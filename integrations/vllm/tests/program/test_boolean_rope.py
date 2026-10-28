@@ -1,9 +1,9 @@
 """`registry.boolean_rope`: the Boolean NeoX rotation agrees with its word Definitions (`trace.word_of`) on every quadruple of
 special bf16 words and on 90k random and structured quadruples per half, on random heads of each served head width against
-`RoPEHead_v1` through the IR reference, on 16k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
+`RoPEHead_v1` through the reference evaluator, on 16k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
 random heads of every `RoPE_v1` binding the served workload Programs call (`SERVED`); carries exactly its builders' live ANDs;
 is pinned by gate count and program digest; and cuts under `Q_word` v1 into one 16-bit unit per output element, as the word
-Program does. The interleaved (GPT-J) versions agree with `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` through the IR reference at
+Program does. The interleaved (GPT-J) versions agree with `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` through the reference evaluator at
 DeepSeek-V2 MLA's q_pe and k_pe shapes and reproduce the words vLLM's `rotary_embedding(is_neox=False)` wrote on sm_120 where
 `RoPEHeadGptJ_v1` does not."""
 from __future__ import annotations
@@ -24,17 +24,17 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity_vllm.program.kernels import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
-from verity_vllm.program.kernels.twins import rand_bf16, tie_pairs_mul
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_rope as R
-from verity_vllm.program.registry import ref_prims
+from verity.ml.definitions.numerics import twins  # registers RoPE_v1's kernel, which the served shapes' word side runs
+from verity.ml.definitions.numerics.twins import rand_bf16, tie_pairs_mul
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_rope as R
+from verity.ml.definitions.registry import ref_prims
 
 U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]
 
 #: (NHEADS, D) of the `RoPE_v1` Calls in each model's traced workload Programs, q then k (one binding where the model has as
-#: many kv heads as heads): every Build descriptor of the coverage rows, art:5c594ebc74d2374816ced39e2b2bc114422a42bfc06ccf09a0090b523a8bc50f
+#: many kv heads as heads): every Build descriptor of the coverage rows
 SERVED = {
     "SmolLM2-135M": ((9, 64), (3, 64)),
     "Llama-3.2-1B": ((32, 64), (8, 64)),
@@ -208,7 +208,7 @@ def _heads(rng, n: int, nheads: int, D: int) -> tuple[np.ndarray, np.ndarray]:
 
 @pytest.mark.parametrize("head", HEADS.values(), ids=lambda t: t.id)
 def test_the_head_agrees_with_rope_head_v1(head) -> None:
-    """Against `RoPEHead_v1{D}` evaluated primitive by primitive (the IR reference) on 96k words, so the halves' wiring is
+    """Against `RoPEHead_v1{D}` evaluated primitive by primitive (the reference evaluator) on 96k words, so the halves' wiring is
     checked without any kernel."""
     D = head.bindings["D"]
     x, cs = _heads(np.random.default_rng(D), 96_000 // D, 1, D)
@@ -222,14 +222,15 @@ def _random_heads(target, heads: int) -> tuple[np.ndarray, np.ndarray]:
     return x, cs
 
 
-@pytest.mark.parametrize("target", ROPES, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.bindings['D'] == 256 else t for t in ROPES], ids=lambda t: t.id)
 def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     """1,024 random heads of each binding the served Programs call against `RoPE_v1`'s registered kernel (`twins.RoPETwin`,
-    self-checked against the IR reference by the kernel registry): `RoPE_v2`'s batch over the heads and its shared cos/sin row
+    self-checked against the reference evaluator by the kernel registry): `RoPE_v2`'s batch over the heads and its shared cos/sin row
     at each served NHEADS."""
     _agree(target, list(_random_heads(target, 1024)))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("target", LARGE, ids=lambda t: t.id)
 def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None:
@@ -241,7 +242,7 @@ def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None
 
 @pytest.mark.parametrize("target", [GPTJ_HEAD, *GPTJ], ids=lambda t: t.id)
 def test_gptj_agrees_with_its_word_definition(target) -> None:
-    """Against `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` evaluated primitive by primitive (the IR reference): 96k words of the head
+    """Against `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` evaluated primitive by primitive (the reference evaluator): 96k words of the head
     and 1,024 heads of each multi-head binding, a quarter of them wide words whose products leave f32's range, where the
     odd half's operand order shows."""
     if target is GPTJ_HEAD:
@@ -252,7 +253,7 @@ def test_gptj_agrees_with_its_word_definition(target) -> None:
 
 
 #: (x[2i], x[2i+1], cos[i], sin[i], out[2i+1]) that vLLM d9105ea80's `rotary_embedding(is_neox=False)` wrote on sm_120
-#: (run r20261004-060203-ba52, rope-gptj cases 2 and 4) where `RoPEHeadGptJ_v1`'s odd half gives another word: in each,
+#: (rope-gptj cases 2 and 4) where `RoPEHeadGptJ_v1`'s odd half gives another word: in each,
 #: x*sin or y*cos overflows f32, so the word depends on which product the FMA keeps unrounded
 GPTJ_ODD_HW = [(0x7F7F, 0xFF7F, 0xBF1A, 0xBF94, 0xFF0D), (0x7F7F, 0x7F7F, 0xBFE3, 0x3F6E, 0xFF80),
                (0xFF7F, 0xFF7F, 0xBEA2, 0x3FA7, 0xFF7C), (0x7F7F, 0x7F7F, 0x3FF1, 0xBF65, 0x7F80),

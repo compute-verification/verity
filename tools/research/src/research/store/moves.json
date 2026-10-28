@@ -1359,6 +1359,163 @@
         "verity/experimental/tests/network/": "verity/core/protocols/network/tests/",
         "verity/experimental/tests/sampled_proofs/": "verity/core/protocols/sampled_proofs/tests/"
       }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/commit/serving_rows.py": "verity/ml/windows/rows.py",
+        "integrations/vllm/verity_vllm/commit/hiding.py": "verity/ml/windows/hiding.py",
+        "integrations/vllm/verity_vllm/commit/wiring.py": "verity/ml/windows/wiring.py",
+        "integrations/vllm/verity_vllm/commit/tables.py": "verity/ml/windows/tables.py",
+        "integrations/vllm/verity_vllm/commit/flock_inputs.py": "verity/ml/windows/flock_inputs.py"
+      }
+    },
+    {
+      "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/protocol_options/__init__.py": "integrations/vllm/verity_vllm/protocols/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/interface.py": "integrations/vllm/verity_vllm/protocols/interface.py",
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py": "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pous.py": "integrations/vllm/verity_vllm/protocols/pous.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw.py": "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/credit_gate.py": "integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py": "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py": "integrations/vllm/verity_vllm/protocols/pouw/device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py": "integrations/vllm/verity_vllm/protocols/pouw/native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/": "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_challenger.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_commit.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_handoff.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_hooks.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_kept.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_prover.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_ranks.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/ranks.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_records.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/records.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/registered.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered_device.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_requests.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_settings.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_static.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_tables_device.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_window.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_words.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_grouped.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/grouped.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_lanes.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pass.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
+        "integrations/vllm/verity_vllm/linear/": "integrations/vllm/verity_vllm/protocols/linear/",
+        "integrations/vllm/verity_vllm/store/": "integrations/vllm/verity_vllm/protocols/remote_bandwidth/",
+        "integrations/vllm/verity_vllm/predict/": "integrations/vllm/verity_vllm/program/predict/",
+        "integrations/vllm/verity_vllm/collectives/": "integrations/vllm/verity_vllm/engine/collectives/",
+        "integrations/vllm/verity_vllm/pipeline/engine_spec.py": "integrations/vllm/verity_vllm/engine/spec.py",
+        "integrations/vllm/verity_vllm/pipeline/llm.py": "integrations/vllm/verity_vllm/llm.py",
+        "integrations/vllm/tests/protocol_options/": "integrations/vllm/tests/protocols/",
+        "integrations/vllm/tests/linear/": "integrations/vllm/tests/protocols/linear/",
+        "integrations/vllm/tests/store/": "integrations/vllm/tests/protocols/remote_bandwidth/",
+        "integrations/vllm/tests/store/int8_store_gpu.py": "integrations/vllm/tests/engine/int8_store_gpu.py",
+        "integrations/vllm/tests/predict/": "integrations/vllm/tests/program/predict/",
+        "integrations/vllm/tests/collectives/": "integrations/vllm/tests/engine/collectives/"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/program/registry/": "verity/ml/definitions/registry/",
+        "integrations/vllm/verity_vllm/program/kernels/": "verity/ml/definitions/numerics/",
+        "integrations/vllm/verity_vllm/program/boolean.py": "verity/ml/definitions/boolean.py",
+        "integrations/vllm/verity_vllm/program/replay.py": "verity/ml/definitions/replay.py",
+        "integrations/vllm/verity_vllm/program/dtypes.py": "verity/ml/definitions/dtypes.py",
+        "integrations/vllm/verity_vllm/program/encoding.py": "verity/ml/definitions/encoding.py",
+        "integrations/vllm/verity_vllm/query/word.py": "verity/ml/definitions/word.py",
+        "integrations/vllm/verity_vllm/query/call_scope.py": "verity/ml/definitions/call_scope.py",
+        "integrations/vllm/verity_vllm/query/cross_call.py": "verity/ml/definitions/cross_call.py",
+        "integrations/vllm/verity_vllm/program/registry/quarantine/": "integrations/vllm/verity_vllm/program/quarantine/",
+        "integrations/vllm/verity_vllm/program/registry/mla_capture.py": "integrations/vllm/verity_vllm/program/mla_capture.py",
+        "integrations/vllm/verity_vllm/program/registry/moe_difftest.py": "integrations/vllm/verity_vllm/program/moe_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py": "integrations/vllm/verity_vllm/program/layer_norm_difftest.py",
+        "integrations/vllm/verity_vllm/program/kernels/relations.py": "integrations/vllm/verity_vllm/program/relations.py",
+        "integrations/vllm/verity_vllm/program/kernels/sampling_rng.py": "integrations/vllm/verity_vllm/program/sampling_rng.py",
+        "integrations/vllm/verity_vllm/program/kernels/libdevice_sampling.py": "integrations/vllm/verity_vllm/program/libdevice_sampling.py",
+        "integrations/vllm/verity_vllm/program/kernels/rmsnorm_fused_sweep.py": "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",
+        "integrations/vllm/verity_vllm/program/kernels/gemm_target_correspondence.py": "integrations/vllm/verity_vllm/program/gemm_target_correspondence.py",
+        "integrations/vllm/verity_vllm/program/kernels/compiled_relations.py": "integrations/vllm/verity_vllm/program/compiled_relations.py",
+        "integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py": "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/capture.py": "integrations/vllm/verity_vllm/observe/capture.py",
+        "integrations/vllm/verity_vllm/engine/pinned.py": "integrations/vllm/verity_vllm/observe/pinned.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/observe/chunks.py": "integrations/vllm/verity_vllm/engine/chunks.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/rank_worker.py": "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/check/kernel_identity.py": "integrations/vllm/verity_vllm/engine/kernel_identity.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
+        "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/profiles/__init__.py": "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py",
+        "integrations/vllm/verity_vllm/engine/profiles/generic.py": "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_softcap_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_llama_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_llama_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ln_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ln_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_marlin_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_mhc_moe.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_mhc_moe.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_easy_family.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_easy_family.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_sampling_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_shared_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_shared_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+        "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py": "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py",
+        "integrations/vllm/verity_vllm/engine/profiles/cases.py": "integrations/vllm/verity_vllm/engine/profiles/cases.py",
+        "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py": "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py",
+        "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py": "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/devices.py": "integrations/vllm/verity_vllm/engine/profiles/devices.py",
+        "integrations/vllm/verity_vllm/engine/profiles/family_facts.py": "integrations/vllm/verity_vllm/engine/profiles/family_facts.py",
+        "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py": "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py",
+        "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
+        "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/e2e_h200/": "examples/h200/",
+        "benchmarks/e2e_demo/": "examples/h200/interfaces/"
+      }
     }
   ]
 }

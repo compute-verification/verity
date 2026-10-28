@@ -7,6 +7,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's.
 inputs = [
   "Security/lean-audit.json",
-  "Security/Models/Nci/Assumptions/Layered.lean",
-  "Security/Models/Nci/Guarantees/Layered.lean",
+  "Security/Definitions/Nci/Assumptions/Layered.lean",
+  "Security/Definitions/Nci/Guarantees/Layered.lean",
+  # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
+  "Security/Definitions/Core/Accel/Sm120.lean",
+  "verity/core/protocols/pouw/circuit/h1device.py",
+  # the compute dampener D is the overhead calculator's (statement.py, fit.py, imported by path)
+  "benchmarks/rho/rho/__init__.py",
+  "benchmarks/rho/rho/theorem.py",
 ]

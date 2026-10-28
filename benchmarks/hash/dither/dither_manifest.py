@@ -10,10 +10,11 @@ the window, every round's root, each step's round leaves and unit salt, the B ro
 manifest root and the coins in `coins.check`'s form; each step's per-call roots go to a file beside it (`calls`, by
 sha512).  `check` recomputes every round root from the manifest's leaves (the epoch round from the B roots, the final
 round from the tail's leaves), the manifest root from those, and holds the challenger's run to them: the salt coin after
-the window's root, each round's coin after its root, the draw coin after the manifest root.
+the window's root, each round's coin after its root, the draw coin after the manifest root, the session run from a
+commit the host's pins log (``--pins``) records on the verifier's own first-parent history of main (``--main``).
 
     python dither_manifest.py check --manifest OUT/manifest-SESSION.json --challenger-out SESSION_DIR --ledger HEAD [...]
-        [--key-record KEY] [--period P] [--root R]
+        --pins PINS --main FIRST_PARENT [--key-record KEY] [--period P] [--root R]
 """
 from __future__ import annotations
 
@@ -99,13 +100,15 @@ def expect(m: dict) -> dict:
             "manifest_root_listed": mroot.hex() == m["manifest_root"]}
 
 
-def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], key=None, period: str | None = None,
-          root: bytes | None = None) -> dict:
+def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str], key=None,
+          period: str | None = None, root: bytes | None = None) -> dict:
     """`coins.check` of the window's coins against the challenger's run, over the round roots and manifest root `expect`
-    recomputes; ``ok`` only when it passes and the recomputed roots are the manifest's."""
+    recomputes, with the host's pins log `pins` (its lines) and the verifier's first-parent history of main `main`;
+    ``ok`` only when it passes and the recomputed roots are the manifest's."""
     m = json.loads(Path(manifest).read_text())
     e = expect(m)
-    got = CO.check(challenger_out, m["coins"], heads, e["rounds"], e["salts"], e["draw_after"], key, period, root)
+    got = CO.check(challenger_out, m["coins"], heads, pins, main, e["rounds"], e["salts"], e["draw_after"], key, period,
+                   root)
     got["recomputed"] = {"rounds": len(e["rounds"]), "differ_from_listed": e["differ"][:8],
                          "manifest_root_listed": e["manifest_root_listed"], "steps": m["steps"], "salts": len(e["salts"])}
     got["ok"] = bool(got["ok"] and not e["differ"] and e["manifest_root_listed"])
@@ -117,14 +120,20 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check", help="an ended window's manifest against the challenger's own run")
     c.add_argument("--manifest", required=True)
-    c.add_argument("--challenger-out", required=True, help="the session as infra's gate publishes it, or its out/")
+    c.add_argument("--challenger-out", required=True, help="the session as the challenger's gate publishes it, or its out/")
     c.add_argument("--ledger", action="append", required=True, help="a head of the auditor's ledger, once for each")
+    c.add_argument("--pins", type=Path, required=True, help="the challenger host's pins log as infra published it, a "
+                   "line a pin (its `challenger-pins head` label)")
+    c.add_argument("--main", type=Path, required=True, help="the verifier's own `git rev-list --first-parent "
+                   "origin/main`, a commit a line")
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1)")
     c.add_argument("--period", help="the window's period, as the verifier knows it")
     c.add_argument("--root", help="the window's root as the verifier recomputes it (128 hex digits)")
     a = ap.parse_args(argv)
     key = CO.key_record(a.key_record) if a.key_record else None
-    got = check(a.manifest, a.challenger_out, a.ledger, key, a.period, bytes.fromhex(a.root) if a.root else None)
+    pins = [x for x in a.pins.read_text().split("\n") if x]
+    got = check(a.manifest, a.challenger_out, a.ledger, pins, CO.R.main_lines(a.main), key, a.period,
+                bytes.fromhex(a.root) if a.root else None)
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 

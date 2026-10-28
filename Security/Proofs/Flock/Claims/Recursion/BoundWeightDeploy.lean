@@ -3,8 +3,8 @@ import Proofs.Flock.Claims.Recursion.BoundWeight
 /-!
 # The deployed bound record at `coverW`, and the route with (P3) discharged
 
-Daniel's ruling (19 Oct, 2:06 PM PDT, ASK-72): the deployed bound record states its inner claim at `IVStar` at the weight
-`coverW` of `deployPlainTrim`'s weight, the least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
+The deployed bound record states its inner claim at `IVStar` at the weight `coverW` of `deployPlainTrim`'s weight, the
+least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
 
 * **The weight** is `wCover rel = coverW (deployPlainTrim rel).weight`, and **the deployed bound record** `bdCover` is
   `bdDeployed` at it, at every other choice the code side makes. `bdDeployed` keeps `γ`'s weight at `IVStar` a parameter,
@@ -18,12 +18,12 @@ Daniel's ruling (19 Oct, 2:06 PM PDT, ASK-72): the deployed bound record states 
 At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. At the deployed
 shape (one inner table at `m = 35`, `k_log = 24`) the recursion's security level (`Claims.Recursion.lam`) is about 65.2
 bits per SHA-512 call at `wCover`, against 69.4 at `w = C_DE`: its third term, `128 − log₂(γ_E·c_Be)/2`, the one that
-binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route
+binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight. Route
 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises
-still open: `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript reading
-back (`RecDeploy.ReadsBack`, `RecDeploy.ksLin2_deployed_open`, with the last round's pieces at the parts that commit the
-earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+still open: `PartChecksBV`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript
+reading back (`RecDeploy.ReadsBackB`, `RecDeploy.ksLin2_deployed_open`, with the last round's pieces at the parts that
+commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 -/
 
@@ -32,11 +32,11 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`γ`'s weight at `IVStar` at the deployment** (ASK-72): (P3)'s floor at the deployed plain record's weight. -/
+/-- **`γ`'s weight at `IVStar` at the deployment**: (P3)'s floor at the deployed plain record's weight. -/
 noncomputable def wCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) : Msg → ℝ :=
   coverW (FlockDeploy.deployPlainTrim rel).weight
 
-/-- **The deployed bound record** (ASK-72): `bdDeployed` with `γ`'s weight at `IVStar` at `wCover`, at every other
+/-- **The deployed bound record**: `bdDeployed` with `γ`'s weight at `IVStar` at `wCover`, at every other
 choice the code side makes. -/
 noncomputable def bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -87,7 +87,8 @@ about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor an
 (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (hwE : ∀ x, wE x ≤ (FlockDeploy.deployPlainTrim rel).weight x) :
@@ -105,7 +106,7 @@ theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.F
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -113,7 +114,7 @@ theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.F
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
     KSBoundCover rel relO b L nextE colsE wE join rowIn final := by
   intro _ _ _ hP1 hBinds hLB hF hst hT hL hRRP
-  exact ksBoundRoute rel relO b L nextE colsE wE join rowIn final (wCover rel) hP1 hBinds
+  exact ksBoundRoute rel relO b L hRows nextE colsE wE join rowIn final (wCover rel) hP1 hBinds
     (weightCovers_bdCover rel nextE colsE wE join rowIn final hwE) hLB hF hst hT hL hRRP
 
 end RecDeploy

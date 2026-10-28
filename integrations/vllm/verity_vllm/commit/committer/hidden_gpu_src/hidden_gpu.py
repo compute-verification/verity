@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""R9 cmt-hidden: GPU-resident commitment path (option (c)) over the M1 stream and the H1 digests.
+"""GPU-resident commitment path (option (c)) over the M1 stream and the H1 digests.
 
   verity-vllm hidden-gpu check  --out J          root of the GPU chunk tree == hidden_stream.commit_stream (hashlib) on random streams;
                                         tree_levels over synthetic H1 digests == ThreadLeafCommitment; openings served from the
@@ -15,9 +15,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _repo_of_this_file():
-    """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITY_TREE, never a default path.  The former
-    `REPO = os.environ.get(<tree variable>, <the pod's default tree>)` made a Commit under --gpu-tree without the variable import verity.ml.circuits
-    from the pod's DEFAULT tree while verity_vllm ran the release (tp M-1830).  This file is shipped at
+    """The tree THIS FILE lives in -- never $VERITY_TREE, never a default path: a default tree would let a Commit under --gpu-tree
+    import verity.ml.circuits from the pod's DEFAULT tree while verity_vllm runs from the release.  This file is shipped at
     <tree>/verity_vllm/commit/committer/hidden_gpu_src/ and materialised at <tree>/out/gen/r9/cmt-hidden/src/ (pod_hidden_gpu.sh), so the tree
     is found by walking up to the first ancestor holding verity_vllm/ -- the same answer from either copy."""
     p = os.path.realpath(HERE)
@@ -54,10 +53,11 @@ def ext():
     with other jobs on the host (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
+        from verity_vllm import settings
         from verity_vllm.commit.committer import native_jit
 
         _EXT, _bd, _digest = native_jit.jit_load('hidden_gpu_tree', [os.path.join(HERE, 'hidden_gpu_tree.cu')],
-                                                 parent=os.environ.get('HIDDEN_GPU_BUILD') or None, cuda_cflags=('-O3', '--use_fast_math'))
+                                                 parent=settings.HIDDEN_GPU_BUILD or None, cuda_cflags=('-O3', '--use_fast_math'))
     return _EXT
 
 

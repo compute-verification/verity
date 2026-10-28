@@ -120,7 +120,8 @@ class Certifier:
     """One link's active certifier (W1–W6): constant-rate, left-packed, FIFO and fail-closed.
 
     - **Enqueue.** The sender hands frames with `enqueue`. A frame handed during bucket t, before its cutoff, is eligible
-      for bucket t.
+      for bucket t. With `first`, it goes to the head of the queue, ahead of every frame queued: the ingress
+      certifier's own salt frame (`active.Bucketer`). Release counts don't read the order, so `released` is unchanged.
     - **Tick.** `tick` releases bucket t: min(queue, r) frames in queue order, then padding, so the wire always carries r.
     - **Faults.** A fault is an overflow beyond Q, a frame of the wrong size, or one reported with `fault`. It makes the
       rest of the window padding and drops the queue, since nothing is forwarded uncertified, and it records the first
@@ -141,13 +142,20 @@ class Certifier:
     def queued(self) -> int:
         return len(self._queue)
 
-    def enqueue(self, frame: bytes) -> None:
+    @property
+    def faulted(self) -> Reason | None:
+        """The window's first fault so far, None while its coverage holds."""
+        return self._fault
+
+    def enqueue(self, frame: bytes, *, first: bool = False) -> None:
         if self._fault is not None:
             return
         if len(frame) != self.params.frame_bytes:
             self.fault(Reason.MALFORMED)
         elif len(self._queue) >= self.params.queue_capacity:
             self.fault(Reason.OVERFLOW)
+        elif first:
+            self._queue.appendleft(bytes(frame))
         else:
             self._queue.append(bytes(frame))
 

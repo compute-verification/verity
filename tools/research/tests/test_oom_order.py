@@ -35,9 +35,15 @@ class Node:
             (self.ramlock / f"research-{rid}.json").write_text(json.dumps({"owner": "research", "gb": gb, "pid": runner, "run_id": rid}))
         return str(d.resolve())
 
-    def process(self, pid: int, *, pgid: int, anon_gb: float, shmem_gb: float = 0.0, adj: int = 0, run_dir: str | None = None) -> None:
+    def process(self, pid: int, *, pgid: int, anon_gb: float, shmem_gb: float = 0.0, adj: int = 0, run_dir: str | None = None,
+                pss_gb: float | None = None, scope: str | None = None, cmdline: bytes = b"python\0") -> None:
         d = self.proc / str(pid)
         d.mkdir()
+        (d / "cgroup").write_text(f"0::{scope}\n" if scope else "0::/user.slice/user-1001.slice/user@1001.service/app.slice\n")
+        (d / "cmdline").write_bytes(cmdline)
+        if pss_gb is not None:
+            (d / "smaps_rollup").write_text(f"Rss:\t{int(anon_gb * GB) // 1024} kB\nPss:\t{int(pss_gb * GB) // 1024} kB\n"
+                                            f"Pss_Anon:\t{int(pss_gb * GB) // 1024} kB\nPss_File:\t0 kB\nPss_Shmem:\t0 kB\n")
         (d / "stat").write_text(f"{pid} (py thon) S 1 {pgid} {pgid} 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 100 0 0\n")
         (d / "status").write_text(f"Name:\tpython\nVmRSS:\t{int((anon_gb + shmem_gb + 9) * GB) // 1024} kB\n"
                                   f"RssAnon:\t{int(anon_gb * GB) // 1024} kB\nRssFile:\t{9 * GB // 1024} kB\n"
@@ -123,6 +129,59 @@ def test_a_check_slot_s_reservation_counts_for_its_run_and_the_largest_of_a_run_
     assert node.adj(30) == 0 and node.adj(40) == 0
 
 
+def test_forked_workers_copy_on_write_pages_count_once_so_a_share_within_its_reservation_stays_at_0(node):
+    """24 Oct, n2 03:44Z: a PRF-131 share (345 GB) whose ~278 GB parent forked 8 workers summed to 2,505 GB of RssAnon and was set
+    to 1000, the node's first pick; split among the processes sharing them (Pss), its pages come to 300 GB."""
+    share = node.run("r20261024-011205-2882", pgid=70, gb=345)
+    node.process(70, pgid=70, anon_gb=278, pss_gb=278 / 9 + 10, run_dir=share)
+    for i in range(1, 9):
+        node.process(70 + i, pgid=70, anon_gb=278, pss_gb=278 / 9 + 0.5, run_dir=share)
+    over = node.run("r20261024-011205-3333", pgid=90, gb=10)
+    node.process(90, pgid=90, anon_gb=100, pss_gb=50, run_dir=over)
+    node.process(91, pgid=90, anon_gb=100, run_dir=over)                              # no smaps_rollup: its Rss counts
+    assert node.main() == 0
+    assert all(node.adj(70 + i) == 0 for i in range(9)), "Pss 292 GB, within 345"
+    assert node.adj(90) == node.adj(91) == 500 + round(500 * 140 / 1000), "still over: Pss 50 + Rss 100 against 10"
+    assert {r["run"]: r["use_gb"] for r in node.log()} == {"r20261024-011205-3333": 150.0}
+
+
+def test_workers_that_left_a_runs_group_and_environment_count_by_its_session_scope(node):
+    """24 Oct, cpu-3: suites.py's verity-circuit-check run e48b (no reservation) held 383 GB in its session scope, read here at
+    0.1 GB, so the kernel took small runs and a reserved 80 GB verify first. Its runner stays out; a scope two runs share counts
+    for neither."""
+    s = "/user.slice/user-1001.slice/session-14429.scope"
+    suite = node.run("r20261024-041008-e48b", pgid=10)
+    node.process(9, pgid=9, anon_gb=0.1, scope=s, cmdline=b"python3\0-m\0research\0run\0--id\0x\0")    # its runner
+    node.process(10, pgid=10, anon_gb=0.1, run_dir=suite, scope=s)
+    node.process(11, pgid=11, anon_gb=383, scope=s)                                                   # xdist worker, scrubbed
+    verify = node.run("r20261024-024255-adf9", pgid=20, gb=130)
+    node.process(20, pgid=20, anon_gb=80, run_dir=verify, scope="/user.slice/user-1001.slice/session-1.scope")
+    a, b = node.run("r-a", pgid=30), node.run("r-b", pgid=40)
+    shared = "/user.slice/user-1001.slice/session-2.scope"
+    node.process(30, pgid=30, anon_gb=1, run_dir=a, scope=shared)
+    node.process(40, pgid=40, anon_gb=1, run_dir=b, scope=shared)
+    node.process(41, pgid=41, anon_gb=50, scope=shared)
+    assert node.main() == 0
+    assert node.adj(10) == node.adj(11) == 500 + round(500 * 383.1 / 1000)
+    assert node.adj(9) == 0 and node.adj(20) == 0 and node.adj(41) == 0
+
+
+def test_a_train_checks_priority_reservation_ranks_it_below_research_runs(node):
+    """ci 24 Oct 05:47Z: a train check's slot reservation carries "priority": true (#3486), so a research job within its own
+    reservation is still picked before the train, and a train over its reservation ranks with a research job within one."""
+    train = node.run("r-train", pgid=10)
+    (node.ramlock / "check-b.json").write_text(json.dumps({"owner": "check", "gb": 300, "pid": 10, "run_id": "r-train",
+                                                            "priority": True}))
+    node.process(10, pgid=10, anon_gb=250, run_dir=train)
+    lane = node.run("r-lane", pgid=20, gb=100)
+    node.process(20, pgid=20, anon_gb=90, run_dir=lane)
+    over = node.run("r-train2", pgid=30)
+    (node.ramlock / "check-a.json").write_text(json.dumps({"gb": 300, "pid": 30, "run_id": "r-train2", "priority": True}))
+    node.process(30, pgid=30, anon_gb=400, run_dir=over)
+    assert node.main() == 0
+    assert node.adj(10) == -500 and node.adj(20) == 0 and node.adj(30) == round(500 * 100 / 1000)
+
+
 def test_a_dry_run_says_what_it_would_set_and_writes_nothing(node, capsys):
     rd = node.run("r20261019-140000-1111", pgid=50)
     node.process(50, pgid=50, anon_gb=10, run_dir=rd)
@@ -139,7 +198,8 @@ def test_the_script_is_stdlib_only_and_deploy_toml_runs_it_as_root_on_the_shared
     import tomllib
     m = tomllib.loads((src.parent / "deploy.toml").read_text())
     rows = {e["path"]: e for e in m["file"]}
-    nodes = {"vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"}
+    nodes = {"vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
+             "vy-nebius-cpu-5"}
     for path in ("/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.service",
                  "/etc/systemd/system/vy-oom-order.timer"):
         assert set(rows[path]["nodes"]) == nodes and nodes <= set(m["nodes"]), path

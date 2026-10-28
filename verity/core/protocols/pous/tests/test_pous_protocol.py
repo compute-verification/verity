@@ -291,10 +291,10 @@ def test_certificates_at_their_points():
 
 def test_certificates_name_proved_guarantees():
     """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in
-    `Security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Models/Pous/Guarantees.lean` there and the
-    files under `Models/Pous/Guarantees/`), experimental schemes' included."""
+    `Security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Definitions/Pous/Guarantees.lean` there and the
+    files under `Definitions/Pous/Guarantees/`), experimental schemes' included."""
     security = Path(__file__).parents[5] / "Security"
-    specs = security / "Models" / "Pous"
+    specs = security / "Definitions" / "Pous"
     texts = [(specs / "Guarantees.lean").read_text()] + [f.read_text() for f in sorted((specs / "Guarantees").glob("*.lean"))]
     statements = {x for t in texts for x in re.findall(r"^def (\w+) : Prop", t, re.M)}
     guarantees = json.loads((security / "lean-audit.json").read_text())["guarantees"]
@@ -504,7 +504,7 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
             core_claim(c)
         assert "/" not in c and c == c.lower()
     assert protocol.claim("cr/sha-512").kind == "assumption"
-    assert protocol.claim("trusted-nebius-host").kind == "assumption"
+    assert protocol.claim("trusted-host").kind == "assumption"
 
 
 def test_p2_is_experimental_and_says_so():
@@ -522,7 +522,7 @@ def test_p2_is_experimental_and_says_so():
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
             "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-nebius-host"} <= set(
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-host"} <= set(
             cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
@@ -545,6 +545,60 @@ def test_p2_is_experimental_and_says_so():
         schemes.get("p2-16448/v4", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
     with pytest.raises(ValueError, match="expander"):
         P2Params(128, 173, 8, 1, "chacha20")
+
+
+def test_p2_family_certificate_is_the_proved_block_range():
+    """`p2.family_certificate` is `P2SlackFamilyUncond`'s `λ = 128` row at k = 105, the registered certificate's every
+    field but its segment pin, for a v4 store of 2^8 to 2^23 blocks at the registered width and prime in any number of
+    segments; there is none off that range, at another width, or for v2's ChaCha8 keys."""
+    from verity.core.protocols.pous.schemes.p2 import CERT_FAMILY_BLOCKS, family_certificate
+
+    reg = schemes.get("p2-16448/v4", segments=8).certificate
+    assert CERT_FAMILY_BLOCKS == (1 << 8, 1 << 23)
+    for bps, segments in ((256, 1), (128, 2), (1 << 16, 1), (1 << 16, 8), (1 << 16, 128)):
+        cert = family_certificate(P2Params(16448, 21065, bps, segments))
+        assert cert.to_json() == reg.to_json() | {"segments": None}, (bps, segments)
+        assert cert.theorem == "Pous.SecurityProofs.P2SlackFamilyUncond" and cert.claims == reg.claims
+    for q in (P2Params(16448, 21065, 255, 1), P2Params(16448, 21065, 1 << 16, 129), P2Params(128, 173, 256, 1),
+              P2Params(16448, 21065, 256, 1, CHACHA8)):
+        assert family_certificate(q) is None, q
+    assert schemes.P2(P2Params(16448, 21065, 256, 1)).certificate is None
+
+
+def test_p2_wide_certificate_is_period_held_at():
+    """`p2.wide_certificate` is `Pous.Period.SecurityProofs.periodHeldAt`, the family's audit (k = 105, no root within
+    `Δ + RTT`, `2^20` queries, `⌊ρ·|C|⌋` at `1% + 2^-128`) for a v4 store of 2^19 to 2^27 blocks at the registered width
+    and prime in any number of segments, Demo B's 1038 segments among them, resting on `P2_CLAIMS` and a claim for each
+    of `periodHeldAt`'s premises at `N`; there is none off that range, at another width, or for v2's ChaCha8 keys."""
+    from verity.core.protocols.pous.schemes.p2 import CERT_WIDE_BLOCKS, P2_CLAIMS, WIDE_CLAIMS, family_certificate
+    from verity.core.protocols.pous.schemes.p2 import wide_certificate
+
+    fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
+    assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
+    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+    for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 129), (1 << 16, 1038), (1 << 16, 1 << 11)):
+        cert = wide_certificate(P2Params(16448, 21065, bps, segments))
+        assert cert.to_json() == fam | {"theorem": "Pous.Period.SecurityProofs.periodHeldAt",
+                                        "claims": list(WIDE_CLAIMS)}, (bps, segments)
+        assert all(protocol.claim(c).id == c for c in cert.claims)
+    for q in (P2Params(16448, 21065, (1 << 16) - 1, 8), P2Params(16448, 21065, 1 << 16, (1 << 11) + 1),
+              P2Params(1024, 105, 1 << 16, 1038), P2Params(16448, 21065, 1 << 16, 1038, CHACHA8)):
+        assert wide_certificate(q) is None, q
+
+
+def test_p2_encode_blocks_are_slices_of_the_segment():
+    """`p2.encode_blocks` from block `j0` of a segment gives those blocks of `encode_segment`, and refuses payloads that
+    are not whole blocks inside the segment."""
+    from verity.core.protocols.pous.schemes.p2 import encode_blocks, encode_segment
+
+    params = P2Params(128, 173, 8, 2)
+    w = bytes(range(112))
+    c = encode_segment(params, None, SALT, 1, w)
+    assert encode_blocks(params, SALT, 1, 0, w) == c and encode_blocks(params, SALT, 1, 8, b"") == []
+    assert encode_blocks(params, SALT, 1, 3, w[3 * 14:6 * 14]) == c[3:6] != encode_blocks(params, SALT, 0, 3, w[42:84])
+    for j0, payloads in ((0, w[:13]), (6, w[:42]), (-1, w[:14])):
+        with pytest.raises(ValueError, match="whole blocks"):
+            encode_blocks(params, SALT, 1, j0, payloads)
 
 
 @pytest.mark.parametrize("expander", ["sha512-ctr-v4", CHACHA8])
@@ -584,7 +638,7 @@ def test_p2_square_is_exact_for_every_accepted_c0(w, c0):
 
 
 def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
-    """Spec v1.1 (§12, Daniel's ruling of 4 Oct 2026): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
+    """Spec v1.1 (§12): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
     from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
     w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
     r20260929-060834-0ec4).  The RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate

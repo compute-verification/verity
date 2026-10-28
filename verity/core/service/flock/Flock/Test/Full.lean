@@ -13,7 +13,7 @@ def n (x : Nat) : Json := Lean.toJson x
 
 def port (value : String) (reads : Array (Option Nat)) : Registered.Port :=
   { name := "m0", value, root := ByteArray.empty, leaves := 1, words := none, wordBits := 16,
-    domain := ByteArray.empty, reads }
+    domain := ByteArray.empty, readsRel := reads }
 
 def stratified : Json := Json.mkObj [("law", "stratified"), ("population", (n 5)), ("k", (n 2)),
   ("strata", Json.arr #[

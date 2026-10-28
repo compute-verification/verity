@@ -70,7 +70,8 @@ circuit has RecCap's port `top` (`capPorted`). -/
 theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧ portsNamed r.w.parts vs = true ∧
       capPorted r.w.parts = true := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, -, pa, -, dims, -, vs, hvs, h⟩ := h
   split_ifs at h with hl
@@ -166,7 +167,7 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' ports discharged**:
 `ksLin2_deployed_tops` with `RowsCover` from `rowsCover`. What stays at the dense form is the schedule (`SchedMatches`),
 RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
+`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
 number by itself: those premises are open.
 -/
 theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -185,18 +186,17 @@ theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hP hRT hRL hRP
-  refine ksLin2_deployed_tops b fin wE join final w ?_ hRT hRL hRP
+  intro L Bd D bL hP hRT hRP
+  refine ksLin2_deployed_tops b fin wE join final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain ⟨hM, hC, hF, rest⟩ := hS shape hsh

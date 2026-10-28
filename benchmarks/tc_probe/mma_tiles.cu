@@ -5,7 +5,7 @@
 //   mma_e5m2_m16n8k32_tiles   mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e5m2.f32   (sm_89+)   A 16x32 e5m2, Bt 8x32 e5m2
 //
 // Provenance: veritor `gpu/tensor-core-semantics/mma_tiles.cu` (BF16 and E4M3 halves; the E5M2 kernel is the E4M3 one with the
-// other operand type), copied for lane WP1 (BF16) and lane tc-probe-fp8 (FP8) of the Verity silicon campaign.  Every warp
+// other operand type).  Every warp
 // executes exactly one `mma.sync` on one tile, so each output element D[i][j] is the hardware's own function of
 // (C[i][j], A[i][:], B[:][j]) with no software reduction in between.  Operands and results move as raw bits; nothing is
 // converted or rounded on the way in or out.

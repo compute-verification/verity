@@ -21,7 +21,8 @@ y_(i,p)       sketch-sha512, the default: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ fra
 k_s           sketch-sha512's rows, the registration's: 16 (the default) or 64 (`ROWS`); 0 under block-sha512
 S_i           sketch-sha512's k_s × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
               "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
-              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
+              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"; over a P2 store,
+              k_s × 8224, n = 8224 and 1,028 bytes a row, a unit of four blocks a vector (`p2.py`)
 σ_(i,j)       S_i · e_(i,j), its 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32 little-endian, 64
               bytes at 16 rows (y one compression after the seed's block) and 256 at 64 (three)
 leaf c        v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
@@ -55,8 +56,9 @@ permutation ra-codec-tensor proposes for it is a layout of its own here.
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
 the tree's, not necessarily the reads': listed in store order, a plan is one run per contiguous range it reads.
-`Plan.from_array` takes the runs as an (R, 2) numpy array, as a store holds them, and checks and encodes them in numpy
-(`verity.ml.kernels.plans`: a protocol imports no third-party package); the suite holds it to `Plan` on the same rows.
+`Plan.from_array` takes the runs as an (R, 2) array, as a store holds them, and checks and encodes them column by
+column through the buffer protocol, in the standard library (a protocol imports no third-party package, and a verifier
+no `verity.ml` code); the suite holds it to `Plan` on the same rows.
 `Plan.changed` is the next pass's plan from its change, the blocks it adds and removes, in store order.
 """
 
@@ -66,7 +68,9 @@ import bisect
 import hashlib
 import itertools
 import math
+import operator
 import struct
+import sys
 from array import array
 from collections.abc import Iterator, Sequence
 
@@ -121,17 +125,19 @@ def store_blocks(blocks: object) -> int:
     return blocks
 
 
-def _u64s(native: bytes) -> array:
-    out = array("Q")
-    out.frombytes(native)
-    return out
+_RUNS = "a plan is 1 to 2^32 − 1 runs"
+_RUN = "a run is (first, count) with count ≥ 1, inside the store"
+_CONTINUED = "a run that starts where the one before it ends is part of it"
+_DISJOINT = "a plan's runs are disjoint: no block is read twice in a pass"
+#: The buffer formats `Plan.from_array` reads in place: one native integer (struct's codes; numpy's int8 … uint64).
+_NATIVE_INTS = frozenset("bBhHiIlLqQ")
 
 
 class Plan:
     """What one pass reads, in read order, in a store of `blocks` blocks: `runs` of `(first, count)` consecutive blocks.
     Construction refuses any plan but a canonical one of distinct blocks (the format above), so equal read sequences
     have equal digests and no block is read twice.  `Plan.from_array` is the same plan, or the same refusal, from an
-    (R, 2) integer numpy array of runs, checked and encoded in numpy."""
+    (R, 2) integer array of runs, checked column by column."""
 
     __slots__ = ("blocks", "_encoding", "_firsts", "_ends", "_runs", "_digest")
 
@@ -139,16 +145,16 @@ class Plan:
         store_blocks(blocks)
         runs = tuple(runs) if isinstance(runs, Sequence) else None
         if runs is None or not 1 <= len(runs) < 1 << 32:
-            raise ValueError("a plan is 1 to 2^32 − 1 runs")
+            raise ValueError(_RUNS)
         for r in runs:
             if (type(r) is not tuple or len(r) != 2 or any(type(x) is not int for x in r) or r[0] < 0 or r[1] < 1
                     or r[0] + r[1] > blocks):
-                raise ValueError("a run is (first, count) with count ≥ 1, inside the store")
+                raise ValueError(_RUN)
         if any(a[0] + a[1] == b[0] for a, b in zip(runs, runs[1:])):
-            raise ValueError("a run that starts where the one before it ends is part of it")
+            raise ValueError(_CONTINUED)
         ordered = sorted(runs)
         if any(a[0] + a[1] > b[0] for a, b in zip(ordered, ordered[1:])):
-            raise ValueError("a plan's runs are disjoint: no block is read twice in a pass")
+            raise ValueError(_DISJOINT)
         encoding = len(runs).to_bytes(4, "big") + b"".join(f.to_bytes(8, "big") + c.to_bytes(8, "big") for f, c in runs)
         self._set(blocks, encoding, array("Q", (f for f, _ in runs)), array("Q", itertools.accumulate(c for _, c in runs)),
                   runs)
@@ -163,18 +169,47 @@ class Plan:
 
     @classmethod
     def from_array(cls, runs, blocks: int) -> Plan:
-        """`Plan` of the rows of `runs`, an (R, 2) integer numpy array, as `(first, count)` tuples: the same plan with
-        the same digest, or the same refusal, checked and encoded in numpy (`verity.ml.kernels.plans`), so a KV pass's
-        10^5 runs take milliseconds.  An array of any other shape or dtype is `Plan` of its rows as tuples."""
-        from verity.ml.kernels import plans
+        """`Plan` of the rows of `runs`, an (R, 2) array, as `(first, count)` tuples: the same plan with the same
+        digest, or the same refusal.  An array that exports C-ordered native integers (a numpy array of int8 … uint64)
+        is read through the buffer protocol and checked column by column, each rule over every run in the reference's
+        order; anything else is `Plan` of its rows (`tolist`) as tuples.
 
+        Disjointness is checked on the firsts and the ends sorted apart, the k-th end at most the (k+1)-th first for
+        every k: runs of count ≥ 1 are disjoint exactly then.  (Sorted by first, disjoint runs are sorted by end too.
+        Conversely, the k runs ending by the (k+1)-th first start before it, so no two runs share a first and those k
+        are the first k by first: the k-th by first ends by the next one's first.)"""
         store_blocks(blocks)
-        out = plans.checked(runs, blocks)
-        if out is None:
+        try:
+            view = memoryview(runs)
+        except (TypeError, ValueError):
+            view = None
+        if (view is None or view.ndim != 2 or view.shape[1] != 2 or view.format not in _NATIVE_INTS
+                or not view.c_contiguous):
             rows = runs.tolist()
             return cls(tuple(tuple(r) if type(r) is list else r for r in rows) if type(rows) is list else rows, blocks)
+        if not 1 <= len(view) < 1 << 32:
+            raise ValueError(_RUNS)
+        raw = view.cast("B")
+        flat = raw.cast(view.format)
+        firsts, counts = flat[0::2].tolist(), flat[1::2].tolist()
+        ends = list(map(operator.add, firsts, counts))
+        if min(firsts) < 0 or min(counts) < 1 or max(ends) > blocks:
+            raise ValueError(_RUN)
+        if any(map(operator.eq, ends, itertools.islice(firsts, 1, None))):
+            raise ValueError(_CONTINUED)
+        if any(map(operator.gt, sorted(ends), itertools.islice(sorted(firsts), 1, None))):
+            raise ValueError(_DISJOINT)
+        words = array("Q")
+        if view.itemsize == words.itemsize:
+            words.frombytes(raw)  # every word is nonnegative now, so a signed one's bytes are its u64's
+        else:
+            words.extend(flat.tolist())
+        native_firsts = words[0::2]
+        if sys.byteorder == "little":
+            words.byteswap()
         plan = object.__new__(cls)
-        plan._set(blocks, out[0], _u64s(out[1]), _u64s(out[2]), None)
+        plan._set(blocks, len(firsts).to_bytes(4, "big") + words.tobytes(), native_firsts,
+                  array("Q", itertools.accumulate(counts)), None)
         return plan
 
     @property
@@ -335,12 +370,19 @@ class Receipter:
         return h.digest()
 
 
-def sign_bits(seed: bytes, rows: int = SKETCH_ROWS) -> tuple[bytes, ...]:
-    """`S_i`'s sign bits, `rows` = k_s rows of 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where
-    `S_i[c][u] = −1`.  The key binds k_s, so 64 rows are not 16 rows and 48 more."""
+def _width(width: object) -> int:
+    if type(width) is not int or width < 8 or width % 8:
+        raise ValueError("a sketch's vector is a positive whole number of 8-byte groups")
+    return width
+
+
+def sign_bits(seed: bytes, rows: int = SKETCH_ROWS, width: int = BLOCK_BYTES) -> tuple[bytes, ...]:
+    """`S_i`'s sign bits, `rows` = k_s rows of `width`/8 bytes (512 at a registered block's 4,096 bytes, 1,028 at a P2
+    unit's 8,224, `p2.UNIT_BYTES`): bit u of row c (byte u // 8, LSB first) is 1 where `S_i[c][u] = −1`.  The key binds
+    k_s and the width, so 64 rows are not 16 rows and 48 more, and a unit's signs are not a block's."""
     rows = sketch_rows(SKETCH_SHA512, rows)
-    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": rows, "n": BLOCK_BYTES})
-    return tuple(key.stream(("row", c), BLOCK_BYTES // 8) for c in range(rows))
+    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": rows, "n": _width(width)})
+    return tuple(key.stream(("row", c), width // 8) for c in range(rows))
 
 
 def sketch_prefix(seed: bytes) -> bytes:
@@ -350,7 +392,6 @@ def sketch_prefix(seed: bytes) -> bytes:
 
 
 _BYTE_BITS = tuple(bytes((b >> u) & 1 for u in range(8)) for b in range(256))
-_EVERY_BYTE = int.from_bytes(b"\1" * BLOCK_BYTES, "little")
 
 
 def _int8_sum(planes: list[int], mask: int) -> int:
@@ -363,27 +404,53 @@ class SketchReceipter:
     """sketch-sha512 receipts under one pass's seed at `rows` = k_s, the default kind: `receipter(j, block)` is
     `y_(i,j)`, and `sketch(block)` its `σ_(i,j)`; given `z`, the receipt and sketch that bind it.  The product is in
     pure Python, a row's ±1 dot product as T − 2·(the sum where its sign is −1), each sum over the block's bit planes:
-    about 0.25 ms a block at 16 rows."""
+    about 0.25 ms a block at 16 rows.  `width` is the vector's bytes: a registered block's 4,096, or a P2 unit's 8,224
+    (`p2.py`, where z binds nothing), whose sketch is the sum of its pieces' (`partial`)."""
 
     kind = SKETCH_SHA512
 
-    def __init__(self, seed: bytes, rows: int = SKETCH_ROWS) -> None:
-        self.rows = sketch_rows(SKETCH_SHA512, rows)
+    def __init__(self, seed: bytes, rows: int = SKETCH_ROWS, width: int = BLOCK_BYTES) -> None:
+        self.rows, self.width = sketch_rows(SKETCH_SHA512, rows), _width(width)
         self._signs = tuple(int.from_bytes(b"".join(_BYTE_BITS[b] for b in row), "little")
-                            for row in sign_bits(seed, self.rows))
+                            for row in sign_bits(seed, self.rows, width))
+        self._every = int.from_bytes(b"\1" * width, "little")
         self.head = hashlib.sha512(sketch_prefix(seed))
 
-    def sketch(self, block: bytes, z: bytes | None = None) -> bytes:
-        x = int.from_bytes(_e(block, z), "little")
+    def _vector(self, block: bytes, z: bytes | None) -> bytes:
+        if self.width == BLOCK_BYTES:
+            return _e(block, z)
+        if z is not None or type(block) is not bytes or len(block) != self.width:
+            raise ValueError(f"a {self.width}-byte vector's sketch is of its {self.width} bytes alone")
+        return block
+
+    def _product(self, x: int) -> bytes:
         planes = [x >> k for k in range(8)]
-        total = _int8_sum(planes, _EVERY_BYTE)
+        total = _int8_sum(planes, self._every)
         return struct.pack(f"<{self.rows}i", *(total - 2 * _int8_sum(planes, row) for row in self._signs))
 
-    def __call__(self, j: int, block: bytes, z: bytes | None = None) -> bytes:
+    def sketch(self, block: bytes, z: bytes | None = None) -> bytes:
+        return self._product(int.from_bytes(self._vector(block, z), "little"))
+
+    def partial(self, piece: bytes, offset: int) -> bytes:
+        """The sketch of `piece` laid at byte `offset` of a vector, the rest of it zero: `S_i[c][offset + x]` against
+        `int8(piece[x])`, k_s int32 little-endian.  The sketch is linear, so a vector's is its disjoint pieces'
+        partials summed row by row."""
+        if (type(piece) is not bytes or not piece or type(offset) is not int or offset < 0
+                or offset + len(piece) > self.width):
+            raise ValueError(f"a piece is nonempty bytes inside the {self.width}-byte vector")
+        return self._product(int.from_bytes(piece, "little") << 8 * offset)
+
+    def receipt(self, j: int, sigma: bytes) -> bytes:
+        """`y` from vector j's sketch `sigma`, however it was computed: SHA512(prefix ‖ u64be j ‖ σ)."""
+        if type(sigma) is not bytes or len(sigma) != 4 * self.rows:
+            raise ValueError(f"a sketch is {self.rows} int32s")
         h = self.head.copy()
         h.update(_index(j))
-        h.update(self.sketch(block, z))
+        h.update(sigma)
         return h.digest()
+
+    def __call__(self, j: int, block: bytes, z: bytes | None = None) -> bytes:
+        return self.receipt(j, self.sketch(block, z))
 
 
 RECEIPTERS = {SKETCH_SHA512: SketchReceipter, BLOCK_SHA512: Receipter}

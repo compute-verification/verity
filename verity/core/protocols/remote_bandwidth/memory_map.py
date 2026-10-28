@@ -20,16 +20,25 @@ d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,
 ~~~
 
 A write puts block j in its slot and releases the block the slot held, if it was live: the write overwrote it.  A
-free releases the slot's block and leaves the slot not live, its memory out of the store, until a write.  vLLM's
-`kv_free` is a free, though the pages' bytes stay as they were: a block left live after its values' last read would be
-credited past the circuit's use of it and past the lifetime cap, so the writer records the free, and the store's
-filler plan leaves the released blocks out.  A free of a slot below N releases its registered block, and the writer
-records one at the step that reads the block's values for the last time (weights only some steps read), so no
-registered block stays credited past its last read; that every free but a re-key's (below), of a registered block or
-a written one, is at its values' last read is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's
-link").  A step's
-frees apply before its writes; a step frees a slot at most once,
-only a live one, and writes a slot at most once.  A block is written once, complete and encoded (deferred residency):
+free releases the slot's block and leaves the slot not live, its memory out of the store, until a write.
+
+Frees are structural.  A block is freed in the record of its values' last structural reader: the last step of the
+schedule that runs a gate with one of them as an operand, a gather that may select one included, whichever request
+the gate is in (a page requests share is freed once, after the last of them reads it).  That step is where Lean's
+`live` ends (`Definitions.Accounting.Requirement`, whose `StoreMatches` keeps every block holding a credited value
+resident through it), and it is `requirement.Requirement.last` over the circuit's census.  It reads the circuit, its
+schedule and the registration, never a committed value.  A free at a value's last use (the last step whose gather
+selected it) breaks `StoreMatches` for each candidate no later step selects, and one wrong unit upstream of the
+selection moves it.  vLLM's `kv_free` is a free, though the pages' bytes stay as they were: a block left live past its
+values' last structural reader would be credited past the circuit's use of it and past the lifetime cap, so the writer
+records the free, and the store's filler plan leaves the released blocks out.  A free of a slot below N releases its
+registered block, and the writer records one at its values' last structural reader, so no registered block stays
+credited past it: weights only the first steps read are freed after the last of them, and a gathered table (an
+embedding, the experts a router indexes) stays until the last step whose gather may select any of its rows, whichever
+rows the run selected.  That every free but a re-key's (below), of a registered block or a written one, is at its
+values' last structural reader is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A
+step's frees apply before its writes; a step frees a slot at most once, only a live one, and writes a slot at most
+once.  A block is written once, complete and encoded (deferred residency):
 a KV block the step's tokens are still filling is not in the record until it is complete, and a complete one is not
 until the device has encoded it in place under its append's coin (below).  The write of a block completed at step s is
 recorded at the step before the first step whose attention reads it encoded: s itself if the coin is back before step
@@ -37,24 +46,25 @@ s + 1's reads, later if not.  Until then the block is in no record and uncredite
 prover-side registry's dirty blocks, the block its slot held freed at the step a write first reached it), though
 serving reads it as plaintext from its slot.
 
-Withdrawn.  A block freed before its encode lands (its values' last read at or before the step its write would be
-recorded at) is withdrawn: no write, no free, no credit.  It was never resident encoded, and a block no step reads
-while it is resident is in no record, so the line its write would be in, the one open when its encode lands, lists
-its index in `withdrawn` instead.  A line's writes and withdrawals take the store's next fresh indices together, each
-once and in index order, so a withdrawn index is never written.  Its slot holds nothing in the record from the step
-that reached it until a later write, and the writer records no free of it.  The prover releases the index
+Withdrawn.  A block freed before its encode lands (its values' last structural reader at or before the step its write
+would be recorded at) is withdrawn: no write, no free, no credit.  It was never resident encoded, and a block no step
+reads while it is resident is in no record, so the line its write would be in, the one open when its encode lands,
+lists its index in `withdrawn` instead.  A line's writes and withdrawals take the store's next fresh indices together,
+each once and in index order, so a withdrawn index is never written.  Its slot holds nothing in the record from the
+step that reached it until a later write, and the writer records no free of it.  The prover releases the index
 (`Change.released` covers it) and names it withdrawn (`Change.withdrawn`, `Session.release(released, withdrawn)`), and
 the verifier checks that no plan held it, so it was never written.
 
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
-an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
+the windows in 30 s), so every block written leaves the credited store within L.  A block the writer keeps
 longer (a prefix cache's) is re-keyed: its payload appended again, the same `d_j` at the store's next fresh index
 under a fresh coin, so the device encodes it anew under a fresh bound key.  A re-key's free is the one exception to a
-free at its values' last read: the re-key's step frees the slot, releasing the old index, and the new index is
-written in the slot when its encode lands (deferred residency, above), so the value is uncredited in between, and
-withdrawn if its last read comes first.  A block appended in window w is resident from w or w + 1, so its re-key,
-recorded at a step before the first pass of window w + L, falls at age L − 1 at the latest.  At L = 1 that is the window
-it was appended in, before it may be resident, so a session that defers residency has L ≥ 2 (`audit.Params.deferred`).
+free at its values' last structural reader: the re-key's step frees the slot, releasing the old index, and the new
+index is written in the slot when its encode lands (deferred residency, above), so the value is uncredited in
+between, and withdrawn if its last structural reader comes first.  A block appended in window w is resident from w
+or w + 1, so its re-key, recorded at a step before the first pass of window w + L, falls at age L − 1 at the latest.
+At L = 1 that is the window it was appended in, before it may be resident, so a session that defers residency has
+L ≥ 2 (`audit.Params.deferred`).
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side commits the digests of the blocks serving completes in an append tree (`audit.append_tree`,
@@ -80,12 +90,16 @@ circuit reads at `s`, filler beside them allowed: here the blocks resident at `s
 before `s` and not freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
 `Definitions.Accounting.Requirement`).
 A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
-did and the device has since encoded, and its frees are of blocks whose values the step read last.  `Replay.take(s)`
-is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's `Session.receive(...,
-change=...)`), the blocks appended and released between them, of which a block appended and released in between is in
-neither; it refuses a step at or before one already applied or taken.  That a pass's plan holds every complete block
-the circuit reads at its step is the plan's proof unit's to check, against this record and the circuit's requirement,
-inside zero knowledge.
+did and the device has since encoded, and its frees are of blocks whose values' last structural reader it is.
+`Replay.take(s)` is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's
+`Session.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
+released in between is in neither; it refuses a step at or before one already applied or taken.  That a pass's plan
+holds every complete block the circuit reads at its step is the plan's proof block's to check, against this record and
+the circuit's requirement, inside zero knowledge.
+
+The schedule.  `schedule` turns the map into the schedule the prover publishes (each block's write and free, the
+appends' extents and the passes' steps, `schedule.py`), from which the verifier computes every pass's plan and which it
+requires before it credits an appended block (`audit.Session.scheduled`): the plans `take` gives are that schedule's.
 """
 
 from __future__ import annotations
@@ -97,6 +111,7 @@ from dataclasses import dataclass
 from verity.ml.commitments import MerkleTree
 
 from . import audit
+from . import schedule as _schedule
 from .codec import BLOCK_BYTES
 from .receipts import DIGEST_BYTES
 
@@ -325,3 +340,31 @@ class Replay:
         out = _runs(self._added), _runs(self._removed)
         self._added, self._removed, self.taken = set(), set(), step
         return out
+
+
+def schedule(head: Header, steps: Iterable[Step], appends: Sequence[tuple[int, int]],
+             passes: Sequence[int]) -> _schedule.Schedule:
+    """The schedule the prover publishes for `Session.scheduled` (`schedule.Schedule`), from its memory map: each
+    registered block's free, each appended block's write and free (a block's free is the step that freed its slot or
+    wrote over it), the appended blocks grouped as the session's `appends` (first, count) went out, and the passes'
+    steps.  A block the map never writes (withdrawn, or appended and not encoded by the map's end) is never resident.
+    The map is held to memory-map/v1 as `Replay` holds it (`MemoryMapError`).  A prover whose plans are `Replay.take`'s
+    sends the plans this schedule gives."""
+    replay, write, free = Replay(head), {}, {}
+    for s in steps:
+        for slot in [*s.freed, *(w.slot for w in s.written)]:
+            if (j := replay.holds(slot)) is not None:
+                free[j] = s.step
+        replay.apply(s)
+        write.update((w.index, s.step) for w in s.written)
+    registered: list[list[int]] = []
+    for j in sorted(j for j in free if j < head.blocks):
+        if registered and registered[-1][0] + registered[-1][1] == j and registered[-1][2] == free[j]:
+            registered[-1][1] += 1
+        else:
+            registered.append([j, 1, free[j]])
+    return _schedule.Schedule(
+        tuple((f, c, e) for f, c, e in registered),
+        tuple(tuple((write[j], free.get(j)) if j in write else None for j in range(first, first + count))
+              for first, count in appends),
+        tuple(passes))

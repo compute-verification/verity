@@ -93,9 +93,10 @@ def _registered(monkeypatch, name: str, statics: tuple[str, ...]):
 
 
 def test_a_definition_valued_static_parses_to_the_definition_it_names_recursively(monkeypatch):
-    """CIR-42: ``EXACT=GemmAccumulatorS8_v2{...}`` in an id was bound as its text (``'str' object has no attribute
-    'signature'``).  A Definition-valued static with statics of its own parses to that Definition bound to them, a Definition
-    among those the same way, in a tuple too, beside a bare id, a literal and a tuple of literals; without the catalog."""
+    """``EXACT=GemmAccumulatorS8_v2{...}`` in an id is not bound as its text (which fails with ``'str' object has no
+    attribute 'signature'``).  A Definition-valued static with statics of its own parses to that Definition bound to them, a
+    Definition among those the same way, in a tuple too, beside a bare id, a literal and a tuple of literals; without the
+    catalog."""
     from verity.ml.circuits.defs import REGISTRY, bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 
@@ -116,9 +117,9 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
 
 
 def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
-    """CIR-42: `PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
-    the tile's cells) could not be targeted by id; each parses to the very Definition the sidecar binds, without building it
-    or the catalog."""
+    """`PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
+    the tile's cells) can be targeted by id: each parses to the very Definition the sidecar binds, without building it
+    or the catalog. The sidecar's last root is `TemplateInstances_v1` of the v1 tile, which is not a tile."""
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
@@ -127,15 +128,17 @@ def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")
     assert len({root.id for root in roots}) == len(roots)
+    *roots, population = roots
+    assert population.id.startswith("TemplateInstances_v1{template='PouwH1Tile_v1{") and population.id.endswith(",N=2}")
     for root in roots:
         assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
         assert TG.definition(root.id) is root
 
 
 def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeypatch):
-    """CIR-42: an id with a record static (``S={45bd63c5a436}``, a digest) looked the record up among the suite's Definitions,
-    building the whole catalog for one target.  Every catalog root whose id prints a record parses back to that root from the
-    roots alone (`targets.binding_roots`); only a digest no root binds is looked up in the suite."""
+    """An id with a record static (``S={45bd63c5a436}``, a digest) does not look the record up among the suite's Definitions,
+    which would build the whole catalog for one target.  Every catalog root whose id prints a record parses back to that root
+    from the roots alone (`targets.binding_roots`); only a digest no root binds is looked up in the suite."""
     import re
 
     TG.load_registries()
@@ -152,7 +155,7 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
 
 def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_by_name(monkeypatch):
     """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's, and
-    `test_every_call_the_suite_checks_is_partitioned` pass without it (#2765's `dsv4_indexer_compress` before its statics)."""
+    `test_every_call_the_suite_checks_is_partitioned` pass without it."""
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "load_registries", lambda: None)

@@ -1,7 +1,7 @@
-import Models.Pouw.Assumptions.NCP.RouteUWord
+import Definitions.Pouw.Assumptions.NCP.RouteUWord
 import Proofs.Pouw.NCP.ChainProofs
 import Proofs.Pouw.NCP.RouteUProofs
-import Models.Pouw.Guarantees.NCP
+import Definitions.Pouw.Guarantees.NCP
 
 /-!
 # The word layer on route U: proofs

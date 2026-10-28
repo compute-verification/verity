@@ -1,5 +1,5 @@
-"""`verity_int8::scaled_mm_zy`: scaled_mm's y and, from the same product, the call's z/y records (`int8_exact.zy_records`,
-CA's layout of 21 Oct 04:32Z): one record a 32 x 32 unit over the call's T slots, its exact s32 z over the whole K, then its
+"""`verity_int8::scaled_mm_zy`: scaled_mm's y and, from the same product, the call's z/y records (`int8_exact.zy_records`):
+one record a 32 x 32 unit over the call's T slots, its exact s32 z over the whole K, then its
 y = dq(z) in bf16, both row-major and little-endian, units in row-block-major order, empty slots zero bytes."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
-from verity_vllm.protocol_options import credit_gate as CG
+from verity_vllm.protocols.pouw import credit_gate as CG
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 UR, UC = E.UNIT
@@ -93,7 +93,7 @@ def test_each_records_z_is_the_compiled_units_z_in_its_cells_order():
     """Record u's z words are `pouw_h1.Call.z(Y, u)`: the compiled Program's unit u, its cells in its tile's pair order, so
     a leaf of the record is the unit's z as H1's statement reads it.  The only test that holds the layout to the compiled
     Program rather than to the module doc; about 30 s, compiling the smallest H1 call (K = 64, two by two units)."""
-    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocols.pouw import h1 as PH
     m, rows, n, k = 40, 64, 64, 64
     xq, sa, w, sw = _args(m, k, n, seed=11)
     zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)[1]

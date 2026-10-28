@@ -1,16 +1,14 @@
-"""`verity_vllm.program.registry.boolean_tanh`: RN32 tanh and Gemma-2's GeGLU by arithmetic are their word Definitions
+"""`verity.ml.definitions.registry.boolean_tanh`: RN32 tanh and Gemma-2's GeGLU by arithmetic are their word Definitions
 (`trace.word_of`) and compute the registered tables they replace. The activation inside `GeluTanhMulBf16_v4` is
 `gelu_tanh_bf16`'s word at every one of the 65,536 g (the words hash to the table's pin), and `GeluTanhMulBf16_v4` is
-`GeluTanhMulBf16_v1` on every gate word at six up words, every pair of special words and random and edge-product pairs;
+`GeluTanhMulBf16_v1` on every gate word at twelve up words, every pair of special words and random and edge-product pairs;
 `TanhF32Rn_v3` is `TanhF32Rn_v1` at every rule's and the region's edges, every exponent and random words of the region and of all
 f32. They carry exactly their builders' live ANDs, are pinned by gate count and program digest, hold no data, and are what a
 Program on bits calls for their word Definitions.
 
 An opt-in check runs every f32 word (`VERITY_VLLM_TANH_EXHAUSTIVE=1`: all 2^32 against `TanhF32Rn_v1`, the region's positive
 results assembled into `tanh_rn` and hashed against its pin), over every core the process may use, against a vectorized
-reference a test here ties to the word Definition. The 2^32 (g, u) pairs need none: past their activations `GeluTanhMulBf16_v4`
-and `GeluTanhMulBf16_v2` are the same code on (activation word, u), and both activations are `gelu_tanh_bf16` at every g, so v4
-is v2 on every pair."""
+reference a test here ties to the word Definition. No check runs the 2^32 (g, u) pairs."""
 from __future__ import annotations
 
 import hashlib
@@ -31,12 +29,12 @@ from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import boolean_tanh as BT
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import tables as T
+from verity.ml.definitions.registry import boolean_tanh as BT
+from verity.ml.definitions.registry import dense as D
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import tables as T
 
-from tests.program.test_boolean_dense import SPECIALS, _agree, _bits, _edge_products
+from tests.program.test_boolean_dense import SPECIALS, _agree, _bits
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -53,10 +51,10 @@ MUX_ANDS = {"gelu_tanh_bf16": ((1 << 16) - 1) * 16, "tanh_rn": ((1 << 27) - 1) *
 BF16_ONE = 0x3F80
 
 TARGETS = [bind(BT.TanhF32Rn), bind(BT.GeluTanhMulBf16), bind(BT.GeluTanhMul, I=8)]
+SLOW_PINS = ("TanhF32Rn_v3", "GeluTanhMulBf16_v4")
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id in SLOW_PINS else t for t in TARGETS], ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)
@@ -73,6 +71,7 @@ def test_a_read_is_a_small_part_of_its_table_s_multiplexer() -> None:
     assert PINS["GeluTanhMulBf16_v4"][0] * 60 < MUX_ANDS["gelu_tanh_bf16"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("d", [BT.TanhF32Rn, BT.GeluTanhMulBf16], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     params = [t for _, t in d.signature(None)[0]]
@@ -82,10 +81,11 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
     assert d.traced().counts["and"] == C.counts()["ands"] == PINS[bind(d).id][0]
 
 
+@pytest.mark.slow
 def test_the_word_views_and_the_boolean_versions() -> None:
-    """Each names its word Definition, is the newest Boolean version of it (`program.boolean.boolean_version`, ahead of
-    `boolean_dense`'s band `GeluTanhMulBf16_v2`), and holds no data (`operations.program_data`)."""
-    from verity_vllm.program.boolean import boolean_version
+    """Each names its word Definition, is the newest Boolean version of it (`program.boolean.boolean_version`), and holds no
+    data (`operations.program_data`)."""
+    from verity.ml.definitions.boolean import boolean_version
 
     assert TR.word_of(bind(BT.TanhF32Rn)) is D.TanhF32Rn
     assert TR.word_of(bind(BT.GeluTanhMulBf16)) is D.GeluTanhMulBf16
@@ -126,6 +126,7 @@ def _act() -> np.ndarray:
     return np.array(T.gelu_tanh_bf16_words(), np.uint32)
 
 
+@pytest.mark.slow
 def test_tanh_is_the_word_definition_at_the_edges_every_exponent_and_random_words() -> None:
     words = _tanh_words(np.random.default_rng(21))
     got, want = _bits(bind(BT.TanhF32Rn), words), np.array([D.tanh_f32_bits(int(w)) for w in words], np.uint64)
@@ -142,6 +143,17 @@ def test_the_vectorized_reference_is_the_word_definition() -> None:
     assert _tanh_ref(words).tolist() == [D.tanh_f32_bits(int(w)) for w in words]
 
 
+def _edge_products(rng, n: int, act) -> tuple[np.ndarray, np.ndarray]:
+    """(g, u) whose product f32(act(g)) * f32(u) lands in or near f32's subnormal range (rounded twice, to f32 then to bf16) or
+    at its overflow: g random, u's exponent field chosen against act(g)'s so that the product's is in -26..3 or 250..257."""
+    g = rng.integers(0, 1 << 16, n, dtype=np.int64)
+    ea = (np.array([act(int(x)) for x in g], np.int64) >> 7) & 0xFF
+    target = np.where(rng.integers(0, 2, n) == 1, rng.integers(-26, 4, n), rng.integers(250, 258, n))
+    eu = np.clip(target - ea + 127, 0, 254)
+    u = rng.integers(0, 2, n) << 15 | eu << 7 | rng.integers(0, 128, n)
+    return g.astype(np.uint16), u.astype(np.uint16)
+
+
 def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
     sg, su = np.meshgrid(SPECIALS, SPECIALS, indexing="ij")
     eg, eu = _edge_products(rng, 4096, D.gelu_tanh_bf16_bits)
@@ -150,10 +162,9 @@ def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
     return g.astype(np.uint64), u.astype(np.uint64)
 
 
+@pytest.mark.slow
 def test_the_activation_is_the_table_on_every_word() -> None:
-    """`gelu_tanh_bf16(g)` at all 65,536 g: `gelu_tanh_bf16`'s words, which hash to its pin. `boolean_dense`'s activation is
-    these words too (its `test_the_activation_on_every_word`), and past the activation `GeluTanhMulBf16_v4` and `_v2` are the same
-    code on (activation word, u), so the two agree on all 2^32 (g, u) pairs and v2's pair checks hold for v4."""
+    """`gelu_tanh_bf16(g)` at all 65,536 g: `gelu_tanh_bf16`'s words, which hash to its pin."""
     act = TR.definition("GeluTanhBf16ArithCheck", 1, lambda C, g: BT.gelu_tanh_bf16(C, g), (("g", BT.BF16),), BT.BF16,
                         register=False)
     got = _bits(act, np.arange(1 << 16, dtype=np.uint64))
@@ -162,14 +173,16 @@ def test_the_activation_is_the_table_on_every_word() -> None:
     assert hashlib.sha256(got.astype("<u4").tobytes()).hexdigest() == TABLE_SHA256["gelu_tanh_bf16"]
 
 
-@pytest.mark.parametrize("u", [BF16_ONE, 0x8000, 0x0001, 0x7F7F, 0xFF80, 0x7FC0])
+@pytest.mark.slow
+@pytest.mark.parametrize("u", [BF16_ONE, 0xBF80, 0x0000, 0x8000, 0x0001, 0x8080, 0x7F7F, 0xFF80, 0x7FC0, 0x4000, 0x3B80, 0x0080])
 def test_every_gate_word(u: int) -> None:
-    """All 65,536 gate words at an up word: at 1.0 the activation alone, then -0 (which becomes +0), a subnormal, the finite
-    maximum, an infinity and a NaN."""
+    """All 65,536 gate words at an up word: at 1.0 the activation alone, then signs, zeros (-0 becomes +0), subnormals, the
+    finite maximum, an infinity, a NaN and scales that move the product's exponent."""
     g = np.arange(1 << 16, dtype=np.uint64)
     _agree(bind(BT.GeluTanhMulBf16), g, np.full(g.shape, u, np.uint64))
 
 
+@pytest.mark.slow
 def test_gelu_is_the_word_definition_on_special_random_and_edge_pairs() -> None:
     _agree(bind(BT.GeluTanhMulBf16), *_pairs(np.random.default_rng(23)))
 

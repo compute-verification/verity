@@ -1,8 +1,8 @@
-"""The WEIGHTS OF RECORD (R15 manbind MAN-09; rev-cb M-0610, coord M-0614 (1)).
+"""The WEIGHTS OF RECORD.
 
 A Commit's `weights` registration hashes whatever model the committer served; comparing it with the live parameters re-registered at
-replay (O5) is self-consistency, not authentication: a served model that differs from the checkpoint in one element (rev-cb `flipweight`)
-replays bit-exactly against itself.  DECISIONS-2 §4 requires the registered inputs to be authenticated by their CANONICAL reference; for the
+replay (O5) is self-consistency, not authentication: a served model that differs from the checkpoint in one element (a flipped weight)
+replays bit-exactly against itself.  C2 requires the registered inputs to be authenticated by their CANONICAL reference; for the
 weights that reference is the CHECKPOINT OF RECORD -- the safetensors shards whose sha256 `manifests/checkpoints.json` pins --
 not the live engine.
 
@@ -18,13 +18,13 @@ This module derives, ENGINE-FREE and on CPU, one digest per weight field the Pro
     implementation's round-to-nearest-even (`torch.Tensor.to(bfloat16)` semantics), and the cast is recorded by name;
   * digest = sha256 of the composed row-major bytes; root_of_record = sha256 over the ordered (field, digest) list, an ANALYTIC field
     (the rotary table) entering as `analytic:<sha256 of its exact config.json inputs>` -- so the root is a function of (the Program's
-    weights struct, the checkpoint bytes, config.json) and of nothing on the deriving host.  [R16 pin, schema v2: v1 keyed the analytic
+    weights struct, the checkpoint bytes, config.json) and of nothing on the deriving host.  [Schema v2: v1 keyed the analytic
     entry by the numpy-fp32 inv_freq bytes, which differ by host CPU dispatch (AVX512 SVML vs scalar libm: cp-r1 vs cp-a100 gave two
-    roots for one Llama-3.2-1B record, exec M-0178) -- the pin VERDICT never depended on it (check_cos_sin is a bounded check).]
+    roots for one Llama-3.2-1B record) -- the pin VERDICT never depended on it (check_cos_sin is a bounded check).]
 
 Program fields that are NOT checkpoint tensors (the attention `_k_scale/_v_scale/_q_scale/_prob_scale` `Value<32>` engine constants,
 and on a quantized checkpoint vLLM's `attn.k_scale/v_scale/q_scale/prob_scale` loader placeholders -- F-fp8-PIN1) are pinned from the
-engine's declared configuration by `_engine_constant` (MAN-09c: f32 1.0 / the f32 -1.0 sentinel under kv_cache_dtype auto; the rotary
+engine's declared configuration by `_engine_constant` (f32 1.0 / the f32 -1.0 sentinel under kv_cache_dtype auto; the rotary
 table analytically) or listed BY NAME as `unpinned` when no rule applies;
 a field with no composition rule is `unresolved`, named, and the record's `complete` is False (fail closed: a Program whose weights
 this module cannot derive from the checkpoint has no weights of record).
@@ -57,6 +57,7 @@ from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, row
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
+PARAM = "weights"                                   # the Program parameter (a struct) the record is of, and the window circuit's registered value
 
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
@@ -73,7 +74,7 @@ FUSED_W13 = {"shared_experts.gate_up_proj": ("shared_experts.w1", "shared_expert
 #: whichever the checkpoint carries for expert 0 is the composition's source set; neither -> refused by name.
 EXPERTS = {"w13": ("gate_proj", "up_proj"), "w2": ("down_proj",)}
 EXPERTS_MIXTRAL = {"w13": ("w1", "w3"), "w2": ("w2",)}
-#: [F-r16-15, rev M-0131 / coord M-0130 (c)] the served stacks live on the FusedMoE layer (`<container>.experts.w13_weight`, vLLM <= 0.11) or
+#: the served stacks live on the FusedMoE layer (`<container>.experts.w13_weight`, vLLM <= 0.11) or
 #: on its RoutedExperts submodule (`<container>.experts.routed_experts.w13_weight`, vLLM 0.28 on the pods): the OPTIONAL `routed_experts`
 #: segment is the only extra segment accepted; the container (`mlp.experts`, Mixtral's `block_sparse_moe.experts`) is where the
 #: checkpoint's `<container>.<e>.<part>.<suffix>` tensors live.  Any other segment: no composition rule (refused by name, never guessed).
@@ -81,7 +82,7 @@ EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$
 #: Program weight fields that are engine constants, not checkpoint tensors (listed by name; not pinned by this module): the attention
 #: kv-cache scales (f32 1.0 without kv quantization) and the rotary cos/sin table (a function of config.json: rope_theta, rope_scaling,
 #: head_dim, max_position_embeddings -- derivable, v2).  Their effect on the served values is under the Match oracle (form B).
-#: [R16 fp8, F-fp8-PIN1] a QUANTIZED checkpoint's attention layers also carry vLLM's loader placeholders `attn.q_scale / k_scale /
+#: a QUANTIZED checkpoint's attention layers also carry vLLM's loader placeholders `attn.q_scale / k_scale /
 #: v_scale / prob_scale` (no underscore): `Fp8KVCacheMethod.create_weights` -> `KVCacheScaleParameter()` = the f32 sentinel -1.0,
 #: "overwritten when loading weights" IF the checkpoint ships kv scales (then `compose` finds them 1:1: the `not ck.has(live)` guard),
 #: created by `torch.tensor(-1.0)` at the MODEL dtype (bf16 -> `Value<16>` in the Program; F-fp8-PIN2: the measured Qwen3-4B-FP8 B1/B8
@@ -90,7 +91,7 @@ EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$
 #: `_k_scale = _v_scale = 1.0` and never touches the placeholders, which no kernel reads (Qwen3-4B-FP8 B1: 144 such fields, 723 - 435
 #: checkpoint - 144 `_x_scale`).  Pinned EXACTLY as the sentinel under kv_cache_dtype auto (a served value other than -1.0 means the
 #: loader wrote it from somewhere that is not the pinned checkpoint); any other kv_cache_dtype: unpinned by name (the scale is then live).
-#: [R19, F-r19-int-11] vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends every branch with `del layer.k_scale /
+#: vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends every branch with `del layer.k_scale /
 #: v_scale / q_scale / prob_scale` (kv_cache.py:106-109, 209-212; the early-return branch asserts they are already gone): the placeholders
 #: exist only between `create_weights` and the end of weight loading, so the served model has NO parameter to compare the record's
 #: pinned sentinel against.  #74 (Qwen3-4B-FP8 B8, H100): 579/579 compared equal, 144 placeholders "not found among the served
@@ -234,10 +235,10 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
         note["rule"] = "tied lm_head <- model.embed_tokens.weight"
         whole = ["model.embed_tokens.weight"]
     elif name == "normalizer" or name.endswith(".normalizer"):
-        # Gemma-2's embedding normalizer (dense M-0619 preflight on the real Gemma-2-2B Program: the ONE unresolved field of 316): a
+        # Gemma-2's embedding normalizer (on the real Gemma-2-2B Program, the ONE unresolved field of 316): a
         # non-persistent 0-d buffer `torch.tensor(hidden_size ** 0.5)` created at the served dtype in vLLM's Gemma2Model.__init__ -- no
-        # checkpoint tensor, a function of config.json's hidden_size alone.  The frozen root policy already classifies it with the
-        # rotary table (root_policy.ANALYTIC_TABLES["normalizer"]) and pins its value EXACTLY: the Python float sqrt(H) rounded once
+        # checkpoint tensor, a function of config.json's hidden_size alone.  It is an analytic table like the rotary table
+        # (`acquire.plan.analytic_table_of_buffer`), and its value is pinned EXACTLY: the Python float sqrt(H) rounded once
         # (nearest-even) to bf16 (analytic.normalizer_word).  Composed here from config.json, so the served buffer is compared like a
         # weight, not left unpinned; any other declared width / shape has no rule -> unresolved (fail closed).
         if bits != 16 or list(shape) not in ([], [1]):
@@ -310,7 +311,7 @@ def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = Non
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
     from verity_vllm.check.replay.index import parse_struct
-    wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
+    wparam = next((t for n, t in inst.get("params", []) if n == PARAM), None)
     if not wparam or not str(wparam).startswith("{"):
         return []
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
@@ -322,10 +323,10 @@ ENGINE_ROTARY_RE = re.compile(r"\.rotary_emb\.cos_sin_cache$")
 
 
 def kv_scale_remap_sources(served_name: str) -> list[str]:
-    """[rev M-0489 / M-0516 F-r16-21 residual] the checkpoint names vLLM's `weight_utils.maybe_remap_kv_scale_name` renames onto a served
+    """The checkpoint names vLLM's `weight_utils.maybe_remap_kv_scale_name` renames onto a served
     `<layer>.attn.<x>_scale` (x in k, v, q, prob) at load: kv_cache_scheme checkpoints (`<layer>.<x>_scale`, `<layer>.<x>_proj.<x>_scale`),
     modelopt (`<layer>.<x>_proj.output_scale`), the legacy fused `<layer>.kv_scale` (k and v).  `<layer>` = the served name up to `.attn.`.
-    Ordered; the caller pins 1:1 from the ONE source present and refuses two.  `attn._<x>_scale` (the MAN-09c engine constant) -> []."""
+    Ordered; the caller pins 1:1 from the ONE source present and refuses two.  `attn._<x>_scale` (an engine constant) -> []."""
     m = re.search(r"^(.*)\.attn\.(k|v|q|prob)_scale$", served_name)
     if not m:
         return []
@@ -337,13 +338,13 @@ def kv_scale_remap_sources(served_name: str) -> list[str]:
 
 
 def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: CheckpointIndex, kv_cache_dtype: str) -> dict[str, Any] | None:
-    """[MAN-09c, rev-cb M-0655 W3] the engine constants the Program declares as weights but no checkpoint carries, pinned from
+    """The engine constants the Program declares as weights but no checkpoint carries, pinned from
     config.json / the engine's declared configuration instead of left unpinned:
       * attention kv-cache scales `attn._{k,v,q,prob}_scale`: without kv-cache quantization (kv_cache_dtype auto) vLLM creates them as
         f32 1.0 -- pinned EXACTLY (digest of the f32 word); any other kv_cache_dtype has its scales in the checkpoint (then `compose`
         finds them) or is left unpinned BY NAME with the dtype in the why (never assumed).
-      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: the frozen root policy's analytic table (root_policy
-        ANALYTIC_TABLES['cos_sin'] = analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
+      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: an analytic table (`acquire.plan.analytic_table_of_buffer`,
+        checked by analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
         pipeline's error bound of the analytic function of config.json (theta, D/ROT, MAX_POS, rope_scaling); there is no byte digest
         (CUDA libm != numpy libm at the last bf16 ulp), so the field is pinned 'analytic' and `check` runs the bound on the served
         words.  A rope_scaling type without an analytic table stays unpinned by name.
@@ -359,12 +360,12 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
         return base | {"digest": hashlib.sha256(arr.tobytes()).hexdigest(), "pinned": True, "sources": ["engine:kv_cache_dtype=auto"],
                        "rule": "engine constant: kv-cache scale == f32 1.0 (kv_cache_dtype auto -- no kv quantization; vLLM Attention.__init__)"}
     if ENGINE_KV_PLACEHOLDER_RE.search(field):
-        # [rev M-0489 (2) / M-0516 F-r16-21 residual: the remap-aware compose] BEFORE the placeholder rule, look the checkpoint up under
+        # The remap-aware compose: BEFORE the placeholder rule, look the checkpoint up under
         # vLLM's REMAP SOURCES for this layer's scale (weight_utils.maybe_remap_kv_scale_name renames them to attn.<x>_scale at load): a
         # shipped scale is a checkpoint tensor, written by the loader and read by the kernel -- pinned 1:1 from its source as one f32 word
         # under ANY kv_cache_dtype; two sources for one scale, or a source that is not one word, -> unresolved (fail closed).  Only a
         # checkpoint with NO source for this scale reaches the placeholder rule below (the sentinel, which such a checkpoint would fail by
-        # name anyway: rev M-0516).  The exact-name `ck.has(served)` case never arrives here (compose pins it first).
+        # name anyway).  The exact-name `ck.has(served)` case never arrives here (compose pins it first).
         srcs = kv_scale_remap_sources(live)
         found = [n for n in srcs if ck.has(n)]
         if found:
@@ -383,7 +384,7 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
             return base | {"digest": hashlib.sha256(np.ascontiguousarray(words).tobytes()).hexdigest(), "pinned": True, "sources": [src],
                            "rule": f"kv scale (remapped from checkpoint {src} -> {live}; vLLM maybe_remap_kv_scale_name; one word in the declared Value<{bits}>)",
                            **({"cast": cast} if cast else {})}
-        # [R16 fp8 F-fp8-PIN1 / F-fp8-PIN2] vLLM Fp8KVCacheMethod.create_weights: `KVCacheScaleParameter()` = `torch.tensor(-1.0)` with NO
+        # vLLM Fp8KVCacheMethod.create_weights: `KVCacheScaleParameter()` = `torch.tensor(-1.0)` with NO
         # dtype -> the sentinel is created at the model's default dtype (bf16 under `set_default_torch_dtype(model dtype)`: the served
         # Qwen3-4B-FP8 word is bf16 0xBF80, and the Program declares the field `Value<16>`; `_k_scale` is an explicit f32 1.0, `Value<32>`).
         # Pinned as -1.0 IN THE DECLARED WIDTH (one word, shape [] or [1]); a declared width other than 16/32 has no rule -> unpinned by name.
@@ -449,12 +450,12 @@ def root_of_fields(fields: list[dict[str, Any]]) -> str:
 def reroot(record: dict[str, Any]) -> str:
     """The root a record's fields give under the CURRENT schema -- a reader: the record is not changed.  For a current-schema record this
     equals its root_of_record (a self-check that the root is recomputable from the fields); for a v1 record it is the root v2 would have
-    derived from the same fields (exec M-0178: two v1 roots of one Llama-3.2-1B, cp-r1 / cp-a100, re-root to one)."""
+    derived from the same fields (two v1 roots of one Llama-3.2-1B, cp-r1 / cp-a100, re-root to one)."""
     return root_of_fields(record.get("fields") or [])
 
 
 def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Compare two records FIELD BY FIELD (the comparison report uses for same-model rows across pods under schema v1, COORD ruling 25):
+    """Compare two records FIELD BY FIELD (the comparison report uses for same-model workloads across pods under schema v1):
     fields only on one side; fields whose digest / shape / bits / analytic KEY differ (the weights of record differ); fields that differ
     only in host-side information (analytic.inv_freq_sha256, the host note, sources/rule text) -- named separately, they do not make
     the weights differ.  `same_weights_of_record` = no one-sided field, no differing digest/shape/bits/analytic key; then reroot(a) ==
@@ -485,9 +486,11 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto",
-                      fields: list[tuple[str, list[int], int]] | None = None) -> dict[str, Any]:
+                      fields: list[tuple[str, list[int], int]] | None = None,
+                      on_field: Callable[[str, np.ndarray], None] | None = None) -> dict[str, Any]:
     """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list.
-    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`)."""
+    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`); `on_field(field, words)`
+    is given each field it digests, its raw words row-major as digested."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
     tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
@@ -537,6 +540,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
             continue
         b = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)      # arr.tobytes()'s bytes, not copied again
         n_bytes += b.nbytes
+        if on_field is not None:
+            on_field(field, arr)
         out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": hashlib.sha256(b).hexdigest(),
                            "pinned": True, **note})
     root = root_of_fields(out_fields)
@@ -547,7 +552,7 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
             "tp": {"world": world, "rank": rank}, "checkpoint": {"dir": ck.dir, "config_tie_word_embeddings": bool(ck.config.get("tie_word_embeddings", False)),
                                                                    **ck.pin, "all_shards_pinned": shards_ok},
             "root_of_record": root, "fields": out_fields, "n_fields": len(fields), "n_pinned": n_pinned, "bytes": n_bytes,
-            "n_analytic": len(analytic_fields), "analytic_fields": analytic_fields,      # [MAN-09c] pinned by the frozen analytic table (bounded), no byte digest
+            "n_analytic": len(analytic_fields), "analytic_fields": analytic_fields,      # pinned by the frozen analytic table (bounded), no byte digest
             "engine_assumptions": {"kv_cache_dtype": str(kv_cache_dtype or "auto")},
             "unpinned": unpinned, "unresolved": unresolved, "complete": not unresolved,
             "of_record": (not unresolved) and shards_ok is True,          # [W1] composed from the PINNED shards, every field resolved
@@ -561,13 +566,13 @@ def live_param_digests(model, *, include_buffers: bool = True, raw_for: "re.Patt
     """sha256 of every live parameter (and buffer) of the served model, by `named_parameters()` name: the SAME tensors the committer's
     weights root covers (register_weights), hashed as raw contiguous bytes (bf16 words row-major).  Tensors whose name matches `raw_for`
     (default: the rotary cos_sin table) also keep their raw words under `raw[name]` (numpy uint16, in memory only -- not for the row
-    record) so `check` can run the analytic bound on them [MAN-09c].  Hashed a chunk at a time on a thread pool (`param_digests`)."""
+    record) so `check` can run the analytic bound on them.  Hashed a chunk at a time on a thread pool (`param_digests`)."""
     from verity_vllm.check.param_digests import param_digests
     return param_digests(model, include_buffers=include_buffers, raw_for=raw_for)
 
 
 def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]:
-    """[MAN-09c] the served rotary table against the frozen analytic table's bound (analytic.check_cos_sin)."""
+    """The served rotary table against the frozen analytic table's bound (analytic.check_cos_sin)."""
     from verity_vllm.program import model as analytic
     a = f.get("analytic") or {}
     rep: dict[str, Any] = {"field": f["field"], "served_name": f["served_name"], "table": a.get("table"), "expected_shape": a.get("expected_shape")}
@@ -591,7 +596,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
     """Field by field: the checkpoint-composed digest of record == the served parameter's digest.  Any difference or a Program field
     missing from the served model -> result False, NAMED.  Fields the record leaves unpinned are listed, not compared.
 
-    [rev-cb M-0655 W1] the record is OF RECORD only when every shard it was composed from carries the sha256 `manifests/checkpoints.json`
+    The record is OF RECORD only when every shard it was composed from carries the sha256 `manifests/checkpoints.json`
     pins: an unpinned / differently-hashed shard (a copy outside the manifest, a substituted file) -> result False, named -- 'served ==
     whatever is on disk' is not the pin.  [W2] with `program_digests_of_record` (the Build digest of record / the manifest's component
     digests) a record built for another Program is refused by name; with `checkpoint_of_record` ({repo, revision}) a record whose
@@ -618,7 +623,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         if short := sorted(x[:16] for x in ofr | st | ({pd} if pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
             prog_why = f"Program digests not full sha512 (128 hex), compared only whole: {short}"
         elif stamped is not None:
-            # [rev-cb M-0733] a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
+            # a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
             # row -- more, fewer or other components -- is refused by name; the stamp itself must be sound (every component's struct equal)
             if stamped.get("why"):
                 prog_why = f"record's of-record stamp is not sound: {str(record.get('of_record_why') or stamped.get('why'))[:200]}"
@@ -638,7 +643,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             ent_why = f"record's checkpoint entry {ent.get('repo')} != the workload's model {want_repo}"
         elif want_rev and not str(ent.get("revision") or "").startswith(want_rev[:10]):
             ent_why = f"record's checkpoint revision {str(ent.get('revision'))[:10]} != the workload's pin {want_rev[:10]}"
-    # [MAN-09c] the record's engine assumption must be the engine's: a record that pinned the kv scales as 1.0 (kv_cache_dtype auto)
+    # the record's engine assumption must be the engine's: a record that pinned the kv scales as 1.0 (kv_cache_dtype auto)
     # does not certify an engine running a quantized kv cache (its scales are other values) -- refused by name, never re-assumed
     kv_why = None
     rec_kvd = str((record.get("engine_assumptions") or {}).get("kv_cache_dtype") or "auto")
@@ -668,7 +673,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         if str(got.get("digest")) != str(f["digest"]):
             mismatched.append({"field": f["field"], "served_name": f["served_name"], "of_record": f["digest"][:16], "served": str(got.get("digest"))[:16],
                                "shape": f.get("shape"), "served_dtype": got.get("dtype")})
-    # [F-r19-int-11] a loader placeholder (`attn.k_scale`, no underscore) the engine deleted after loading is absent by construction, not
+    # a loader placeholder (`attn.k_scale`, no underscore) the engine deleted after loading is absent by construction, not
     # missing: moved out of `missing` by name iff the record assumes kv_cache_dtype auto AND the `attn._k_scale` the kernels read was
     # itself found and compared (so the scale that reaches the served values IS pinned).
     placeholders_deleted: list[str] = []
@@ -713,15 +718,15 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             "placeholders_deleted": placeholders_deleted,
             "placeholders_deleted_note": ((f"{len(placeholders_deleted)} Fp8KVCacheMethod loader placeholder(s) (attn.q/k/v/prob_scale) pinned as the -1.0 "
                                           "sentinel on the record are not served: vLLM's process_weights_after_loading deletes them after weight loading; "
-                                          "the attn._x_scale the kernels read are compared (F-r19-int-11)") if placeholders_deleted else None),
+                                          "the attn._x_scale the kernels read are compared") if placeholders_deleted else None),
             "analytic": analytic_checked, "engine_assumptions": record.get("engine_assumptions"),
             "unpinned_note": (("engine constants left unpinned by name are not authenticated by this pin (form (B) only)") if unpinned else
                               "every declared weight field is pinned: checkpoint bytes by digest, kv scales as the engine constant, the rotary table by the frozen analytic bound"),
             "unresolved": list(record.get("unresolved") or []), "shards": ck.get("shards"),
             "all_shards_pinned": ck.get("all_shards_pinned"), "shards_ok": bool(shards_ok),
             "method": "sha256(served parameter bytes) == sha256(checkpoint-composed tensor of record) per Program weight field, shards pinned by "
-                      "manifests/checkpoints.json sha256, record bound to the Program of record (MAN-09 + W1/W2); engine constants: kv scales "
-                      "== f32 1.0 under kv_cache_dtype auto, rotary table within analytic.check_cos_sin's bound (MAN-09c)",
+                      "manifests/checkpoints.json sha256, record bound to the Program of record; engine constants: kv scales "
+                      "== f32 1.0 under kv_cache_dtype auto, rotary table within analytic.check_cos_sin's bound",
             "why": why}
 
 
@@ -791,7 +796,7 @@ def weights_struct(program: dict[str, Any]) -> list[list[Any]]:
 
 
 def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest: str | None = None) -> dict[str, Any]:
-    """[rev-cb M-0733 hardening of hopper M-0723] Stamp the WHOLE of-record set on the record instead of one arbitrary component's digest:
+    """Stamp the WHOLE of-record set on the record instead of one arbitrary component's digest:
     every component Program under `programs_root` (build_request_LP*_T* + build_request) + the workload digest (build_workload/
     workload_program.json) + the manifest's program / component digests.  Each component's weights struct must EQUAL the record's
     (field list, shapes, bits): a component whose struct differs is named and the record is not of record (a record derived from one
@@ -854,7 +859,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
         why.append(f"no component Program under {programs_root}")
     record["of_record_set"] = {"program_digests": sorted(digests), "components": comps, "workload_digest": workload_digest,
                                "manifest_digests": sorted(set(manifest_digests)), "programs_root": str(programs_root), "why": why or None,
-                               "rule": "every component Program's weights struct == the record's; the run's of-record set must equal this set (rev-cb M-0733)"}
+                               "rule": "every component Program's weights struct == the record's; the run's of-record set must equal this set"}
     if why:
         record["of_record"] = False
         record["of_record_why"] = "; ".join(why)[:600]
@@ -863,33 +868,38 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
 
 def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_manifest: str | None, argv: list[str] | None, *,
                           supersedes: str | None = None) -> dict[str, Any]:
-    """[COORD R16 M-0038 (2): record repairs are LOGGED DERIVATIONS] the provenance line of a record written by this CLI: tool, the code that
-    ran it (the repo's HEAD when this file sits in a git tree, else null), the SOURCE FILES the derivation read (the Program's instances.json.gz
+    """[Record repairs are LOGGED DERIVATIONS] the provenance line of a record written by this CLI: tool, the code that
+    ran it (the repo's HEAD when this file sits in a git tree, else null, with `code_source` naming what failed), the SOURCE FILES the derivation read (the Program's instances.json.gz
     + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (row_pod moves a
-    stale / pre-MAN-09c record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
+    stale / older record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
     import subprocess
     import time as _t
 
     code = None
     code_source = None
+    unread: list[str] = []
     try:
         # the release tree on a pod has no .git: ship.sh's EXPORT.json names the shipped commit (experiment.code_version reads it first,
-        # then git); the int-1 wave-1 records carried code null for that reason (exec r16_0413 build_request/weights_of_record.json)
+        # then git); the first pod records carried code null for that reason
         from verity_vllm.config import ROOT
         from verity_vllm.pipeline.experiment import code_version
         cv = code_version(ROOT)
         code, code_source = cv.get("commit") or None, cv.get("source")
         if code and cv.get("dirty_patch_sha256"):
             code_source = f"{code_source} (dirty patch {str(cv['dirty_patch_sha256'])[:12]})"
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         code = None
+        unread.append(f"code_version raised {type(e).__name__}: {e}")
     if code is None:
         try:
             here = os.path.dirname(os.path.abspath(__file__))
             code = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip() or None
             code_source = "git" if code else None
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             code = None
+            unread.append(f"git rev-parse raised {type(e).__name__}: {e}")
+    if unread:
+        code_source = (f"git ({'; '.join(unread)})" if code else f"unreadable: {'; '.join(unread)}")[:240]
     return {"tool": "verity_vllm.check.weights_of_record", "code": code, "code_source": code_source, "at": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
             "sources": {"program_dir": os.path.abspath(program_dir), "program_files": ["instances.json.gz", "result.json"],
                         "checkpoint_dir": os.path.abspath(checkpoint_dir), "checkpoints_manifest": os.path.abspath(checkpoints_manifest) if checkpoints_manifest else "repo default"},
@@ -898,19 +908,19 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    """weights of record: per-field digests of the checkpoint-composed served weights (MAN-09)"""
+    """weights of record: per-field digests of the checkpoint-composed served weights"""
     program_dir: str | None = option("--program-dir", default=None, help="the Program of record (instances.json.gz + result.json)")
-    programs_root: str | None = option("--programs-root", default=None, help="[M-0733] a row dir: derive from its first component Program and stamp EVERY component's " "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
+    programs_root: str | None = option("--programs-root", default=None, help="a row dir: derive from its first component Program and stamp EVERY component's " "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
     manifest: str | None = option("--manifest", default=None, help="the row's required manifest (default <programs-root>/manifest.json): its digests join the stamp")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint snapshot (safetensors shards + config.json); required to derive")
-    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; " "exit 0 when they pin the same weights of record (COORD R16 ruling 25: same-model rows across pods under schema v1)")
+    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; " "exit 0 when they pin the same weights of record (same-model rows across pods under schema v1)")
     checkpoints: str | None = option("--checkpoints", default=None, help="manifests/checkpoints.json (default: the repo's)")
     model: str | None = option("--model", default=None, help="HF repo id, to select the checkpoints.json entry when --checkpoint-dir is not its local_path")
     revision: str | None = option("--revision", default=None)
     no_verify_shards: bool = option("--no-verify-shards", default=False, action="store_true", help="skip the shard sha256 (the record then says pinned: null)")
-    kv_cache_dtype: str = option("--kv-cache-dtype", default="auto", help="[MAN-09c] the engine's kv_cache_dtype the record assumes (auto: kv scales pinned as f32 1.0)")
+    kv_cache_dtype: str = option("--kv-cache-dtype", default="auto", help="the engine's kv_cache_dtype the record assumes (auto: kv scales pinned as f32 1.0)")
     out: str | None = option("--out", default=None, help="write the record here (default: <program-dir>/weights_of_record.json)")
-    supersedes: str | None = option("--supersedes", default=None, help="[COORD R16 M-0038 (2)] the record this derivation replaces (moved aside by the caller), named in `derived`")
+    supersedes: str | None = option("--supersedes", default=None, help="the record this derivation replaces (moved aside by the caller), named in `derived`")
 
 
 def main(a: Options) -> int:

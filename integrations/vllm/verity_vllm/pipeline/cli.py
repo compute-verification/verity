@@ -5,7 +5,9 @@
 A command is a library module with an options dataclass -- `Options`, or `COMMANDS = {name: <options class>}` for a
 command with subcommands -- whose fields are `config.option`s, and `main(options)`.  This module is the only place that
 parses a command line: it builds the parser from the dataclass fields, takes the environment defaults the fields name
-(`option(env=...)`), and reports a `config.UsageError` as a usage error (exit 2).  `python -m verity_vllm.pipeline.cli`
+(`option(env=...)`), and reports a `config.UsageError`, the command's or an option type's, as a usage error with its message
+(exit 2).  A process it starts refuses a `VERITY_*`
+variable nothing in the tree reads (`settings.validate_environ`), naming it, also exit 2.  `python -m verity_vllm.pipeline.cli`
 is the same program, for interpreters without the `verity-vllm` launcher.
 """
 
@@ -16,9 +18,10 @@ import dataclasses
 import importlib
 import os
 import sys
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError
 
 PROG = "verity-vllm"
@@ -26,9 +29,9 @@ PROG = "verity-vllm"
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
 COMMANDS: dict[str, tuple[str, str]] = {
     "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
-    "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
+    "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
-    "boolean-purity": ("verity_vllm.program.boolean", "the Definitions a Program reaches that are not Boolean (or, --dry-run, would)"),
+    "boolean-purity": ("verity_vllm.program.boolean_purity", "the Definitions a Program reaches that are not Boolean (or, --dry-run, would)"),
     "boolean-replay": ("verity_vllm.pipeline.boolean_replay", "a deferred Commit's replay with every pick evaluated on bits"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
@@ -36,6 +39,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "capture-map": ("verity_vllm.check.capture_map", "a capture map against a module inventory (check), its tap counts and value ids"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
     "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
@@ -51,8 +55,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
     "fp8-checkpoint": ("verity_vllm.engine.fp8_checkpoint", "make or re-make a block-FP8 checkpoint from a BF16 pin"),
     "gate": ("verity_vllm.acquire.gate", "CPU acquisition gate of one row"),
-    "int8-checkpoint": ("verity_vllm.engine.int8_checkpoint", "make or re-make an int8 checkpoint (exact-int8 linears) from a BF16 pin"),
-    "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
+    "int8-checkpoint": ("verity_vllm.engine.int8_checkpoint", "make or re-make an int8 checkpoint (exact-int8 linears) from a BF16 or FP8-block pin"),
+    "gemm-correspondence": ("verity_vllm.program.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
@@ -61,54 +65,51 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
     "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
     "instances-form": ("verity_vllm.program.instances_form", "stored form of instances.jsonl operand references"),
-    "kernel-identity": ("verity_vllm.check.kernel_identity", "generated-kernel identity"),
+    "kernel-identity": ("verity_vllm.engine.kernel_identity", "generated-kernel identity"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
-    "libdevice-sampling": ("verity_vllm.program.kernels.libdevice_sampling", "libdevice sampler transcription check"),
+    "libdevice-sampling": ("verity_vllm.program.libdevice_sampling", "libdevice sampler transcription check"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
-    "manifest-verify": ("verity_vllm.query.manifest.verify", "is manifest.json the manifest of record"),
+    "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
-    "mla-capture": ("verity_vllm.program.registry.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
+    "mla-capture": ("verity_vllm.program.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
     "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
     "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
-    "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
-    "predict": ("verity_vllm.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
-    "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
+    "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
+    "prefix-cache": ("verity_vllm.pipeline.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "served": ("verity_vllm.acquire.served", "the served-compiled Program and required-value manifest (build), the GEMM routes it needs (routes)"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
     "served-pin": ("verity_vllm.acquire.served_artifact", "a served row's pinned compile artifact: seed a fresh Inductor dir with its autotune winners (seed), check a dir's (check)"),
+    "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
     "profile-descriptor": ("verity_vllm.program.profile_descriptor", "where a serialised descriptor's bytes go"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
-    "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
     "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
-    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+    "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                             "switch), and a checkpoint's staging (staged)"),
     "rejudge": ("verity_vllm.pipeline.tp.rejudge", "recompute a finished TP Commit's GPU-free gates from its saved outputs"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),
-    "replay": ("verity_vllm.check.replay.replay", "the derived Program as its own oracle"),
     "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
     "research-result": ("verity_vllm.pipeline.research_result", "a sweep row's result.json"),
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
-    "rmsnorm-fused-sweep": ("verity_vllm.program.kernels.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
-    "root-policy": ("verity_vllm.check.root_policy", "root closure check"),
+    "rmsnorm-fused-sweep": ("verity_vllm.program.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
-    "sweep": ("verity_vllm.pipeline.sweep", "a night's config runs on one host, packed onto its GPUs by RAM and CPU (plan, run)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
-    "sampling-rng": ("verity_vllm.program.kernels.sampling_rng", "sampler noise recomputation"),
+    "sampling-rng": ("verity_vllm.program.sampling_rng", "sampler noise recomputation"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
     "telemetry-admission": ("verity_vllm.pipeline.telemetry.admission_commands", "empirical admission planner"),
     "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
     "tp-commit": ("verity_vllm.pipeline.tp.commit", "tensor-parallel Commit"),
@@ -116,10 +117,12 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "tp-fold-match": ("verity_vllm.pipeline.tp.fold_match", "per-rank fold Match of a tensor-parallel row"),
     "tp-match": ("verity_vllm.pipeline.tp.match", "tensor-parallel Match at the collective level"),
     "tp-serving-rows": ("verity_vllm.pipeline.tp.serving_rows", "a deferred tensor-parallel Commit's stand-in windows, from its ranks' sealed bundles"),
-    "twins": ("verity_vllm.program.kernels.twins", "vectorized twins of the registered bodies"),
+    "advice-windows": ("verity_vllm.pipeline.advice_windows", "a deferred tensor-parallel Commit's stand-in windows over a compiler's Programs for the advice"),
+    "twins": ("verity_vllm.program.twins_check", "vectorized twins of the registered bodies"),
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
+    "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
 
 
@@ -180,7 +183,21 @@ def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[st
             kw["dest"] = f.name
             if "default" not in kw:
                 kw["required"] = True
+        if "type" in kw:
+            kw["type"] = _typed(kw["type"])
         parser.add_argument(*flags, **kw)
+
+
+def _typed(convert: Callable[[str], Any]) -> Callable[[str], Any]:
+    """An option's ``type`` whose `config.UsageError` argparse reports with its message (of a ValueError it says only "invalid
+    <type> value")."""
+    def typed(s: str) -> Any:
+        try:
+            return convert(s)
+        except UsageError as e:
+            raise argparse.ArgumentTypeError(str(e)) from e
+    typed.__name__ = getattr(convert, "__name__", repr(convert))
+    return typed
 
 
 def _options(cls: type, ns: argparse.Namespace, environ: Mapping[str, str]) -> Any:
@@ -253,6 +270,12 @@ def main(argv: list[str] | None = None) -> Any:
     if argv[0] not in COMMANDS:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
+    if process:
+        try:
+            settings.validate_environ()
+        except settings.UnknownSetting as e:
+            print(f"{PROG}: {e}", file=sys.stderr)
+            return 2
     parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
     process_settings(os.environ)
     if process:

@@ -1,25 +1,32 @@
 {
  "definitions": {
   "MoePairCoordinateW_v2{E=128,K=16,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 43189
+   "and": 43189,
+   "type": "d09832ee7f4e04e4d8526efd3ce0a980b61367d3caa13883938de96a7f7aa96b428cb32ff4fbda3b86c78b8562d32d7ed11e4d1c0ddbdb8eecdca3587bb00893"
   },
   "MoePairCoordinateW_v2{E=3,K=32,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 20885
+   "and": 20885,
+   "type": "3bc7201b8307ebdfb6cc127427dfe5d6b6209e8cba05e3388f55c0b52281dd3e2ebea74d280c86eeb4cba046aad8223396b1cfcba0549bdb8b3a6bfc33949716"
   },
   "MoePairCoordinate_v2{E=128,K=16,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 40791
+   "and": 40791,
+   "type": "e33357032f8bf6335da5067f883b0330e7e649f4c4ddf613f5c6b9362084ee8ccbee742f89693822509ecfe57f064165ec74fd27251f108a7a636a917f187761"
   },
   "MoePairCoordinate_v2{E=3,K=32,DOT=AmpereBF16TcDot16_v3}": {
-   "and": 19270
+   "and": 19270,
+   "type": "d10e5c6a9d1c9753ac0f3d2403704641f5254997a746dd580a582b8d45a74f8803dbfd3f7b35dcc2034dc67ef923424536945cb8bdc627af02fa0ce54528a2eb"
   },
   "MoePairCoordinate_v2{E=3,K=32,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 18487
+   "and": 18487,
+   "type": "66cd491354005d2ab088925c189961e101cdf04b965aec1272b352da9e7f5031f0fd9f2ba2dd030964b7ee9d3f55d7a41c418e8f9f45ca0a6d4b32c57a58e4c9"
   },
   "MoePairGemmW_v2{E=3,K=16,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 34575
+   "and": 34575,
+   "type": "3f3e1f07b13c6a5042a39f7c1bcef880f8ddbfe26a47717a0ecf22a58eb1dc96395d86b087e03fcd3e1cef225963c9d6f814613a4244aeb50cace34a69d25d81"
   },
   "MoePairGemm_v2{E=3,K=16,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 27381
+   "and": 27381,
+   "type": "f289d307173ba6f151f05110056fbf04f00a70590170a70d4df81040aeda023e5fd9421ff69994a54bd801c0910867ff8ef7e28b1940a086812565d39d3a529c"
   }
  }
 }

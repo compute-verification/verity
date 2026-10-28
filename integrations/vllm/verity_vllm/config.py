@@ -2,7 +2,10 @@
 
 * **Run definitions.**  ``manifests/`` (checkpoint pins, semantic profiles) and ``workloads/`` (row workloads) sit beside
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
-  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``.
+  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``; a row id finds its file through
+  :func:`row_file`, which also reads the directories ``$VERITY_WORKLOADS`` names.  A workload's bytes are a fixture in the
+  evidence store: the tree keeps its name, its digest (``workloads/SHA256SUMS``) and its art id (``fixtures/artifacts.json``),
+  and every reader takes the file through :func:`workload_file`, which fetches it by that id and checks the digest.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
   :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
   cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
@@ -20,14 +23,20 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
+import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from importlib import resources
 from pathlib import Path
 from typing import Any
+
+from verity_vllm import settings
+from verity_vllm.records import workload as workload_record
 
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
 ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
@@ -40,6 +49,11 @@ RECORDS = MANIFESTS / "records.json"
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
 VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
+#: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
+#: POUS encodes with (`protocols.pous`).
+P2_POUS = ROOT.parent.parent / "benchmarks" / "pous"
+#: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
+P2_STAGE = ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -149,6 +163,15 @@ class RowId:
                           f"o{self.max_output}", self.arrivals, self.sampling, self.execution))
 
 
+#: A row id inside text (a workload path, a log line): ten ``__``-separated fields, the four integer ones by their prefix.
+ROW_ID_PATTERN = r"[\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+"
+
+
+def row_tokens(row: str) -> list[str]:
+    """A row id's ``__``-separated fields as written, unvalidated (`RowId.parse` validates them)."""
+    return row.split("__")
+
+
 def row_int(row: str, prefix: str, default: int = 1) -> int:
     """The ``__<prefix><N>__`` field of a row id (``tp``, ``b``, ``i``, ``o``), ``default`` when the id has none."""
     for m in _TOKEN.finditer(str(row)):
@@ -178,11 +201,12 @@ def row_target(row: str) -> str | None:
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
 
 
-#: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
+#: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
 #: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
-#: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
-DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:vllm-v1",)
+#: The set a row runs when its target declares none: sampled proofs alone, the Commit under its committer's scheme
+#: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
+DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
 _SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
 
 
@@ -192,7 +216,7 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
     ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
     entries of one protocol.  Whether a scheme is registered is the protocol package's to say
-    (`verity_vllm.protocol_options.refusals`)."""
+    (`verity_vllm.protocols.refusals`)."""
     if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
         return ()
     if isinstance(value, Mapping):
@@ -283,11 +307,100 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
 #: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
 VLLM = "d9105ea80"
 
-#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`).
-WORKLOAD_SCHEMA = "verity-vllm/workload/v2"
+#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`), the typed record
+#: ``records.workload.Workload``.
+WORKLOAD_SCHEMA = workload_record.SCHEMA
+
+
+#: The repository root: its ``fixtures/artifacts.json`` registers each stored workload file by its art id.
+REPO = ROOT.parent.parent
+#: A workload directory's digests, ``<sha256>  <name>`` a line (``sha256sum``'s format): each file it lists is a fixture in the
+#: evidence store, gitignored here, and every reader takes it through :func:`workload_file`.
+DIGESTS = "SHA256SUMS"
+
+
+def stored_workloads(d: Path = WORKLOADS) -> dict[str, str]:
+    """{file name: SHA-256} of the workloads the directory ``d`` keeps in the store (its ``SHA256SUMS``); {} without one."""
+    p = Path(d) / DIGESTS
+    if not p.is_file():
+        return {}
+    pairs = [line.split(None, 1) for line in p.read_text().splitlines() if line.strip()]
+    return {name.strip().lstrip("*"): h for h, name in pairs}
+
+
+def _fetch(paths: list[Path]) -> None:
+    """Fetch ``paths`` with ``research data fetch-fixtures`` in the repository holding each (the nearest ancestor with a registry),
+    by that tree's own ``research``."""
+    by_repo: dict[Path, list[Path]] = {}
+    for p in paths:
+        repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)
+        by_repo.setdefault(repo, []).append(p)
+    for repo, ps in by_repo.items():
+        rels = [os.path.relpath(p.resolve(), repo) for p in ps]
+        env = settings.environ()
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
+        r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json", *rels],
+                           capture_output=True, text=True, env=env)
+        if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
+            raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
+                               f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
+                               "is reachable, or name the public export with $RESEARCH_PUBLIC_URL")
+
+
+def workload_file(path: str | Path) -> Path:
+    """``path``, made present and checked when its directory's ``SHA256SUMS`` lists it: an absent file is fetched by the art id
+    ``fixtures/artifacts.json`` gives its path (``research data fetch-fixtures``), and a file whose SHA-256 is not the listed one is
+    refused.  A file its directory doesn't list is returned as it is."""
+    p = Path(path)
+    want = stored_workloads(p.parent).get(p.name)
+    if want is None:
+        return p
+    if not p.is_file():
+        _fetch([p])
+    if (got := hashlib.sha256(p.read_bytes()).hexdigest()) != want:
+        raise RuntimeError(f"{p}: SHA-256 {got} is not the {want} its {DIGESTS} lists: a changed workload is a new fixture "
+                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in fixtures/artifacts.json, "
+                           f"its digest in {DIGESTS}); `research data fetch-fixtures PATH` restores the stored one")
+    return p
+
+
+def workload_arg(s: str) -> str:
+    """The ``type`` of an option naming a workload file: ``s`` as given, its file made present and checked (:func:`workload_file`;
+    its refusal a :class:`UsageError`)."""
+    try:
+        workload_file(s)
+    except RuntimeError as e:
+        raise UsageError(str(e)) from e
+    return s
+
+
+def workload_files(d: Path = WORKLOADS) -> list[Path]:
+    """Every workload of the directory ``d``, its stored ones (``SHA256SUMS``) and any other ``*.json`` in it, each through
+    :func:`workload_file`; the absent stored ones are fetched in one call."""
+    names = sorted({*stored_workloads(d), *(p.name for p in Path(d).glob("*.json"))})
+    if absent := [p for n in names if not (p := Path(d) / n).is_file()]:
+        _fetch(absent)
+    return [workload_file(Path(d) / n) for n in names]
+
+
+def row_file(row: str) -> Path:
+    """Row id ``row``'s file: ``<dir>/<row>.json`` in ``WORKLOADS`` or in a directory ``$VERITY_WORKLOADS`` names (rows that live
+    outside the integration, which it finds only there), else ``WORKLOADS/<row>.json``; a stored one is fetched and checked
+    (:func:`workload_file`).  A row id with a file in two is refused."""
+    dirs = (WORKLOADS, *map(Path, settings.VERITY_WORKLOADS))
+    found = list(dict.fromkeys(p.resolve() for d in dirs if (p := d / f"{row}.json").is_file() or p.name in stored_workloads(d)))
+    if len(found) > 1:
+        raise UsageError(f"row {row} has a file in more than one of workloads/ and $VERITY_WORKLOADS: {', '.join(map(str, found))}")
+    return workload_file(found[0]) if found else WORKLOADS / f"{row}.json"
+
+
+def row_path(row: str) -> str:
+    """:func:`row_file` from ``ROOT``, where a row's Build, Match and Commit run: ``workloads/<row>.json`` for a row of the
+    integration's own."""
+    return os.path.relpath(row_file(row), ROOT)
 
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
-#: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
+#: EOS the model samples before it.  A row of record is done only at its public cap, so its served length is
 #: public; the EOS a request samples there is a value, which decides no step.
 DONE_SOURCES = ("public-cap", "eos-token")
 
@@ -306,7 +419,7 @@ def done_source(workload: Mapping[str, Any]) -> str:
 def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False) -> str | None:
     """Why a row of record (its ``sweep.row_id`` in ``RECORDS``, or any row with ``of_record``: one about to be indexed) is not done
     only at its public cap; None for a row that is, and for every research row (its EOS stops are its own).  Row files
-    (:meth:`RowConfig.of`), the row precheck and GP-01 refuse with it, and so does whatever indexes a row
+    (:meth:`RowConfig.of`), the row precheck and `pipeline.global_program` refuse with it, and so does whatever indexes a row
     (``pipeline.config_record.index_refusal``: ``records publish``, ``pull`` and ``switch``, and ``row chain`` when it publishes)."""
     sw = workload.get("sweep")
     row = sw.get("row_id") if isinstance(sw, Mapping) else None
@@ -338,7 +451,7 @@ class RowEngine:
     ``model``), the ``vllm`` commit, the engine ``args``, the ``env`` its engines run under (kernel selection: ``VLLM_BATCH_INVARIANT``,
     ``NCCL_P2P_DISABLE``), the declared ``target`` (``TargetProfile`` fields; None: the device's) and ``reasons``: why the row sets a
     switch away from vLLM's default, by the switch's name (``engine.served.DEFAULTS``; a served Commit refuses one without).  The κ
-    profile a Match folds with is the role's (``engine.profiles.generic.module_name``), never a field."""
+    profile a Match folds with is the role's (``observe.fold.profiles.generic.module_name``), never a field."""
 
     revision: str | None = None
     vllm: str = VLLM
@@ -408,9 +521,9 @@ class RowConfig:
 
     @classmethod
     def load(cls, row_or_path: str | Path) -> RowConfig:
-        """A row's config by row id (``WORKLOADS/<row>.json``) or by file."""
+        """A row's config by row id (:func:`row_file`) or by file (:func:`workload_file`)."""
         p = Path(row_or_path)
-        return cls.of(json.loads((p if p.suffix == ".json" else WORKLOADS / f"{row_or_path}.json").read_text()))
+        return cls.of(json.loads((workload_file(p) if p.suffix == ".json" else row_file(str(row_or_path))).read_text()))
 
     @property
     def row(self) -> str | None:
@@ -441,7 +554,13 @@ class BuildConfig:
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
                                                help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
-                                       help="seconds per derive; default scales with the envelope (TP: 7200)")
+                                       help="seconds for one derive (and for one workload Program compose; TP: one rank's global Program "
+                                            "and the call-boundary check); default scales with the envelope (TP: 7200).  Never the TP "
+                                            "manifest, which --manifest-timeout bounds")
+    manifest_timeout: int | None = option("--manifest-timeout", env="MANIFEST_TIMEOUT", type=int, default=None,
+                                          help="TP: seconds for the required-value manifest over the W ranks, the Build's and a Commit's "
+                                               "rebuild (default 4 h + 1200 s a component build, W x declared requests: "
+                                               "row_records.manifest_timeout; 0 = no limit).  manifest.log reports each component built")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
                             help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
     t: int | None = option("--t", env="T", type=int, default=None,
@@ -453,11 +572,11 @@ class BuildConfig:
                                 help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
                                      "step guard over every rank and a canary request derived in full; default off")
     build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
-                                      help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
+                                      help="TP: 1 = the Build ends at the rank and global Programs: no required-value manifest or call-boundary "
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
     build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
                                      help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
-                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "manifests/records.json, verity_vllm.program.predict.aot) and the trace for any other; trace = the trace "
                                           "(`verity-vllm neutrality`'s heavy tier)")
     aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
                                    help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
@@ -488,17 +607,25 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
-                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, the global match; default "
+                                           "350 s a GiB of a rank's summed request derive peaks, at least 7200: row_records.fold_plan); "
+                                           "tp-fold-match as a whole gets the folds' rounds, the compare and global-match rounds and the "
+                                           "cross-rank leg (row_records.fold_phase_s: four legs when every rank runs at once)")
+    fold_mem_gb: float | None = option("--fold-mem-gb", env="RESEARCH_RUN_MEM_GB", type=float, default=None,
+                                       help="TP: the memory (GB) the fold Match's concurrent legs are sized to (default: research run's "
+                                            "--mem-gb, RESEARCH_RUN_MEM_GB; without one, the host's headroom); one that holds no planned "
+                                            "global-match leg beside one fold runs one rank at a time, with a warning in row.log")
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
-                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
-                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+                                    help="TP: ranks whose compare and global-match legs run at once (0 = as many as --fold-mem-gb holds at "
+                                         "a global-match leg's planned peak beside one fold, 5.5x a rank's summed request derive peaks: "
+                                         "GLM-5.3 B8 I256's 339 GiB; every rank when the checkpoint's layers are unknown)")
     fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
-                               help="TP: ranks whose fold leg runs at once (0 = as --fold-rank-workers, which then bounds only their compare "
-                                    "and GM-01 legs; a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
+                               help="TP: ranks whose fold leg runs at once (0 = as many as the memory those global-match legs leave holds "
+                                    "at a fold's planned peak, 0.6x the same sum: B8 I256's 40 GB; as --fold-rank-workers when it is given "
+                                    "or the layers are unknown)")
     match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
                               help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
-                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
+                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and global-match "
                                    "documents, so only the missing legs and the cross-rank leg run")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
@@ -556,11 +683,12 @@ class CommitConfig:
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
-                                           "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
+                                           "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
+                                           "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.store.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

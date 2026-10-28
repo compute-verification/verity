@@ -29,12 +29,12 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import deepgemm_twins as T
-from verity_vllm.program.kernels import derived_rows as R
-from verity_vllm.program.registry import boolean_deepgemm as BDG
-from verity_vllm.program.registry import deepgemm as DG
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import deepgemm_twins as T
+from verity.ml.definitions.numerics import derived_rows as R
+from verity.ml.definitions.registry import boolean_deepgemm as BDG
+from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import prims as P
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_dsa import _ceil_ftz, _e4m3, _ex2_integer, _ftz, _is_nan, _val, log2f
 from tests.program.test_fp8_moe import _q, _rn
@@ -88,6 +88,7 @@ def _exact_pow2_ceil(w: int) -> int:
     return (e + 127) << 23
 
 
+@pytest.mark.slow
 def test_ue8m0_bit_form_is_the_kernels_exp2f_ceilf_log2f_on_every_reachable_scale() -> None:
     ys = _reachable_scales()
     got = T.ue8m0_ceil(ys)
@@ -251,14 +252,15 @@ def test_grouped_einsum_matches_its_twin() -> None:
     assert list(evaluate(bind(DG.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G), *map(_words, (xq, sx, w, ws)))) == _words(y)
 
 
+@pytest.mark.slow
 def test_replay_evaluates_the_linears_with_their_row_kernels() -> None:
     """`evaluate_batch`'s default for the three Definitions is their row kernel (`kernels.deepgemm_rows`, registered from `rows`), not
     the plain-integer reference.  The middle row of each batch is one the GEMM twin does not reproduce (DeepGEMM: accumulators past
     the largest finite; FlashInfer: its all-subnormal group's NaN words; the einsum: a NaN e4m3 byte in one token): the row kernel
     declines it by name, and the reference evaluates it."""
     from verity.ml.circuits.evaluation.reference import statics_of
-    from verity_vllm.program.kernels import kernel_registry as KR
-    from verity_vllm.program.kernels import rows
+    from verity.ml.definitions.numerics import kernel_registry as KR
+    from verity.ml.definitions.numerics import rows
 
     rng = np.random.default_rng(8)
     K, N, H, G = 256, 130, 2, 128
@@ -294,9 +296,11 @@ def test_statics_are_checked() -> None:
 AGREEMENT = [bind(BDG.F32LtFtzV2), bind(BDG.Fp8Ue8m0CeilV2), bind(BDG.Fp8GroupScaleUe8m0V2, G=32),
              bind(BDG.Fp8GroupQuantUe8m0GroupV2, G=32), bind(BDG.Fp8GroupQuantUe8m0V2, K=64, G=32), bind(BDG.FlashInferFp8Quant1x128GroupV2),
              bind(BDG.FlashInferFp8Quant1x128V2, K=256), bind(BDG.DeepGemmFp8LinearV2, K=128, N=2),
-             bind(BDG.FlashInferFp8LinearV2, K=128, N=2), bind(BDG.ScaledMmFp8BlockGroupedV2, H=2, K=64, N=34, G=32)]
+             bind(BDG.FlashInferFp8LinearV2, K=128, N=2), bind(BDG.FlashInferFp8LinearV2, K=128, N=1),
+             bind(BDG.ScaledMmFp8BlockGroupedV2, H=2, K=64, N=34, G=32)]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_versions_agree_with_their_word_views(target) -> None:
     word = TR.word_of(target)

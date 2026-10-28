@@ -7,11 +7,12 @@ signer's leaf states and session logs go under the suite's basetemp (`pous_test_
 from __future__ import annotations
 
 import inspect
+import shutil
 
 import pytest
 
 import pous_test_signer
-from verity.core.protocols.pous import audit, memory_challenger, streamed_wipe
+from verity.core.protocols.pous import audit, memory_challenger, streamed_wipe, wipe_stream
 from verity.core.protocols.pous.continuous import ContinuousMemoryChallenger
 
 
@@ -31,6 +32,14 @@ def _no_default_clock(monkeypatch):
         defaults = list(init.__defaults__)
         defaults[defaulted.index("clock")] = _wall_clock
         monkeypatch.setattr(init, "__defaults__", tuple(defaults))
+
+
+@pytest.fixture(scope="session")
+def wipe_streamer(tmp_path_factory) -> wipe_stream.Streamer:
+    """`wipe_stream.c` built once for the suite, on two threads."""
+    if shutil.which("cc") is None:
+        pytest.skip("no C compiler (cc) on this host to build wipe_stream.c")
+    return wipe_stream.Streamer.build(tmp_path_factory.mktemp("wipe-stream"), threads=2)
 
 
 @pytest.fixture(autouse=True, scope="session")

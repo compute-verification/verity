@@ -15,6 +15,9 @@
 //          in integer arithmetic
 //   host_* the device's rcp, sqrt, div and 3 / b on every subnormal input and every input whose reciprocal is subnormal
 //          (2^24 - 2 + 2^25), each with a weighted divisor, against the host's double arithmetic: a reference off the card
+//   units_* on an sm_90 card, the slow-path bodies ptxas builds for sm_90a in kernels' units.cu, from copies of its kernels
+//          (units_checks): sqrt on all 2^32 x; rmsnorm's division on 2^32 weighted pairs and its one / mean; softmax's,
+//          whose numerator its body loads, at 1.0 on all 2^32 divisors and at 1024 weighted numerators on weighted divisors
 // Division by zero and INT_MIN / -1 are outside the domain, counted as skipped. NaN results compare equal whatever their
 // payload; everything else bit for bit. Prints one JSON line for the device, then one per check.
 //   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --no-compress [FLAGS] ieee_pin.cu -o ieee_pin
@@ -253,6 +256,249 @@ __global__ void s64_all(Tally* t, uint64_t count) {
   add(t, c, s, 0, 0, nb);
 }
 
+// ---- units.cu as ptxas builds it for sm_90a -------------------------------------------------------------------------------
+// ptxas builds a function's slow-path bodies around its calls, so these three are copies of units.cu's kernels (its helpers,
+// unchanged) that build the bodies its rmsnorm and softmax take: units_sqrt the sqrt.rn one, units_rms the div.rn one of
+// rmsnorm's two divisions and units_soft softmax's, which loads its numerator (the parameter one_word, at the same offset)
+// from the constant bank itself. Their kernel names are their own; only an sm_90a build has their bodies.
+#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ == 900
+#define UNITS 1
+#else
+#define UNITS 0
+#endif
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+#define D __device__ __forceinline__
+D float fadd(float a, float b) { return __fadd_rn(a, b); }
+D float fsub(float a, float b) { return __fsub_rn(a, b); }
+D float fmul(float a, float b) { return __fmul_rn(a, b); }
+D float fdiv(float a, float b) { return __fdiv_rn(a, b); }
+D float fsqrt(float a) { return __fsqrt_rn(a); }
+D float f32(u32 w) { return __uint_as_float(w); }
+D float widen(u32 h) { return __uint_as_float((h & 0xFFFFu) << 16); }
+D u16 bf16(float f) { u16 r; asm("cvt.rn.bf16.f32 %0, %1;" : "=h"(r) : "f"(f)); return r; }
+D float ex2(float x) { float r; asm("ex2.approx.ftz.f32 %0, %1;" : "=f"(r) : "f"(x)); return r; }
+D int order16(u32 v) { int m = (int)(v & 0x7FFFu); return (v & 0x8000u) ? -m : m; }
+D bool isnan16(u32 v) { return (v & 0x7F80u) == 0x7F80u && (v & 0x7Fu); }
+#define RT 128
+#define RQ 2048
+D int swz(int q, bool sw) { return sw ? q ^ ((q >> 4) & 15) : q; }
+D u32 rms_pair(u32 x2, u32 w2, float rs) {
+  const u32 lo = bf16(fmul(widen(w2), widen(bf16(fmul(widen(x2), rs)))));
+  const u32 hi = bf16(fmul(widen(w2 >> 16), widen(bf16(fmul(widen(x2 >> 16), rs)))));
+  return lo | (hi << 16);
+}
+#define LMAX 32
+#define SR 128
+D int sswz(int q) { return q ^ ((q >> 3) & 3); }
+
+// y[j] = sqrt(base + j), one word a thread
+extern "C" __global__ void __launch_bounds__(128) units_sqrt(u32* y, u64 base, u64 n) {
+#if UNITS
+  const u64 j = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (j < n) y[j] = __float_as_uint(fsqrt(f32((u32)(base + j))));
+#endif
+}
+
+// units_rmsnorm with row's total tots[row] and count ns[row]: groups[row] = tot / n and rs_out[row] = one / (mean + eps)
+extern "C" __global__ void __launch_bounds__(RT) units_rms(const u32* __restrict__ tots, const u32* __restrict__ ns,
+                                                           const u16* __restrict__ x, const u16* __restrict__ w,
+                                                           u16* __restrict__ out, u32* __restrict__ chunks,
+                                                           u32* __restrict__ groups, u32* __restrict__ rs_out, int N, int C,
+                                                           int nc, int G, int ng, u32 n_word, u32 eps_word, u32 one_word) {
+#if UNITS
+  __shared__ uint4 xs[RQ];
+  __shared__ float cs[RT];
+  __shared__ float gs[RT];
+  __shared__ float rs_s;
+  const int t = threadIdx.x, n8 = N >> 3;
+  const bool sw = C == 128;
+  const size_t row = blockIdx.x;
+  const uint4* xp = reinterpret_cast<const uint4*>(x + row * (size_t)N);
+#pragma unroll
+  for (int b = 0; b < RQ / RT; b += 8) {
+    uint4 v[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const int q = t + RT * (b + i);
+      v[i] = q < n8 ? xp[q] : make_uint4(0u, 0u, 0u, 0u);
+    }
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      const int q = t + RT * (b + i);
+      if (q < n8) xs[swz(q, sw)] = v[i];
+    }
+  }
+  __syncthreads();
+  if (t < nc) {
+    const int K = C >> 3;
+    float acc = 0.0f;
+#pragma unroll 16
+    for (int k = 0; k < K; ++k) {
+      const uint4 v = xs[swz(t * K + k, sw)];
+      const u32 q[4] = {v.x, v.y, v.z, v.w};
+#pragma unroll
+      for (int h = 0; h < 4; ++h) {
+        const float a = widen(q[h]), b = widen(q[h] >> 16);
+        acc = fadd(acc, fmul(a, a));
+        acc = fadd(acc, fmul(b, b));
+      }
+    }
+    cs[t] = acc;
+    if (chunks) chunks[row * nc + t] = __float_as_uint(acc);
+  }
+  __syncthreads();
+  if (t < ng) {
+    float acc = 0.0f;
+#pragma unroll 16
+    for (int k = 0; k < G; ++k) acc = fadd(acc, cs[t * G + k]);
+    gs[t] = acc;
+    if (groups) groups[row * ng + t] = __float_as_uint(acc);
+  }
+  __syncthreads();
+  if (t == 0) {
+    float total = 0.0f;
+    total = f32(tots[row]);
+    const float mean = fdiv(total, f32(ns[row]));
+    if (groups) groups[row] = __float_as_uint(mean);
+    const float rs = fdiv(f32(one_word), fadd(mean, f32(eps_word)));
+    rs_s = rs;
+    if (rs_out) rs_out[row] = __float_as_uint(rs);
+  }
+  __syncthreads();
+  const float rs = rs_s;
+  const uint4* wp = reinterpret_cast<const uint4*>(w);
+  uint4* op = reinterpret_cast<uint4*>(out + row * (size_t)N);
+#pragma unroll 4
+  for (int q = t; q < n8; q += RT) {
+    const uint4 a = xs[swz(q, sw)], b = wp[q];
+    op[q] = make_uint4(rms_pair(a.x, b.x, rs), rms_pair(a.y, b.y, rs), rms_pair(a.z, b.z, rs), rms_pair(a.w, b.w, rs));
+  }
+#endif
+}
+
+// units_softmax with the divisor s k + sv[row]: at rows of one key (s = 1) and k = -0, r_out[row] = one / sv[row]
+extern "C" __global__ void __launch_bounds__(SR) units_soft(const u16* __restrict__ x, const int* __restrict__ lens,
+                                                            u16* __restrict__ p, u16* __restrict__ m_out,
+                                                            u32* __restrict__ r_out, int heads, u32 one_word, u32 k_word,
+                                                            const u32* __restrict__ sv) {
+#if UNITS
+  __shared__ uint4 buf[SR * 4];
+  const int t = threadIdx.x, h0 = blockIdx.x * SR, rows = min(SR, heads - h0), nq = rows * 4;
+  const size_t row0 = (size_t)blockIdx.y * heads + h0;
+  const uint4* xp = reinterpret_cast<const uint4*>(x + row0 * LMAX);
+  {
+    uint4 a[4];
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      const int q = t + SR * i;
+      a[i] = q < nq ? xp[q] : make_uint4(0u, 0u, 0u, 0u);
+    }
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      const int q = t + SR * i;
+      if (q < nq) buf[sswz(q)] = a[i];
+    }
+  }
+  __syncthreads();
+  int n = lens[blockIdx.y];
+  n = n < 1 ? 1 : (n > LMAX ? LMAX : n);
+  u32 pw[LMAX / 2] = {};
+  if (t < rows) {
+    u32 v[LMAX];
+#pragma unroll
+    for (int k = 0; k < 4; ++k) {
+      const uint4 b = buf[sswz(t * 4 + k)];
+      const u32 q[4] = {b.x, b.y, b.z, b.w};
+#pragma unroll
+      for (int h = 0; h < 4; ++h) {
+        const int j = 8 * k + 2 * h;
+        v[j] = j < n ? (q[h] & 0xFFFFu) : 0u;
+        v[j + 1] = j + 1 < n ? (q[h] >> 16) : 0u;
+      }
+    }
+    u32 m = v[0];
+    int best = order16(v[0]);
+    bool nan = isnan16(v[0]);
+#pragma unroll
+    for (int j = 1; j < LMAX; ++j) {
+      if (j < n) {
+        const int o = order16(v[j]);
+        if (o > best) { best = o; m = v[j]; }
+        nan = nan || isnan16(v[j]);
+      }
+    }
+    if (nan) m = 0x7FFFu;
+    const float mf = widen(m), log2e = f32(0x3FB8AA3Bu);
+    float e[LMAX];
+    float s = 0.0f;
+#pragma unroll
+    for (int j = 0; j < LMAX; ++j) {
+      e[j] = 0.0f;
+      if (j < n) {
+        e[j] = ex2(fmul(fsub(widen(v[j]), mf), log2e));
+        s = fadd(s, e[j]);
+      }
+    }
+    const float r = fdiv(f32(one_word), fadd(fmul(s, f32(k_word)), f32(sv[row0 + t])));
+#pragma unroll
+    for (int j = 0; j < LMAX; j += 2)
+      pw[j / 2] = (j < n ? (u32)bf16(fmul(e[j], r)) : 0u) | ((j + 1 < n ? (u32)bf16(fmul(e[j + 1], r)) : 0u) << 16);
+    if (m_out) m_out[row0 + t] = (u16)m;
+    if (r_out) r_out[row0 + t] = __float_as_uint(r);
+  }
+  __syncthreads();
+  if (t < rows) {
+#pragma unroll
+    for (int k = 0; k < 4; ++k) buf[sswz(t * 4 + k)] = make_uint4(pw[4 * k], pw[4 * k + 1], pw[4 * k + 2], pw[4 * k + 3]);
+  }
+  __syncthreads();
+  uint4* pp = reinterpret_cast<uint4*>(p + row0 * LMAX);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const int q = t + SR * i;
+    if (q < nq) pp[q] = buf[sswz(q)];
+  }
+#endif
+}
+
+// the operands: a[j] = base + j (every word, when `all`) or pick(base + j, sa), b[j] = pick(base + j, sb)
+__global__ void units_fill(uint32_t* a, uint32_t* b, uint64_t base, uint64_t n, bool all, uint32_t sa, uint32_t sb) {
+  EACH(j, n) {
+    if (a) a[j] = all ? (uint32_t)(base + j) : pick(base + j, sa);
+    if (b) b[j] = pick(base + j, sb);
+  }
+}
+
+__global__ void units_sqrt_check(Tally* t, const uint32_t* y, uint64_t base, uint64_t n) {
+  unsigned long long c = 0, si = 0, so = 0, nb = 0;
+  EACH(j, n) {
+    float x = flt((uint32_t)(base + j)), h = flt(y[j]), r = __double2float_rn(sqrt((double)x));
+    c++; si += subn(x); so += subn(r);
+    if (!same(h, r)) { nb++; first(t, bits(x), 0, bits(h), bits(r)); }
+  }
+  add(t, c, 0, si, so, nb);
+}
+
+// t[0]: num[j] / den[j] against q[j]; t[1], with `second`: one / (q's reference + eps) against q2[j]
+__global__ void units_div_check(Tally* t, const uint32_t* num, uint32_t one, const uint32_t* den, const uint32_t* q,
+                                const uint32_t* q2, uint32_t eps, uint64_t n) {
+  unsigned long long c = 0, si[2] = {0, 0}, so[2] = {0, 0}, nb[2] = {0, 0};
+  EACH(j, n) {
+    float a = flt(num ? num[j] : one), b = flt(den[j]), h = flt(q[j]), r = __double2float_rn((double)a / (double)b);
+    c++; si[0] += subn(a) || subn(b); so[0] += subn(r);
+    if (!same(h, r)) { nb[0]++; first(t, bits(a), bits(b), bits(h), bits(r)); }
+    if (q2) {
+      float d = __fadd_rn(r, flt(eps)), h2 = flt(q2[j]), r2 = __double2float_rn((double)flt(one) / (double)d);
+      si[1] += subn(flt(one)) || subn(d); so[1] += subn(r2);
+      if (!same(h2, r2)) { nb[1]++; first(t + 1, one, bits(d), bits(h2), bits(r2)); }
+    }
+  }
+  add(t, c, 0, si[0], so[0], nb[0]);
+  if (q2) add(t + 1, c, 0, si[1], so[1], nb[1]);
+}
+
 __global__ void apply(const uint32_t* x, const uint32_t* y, uint32_t* out, size_t n) {
   size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n) {
@@ -267,6 +513,55 @@ static void print(const char* check, const Tally& t) {
          "\"first\":[%llu,%llu,%llu,%llu]}\n", check, t.cases, t.skipped, t.sub_in, t.sub_out, t.bad, t.first[0], t.first[1],
          t.first[2], t.first[3]);
   fflush(stdout);
+}
+
+// units.cu's bodies: units_sqrt on all 2^32 words; units_rms on 2^32 weighted (total, count) pairs, rows of 8 words, with
+// one = pick(chunk) and eps = -0, so its second division is one / mean; units_soft at rows of one key with k = -0, one = 1.0
+// on all 2^32 divisors, then 2^32 weighted divisors at 1024 numerators pick(chunk)
+static void units_checks(int grid, Tally* t) {
+  const uint64_t n = 1ull << 24, all = 1ull << 32;
+  const uint32_t neg0 = 0x80000000u, one = 0x3f800000u;
+  uint32_t *a, *b, *y, *y2;
+  uint16_t *x, *w, *out;
+  int* lens;
+  CK(cudaMalloc(&a, n * 4)); CK(cudaMalloc(&b, n * 4)); CK(cudaMalloc(&y, n * 4)); CK(cudaMalloc(&y2, n * 4));
+  CK(cudaMalloc(&x, n * 64)); CK(cudaMalloc(&out, n * 64)); CK(cudaMalloc(&w, 16)); CK(cudaMalloc(&lens, 4));
+  CK(cudaMemset(x, 0, n * 64)); CK(cudaMemset(w, 0, 16));
+  const int one_key = 1;
+  CK(cudaMemcpy(lens, &one_key, 4, cudaMemcpyHostToDevice));
+  auto done = [&] { CK(cudaGetLastError()); CK(cudaDeviceSynchronize()); };
+  memset(t, 0, 2 * sizeof(Tally));
+  for (uint64_t base = 0; base < all; base += n) {
+    units_sqrt<<<(unsigned)(n / 128), 128>>>(y, base, n);
+    units_sqrt_check<<<grid, 256>>>(t, y, base, n);
+  }
+  done(); print("units_sqrt", t[0]);
+  memset(t, 0, 2 * sizeof(Tally));
+  for (uint64_t base = 0, k = 0; base < all; base += n, k++) {
+    const uint32_t num = pick(k, 11);
+    units_fill<<<grid, 256>>>(a, b, base, n, false, 9, 10);
+    units_rms<<<(unsigned)n, RT>>>(a, b, x, w, out, nullptr, y, y2, 8, 8, 1, 1, 1, 0u, neg0, num);
+    units_div_check<<<grid, 256>>>(t, a, num, b, y, y2, neg0, n);
+  }
+  done(); print("units_rms_mean", t[0]); print("units_rms_rs", t[1]);
+  const uint64_t m = 1ull << 22;
+  memset(t, 0, 2 * sizeof(Tally));
+  for (uint64_t base = 0; base < all; base += m) {
+    units_fill<<<grid, 256>>>(b, nullptr, base, m, true, 0, 0);
+    units_soft<<<dim3((unsigned)(m / SR), 1), SR>>>(x, lens, out, nullptr, y, (int)m, one, neg0, b);
+    units_div_check<<<grid, 256>>>(t, nullptr, one, b, y, nullptr, 0u, m);
+  }
+  done(); print("units_soft_one", t[0]);
+  memset(t, 0, 2 * sizeof(Tally));
+  for (uint64_t base = 0, k = 0; base < all; base += m, k++) {
+    const uint32_t num = pick(k, 12);
+    units_fill<<<grid, 256>>>(nullptr, b, base, m, false, 0, 13);
+    units_soft<<<dim3((unsigned)(m / SR), 1), SR>>>(x, lens, out, nullptr, y, (int)m, num, neg0, b);
+    units_div_check<<<grid, 256>>>(t, nullptr, num, b, y, nullptr, 0u, m);
+  }
+  done(); print("units_soft_div", t[0]);
+  CK(cudaFree(a)); CK(cudaFree(b)); CK(cudaFree(y)); CK(cudaFree(y2)); CK(cudaFree(x)); CK(cudaFree(out)); CK(cudaFree(w));
+  CK(cudaFree(lens));
 }
 
 static void host_check() {
@@ -352,6 +647,7 @@ int main() {
   });
   run("u64", [&] { u64_all<<<grid, 256>>>(t, 1ull << 30); });
   run("s64", [&] { s64_all<<<grid, 256>>>(t, 1ull << 30); });
+  if (p.major == 9) units_checks(grid, t);
   host_check();
   return 0;
 }

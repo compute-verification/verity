@@ -39,7 +39,9 @@ sys.path.insert(0, str(HERE))
 import h1c as H1CM  # noqa: E402
 from h1c import H1C, unwords  # noqa: E402
 from h1cgate import POISON, Step, cpu_calls, linears  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 T, MX = 64, 72
 
 
@@ -272,7 +274,7 @@ def stamps(c: Calls, m: int, ws=(0, 2, 3), reps: int = 5) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lib", default=os.environ.get("DITHER_H1C"))
+    ap.add_argument("--lib", default=settings.DITHER_H1C)
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", default=None, help="unused (sbench.sh's SBENCH_SCRIPT passes it)")
     ap.add_argument("--reps", type=int, default=9)
@@ -283,7 +285,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     key = os.urandom(64)
-    window = os.environ.get("RESEARCH_RUN_ID") or "gate"
+    window = settings.RESEARCH_RUN_ID or "gate"
     lib = H1C(a.lib, key, dev)
     forms = [int(f) for f in a.forms.split(",")]
     doc: dict = {"gpu": torch.cuda.get_device_name(), "by_t": {}}

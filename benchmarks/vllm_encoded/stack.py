@@ -14,7 +14,7 @@ receipts  a decode step is a pass: before the model's forward (eager, the runner
           at the step's running offset, the lm_head's last; after it (in the lm_head's CUDA graph) reader.cu's leaves,
           pads and tree, and the root copied to the buffer the next pass reads. A forward with no lm_head after it
           (vLLM's warm-ups) leaves its pass uncommitted, and the next pass starts from the last root committed.
-lm_head   BF16 payloads (Daniel's ruling: its logits are BF16's) in the linears' plain layout (the BF16 matrix's bytes,
+lm_head   BF16 payloads (its logits are BF16's) in the linears' plain layout (the BF16 matrix's bytes,
           which mma.m16n8k16.bf16 takes as e4m3 m16n8k32 takes FP8), as words: wt.cu's wt_fused_sketch_bf decodes,
           multiplies (BF16 MMA, FP32 sums) and receipts them in one launch, the chunks' sums reduced in order to BF16;
           pstack: wt_gemm's BF16 mode over the plain fragments, the same sums. One CUDA graph a batch, its partial sums
@@ -23,6 +23,8 @@ KV        vLLM's own paged cache tensors, a layer's words at their place in the 
           layers' in one launch on a second stream after the step's forward; the step reads its own tokens from vLLM's
           rows), a decode-only step's attention decodes inside paged.cu's tensor-core attention (CUDA-graph safe), and
           a step with prefill gathers its sequences' pages decoded into a scratch for vLLM's FlashAttention.
+spans     with args.spans, step_spans.py's marks between these parts (captured into vLLM's graphs with them): each
+          step's time by part, for ablations; none without it.
 ~~~
 """
 from __future__ import annotations
@@ -49,8 +51,10 @@ import sketching as SKT  # noqa: E402
 sys.path.insert(0, str(HERE))
 import kernels as K  # noqa: E402
 import paged as P  # noqa: E402
+import step_spans as SS  # noqa: E402
 
 SR = BW.SR
+SP = SS.P
 T = 8                                   # tasks a sketch vector
 PLAIN_CFGS = ((4, 4), (8, 8))           # wt_gemm's (consumers, stages): step.py's PLAIN_CFGS
 MAX_ROWS = 128                          # a decode's rows on the fused kernel (wt_fused_sketch's most a launch)
@@ -126,6 +130,11 @@ class Stack:
         self.nvec: dict[int, int] = {}       # a step's receipts at each batch
         self.passes = 0
         self.attention: Attention | None = None
+        self.spans: SS.Spans | None = None
+
+    def mark(self, part: int, kind: int = -1) -> None:
+        if self.spans is not None:
+            self.spans.mark(part, kind)
 
     # the step's pass --------------------------------------------------------------------------------------------
     def buffers(self) -> None:
@@ -344,11 +353,15 @@ class StackLinear:
 
     def forward(self, x8: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         m, st = x8.shape[0], self.st
+        st.mark(SP["model"])
         xs = xs.reshape(-1).float().contiguous()
         if m > MAX_ROWS:
             from vllm import _custom_ops as ops
             w = self.rows(st.scratch).view(torch.float8_e4m3fn)
-            return ops.cutlass_scaled_mm(x8, w.t(), out_dtype=torch.bfloat16, scale_a=xs, scale_b=self.ws, bias=None)
+            st.mark(SP["prefill_decode"])
+            y = ops.cutlass_scaled_mm(x8, w.t(), out_dtype=torch.bfloat16, scale_a=xs, scale_b=self.ws, bias=None)
+            st.mark(SP["prefill_gemm"])
+            return y
         if self.idx == 0:
             st.at = 0
         x8 = x8.contiguous()
@@ -358,6 +371,7 @@ class StackLinear:
             self.reduce(self.sums(x8[r0:r0 + r], plan, st.at), xs if xs.numel() == 1 else xs[r0:r0 + r], y[r0:r0 + r])
             st.at += plan[3]
             r0 += r
+        st.mark(SP["linear"])
         return y
 
 
@@ -409,6 +423,7 @@ class LmHead:
 
     def apply(self, layer, x: torch.Tensor, bias=None) -> torch.Tensor:
         st = self.st
+        st.mark(SP["model"])
         x2 = x.reshape(-1, self.h).contiguous()
         m = x2.shape[0]
         capturing = torch.cuda.is_current_stream_capturing()
@@ -443,6 +458,7 @@ class LmHead:
             # A graph replay executes the receipt writes but not `run`'s Python update of the receipt cursor.
             st.at = self.lin.at[st.pass_m] + self.lin.receipts(m)
             st.ready = True
+        st.mark(SP["lm_head"])
         if bias is not None:
             y = y + bias
         return y.reshape(*x.shape[:-1], self.v)
@@ -695,11 +711,16 @@ class Attention:
             torch.cuda.current_stream().wait_event(self.app_done)
             self.outstanding = False
 
-    def _launch(self, tab: torch.Tensor, layers: int, rows: int) -> None:
+    def _launch(self, tab: torch.Tensor, layers: int, rows: int, kind: int) -> None:
         main = torch.cuda.current_stream()
         self.fwd_done.record(main)
         self.s2.wait_event(self.fwd_done)
+        spans = self.st.spans
+        if spans is not None:
+            spans.mark_side(SP["idle"], kind, self.s2.cuda_stream)
         P.append_multi(self.lib, torch, tab, layers, rows, self.lay, self.enc, self.st.k, self.s2.cuda_stream)
+        if spans is not None:
+            spans.mark_side(SP["append"], kind, self.s2.cuda_stream)
         self.app_done.record(self.s2)
         self.outstanding = True
 
@@ -712,7 +733,7 @@ class Attention:
                     for l, (c, base, layers, idx) in sorted(self.staged.items())]
             self.graph_tab = P.table(torch, ents).cuda()
             self.graph_layers = len(ents)
-        self._launch(self.graph_tab, self.graph_layers, rows)
+        self._launch(self.graph_tab, self.graph_layers, rows, SS.KINDS.index("graph"))
         self.calls["flush_graph"] += 1
 
     def flush_eager(self) -> None:
@@ -722,7 +743,7 @@ class Attention:
         rows = max(e[3] for e in self.pending)
         with torch.cuda.stream(self.s2):
             tab = P.table(torch, self.pending).to("cuda", non_blocking=False)
-        self._launch(tab, len(self.pending), rows)
+        self._launch(tab, len(self.pending), rows, SS.KINDS.index("eager"))
         for key, val, slots, *_ in self.pending:
             for t in (key, val, slots):
                 t.record_stream(self.s2)
@@ -742,27 +763,36 @@ class Attention:
                     raise RuntimeError("the stack's attention takes a bf16 cache and no cascade")
                 return orig(impl, layer, query, key, value, kv_cache, attn_metadata, output, output_scale,
                             output_block_scale)
+            st = att.st
+            st.mark(SP["model"])
             L = att.layer(layer, kv_cache)
             k2, v2 = key.view(key.shape[0], -1), value.view(value.shape[0], -1)
             if md.max_query_len == 1:
                 b = md.seq_lens.shape[0]
                 q2, o2 = query.view(query.shape[0], -1), output.view(output.shape[0], -1)
-                P.attn(att.lib, torch, kv_cache, L.lay, att.st.words, att.nl, L.index, att.enc, att.st.k, q2, o2,
+                P.attn(att.lib, torch, kv_cache, L.lay, st.words, att.nl, L.index, att.enc, st.k, q2, o2,
                        att.partials(b), md.seq_lens, md.block_table, b, att.split(b), nrows=o2.shape[0], ck=k2, cv=v2,
                        receipts=att.receipts())
+                st.mark(SP["attention"])
                 att.receipt_layer(L.index)
+                st.mark(SP["kv_receipts"])
                 att.calls["decode"] += 1
                 return output
             slots = att.slots[att.index(layer)]
             blocks, md2, s2 = att.plan(md, L.lay.bs, slots)
             scratch = att.gathered(blocks.shape[0], kv_cache)
-            P.gather(att.lib, torch, kv_cache, L.lay, att.st.words, att.nl, L.index, att.enc, att.st.k, blocks, scratch,
+            P.gather(att.lib, torch, kv_cache, L.lay, st.words, att.nl, L.index, att.enc, st.k, blocks, scratch,
                      receipts=att.receipts())
+            st.mark(SP["gather"])
             att.receipt_layer(L.index)
+            st.mark(SP["kv_receipts"])
             lay2 = P.Layout(blocks.shape[0], L.lay.bs, L.lay.sb, L.lay.sh, L.lay.ss)
             P.append(att.lib, torch, scratch, lay2, 0, 1, 0, 0, 0, k2[:s2.shape[0]], v2[:s2.shape[0]], s2)
+            st.mark(SP["gather"])
             att.calls["gathered"] += 1
-            return orig(impl, layer, query, key, value, scratch, md2, output, output_scale, output_block_scale)
+            out = orig(impl, layer, query, key, value, scratch, md2, output, output_scale, output_block_scale)
+            st.mark(SP["attention"])
+            return out
         return fn
 
     def update(self, orig):
@@ -1096,6 +1126,9 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     parts = components(st, lm)
     st.open = False
     log(f"components (ms): {parts}")
+    if getattr(args, "spans", False):
+        # after the install's own timings, before vLLM's captures, which take the marks into its graphs
+        st.spans = SS.Spans(st.plib, torch)
     att = Attention(st, len(model.model.layers))
     from vllm.v1.attention.backends.flash_attn import FlashAttentionImpl
     hooks.wrap(FlashAttentionImpl, "forward", att.forward)
@@ -1112,7 +1145,7 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
     store_bytes = sum(lin.nbytes for lin in st.linears if not lin.bf)
     st.attention = att
     wt = st.wt
-    return {"stack": st, "record": {
+    record = {
         "arm": args.arm, "k": st.k, "wt_lib": Path(args.wt_lib).name, "paged_lib": Path(args.paged_lib).name,
         "codec": {"field": wt.field.name, "mask": wt.mask, "fold6": wt.fold6, "receipt": "sketch-sha512" if st.encoded
                   else None, "sketch_t": T, "kv_field": st.plib.field.name, "kv_fold6": st.plib.fold6,
@@ -1132,7 +1165,10 @@ def install(runner, args, hooks, fp8_linears, unwrap, plaintext_scan, log) -> di
         "plaintext_scan": scan, "gates": gates, "selection": selection, "passes_hooked": passes, "components_ms": parts,
         "fp8_kernel": type(layers[0][1].quant_method.fp8_linear).__name__,
         "activation_quant": str(layers[0][1].quant_method.activation_quant_key),
-        "install_s": time.perf_counter() - t0}}
+        "install_s": time.perf_counter() - t0}
+    if st.spans is not None:
+        record["spans"] = list(SS.PARTS)
+    return {"stack": st, "record": record}
 
 
 def _apply(idx: int, quant):
@@ -1153,21 +1189,27 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
     size desc.num_tokens; staged in the graph) or its eager forward's (the model's own)."""
     from vllm.v1.worker.gpu.cudagraph_utils import ModelCudaGraphManager
 
-    def begin(m: int) -> bool:
+    def begin(m: int, kind: int) -> bool:
         if torch.cuda.is_current_stream_capturing():
             return False
+        if st.spans is not None:
+            st.spans.step(kind, m)
+        st.mark(SP["between"], kind)
         # Finish the preceding pass at vLLM's existing host/device boundary, before its root seeds this pass.
         att.finish_pass()
+        st.mark(SP["commit"])
         att.join()
+        st.mark(SP["append_wait"])
         if 0 < m <= MAX_ROWS:
             st.begin_pass(m)
         else:
             st.open = False
+        st.mark(SP["pass"])
         return True
 
     def replay(orig):
         def fn(self, desc):
-            begin(desc.num_tokens)
+            begin(desc.num_tokens, SS.KINDS.index("graph"))
             out = orig(self, desc)
             att.flush_graph(desc.num_tokens)
             return out
@@ -1176,7 +1218,7 @@ def hook_passes(st: Stack, att: Attention, hooks, model) -> str:
     def forward(orig):
         def fn(input_ids=None, positions=None, *a, **kw):
             ref = input_ids if input_ids is not None else positions
-            live = begin(ref.shape[0] if ref is not None else 0)
+            live = begin(ref.shape[0] if ref is not None else 0, SS.KINDS.index("eager"))
             out = orig(input_ids, positions, *a, **kw)
             if live:
                 att.flush_eager()

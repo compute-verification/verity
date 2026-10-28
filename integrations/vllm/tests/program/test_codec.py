@@ -10,7 +10,7 @@ import pytest
 from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
 from verity.ml.circuits.codec import IdentityConflict
 from verity.ml.circuits.defs import CompositeDefinition
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from tests.program.test_running_example import Add16, Dot, Id16, Mul16, Relu16, make_program
 
@@ -167,7 +167,7 @@ def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
 
 
 def test_duplicate_definition_objects_are_identity_checked_once_per_object(monkeypatch):
-    """[R15 moe GP01-DUP] A body that calls the SAME re-decoded definition object from many nodes (a workload Program composed
+    """A body that calls the SAME re-decoded definition object from many nodes (a workload Program composed
     from separately decoded request components: every node of the second component refers to a duplicate object) is identity-
     checked once per distinct duplicate object, not once per calling node -- the OLMoE B2 GP-01 compose re-encoded 95 definitions
     146,523 times (> 45 min; 8 s deduplicated); the descriptor and digest are unchanged, and a conflicting duplicate is still refused."""

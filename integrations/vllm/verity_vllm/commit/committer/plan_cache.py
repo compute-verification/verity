@@ -12,7 +12,9 @@ layout.
 
 The worker reads and fills the cache while the serving thread asks whether a plan is in it (`in`), so a plan is added to
 the current generation before it leaves the previous one, and `in` looks at the previous generation first: a plan never
-appears missing while it moves. `end_run` runs between runs, when the worker has drained.
+appears missing while it moves. `end_run` runs between runs: in the committer's reset when the worker has drained, or on the
+worker at a detached window's end (`NativeHostCommitter.detach`). There the serving thread asks of a step it ends whether a
+plan survives the window ends the worker reaches before that step (`native_collect.NativeCollectCommitter._plan_held`).
 """
 from __future__ import annotations
 
@@ -45,6 +47,18 @@ class PlanMetas(Sequence):
         self.nbytes = sum(self.sizes)
         self.digest: bytes | None = None
         self._metas: list | None = None
+
+    def columns(self) -> tuple:
+        """The plan as plain tuples, what `of_columns` rebuilds it from in another process: never its built `TensorMeta`s."""
+        return self.names, self.dtypes, self.sizes, self.offsets, self.ranks, self.dims, self.chunk, self.digest
+
+    @classmethod
+    def of_columns(cls, cols: tuple) -> PlanMetas:
+        names, dtypes, sizes, offsets, ranks, dims, chunk, digest = cols
+        p = cls.__new__(cls)
+        p.names, p.dtypes, p.sizes, p.offsets, p.ranks, p.dims, p.chunk = names, dtypes, sizes, offsets, ranks, dims, chunk
+        p.nbytes, p.digest, p._metas = sum(sizes), digest, None
+        return p
 
     @classmethod
     def of_entries(cls, entries: Iterable[tuple], names: Sequence[str], chunk: int) -> PlanMetas:

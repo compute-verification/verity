@@ -4,7 +4,7 @@ when its manifest names the tap's family (`pipeline.row_records.applicable_taps`
 the manifest names them: the blockwise FP8 GEMM's scale products (`scale_products_source`) and the exact-int8 quantizers' results
 (`int8_source`, which claims its call boundaries from the call-boundary source); the single-rank Commit only.  One entry point
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
-`for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
+`for_ranks(...)` to `pipeline.tp.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
 attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention sources
 (`attention_source`, which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and `dsv4_attention_source`,
@@ -16,7 +16,8 @@ which claims the Marlin block's call boundaries when the manifest names no plane
 one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
 manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
 gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split
-count (`prescribe_idle_splits`), taps or none."""
+count (`prescribe_idle_splits`), taps or none, and attach the narrowed-rows source (`narrowed_source`: the keys' and values' columns of
+the last layer's prompt rows before the last) whenever the manifest names narrowed rows; once one rank has it, every rank must."""
 from __future__ import annotations
 
 import json
@@ -26,12 +27,12 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
-                                         kv_slots_source, linear_quant_source, moe_align_source, norm_scale_source, route_source,
-                                         router_softmax_source, scale_products_source, vocab_range_source)
+                                         kv_slots_source, linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,
+                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity.ml.definitions.registry.topp_geometry import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
@@ -75,6 +76,7 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
                                                           explicit_classes=explicit_classes, model=model)
     required_classes, _src = int8_source.attach(com, int8_source.applies(manifest), manifest, required_classes,
                                                 explicit_classes=explicit_classes, model=model)
+    narrowed_source.attach(com, manifest, model=model)
     prescribe_idle_splits(com, manifest)
     return required_classes
 
@@ -107,7 +109,8 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     source (`attention_source`, `dsv4_attention_source`) when a capture map that binds through it describes the manifest's model at its
     ranks (`route_source.manifest_map`: every rank attaches it, `attach_rank`), the MoE align source when the manifest names the
     align Definitions, and the MoE block source when the manifest names a call boundary it claims and no `moe_block_stream` plane (every
-    rank attaches it, binding at the block's Calls: `engine.rank_worker`, `moe_source.at_calls`)."""
+    rank attaches it, binding at the block's Calls: `pipeline.tp.rank_worker`, `moe_source.at_calls`); on any number of ranks, the
+    narrowed-rows source when the manifest names narrowed rows."""
     ids = (manifest or {}).get("identities") or []
     fams = {r.get("family") for r in ids}
     one = int((manifest or {}).get("ranks") or 1) == 1
@@ -121,7 +124,8 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
               if cmap is not None and mod.binds(cmap)),
             *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else []),
             *([moe_source.MoeBlockSource.short_name]
-              if not one and not moe_source.binds_planes(manifest) and any(moe_source.claims(r) for r in ids) else [])]
+              if not one and not moe_source.binds_planes(manifest) and any(moe_source.claims(r) for r in ids) else []),
+            *([narrowed_source.SHORT_NAME] if narrowed_source.applies(manifest) else [])]
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, kv_slots: bool = False, **given: Any) -> dict[str, Any]:
@@ -158,6 +162,12 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, k
             out["moe_align_source"] = {"layers": len(ma.layers)}
     except (ValueError, RuntimeError, AttributeError) as e:
         out["moe_align_source"] = {"error": repr(e)[:200]}
+    try:
+        nr = narrowed_source.attach(com, mine, model=model)
+        if nr is not None:
+            out["narrowed_source"] = {"sites": len(nr.sites)}
+    except (SystemExit, ValueError, RuntimeError, AttributeError) as e:
+        out["narrowed_source"] = {"error": repr(e)[:200]}
     if kv_slots:
         try:
             out["kv_slots_source"] = {"layers": len(kv_slots_source.attach(com, model).layers)}
@@ -177,12 +187,13 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
     closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`; the route
     source (when any rank's model has a capture map), the linear quant source and the MoE align source (when any rank's rows name their
-    Definitions) attached on every rank (else SystemExit); the attention hidden class every rank reports
+    Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
+    hidden class every rank reports
     (`hidden_source.require_hidden_on_every_rank`)."""
     from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
-    for key in ("route_source", "linear_quant_source", "moe_align_source"):
+    for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
         states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
         if any(states.values()):
             bad = sorted(r for r, v in states.items() if not v or v.get("error"))

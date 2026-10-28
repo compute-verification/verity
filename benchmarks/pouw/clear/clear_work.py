@@ -25,9 +25,10 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ times the credited cells' credit, their
     share of the unit's `creditDevRev1` (F1; `tile_cap`);
   - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
-    at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)).
+    at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)), and at most 4ρ at Pearl-C's census ks below k_min
+    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`), the tile's cap staying ρ.
   A failure is a wrong tile, reported as a reason; nothing raises.
-* **Voluntary rows (V-EX; the assessor's B at 17:32Z).**
+* **Voluntary rows.**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
     in every unit of the weight). They are committed in `records_root` with the excluded rows, before the draw coin.
   - A voluntary row earns no credit. Its words are still formed, checked and hashed on every drawn tile that holds it.
@@ -257,26 +258,41 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
         if kind == "credited" and r1(side, index, True):
             return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
+    return cap_failure(scheme, record, tile, ops, tol)
+
+
+def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) -> str | None:
+    """`check_opened`'s cap on the tile's credited words: None, or the reason the tile's debit or (under a row-capped
+    format) a credited row's is over its cap.  The hidden path's is `circuit.cap`'s (`cap.served`)."""
+    k = record.matmul.shape.k
     rows, cols = record.credited(tile)
     if rows and cols:
         bound = 1 + Fraction(tol)
         debit, cap = _debit_cap(scheme, record, tile, ops, rows, cols)
         if debit > cap * bound:
             return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
+        widen = row_cap_multiple(scheme, k)
         for i in rows if row_cap(scheme) else ():
             debit, cap = _debit_cap(scheme, record, tile, ops, [i], cols)
-            if debit > cap * bound:
-                return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap):.0f} (the row cap: ρ·its "
-                        "credited cells' credit)")
+            if debit > cap * widen * bound:
+                return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
+                        f"cap: {'' if widen == 1 else f'{widen}'}ρ·its credited cells' credit)")
     return None
 
 
 def row_cap(scheme) -> bool:
     """Whether the scheme's hashing format caps every credited row's debit as well as the tile's (`HashFormat.row_cap`,
     -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's debit over the tile's credited columns at
-    most ρ times its cells' share of the credit."""
+    most ρ times its cells' share of the credit, or `row_cap_multiple`·ρ (`pearlCTilesDevRev1RowCapAt`)."""
     hashing = getattr(scheme, "hashing", None)
     return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_cap
+
+
+def row_cap_multiple(scheme, k: int) -> Fraction:
+    """A credited row's cap at depth ``k`` over the tile's ρ: the scheme's `row_cap_at(k)`/ρ, 4 at Pearl-C's census ks
+    (`pearl_c.CENSUS_ROW_CAP`), and 1 for a scheme without one."""
+    at = getattr(scheme, "row_cap_at", None)
+    return Fraction(1) if at is None else Fraction(at(k)) / Fraction(scheme.cap)
 
 
 def _debit_cap(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
@@ -455,15 +471,19 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
 def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]],
             splits: Mapping[int, Split], real_rows: Mapping[int, int] | None = None,
             transcript: Transcript | None = None, voluntary_a: Mapping[int, Sequence[int]] | None = None,
-            voluntary_b: Mapping[int, Sequence[int]] | None = None) -> list[UnitRecord]:
+            voluntary_b: Mapping[int, Sequence[int]] | None = None,
+            padded_b: Mapping[int, Sequence[int]] | None = None) -> list[UnitRecord]:
     """An honest prover's records: each real row and each weight row checked by the per-row rules on the unit's words,
     and, for a scheme with a salted per-row credit rule (`r1_rows`, Pearl-C4's R1), by that rule on the committed
     transcript's forming.  Pearl-C's schemes bring none, so `transcript` changes nothing for them.  `voluntary_a` (by
     matmul index) and `voluntary_b` (by weight) are the rows the prover gives up (V-EX, `volunteer`); a row the rules
-    exclude stays excluded."""
+    exclude stays excluded.  `padded_b` (by weight) is a padded tile's rows (`pearl_c_work.pad_weight`), voluntary
+    whether or not they pass, so the tile opens no exclusion tile."""
     parse, passes = _rules(scheme)
     k_of = {u.weight: u.shape.k for u in epoch.workload.matmuls}
-    excluded_b = {w: {j for j, r in enumerate(rows) if not passes(parse(r, k_of[w]))} for w, rows in weights.items()}
+    padded = {w: set(rows) for w, rows in (padded_b or {}).items()}
+    excluded_b = {w: {j for j, r in enumerate(rows) if j not in padded.get(w, ()) and not passes(parse(r, k_of[w]))}
+                  for w, rows in weights.items()}
     r1 = getattr(scheme, "r1_rows", None) if transcript is not None else None
     extra_a: dict[int, set[int]] = {}
     if r1 is not None:
@@ -482,7 +502,7 @@ def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[b
         rows = activations[u.index]
         excluded_a = tuple(i for i in range(real) if not passes(parse(rows[i], u.shape.k)) or i in extra_a.get(u.index, ()))
         va = tuple(sorted(set((voluntary_a or {}).get(u.index, ())) - set(excluded_a)))
-        vb = tuple(sorted(set((voluntary_b or {}).get(u.weight, ())) - excluded_b[u.weight]))
+        vb = tuple(sorted((set((voluntary_b or {}).get(u.weight, ())) - excluded_b[u.weight]) | padded.get(u.weight, set())))
         out.append(UnitRecord(u, real, splits[u.weight].k_kept, excluded_a, tuple(sorted(excluded_b[u.weight])), va, vb))
     return out
 
@@ -519,8 +539,9 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
                     rows, cols = cur.credited(tile)
                     if not (rows and cols):
                         break
-                    over = [(d - c, i) for i in (rows if row_cap(scheme) else ())
-                            for d, c in (_debit_cap(scheme, cur, tile, ops, [i], cols),) if d > c * tol]
+                    widen = row_cap_multiple(scheme, u.shape.k)
+                    over = [(d - c * widen, i) for i in (rows if row_cap(scheme) else ())
+                            for d, c in (_debit_cap(scheme, cur, tile, ops, [i], cols),) if d > c * widen * tol]
                     if over and len(va[u.index]) < voluntary_cap(u.shape.m):
                         va[u.index].add(max(over)[1])
                         changed = True

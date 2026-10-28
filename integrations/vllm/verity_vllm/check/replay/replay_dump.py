@@ -6,23 +6,25 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm import settings
+
 _DUMP_N = [0]
 
 
 def dump_row_words(fam: str, rid: str, step: int, op_path: str, row: int, member: str, have: np.ndarray, want: np.ndarray, eq: bool, *,
                    store: Any = None, elo: int | None = None, ehi: int | None = None) -> None:
-    """[moe F-moe-r17-06, DIAGNOSTIC, opt-in, record-neutral] `VERITY_REPLAY_DUMP_DIR=<dir>` + `VERITY_REPLAY_DUMP_FAMILIES=Fam1,Fam2`: write
+    """[DIAGNOSTIC, opt-in, record-neutral] `VERITY_REPLAY_DUMP_DIR=<dir>` + `VERITY_REPLAY_DUMP_FAMILIES=Fam1,Fam2`: write
     the committed words and the evaluated words of every evaluated row of those families (equal or not; <= VERITY_REPLAY_DUMP_MAX files,
     default 1024) so a reader can test, offline, WHICH committed invocation an evaluated row matches (the aliased shared module: layer L's
     rope output vs the canonical path's invocation L).  Off unless the directory is set; nothing on the record changes."""
     import os
-    dd = os.environ.get("VERITY_REPLAY_DUMP_DIR")
+    dd = settings.VERITY_REPLAY_DUMP_DIR
     if not dd:
         return
-    fams = {f for f in os.environ.get("VERITY_REPLAY_DUMP_FAMILIES", "").split(",") if f}
+    fams = set(settings.VERITY_REPLAY_DUMP_FAMILIES)
     if fams and fam not in fams:
         return
-    if _DUMP_N[0] >= int(os.environ.get("VERITY_REPLAY_DUMP_MAX", "1024")):
+    if _DUMP_N[0] >= settings.VERITY_REPLAY_DUMP_MAX:
         return
     _DUMP_N[0] += 1
     os.makedirs(dd, exist_ok=True)

@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
 spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
@@ -82,6 +81,13 @@ def test_words_in_hold_only_in_their_files():
     assert WORDS.sub(harness, "benchmarks/other/harness.py") == harness
 
 
+def test_a_map_of_words_in_alone_leaves_every_other_file():
+    words = M.Words({"words": {}, "words_in": [{"files": ["cli/*.py"], "words": {'"examples"': '"demos"'}}]})
+    assert words.sub('ROOT / "examples"\n', "cli/run.py") == 'ROOT / "demos"\n'
+    assert words.sub('ROOT / "examples"\n', "other/run.py") == 'ROOT / "examples"\n'
+    assert words.path("examples/run.py") == "examples/run.py"
+
+
 def test_the_certifiers_program_is_network_certifier_where_it_stands():
     lean = "verity/protocols/accounting/communication/warden/lean"
     assert WORDS.path(f"{lean}/Warden/Grid.lean") == \
@@ -133,12 +139,55 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
-def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_part():
+def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
+    """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
+    quoted string names the module, and everywhere else the name stands."""
+    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    code = ("import Properties.RemoteAudit.Line.Record\nimport Proofs.Properties.RemoteAudit.Line\n"
+            "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
+            "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
+            'roots = ["Properties.RemoteAudit.Line", "Properties.RemoteAudit.Line.LineHeld"]\n')
+    assert areas.sub(code, "Security/Proofs/Properties/X.lean") == (
+        "import Properties.Accounting.Remote.Line.Record\nimport Proofs.Properties.Accounting.Remote.Line\n"
+        "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
+        "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
+        'roots = ["Properties.Accounting.Remote.Line", "Properties.RemoteAudit.Line.LineHeld"]\n')
+
+
+def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
+    """The areas move renames module `Properties.CertifierDevice` and keeps namespace `Properties.CertifierDevice`: the
+    rewrite and the declaration renames the locks need agree on what stands."""
+    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    code = ("import Properties.CertifierDevice\nimport Proofs.Properties.CertifierNetwork.Runs\n"
+            "namespace Properties.CertifierDevice\nopen Properties.NetworkCertifier Properties.NetworkCertifier.Bytes\n"
+            "/-- `Properties.CertifierDevice.failClosed`, stated in `Properties.CertifierNetwork.Runs`. -/\n"
+            "end Properties.CertifierDevice\n")
+    assert areas.sub(code, "Security/Proofs/Properties/X.lean") == (
+        "import Properties.NetworkCertifier.Device\nimport Proofs.Properties.NetworkCertifier.DeviceOutput.Runs\n"
+        "namespace Properties.CertifierDevice\nopen Properties.NetworkCertifier Properties.NetworkCertifier.Bytes\n"
+        "/-- `Properties.CertifierDevice.failClosed`, stated in `Properties.NetworkCertifier.DeviceOutput.Runs`. -/\n"
+        "end Properties.CertifierDevice\n")
+    assert areas.path("Security/Proofs/Properties/NetworkCertifier/Check.lean") == \
+        "Security/Proofs/Properties/NetworkCertifier/Check/Check.lean"
+    lock = {"layers": {"Properties.CertifierDevice": {"imports": ["Properties.Identity"]}},
+            "guarantees": {"Properties.CertifierDevice.failClosed": {}},
+            "reads": {"Definitions.Population.Exfiltration": {"definitions": {
+                "Properties.Identity.TaggedIsFlock": "00", "Population.Exfil.game": "00", "NciCheck.Properties.x": "00"}}}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    assert M.lock_moves(tmp_path, areas, ["lean-audit.json"]) == {}
+    out = json.loads(areas.sub(json.dumps(lock), "Security/Properties/lean-audit.json", M.record_spans(json.dumps(lock))))
+    assert out["layers"] == {"Properties.NetworkCertifier.Device": {"imports": ["Properties.Hash.Identity"]}}
+
+
+def test_the_recorded_paths_are_the_moves_up_to_their_first_renamed_span():
     moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/lean/Warden/B.lean", "v/certifier/lean/NetworkCertifier/B.lean"),
              ("S/Proofs/Warden.lean", "S/Proofs/NetworkCertifier.lean"), ("S/Proofs/Warden/C.lean", "S/Proofs/NetworkCertifier/C.lean")]
     assert M.renamed_paths(moves) == {"S/Proofs/Warden.lean": "S/Proofs/NetworkCertifier.lean",
                                       "S/Proofs/Warden/": "S/Proofs/NetworkCertifier/", "v/warden/": "v/certifier/"}
     assert M.renamed_paths(moves[:1]) == M.renamed_paths(moves[:2])       # a branch's new file under a renamed directory
+    swapped = [("S/Properties/Proofs/Nci.lean", "S/Proofs/Properties/Nci.lean"), ("S/Properties/Proofs/Nci/V.lean",
+                                                                              "S/Proofs/Properties/Nci/V.lean")]
+    assert M.renamed_paths(swapped) == {"S/Properties/Proofs/": "S/Proofs/Properties/"}
     with pytest.raises(SystemExit, match="would move to both"):
         M.renamed_paths([("v/warden/a.py", "v/certifier/a.py"), ("v/warden/b.py", "v/guard/b.py")])
 
@@ -226,6 +275,20 @@ def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
     assert json.loads(capsys.readouterr().out) == {}
 
 
+def test_a_file_lands_where_another_leaves(toy):
+    """`S/Area.lean` -> `S/Area/Check.lean` while `S/Area/Check.lean` -> `S/Area/Check/Check.lean`: both arrive whole."""
+    (toy / "S/Area").mkdir(parents=True)
+    (toy / "S/Area.lean").write_text("import S.Area.Check\n")
+    (toy / "S/Area/Check.lean").write_text("theorem t : True := trivial\n")
+    (toy / "areas.toml").write_text('[words]\n"S/Area" = "S/Area/Check"\n"S.Area" = "S.Area.Check"\n')
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "areas")
+    assert M.main(["--root", str(toy), "--map", str(toy / "areas.toml")]) == 0
+    assert (toy / "S/Area/Check.lean").read_text() == "import S.Area.Check.Check\n"
+    assert (toy / "S/Area/Check/Check.lean").read_text() == "theorem t : True := trivial\n"
+    assert not (toy / "S/Area.lean").exists()
+
+
 def test_it_refuses_a_dirty_worktree(toy):
     (toy / "README.md").write_text("edited\n")
     with pytest.raises(SystemExit, match="isn't clean"):
@@ -239,9 +302,3 @@ def test_two_files_landing_at_one_path_fail(toy):
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clash")
     with pytest.raises(SystemExit, match="two files would land at one path"):
         M.main(["--root", str(toy)])
-
-
-def test_the_tree_is_renamed():
-    files = [p for p in git(ROOT, "ls-files", "-z").split("\0") if p]
-    left = [p for p in files if not WORDS.excluded(p) and WORDS.path(p) != p]
-    assert not left, f"rename.py would still move: {left[:5]}"

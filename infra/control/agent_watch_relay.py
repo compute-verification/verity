@@ -7,17 +7,20 @@ cancel, held again within the hour, and a run unreadable for an hour; the first 
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
 the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker alert is never posted unrung: one whose
-lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent agent (ACTIVE 90 min with no note
-and no push) leads with the record's handle and rings it the same way. A `research run` that ended on a node leads with its
+lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent worker (ACTIVE 90 min with no note
+and no push) leads with the record's handle and rings it the same way; a silent coordinator (60 min, its record's owner top)
+rings @top. A `research run` that ended on a node leads with its
 sender's handle (a coordinator's own, a worker's launcher's, for a run whose sender is a lane, the lane's), and its doorbell is
 `research msg ring-run` (INF-140), the one sender of run-end doorbells: `from runs, run R rc N (AGENT): ...`, once per run however
-often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. The runs of one read whose sender
+often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
+is posted but rings no one: the watch resumes the worker itself, and rings its coordinator only if it stays idle (INF-216: run
+ends were 47% of all doorbells, most of them workers' successes). The runs of one read whose sender
 no handle owns are one post that leads with @infra, naming each run's sender, rung as an alert. A record this relay can't render
 (a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to @infra, never as a sentence of ?s.
 A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined) is posted with no handle and
 rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
 reset, never posts it again.
-A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
+A failure the watch acted on (`FAIL`: held, stalled, held unread, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
 worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
 with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
@@ -74,18 +77,22 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "worker_idle": "went idle at {at}; if it didn't report back, resume it with Task",
        "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
+       "no_step": "has shown nothing (no note, no push, nothing streamed) since {since} ({hours} h) after its two silent rings: "
+                  "stop it and archive it, or resume it",
        "run_ended": "ended rc={rc} after {after} on {node}",
-       "stalled": "streamed nothing for {minutes} min since {since} while RUNNING (a hung call or a suspended VM); the watch "
-                  "{action}",
+       "stalled": "streamed nothing for {minutes} min since {since}, its agent not moving either (a hung call or a suspended "
+                  "VM); the watch {action}",
        "idle_after_run": "sat idle after its run {ended_run} ended ({result}), with nothing resuming it for {minutes} min; the "
                          "watch {action}",
        "relaunch": "needs a fresh launch ({reason}); the watch {action}",
        "not_relaunched": "was idle after its run {ended_run} ended, and the watch did not relaunch it: {why}",
-       "workers_failed": "stopped within {minutes} min"}
-TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
+       "workers_failed": "stopped within {minutes} min",
+       "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
+                      "follow-ups sat unread ({reason}); the watch {action}"}
+TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
-FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
+FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
 UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
@@ -136,7 +143,9 @@ def rung(rec: dict) -> str | None:
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined
         return None
-    if rec.get("kind") in TOP:
+    if rec.get("kind") == "run_ended" and rec.get("sender_status") == "ACTIVE":
+        return None             # its sender is in a turn and sees its own run end; if it then idles, the watch resumes it
+    if rec.get("kind") in TOP or (rec.get("kind") == "silent" and rec.get("owner") == "top"):
         return "top"
     handles = {h["handle"] for h in REG.get("handles") or []}
     owner = RENAMED.get(rec.get("owner"), rec.get("owner"))
@@ -205,6 +214,9 @@ def text(rec: dict) -> str:
                    else f"lane {rec.get('handle') or '?'}")
             return (f"*Agent watch:* {run} of {who} {line}, cancelled by its own lane ({rec.get('cancelled_by') or '?'}: "
                     f"\u201c{str(rec.get('cancel_reason') or '')[:160]}\u201d): nothing to resume.")
+        if rec.get("sender_status") == "ACTIVE" and rec.get("role") in ("worker", "coordinator"):
+            who = f"worker {name}" if rec.get("role") == "worker" else name
+            return f"*Agent watch:* {run} of {who} ({link}) {line}; its sender is in a turn, so no one is rung."
         if rec.get("role") == "worker" and rec.get("listed"):
             return (f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; the watch starts a run on it with the "
                     "result if it is still idle in 10 min.")
@@ -335,7 +347,9 @@ def once() -> None:
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             sent[key] = time.time()
             save_sent(sent)
-            if to := rung(rec):
+            if (to := rung(rec)) and rec.get("kind") == "run_ended" and rec.get("role") == "worker" and rec.get("rc") == 0:
+                log(f"run {rec.get('run')}: a worker's run ended rc 0, posted unrung (the watch resumes the worker)")
+            elif to:
                 try:
                     if rec.get("kind") == "run_ended" and rec.get("role") != "unknown" and renderable(rec):
                         ring_run(rec, to, ts)

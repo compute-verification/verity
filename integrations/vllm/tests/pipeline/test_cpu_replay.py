@@ -12,12 +12,13 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import scheme
+from verity_vllm.commit import scheme, step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
 CHUNK = 16
 GEO = bytes(range(32))
+WK = bytes(range(64, 128))
 RNG = np.random.default_rng(7)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
          "model.layers.0.self_attn.k_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
@@ -45,24 +46,34 @@ def _served():
             "model.unknown.weight": ("bfloat16", np.zeros(4, np.uint16))}
 
 
-@pytest.fixture
-def world(tmp_path):
+def weights_tree(tensors: dict[str, tuple[str, np.ndarray]], commit_scheme: str = step_rows.NAME) -> dict:
+    """The registered tensors' weights tree as `register_weights` keeps it, under ``commit_scheme``."""
+    names, roots = [], []
+    for i, (name, (dt, a)) in enumerate(tensors.items()):
+        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
+        entry = [name, dt, list(a.shape), int(raw.size)]
+        roots.append(step_rows.tensor_root(GEO, i, entry, raw, WK) if commit_scheme == step_rows.NAME else CPU.tensor_root(raw, CHUNK))
+        names.append(entry)
+    if commit_scheme == step_rows.NAME:
+        return step_rows.weights_tree(GEO, names, scheme.names_digest(names), roots, WK)
+    return {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(GEO, scheme.names_digest(names), roots).hex(),
+            "chunk": CHUNK, "geo_digest": GEO.hex()}
+
+
+@pytest.fixture(params=[step_rows.NAME, scheme.NAME])
+def world(tmp_path, request):
     ckd, bundle = tmp_path / "ck", tmp_path / "bundle"
     ckd.mkdir()
     (ckd / "config.json").write_text("{}")
     _shard(ckd / "model.safetensors", PARTS)
     (bundle / "weights" / "extra").mkdir(parents=True)
-    names, roots, extra = [], [], {}
-    for i, (name, (dt, a)) in enumerate(_served().items()):
-        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
-        names.append([name, dt, list(a.shape), int(raw.size)])
-        roots.append(CPU.tensor_root(raw, CHUNK))
+    tree, extra = weights_tree(_served(), request.param), {}
+    for i, (name, (_dt, a)) in enumerate(_served().items()):
         if name == "model.rotary_emb.cos_sin_cache":
-            (bundle / "weights" / "extra" / f"{i}.bin").write_bytes(raw.tobytes())
+            (bundle / "weights" / "extra" / f"{i}.bin").write_bytes(np.ascontiguousarray(a).tobytes())
             extra[name] = i
-    root = scheme.weights_root(GEO, scheme.names_digest(names), roots).hex()
-    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root, "chunk": CHUNK, "geo_digest": GEO.hex(), "extra": extra}
-    return {"ck": ckd, "bundle": bundle, "tree": tree, "root": root}
+    tree["extra"] = extra
+    return {"ck": ckd, "bundle": bundle, "tree": tree, "root": tree["root"], "other_root": "00" * (len(tree["root"]) // 2)}
 
 
 def _open(w):
@@ -113,11 +124,60 @@ def test_a_changed_bundle_constant_fails_by_name(world):
 
 
 def test_a_tree_that_is_not_the_committed_root_opens_nothing_of_record(world):
-    _, wc = CPU.open_weights(world["bundle"], world["tree"], "00" * 32, WR.CheckpointIndex(str(world["ck"]), verify_shards=False))
+    _, wc = CPU.open_weights(world["bundle"], world["tree"], world["other_root"], WR.CheckpointIndex(str(world["ck"]), verify_shards=False))
     assert wc["equal"] is False and "is not the committed weights root" in wc["why"]
-    world["tree"]["tensor_roots"][1] = "11" * 32
+    world["tree"]["tensor_roots"][1] = world["other_root"].replace("0", "1")
     _, wc = _open(world)
     assert wc["equal"] is False and "does not fold to its root" in wc["why"]
+
+
+def test_a_tree_is_read_only_under_the_scheme_its_root_of_record_was_registered_under(world):
+    """A vllm-v1 (SHA-256) weights tree is read only for a registration recorded under vllm-v1: under a SHA-512 root of record it is
+    refused by name before anything opens, as a rows-sha512 tree is under a 32-byte root, and `OnRead` refuses the same."""
+    have = CPU.tree_scheme(world["tree"])
+    other = scheme.NAME if have == step_rows.NAME else step_rows.NAME
+    root = "ab" * (step_rows.ROOT_BYTES if other == step_rows.NAME else 32)
+    assert CPU.root_scheme(world["root"]) == have and CPU.root_scheme(root) == other
+    words, wc = CPU.open_weights(world["bundle"], world["tree"], root, WR.CheckpointIndex(str(world["ck"]), verify_shards=False))
+    assert wc["equal"] is False and wc["why"] == (f"the bundle's weights tree is {have}'s, and the committed weights root is {other}'s: "
+                                                  f"a {have} tree is read only for a registration recorded under {have}")
+    with pytest.raises(ValueError, match=f"weights tree is {have}'s, and the committed weights root is {other}'s"):
+        CPU.OnRead(world["bundle"], world["tree"], root, None)
+
+
+def test_a_rows_sha512_tree_names_its_scheme_and_a_sha512_root_and_its_tensor_roots_are_the_rows_trees():
+    """Under rows-sha512 a tensor's root is the root of its rows' frame-v3-sha512 tree (`step_rows.levels` over its zero-padded
+    ROW_BYTES rows, under the tensor's domain and salt key), and the weights root is 64 bytes; another key gives other roots."""
+    a = RNG.integers(0, 256, step_rows.ROW_BYTES + 100, dtype=np.uint8)
+    entry = ["model.x.weight", "uint8", [a.size], int(a.size)]
+    dom = step_rows.weights_domain(GEO, 0, entry)
+    rows = [a[:step_rows.ROW_BYTES].tobytes(), a[step_rows.ROW_BYTES:].tobytes() + bytes(step_rows.ROW_BYTES - 100)]
+    lv = step_rows.levels(dom, rows, step_rows.tensor_key(WK, 0), 8 * step_rows.ROW_BYTES)
+    assert dom.count == 2 and step_rows.tensor_root(GEO, 0, entry, a, WK) == lv[-1][0]
+    tree = weights_tree({"model.x.weight": ("uint8", a)})
+    assert (tree["scheme"], len(bytes.fromhex(tree["root"])), tree["key"]) == (step_rows.NAME, step_rows.ROOT_BYTES, WK.hex())
+    assert CPU.folded_root(tree) == tree["root"] and tree["tensor_roots"] == [lv[-1][0].hex()]
+    assert step_rows.tensor_root(GEO, 0, entry, a, bytes(64)) != lv[-1][0]
+    assert step_rows.tensor_root(GEO, 1, entry, a, WK) != lv[-1][0], "each tensor has its own domain and salt key"
+
+
+def test_on_read_opens_a_tensor_on_its_first_read_as_open_weights_does_and_refuses_one_by_name(world):
+    words, _wc = _open(world)
+    shard = world["ck"] / "model.safetensors"
+    b = bytearray(shard.read_bytes())
+    b[-(PARTS["model.norm.weight"].nbytes + 3)] ^= 1       # inside v_proj, a part of qkv_proj
+    shard.write_bytes(bytes(b))
+    lazy = CPU.OnRead(world["bundle"], world["tree"], world["root"], WR.CheckpointIndex(str(world["ck"]), verify_shards=False))
+    assert set(lazy) == {n for n, *_ in world["tree"]["names"] if n != "model.half.weight"} and not lazy.words
+    rd = CPU.provider(lazy, "model.", set())
+    assert np.array_equal(rd("model.norm.weight", 0, 8), words["model.norm.weight"]) and set(lazy.words) == {"model.norm.weight"}
+    with pytest.raises(LookupError, match=f"{QKV} \\(checkpoint\\) does not open .*tensor root != the committed tensor root"):
+        rd("model." + QKV, 0, 1)
+    with pytest.raises(ValueError, match="is not the committed weights root"):
+        CPU.OnRead(world["bundle"], world["tree"], world["other_root"], None)
+    world["tree"]["tensor_roots"][1] = world["other_root"].replace("0", "1")
+    with pytest.raises(ValueError, match="does not fold to its root"):
+        CPU.OnRead(world["bundle"], world["tree"], world["root"], None)
 
 
 def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
@@ -151,7 +211,8 @@ def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
 
 # ------------------------------------------------------------------------------------------------ the bundle is the record's
 
-def _deferred(tmp_path, steps=None):
+def _deferred(tmp_path, steps=None, tree=None):
+    """A deferred record and its sealed bundle; ``tree``: the bundle's weights tree (its ``extra`` the cos/sin cache)."""
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
@@ -160,8 +221,10 @@ def _deferred(tmp_path, steps=None):
     p = RB.partial(tmp_path, 1)
     SD.dump(com, rc, p / "store")
     (p / "weights" / "extra").mkdir(parents=True)
-    (p / "weights" / "tree.json").write_text(json.dumps({"names": [], "extra": {"model.rotary_emb.cos_sin_cache": 0}}))
-    (p / "weights" / "extra" / "0.bin").write_bytes(COS_SIN.tobytes())
+    tree = tree or {"names": [], "extra": {"model.rotary_emb.cos_sin_cache": 0}}
+    (p / "weights" / "tree.json").write_text(json.dumps(tree))
+    for i in tree["extra"].values():
+        (p / "weights" / "extra" / f"{i}.bin").write_bytes(COS_SIN.tobytes())
     (tmp_path / "binding_map_p1.json").write_text(json.dumps({"entries": []}))
     sr, lk = RB.deferred_records(RB.path(tmp_path, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr, "boundary_linkage": lk}}
@@ -213,11 +276,11 @@ STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5), ("model.layers.0.sel
 PICKS = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (1, "runner.sampler", 0, 4)]
 
 
-def _kept(tmp_path):
+def _kept(tmp_path, tree=None):
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.commit import store_dump as SD
 
-    out = _deferred(tmp_path, STEPS)
+    out = _deferred(tmp_path, STEPS, tree)
     b = RB.open_bundle(RB.path(out, 1))
     _rows, _row, _verdict, store, run = CPU.of_record(b, out)
     with SD.touched(store) as t:
@@ -233,7 +296,7 @@ def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(
     from verity_vllm.commit import store_dump as SD
 
     out, b, store, run, t, want, c, plan = _kept(tmp_path)
-    doc = CPU.keep(out, b, store, run, t, plan, c)
+    doc = CPU.keep(out, b, store, run, t, plan, c, opened=set())
     k = CPU.slim_path(out, 1)
     assert json.loads((k / CPU.SLIM_DOC).read_text()) == doc and not k.with_name(k.name + ".partial").exists()
     assert (doc["schema"], doc["pair"], doc["run_root"], doc["picked"], doc["picks"], doc["commit_pass"]) == (
@@ -259,15 +322,50 @@ def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(
 def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
     out, b, store, run, t, _want, c, plan = _kept(tmp_path)
     for bad in (dict(plan, picked=1), {k: v for k, v in plan.items() if k != "plan"}, dict(plan, picks=plan["picks"][:1])):
-        assert CPU.keep(out, b, store, run, t, bad, c) is None
-    assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}) is None
+        assert CPU.keep(out, b, store, run, t, bad, c, opened=set()) is None
+    assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}, opened=set()) is None
     assert not list(out.glob("replay_slim_p*"))
+
+
+def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
+    """The slim keep is published, and ``Kw`` opens every weights leaf (each tensor's salt key derives from it): no file of a
+    rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
+    bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
+    tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
+    out, b, store, run, t, _want, c, plan = _kept(tmp_path, tree)
+    names = [n for n, *_r in tree["names"]]
+    assert WK.hex().encode() in (Path(b["path"]) / "weights" / "tree.json").read_bytes(), "the private bundle holds Kw"
+    for opened in ({QKV, "model.rotary_emb.cos_sin_cache"}, {QKV}):
+        CPU.keep(out, b, store, run, t, plan, c, opened=opened)
+        k = CPU.slim_path(out, 1)
+        held = [i for i, n in enumerate(names) if n in opened]
+        secret = [WK, *(step_rows.tensor_key(WK, i) for i in range(len(names)) if i not in held)]
+        for f in (x for x in k.rglob("*") if x.is_file()):
+            data = f.read_bytes()
+            assert not [s for s in secret if s in data or s.hex().encode() in data], f"{f.relative_to(k)} holds Kw or an unopened tensor's key"
+        kt = json.loads((k / "weights" / "tree.json").read_text())
+        assert "key" not in kt and kt["tensor_keys"] == {str(i): step_rows.tensor_key(WK, i).hex() for i in held}
+        assert (kt["root"], kt["tensor_roots"], kt["names"]) == (tree["root"], tree["tensor_roots"], tree["names"])
+        assert kt["extra"] == {n: i for n, i in tree["extra"].items() if n in opened}
+        assert sorted(x.name for x in (k / "weights" / "extra").glob("*")) == [f"{i}.bin" for i in sorted(kt["extra"].values())]
+    ckd = tmp_path / "ck"
+    ckd.mkdir()
+    (ckd / "config.json").write_text("{}")
+    _shard(ckd / "model.safetensors", PARTS)
+    CPU.keep(out, b, store, run, t, plan, c, opened={QKV, "model.rotary_emb.cos_sin_cache"})
+    k = CPU.slim_path(out, 1)
+    words, wc = CPU.open_weights(k, json.loads((k / "weights" / "tree.json").read_text()), tree["root"],
+                                 WR.CheckpointIndex(str(ckd), verify_shards=False), threads=2)
+    assert wc["equal"] is True and set(words) == {QKV, "model.rotary_emb.cos_sin_cache"} and wc["mismatched_n"] == 0, wc
+    assert {u["name"]: u["why"] for u in wc["unopened"]} == {n: "the slim keep carries no salt key for it" for n in ("model.norm.weight", "model.unknown.weight")}
+    with pytest.raises(KeyError, match="carries no salt key"):
+        CPU.tensor_root_of(json.loads((k / "weights" / "tree.json").read_text()), 1, PARTS["model.norm.weight"].view(np.uint8))
 
 
 def _decided(tmp_path):
     """A record whose deferred replay was decided and left its keep, and its instrumented row as it awaited the replay."""
     out, b, store, run, t, _want, c, plan = _kept(tmp_path)
-    CPU.keep(out, b, store, run, t, plan, c)
+    CPU.keep(out, b, store, run, t, plan, c, opened=set())
     rows, row, verdict, _s, _r = CPU.of_record(b, out)
     rc = row["commit"]
     rc.update(commit_fail_reason=RB.PENDING, value_correspondence={"method": "offline-suite", "result": None, "why": None,

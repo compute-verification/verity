@@ -219,7 +219,6 @@ def ZkBatchAlign (x : Claims.Msg) : Prop :=
         (repRounds true spec sts[zkTbl sts j]!) (zkFront spec sts j)
         (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -245,28 +244,6 @@ def ZkBatchAlign (x : Claims.Msg) : Prop :=
         (repRounds true spec sts[zkTbl sts j]!) (zkFront spec sts j)
         (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
 
-end Gen
-
-/-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
-`schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
-level. -/
-theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
-  by_cases hℓ : ℓ.val + 1 < (zkTabs h0 L hz hk hlay j).sch.levels.length
-  · obtain ⟨-, -, -, -, -, hl⟩ := zkTabs_facts h0 L hz hk hlay j
-    refine slotRSZ_of_batch _ _ _ _ _ _ r.val r.isLt ℓ.val _ _ _ (DeadZ j) ?_
-      (fun pts => dist_lockRepZ_zkCap _ _ _ hl r.val r.isLt default ℓ.val pts) _
-      (schedZ_of_schedC _ _ _ _ _ _ _ _ _ _ _ (h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u hℓ))
-    intro e b b' hb _
-    rw [take_gamesZC_length]
-    exact ind_conflictAcc_nul _ _ _ _ _ _ _ _ hb
-  · exact slotRSZ_of_ge _ _ _ _ _ _ r.val r.isLt ℓ.val _ _ (by omega)
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 /-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
 `schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
 level. -/
@@ -283,6 +260,12 @@ theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAli
   · exact slotRSZ_of_ge _ _ _ _ _ _ r.val r.isLt ℓ.val _ _ (by omega)
 
 end Gen
+
+/-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
+`schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
+level. -/
+theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x :=
+  Gen.zkFrontAlign_of_batch (S := S₀) (x := x) (h := h)
 
 namespace Gen
 

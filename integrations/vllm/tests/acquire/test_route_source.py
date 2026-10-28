@@ -80,6 +80,7 @@ def test_the_map_describes_the_model_and_the_source_wraps_every_attention_layer(
     assert "_use_sparse_mha" not in vars(attn) and attn._use_sparse_mha.__func__ is Attention._use_sparse_mha
 
 
+@pytest.mark.slow
 def test_each_step_records_the_routes_its_layers_took(run):
     for k, (_md, routes, phase) in enumerate(STEPS):
         assert run.src.step_routes(k) == (tuple(sorted(routes)), phase)
@@ -88,6 +89,7 @@ def test_each_step_records_the_routes_its_layers_took(run):
                                                 "prefill sparse-mqa": 1}
 
 
+@pytest.mark.slow
 def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
     steps = {k: map_names(capsys, routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
     for k, (_md, routes, phase) in enumerate(STEPS):
@@ -107,6 +109,7 @@ def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
     assert any(v["step"] == 1 and v["multiplicity_vs_step0"] for v in without["violations"]), "a sparse step differs from step 0"
 
 
+@pytest.mark.slow
 def test_a_step_off_its_routes_fails(run, capsys):
     steps = {k: map_names(capsys, routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
     extra = "model.layers.5.self_attn.kv_b_proj/0"
@@ -121,6 +124,7 @@ def test_a_step_off_its_routes_fails(run, capsys):
     assert by_step[0]["missing_modules"] == [] and by_step[0]["unknown_modules"] == [], "the map's modules are held by name"
 
 
+@pytest.mark.slow
 def test_a_step_without_a_route_on_every_layer_fails(run, capsys):
     run.step(9, STEPS[1][0], skip=(3,))
     steps = {0: map_names(capsys, DENSE, "prefill"), 9: map_names(capsys, SPARSE, "decode")}

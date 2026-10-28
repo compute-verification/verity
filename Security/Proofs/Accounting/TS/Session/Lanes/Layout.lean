@@ -4,20 +4,22 @@ import PouwWindow.Lanes
 /-!
 # A leaf's 33 statements' ports at the served tile
 
-`PouwWindow.Lanes` (INT-TIE's layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
+`PouwWindow.Lanes` (the statements' layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
 contraction, which port of each of the 33 statements holds each of the Definition's inputs and its output, at which
 bits of the port's row, and where the verifier opens that row (`Source`). At the served 32 × 32 leaf (`servedTile K`):
 
 * its lanes, rows and columns are this layer's: 32 lanes, `Tile.rowOf` is `rowOf` and `Tile.colOf` is `colOf`;
-* each lane's ports are opened where `Accounting.Assumptions.TS.LeafReads` says the data ports hold them: its A row at
+* each lane's ports are opened at the rows the leaf's values are decoded from (`Lanes.Committed`): its A row at
   row slot `s` at row `rowOf l s` of `a`, its B row at column slot `t` at row `colOf l t` of `b`, the leaf's record at
   `zy`'s row, and its partials row at row `l` of `partials`; its admit bits, its public inputs (`pub<l>`: salt,
   position, roots and the index) and its `ok` (`ok<l>`) at values the verifier registers at their known content;
 * the combine's `p<x>` is opened at row `x` of `partials`, its `receipt` at `receipt`'s row, and its `ok` at `ok32`.
 
-What `LeafReads` asks beyond this is of the registrations, not of the layout: that the registrants of `a`, `b`, `zy`,
-`partials` and `receipt` are the leaf's committed values at these rows. The known values' content is flock-verify's
-known-content and known-read checks' (`Lanes.KnownRead`).
+The leaf and the receipt are the ones the registrants' rows of `a`, `b`, `zy` and `receipt` decode to at these rows
+(`Lanes.Committed`). Four lanes read each A row and four each B row, and lane `l`'s `partials` and the combine's
+`p<l>` read one row: each such pair reads one row of one registered tree (`PouwWindow.Lanes.ownOf`) in full, so they
+decode it alike (`Lanes.Partials`' `read_bits`). The known values' content is flock-verify's known-content and
+known-read checks' (`Lanes.KnownRead`).
 -/
 
 namespace Accounting.TS.Lanes

@@ -1,7 +1,7 @@
-"""CPU tests for tp2_worker._t6_4_check (moe cf29c7e72 folded by tp; rev-cb M-0424 T6-4 / report M-0435+M-0478).
+"""CPU tests for tp2_worker._t6_4_check, the late-read detector.
 
 The detector compares the committed fused-MoE received all-reduce output `<L>.mlp.experts/out` with the committed next norm's `/0`
-in the same step: an EQUAL pair is a late read.  tp's fold adds the not-applicable outcome for dense TP rows (no `/out` member).
+in the same step: an EQUAL pair is a late read.  The not-applicable outcome is for dense TP workloads (no `/out` member).
 The members are committed on the per-tensor host path and read through `oracle_compare.OpenedReader` (opened, verified against the run root).
 """
 from __future__ import annotations
@@ -13,11 +13,11 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from tests.check.opened import commit_host_steps  # noqa: E402
+from tests.check.opened import commit_host_steps
 
 
 def _worker():
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     cls = W.__dict__.get("TP2Worker") or next(v for v in W.__dict__.values() if isinstance(v, type) and hasattr(v, "_t6_4_check"))
 

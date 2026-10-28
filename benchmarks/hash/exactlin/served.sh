@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# exactlin's served standard number on node 2 (RTX PRO 6000), vy-dc-h200 or vy-dc-b200: dither's sbench.py (the arms stock,
+# exactlin's served standard number on an RTX PRO 6000, an H200 or a B200: dither's sbench.py (the arms stock,
 # stock-percall, stock-cutlass on sm_90, exact and exact-fused, which need none of Dither's libraries) on one leased GPU for
 # at most SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
 # bitwise gate (every config row, both models) passed in the same lease.  Extra arguments go to sbench.py; stock first, so its
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
 # SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0
-# forces the gate on or off.
-#   research run --on vy-dc-h200 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/served.sh \
+# forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
+# (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
+# On an H200 under a GPU lease:
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
@@ -28,7 +29,7 @@ echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config
 DITHER=$ROOT/benchmarks/hash/dither; [ -d "$DITHER" ] && PYTHONPATH=$PYTHONPATH:$DITHER
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then
@@ -44,7 +45,7 @@ SCRIPT=$ROOT/${SERVED_SCRIPT:-benchmarks/hash/dither/sbench.py}
 [ -f "$SCRIPT" ] || { echo "served.sh: no $SCRIPT (set SERVED_SCRIPT)" >&2; exit 2; }
 export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
+gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- "$PY" "$DITHER/numabind.py" "$OUT/env/numa.json" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \

@@ -1,4 +1,4 @@
-"""The columnar `ProgramView` (F-r19-int-25) reads exactly what the materialized reader read.
+"""The columnar `ProgramView` reads exactly what the materialized reader read.
 
 `from_instances` streams the rows of `instances.json.gz` into flat int columns and hands out `CallView`s / `ValueRef`s lazily; the
 oracle below is the reader it replaced (`json.load` of the document, a `CallView` per row with a tuple of `ValueRef`s), kept here
@@ -347,4 +347,60 @@ def test_weight_read_progressions_resolve_to_the_columns_and_reads_of_their_runs
     for i, ops in rows:
         want: list[ValueRef] = []
         _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], [], ins, [], want)
+        assert tuple(P.call(i).reads) == tuple(want), i
+
+
+@pytest.mark.parametrize("cap", [0, 40, 1 << 25])
+@pytest.mark.parametrize("least", [1, 3, 8])
+def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_its_runs(monkeypatch, cap, least):
+    """The memo of a document's parameter operands builds the columns the Builder without it builds and the reads the reader this
+    replaced gives, for operands that are one list again, a copy of it, equal runs that are other objects, more operands sharing a
+    first run than the memo keeps, parameter runs then a Call's, and a Call reading a weight port before the repeat; under any cap."""
+    from verity_vllm.program import compact as C
+    monkeypatch.setattr(pv, "RESOLVE_MEMO_RUNS", cap)
+    monkeypatch.setattr(pv, "RESOLVE_MEMO_MIN", least)
+    rng = random.Random(13)
+    edges = sorted(rng.sample(range(1, 20_000), 99))
+    table = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [20_000])))
+    ins = (pv.InputView(-1, "weights", "x", table), pv.InputView(-2, "prompt", "y", (pv.Port("0", 0, 4, 4, 32),)))
+
+    def weight(k: int) -> list[list]:
+        out = []
+        for _ in range(k):
+            p, r = table[rng.randrange(len(table))], rng.random()
+            lo = rng.randrange(p.lo, p.hi)
+            out.append(["P", 0, lo, lo + 1, 0, 1, 1, rng.randint(1, p.hi - lo)] if r < 0.7 else
+                       ["P", 0, lo, lo + 2, 0, 40, 40, rng.randint(1, 9)] if r < 0.8 else
+                       ["p", 0, lo, min(20_000, lo + rng.randint(1, 900))] if r < 0.9 else ["p", 1, 0, 4])
+        return out
+
+    pool = [weight(rng.randint(8 if k == 0 else 1, 14)) for k in range(6)]
+    first = pool[0][0]
+    shared = [[first, *weight(rng.randint(8, 12))] for _ in range(pv._MEMO_WAYS + 2)]
+    spec = f"RMSNormFusedCuda_v2{{N=4,EPS={EPS}}}"
+    rows = []
+    for i in range(80):
+        ops = []
+        for _ in range(rng.randint(1, 4)):
+            o, r = rng.choice(pool), rng.random()
+            ops.append(o if r < 0.35 else o.copy() if r < 0.5 else rng.choice(shared) if r < 0.65 else [list(t) for t in o] if r < 0.75 else
+                       [*o, ["n", rng.randrange(i), 0, 8]] if r < 0.85 and i else [["n", rng.randrange(i), 2, 6]] if i else weight(3))
+        rows.append((i, ops))
+    cols, memos = [], []
+    for memo in (False, True):
+        b = pv._Builder(ins, memo)
+        for i, ops in rows:
+            b.add(i, spec, "call", f"r{i}", pv.definition_ports(spec), ops)
+        cols.append((list(b.c.read_call), list(b.c.read_port), list(b.c.pread_call), list(b.c.pread_port), list(b.c.read_off)))
+        memos.append(b._memo)
+        if memo:
+            P = b.view((), None, "instances")
+    assert cols[0] == cols[1]
+    assert memos[0] is None and b._memo_runs <= cap and all(len(w) <= pv._MEMO_WAYS for w in memos[1].values())
+    if cap > 40:
+        assert len(memos[1][id(first)]) == pv._MEMO_WAYS and b._memo_runs < sum(len(o) for _i, ops in rows for o in ops if len(o) >= least)
+    port_of = [pv.definition_ports(spec)] * len(rows)
+    for i, ops in rows:
+        want: list[ValueRef] = []
+        _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], port_of, ins, ["call"] * len(rows), want)
         assert tuple(P.call(i).reads) == tuple(want), i

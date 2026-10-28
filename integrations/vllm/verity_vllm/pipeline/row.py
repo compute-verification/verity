@@ -13,7 +13,7 @@
 A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
 ``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
-(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocol_options`): a set it cannot
+(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocols`): a set it cannot
 run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
 its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 
@@ -30,23 +30,23 @@ from dataclasses import asdict, dataclass, fields
 from importlib import metadata
 from typing import Any
 
-from verity_vllm import protocol_options as PO
-from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
-                                done_source_refusal, group, option, row_world)
+from verity_vllm import protocols as PO
+from verity_vllm.config import (ROOT, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, done_source_refusal,
+                                group, option, row_file, row_path, row_world)
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
+from verity_vllm import settings
 
 STAGES = "build,match,commit"
 EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
 ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
-_SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
 
 
 @dataclass(frozen=True, kw_only=True)
 class _Row:
-    row: str = option("row", help="row id (workloads/<row>.json)")
+    row: str = option("row", help="row id (workloads/<row>.json, or in a directory $VERITY_WORKLOADS names: config.row_file)")
     role: str = option("role", help="checkpoint role (manifests/checkpoints.json)")
     repo: str = option("repo", help="HF repo")
     rev: str = option("rev", help="revision")
@@ -56,8 +56,8 @@ class _Row:
     world: int | None = option("--world", env="WORLD", type=int, default=None, help="TP: ranks (default: the manifest's sweep.tp)")
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     protocols: str | None = option("--protocols", env="PROTOCOLS", default=None,
-                                   help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:vllm-v1' "
-                                        "(verity_vllm.protocol_options); default: the workload target's, else sampled proofs alone")
+                                   help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:rows-sha512' "
+                                        "(verity_vllm.protocols); default: the workload target's, else sampled proofs alone")
     build: BuildConfig = group(BuildConfig)
     match: MatchConfig = group(MatchConfig)
     commit: CommitConfig = group(CommitConfig)
@@ -142,7 +142,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
     """What a run of a row used: its config (the row file without its requests, and the file's digest), the stage configs in full with
     the options a flag or variable set away from its default, the run's positionals, the installed vLLM and the engine environment
     the stages inherit (``ENGINE_ENV``)."""
-    wl = WORKLOADS / f"{o.row}.json"
+    wl = row_file(o.row)
     cfg = RowConfig.load(wl) if wl.is_file() else None
     try:
         vllm = metadata.version("vllm")
@@ -155,18 +155,18 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
     environ = o.env.environ
     return {"schema": EFFECTIVE_SCHEMA, "row": o.row,
             "config": None if cfg is None else {k: v for k, v in cfg.to_json().items() if k != "requests"},
-            "file": None if cfg is None else {"path": f"workloads/{o.row}.json", "sha256": hashlib.sha256(wl.read_bytes()).hexdigest()},
+            "file": None if cfg is None else {"path": row_path(o.row), "sha256": hashlib.sha256(wl.read_bytes()).hexdigest()},
             "run": run, "run_differs_from_config": differs,
             "stages": {"build": asdict(o.build), "match": asdict(o.match), "commit": asdict(o.commit)},
             "overrides": {**_overrides(o.build, "build."), **_overrides(o.match, "match."), **_overrides(o.commit, "commit."),
                           **{k: run[k] for k in ("world", "gpu_util", "protocols") if run[k] is not None}},
             "vllm_installed": vllm,
             "engine_env": {k: environ[k] for k in sorted(environ) if k.startswith(ENGINE_ENV)
-                           and not any(w in k.upper() for w in _SECRET_WORDS)}}
+                           and not settings.is_secret(k)}}
 
 
 def run_row(o: Run | Stage, stages: str) -> int:
-    wl = WORKLOADS / f"{o.row}.json"
+    wl = row_file(o.row)
     doc = json.loads(wl.read_text()) if wl.is_file() else {}
     try:
         protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
@@ -204,8 +204,7 @@ def run_row(o: Run | Stage, stages: str) -> int:
 
 
 def _workload(row: str) -> str:
-    from verity_vllm.config import WORKLOADS
-    return str(WORKLOADS / f"{row}.json")
+    return str(row_file(row))
 
 
 def fa_version(workload: str, target: str | None = None) -> int:

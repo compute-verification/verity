@@ -104,6 +104,7 @@ def expected(tid: str, seen: dict[str, Any]) -> torch.Tensor:
             "attn": lambda: seen["attn_mqa"], "attn.mha": lambda: seen["attn_mha"]}[tid]()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [True, False], ids=["on-target", "off-target"])
 def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, capsys, target):
     r = runs[target]
@@ -114,6 +115,7 @@ def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, capsys, targ
     assert r.att.stats["unpaired"] == 0 and r.att.stats["layout_refused"] == 0 and r.att.stats["mha_unbound"] == 0
 
 
+@pytest.mark.slow
 def test_each_bound_value_is_the_one_the_layer_computed(runs):
     r = runs[True]
     by_name = {n: (tid, i) for tid, layers in r.att.names.items() for i, n in layers.items()}
@@ -129,6 +131,7 @@ def test_each_bound_value_is_the_one_the_layer_computed(runs):
     assert rows == {"v_absorb": 1, "attn": 1, "attn.mha": 3}, "a mixed step's decode row goes through MQA, its prefill rows through MHA"
 
 
+@pytest.mark.slow
 def test_the_shared_top_k_buffer_is_flushed_as_soon_as_it_is_bound(runs):
     log = runs[True].log
     topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("self_attn/topk")]
@@ -147,9 +150,10 @@ def test_pitched_2d_is_the_native_collectors_staging_rule():
     assert not AS.pitched_2d(base[::2, ::2]), "every other word of every other row"
 
 
+@pytest.mark.slow
 def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(runs):
     """The native collector stages a contiguous tensor or equally spaced contiguous rows and raises on anything else ("layout is
-    not 2-D pitched", every rank of r20261013-002759-c965 on 8x H200). The W_UK_T product of a step of more than one token is a
+    not 2-D pitched", every rank on 8x H200). The W_UK_T product of a step of more than one token is a
     transposed bmm output, so the source hands the committer a contiguous copy of it, word-equal to it
     (`test_each_bound_value_is_the_one_the_layer_computed`)."""
     for r in runs.values():
@@ -170,6 +174,7 @@ def routes_bad(violation: dict[str, Any], names: set[str], counts: tuple[int, in
     return violation["routes_bad"] == dict(sorted(want.items())[:8]) and violation["routes_bad_n"] == len(want)
 
 
+@pytest.mark.slow
 def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs, capsys):
     q8 = f"model.layers.{min(INDEXER)}.self_attn/index_q"
     on, off = runs[True], runs[False]
@@ -185,6 +190,7 @@ def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(
     assert [x["step"] for x in v] == [1] and routes_bad(v[0], {q8}, (1, 0)), "off the target a step that commits it fails"
 
 
+@pytest.mark.slow
 def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     r = AttnRun()
     wrapped, G.fused_norm_rope = G.fused_norm_rope, NORM_ROPE
@@ -200,6 +206,7 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     assert routes_bad(v[0], rows, (0, 1))
 
 
+@pytest.mark.slow
 def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
     md = metadata(prefill=True, dense=True)
     md.prefill.chunked_context = types.SimpleNamespace()
@@ -214,6 +221,7 @@ def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
     assert routes_bad(v[0], mha, (0, 1)), "the step fails closed"
 
 
+@pytest.mark.slow
 def test_the_arena_estimate_covers_what_each_step_binds(runs):
     for r in runs.values():
         est = r.att.extra_step_bytes({}, None)
@@ -223,6 +231,7 @@ def test_the_arena_estimate_covers_what_each_step_binds(runs):
     assert runs[True].att.extra_step_bytes({}, None)["per_token_bytes"] > runs[False].att.extra_step_bytes({}, None)["per_token_bytes"]
 
 
+@pytest.mark.slow
 def test_install_wraps_each_call_and_uninstall_restores_them():
     model = glm_model()
     src = RS.RouteSource(None, model, CMAP, target=True)
@@ -311,6 +320,7 @@ def test_the_source_claims_the_attention_bodys_call_boundaries_its_taps_bind_and
         assert AS.claims({**b, **other}) is None, other
 
 
+@pytest.mark.slow
 def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_step(bruns):
     on = bruns[True]
     labels = {n.rsplit("/", 1)[1] for n in on.att.names[AS.ATTN_MQA].values()}
@@ -321,6 +331,7 @@ def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_st
     assert off.att.stats["call_boundaries_held"] == 0 and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
 
 
+@pytest.mark.slow
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
     on = bruns[True]
     layouts = {}

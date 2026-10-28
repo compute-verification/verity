@@ -38,6 +38,15 @@ DEV uint32_t mix32(uint32_t x) {
 // ---------------------------------------------------------------- cp.async, ldmatrix, mma.sync
 DEV uint32_t sa(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 DEV void cp16(void* s, const void* g) { asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory"); }
+// cp16 with L2 fetching PF (128 or 256) bytes around the line from DRAM; 0 is cp16
+template <int PF> DEV void cp16p(void* s, const void* g) {
+  if constexpr (PF == 128)
+    asm volatile("cp.async.cg.shared.global.L2::128B [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory");
+  else if constexpr (PF == 256)
+    asm volatile("cp.async.cg.shared.global.L2::256B [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory");
+  else
+    cp16(s, g);
+}
 DEV void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
 template <int N> DEV void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
 DEV void ldsm4(uint32_t* r, uint32_t addr) {
@@ -64,36 +73,44 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 // ml_body's, below): 64 x 64 (warp tile 16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle, or 128 x 32
 // (16 x 32) for the 32-column words
 // (A'F_B, B~F_A, G) at M a multiple of 128; persistent over tiles in groups of `i[3]` tile
-// rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is the promotion period: every 32 G products (G / 2
-// stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
-// output's chain is the same at either tile.  Modes:
+// rows; a 4-deep cp.async pipeline of RB-byte stages (RB / 32 atoms each): 64 bytes, or for the served decode chain
+// (gemm_pearlc_d) BK_D = 128 with L2 fetching PF_D = 256 bytes a request: serving streams B from DRAM, not L2, and the
+// wider stages halve the loads and barriers per byte while the hint widens each DRAM read (gemm_pearlc4_d is the 64-byte
+// one it replaced).  G is the promotion period: every 32 G products (32 G / RB stages) from +0, promoted by one FADD into
+// the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every output's chain is the same at either tile,
+// any depth, any stage width and either hint.  Rows from i[4] on (0: none) are filler, which nothing reads: a
+// warp whose rows are all filler (decode's padding to 64, past m16) skips its products and stores, and no stage or peel
+// loads its rows of A or P_A, so the tile does only the real rows' work; those rows of C~, U and y are left as they were.
+// Modes:
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the call without hashing
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
-constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
-template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
-  return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
+constexpr int BK = 64, BK_D = 128, PF_D = 256, STAGES = 4, NT = 256, PEEL_ROW = 128;
+template <int MODE, int TM, int BN, int RB = BK> __host__ __device__ constexpr int gemm_smem() {
+  return STAGES * (TM + BN) * RB + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
 }
 
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
 DEV uint32_t swz128(int r, int c) { return r * 128 + ((c ^ (r & 7)) << 4); }
+template <int RB> DEV uint32_t swz(int r, int c) { return RB == 64 ? swz64(r, c) : swz128(r, c); }
 
-// ROWS rows of 64 bytes at g (row stride ld) into s
-template <int ROWS> DEV void stage_rows(uint8_t* s, const uint8_t* g, int ld, int tid) {
+// the first `rows` (at most ROWS) rows of RB (64 or 128) bytes at g (row stride ld) into s, through cp16p<PF>
+template <int ROWS, int RB, int PF> DEV void stage_rows(uint8_t* s, const uint8_t* g, int ld, int tid, int rows = ROWS) {
+  constexpr int CH = RB / 16;
 #pragma unroll
-  for (int j = 0; j < (ROWS * 4 + NT - 1) / NT; j++) {
-    const int idx = tid + j * NT, r = idx >> 2, c = idx & 3;
-    if (ROWS * 4 % NT == 0 || idx < ROWS * 4) cp16(s + swz64(r, c), g + (size_t)r * ld + 16 * c);
+  for (int j = 0; j < (ROWS * CH + NT - 1) / NT; j++) {
+    const int idx = tid + j * NT, r = idx >> (RB == 64 ? 2 : 3), c = idx & (CH - 1);
+    if ((ROWS * CH % NT == 0 || idx < ROWS * CH) && r < rows) cp16p<PF>(s + swz<RB>(r, c), g + (size_t)r * ld + 16 * c);
   }
 }
-// ROWS peel rows of 128 bytes at g into s
-template <int ROWS> DEV void peel_rows(uint8_t* s, const uint8_t* g, int tid) {
+// the first `rows` (at most ROWS) peel rows of 128 bytes at g into s
+template <int ROWS> DEV void peel_rows(uint8_t* s, const uint8_t* g, int tid, int rows = ROWS) {
 #pragma unroll
   for (int j = 0; j < ROWS * 8 / NT; j++) {
     const int idx = tid + j * NT, r = idx >> 3, c = idx & 7;
-    cp16(s + swz128(r, c), g + (size_t)r * PEEL_ROW + 16 * c);
+    if (r < rows) cp16(s + swz128(r, c), g + (size_t)r * PEEL_ROW + 16 * c);
   }
 }
 
@@ -110,21 +127,21 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
   *reinterpret_cast<uint32_t*>(p) = f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
 }
 
-template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
-  constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
+template <int MODE, int TM, int BN, int G, int RB = BK, int PF = 0> DEV void gemm_body(const Args& a) {
+  constexpr int S = STAGES, WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
   constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S;
   constexpr bool STORE_CU = MODE == M_PEARLC || MODE == M_CT, PROMOTE = G > 0;
-  constexpr int PERIOD = PROMOTE ? G / 2 : 1;
-  static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
-  constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
+  constexpr int PERIOD = PROMOTE ? 32 * G / RB : 1;
+  static_assert(G == 0 || 32 * G % RB == 0, "a promotion window is whole stages");
+  constexpr uint32_t A_ST = TM * RB, B_ST = BN * RB;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t* sA = smem;
-  uint8_t* sB = smem + STAGES * A_ST;
-  uint8_t* sPA = sB + STAGES * B_ST;
+  uint8_t* sB = smem + S * A_ST;
+  uint8_t* sPA = sB + S * B_ST;
   uint8_t* sPB = sPA + TM * PEEL_ROW;
-  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
-  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
+  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / RB;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / WARPS_N, wn = warp % WARPS_N;
   const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
   const uint8_t* B = reinterpret_cast<const uint8_t*>(a.p[1]);
@@ -142,17 +159,19 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, group, tm, tn);
+    const bool busy = tm * TM + wm * WM < live;
+    const int rows = min(TM, max(0, (live - tm * TM + WM - 1) / WM * WM));   // the busy warps' rows, all a busy warp reads
     const uint8_t* ga = A + (size_t)tm * TM * K;
     const uint8_t* gb = B + (size_t)tn * BN * K;
     if constexpr (PEEL) {
-      peel_rows<TM>(sPA, reinterpret_cast<const uint8_t*>(a.p[5]) + (size_t)tm * TM * PEEL_ROW, tid);
+      peel_rows<TM>(sPA, reinterpret_cast<const uint8_t*>(a.p[5]) + (size_t)tm * TM * PEEL_ROW, tid, rows);
       peel_rows<BN>(sPB, reinterpret_cast<const uint8_t*>(a.p[6]) + (size_t)tn * BN * PEEL_ROW, tid);
     }
 #pragma unroll
-    for (int s = 0; s < STAGES - 1; s++) {
+    for (int s = 0; s < S - 1; s++) {
       if (s < KB) {
-        stage_rows<TM>(sA + s * A_ST, ga + s * BK, K, tid);
-        stage_rows<BN>(sB + s * B_ST, gb + s * BK, K, tid);
+        stage_rows<TM, RB, PF>(sA + s * A_ST, ga + s * RB, K, tid, rows);
+        stage_rows<BN, RB, PF>(sB + s * B_ST, gb + s * RB, K, tid);
       }
       cp_commit();
     }
@@ -165,13 +184,13 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
         for (int e = 0; e < 4; e++) { acc[mi][ni][e] = 0.0f; total[mi][ni][e] = 0.0f; }
 
     for (int kb = 0; kb < KB; kb++) {
-      cp_wait<STAGES - 2>();
+      cp_wait<S - 2>();
       __syncthreads();
       {
-        const int nk = kb + STAGES - 1, s = nk % STAGES;
+        const int nk = kb + S - 1, s = nk % S;
         if (nk < KB) {
-          stage_rows<TM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid);
-          stage_rows<BN>(sB + s * B_ST, gb + (size_t)nk * BK, K, tid);
+          stage_rows<TM, RB, PF>(sA + s * A_ST, ga + (size_t)nk * RB, K, tid, rows);
+          stage_rows<BN, RB, PF>(sB + s * B_ST, gb + (size_t)nk * RB, K, tid);
         }
         cp_commit();
       }
@@ -183,22 +202,24 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
 #pragma unroll
             for (int e = 0; e < 4; e++) acc[mi][ni][e] = 0.0f;
       }
-      const uint32_t a0 = sa(sA + (kb % STAGES) * A_ST), b0 = sa(sB + (kb % STAGES) * B_ST);
+      const uint32_t a0 = sa(sA + (kb % S) * A_ST), b0 = sa(sB + (kb % S) * B_ST);
+      if (busy) {
 #pragma unroll
-      for (int kk = 0; kk < 2; kk++) {
-        uint32_t fa[MI][4], fb[NI][2];
+        for (int kk = 0; kk < RB / 32; kk++) {
+          uint32_t fa[MI][4], fb[NI][2];
 #pragma unroll
-        for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz64(a_row + 16 * mi, 2 * kk + a_half));
+          for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz<RB>(a_row + 16 * mi, 2 * kk + a_half));
 #pragma unroll
-        for (int nj = 0; nj < NI / 2; nj++) {
-          uint32_t r[4];
-          ldsm4(r, b0 + swz64(b_row + 16 * nj, 2 * kk + b_half));
-          fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+          for (int nj = 0; nj < NI / 2; nj++) {
+            uint32_t r[4];
+            ldsm4(r, b0 + swz<RB>(b_row + 16 * nj, 2 * kk + b_half));
+            fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+          }
+#pragma unroll
+          for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+            for (int ni = 0; ni < NI; ni++) qmma(acc[mi][ni], fa[mi], fb[ni]);
         }
-#pragma unroll
-        for (int mi = 0; mi < MI; mi++)
-#pragma unroll
-          for (int ni = 0; ni < NI; ni++) qmma(acc[mi][ni], fa[mi], fb[ni]);
       }
       if (PROMOTE && kb % PERIOD == PERIOD - 1) {
 #pragma unroll
@@ -220,62 +241,64 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
     cp_wait<0>();
     __syncthreads();
 
-    const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
-    if constexpr (MODE == M_PLAIN) {
+    if (busy) {
+      const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
+      if constexpr (MODE == M_PLAIN) {
 #pragma unroll
-      for (int mi = 0; mi < MI; mi++) {
-        const int row = row0 + 16 * mi;
-        const float r0 = rs[row], r1 = rs[row + 8];
+        for (int mi = 0; mi < MI; mi++) {
+          const int row = row0 + 16 * mi;
+          const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          const int col = col0 + 8 * ni;
-          const float c0 = cs[col], c1 = cs[col + 1];
-          store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
-          store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+          for (int ni = 0; ni < NI; ni++) {
+            const int col = col0 + 8 * ni;
+            const float c0 = cs[col], c1 = cs[col + 1];
+            store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+            store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+          }
         }
-      }
-    } else if constexpr (STORE_CU) {
-#pragma unroll
-      for (int mi = 0; mi < MI; mi++)
-#pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          const int row = row0 + 16 * mi, col = col0 + 8 * ni;
-          store2(C + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
-          store2(C + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
-        }
-    }
-    if constexpr (PEEL) {
-      const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
-#pragma unroll
-      for (int s = 0; s < 4; s++) {
-        uint32_t fa[MI][4], fb[NI][2];
-#pragma unroll
-        for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], pa0 + swz128(a_row + 16 * mi, 2 * s + a_half));
-#pragma unroll
-        for (int nj = 0; nj < NI / 2; nj++) {
-          uint32_t r[4];
-          ldsm4(r, pb0 + swz128(b_row + 16 * nj, 2 * s + b_half));
-          fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
-        }
+      } else if constexpr (STORE_CU) {
 #pragma unroll
         for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-          for (int ni = 0; ni < NI; ni++) hmma(total[mi][ni], fa[mi], fb[ni]);
-      }
-#pragma unroll
-      for (int mi = 0; mi < MI; mi++) {
-        const int row = row0 + 16 * mi;
-        const float r0 = rs[row], r1 = rs[row + 8];
-#pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          const int col = col0 + 8 * ni;
-          const float c0 = cs[col], c1 = cs[col + 1];
-          if constexpr (STORE_CU) {
-            store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
-            store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+          for (int ni = 0; ni < NI; ni++) {
+            const int row = row0 + 16 * mi, col = col0 + 8 * ni;
+            store2(C + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+            store2(C + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
           }
-          store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
-          store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+      }
+      if constexpr (PEEL) {
+        const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
+#pragma unroll
+        for (int s = 0; s < 4; s++) {
+          uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+          for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], pa0 + swz128(a_row + 16 * mi, 2 * s + a_half));
+#pragma unroll
+          for (int nj = 0; nj < NI / 2; nj++) {
+            uint32_t r[4];
+            ldsm4(r, pb0 + swz128(b_row + 16 * nj, 2 * s + b_half));
+            fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+          }
+#pragma unroll
+          for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+            for (int ni = 0; ni < NI; ni++) hmma(total[mi][ni], fa[mi], fb[ni]);
+        }
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++) {
+          const int row = row0 + 16 * mi;
+          const float r0 = rs[row], r1 = rs[row + 8];
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++) {
+            const int col = col0 + 8 * ni;
+            const float c0 = cs[col], c1 = cs[col + 1];
+            if constexpr (STORE_CU) {
+              store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+              store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+            }
+            store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+            store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+          }
         }
       }
     }
@@ -386,9 +409,10 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
 #define ML_GEMM(NAME, MODE, G)                                                                                \
   extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM; }
-#define GEMM(NAME, MODE, TM, BN, G)                                                                                 \
-  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
+#define GEMM_X(NAME, MODE, TM, BN, G, RB, PF)                                                                           \
+  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G, RB, PF>(a); }     \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN, RB>(); }
+#define GEMM(NAME, MODE, TM, BN, G) GEMM_X(NAME, MODE, TM, BN, G, BK, 0)
 ML_GEMM(gemm_plain, M_PLAIN, 4)
 ML_GEMM(gemm_fast, M_PLAIN, 0)
 ML_GEMM(gemm_ct, M_CT, 4)
@@ -398,9 +422,11 @@ ML_GEMM(gemm_pearlc_u, M_PEARLC, 0)
 ML_GEMM(gemm_pearlc_s, M_PEARLC_S, 4)
 ML_GEMM(gemm_pearlc_s_u, M_PEARLC_S, 0)
 GEMM(gemm_ct_d, M_CT, 64, 64, 4)
-GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
+GEMM_X(gemm_pearlc_d, M_PEARLC, 64, 64, 4, BK_D, PF_D)
+GEMM(gemm_pearlc4_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
-GEMM(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0)
+GEMM_X(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0, BK_D, PF_D)
+GEMM(gemm_pearlc4_d_u, M_PEARLC, 64, 64, 0)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_u, M_CT, 128, 32, 0)
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
@@ -449,6 +475,87 @@ template <int G> DEV void words_body(const Args& a) {
 }
 extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
 extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
+// the cluster's barrier, every thread of every block; its memory clobber keeps loads and stores on their side of it
+DEV void cluster_sync() {
+  asm volatile("barrier.cluster.arrive.release.aligned;\n\tbarrier.cluster.wait.acquire.aligned;" ::: "memory");
+}
+DEV int cluster_rank() { uint32_t r; asm volatile("mov.u32 %0, %%cluster_ctarank;" : "=r"(r)); return (int)r; }
+// p, in this block's shared memory, at the same place in block `rank` of the cluster (a generic address)
+DEV const float* in_rank(const float* p, int rank) {
+  uint64_t d;
+  asm volatile("mapa.u64 %0, %1, %2;" : "=l"(d) : "l"(p), "r"(rank));
+  return reinterpret_cast<const float*>(d);
+}
+// words' chain split along K, for decode's few rows (where words has M / 16 blocks): a cluster of WK_CL blocks of WK_WARPS
+// warps per m16 x n8 output tile (one block's warps wait on its own load issue, each ld32 touching 8 rows).  A promotion
+// window's sum (G atoms from +0) depends on no other window, so the warps share out the windows, WK_CL WK_CHUNK at a time,
+// block r the chunk's windows r, r + WK_CL, ..., each window's sum into its block's shared memory (lane l's four words at
+// window w0 + WK_CL i + r, 128 i + 4 l), and then a thread of block 0 a word folds the chunk, from every block's shared
+// memory, into its FP32 total in window order, from +0: words' chain, word for word.  Two windows a warp are in flight at
+// once.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8 and 32 G); grid
+// (M / 16) (N / 8) WK_CL
+constexpr int WK_WARPS = 16, WK_CL = 4, WK_CHUNK = 64, WK_G = 4;
+extern "C" __global__ void __cluster_dims__(WK_CL, 1, 1) __launch_bounds__(32 * WK_WARPS) words_k(const Args a) {
+  constexpr int G = WK_G, CL = WK_CL;
+  __shared__ float4 part[WK_CHUNK * 32];
+  const int N = a.i[1], K = a.i[2], tn = N / 8, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
+  const int g = lane / 4, q = lane % 4, W = K / (32 * G), tile = blockIdx.x / CL, rank = cluster_rank();
+  const int r0 = tile / tn * 16, c0 = tile % tn * 8;
+  const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 4 * q;
+  const uint8_t* A1 = A0 + (size_t)8 * K;
+  const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 4 * q;
+  const float* fold[CL];
+#pragma unroll
+  for (int r = 0; r < CL; r++) fold[r] = in_rank(reinterpret_cast<const float*>(part), r) + tid;
+  float total = 0.0f;
+  for (int w0 = 0; w0 < W; w0 += CL * WK_CHUNK) {
+    const int nw = min(CL * WK_CHUNK, W - w0), mine = (nw - rank + CL - 1) / CL;
+    for (int i = warp; i < mine; i += 2 * WK_WARPS) {
+      uint32_t fa[2][G][4], fb[2][G][2];
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        if (i + h * WK_WARPS < mine) {
+          const int kk = 32 * G * (w0 + CL * (i + h * WK_WARPS) + rank);
+#pragma unroll
+          for (int d = 0; d < G; d++) {
+            const int k = kk + 32 * d;
+            fa[h][d][0] = ld32(A0 + k); fa[h][d][1] = ld32(A1 + k); fa[h][d][2] = ld32(A0 + k + 16); fa[h][d][3] = ld32(A1 + k + 16);
+            fb[h][d][0] = ld32(B0 + k); fb[h][d][1] = ld32(B0 + k + 16);
+          }
+        }
+      }
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        if (i + h * WK_WARPS < mine) {
+          float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+#pragma unroll
+          for (int d = 0; d < G; d++) qmma(acc, fa[h][d], fb[h][d]);
+          part[32 * (i + h * WK_WARPS) + lane] = make_float4(acc[0], acc[1], acc[2], acc[3]);
+        }
+      }
+    }
+    cluster_sync();
+    if (rank == 0 && tid < 128) {
+      // window w0 + j is block j % CL's (j / CL); the loads clamped to the chunk, so that they can all be in flight
+      for (int j = 0; j < nw; j += 4 * CL) {
+        float v[4][CL];
+#pragma unroll
+        for (int u = 0; u < 4; u++)
+#pragma unroll
+          for (int r = 0; r < CL; r++) v[u][r] = fold[r][128 * min(j / CL + u, WK_CHUNK - 1)];
+#pragma unroll
+        for (int u = 0; u < 4; u++)
+#pragma unroll
+          for (int r = 0; r < CL; r++)
+            if (j + CL * u + r < nw) total = __fadd_rn(total, v[u][r]);
+      }
+    }
+    cluster_sync();
+  }
+  if (rank != 0 || tid >= 128) return;
+  const int l = tid / 4, e = tid % 4;   // lane l's word e: rows g, g + 8 by e / 2, columns 2 q, 2 q + 1 by e % 2
+  reinterpret_cast<float*>(a.p[2])[(size_t)(r0 + l / 4 + 8 * (e >> 1)) * N + c0 + 2 * (l % 4) + (e & 1)] = total;
+}
 
 // ---------------------------------------------------------------- noise lines (Pearl's line rule on -h3's H_line)
 DEV uint32_t isqrt(uint32_t v) {
@@ -504,6 +611,16 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
 constexpr uint32_t S5_LINE = 0x3AB504F3;   // f32(sqrt(32) / (256 * 16))
 constexpr float S5_FLOOR = 0x1p-32f;
 
+// a row's rho, alpha and beta_row from s = max|x| and the chains' sum part, and the stores
+DEV void stats_tail(const Args& a, int row, int k, float s, float part) {
+  const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
+  const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
+  reinterpret_cast<float*>(a.p[1])[row] = alpha;
+  reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
+  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
+  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+}
+
 // one warp per FP32 row, one pass: s = max|x|, rho (32 partial FMA chains, chain c over positions 8c + 256i in order of i,
 // then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
 // the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
@@ -525,12 +642,45 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
 #pragma unroll
   for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
   if (lane) return;
-  const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
-  const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
-  reinterpret_cast<float*>(a.p[1])[row] = alpha;
-  reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
-  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
-  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+  stats_tail(a, row, k, s, part);
+}
+
+// stats_s5 with a block per row, for decode's few rows (where stats_s5 has rows / 8 blocks): the block's 8 warps read the
+// row for s (a max, in any order) and stage each chain's words (chain c's position 8c + 256i at 32i + c), then warp 0 runs
+// stats_s5's 32 chains, its butterfly and its tail, the same operations in the same order.  stats_s5's arguments; grid rows,
+// 256 threads, k at most SR_MAX_K
+constexpr int SR_MAX_K = 32768;
+extern "C" __global__ void __launch_bounds__(256) stats_r(const Args a) {
+  __shared__ float chain[SR_MAX_K / 8];
+  __shared__ float smax[8];
+  const int row = blockIdx.x, tid = threadIdx.x, lane = tid % 32, k = a.i[1];
+  if (row >= a.i[0]) return;
+  if (k > SR_MAX_K) __trap();
+  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
+  float s = 0.0f;
+#pragma unroll 4
+  for (int j = tid; j < k / 4; j += 256) {
+    const float4 v = x[j];
+    s = fmaxf(s, fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))));
+    if (!(j & 1)) chain[j / 2] = v.x;   // position 4j = 256 (j / 64) + 8 ((j % 64) / 2)
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
+  if (lane == 0) smax[tid / 32] = s;
+  __syncthreads();
+  if (tid >= 32) return;
+  s = smax[lane % 8];
+#pragma unroll
+  for (int o = 4; o; o >>= 1) s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
+  float part = 0.0f;
+  for (int i = 0; i < k / 256; i++) {
+    const float e = chain[32 * i + lane];
+    part = __fmaf_rn(e, e, part);
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o));
+  if (lane) return;
+  stats_tail(a, row, k, s, part);
 }
 
 // E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32); i0 rows
@@ -742,6 +892,26 @@ extern "C" __global__ void pa(const Args a) {
   const uint16_t v = e < 32 ? e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e])
                             : f2bf(reinterpret_cast<const float*>(a.p[2])[row * 32 + e - 32]);
   reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
+}
+
+// B~'s bytes into L2 ahead of its call's GEMM, beside the call's per-row keying, which leaves DRAM idle.  Writes nothing.
+// p0 the bytes; i0 their count (a multiple of 128), i1 the form: 0 prefetch.global.L2 a 128-byte line a thread, 1 the same
+// with ::evict_last, 2 cp.async.bulk.prefetch.L2 a PF_CHUNK chunk a thread
+#define PF_CHUNK 16384
+extern "C" __global__ void __launch_bounds__(256) prefetch_l2(const Args a) {
+  const char* p = reinterpret_cast<const char*>(a.p[0]);
+  const size_t n = (size_t)(uint32_t)a.i[0], t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const size_t stride = (size_t)gridDim.x * blockDim.x;
+  if (a.i[1] == 2) {
+    for (size_t o = t * PF_CHUNK; o < n; o += stride * PF_CHUNK) {
+      const uint32_t len = (uint32_t)(n - o < PF_CHUNK ? n - o : PF_CHUNK);
+      asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(p + o), "r"(len) : "memory");
+    }
+  } else if (a.i[1] == 1) {
+    for (size_t o = t * 128; o < n; o += stride * 128) asm volatile("prefetch.global.L2::evict_last [%0];" ::"l"(p + o));
+  } else {
+    for (size_t o = t * 128; o < n; o += stride * 128) asm volatile("prefetch.global.L2 [%0];" ::"l"(p + o));
+  }
 }
 
 // P_B rows: [RNE_bf16(FP32 add(fma chain from +0 over p of be_p G_pq, -BF_jq)) || -be], be = bf16(E'_B).

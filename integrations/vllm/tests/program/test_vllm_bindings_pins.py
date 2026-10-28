@@ -80,13 +80,13 @@ def test_tuned_table_row_pins_follow_the_eager_matcher():
     """(N, K) = (2048, 2048) is a key of the eager matcher's pinned sm_89 table: M=8 -> the 8-bucket (32, 128, 8 warps, 3 stages);
     M=1 -> (32, 128, 8, 5); an untabled shape -> the default pins. The default tiling on a tabled shape is REFUSED (vLLM would not
     launch it there), and vice versa."""
-    pytest.importorskip("verity_vllm.engine.profiles.gen_llama_patterns")
+    pytest.importorskip("verity_vllm.observe.fold.profiles.gen_llama_patterns")
     pins8, src8 = gemm_pins_for(8, 2048, 2048)
     assert (pins8["constexprs"]["BLOCK_SIZE_M"], pins8["constexprs"]["BLOCK_SIZE_N"], pins8["num_warps"], pins8["num_stages"]) == (32, 128, 8, 3) and "tuned" in src8
     pins1, _ = gemm_pins_for(1, 2048, 2048)
     assert (pins1["constexprs"]["BLOCK_SIZE_M"], pins1["num_stages"]) == (32, 5)
     assert pins8["constexprs"]["BLOCK_SIZE_K"] == 64 and pins8["src_sha256"] == GEMM_PINS["src_sha256"]
-    assert gemm_pins_for(8, 960, 576) == (GEMM_PINS, "default[ada]")   # [R13 ampere] source names the registered target
+    assert gemm_pins_for(8, 960, 576) == (GEMM_PINS, "default[ada]")   # source names the registered target
     tuned_launch = _gemm_meta(M=8, N=2048, K=2048, BLOCK_SIZE_M=32, BLOCK_SIZE_N=128, stride_am=2048, stride_bn=2048, stride_cm=2048)
     assert _pins_ok(tuned_launch, pins8) is None
     assert "BLOCK_SIZE_M=32" in (_pins_ok(tuned_launch, GEMM_PINS) or "")

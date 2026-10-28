@@ -13,10 +13,10 @@ from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
                                                                            launch_tokens_of)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
-from verity_vllm.program.registry import tp_allreduce
+from verity.ml.definitions.registry import tp_allreduce
 
 
-# -- [R13 lane tp, P4] tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
+# -- tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
 
 
 def _tp_op(name: str) -> set:
@@ -35,14 +35,14 @@ def _hint_module(hint: str) -> str:
 
 
 def _collective_hint(node, ctx) -> str:
-    """[R19 moe F-r19-moe-1, row #70] the naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
+    """The naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
     collective's own module (a row-parallel linear's all-reduce of its Gemm, the MoE runner's all-reduce of its MoeSum, the logits
     processor's all-gather of its Gemm shard) is named under that module (`<module>/<node>`) as before: the Gemm / MoeSum row under the
     module IS the rank's partial (required_manifest TP-04 `members_for`).  A collective issued MID-module -- every rank-local operand row
     lives under ANOTHER module (OLMoE `OlmoeAttention._apply_qk_norm`: q and k all-gathered inside `self_attn`, each a slice of the
     `qkv_proj` Gemm's output) -- is named at its call SITE `<module>.<fx node>/<node>`, so the manifest (`collective_site`) requires it as
     the module's k-th collective identity WITH its own `shard_rank<r>` / `part_rank<r>` member, rather than folding both calls into one
-    `<module>/out` of twice the width with no partial to bind (row #70: 6,944 unbound per rank).  The rank-local operand is the one that
+    `<module>/out` of twice the width with no partial to bind (6,944 identities unbound per rank).  The rank-local operand is the one that
     is NOT a Program input (the peer's partial arrives as a `peers_<k>` Input); when neither operand is an input (a TP1-style test
     Program) both are examined.  Its producing rows are read off the Program's own refs (`node_hints` of the rows' nodes: space "n")."""
     own_mod = ctx.stack_path(node) if node.meta.get("nn_module_stack") else ""
@@ -70,7 +70,7 @@ class AllReduce2Rule(OpRule):
     """`verity_tp::all_reduce2(part_rank0 [.., N] bf16, part_rank1 [.., N] bf16)` -> `all_reduce2{N}` (`AllReduce2_v1{N}`: one bf16 add per
     element = `ncclSum` bf16 of two terms) per row.  Operands are in RANK ORDER; one of them is this rank's partial (a value the rank
     computes: a K-sharded `Gemm_v1` output or an `EmbeddingShard` row), the other the PEER INPUT bound by `tp_links.json` to the other
-    rank's committed partial — the received collective output is never a fresh trusted input.  Established on the pod (R13 tp step 1):
+    rank's committed partial — the received collective output is never a fresh trusted input.  Established on the pod (tp step 1):
     the pynccl all-reduce result equals `bf16(f32(P_0) + f32(P_1))` bit-exactly on every recorded element."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce2[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce2(a [.., N] bf16, b [.., N] bf16) (rank order)",
@@ -95,7 +95,7 @@ class AllReduce2Rule(OpRule):
         rb, _ = rows_of(b)
         N = ra[0].type.n
         fn = ctx.kind("all_reduce2", node, N=N)
-        hint = _collective_hint(node, ctx)                                   # [R19 moe F-r19-moe-1] site-named when mid-module
+        hint = _collective_hint(node, ctx)                                   # site-named when mid-module
         outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{hint}[{i}]/all_reduce") for i, (x, y) in enumerate(zip(ra, rb))]
         ctx.define(node, from_rows(outs, lead))
         ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}", collective="all_reduce")
@@ -127,7 +127,7 @@ class AllGather2Rule(OpRule):
         rb, _ = rows_of(b)
         N = ra[0].type.n
         fn = ctx.kind("all_gather2", node, N=N)
-        hint = _collective_hint(node, ctx)                                   # [R19 moe F-r19-moe-1] site-named when mid-module
+        hint = _collective_hint(node, ctx)                                   # site-named when mid-module
         outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{hint}[{i}]/all_gather") for i, (x, y) in enumerate(zip(ra, rb))]
         ctx.define(node, from_rows(outs, lead))
         ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}", collective="all_gather")
@@ -177,7 +177,7 @@ def _allreduce_kind(ctx, node, plan, world: int):
 
 
 class AllReduceRule(OpRule):
-    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> the captured route
+    """`verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> the captured route
     (`tp_allreduce.CAPTURED`) selected by the call's M, the workload's custom-all-reduce, symmetric-memory, FlashInfer and
     batch-invariance settings, its world, the declared target's device and NCCL's transport: the H200 routes at world 8, NCCL's tree
     (`AllReduceNcclTree_v1`) at world 4 on the RTX PRO 6000 over SHM. A route absent from `tp_allreduce.covered()` refuses by name."""
@@ -276,7 +276,7 @@ class FusedAllReduceRmsNormRule(OpRule):
 
 
 class AllGatherRule(OpRule):
-    """[lane vllm-tp-n] `verity_tp::all_gather([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_gather{WORLD=W, N}` (`AllGather_v1{WORLD,N}`:
+    """`verity_tp::all_gather([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_gather{WORLD=W, N}` (`AllGather_v1{WORLD,N}`:
     the [W*N] row IS the W shards side by side, a copy) per row, W > 2 (world 2 is `AllGather2Rule`)."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllGather[tp]", 1, "op-binding", applies_to="verity_tp::all_gather([a_0 .. a_{W-1}] each [.., N] bf16) (rank order, trailing axis), W > 2",

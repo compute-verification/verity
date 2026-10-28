@@ -1,11 +1,11 @@
-"""The Boolean Build's cost against the word Build's on one row's specializations: the descriptor of their union and the
-`Q_word_v1{16,32}` unit rules the manifest computes for them (`verity_vllm.query.word`'s prefetch, then its check, one rule per
+"""The Boolean Build's cost against the word Build's on one workload's specializations: the descriptor of their union and the
+`Q_word_v1{16,32}` proof-block rules the manifest computes for them (`verity.ml.definitions.word`'s prefetch, then its check, one rule per
 distinct Definition), timed per Definition.
 
     uv run benchmarks/bool_build_cost/run.py [--row qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
                                              [--jobs N] [--t T,T,...] --out DIR
 
-A row is its Calls' word specializations (`ROWS`); the Boolean ones are `program.boolean.boolean_version` of each, as the Boolean
+A workload is its Calls' word specializations (`ROWS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
 Build's lift calls them.  `--t` keeps the attention specializations of those key lengths only.  Writes `DIR/<ir>.json` (descriptor
 bytes, Program digest, the largest Definitions, rule seconds and the verdict per specialization, a digest of every rule) and
 `DIR/rules-<ir>.jsonl` (one line per rule as it finishes, so a run cut short keeps what it measured).
@@ -32,9 +32,9 @@ def _attention(T: int, mf: int) -> str:
 
 
 def qwen3_06b() -> list[str]:
-    """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2 (r20261018-183840-0fc5's row): prefill row r sees r + 1 keys,
+    """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2: prefill row r sees r + 1 keys,
     decode step s sees 256 + s; MASKED_FROM is FA2's tile rule (`attention_vocab.fa2_masked_from`, BN 64)."""
-    from verity_vllm.program.registry.attention_vocab import fa2_masked_from
+    from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
     att = [_attention(r + 1, fa2_masked_from(256, 256, r, 64, True)) for r in range(256)]
     att += [_attention(T, fa2_masked_from(T, 1, 0, 64, False)) for T in range(257, 288)]
     other = [f"Gemm_v2{{K={k},N={n},DOT={DOT}}}" for k, n in ((1024, 4096), (2048, 1024), (1024, 6144), (3072, 1024), (1024, 151936))]
@@ -44,7 +44,7 @@ def qwen3_06b() -> list[str]:
 
 
 def small() -> list[str]:
-    """Two padded attention rows (one block, and a full block plus one key), RoPE and SiLU-mul at Qwen3-0.6B's statics."""
+    """Two padded attention rows (one tile, and a full tile plus one key), RoPE and SiLU-mul at Qwen3-0.6B's statics."""
     return [_attention(1, 0), _attention(65, 0), "RoPE_v1{NHEADS=8,D=128}", "SiluMul_v2{I=3072}"]
 
 
@@ -53,8 +53,8 @@ ROWS = {"qwen3-06b": qwen3_06b, "small": small}
 
 def definitions(specs: list[str], ir: str) -> list:
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity_vllm.program import boolean as BB
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions import boolean as BB
+    from verity.ml.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
     out = []
     for s in specs:
@@ -103,7 +103,7 @@ _PENDING: list = []
 
 
 def _rule(i: int):
-    from verity_vllm.query import word as WQ
+    from verity.ml.definitions import word as WQ
     fn, limits = _PENDING[i]
     t = time.time()
     try:
@@ -122,7 +122,7 @@ def verdict(r: dict) -> dict:
 def rules(fns: list, jobs: int, log: Path) -> dict:
     """`word.prefetch`'s schedule (bodies cut as a whole first, then each separable body once its members are memoed), each rule
     timed in its worker, then `word.check_calls`'s lookups."""
-    from verity_vllm.query import word as WQ
+    from verity.ml.definitions import word as WQ
     limits = WQ.gate_limits(None)
     memo = WQ._RULES.setdefault(tuple(sorted(limits.items())), {})
     depth: dict[str, int] = {}

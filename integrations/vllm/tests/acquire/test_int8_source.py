@@ -48,7 +48,7 @@ class _Linear(nn.Module):
 
 class _Attn(nn.Module):
     def forward(self, kc, vc, blocks, ks):
-        return int8_ops.kv_quant(kc, vc, blocks, S, ks)
+        return int8_ops.kv_quant_batch(kc, vc, blocks[None], [S], ks)
 
 
 class _Model(nn.Module):
@@ -137,7 +137,7 @@ class _Read(nn.Module):
 
 
 def test_a_credited_read_commits_the_attentions_kv_quantization_as_the_paged_read_does():
-    """Under a credited read the layer quantizes with `kv_quant_window`, not `kv_quant`: its results are the same
+    """Under a credited read the layer quantizes with `kv_quant_window_batch`, not `kv_quant_batch`: its results are the same
     `<attention>/kv_quant.0..3`, bit for bit, so a Commit whose warm-up read the pages and whose run reads through the store's
     session lays out the same steps (a source that saw only `kv_quant` left every step of such a run uncommitted)."""
     g = torch.Generator().manual_seed(5)
@@ -172,7 +172,7 @@ def test_a_credited_read_commits_the_attentions_kv_quantization_as_the_paged_rea
     for m, t in zip(I8.KV_LABELS, want):
         assert torch.equal(got[0][f"{ATTN}/{m}"], t) and torch.equal(got[1][f"{ATTN}/{m}"], t), m
     assert torch.equal(outs[0].view(torch.int16), outs[1].view(torch.int16))
-    assert not isinstance(int8_ops.kv_quant_window, types.FunctionType)                 # the op is back
+    assert not isinstance(int8_ops.kv_quant_window_batch, types.FunctionType)           # the op is back
 
 
 def test_nothing_is_committed_outside_a_committed_step_or_a_site():
@@ -204,11 +204,13 @@ def test_x03_holds_the_quantizer_names_to_the_steps_sites():
 
 
 def test_a_credited_reads_window_quantization_is_committed_as_the_pages_is():
-    """Under a credited cache read the attention quantizes its window with `verity_int8::kv_quant_window`: the same `<attention>/kv_quant.0..3`,
-    bit for bit, two requests at one step concatenated in call order (the Commit left 4,096 of them unbound, r20261018-193305-618b)."""
+    """Under a credited cache read the attention quantizes its windows with `verity_int8::kv_quant_window_batch`: the same
+    `<attention>/kv_quant.0..3`, bit for bit, two requests at one step concatenated in batch order, each its own slice of the batch's
+    padded results (the Commit left 4,096 of them unbound)."""
     com, model, man = _Committer(), _Model(), _manifest(steps=(0,))
     (_kc, _vc, _b, ks), (k, v) = _kv_args()
-    model.model.layers[0].self_attn.attn.forward = lambda: [int8_ops.kv_quant_window(k[:n], v[:n], ks) for n in (S, 2)]
+    rows_k, rows_v = torch.cat([k, k[:2]]), torch.cat([v, v[:2]])
+    model.model.layers[0].self_attn.attn.forward = lambda: int8_ops.kv_quant_window_batch(rows_k, rows_v, [0, S], [S, 2], ks)
     _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)
     src.install()
     try:
@@ -231,7 +233,7 @@ def test_a_manifest_without_int8_sites_refuses_the_source():
 def test_the_binder_binds_the_kv_quantization_and_the_attentions_return_under_the_manifests_spelling():
     """The manifest spells a hinted multi-port Call's Values `<hint>.<port>` (`query.required.member_name`) and the attention's return
     `out`.  Committed as bare digits, `<attention>/0..3` were slots of the attention's return beside the return itself, so none of the
-    five bound (r20261020-000034-addf: 5,120 of 27,333 unbound, first model.layers.0.self_attn.attn/kv_quant.0).  Declared as
+    five bound (5,120 of 27,333 unbound, first model.layers.0.self_attn.attn/kv_quant.0).  Declared as
     Int8KvQuant_v1's ports they bind by port, and the return binds its one remaining member."""
     man = _manifest(steps=(0,))
     src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(man))

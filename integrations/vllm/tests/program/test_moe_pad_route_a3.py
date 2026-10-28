@@ -1,15 +1,15 @@
-"""[R17-42 / R17-45 (a) route A (3), lane moe] The FRONTEND's fixed-slot unit: `MoeFfnFixedL_v1(x, logits, w13, w2)` -- the padded block
+"""The FRONTEND's fixed-slot unit: `MoeFfnFixedL_v1(x, logits, w13, w2)` -- the padded block
 from the router LOGITS (vLLM's fused block `vllm.moe_forward(hidden_states, router_logits)` starts at `_moe_C.topk_softmax`; the router
 GEMM is the layer's own `mlp.gate` Compute, one resolution per dispatcher root) -- and its hand-authored lift of record `LMoeFfnL_v1`.
 
   (1) value: `MoeFfnFixedL(x, Gemm(x, wg), w13, w2) == MoeFfnFixed(x, wg, w13, w2) == MOE-01` word for word on every admitted route;
   (2) lift of record: `lift_def(bind(MoeFfnFixedL))` IS `bind(LMoeFfnL)` (registry AND decoded path), never a replay; at enable 1 its
       payload equals the twin's; at enable 0 it is all bot; the unselected slots are DISABLED (bot z_e, a_e = Active(0)) as in `LMoeBlock`;
-  (3) the signed Stage 2 object is untouched: `LMoeBlock_v1`'s digest at (E=4, K=2, VPT=2, H=I=16) is what revb signed
+  (3) the signed Stage 2 object is untouched: `LMoeBlock_v1`'s digest at (E=4, K=2, VPT=2, H=I=16) is the signed one
       (1dd831feee7ac882..., moe_pad_stage2_routes_E4_K2.json) -- the shared `_lifted_core` emits the same nodes in the same order;
   (4) the frontend vocabulary binds the kind: `PROFILE_B1_EAGER_V3.kind("moe_ffn_fixed", ...)` is `bind(MoeFfnFixedL, ...)`.
 
-The traced Build (the `Padded*` rules on an exported OLMoE forward, `moe_construction = padded`) is exercised on cp-moe with vLLM importable
+The traced Build (the `Padded*` rules on an exported OLMoE forward, `moe_construction = padded`) is exercised on a GPU pod with vLLM importable
 (`derive_step --target '{"moe_construction": "padded"}'`); this file is the registry half, torch-free.
 """
 from __future__ import annotations
@@ -23,9 +23,9 @@ import pytest
 from verity.ml.circuits import Program, bind
 from verity.ml.circuits.codec import decode_program, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, composite
-from verity_vllm.program.registry import b1, lifted as L, moe_pad as MP
-from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.definitions.registry import b1, lifted as L, moe_pad as MP
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.prims import BF16
 from verity.ml.circuits.types import Array
 
 from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, WG_T, X_T, MoeIndexedReadRef, run, token_for_route,
@@ -112,19 +112,19 @@ def test_2_the_lift_of_record_is_the_hand_authored_lmoeffnl_on_both_paths_disabl
 
 
 def _no_ord(fid: str) -> str:
-    """A lifted id without pad G1's `ORD=<mask>` static (absent at pad v0.7): `Lifted[F]_v2{K=16,N=4,ORD=0}` -> `Lifted[F]_v2{K=16,N=4}`."""
+    """A lifted id without the ORDINARY class's `ORD=<mask>` static (absent on the first stack): `Lifted[F]_v2{K=16,N=4,ORD=0}` -> `Lifted[F]_v2{K=16,N=4}`."""
     return re.sub(r"\{ORD=[^}]*\}$", "", re.sub(r",ORD=[^,}]*", "", fid))
 
 
 def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
-    """`LMoeBlock_v1` (router-owning) emits through the shared `_lifted_core`: its digest at the Stage 2 envelope is the one revb signed
-    (S-r17b-S2 (2)); `LMoeBlockL_v1` differs from it (no router GEMM node, `logits` an input) and from nothing else."""
+    """`LMoeBlock_v1` (router-owning) emits through the shared `_lifted_core`: its digest at the Stage 2 envelope is the signed
+    one; `LMoeBlockL_v1` differs from it (no router GEMM node, `logits` an input) and from nothing else."""
     sp = MP.block(E, 2, VPT, H, I)
     d = program_digest(encode_program(Program(sp)))
-    # The PIN is the digest of the Stage 2 block on the lifting stack of record; a pin is a pin, not a claim (rev M-1280).  It moved twice:
-    #   1dd831feee7ac882  pad v0.7 / B7 (lifted.py 5460c3e03 .. 90d284951) -- the digest revb signed, S-r17b-S2 (2);
-    #   de34ef2c82f65eb4  pad G1 5261740d7 (ORDINARY class: ORD statics in the lifted ids) -- the same block, the same relation; the Stage 2
-    #                     evidence JSON (dump_routes.py at v2) still carries the v0.7 digest and is compared only when it names the current stack.
+    # The PIN is the digest of the Stage 2 block on the lifting stack of record; a pin is a pin, not a claim.  The digests it has had:
+    #   1dd831feee7ac882  the first lifting stack -- the signed digest;
+    #   de34ef2c82f65eb4  the ORDINARY class (ORD statics in the lifted ids) -- the same block, the same relation; the Stage 2
+    #                     evidence JSON (dump_routes.py at v2) still carries the first digest and is compared only when it names the current stack.
     #   43bb1ede072b2031  the re-baseline re-key (the k16 step AmpereBF16TcDot16_v1 -> core's _v2; nothing else moved).
     #   52de640566245b7f  the same descriptor, digested with SHA-512 (the identity re-baseline).
     STAGE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)", "43bb1ede072b2031": "re-key (TcDot16 v2)",
@@ -136,7 +136,7 @@ def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
     dl = program_digest(encode_program(Program(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=I))))
     assert dl != d
     # the node census: LMoeBlockL = LMoeBlock minus exactly the router GEMM call
-    # (ids read without pad G1's ORD static -- `Lifted[Gemm_v1]_v2{K=16,N=4,ORD=0}` under G1, `{K=16,N=4}` at v0.7: the census is the same)
+    # (ids read without the ORD static -- `Lifted[Gemm_v1]_v2{K=16,N=4,ORD=0}` now, `{K=16,N=4}` on the first stack: the census is the same)
     names = lambda spec: sorted(_no_ord(n.fn.id) for n in Program(spec).root.body.nodes)  # noqa: E731
     a, b = names(sp), names(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=I))
     extra = list(a)

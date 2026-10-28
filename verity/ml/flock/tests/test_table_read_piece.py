@@ -1,4 +1,4 @@
-"""A read of a table the program brings (a word read as `verity_vllm.program.registry.tables.table_read` makes one) lowers by its
+"""A read of a table the program brings (a word read as `verity.ml.definitions.registry.tables.table_read` makes one) lowers by its
 Boolean form's builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits
 at every index and on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table
 past `BT.MAX_WORDS` has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every unit

@@ -12,8 +12,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.engine.capture import Capture, ObserverConfig
-from verity_vllm.engine.rank_worker import register_post_load_tensors
+from verity_vllm.observe.capture import Capture, ObserverConfig
+from verity_vllm.pipeline.tp.rank_worker import register_post_load_tensors
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.check.component_programs import post_load_tensors
 

@@ -3,7 +3,7 @@ import Definitions.Accounting.TS.Receipt
 /-!
 # A round's unfolded share and the whole-unit luck (trusted)
 
-HMU's B′ at a whole unit (ASK-9 = A, `p₀ = ½`): a run that skips a unit's fold commits a value for the unit's receipt
+HMU's B′ at a whole unit (`p₀ = ½`): a run that skips a unit's fold commits a value for the unit's receipt
 that no word of the unit determines, so the round's check passes only if it guessed the unit's committed value.
 
 * `Unfolded`: per round, the share `e` of the run's words whose fold it skips, fixed before the round's coins, then the

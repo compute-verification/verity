@@ -2,6 +2,7 @@ import Flock.Field
 import Flock.Hash
 import Flock.Bytes
 import Flock.Canon
+import Flock.Norm
 import Flock.Schedule
 import Flock.Proof
 import Flock.Transcript
@@ -14,6 +15,7 @@ import Flock.Ligerito
 import Flock.Comp
 import Flock.Tags
 import Flock.Net
+import Flock.SplitNL
 import Flock.Lookup
 import Flock.Circuit
 import Flock.Public
@@ -35,6 +37,7 @@ import Flock.With.SimWalk
 import Flock.With.SimVerify
 import Flock.With.SimZk
 import Flock.With.Log
+import Flock.With.VerifyE
 import Flock.Partition
 import Flock.HmNets
 import Flock.RecOpen
@@ -47,13 +50,17 @@ import Flock.HmRow
 import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
+import Flock.PortRoots
 import Flock.Registered
 import Flock.RegKnown
 import Flock.KnownRead
 import Flock.JsonKeys
+import Flock.RecordText
 import Flock.Keccak
 import Flock.RecCoins
 import Flock.RecSetup
+import Flock.RecBudget
+import Flock.RecCompose
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll

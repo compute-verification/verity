@@ -38,7 +38,7 @@ def vocab_kind(ctx: StepContext, role: str, **statics):
 def target_of_header(header) -> tuple[TargetProfile, bool]:
     """`target_of` for a run header."""
     try:
-        # [R13 hopper] the DECLARED profile when the capture recorded one (`profile["target"]`: exact, incl. `flash_attn_version`), else the
+        # the DECLARED profile when the capture recorded one (`profile["target"]`: exact, incl. `flash_attn_version`), else the
         # device document + the layers' reported FA version (`TargetProfile.from_run_profile`)
         tp = TargetProfile.from_run_profile(header.profile or {})
     except (AttributeError, TypeError, ValueError):
@@ -74,7 +74,7 @@ class WeightOnlyCalls:
 
 
 def header_gemm_arch_family(ctx: StepContext):
-    """[R13 ampere] The tuned-GEMM arch family the CAPTURE host reported (`RunHeader.profile["gpu"]["tuned_gemm_arch_family"]`, written by
+    """The tuned-GEMM arch family the CAPTURE host reported (`RunHeader.profile["gpu"]["tuned_gemm_arch_family"]`, written by
     `verity_vllm.engine.engine_profile.gpu_info` from vLLM's own `_get_tuned_matmul_arch_family`), or `...` when the header predates the field
     (the registry then derives it from the capability alone)."""
     try:
@@ -88,7 +88,7 @@ GEMM_TARGET_SCRATCH_KEY = "r13_gemm_target"
 
 
 def gemm_target_of(ctx: StepContext):
-    """[R13 ampere] The registered GEMM specialization of the record's target (`TargetProfile.gemm_target()` on `target_of(ctx)`, with
+    """The registered GEMM specialization of the record's target (`TargetProfile.gemm_target()` on `target_of(ctx)`, with
     the family the capture host reported): `(GemmTarget, None)` or `(None, refusal)` — the ONE source of the launch geometry every
     `matmul_kernel_persistent` launch must show (`GemmTarget.launch_config`), shared with Bet A (`vllm_bindings.gemm_pins_for`).  The
     selection is recorded once in `ctx.scratch[GEMM_TARGET_SCRATCH_KEY]` for the fold / resolution report."""

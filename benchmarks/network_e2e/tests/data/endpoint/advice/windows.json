@@ -1,0 +1,37 @@
+{
+ "schema": "verity-vllm/advice-windows-index/v1",
+ "run": "r20261024-094558-6d6a",
+ "trace": "r20261024-094558-6d6a",
+ "T": 600,
+ "windows": {
+  "0": {
+   "registration": "w0/registration.json",
+   "root": "befe62e34f59ea9674cffb0263dca78d8b13e1f868fe14e43cdb5c80ba4ca39c48bb7a92abb4e7284c2a03c0b122c3091307ee14ab9dcb08fb98d2896ada5a03",
+   "bits": 480,
+   "commit": {
+    "run_id": "r20261024-094558-6d6a/w0",
+    "run_root": "6452d87636cd52cba5e719e266139bb87c68f52a8ceb1cc9072025bffe27ad5a"
+   }
+  },
+  "1": {
+   "registration": "w1/registration.json",
+   "root": "5f75119328a5af69a6f074b8aefca5c7884e7a437eb982557dd514966840f98091444e770f9bd2072aa0102824bb843a8d2ab8af6b3494e1b4390727a970f8bd",
+   "bits": 2390,
+   "commit": {
+    "run_id": "r20261024-094558-6d6a/w1",
+    "run_root": "66146e08874d7e147415e20a183ae9e41da08fac89d692cbd22d12e4b7c970ac"
+   }
+  },
+  "2": {
+   "registration": "w2/registration.json",
+   "root": "b2ea9ca32f4a669d881aa00affbe7919813025885bdb900404aec5727060232ccca0d7a5b1f6932eda2450464d75d485d8c32b82257534ca3acd9f36c0674206",
+   "bits": 2392,
+   "commit": {
+    "run_id": "r20261024-094558-6d6a/w2",
+    "run_root": "b9d184848c0022a6252853b57b791e96662c71f18fecd8086cf53b8d1f99f917"
+   }
+  }
+ },
+ "refused": {},
+ "open": []
+}

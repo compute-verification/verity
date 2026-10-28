@@ -1,7 +1,7 @@
-"""[R18 infra, R19 tele] F-r17-tp-06 fixed by construction: source identity manifest + PRECHECK_FAIL_SOURCE_IDENTITY (torch-free).
+"""Source identity manifest + PRECHECK_FAIL_SOURCE_IDENTITY (torch-free).
 
-The finding (tp M-1830): a Commit under --gpu-tree without the tree variable (now VERITY_TREE) imported the core package from the pod's DEFAULT tree (another
-release) while `verity_vllm` ran the release tree and versions.json named the release.  These tests reproduce the leak -- a SECOND
+A Commit under --gpu-tree without the tree variable (VERITY_TREE) can import the core package from the pod's DEFAULT tree (another
+release) while `verity_vllm` runs the release tree and versions.json names the release.  These tests reproduce the leak -- a SECOND
 tree on sys.path ahead of the tree of record -- and require the precheck to fail BY NAME, plus the positive (one tree), the shipped-tree
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITY_TREE).
 
@@ -26,7 +26,7 @@ import pytest
 
 from research import pythonpath as rpp
 from research.telemetry import source_identity as gsid
-from verity_vllm import config as vconfig
+from verity_vllm import config as vconfig, settings as vsettings
 from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
@@ -108,8 +108,8 @@ def test_precheck_passes_with_matching_verity_tree_and_sha(env_form):
 
 def test_negative_second_tree_on_sys_path_fails_by_name(tmp_path):
     """tp's vector: `sys.path.insert(0, <default tree>)` while the release tree's verity_vllm runs.  Here the second tree is sys.path[0]
-    (the interpreter's cwd under -m, exactly where hidden_gpu.py used to insert the tree variable or its default) and the tree of record follows on
-    PYTHONPATH -> `verity` resolves from the second tree, verity_vllm from the tree of record: PRECHECK_FAIL_SOURCE_IDENTITY naming verity."""
+    (the interpreter's cwd under -m) and the tree of record follows on PYTHONPATH ->
+    `verity` resolves from the second tree, verity_vllm from the tree of record: PRECHECK_FAIL_SOURCE_IDENTITY naming verity."""
     other = _other_tree(tmp_path)
     out = tmp_path / "source_identity.json"
     r = _run("--tree", str(REPO), "--out", str(out), cwd=other)
@@ -129,7 +129,7 @@ def test_negative_second_tree_on_sys_path_fails_by_name(tmp_path):
 
 
 def test_negative_mixed_tree_copy_of_verity_vllm_elsewhere_is_refused_by_name(tmp_path):
-    """[R19 tele] the mixed-tree case for an integration package: a COPY of verity_vllm (the vLLM IR half) somewhere else on sys.path,
+    """the mixed-tree case for an integration package: a COPY of verity_vllm (the vLLM IR half) somewhere else on sys.path,
     ahead of the tree of record.  The copy is byte-identical to ours -- identity is WHERE it resolves from, not what it contains.
     (cwd is neutral: under -m, sys.path[0] is the cwd and would otherwise put the tree of record ahead of PYTHONPATH.)"""
     elsewhere = tmp_path / "elsewhere"
@@ -250,8 +250,8 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
 def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers and the workspace declaration (every member's
     pyproject.toml), stub packages at Verity's locations, and the REAL source_identity modules (generic + project, with the verity_vllm.config
-    it locates the tree through, the research.pythonpath that names core's directories, and the CLI) so the precheck under test runs from
-    the shipped tree itself."""
+    it locates the tree through and the typed records that reads, the research.pythonpath that names core's directories, and the CLI with the
+    settings it reads) so the precheck under test runs from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in (*research_tools.CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
                 "tools/research/src/research/telemetry"):
@@ -267,6 +267,9 @@ def _shipped_tree(tmp_path: Path) -> Path:
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
     shutil.copy(vcli.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
+    shutil.copy(vsettings.__file__, t / "integrations" / "vllm" / "verity_vllm" / "settings.py")
+    shutil.copytree(INTEGRATION / "verity_vllm" / "records", t / "integrations" / "vllm" / "verity_vllm" / "records",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     assert not (t / ".git").exists() and not (t / "EXPORT.json").exists()
     return t
 
@@ -276,7 +279,7 @@ def _shipped_pp(t: Path) -> str:
 
 
 def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
-    """[R19 tele] `research run --source` executes from a git-archive export: no .git, no EXPORT.json.  The runner exports RESEARCH_SOURCE_SHA
+    """`research run --source` executes from a git-archive export: no .git, no EXPORT.json.  The runner exports RESEARCH_SOURCE_SHA
     (research.result.ENV_SOURCE_SHA); the record carries it for every package of the tree, naming the source.  Without it the packages
     resolve (ok) with git_sha None -- the tree has no sha to give and none is invented."""
     t = _shipped_tree(tmp_path)
@@ -366,7 +369,7 @@ def test_hidden_gpu_resolves_repo_from_its_own_file_not_the_environment(tmp_path
     a = _fake_tree_with_hidden_gpu(tmp_path, "treeA")
     b = _fake_tree_with_hidden_gpu(tmp_path, "treeB")
     probe = f"import sys; sys.path.insert(0, {str(a / copy)!r}); import hidden_gpu"
-    # the leak vector of F-r17-tp-06: hidden_gpu from tree A while the environment names tree B -> refused by name
+    # the leak vector: hidden_gpu from tree A while the environment names tree B -> refused by name
     r = subprocess.run([PY, "-c", probe], env=_env(VERITY_TREE=str(b)), capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode != 0 and "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(a.resolve()) in r.stderr, r.stderr
     # no environment at all: REPO = tree A (the file's tree); the import proceeds past identity (fails later only on torch/numpy/hs here)
@@ -398,7 +401,7 @@ def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
         pytest.skip("out/gen/r9 is not part of the Verity tree (materialised on the pod by pod_hidden_gpu.sh)")
     assert r9.read_bytes() == a
     code = b"\n".join(l for l in a.splitlines() if l.startswith(b"REPO = "))                  # module-level assignments only, not the docstring
-    assert code == b"REPO = _repo_of_this_file()"                                             # the F-r17-tp-06 line is gone from both copies
+    assert code == b"REPO = _repo_of_this_file()"                                             # the default-tree line is gone from both copies
 
 
 # ---- runners set VERITY_TREE from their own tree ---------------------------------------------------------------------------------------------------

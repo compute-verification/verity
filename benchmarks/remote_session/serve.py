@@ -1,6 +1,6 @@
 """vLLM serving under the remote bandwidth audit: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
-with `verity_vllm.store.binder.Binder` on it registers its weights and KV pool in a `Store`, and
-`verity_vllm.store.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
+with `verity_vllm.protocols.remote_bandwidth.binder.Binder` on it registers its weights and KV pool in a `Store`, and
+`verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
 reads every live block at it (`prover.py`'s serve modes: ``serve``, or ``servedrop:K``, which withholds the first K
 blocks appended).
@@ -20,7 +20,7 @@ finish and free theirs, and freed pages are reused.
 OUT/serve.json holds the store (`Binder.stats`), the requests, the prover's session result and, with --local, the
 verifier's (its record and ledgers, the memory line among them: on the pass clock a window's span is ticks, which
 the rebuild charge reads as nanoseconds, so it credits nothing there and only the held and read bytes mean anything).
-It needs `verity_vllm.store.remote.StoreBackend` and vLLM on a GPU (`tests/test_vllm_serve.py`).
+It needs `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` and vLLM on a GPU (`tests/test_vllm_serve.py`).
 """
 from __future__ import annotations
 
@@ -166,8 +166,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     try:
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
-                              clock=clock, log=lambda m: None, lifetime=a.lifetime,
-                              verdict=a.verdict or verifier.VERDICT)
+                              clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)
     except BaseException as e:  # noqa: BLE001
@@ -191,16 +190,14 @@ def main() -> int:
     ap.add_argument("--window-ns", type=int, default=6, help="with --local: passes a window, a tick each")
     ap.add_argument("--samples", type=int, default=4096, help="with --local")
     ap.add_argument("--lifetime", type=int, default=1, help="with --local: L, windows")
-    ap.add_argument("--verdict", choices=("lean", "both", "python"),
-                    help="with --local: who decides (`verifier.py --verdict`; default its own, lean)")
     a = ap.parse_args()
     if "," in a.plan:
         ap.error("one session a process: a Store serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.store import remote
-    from verity_vllm.store.binder import Binder
-    from verity_vllm.store.registry import Store
+    from verity_vllm.protocols.remote_bandwidth import remote
+    from verity_vllm.protocols.remote_bandwidth.binder import Binder
+    from verity_vllm.protocols.remote_bandwidth.registry import Store
 
     store = Store()
     binder = Binder(store, passes=False).install()

@@ -28,6 +28,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.boolean.forms import Circuit
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
+from verity_flock.record_text import session_text
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
@@ -177,6 +178,27 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
         assert info["T"] == h(rep.dump["T"]) and info["gamma"] == [h(x) for x in rep.dump["gamma"]]
 
 
+def test_a_nonzero_nonce_is_refused(session, monkeypatch):
+    """R4 (verifier PROTOCOL.md D21): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
+    verifier's `Reader.nonce0` does, with its reason."""
+    rep = session[1][0]
+    at, vec = {}, A._Reader.vec
+
+    def spy(r, want, elem, what):
+        at[what] = r.o + 8
+        return vec(r, want, elem, what)
+
+    monkeypatch.setattr(A._Reader, "vec", spy)
+    A.decode(rep.shape, rep.data)
+    monkeypatch.undo()
+    for what in ("grinding_nonces", "claim_batch_grinding_nonces", "consistency_batch_grinding_nonces"):
+        b = bytearray(rep.data)
+        assert b[at[what]:at[what] + 8] == bytes(8), what
+        b[at[what]] = 1
+        with pytest.raises(ValueError, match=f"^{what[:-1]} ≠ 0 \\(R4\\)$"):
+            A.decode(rep.shape, bytes(b))
+
+
 def _ports(rep: Rep, seed: int) -> tuple[dict, A.Layout, list[int], list[int]]:
     """The structure, its layout, and its v and w ports on the honest rep, the running sums starting at a random value."""
     S, lay = A.structure(rep.shape)
@@ -317,7 +339,7 @@ def _reason(i: int, claims: int) -> str:
 
 def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
     d.mkdir()
-    (d / "session.json").write_text(json.dumps(record))
+    (d / "session.json").write_text(session_text(record))
     for r, b in enumerate(proofs):
         (d / f"circuit.rep{r}.bin").write_bytes(b)
 

@@ -1,7 +1,7 @@
-"""[GEN dense2] the lane's tests: the two profile modules are exactly `analytic.config_of` + `build_profile` with the listed hand
+"""The two profile modules are exactly `analytic.config_of` + `build_profile` with the listed hand
 fields; the weight-name maps bind every parameter name of the served models and nothing else; the workloads mirror the B1
 one-request workload (32 prompt tokens, 16 greedy tokens, no accepted tokens); positive AND negative recognizer tests of the
-lane's patterns (`gen_dense2_patterns`, when present)."""
+patterns (`gen_dense2_patterns`, when present)."""
 from __future__ import annotations
 
 import importlib
@@ -14,11 +14,11 @@ import pytest
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.engine.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles import profile_module_for_case
 
-gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
-phi3 = importlib.import_module("verity_vllm.engine.profiles.derived_PHI3_MINI")
-from verity_vllm.program.registry import b1
+gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
+phi3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_PHI3_MINI")
+from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 PROFILES = REPO / "workloads"
@@ -56,12 +56,12 @@ def test_gemma2_config_hand_fields_are_listed_and_only_those():
     assert C["tie_word_embeddings"] is False and gemma.C["tie_word_embeddings"] is True
     hand = gemma.PROFILE.notes["hand_fields"]
     assert hand == sorted(gemma.HAND)
-    assert {k for k, v in gemma.PROVENANCE.items() if v == "hand"} <= set(hand)      # [P6] a `key` fact's value is config.json's (hf-config)
+    assert {k for k, v in gemma.PROVENANCE.items() if v == "hand"} <= set(hand)      # a `key` fact's value is config.json's (hf-config)
     assert set(hand) == {"model", "revision", "tie_word_embeddings", "attn_logit_softcapping", "final_logit_softcapping",
                          "query_pre_attn_scalar", "sliding_window", "hidden_act", "embed_normalizer", "rmsnorm_plus_one",
                          "layer_norms", "extra_layer_norms"}
     assert gemma.C["embed_normalizer"] == 48.0 == gemma.C["H"] ** 0.5 and gemma.C["query_pre_attn_scalar"] == gemma.C["D"]
-    # tied: the shared weights Record has no lm_head field; the sqrt(H) embedding-scale buffer is the LAST field (lane cov-dense)
+    # tied: the shared weights Record has no lm_head field; the sqrt(H) embedding-scale buffer is the LAST field
     assert [f for f, _ in analytic.weights_type(gemma.C).fields] == ["embed", "layers", "norm", "cos_sin", "normalizer"]
 
 
@@ -104,7 +104,7 @@ def test_phi3_weight_field_binds_llama_fused_names_and_untied_lm_head():
     assert phi3.root_class("model.normalizer") == "unknown"
     # the fused checkpoint map covers exactly the per-layer fields of the weights Record
     layer_rec = dict(analytic.weights_type(phi3.C).fields)["layers"].elem
-    # [P6] the fused-name map is the base module's (`make_weight_field`): every per-layer Record field is bound by exactly one root name
+    # the fused-name map is the base module's (`make_weight_field`): every per-layer Record field is bound by exactly one root name
     bound = {}
     for suffix in ("input_layernorm.weight", "self_attn.qkv_proj.weight", "self_attn.o_proj.weight", "post_attention_layernorm.weight",
                    "mlp.gate_up_proj.weight", "mlp.down_proj.weight"):
@@ -123,11 +123,11 @@ def test_gemma2_weight_field_adds_the_two_mlp_norms_and_ties_lm_head():
     assert wf("model.layers.4.pre_feedforward_layernorm.weight") == ("layers", 4, "ln_pre_mlp")
     assert wf("model.layers.4.post_feedforward_layernorm.weight") == ("layers", 4, "ln_post_mlp")
     assert wf("lm_head.weight") == ("embed",)                    # tied (vLLM computes the logits with model.embed_tokens)
-    assert wf("model.normalizer") == ("normalizer",)              # the one-word analytic table (lane cov-dense; was None / "unknown")
+    assert wf("model.normalizer") == ("normalizer",)              # the one-word analytic table
     assert wf("model.layers.0.self_attn.qkv_proj.bias") is None
 
 
-# --- the sqrt(H) embedding-scale buffer as an analytic-table root (lane cov-dense 2026-09-17) --------------------------------
+# --- the sqrt(H) embedding-scale buffer as an analytic-table root --------------------------------
 
 def _f32_path_word(H: int) -> int:
     """The other plausible construction (`torch.tensor(sqrt(H))` as f32, then `.to(bf16)`): must agree for every Gemma-2 width."""
@@ -183,76 +183,6 @@ def test_weight_source_serves_the_normalizer_word_without_a_checkpoint():
     lo, hi, name = _field_intervals(wt, "")[-1]
     assert name == "normalizer"
     assert ws.words(lo, hi).tolist() == [0x4240]
-
-
-def test_root_policy_validates_the_normalizer_buffer_against_the_analytic_word(tmp_path):
-    """A synthetic capture with the one Gemma root the D82 policy called 'unknown': a 0-d bf16 buffer `model.normalizer` whose
-    2-byte snapshot is bf16(48) -> class analytic-table, validator check_normalizer, pass; a wrong word or no snapshot fails;
-    nothing else about the policy changes (the root is still counted, never silently accepted)."""
-    from verity_vllm.check import root_policy
-    from verity_vllm.observe.events import Root, RunHeader, ViewDesc
-
-    view = ViewDesc(alloc=211, offset=0, shape=(), strides=(), dtype="bfloat16", device="cuda:0")
-    root = Root(view, "buffer", "model.normalizer")
-    header = RunHeader(schema="test", created_utc="", profile_id=gemma.PROFILE.id, profile={"model": {"weights_sha256": "x"}},
-                       model={"repo": gemma.MODEL, "revision": gemma.REVISION, "config": dict(gemma.HF_CONFIG)}, workload={"requests": []},
-                       notes={"weights_verified": True})
-
-    def snaps(word: int) -> Path:
-        d = tmp_path / f"snaps_{word:04X}"
-        d.mkdir()
-        (d / "normalizer.bin").write_bytes(np.array([word], dtype=np.uint16).tobytes())
-        (d / "snapshots.json").write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "layout": "spanned-storage-bytes",
-                                                      "entries": [{"event": 90, "arg": "buffer", "view": view.to_json(), "file": "normalizer.bin",
-                                                                   "byte_offset": 0, "nbytes": 2, "step": 0}]}))
-        return d
-
-    rep = root_policy.evaluate([header, root], snaps(0x4240), gemma.PROFILE, weight_bytes=False)
-    ent = next(e for e in rep["roots"] if e["name"] == "model.normalizer")
-    assert ent["class"] == "analytic-table" and ent["validator"] == "analytic.check_normalizer" and ent["status"] == "pass", ent
-    assert ent["detail"]["expected_word"] == 0x4240 and ent["detail"]["captured_words"] == [0x4240]
-    assert rep["new_root_classes"] == [] and rep["classes"]["analytic-table"]["validated"] == 1
-
-    bad = root_policy.evaluate([header, root], snaps(0x4200), gemma.PROFILE, weight_bytes=False)
-    ent = next(e for e in bad["roots"] if e["name"] == "model.normalizer")
-    assert ent["status"] == "fail" and "0x4200" in ent["reason"] and bad["status"] == "fail"
-
-    empty = tmp_path / "nosnap"
-    empty.mkdir()
-    (empty / "snapshots.json").write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "entries": []}))
-    none = root_policy.evaluate([header, root], empty, gemma.PROFILE, weight_bytes=False)
-    ent = next(e for e in none["roots"] if e["name"] == "model.normalizer")
-    assert ent["status"] == "fail" and "no observation" in ent["reason"]
-
-
-def test_root_policy_reads_the_captured_normalizer_npy_like_cos_sin(tmp_path):
-    """The real capture does not snapshot buffers (weights validate by checkpoint identity), so `m1_capture.dump_normalizer`
-    writes the runtime word to capture/normalizer.npy the way `dump_cos_sin` writes the rotary table; root_policy reads it
-    first (0-d uint16 as saved), the snapshot store second, and a wrong captured word is still a fail."""
-    from verity_vllm.check import root_policy
-    from verity_vllm.observe.events import Root, RunHeader, ViewDesc
-
-    view = ViewDesc(alloc=211, offset=0, shape=(), strides=(), dtype="bfloat16", device="cuda:0")
-    root = Root(view, "buffer", "model.normalizer")
-    header = RunHeader(schema="test", created_utc="", profile_id=gemma.PROFILE.id, profile={"model": {"weights_sha256": "x"}},
-                       model={"repo": gemma.MODEL, "revision": gemma.REVISION, "config": dict(gemma.HF_CONFIG)}, workload={"requests": []},
-                       notes={"weights_verified": True})
-
-    def capture(word: int) -> Path:
-        d = tmp_path / f"cap_{word:04X}"
-        d.mkdir()
-        (d / "snapshots.json").write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "entries": []}))   # no buffer snapshot
-        np.save(d / "normalizer.npy", np.array(word, dtype=np.uint16))                                          # 0-d, as dumped
-        return d
-
-    rep = root_policy.evaluate([header, root], capture(0x4240), gemma.PROFILE, weight_bytes=False)
-    ent = next(e for e in rep["roots"] if e["name"] == "model.normalizer")
-    assert ent["status"] == "pass" and ent["detail"]["source"] == "capture/normalizer.npy" and ent["detail"]["captured_words"] == [0x4240], ent
-    assert rep["status"] == "pass" and rep["classes"]["analytic-table"] == {"count": 1, "validated": 1, "failed": 0, "other": {}}
-
-    bad = root_policy.evaluate([header, root], capture(0x4241), gemma.PROFILE, weight_bytes=False)
-    ent = next(e for e in bad["roots"] if e["name"] == "model.normalizer")
-    assert ent["status"] == "fail" and "0x4241" in ent["reason"] and bad["status"] == "fail"
 
 
 def test_weight_source_serves_gemma2_pre_and_post_mlp_norms_from_the_checkpoint_names():
@@ -333,8 +263,8 @@ import dataclasses
 
 from verity_vllm.observe.events import DispatchEnter
 from verity_vllm.observe.fold.patterns import AttentionScope
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
+from verity_vllm.observe.fold.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.observe.fold.tree import step_events

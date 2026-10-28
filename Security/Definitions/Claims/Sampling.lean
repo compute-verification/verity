@@ -51,7 +51,7 @@ Generic pieces this block adds, which move to `Definitions.Claims` in a later ch
 is the spec's `ZKmalRx` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`;
 nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).
 
-Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
+Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Definitions/Flock/Guarantees/SamplingClaims.lean`), whose statement
 reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
 
@@ -196,8 +196,8 @@ def Partition.sizes (P : Partition) : List ℕ := P.rus.map List.length
 /-- The gates of all of `P`'s proof units. -/
 def Partition.gates (P : Partition) : List ℕ := P.rus.flatten.flatten
 
-/-- **The widest public size class** of a proof unit's outputs, in bits: 262,144 under ASK-61 (Daniel, 19 Oct 2:59 PM
-PDT, provisional). Setting it to `16` makes `unitClasses` `[16]`, the former literal limit. -/
+/-- **The widest public size class** of a proof unit's outputs, in bits: 262,144, provisional. Setting it to `16` makes
+`unitClasses` `[16]`, the former literal limit. -/
 def unitClassMax : ℕ := 262144
 
 /-- **The public size classes** `w_c` of a proof unit's outputs, in bits: the powers of two from `16` up to
@@ -792,8 +792,8 @@ def FaultyBoundary : Prop :=
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
-the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference prover
-(ruling 4). It is of the deployed record's reference prover (`D.P`), at the deployed error (`D.δc H`). -/
+the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference
+prover. It is of the deployed record's reference prover (`D.P`), at the deployed error (`D.δc H`). -/
 def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   Claims.Complete H D.V D.P (Rhon H D.commit D.parse D.partition) (Scope D) (D.δc H)
 

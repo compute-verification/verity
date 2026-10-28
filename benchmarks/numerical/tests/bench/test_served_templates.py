@@ -1,7 +1,8 @@
 """The templates of every served workload beyond #101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
 MoE router (with and without renormalisation), expert coordinates (plain and weighted), MoE sum, the FP8 block-scaled GEMM, bias-add,
-the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels).  Each evaluation path
-equals its subcircuit's own Definition, and every census-bound subcircuit id of every workload is the spine's."""
+the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels), and the registered compiler's
+dead-free RMSNormTriton_v5 and AttentionHead_v18.  Each evaluation path equals its subcircuit's own Definition, and every
+census-bound subcircuit id of every workload is the spine's."""
 from __future__ import annotations
 
 import json
@@ -26,13 +27,18 @@ def _eval(sub: TM.Subcircuit, draws: list[TM.Draw]) -> dict[str, list[np.ndarray
     return sub.evaluate({p.name: [d.inputs[p.name] for d in draws] for p in sub.inputs}, [d.instance_statics for d in draws])
 
 
-def test_every_bound_subcircuit_id_is_the_spines():
-    from verity_numerical.bench import headline as H
+def _bound(mix: dict) -> str | None:
+    """The census subcircuit a workload mix entry binds: its template at exactly its parameters."""
+    return next((s.id for s in census.SUBCIRCUITS.values()
+                 if s.template == mix["subcircuit_template"] and vars(s.parameters) == (mix["subcircuit_parameters"] or {})), None)
 
+
+def test_every_bound_subcircuit_id_is_the_spines():
     for w in census.raw("workloads"):
-        for g in H.groups(w):
-            sub = TM.parse_subcircuit_id(g["subcircuit"])
-            assert (sub.id, sub.display) == (g["subcircuit"], census.SUBCIRCUITS[g["subcircuit"]].display)
+        for m in w["template_mix"]:
+            sid = _bound(m)
+            sub = TM.parse_subcircuit_id(sid)
+            assert (sub.id, sub.display) == (sid, census.SUBCIRCUITS[sid].display)
 
 
 def test_fa3_head_equals_its_definition():
@@ -108,6 +114,37 @@ def test_vec8_rmsnorm_equals_its_definition(template, family):
     assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
 
 
+def test_rmsnorm_triton_v5_equals_its_definition():
+    """The dead-free RMSNormTriton_v5's evaluation path (its registered row kernel) equals its Definition's gate reference."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit("rmsnorm-triton-v5", N=128, EPS=1e-6)
+    assert sub.relation["definition"] == "RMSNormTriton_v5" and sub.id == "rmsnorm-triton-v5/n128-eps1e-06/bf16"
+    assert sub.set_name.startswith("rmsnormtriton-v5-n128-")
+    draws = _draws(sub, 4)
+    ref = evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in draws]) for p in sub.inputs], kernel="reference")
+    assert np.array_equal(np.asarray(ref).reshape(4, 128), np.stack(_eval(sub, draws)["out.out"]).astype(np.asarray(ref).dtype))
+    assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
+
+
+def test_v18_head_equals_its_definition_at_the_decode_launch():
+    """AttentionHead_v18's evaluation path (Attention_v18{NH=1, KVH=1}'s row kernel) equals the head's gate reference, at the
+    MASKED_FROM FA2's decode-only launch guards (its last block of keys, 0-based: ceil(T/BN) - 1)."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit("attention-head-v18", D=16, BN=16, T="17:40")
+    assert sub.relation["definition"] == "Attention_v18" and sub.set_name == "attention-head-v18-decode-d16-bn16"
+    for d in _draws(sub, 4):
+        T = d.instance_statics["T"]
+        defn = sub.definition(**d.instance_statics)
+        assert 17 <= T <= 40 and defn.bindings["MASKED_FROM"] == -(-T // 16) - 1
+        ref = evaluate_batch(defn, *[d.inputs[p.name][None, :] for p in sub.inputs], kernel="reference")
+        assert np.array_equal(ref.reshape(-1), _eval(sub, [d])["out"][0].astype(ref.dtype))
+    assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
+    with pytest.raises(KeyError):
+        TM.identify(dict(sub.relation, masked_from="causal"))
+
+
 def test_greedy_token_select_is_the_first_argmax():
     sub = TM.subcircuit("token-select-greedy", V=64)
     draws = _draws(sub, 16)
@@ -151,10 +188,8 @@ def test_scale_words_are_pinned():
 def test_workloads_suite(tmp_path):
     suite = G.workload_suite((39, 57, 60, 67, 73, 74))
     sids = {TM.subcircuit(t, **p).id for t, p, _n in suite}
-    from verity_numerical.bench import headline as H
-
-    want = {g["subcircuit"] for w in census.raw("workloads") if (w.get("source") or {}).get("row") in (39, 57, 60, 67, 73, 74)
-            for g in H.groups(w)}
+    want = {_bound(m) for w in census.raw("workloads") if (w.get("source") or {}).get("row") in (39, 57, 60, 67, 73, 74)
+            for m in w["template_mix"]}
     assert sids == want and len(suite) == len(sids) == 45
     fa3 = next(p for t, p, _n in suite if p.get("semantics") == "sm90.fa3.bf16")
     rng = census.SUBCIRCUITS["attention-head/d128-bn128/sm90-fa3-bf16"].variable_ranges.T

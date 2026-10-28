@@ -68,15 +68,31 @@ def proverOf : Json → Except String (Option ProverConfig)
                  envelope := ← syncOf (← j.getObjVal? "envelope"), lag := ← j.getObjValAs? Nat "lag",
                  prior := ← (← arrOf (← j.getObjVal? "prior")).mapM pastOf })
 
-def configOf (j : Json) : Except String Config := do
+def saltOf : Json → Except String (Option SaltSource)
+  | .null => pure none
+  | j => do
+    pure (some { values := ← (← arrOf (← j.getObjVal? "values")).mapM bytesOf, bits := ← j.getObjValAs? Nat "bits",
+                 pouwWindow := ← j.getObjValAs? Nat "pouw_window" })
+
+def servedOf : Json → Except String (Option ServedProfile)
+  | .null => pure none
+  | j => do
+    pure (some { responseFrames := ← j.getObjValAs? Nat "F", requestFrames := ← j.getObjValAs? Nat "FIN",
+                 windows := ← j.getObjValAs? Nat "windows", own := ← j.getObjValAs? Nat "own" })
+
+/-- The configuration and the window and position the proxy starts at. -/
+def configOf (j : Json) : Except String (Config × Nat × Nat) := do
   let c : Config := {
     egress := ← paramsOf (← j.getObjVal? "egress"), ingress := ← paramsOf (← j.getObjVal? "ingress"),
     syncSet := ← syncSetOf (← j.getObjVal? "sync_set"), syncs := ← (← arrOf (← j.getObjVal? "syncs")).mapM syncOf,
     windows := ← j.getObjValAs? Nat "windows", origin := ← j.getObjValAs? Nat "origin",
     slack := ← j.getObjValAs? Nat "slack", prover := ← proverOf (← j.getObjVal? "prover"),
-    egressLink := ← j.getObjValAs? String "egress_link", ingressLink := ← j.getObjValAs? String "ingress_link" }
-  c.check
-  pure c
+    egressLink := ← j.getObjValAs? String "egress_link", ingressLink := ← j.getObjValAs? String "ingress_link",
+    salt := ← saltOf (← j.getObjVal? "salt"), served := ← servedOf (← j.getObjVal? "served"),
+    ordinals := ← j.getObjValAs? Bool "ordinals", compact := ← j.getObjValAs? Bool "compact" }
+  let start ← j.getObjValAs? Nat "start"
+  c.check start
+  pure (c, start, ← j.getObjValAs? Nat "position")
 
 def gridOf : String → Except String GridKind
   | "egress" => pure .egress
@@ -92,6 +108,9 @@ def eventOf (j : Json) : Except String Event := do
   | [.str "refused", s, now] => pure (.refused (← s.getNat?) (← now.getNat?))
   | [.str "delivered", s, now] => pure (.delivered (← s.getNat?) (← now.getNat?))
   | [.str "upstream", s, now, b] => pure (.upstream (← s.getNat?) (← now.getNat?) (← bytesOf b))
+  | [.str "salt-connected", now] => pure (.saltConnected (← now.getNat?))
+  | [.str "salt-refused", now] => pure (.saltRefused (← now.getNat?))
+  | [.str "salt-delivered", now] => pure (.saltDelivered (← now.getNat?))
   | _ => throw s!"no event {j.compress}"
 
 def paramsJson (p : Params) : Json :=
@@ -112,6 +131,8 @@ def actionJson : Action → Json
   | .connect s => .arr #[.str "connect", toJson s]
   | .writeUpstream s b drain => .arr #[.str "upstream", toJson s, hexJson b, toJson drain]
   | .publish r p => .arr #[.str "publish", recordJson r, paramsJson p]
+  | .connectSalt => .arr #[.str "connect-salt"]
+  | .writeSalt b => .arr #[.str "salt", hexJson b]
 
 /-- An honest run's check: every record complete, and egress window w's row i is `expectedRow` at bucket w·T + i of the
 Program's frames under the syncs `step` declared. -/
@@ -135,9 +156,9 @@ def honest (c : Config) (syncs : Array ClockSync) (program : Array (ByteArray ×
 /-- What `step` does on an instance, in the shape of the Python's results, and its path. -/
 def evaluate (j : Json) : Except String (String × Json) := do
   let path ← j.getObjValAs? String "path"
-  let c ← configOf (← j.getObjVal? "config")
+  let (c, start, position) ← configOf (← j.getObjVal? "config")
   let events ← (← arrOf (← j.getObjVal? "events")).mapM eventOf
-  let mut st := init c
+  let mut st := initAt c start position
   let mut actions : Array Action := #[]
   for ev in events do
     let (st', acts) := step st ev
@@ -157,10 +178,13 @@ def evaluate (j : Json) : Except String (String × Json) := do
     ("hands", toJson st.shaper.hands),
     ("frames", .arr (st.frames.map fun (pos, s, k, a, r) => .arr #[toJson pos, toJson s, toJson k, toJson a, toJson r])),
     ("link_frames_read", toJson st.linkFramesRead),
-    ("requests_released", toJson st.requestsReleased)])
+    ("requests_released", toJson st.requestsReleased),
+    ("salts_released", toJson st.saltsReleased),
+    ("salts_delivered", toJson st.saltsDelivered)])
 
 /-- The results' fields, in the order they are compared. -/
-def fields : List String := ["actions", "syncs", "hands", "frames", "link_frames_read", "requests_released"]
+def fields : List String :=
+  ["actions", "syncs", "hands", "frames", "link_frames_read", "requests_released", "salts_released", "salts_delivered"]
 
 /-- A run's outcome: accepted, or the reasons its records name. -/
 def outcome (results : Json) : String :=

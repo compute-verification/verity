@@ -244,3 +244,49 @@ def test_recipe_of_names_each_pins_recipe():
     assert I.INT8_V2.lm_head and not I.INT8.lm_head and not F.FP8.lm_head
     with pytest.raises(F.UsageError, match="none of the int8 recipes"):
         I.recipe_of({"role": "X", "recipe": {"id": F.RECIPE}})
+
+
+# ---------------------------------------------------------------- a mixture of experts
+
+def _moe_base(tmp_path: Path, config: str) -> Path:
+    base = tmp_path / "base"
+    base.mkdir()
+    t = lambda n, salt: _bf16(n, salt, 0.05).tobytes()                         # noqa: E731
+    _write_base_shard(base / "model.safetensors", {
+        "model.embed_tokens.weight": ("BF16", [256, 128], t(256 * 128, 1)),
+        "model.layers.0.self_attn.qkv_proj.weight": ("BF16", [128, 128], t(128 * 128, 2)),
+        "model.layers.0.mlp.gate.weight": ("BF16", [8, 128], t(8 * 128, 3)),
+        "model.layers.0.mlp.experts.0.gate_proj.weight": ("BF16", [64, 128], t(64 * 128, 4)),
+        "model.layers.0.mlp.experts.0.up_proj.weight": ("BF16", [64, 128], t(64 * 128, 5)),
+        "model.layers.0.mlp.experts.0.down_proj.weight": ("BF16", [128, 64], t(128 * 64, 6)),
+    })
+    (base / "config.json").write_text(config)
+    return base
+
+
+def test_int8_makes_a_moe_and_copies_its_routers(tmp_path):
+    base = _moe_base(tmp_path, '{"vocab_size": 256, "hidden_size": 128, "num_experts": 8}')
+    F.make(base, tmp_path / "out", ["model.safetensors"], base_repo="o/m", base_revision="0" * 40, recipe=I.INT8)
+    start, header = F.read_header(tmp_path / "out" / "model.safetensors")
+    raw = (tmp_path / "out" / "model.safetensors").read_bytes()
+    names = {k: (v["dtype"], v["shape"]) for k, v in header.items() if k != "__metadata__"}
+    assert names["model.layers.0.mlp.gate.weight"] == ("BF16", [8, 128]) and "model.layers.0.mlp.gate.weight_scale" not in names
+    lo, hi = header["model.layers.0.mlp.gate.weight"]["data_offsets"]
+    assert raw[start + lo: start + hi] == _bf16(8 * 128, 3, 0.05).tobytes()
+    for proj, shape in (("gate_proj", [64, 128]), ("up_proj", [64, 128]), ("down_proj", [128, 64])):
+        name = f"model.layers.0.mlp.experts.0.{proj}.weight"
+        assert names[name] == ("I8", shape) and names[name + "_scale"] == ("F32", [shape[0], 1])
+    assert names["model.layers.0.self_attn.qkv_proj.weight"] == ("I8", [128, 128])
+
+
+@pytest.mark.parametrize("config, why", [('{"vocab_size": 256, "num_experts": 8}', "no integer hidden_size")])
+def test_int8_refuses_a_moe_it_cannot_find_the_routers_of(tmp_path, config, why):
+    with pytest.raises(ValueError, match=why):
+        F.make(_moe_base(tmp_path, config), tmp_path / "out", ["model.safetensors"], base_repo="o/m", base_revision="0" * 40,
+               recipe=I.INT8)
+
+
+def test_fp8_still_refuses_a_moe(tmp_path):
+    with pytest.raises(ValueError, match="mixture-of-experts"):
+        F.make(_moe_base(tmp_path, '{"vocab_size": 256, "hidden_size": 128, "num_experts": 8}'), tmp_path / "out",
+               ["model.safetensors"], base_repo="o/m", base_revision="0" * 40)

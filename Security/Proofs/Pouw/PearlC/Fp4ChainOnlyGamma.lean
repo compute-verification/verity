@@ -1,9 +1,9 @@
 import Proofs.Pouw.PearlC.Fp4IssueGamma
-import Models.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
-# Pearl-C4 under the chain-only reading, at any FP32 price and scale path (the price-twins lane's file; staged)
+# Pearl-C4 under the chain-only reading, at any FP32 price and scale path (staged)
 
 * **The chain-only TT_OUT is weaker** (`ttOutFp4ChainOnly_of_ttOut`, `ttOutTileFp4ChainOnly_of_ttOut`): its credit is
   the record's less `fs·m·k ≥ 0`, so the record's TT_OUT gives it at non-negative `fs`.

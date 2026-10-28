@@ -1,16 +1,29 @@
 {
- "roots": ["CoreOnsite"],
+ "roots": ["CoreOnsite", "CoreProduct"],
  "exempt": {
-  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "ProductMain": "the product executable's entry point, one line; its command is Core.Product.main, audited under CoreProduct"
  },
  "layers": {
   "CoreOnsite": {
-   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs"],
+   "imports": [
+    "CoreComposition.Cases",
+    "NetworkCheck.Period",
+    "PousCheck.RunProtocol",
+    "PouwCheck.Protocol",
+    "RemoteAudit.Protocol",
+    "SampledProofs.OneStage"
+   ],
    "except": [],
-   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "CoreProduct": {
+   "imports": ["CoreOnsite"],
+   "except": [],
+   "why": "the verifier party's product over a deployment's listed components: code over onsite's components, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
-  "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
  }
 }

@@ -1,15 +1,13 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
-ruling of 4 Oct 2026 and to v4 by his ruling of 6 Oct 2026, one hash, SHA-512, in `../p2/PROTOCOL.md`, which this
+v1, amended to v1.1 (the RTT cap) and to v4 (one hash, SHA-512) in `../p2/PROTOCOL.md`, which this
 module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
 in how a block's keys are expanded:
 
 - `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names
   (decision F4).
 - `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
-  assumption, but its keys cost about 1% of the decode's multiply work on the device, and `benchmarks/pous`'s `p2-gpu`
-  arm measures it.  It is kept for that.
+  assumption, but its keys cost about 1% of the decode's multiply work on the device.
 
 ~~~text
 p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (`p2-p16448-c21065`, 2,056-byte blocks)
@@ -45,6 +43,13 @@ leaves and challenge derivation), not with the expander.
   forward queries per answer and any depth, is accepted with probability at most `1% + 2^-128`.  The 128 bits per block
   are a budget for structure an instantiation might leak.  That is **abstract M1** on P2's exact domain `[0, p)`:
   independent forward-only uniform permutations of `[0, p)`, with no hypothesis, and the same for both codecs.
+  `P2.certificate` is it at the registered point alone (`2^19` blocks); `family_certificate` is it for any v4 store in
+  that block range, which the run protocol takes where the registered one doesn't fit.
+- Above `2^23` blocks the run protocol takes `wide_certificate`: the per-period guarantee
+  `Pous.Period.SecurityProofs.periodHeldAt`, for every block count `2^19 ≤ N ≤ 2^27` at the registered width and prime,
+  the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
+  is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
+  above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
 - **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
@@ -85,7 +90,7 @@ PROTOCOL_ID = "p2/v4"
 SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
-             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-nebius-host")
+             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-host")
 """What P2's certificate rests on:
 - abstract M1 (the proof's model);
 - the SMS-to-M1 instantiation (not accepted);
@@ -95,14 +100,27 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
   held plus the help it received, and nothing attests the prover's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
-- a live, designated verifier, whose memory challenger is the auditor's hardware, a Nebius VM under the auditor's
-  account that the prover doesn't control and nothing attests (core's `trusted-nebius-host`)."""
+- a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
+  that the prover doesn't control and nothing attests (core's `trusted-host`)."""
+
+WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+"""What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
+conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
+commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
 segments."""
 
 CERT_BLOCKS = 1 << 19
+
+CERT_FAMILY_BLOCKS = (1 << 8, 1 << 23)
+"""The block counts `P2SlackFamilyUncond` proves its `λ = 128` row at `k = 105` for, at the registered width and prime
+(`family_certificate`)."""
+
+CERT_WIDE_BLOCKS = (1 << 19, 1 << 27)
+"""The block counts `Pous.Period.PeriodHeldAt` covers at the registered width and prime (`wide_certificate`), the range
+of `P2RingRoundSecureWide`."""
 
 CERT_K = 105
 """The spec's k (decision F6): `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
@@ -121,7 +139,7 @@ DELTA_NS = 500_000
 """Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
-"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the
+"""The cap on the measured RTT allowance in spec v1.1 (`p2/PROTOCOL.md` §12): the
 largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
 it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
 alone admits up to `ROOT_CALL_NS − 1`."""
@@ -358,18 +376,28 @@ def _check(params: P2Params, s: int) -> None:
         raise ValueError(f"segment {s} is outside 0..{params.segments - 1}")
 
 
+def encode_blocks(params: P2Params, salt: bytes, s: int, j0: int, payloads: bytes) -> list[bytes]:
+    """Blocks `j0, j0 + 1, …` of segment `s` of C from their payloads, `len(payloads)` a whole number of them: a slice of
+    `encode_segment`, so a segment's blocks can be encoded apart (each block's keys are its own)."""
+    _check(params, s)
+    f, pb, nb = _field(params), params.payload_bytes, params.block_bytes
+    n, rest = divmod(len(payloads), pb)
+    if rest or not 0 <= j0 <= j0 + n <= params.blocks_per_segment:
+        raise ValueError(f"blocks {j0}.. of {len(payloads)} payload bytes are not whole blocks of segment {s}")
+    keys, out = segment_keys(params, salt, s), []
+    for j in range(n):
+        k, t = keys(j0 + j)
+        m = int.from_bytes(payloads[j * pb:(j + 1) * pb], "big")
+        out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "big"))
+    return out
+
+
 def encode_segment(params: P2Params, prims, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
     """Segment `s` of C: `c_j = ρ(σ_K(ρ(m_j + t_j)))` per block (two roots each)."""
     _check(params, s)
     if len(w_seg) != params.segment_bytes:
         raise ValueError(f"a segment of W is {params.segment_bytes} bytes")
-    f, pb, nb = _field(params), params.payload_bytes, params.block_bytes
-    keys, out = segment_keys(params, salt, s), []
-    for j in range(params.blocks_per_segment):
-        k, t = keys(j)
-        m = int.from_bytes(w_seg[j * pb:(j + 1) * pb], "big")
-        out.append(f.rho(f.sigma(f.rho((m + t) % f.p), k)).to_bytes(nb, "big"))
-    return out
+    return encode_blocks(params, salt, s, 0, w_seg)
 
 
 def decode_segment(params: P2Params, prims, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes:
@@ -444,7 +472,33 @@ class P2ChaCha(P2):
     expander = CHACHA8
 
 
-__all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "P2", "P2ChaCha", "P2Params",
-           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment", "expand_prefix",
-           "segment_keys", "segment_seed", "sha512_keys", "stream"]
+def family_certificate(params: P2Params) -> Certificate | None:
+    """`P2SlackFamilyUncond`'s `λ = 128` row for a v4 store at the registered width and prime of any block count in
+    `CERT_FAMILY_BLOCKS`, in any number of segments: the theorem is about `m1p B 16448 (2^16448 − 21065) b` for every such
+    `B`, and segments only frame each block's keys.  `P2.certificate` stays the registered point's alone, the one the
+    memory challenger's coverage and the timed audit's Lean properties read; the run protocol (`period.gaps`,
+    `PousCheck.RunProtocol.gaps`) takes this one where the registered one doesn't fit."""
+    lo, hi = CERT_FAMILY_BLOCKS
+    if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
+        return None
+    return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+
+
+def wide_certificate(params: P2Params) -> Certificate | None:
+    """`Pous.Period.SecurityProofs.periodHeldAt` for a v4 store at the registered width and prime of any block count in
+    `CERT_WIDE_BLOCKS`, in any number of segments: at every point of the run's composed check and every `N` from `2^19`
+    to `2^27`, an accepted period with no break while the node held fewer than `⌊ρ·N·16448⌋` bits has probability at
+    most `δ + ε_max = 1% + 2^-128`, read at `N` = the store's blocks, under `WIDE_CLAIMS`.  The run protocol takes it
+    above `family_certificate`'s range (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    lo, hi = CERT_WIDE_BLOCKS
+    if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
+        return None
+    return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+
+
+__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
+           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]

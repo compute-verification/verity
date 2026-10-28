@@ -12,7 +12,7 @@ taking it over the side link or rebuilding it. Stacking is a way to rebuild: a c
 were chosen after the seed (a KV page the audit credits, say), holds other blocks' encodings, and the device decodes
 them from it instead of reading them. In the verbatim class a sector obtained by computing rather than by reading it at
 its position is a `rebuild`, so a carrier's sectors count in a pass's rebuilds. This file is a carrier's vocabulary;
-`Models/Accounting/Guarantees/Stacking.lean` bounds what carriers hold and charges it in every pass.
+`Definitions/Accounting/Guarantees/Stacking.lean` bounds what carriers hold and charges it in every pass.
 
 **Provenance.** A carrier's contents are values of a circuit (the served model as an exact-integer Program). In the
 ideal encoding model the store's sectors are uniform, they are the blocks' encodings, and the circuit's values depend
@@ -37,8 +37,8 @@ sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts th
 
 **A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values. Its
 carrier's provenance is `W`'s computation from the chain's first write to the pass. So its inputs are `W`'s run inputs
-in those windows of the audit, and its encodes are `W`'s budgeted gates there (`Provenance.OfCircuit`), which `W`'s
-census counts per window (`Gates.census`).
+in those windows of the audit, and its encodes are `W`'s nonlinear units there, its budgeted units and its data
+products (`Provenance.OfCircuit`), which `W`'s census and `Gates.productsAt` count per window.
 
 **The tiles a pass read.** `readsIn` is `readsOn` restricted to the tiles `I j` of each pass `j`: the distinct
 device-memory sectors read from those tiles. With `I j` the tiles of a declared circuit's blocks, it is what a pass
@@ -59,7 +59,7 @@ pass after it, so its coin was drawn after every pass of the windows before. `Li
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game draws every append's coin with the codec, so `joined` is the game's only record of when.
 
-**A pass on the devices' clocks.** A pass is bound to an engine step (#2378), and a placed execution
+**A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
 passes' ticks (`Placement.windowTicks`). On one clock with a placed execution's other windows (compute accounting's
@@ -140,20 +140,21 @@ def encoded (E : SketchStore N m) : Provenance N m α → ℕ
   | input _ f k => (k (f E)).encoded E
   | encode t x _ f k => (k (f fun u => E (t, u))).encoded E + x
 
-/-- The budgeted gates the encodes cost at store `E`, at `cost x` per `encode` step of `x` bits. The circuit's other
-budgeted gates only add to its count, so a budget on its budgeted gates bounds this. -/
+/-- The nonlinear units the encodes cost at store `E`, at `cost x` per `encode` step of `x` bits. The circuit's other
+gates only add to its count, so a budget on its nonlinear units bounds this. -/
 def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → ℕ∞
   | done _ => 0
   | input _ f k => (k (f E)).gates cost E
   | encode t x _ f k => (k (f fun u => E (t, u))).gates cost E + cost x
 
 /-- **A provenance that is `W`'s over the windows `I`** of the audit `A`: at every store its inputs are at most the
-bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s budgeted units
-there (`Gates.census`, property/v1's units). -/
+bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s nonlinear
+units there: its budgeted units (`Gates.census`, property/v1's units) and its data products (`Gates.productsAt`). -/
 def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
     (I : Finset ℕ) : Prop :=
   ∀ E, K.inputs E ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
-    K.gates cost E ≤ ((∑ v ∈ I, (Gates.census W fun t => A.win t = v).budgeted : ℕ) : ℕ∞)
+    K.gates cost E ≤
+      ((∑ v ∈ I, ((Gates.census W fun t => A.win t = v).budgeted + Gates.productsAt W fun t => A.win t = v) : ℕ) : ℕ∞)
 
 end Provenance
 
@@ -344,12 +345,12 @@ end Accounting.Rate
 
 namespace Accounting
 
-/-- **The encode cost of `x` bits of a block's encoding**, in budgeted units: `Gates.encodeCost` (the fewest budgeted
-units of a restricted circuit with no run input, at most `B` operand bits a budgeted gate, that computes that many codec
-words over `F` at `k` rounds on more than `εnum/εden` of the draws, `⊤` when there is none) of the `⌈x / (8·bytes)⌉`
-words that `x` bits fill. A function of a block's encoding is charged as the whole words its bits would fill; one a
-circuit gets without computing those words (a word's parity, the Legendre symbol of its last round's input, which is
-why the words' targets leave it out) enters a provenance as an input. -/
+/-- **The encode cost of `x` bits of a block's encoding**, in nonlinear units: `Gates.encodeCost` (the fewest nonlinear
+units, budgeted units and data products, of a restricted circuit with no run input, at most `B` operand bits a budgeted
+gate, that computes that many codec words over `F` at `k` rounds on more than `εnum/εden` of the draws, `⊤` when there
+is none) of the `⌈x / (8·bytes)⌉` words that `x` bits fill. A function of a block's encoding is charged as the whole
+words its bits would fill; one a circuit gets without computing those words (a word's parity, the Legendre symbol of its
+last round's input, which is why the words' targets leave it out) enters a provenance as an input. -/
 noncomputable def encodeBitsCost (F : Gates.Field) (k B εnum εden x : ℕ) : ℕ∞ :=
   Gates.encodeCost F k B εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
 

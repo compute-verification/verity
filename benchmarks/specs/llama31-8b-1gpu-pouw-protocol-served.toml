@@ -1,0 +1,59 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-1gpu-pouw-protocol-served"
+# Pearl-C's served overhead measured in one run: Pearl-C (`pouw:pearl-c-sm120-v1-h3`) and the batch-invariant eager
+# `stock-fp8` beside `stock-fp8@compiled`, stock FP8 as vLLM serves it (`llama31-8b-fp8-1gpu-compiled-full`), so
+# Pearl-C over the compiled engine is paired by rep under one host load instead of restated across two runs.
+#
+# Every arm shares the preset's engine settings: the 4,096-token step budget, max_num_seqs 128, max_model_len 8,384 and
+# the 8 GiB KV pin in both modes. What differs is each arm's own: `stock-fp8` loads FP8 and runs eager and batch
+# invariant (`bi-eager`, the eager rows' baseline); Pearl-C loads the BF16 checkpoint, quantizes it itself and runs eager
+# and batch invariant (PoUW refuses compiled execution); `stock-fp8@compiled` loads FP8 at vLLM's serving defaults
+# (torch.compile, its CUDA-graph mode and capture sizes, not batch invariant).
+#
+# No arm is another's token control: Pearl-C's y carries the epoch's live salt, and the compiled engine runs other
+# kernels than the eager one (its greedy tokens diverge within three, `llama31-8b-fp8-1gpu-compiled-full`). Each is timed on
+# its own gated tokens. Pearl-C isn't useful work (an FP8-accurate denoise by design): this row prices it; its tokens are
+# salt-dependent and their output quality is unmeasured.
+arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]
+sweep = "quick"
+reps = 3
+eager = true
+setup = "benchmarks/harness/setup/pearl_c.sh"
+
+[arm_settings."pouw:pearl-c-sm120-v1-h3"]
+precision = "bfloat16"
+control = "none"
+
+[arm_settings."pouw:pearl-c-sm120-v1-h3".protocols_config.pouw]
+device = "cuda"
+kernel = "benchmarks/pouw/pearl_c_sm120"
+cubin = "$PEARLC_CUBIN"
+schedule = "deferred"
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama31-8b-1gpu-pouw-protocol-served"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+case = "LLAMA31_8B"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.40
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 4096
+max_num_seqs = 128
+resident_kv_cache_memory_bytes = 8589934592
+block_kv_cache_memory_bytes = 8589934592
+
+[admission]
+max_minutes = 120

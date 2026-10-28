@@ -29,7 +29,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # watch's relay (infra/control) is tested here too, with research.slack.
 inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json",
           "infra/control/agent_watch_relay.py", "infra/control/agent_watch_timers.json", "infra/control/agent_watch_nodes.json",
-          "tools/research/src/research/slack.py",
+          "tools/research/src/research/slack.py", "tools/research/src/research/linear.py",
           "tools/research/src/research/notes_sync.py",
           "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",
           "tools/research/src/research/telemetry/scope.py",
@@ -41,5 +41,7 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/control_disk_alert.py",
           # its watchers supervisor, VM stops and top's loops, with their configs, and the dead-man's switch that reads its heartbeat
           "infra/control/watchers.py", "infra/control/watchers.toml", "infra/control/vm_stop.py", "infra/control/vm_stop.toml",
-          "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json"]
+          "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
+          # drive's loop, whose checkout per verb is tested here
+          "infra/control/drive.sh"]
 parallel = true

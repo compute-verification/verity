@@ -1,5 +1,5 @@
-"""`research run --on auto`'s placement: node 2's Verity share (the queue, `AUTO_NODE`) or a CPU node's pool (`SPILL`), wherever
-the job starts soonest.
+"""`research run --on auto`'s placement: a CPU node's pool (`SPILL`) first, node 2's Verity share (the queue, `AUTO_NODE`) only
+for a job no pool fits.
 
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line; on 19 Oct two runs held all 48
 from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 runs waited, the oldest since 17:42Z, a 4-CPU suite
@@ -8,15 +8,16 @@ from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 ru
 node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json`. `choose`
 then takes, in order:
 
-  - node 2, when its share has the job's CPUs free in whole cores and nobody waits;
   - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
-  - else the shorter wait, as waiters ahead per run that fits at once: node 2's share size // CPUs, a pool's fitting slots;
-    node 2 on a tie.
+  - else the pool with the shortest wait, as waiters ahead per fitting slot;
+  - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
+    24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
-be read is skipped, and with node 2 unread the job is queued there as before. A pool run waits up to an hour in its line
-(slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from taking the slot.
+be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
+run waits up to an hour in its line (slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from
+taking the slot.
 """
 from __future__ import annotations
 
@@ -28,12 +29,22 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: cpu-1's `research` pool is any lane's, on cores no check slot holds (8-53, infra
-#: 19 Oct; slot_only.POOLS). cpu-2's cores are the train slot's and proofs' (and held for circuits to 20 Oct 09:00Z), cpu-3's proofs'.
-SPILL = (("vy-nebius-cpu-1", "research"),)
+#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5 and 6 are any lane's (slot_only.POOLS
+#: on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other pools had 180 runs
+#: waiting; cpu-4's cores are the train slot's, proofs' and soundness's.
+SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
+#: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
+#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
+
+
+class Unplaceable(Exception):
+    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (26 Oct: node 2 stopped,
+    and an `--on auto` job too big for a pool slot was refused there with a stale admission window)."""
 
 PROBE = '''
 import json, os, sys, types
@@ -68,11 +79,25 @@ def doc(f):
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+def disk_short():
+    if not os.path.isdir(DISK):
+        return None
+    s = os.statvfs(DISK)
+    gb = s.f_bavail * s.f_frsize / 1e9
+    if s.f_files and s.f_favail < MIN_INODES:
+        return f"{DISK} has {s.f_favail} inodes free, under {MIN_INODES}"
+    if gb < MIN_GB:
+        return f"{DISK} has {gb:.0f} GB free, under {MIN_GB}"
+    return None
+
+
 out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
+short = disk_short()
 for pool, slots in POOLS.items():
-    out[pool] = doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
+    out[pool] = {"error": f"disk: {short}"} if short else \
+        doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
 print(json.dumps(out))
 '''
 
@@ -101,7 +126,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> byt
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -149,7 +174,8 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
-    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus and (s.get("mem") or 0) >= mem_gb]
+    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus
+           and (s.get("mem") is None or s["mem"] >= mem_gb)]  # slot.py raises a slot without mem= to what the run asks
     if not fit:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs and {mem_gb:g} GB")
     free = [s for s in fit if s.get("holder") is None and not s.get("blocked")]
@@ -160,17 +186,17 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
 
 
 def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
-    """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc)."""
+    """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc); `Unplaceable` when neither can
+    take it."""
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
     if not isinstance(share, dict) or "error" in share:
         why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
-        return None, f"{AUTO_NODE}'s share wasn't read ({why}), so the queue there as before"
-    said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
-            f"{share['waiters']} waiting")
-    if share.get("fits") and not share["waiters"]:
-        return None, f"{said}: it starts there now"
+        share, said = None, f"{AUTO_NODE}'s share wasn't read ({why})"
+    else:
+        said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
+                f"{share['waiters']} waiting")
     ranked, notes = [], [said]
     for i, (machine, pool) in enumerate(SPILL):
         doc = docs.get(machine)
@@ -184,7 +210,12 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
             return (machine, pool), "; ".join(notes) + ": a slot is free there now"
         ranked.append(((waiting + 1) / fit, i, (machine, pool)))
     if ranked:
-        (wait, _, target) = min(ranked)
-        if wait < (share["waiters"] + 1) / max(1, share["share"] // cpus):
-            return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
-    return None, "; ".join(notes) + f": the shortest line is {AUTO_NODE}'s"
+        (_, _, target) = min(ranked)
+        return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
+    if share is None:
+        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} can't be reached, so nothing would run it. "
+                          f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
+                          f"it (`research pods list`), or shrink --cpus/--mem-gb to a pool slot's")
+    if share.get("fits") and not share["waiters"]:
+        return None, "; ".join(notes) + f": no pool fits, and it starts on {AUTO_NODE} now"
+    return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"

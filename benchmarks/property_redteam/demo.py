@@ -38,7 +38,7 @@ from verity.core.protocols.remote_bandwidth import codec as C
 M32 = (1 << 32) - 1
 
 # The stacking-budget classifier's sets (cursor/stack-property-6cd3 4268176afa, count_budgets.py lines 41-50).  Its
-# headline per-byte budget c is cast + act (note:20261017T0814Z-report-stacking-property).  "free(widen)" is dropped
+# headline per-byte budget c is cast + act.  "free(widen)" is dropped
 # entirely (a pass); "int" and "unknown" are counted in the census but are not in c.
 CLASSES = {
     "cast": {"F2fpBf16", "F32ToBf16Rn", "F32ToE4m3Sat", "F32ToE2m1Sat"},
@@ -67,8 +67,8 @@ def classify(pid: str) -> str:
 def load_registry() -> dict[str, PrimitiveDefinition]:
     import verity.ml.circuits.ops as ops
     import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
-    import verity_vllm.program.registry as reg
-    for pkg, prefix in ((ops, "verity.ml.circuits.ops."), (reg, "verity_vllm.program.registry.")):
+    import verity.ml.definitions.registry as reg
+    for pkg, prefix in ((ops, "verity.ml.circuits.ops."), (reg, "verity.ml.definitions.registry.")):
         for m in pkgutil.walk_packages(pkg.__path__, prefix):
             if ".tests" in m.name or "quarantine" in m.name or "circuit-check" in m.name:
                 continue
@@ -220,7 +220,7 @@ def section_floors(prims: dict[str, PrimitiveDefinition]) -> dict:
     # A runtime-indexed gather over constant words is a lookup table: it realizes any function of the index.  Here a
     # 128-entry f32 column holds (i^2 + 7i) mod 251, and the gather returns its entry exactly: a data-dependent
     # nonlinearity property/v1 does not budget (the census counts gathers and fan-in, the budget does not read them).
-    from verity_vllm.program.registry.ref_prims import gather_f32
+    from verity.ml.definitions.registry.ref_prims import gather_f32
     table = [f32(float((i * i + 7 * i) % 251)) for i in range(128)]   # an arbitrary nonlinear table of the 7-bit index
     g = gather_f32(128)
     idx = 100
@@ -309,7 +309,7 @@ def _jacobi(a: int, n: int) -> int:
 
 # ---- the codec's encode from exact products and unbudgeted primitives ---------------------------------------------------
 
-#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which run r20261015-084000-06d8 also reproduced bit for bit
+#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which the validating run also reproduced bit for bit
 #: (`verity.ml.circuits.silicon.integer`'s docstring); its column sums here are at most 128 * 255^2 < 2^23, so every
 #: chain is in range from C = 0 and passes a static operand-range and reduction-length check.
 IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="u8", operand_bits=8,

@@ -58,4 +58,10 @@ theorem zk_verifyWithM_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : F
   unfold Zk.verifyWithM
   sim_walk [decodeWith_sim S hh, dgWith_sim S hh, zk_verifyRepWith_sim S hh]
 
+theorem zk_verifyJWithM_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
+    (hh : S.Hashes hs hs') (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json) (proofs : Array ByteArray) :
+    S.R (Zk.verifyJWithM hs spec tabs j proofs) (Zk.verifyJWithM hs' spec tabs j proofs) := by
+  unfold Zk.verifyJWithM
+  sim_walk [decodeJWith_sim S hh, dgWith_sim S hh, zk_verifyRepWith_sim S hh]
+
 end Flock.With

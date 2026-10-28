@@ -1,7 +1,7 @@
-"""Live C2 -- value correspondence by ORACLE COMPARE (COORD R15 ruling M-0111 (2), lane manbind).
+"""Live C2 -- value correspondence by ORACLE COMPARE.
 
-The Commit's C1 (coverage) and C3 (openings) cannot see a relabel, a same-name byte swap or a late read (rev-cb F-cb-02/03/04:
-every one of them got COMMIT PASS on rc3 with coverage 12943/12943 and 79/79 openings verified).  C2 asks: are the COMMITTED bytes of
+The Commit's C1 (coverage) and C3 (openings) cannot see a relabel, a same-name byte swap or a late read (every
+one of them got COMMIT PASS with coverage 12943/12943 and 79/79 openings verified).  C2 asks: are the COMMITTED bytes of
 each identity the value the Program produced for that identity?  The reference here is the Match stage of the SAME attempt: the m1
 capture (`verity_vllm.pipeline.m1_capture`, a separate process and a separate acquisition path -- torch dispatcher observer + D2H
 snapshots -- sharing nothing with the native collector) recorded, for every snapshotted engine step, the bytes of every dispatcher
@@ -24,7 +24,7 @@ from the record -- the collector's own bytes never enter the expected side.
 
 Result: `result` is False on ANY mismatch (the verdict fails closed naming the identity), True when every comparable identity of every
 snapshotted step was compared equal AND every step was snapshotted (complete live C2), else None with the coverage stated (partial:
-the finalizer grades C2 'not checked' / partial, COORD M-0111 (1)).  Provenance of the oracle (Match dir, capture created_utc,
+the finalizer grades C2 'not checked' / partial).  Provenance of the oracle (Match dir, capture created_utc,
 profile id, fold digest, snapshot steps, tokens.json sha256) is recorded so a reviewer can tell the reference is this attempt's Match.
 """
 from __future__ import annotations
@@ -65,21 +65,21 @@ def _contiguous(shape, strides) -> bool:
 
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
-    """[rev F-r16-24] the facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
-    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest)."""
+    """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
+    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
+    and a log that is there but can't be read is None with `run_header_unreadable` saying why."""
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
         out[key] = hashlib.sha256(open(pth, "rb").read()).hexdigest() if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
-    hdr = None
+    out["run_header_sha256"] = None
     if os.path.exists(lg):
         try:
             with gzip.open(lg, "rb") as f:
-                hdr = hashlib.sha256(f.readline()).hexdigest()
-        except OSError:
-            hdr = None
-    out["run_header_sha256"] = hdr
+                out["run_header_sha256"] = hashlib.sha256(f.readline()).hexdigest()
+        except (OSError, EOFError) as e:
+            out["run_header_unreadable"] = f"unreadable: capture/log.jsonl.gz ({type(e).__name__}: {e})"[:240]
     return out
 
 
@@ -150,7 +150,7 @@ class MatchOracle:
                         self.header = {"created_utc": r.get("created_utc"), "profile_id": r.get("profile_id"), "schema": r.get("schema"),
                                        "vllm": (r.get("profile") or {}).get("vllm", {}).get("version") if isinstance(r.get("profile"), dict) else None}
         self._files: dict[str, bytes] = {}
-        # [R19 int-20 / oracle-key] per step, every instance's OUTPUT views by storage (alloc -> [(byte lo, byte hi, instance)]), built on
+        # per step, every instance's OUTPUT views by storage (alloc -> [(byte lo, byte hi, instance)]), built on
         # demand for the promoted members' dataflow resolution (`_promoted_instances`); a small cache, the compare walks the map by step
         self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
         self._families_at: dict[tuple[int, str], frozenset[str]] = {}
@@ -165,7 +165,7 @@ class MatchOracle:
 
     # ------------------------------------------------------------------ provenance
     def provenance(self) -> dict[str, Any]:
-        # [R16 rev F-r16-24 / M-0586] `tie`: file digests of the Match record this oracle READ (fold_summary.json, instances.jsonl, the
+        # `tie`: file digests of the Match record this oracle READ (fold_summary.json, instances.jsonl, the
         # RunHeader line of capture/log.jsonl.gz) so the finalizer / a reviewer ties the oracle to the Match stage OF RECORD by fact, without
         # reading the fold: the same attempt's match/ (or the chain-reuse Match dir) must carry equal digests, else the oracle is another Match
         return {"match_dir": self.dir, "capture_created_utc": self.header.get("created_utc"), "capture_profile_id": self.header.get("profile_id"),
@@ -173,7 +173,7 @@ class MatchOracle:
                 "tokens_sha256": self.tokens_sha256, "requests": dict(self.requests), "tie": oracle_tie_facts(self.dir)}
 
 
-    # ------------------------------------------------------------------ workload identity [rev-cb M-0301 R3]
+    # ------------------------------------------------------------------ workload identity
     def workload_check(self, workload: dict[str, Any] | None) -> dict[str, Any]:
         """Is this Match record THIS workload's?  Compared BY NAME before any value compare: the run's declared requests (workload uuid ->
         r<index>, prompt_len, max_tokens) against the fold header's request table and tokens.json (prompt ids per request; generated <= cap).
@@ -279,15 +279,15 @@ class MatchOracle:
         return idx
 
     def _promoted_instances(self, step: int, producer: dict[str, Any], request_uuid: str | None) -> tuple[list[dict] | None, str | None]:
-        """[R19 int-20, F-r19-int-20; oracle-key] The fold instances that PRODUCE a promoted member, resolved through the Program's own
+        """The fold instances that PRODUCE a promoted member, resolved through the Program's own
         dataflow rather than the hint's module prefix.
 
         A promoted manifest row names an INTERIOR Program row whose output another module reads: identity (producer module, `out`), with
         `spec` = the producing family and `consumers` = the reading modules in Program order.  The fold hints such an instance by the
         vLLM module path the value was OBSERVED under (the producing Call's own path -- for the final norm's narrowing that is `<module>.norm`,
         for the embedding scale it is the scale's site), which is not the Program row's module: `_inst[(step, op_path)]` finds nothing, and
-        row #57's 432 `model`/`out` identities were "no fold instance of this op at this step" over a Match that snapshotted every step
-        (leg 3, r20260923-091414-451a).  Same Value, two names -- an Occurrence-resolution question, answered here by the Value itself:
+        row #57's 432 `model`/`out` identities were "no fold instance of this op at this step" over a Match that snapshotted every step.
+        Same Value, two names -- an Occurrence-resolution question, answered here by the Value itself:
         the instance whose OUTPUT storage range contains an OPERAND view of a consumer module's instance at this step, of the producer's
         family.  The first consumer in Program order that resolves wins (the collector observes the promoted value at exactly that
         consumer's input, PROMOTED_OBSERVATION_RULE); no consumer resolving = (None, why) -- not compared, named, never complete.
@@ -342,7 +342,7 @@ class MatchOracle:
         AddScalar / Square / Mean / Rsqrt / ScaleRow / Narrow ... all hinted `model.layers.N.input_layernorm`) is read at the producer's
         instances only; when the producer family occurs k > 1 times per row (the fused norm's two NarrowF32ToBf16: residual, normed) the
         manifest must say which by `ordinal` (index in Program/fold order per row), else the member is 'ambiguous producer' -- partial,
-        never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible).
+        never guessed from which candidate happens to equal the committed bytes (that would hide a swapped residual / normed pair).
 
         An `interior` producer (a `call_boundaries` row, op path `<module>/<fx node>`) is read at its module's instances of the producer
         family.  When every row's group holds the same k > 1 producer instances and their member views together are the identity's
@@ -360,7 +360,7 @@ class MatchOracle:
         promoted = bool((producer or {}).get("promoted")) or (bool((producer or {}).get("consumers"))
                                                               and not self._names_producer(step, op_path, producer))
         if promoted:
-            # [R19 int-20 / oracle-key] a promoted member is the output of an interior Program row: its fold instance sits under the
+            # a promoted member is the output of an interior Program row: its fold instance sits under the
             # producing Call's path, not the identity's module -- resolved through the Value (consumer operand -> producer output), see
             # `_promoted_instances`; the hint-prefix key below is never consulted for it
             insts, why = self._promoted_instances(step, producer or {}, uuid)
@@ -385,7 +385,7 @@ class MatchOracle:
             if not by_spec:
                 seen = sorted({str(m.get("spec") or "").split("{", 1)[0] for m in insts})
                 return None, f"no fold instance of producer {spec} under {op_path} at this step (fold has {seen[:6]})", 0
-            # per row (position): k producer instances -> ONE is picked.  [rev-pm M-0402 / dense M-0458] preferred selector = the manifest's
+            # per row (position): k producer instances -> ONE is picked.  Preferred selector = the manifest's
             # `producer_operand`: the family of the instance whose OUTPUT the producer consumes (its first operand view), resolved by
             # storage identity (alloc, offset) among the module's own instances at this step -- independent of emission order, which a
             # dag-criterion fold may permute for two independent producers.  Fallback = `producer_ordinal` in EVENT order (the manifest
@@ -433,7 +433,7 @@ class MatchOracle:
         # ORDER = the request's rows in the packed member = token POSITION order (a request's tokens are contiguous and increasing in the
         # engine's row order), tie-broken by the view's storage offset.  NOT the fold's `row`: for attention instances `row` is the sequence's
         # index inside the varlen launch (and not even constant over a 256-token prefill: rows {0,1} for one request) -- sorting by it
-        # permuted r0's 256 attention rows and reported a false C2 mismatch (B2 run 2026-09-19 19:xxZ, 16 identities, all *.self_attn.attn).
+        # permuted r0's 256 attention rows and reported a false C2 mismatch (at B2: 16 identities, all *.self_attn.attn).
         def _order(m: dict) -> tuple[int, int]:
             pos = m.get("position")
             first = m["output_views"][0] if m.get("output_views") else (m["operand_views"][0] if m.get("operand_views") else {})
@@ -534,7 +534,7 @@ def _family_of(entry: dict) -> str:
 
 
 def _query_family_of(entry: dict) -> str:
-    """[revb n-2.14-1] the Q(P) family (required-manifest vocabulary) a binding-map entry belongs to -- `fa2.m1/` -> fa2_hidden_m1_stream,
+    """The Q(P) family (required-manifest vocabulary) a binding-map entry belongs to -- `fa2.m1/` -> fa2_hidden_m1_stream,
     `fa3.m1/` -> fa3_hidden_m1_stream, `moe/` -> moe_block_stream, registered inputs -> weights; the oracle's own coarse classes
     (`_family_of`: weights / hidden_stream / ids / instance_outputs) stay what the verdict reads, this is the label the POPULATION uses."""
     ident = entry["identity"]
@@ -557,11 +557,17 @@ def query_families_of(manifest: dict[str, Any] | None) -> dict[str, int] | None:
     return dict(Counter(str(r.get("family")) for r in manifest["identities"]))
 
 
+def runtime_rows_of(manifest: dict[str, Any] | None) -> dict[tuple, tuple[int, int]]:
+    """(step, request, op_path, member, invocation) -> (r0, rows) of each identity whose Values are the runtime's rows r0.. (`runtime_rows`)."""
+    return {(int(r["step"]), str(r["request_id"]), str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))):
+            (int(r["runtime_rows"][0]), int(r["runtime_rows"][1]) - int(r["runtime_rows"][0])) for r in (manifest or {}).get("identities") or () if r.get("runtime_rows")}
+
+
 def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
     """(op_path, output_member) -> {"spec": producer family base, "ordinal": producer_ordinal | None, "operand": producer_operand | None}
     from the required manifest's rows (`spec` is the Program op family that produces the member; `producer_ordinal` the optional index
-    among same-family producers per row; `producer_operand` [M-0458] the family whose output the producer consumes -- the order-free selector).
-    A PROMOTED row [R19 int-20] additionally carries `promoted: True` and `consumers` (the reading modules, Program order, unioned over the
+    among same-family producers per row; `producer_operand` the family whose output the producer consumes -- the order-free selector).
+    A PROMOTED row additionally carries `promoted: True` and `consumers` (the reading modules, Program order, unioned over the
     member's rows): the oracle resolves it through the Value's dataflow, not the hint prefix (MatchOracle._promoted_instances)."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
     consumers: dict[tuple[str, str], list[str]] = {}
@@ -570,7 +576,7 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
         cur = out.get(key)
-        # [R19 int-20 / oracle-key] a PROMOTED row (`promoted: true`, `consumers` = the reading modules, Program order) is resolved by the
+        # a PROMOTED row (`promoted: true`, `consumers` = the reading modules, Program order) is resolved by the
         # oracle through the Value's dataflow (MatchOracle._promoted_instances); `promoted` is part of the producer's identity here (a
         # promoted and a vocabulary row on one member is a conflict), the consumer lists of the rows are unioned in first-seen order
         ent = {"spec": str(r["spec"]).split("{", 1)[0], "ordinal": r.get("producer_ordinal"), "operand": r.get("producer_operand")}
@@ -700,7 +706,7 @@ def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str
     (`required.under`), so it is no return of that module.  Such a row gets `promoted: true` + those `consumers` (Program order) and the
     acquisition observes it at its first consumer's input (`manifest_format.PROMOTED_OBSERVATION_RULE`) instead of hooking the module's
     forward output: row #57's `model/out` is Gemma2's embed scale (the model body's `hidden *= normalizer`, read by `model.layers.0`)
-    while `Gemma2Model` returns the final norm's output -- the two differ from element 0 (Commit r20260924-061950-2148, form (B): 432
+    while `Gemma2Model` returns the final norm's output -- the two differ from element 0 (form (B): 432
     mismatches, 159,408 equal).  A v2 manifest carries no `promoted` flag (`required`: such a Value simply crosses the body boundary).
     Only rows whose family the Programs agree on (`spec` equal to the row's, no conflict) and that are not already promoted; a member
     read by any module outside the subtree is a return and stays a module output.  Returns {"members": {"op/member": consumers}, "rows": n}."""
@@ -751,20 +757,22 @@ def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, s
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
-                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset()) -> dict[str, Any]:
+                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset(),
+                   runtime_rows: dict[tuple, tuple[int, int]] | None = None) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
     bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
     `OpeningNotVerified` makes the entry a mismatch.  `own` names what the run's sources committed that no module produced (their
-    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `producers` (producers_of(manifest))
+    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `runtime_rows`
+    (`runtime_rows_of(manifest)`): an identity that is the runtime's rows r0.. is compared with the fold's rows from r0.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
-    nothing compared [rev-cb M-0301 R3].
+    nothing compared.
 
-    [reqval F-moe-r17-06, the ORACLE side] a shared module's invocation k >= 1 (the binding map's `invocation`) is a Program op of its own:
+    On the ORACLE side, a shared module's invocation k >= 1 (the binding map's `invocation`) is a Program op of its own:
     the fold's instances are under the per-layer Program paths, so the oracle is read at the path the manifest's `op_path_aliases`
     (`aliases`, the table the replay resolves through) gives for (canonical op, k) -- `model.layers.k.self_attn.rotary_emb`.  Before this,
-    every invocation was read at the CANONICAL op (= layer 0's fold instance) while the committed side (moe 24df89c50) reads invocation k's
-    own bytes: layers 1..N would compare as FALSE MISMATCHES (and before 24df89c50 they compared EQUAL vacuously, layer 0 against layer 0).
+    every invocation was read at the CANONICAL op (= layer 0's fold instance) while the committed side reads invocation k's
+    own bytes: layers 1..N would compare as FALSE MISMATCHES (and before the reader was fixed they compared EQUAL vacuously, layer 0 against layer 0).
     Without the table, invocation k >= 1 is NOT COMPARED, by name (partial) -- never equal by collapse, never a mismatch by mis-addressing."""
     inv_alias = {(str(v[0]), int(v[1])): str(k) for k, v in (aliases or {}).items()}       # (canonical op, invocation) -> Program op_path
     wcheck = oracle.workload_check(workload)
@@ -775,26 +783,26 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     not_cmp: Counter = Counter()
     not_cmp_fam: Counter = Counter()
     by_fam_cmp: Counter = Counter()
-    not_cmp_qfam: Counter = Counter()                  # [revb n-2.14-1] no-oracle entries per Q(P) family (fa2_hidden_m1_stream / moe_block_stream / weights)
-    shared_inv: Counter = Counter()                    # [revb F-r17b-33] invocations >= 1 of a shared name: compared at their Program op / not compared
+    not_cmp_qfam: Counter = Counter()                  # no-oracle entries per Q(P) family (fa2_hidden_m1_stream / moe_block_stream / weights)
+    shared_inv: Counter = Counter()                    # invocations >= 1 of a shared name: compared at their Program op / not compared
     steps_cmp: set[int] = set()
     steps_seen: set[int] = set()
     seen: set[tuple] = set()
-    # [rev-cb F-cb-23 / M-0216] REQUEST ATTRIBUTION: per (step, request) the two per-request id families the ids oracle covers at EVERY
+    # REQUEST ATTRIBUTION: per (step, request) the two per-request id families the ids oracle covers at EVERY
     # step (tokens.json + StepStart rows; SampleEnd) -- a relabel of equal-row-count requests on one engine step (b2swapeq) moves r0's
     # rows to r1's slots: the bound `in` row / sampled id of r0 then carries r1's token, which THIS request's oracle value refutes.
     attrib: dict[tuple[int, str], dict[str, Any]] = {}
     pairs_seen: set[tuple[int, str]] = set()
-    padding_not_cmp: Counter = Counter()               # [pad B9.1 rev.6 (d)] bot-by-enablement entries per Q(P) family: no execution, no oracle value
+    padding_not_cmp: Counter = Counter()               # bot-by-enablement entries per Q(P) family: no execution, no oracle value
     padding_pairs: set[tuple[int, str]] = set()
-    name_inv = same_name_invocations(bmap)                                       # [moe F-moe-r17-06] (step, member name) -> invocations bound
+    name_inv = same_name_invocations(bmap)                                       # (step, member name) -> invocations bound
     for e in bmap.get("entries") or []:
         ident = e.get("identity") or {}
         step = int(ident.get("step", -1))
         if step < 0:
             continue
         if e.get("activity") == "bot-by-enablement":
-            # [pad B9.1 rev.6 (d); revb M-1482 (iv)] a PADDING entry (a padded record's inactive stratum, LIFTING-SPEC v0.7 B9.1) materializes an
+            # a PADDING entry (a padded record's inactive stratum, LIFTING-SPEC v0.7 B9.1) materializes an
             # identity the executed prefix of record left INACTIVE: nothing executed, so the Match oracle holds no value for it and its
             # (step, request) pair is not one request attribution can or must verify -- its word is checked against bot_word by the
             # inactive-stratum check (`padded_population`), not here.  Counted apart, per Q(P) family, never as 'identity without a byte
@@ -807,7 +815,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         if fam in ("weights", "hidden_stream"):
             not_cmp["no oracle family: " + fam] += 1
             not_cmp_fam[fam] += 1
-            not_cmp_qfam[_query_family_of(e)] += 1                   # [revb n-2.14-1] per Q(P) family, in binding entries (identities below)
+            not_cmp_qfam[_query_family_of(e)] += 1                   # per Q(P) family, in binding entries (identities below)
             continue
         rid = str(ident.get("request_id", "r0"))
         key = (step, rid, ident.get("op_path"), ident.get("output_member"), ident.get("invocation"), tuple(ident.get("element_range") or ()))
@@ -827,7 +835,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         eo = int(e.get("element_offset") or 0)
         blo, bhi = (eo + int(lo)) * isz, (eo + int(hi)) * isz
         try:
-            got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)   # [moe F-moe-r17-06] exact invocation
+            got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)   # exact invocation
         except OpeningNotVerified as exc:
             compared += 1
             by_fam_cmp[fam] += 1
@@ -838,13 +846,13 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             not_cmp["committed bytes not retained on host (retain=none, or an excluded family under retain=host + exclude)"] += 1
             not_cmp_fam[fam] += 1
             continue
-        # [reqval F-moe-r17-06] the Program op of THIS invocation: 0 = the op_path itself; k >= 1 = the alias table's path, else not compared
+        # the Program op of THIS invocation: 0 = the op_path itself; k >= 1 = the alias table's path, else not compared
         inv_k = int(ident.get("invocation") or 0)
         op_k = str(ident.get("op_path"))
         if inv_k > 0:
             op_k = inv_alias.get((op_k, inv_k))
             if op_k is None:
-                not_cmp[f"shared-module invocation >= 1 with no Program path in the alias table (op {ident.get('op_path')}): not compared (F-moe-r17-06)"] += 1
+                not_cmp[f"shared-module invocation >= 1 with no Program path in the alias table (op {ident.get('op_path')}): not compared"] += 1
                 not_cmp_fam[fam] += 1
                 shared_inv["not_compared"] += 1
                 continue
@@ -878,6 +886,8 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             not_cmp[why] += 1
             not_cmp_fam[fam] += 1
             continue
+        r0, n = (runtime_rows or {}).get((step, rid, str(ident.get("op_path")), str(ident.get("output_member")), inv_k), (0, 0))
+        ob = ob[r0 * (len(got) // n):(r0 + n) * (len(got) // n)] if n and len(got) % n == 0 and len(ob) >= (r0 + n) * (len(got) // n) else ob
         compared += 1
         by_fam_cmp[fam] += 1
         steps_cmp.add(step)
@@ -915,12 +925,12 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
                + "; ".join(f"{k} x{v}" for k, v in not_cmp.items() if not k.startswith("no oracle family")))
     return {"schema": SCHEMA, "method": METHOD, "result": result, "why": why, "grade": grade, "compared": compared, "equal": equal, "mismatch_n": len(mism), "mismatch": mism[:max_report],
             "compared_by_family": dict(by_fam_cmp), "not_compared": dict(not_cmp), "not_compared_by_family": dict(not_cmp_fam),
-            # [revb n-2.14-1] the no-oracle families said PER Q(P) FAMILY and IN IDENTITIES (the manifest's rule), with the binding-entry count
+            # the no-oracle families said PER Q(P) FAMILY and IN IDENTITIES (the manifest's rule), with the binding-entry count
             # beside it -- `hidden_stream` is the oracle's class, not a Q(P) family, and entries are not identities (an M1 stream identity is
             # one per (layer, engine step); its entries are per member)
             "not_compared_by_query_family": {qf: {"identities": (int(query_families[qf]) if isinstance(query_families, dict) and qf in query_families else None),
                                                   "binding_entries": int(n),
-                                                  # [revb n-legb-1, M-1580] on a PADDED record the manifest count is the FULL cap (executed + inactive); the
+                                                  # on a PADDED record the manifest count is the FULL cap (executed + inactive); the
                                                   # live (executed) identities are the manifest's minus the padding entries stated apart in `padding` for
                                                   # this family (a per-request stream identity is one entry; a shared plane's cells are per member)
                                                   **({"identities_basis": "required manifest at full cap (executed + inactive by enablement)",
@@ -931,15 +941,15 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
                                                           if qf.endswith("_stream") else "no oracle family: registered input (pinned, not a Match value)")}
                                              for qf, n in sorted(not_cmp_qfam.items())},
             "not_compared_identities_source": ("required manifest rows" if isinstance(query_families, dict) else "no manifest supplied: identities not stated (entries only)"),
-            # [F-moe-r17-06 / revb F-r17b-33] the corrected reach: invocations >= 1 of shared names compared at THEIR op (pre-fix: layer 0 vs layer 0)
+            # the corrected reach: invocations >= 1 of shared names compared at THEIR op (pre-fix: layer 0 vs layer 0)
             "shared_invocations": {"compared_at_program_op": int(shared_inv["compared_at_program_op"]), "not_compared": int(shared_inv["not_compared"]),
                                    "note": "pre-fix records compared these entries as the first tensor's bytes vs the canonical op's oracle value (vacuous equal)"},
-            # [pad B9.1 rev.6 (d)] the padded record's inactive stratum, stated apart: not compared (no execution), not attribution pairs
+            # the padded record's inactive stratum, stated apart: not compared (no execution), not attribution pairs
             **({"padding": {"entries_not_compared": int(sum(padding_not_cmp.values())), "by_query_family": dict(sorted(padding_not_cmp.items())),
                             "pairs": len(padding_pairs), "steps": sorted({s for s, _ in padding_pairs}),
-                            "pair_list": [[s, r] for s, r in sorted(padding_pairs)],          # [revb C3, M-1495] the pairs themselves, for the cross-document check
+                            "pair_list": [[s, r] for s, r in sorted(padding_pairs)],          # the pairs themselves, for the cross-document check
                             "rule": "bot-by-enablement entries materialize identities the executed prefix left inactive: no oracle value exists; "
-                                    "their words are checked == bot_word by the inactive-stratum check, not by the oracle (LIFTING-SPEC v0.7 B9.1)"}}
+                                    "their words are checked == bot_word by the inactive-stratum check, not by the oracle"}}
                if padding_not_cmp else {}),
             "steps_compared": sorted(steps_cmp), "steps_not_snapshotted": steps_not_snap, "complete": complete,
             "attribution": {"complete": attribution_complete, "pairs": len(pairs_seen), "unverified": attrib_missing[:max_report], "unverified_n": len(attrib_missing),

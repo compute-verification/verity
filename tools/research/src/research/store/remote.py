@@ -117,6 +117,14 @@ class FsRemote:
         p = self._p(key)
         return {"bytes": p.stat().st_size, "etag": md5_file(p)} if p.is_file() else None
 
+    def delete(self, key: str) -> bool:
+        """`S3Remote.delete`'s double: remove `key` (True) or find it absent (False)."""
+        try:
+            self._p(key).unlink()
+            return True
+        except FileNotFoundError:
+            return False
+
     def list_meta(self, prefix: str, progress: Callable[[int], None] | None = None, keep: Callable[[str], bool] | None = None) -> dict[str, tuple]:
         """`{key: (bytes, etag)}` under `prefix` that `keep` accepts (the S3 listing's shape; etag = MD5 hex)."""
         out = {k: (self._p(k).stat().st_size, md5_file(self._p(k))) for k in self.list(prefix) if keep is None or keep(k)}

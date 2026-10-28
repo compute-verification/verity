@@ -1303,8 +1303,8 @@ theorem auditTiling_cols_lt (tm tn : ℕ) (L : Layout) (g : ℕ) :
     ∀ j ∈ (auditTiling tm tn L).cols g, j < (L.shape ((auditTiling tm tn L).unit g)).n := fun _ hj =>
   lt_of_lt_of_le (Finset.mem_Ico.1 hj).2 (min_le_right _ _)
 
-/-- `D_dev`'s `k` is whole-tile for `pc8`, a positive multiple of 128. Its `m` and `n` are free, so `Shape8` also needs
-the tile at the unit's shape to divide it. -/
+/-- `D_dev`'s `k` is whole-tile for `pc8`, a positive multiple of 128. Its `m` is free and its `n` only a multiple of 64,
+so `Shape8` also needs the tile at the unit's shape to divide it. -/
 theorem shape8_of_pearlCDomainDev {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N)
     (hm : tileSide (L.shape u).m ∣ (L.shape u).m) (hn : tileSide (L.shape u).n ∣ (L.shape u).n) :
     Shape8 (L.shape u) := by

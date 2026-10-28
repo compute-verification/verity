@@ -112,7 +112,7 @@ def test_a_ranks_loaded_weights_are_the_checkpoints_words_by_vllms_load_rules(ds
 
 
 def test_the_e8m0_upcast_is_vllms_shift_and_the_streams_order_shows_in_the_broadcast(dsv4):
-    from verity_vllm.program.kernels.deepgemm_twins import upcast_e8m0
+    from verity.ml.definitions.numerics.deepgemm_twins import upcast_e8m0
     assert upcast_e8m0(np.array([0, 1, 127, 128, 254, 255], np.uint8)).tolist() == [0, 1 << 23, 0x3F800000, 0x40000000, 0x7F000000, 0x7F800000]
     fn = dsv4["t"]["layers.0.hc_attn_fn"][1].reshape(M, 4, H)
     pairwise = ((fn[:, 0] + fn[:, 1]) + (fn[:, 2] + fn[:, 3])).view(np.uint32)

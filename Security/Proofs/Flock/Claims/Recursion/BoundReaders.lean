@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.BoundBridge
+import Proofs.Flock.Claims.Recursion.VCallsAt
 
 /-!
 # `KSBoundRoute` without `ReadersRunPlayed` (option (d))
@@ -6,16 +7,18 @@ import Proofs.Flock.Claims.Recursion.BoundBridge
 `KSBoundRoute` takes three facts about V*'s readers at the bound layout: `ReadersTrue`, `ReadersLogColl` and
 `ReadersRunPlayed`. The route reads `ReadersRunPlayed` only on accepted runs whose `E_O` gives witnesses, at the rounds
 before the last, and there it follows from the part facts the route already takes, at one fact about the layout
-(`LayoutB.WholeBeforeLast`: only the last round is assembled from pieces):
+(`LayoutB.HeldWhole`: a round some part holds whole has no pieces):
 
 * a round the statement fixes is the statement's message (`LayoutB.pick`), the same at every run;
-* every other round before the last is held whole by some part (`VStarB.HeldB`), and the readers take the first
-  holder's message, which is the commit string its statement shows (`VStarB.PartOpensB`), the run's (`StagedRuns`); or
-  two of that part's recorded calls collide (`RecDeploy.readers_run`).
+* a round held whole by some part (`VStarB.HeldB`) is read as the first holder holds it, the commit string its statement
+  shows (`VStarB.PartOpensB`), the run's (`StagedRuns`);
+* a round assembled from pieces is read as the pieces' bytes, each sitting at its offset in the commit string its
+  part's statement shows (`PartOpensB` again), so the readers' message is the run's first bytes the pieces span;
+* or two of one part's recorded calls collide (`RecDeploy.readers_run`).
 
 `ReadersRunPlayed` itself asks more: at every staged message list in the outer relation, run or not, and at fixed rounds
 too, where the readers' message is the statement's and not the run's. So it is not what the route needs, and the route
-version here drops it (`RecDeploy.ksBoundRoute_wholeBeforeLast`), with `ksBoundRoute`'s statement unchanged. The forks
+version here drops it (`RecDeploy.ksBoundRoute_heldWhole`), with `ksBoundRoute`'s statement unchanged. The forks
 bind as before (`RecDeploy.forksBind_nf_pick`): two forks agree on the run's messages before the fork, so on `pick` of
 them.
 
@@ -36,9 +39,63 @@ by construction where the layout gives pieces only at the last round). -/
 def LayoutB.WholeBeforeLast (L : LayoutB) : Prop :=
   ∀ x i, i + 1 < L.rounds x → L.pieceAt x i = []
 
-/-- **The readers' message at a round, given the run's**: the statement's where it fixes the round, else the run's. -/
+/-- **A round some part holds whole has no pieces**, before the last (a fact about the layout). -/
+def LayoutB.HeldWhole (L : LayoutB) : Prop :=
+  ∀ x s i, i + 1 < L.rounds x → (L.msgAt x s i).isSome → L.pieceAt x i = []
+
+theorem LayoutB.WholeBeforeLast.heldWhole {L : LayoutB} (h : L.WholeBeforeLast) : L.HeldWhole :=
+  fun x _ i hi _ => h x i hi
+
+/-- **The readers' message at a round, given the run's**: the statement's where it fixes the round; where the round is
+assembled from pieces, the run's first bytes the pieces span; else the run's. -/
 def LayoutB.pick (L : LayoutB) (x : Msg) (i : ℕ) (m : Msg) : Msg :=
-  (L.fixedAt x i).getD m
+  (L.fixedAt x i).getD (if (L.pieceAt x i).isEmpty then m else m.take (L.piecesLen x i))
+
+/-- `CmtAgrees` where the readers' message at each round it asks about is `pick` of the commit string. -/
+theorem LayoutB.cmtAgrees_of_pick {L : LayoutB} {cmt : Msg → ℕ → Msg → Msg} {x xO : Msg} {ms : List Msg}
+    (h : ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → ms.getD i [] = L.pick x i (cmt x i xO)) :
+    L.CmtAgrees cmt x xO ms := by
+  intro i hi hf
+  rw [h i hi hf]
+  unfold LayoutB.pick
+  rw [hf, Option.getD_none]
+  refine ⟨fun hp => by simp [hp], ?_⟩
+  by_cases hp : L.pieceAt x i = []
+  · simp [hp]
+  · have hne : (L.pieceAt x i).isEmpty = false := by simpa using hp
+    simp only [hne, Bool.false_eq_true, ↓reduceIte, List.take_take, Nat.min_self]
+
+theorem flatMap_take_of_slices {α β : Type} (len : α → ℕ) (g : α → List β) (M : List β) :
+    ∀ (l : List α) (o : ℕ), (∀ a ∈ l, (g a).length = len a) →
+      (∀ pre a post, l = pre ++ a :: post → ((M.drop (o + (pre.map len).sum)).take (len a)) = g a) →
+        l.flatMap g = (M.drop o).take (l.map len).sum
+  | [], _, _, _ => by simp
+  | a :: l, o, hg, hM => by
+    have h0 := hM [] a l rfl
+    have ih := flatMap_take_of_slices len g M l (o + len a) (fun b hb => hg b (List.mem_cons_of_mem _ hb))
+      fun pre b post h => by
+        have := hM (a :: pre) b post (by rw [h]; rfl)
+        simpa [Nat.add_assoc] using this
+    simp only [List.map_nil, List.sum_nil, Nat.add_zero] at h0
+    rw [List.flatMap_cons, List.map_cons, List.sum_cons, List.take_add, ih, h0, List.drop_drop]
+
+/-- **A round assembled from pieces that each sit in `M` at their offsets is `M`'s first bytes they span**, where every
+piece's part has a witness. -/
+theorem LayoutB.assembled_eq_take {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {i : ℕ} {M : Msg}
+    (hp : ∀ p ∈ L.pieceAt x i, p.1 < ws.length)
+    (hM : ∀ pre p post, L.pieceAt x i = pre ++ p :: post → ∀ hs : p.1 < ws.length,
+      (M.drop (pre.map fun q => pieceLen q.2).sum).take (pieceLen p.2) = readSegs ws[p.1] p.2) :
+    L.assembled x ws i = M.take (L.piecesLen x i) := by
+  unfold LayoutB.assembled LayoutB.piecesLen
+  rw [flatMap_take_of_slices (fun q => pieceLen q.2) _ M (L.pieceAt x i) 0 ?_ ?_, List.drop_zero]
+  · intro q _
+    cases ws[q.1]? with
+    | none => simp
+    | some w => simp [readSegs_length]
+  · intro pre q post hl
+    have hs := hp q (by rw [hl]; simp)
+    rw [Nat.zero_add, hM pre q post hl hs, List.getElem?_eq_getElem hs]
+    rfl
 
 /-- **A round held whole is read as its holders hold it**: at a round the statement doesn't fix, with no pieces and some
 holder, where every holder holds `M`, the readers' message is `M`. -/
@@ -83,12 +140,13 @@ def StagedRuns {W : Type} (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (
 /-- **The readers' rounds before the last are the run's, read through `pick`**, at one shape: at a statement of the
 shape whose V* statements show the run (`hsh`, from `StagedRuns` at an accepted run), at outer witnesses in the outer
 relation there whose recorded calls are true evaluations, each round before the last is the statement's where it fixes
-it, else the run's message; or two of one part's recorded calls collide. From the layout's rounds (`HeldB`,
-`WholeBeforeLast`) and the parts' holdings (`PartOpensB`). -/
+it, the run's message's first bytes its pieces span where it has pieces, else the run's message; or two of one part's
+recorded calls collide. From the layout's rounds (`HeldB`, `HeldWhole`) and the parts' holdings and pieces
+(`PartOpensB`). -/
 theorem readers_run {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop)
-    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (hW : L.WholeBeforeLast)
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (hHW : L.HeldWhole)
     (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope { b with rd := L.readers }) I L shape)
     (hOpen : ∀ s, Claims.Recursion.VStarB.PartOpensB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
       shows cmt s)
@@ -121,46 +179,70 @@ theorem readers_run {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inn
   have hjr : j < L.rounds x := by omega
   have hj1 : j + 1 < L.rounds x := by omega
   rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hjr]
+  have hopen : ∀ s (hs : s < ws.length), ∀ (c : ℕ → Coin),
+      shows s x ((Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r).getD s [])
+        c → ∀ i, i + 1 < L.rounds x →
+      (∀ m, L.held x s ws[s] i = some m →
+        m = cmt x i ((Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r).getD
+          s [])) ∧
+      ∀ pre p post, L.pieceAt x i = pre ++ p :: post → p.1 = s →
+        ((cmt x i ((Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r).getD
+          s [])).drop (pre.map fun q => Claims.Recursion.VStarB.pieceLen q.2).sum).take
+            (Claims.Recursion.VStarB.pieceLen p.2) = Claims.Recursion.VStarB.readSegs ws[s] p.2 := by
+    intro s hs
+    have hts : ∀ e ∈ L.calls x s ws[s], H e.1 = e.2 :=
+      fun e he => htrue e (Claims.Recursion.VStar.mem_calls_of_part hs he)
+    rcases hOpen s x st hst hf _ ws[s] (ho.2 s hs) hts with hop | hop
+    · exact hop
+    · exact absurd ⟨s, hs, hop⟩ hpc
   rcases hfx : L.fixedAt x j with _ | m
   · simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none]
-    refine Claims.Recursion.VStarB.LayoutB.msg_held hfx (hW x j hj1) ?_ ?_
-    · rcases (hcl j (by change j < I.V.k (xIOf x); omega)).1 with h | ⟨s, hs, h⟩ | ⟨h, -⟩
-      · simp [hfx] at h
-      · exact ⟨s, lt_of_lt_of_eq hs ho.1.symm, h⟩
-      · exact absurd (hW x j hj1) h
-    · intro s hs m hm
-      have hsn : s < (deployRec I.V ivScope { b with rd := L.readers }).nS x := lt_of_lt_of_eq hs ho.1
-      have hts : ∀ e ∈ L.calls x s ws[s], H e.1 = e.2 :=
-        fun e he => htrue e (Claims.Recursion.VStar.mem_calls_of_part hs he)
-      have hshs := hsh s hsn
-      rcases hOpen s x st hst hf _ ws[s] (ho.2 s hs) hts with hop | hop
-      swap
-      · exact absurd ⟨s, hs, hop⟩ hpc
-      exact (hop _ hshs.1 j hj1 m hm).trans (hshs.2 j hj1)
+    by_cases hpe : L.pieceAt x j = []
+    · simp only [hpe, List.isEmpty_nil, ↓reduceIte]
+      refine Claims.Recursion.VStarB.LayoutB.msg_held hfx hpe ?_ ?_
+      · rcases (hcl j (by change j < I.V.k (xIOf x); omega)).1 with h | ⟨s, hs, h⟩ | ⟨h, -⟩
+        · simp [hfx] at h
+        · exact ⟨s, lt_of_lt_of_eq hs ho.1.symm, h⟩
+        · exact absurd hpe h
+      · intro s hs m hm
+        have hshs := hsh s (lt_of_lt_of_eq hs ho.1)
+        exact ((hopen s hs _ hshs.1 j hj1).1 m hm).trans (hshs.2 j hj1)
+    · simp only [List.isEmpty_iff, hpe, ↓reduceIte]
+      rw [Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hpe]
+      have hps : ∀ p ∈ L.pieceAt x j, p.1 < ws.length := by
+        rcases (hcl j (by change j < I.V.k (xIOf x); omega)).1 with h | ⟨s, -, h⟩ | ⟨-, h⟩
+        · simp [hfx] at h
+        · exact absurd (hHW x s j hj1 h) hpe
+        · exact fun p hp => lt_of_lt_of_eq (h p hp) ho.1.symm
+      refine Claims.Recursion.VStarB.LayoutB.assembled_eq_take hps fun pre p post hl hs => ?_
+      have hshs := hsh p.1 (lt_of_lt_of_eq hs ho.1)
+      rw [← hshs.2 j hj1]
+      exact (hopen p.1 hs _ hshs.1 j hj1).2 pre p post hl rfl
   · simp [Claims.Recursion.VStarB.LayoutB.pick, Claims.Recursion.VStarB.LayoutB.msg, hfx]
 
 /-- **`VStarAccepts` at V\*'s bound layout, without `ReadersRunPlayed`**: `vstarAccepts_bound` with the staging read at
 the accepted run (`StagedRuns`) and the readers' rounds before the last off the parts (`readers_run`), at a layout whose
-rounds before the last are whole (`WholeBeforeLast`). A round a part holds whole is one the statement doesn't fix, so
-there the readers' message is the run's. -/
+held rounds have no pieces (`HeldWhole`). A round a part holds whole is one the statement doesn't fix and that has no
+pieces, so there the readers' message is the run's. -/
 theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
-    (cmt : Msg → ℕ → Msg → Msg) (hW : L.WholeBeforeLast)
+    (cmt : Msg → ℕ → Msg → Msg) (hHW : L.HeldWhole)
     (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope { b with rd := L.readers }) I L shape)
     (hSt : StagedRuns H (deployRec I.V ivScope { b with rd := L.readers }) I L shape shows cmt)
     (hChk : ∀ s, Claims.Recursion.VStarB.PartChecksB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
-      shows chk s)
+      shows cmt chk s)
     (hOpen : ∀ s, Claims.Recursion.VStarB.PartOpensB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
       shows cmt s)
-    (hDec : Claims.Recursion.VStarB.DecompB H (deployRec I.V ivScope { b with rd := L.readers }) I.V L shape chk) :
+    (hDec : Claims.Recursion.VStarB.DecompB H (deployRec I.V ivScope { b with rd := L.readers }) I.V L shape chk)
+    (hRows : L.ReadsRows H) :
     Claims.Recursion.VStarAccepts H (deployRec I.V ivScope { b with rd := L.readers }) I DO shape := by
   intro x st hst hf Ω P ω r hacc ws ho htrue
   obtain ⟨hK, hcl, hlast⟩ := hHeld x st hst hf
   change I.V.k (xIOf x) = L.rounds x at hK
   have hsh := hSt x st hst hf Ω P ω r hacc
-  rcases readers_run H I ivScope b L DO shape shows cmt hW hHeld hOpen hst hf hsh ho htrue with hrd | hcoll
+  rcases readers_run H I ivScope b L DO shape shows cmt hHW hHeld hOpen hst hf hsh ho htrue with hrd | hcoll
   swap
   · exact Or.inr hcoll
   by_cases hpc : ∃ s, ∃ hs : s < ws.length, (Claims.findColl (L.calls x s ws[s])).isSome
@@ -181,7 +263,7 @@ theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
     rcases hChk s x st hst hf _ ws[s] (ho.2 s hsw) hts with hck | hck
     swap
     · exact absurd hck (hpc' s hsw)
-    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_)
+    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_) ?_ ?_
     · have hi1 : i + 1 < L.rounds x := by
         by_contra hne
         have hil : i = I.V.k (xIOf x) - 1 := by omega
@@ -193,9 +275,14 @@ theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
         rcases hfi : L.fixedAt x i with _ | m'
         · rfl
         · simp [Claims.Recursion.VStarB.LayoutB.held, hfi] at hm
+      have hpe : L.pieceAt x i = [] := by
+        refine hHW x s i hi1 ?_
+        rcases h : L.msgAt x s i with _ | a
+        · simp [Claims.Recursion.VStarB.LayoutB.held, hfx, h] at hm
+        · rfl
       rw [hrd i (by omega)]
-      simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none]
-      exact (hshs.2 i hi1).symm.trans (hop _ hshs.1 i hi1 m hm).symm
+      simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none, hpe, List.isEmpty_nil, ↓reduceIte]
+      exact (hshs.2 i hi1).symm.trans ((hop _ hshs.1 i hi1).1 m hm).symm
     · obtain ⟨pre, p, post, hl, hp, he⟩ := Claims.Recursion.VStarB.LayoutB.mem_piecesOf hm
       have hne : L.pieceAt x i ≠ [] := by
         rw [hl]
@@ -208,9 +295,107 @@ theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
+    · refine Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_pick fun i hi1 _ => ?_
+      rw [hrd i (by omega), hshs.2 i hi1]
+    · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
+
+/-- **`VStarAcceptsV` at V\*'s bound layout, without `ReadersRunPlayed`**: `vstarAccepts_boundW` with each part's
+check holding off a collision among its recorded calls and the compiled verifier's own at its V\* statement
+(`PartChecksBV`), which are among the run's evaluations (`vcallsAt_sub`). -/
+theorem vstarAcceptsV_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
+    (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
+    (shape : Claims.Recursion.Form → Prop)
+    (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
+    (cmt : Msg → ℕ → Msg → Msg) (hHW : L.HeldWhole)
+    (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope { b with rd := L.readers }) I L shape)
+    (hSt : StagedRuns H (deployRec I.V ivScope { b with rd := L.readers }) I L shape shows cmt)
+    (hChk : ∀ s, Claims.Recursion.VStarB.PartChecksBV H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
+      shows cmt chk s)
+    (hOpen : ∀ s, Claims.Recursion.VStarB.PartOpensB H (deployRec I.V ivScope { b with rd := L.readers }) DO L shape
+      shows cmt s)
+    (hDec : Claims.Recursion.VStarB.DecompB H (deployRec I.V ivScope { b with rd := L.readers }) I.V L shape chk)
+    (hRows : L.ReadsRows H) :
+    Claims.Recursion.VStarAcceptsV H (deployRec I.V ivScope { b with rd := L.readers }) I DO shape := by
+  intro x st hst hf Ω P ω r hacc ws ho htrue
+  have hS := Claims.Recursion.setupCalls_true H (deployRec I.V ivScope { b with rd := L.readers })
+    (Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r)
+  obtain ⟨hK, hcl, hlast⟩ := hHeld x st hst hf
+  change I.V.k (xIOf x) = L.rounds x at hK
+  have hsh := hSt x st hst hf Ω P ω r hacc
+  rcases readers_run H I ivScope b L DO shape shows cmt hHW hHeld hOpen hst hf hsh ho htrue with hrd | hcoll
+  swap
+  · exact Or.inr (Claims.Recursion.coll_append htrue hS hcoll)
+  by_cases hpc : ∃ s, ∃ hs : s < ws.length, (Claims.findColl (L.calls x s ws[s] ++
+      Claims.Recursion.VStarB.vcallsAt H (deployRec I.V ivScope { b with rd := L.readers })
+        ((Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r).getD s []))).isSome
+  · obtain ⟨s, hs, h⟩ := hpc
+    have hsv : s < (Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r).length :=
+      lt_of_lt_of_eq (lt_of_lt_of_eq hs ho.1) (vstar_length _ _ _).symm
+    refine Or.inr (Claims.Recursion.VStar.coll_of_sub (fun e he => (List.mem_append.1 he).elim (htrue e) (hS e))
+      (fun p hp => ?_) h)
+    rcases List.mem_append.1 hp with hp | hp
+    · exact List.mem_append_left _ (Claims.Recursion.VStar.mem_calls_of_part hs hp)
+    · exact List.mem_append_right _ (Claims.Recursion.VStarB.vcallsAt_sub hsv p hp)
+  have hpc' : ∀ s (hs : s < ws.length), ¬ (Claims.findColl (L.calls x s ws[s] ++
+      Claims.Recursion.VStarB.vcallsAt H (deployRec I.V ivScope { b with rd := L.readers })
+        ((Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r).getD s []))).isSome :=
+    fun s hs h => hpc ⟨s, hs, h⟩
+  have hchk : ∀ s < (deployRec I.V ivScope { b with rd := L.readers }).nS x,
+      chk s x (Claims.coinSeq r) (L.msgs x ws) := by
+    intro s hs
+    have hsw : s < ws.length := ho.1 ▸ hs
+    have hts : ∀ e ∈ L.calls x s ws[s], H e.1 = e.2 :=
+      fun e he => htrue e (Claims.Recursion.VStar.mem_calls_of_part hsw he)
+    have hshs := hsh s hs
+    rcases hOpen s x st hst hf _ ws[s] (ho.2 s hsw) hts with hop | hop
+    swap
+    · exact absurd (Claims.Recursion.findColl_isSome_of_sub H (Claims.Recursion.VStarB.vcallsAt_append_true hts)
+        (fun _ he => List.mem_append_left _ he) hop) (hpc' s hsw)
+    rcases hChk s x st hst hf _ ws[s] (ho.2 s hsw) hts with hck | hck
+    swap
+    · exact absurd hck (hpc' s hsw)
+    refine hck _ hshs.1 _ (fun i hi m hm => ?_) (fun i hi o m hm => ?_) ?_ ?_
+    · have hi1 : i + 1 < L.rounds x := by
+        by_contra hne
+        have hil : i = I.V.k (xIOf x) - 1 := by omega
+        have hn := hlast s
+        change L.msgAt x s (I.V.k (xIOf x) - 1) = none at hn
+        rw [← hil] at hn
+        simp [Claims.Recursion.VStarB.LayoutB.held, hn] at hm
+      have hfx : L.fixedAt x i = none := by
+        rcases hfi : L.fixedAt x i with _ | m'
+        · rfl
+        · simp [Claims.Recursion.VStarB.LayoutB.held, hfi] at hm
+      have hpe : L.pieceAt x i = [] := by
+        refine hHW x s i hi1 ?_
+        rcases h : L.msgAt x s i with _ | a
+        · simp [Claims.Recursion.VStarB.LayoutB.held, hfx, h] at hm
+        · rfl
+      rw [hrd i (by omega)]
+      simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none, hpe, List.isEmpty_nil, ↓reduceIte]
+      exact (hshs.2 i hi1).symm.trans ((hop _ hshs.1 i hi1).1 m hm).symm
+    · obtain ⟨pre, p, post, hl, hp, he⟩ := Claims.Recursion.VStarB.LayoutB.mem_piecesOf hm
+      have hne : L.pieceAt x i ≠ [] := by
+        rw [hl]
+        simp
+      have hfx : L.fixedAt x i = none := by
+        rcases hfi : L.fixedAt x i with _ | m'
+        · rfl
+        · exact absurd ((hcl i (by change i < I.V.k (xIOf x); omega)).2 (by simp [hfi])) hne
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
+      rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
+        Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
+      exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
+    · refine Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_pick fun i hi1 _ => ?_
+      rw [hrd i (by omega), hshs.2 i hi1]
+    · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
+  rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
+  · exact Or.inl hd
+  · exact Or.inr (Claims.Recursion.VStar.coll_of_sub (fun e he => (List.mem_append.1 he).elim (htrue e) (hS e))
+      (fun _ h => List.mem_append_left _ h) hd)
 
 /-- **The readers' rounds before the last are the run's, read through `pick`, off a collision**, where `E_O` gives
 witnesses on an accepted run: the run's statement parses (`refuses`), its form is dense, holo or sparse, `E_O`'s
@@ -218,7 +403,7 @@ witnesses are in the outer relation (`eoGives_outerHolds`) with true recorded ca
 at that shape. -/
 theorem readersRun_pick {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
-    (hW : L.WholeBeforeLast)
+    (hHW : L.HeldWhole)
     (hsh : ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
       ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg),
         Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope { b with rd := L.readers }) I L shape ∧
@@ -247,7 +432,7 @@ theorem readersRun_pick {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion
         Collision H u v := by
     intro shape hs hf
     obtain ⟨shows, cmt, hHe, hSt, hOp⟩ := hsh shape hs
-    exact readers_run H I ivScope b L DO shape shows cmt hW hHe hOp hst hf (hSt x st hst hf Ω P ω r hg.1) ho ht
+    exact readers_run H I ivScope b L DO shape shows cmt hHW hHe hOp hst hf (hSt x st hst hf Ω P ω r hg.1) ho ht
   rcases Claims.Recursion.Form.shape_cases st.form with hf | hf | hf
   · exact key _ (by simp) hf
   · exact key _ (by simp) hf
@@ -410,12 +595,12 @@ end Forks
 /-! ## The route without `ReadersRunPlayed` -/
 
 /-- **`KSBoundDeployed` without `ReadersRunPlayed`**: `KSBoundRoute`'s premises, with `ReadersRunPlayed` dropped at a
-layout whose rounds before the last are whole (`WholeBeforeLast`), and the staging read at accepted runs (`StagedRuns`)
+layout whose held rounds have no pieces (`HeldWhole`), and the staging read at accepted runs (`StagedRuns`)
 where `KSBoundRoute` has `VstarShowsB` and `RunPairs`. The readers' rounds before the last come off V*'s parts
 (`readersRun_pick`, `vstarAccepts_boundW`), and the forks bind through `pick` (`forksBind_nf_pick`); the rest is
 `ksBoundRoute_of_bridge`'s, at the bridge (`bridge_bdDeployed`). -/
-theorem ksBoundRoute_wholeBeforeLast (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hW : L.WholeBeforeLast) :
+theorem ksBoundRoute_heldWhole (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -430,7 +615,7 @@ theorem ksBoundRoute_wholeBeforeLast (rel relO : _root_.Flock.Readable.Parsed �
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, StagedRuns FlockDeploy.sha512 D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape shows
             cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -443,8 +628,8 @@ theorem ksBoundRoute_wholeBeforeLast (rel relO : _root_.Flock.Readable.Parsed �
       Claims.Recursion.VStarAccepts FlockDeploy.sha512 (deployRec I.V ivScope bL) I (deployZkRec relO) shape := by
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSt, hCk, hOp, hDc⟩ := hshapes shape hs
-    exact vstarAccepts_boundW FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape chk shows cmt hW
-      (hHe decI) (hSt decI) hCk hOp hDc
+    exact vstarAccepts_boundW FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape chk shows cmt hHW
+      (hHe decI) (hSt decI) hCk hOp hDc hRows
   have hsh : ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
       ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg),
         Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope bL) I L shape ∧
@@ -460,7 +645,7 @@ theorem ksBoundRoute_wholeBeforeLast (rel relO : _root_.Flock.Readable.Parsed �
   have hLc := callsLogColl FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT hL
   have hFk := forksBind_nf_pick FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) L.pick hLB hTc hLc hA
     fun decO x Ω P ω r c ws hg =>
-      readersRun_pick FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hW hsh hT hg
+      readersRun_pick FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hHW hsh hT hg
   let bN := nfBrings Bd bL
   have hKS : I.KSAbort FlockDeploy.sha512 :=
     bridge_bdDeployed rel nextE colsE wE join rowIn final w decI hdec hBinds hWC (hP1 decI hdec)

@@ -210,7 +210,7 @@ theorem ksFlock_deployed_concrete_outer (rel : Flock.Readable.Parsed → Flock.R
 /-- **`KSBoundRoute` at the deployed outer relation, with no premise on the outer record**: `ksBoundRoute`, where
 Flock's KS at the outer record is `zk_KS_outer`. -/
 theorem ksBoundRoute_outer (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) :
+    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -228,7 +228,7 @@ theorem ksBoundRoute_outer (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
             (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
               decC shows cmt) ∧
             (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-              shape shows chk s) ∧
+              shape shows cmt chk s) ∧
             (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L shape
               shows cmt s) ∧
             Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -237,14 +237,14 @@ theorem ksBoundRoute_outer (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
       ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec Flock.Readable.relation) →
       KSBoundDeployed rel Flock.Readable.relation b L nextE colsE wE join rowIn final w := by
   intro nextE colsE wE join rowIn final w Bd D bL hP1 hBinds hWC hLB hst hT hL hRRP
-  exact ksBoundRoute rel Flock.Readable.relation b L nextE colsE wE join rowIn final w hP1 hBinds hWC hLB
+  exact ksBoundRoute rel Flock.Readable.relation b L hRows nextE colsE wE join rowIn final w hP1 hBinds hWC hLB
     FlockDeploy.KS.zk_KS_outer hst hT hL hRRP
 
 /-- **`KSBoundRouteCols` at the deployed outer relation, with no premise on the outer record and none on the
 bridge**: `ksBoundRoute_of_bridge_cols` at `bridge_bdDeployed`, where Flock's KS at the outer record is
 `zk_KS_outer`. -/
 theorem ksBoundRouteCols_outer (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) :
+    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -263,7 +263,7 @@ theorem ksBoundRouteCols_outer (rel : _root_.Flock.Readable.Parsed → _root_.Fl
             (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
               decC shows cmt) ∧
             (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-              shape shows chk s) ∧
+              shape shows cmt chk s) ∧
             (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L shape
               shows cmt s) ∧
             Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -272,8 +272,8 @@ theorem ksBoundRouteCols_outer (rel : _root_.Flock.Readable.Parsed → _root_.Fl
       ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec Flock.Readable.relation) →
       KSBoundDeployed rel Flock.Readable.relation b L nextE colsE wE join rowIn final w := by
   intro nextE colsE wE join rowIn final w Bd D bL hP1 hBinds hWC hEC hCF hst hT hL hRRP
-  exact ksBoundRoute_of_bridge_cols rel Flock.Readable.relation b L (bridge_bdDeployed rel) nextE colsE wE join rowIn
-    final w
+  exact ksBoundRoute_of_bridge_cols rel Flock.Readable.relation b L hRows (bridge_bdDeployed rel) nextE colsE wE join
+    rowIn final w
     hP1 hBinds hWC hEC hCF FlockDeploy.KS.zk_KS_outer hst hT hL hRRP
 
 /-! ## At the deployed relations, inner and outer -/
@@ -494,7 +494,8 @@ is the deployed one (`rowInDeployed`), at any join, `final` and `γ` weight at o
 `lastBindsEC_deployed` from the plain verifier's binding of its last message (`PlainLastBinds`), `LastCoinFree`
 `lastCoinFree_deployed`, the bridge `bridge_bdDeployed` and Flock's KS at the outer record `zk_KS_outer`. What stays is
 `PlainLastBinds` and the code facts of the staging, V*'s parts and the readers. -/
-theorem ksBoundDeployed_intended (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (join : List Msg → Msg)
+theorem ksBoundDeployed_intended (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hw : ∀ x, coverW (FlockDeploy.deployPlainTrim Flock.Readable.relation).weight x ≤ w x)
     (hPL : PlainLastBinds FlockDeploy.sha512) :
@@ -513,7 +514,7 @@ theorem ksBoundDeployed_intended (b : Brings) (L : Claims.Recursion.VStarB.Layou
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
           (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-            shape shows chk s) ∧
+            shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
             shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -524,7 +525,7 @@ theorem ksBoundDeployed_intended (b : Brings) (L : Claims.Recursion.VStarB.Layou
       (FlockDeploy.deployPlainTrim Flock.Readable.relation).cols
       (FlockDeploy.deployPlainTrim Flock.Readable.relation).weight join rowInDeployed final w := by
   intro Bd D bL hst hT hL hRRP
-  exact ksBoundRouteCols_outer Flock.Readable.relation b L (FlockDeploy.V false).next
+  exact ksBoundRouteCols_outer Flock.Readable.relation b L hRows (FlockDeploy.V false).next
     (FlockDeploy.deployPlainTrim Flock.Readable.relation).cols
     (FlockDeploy.deployPlainTrim Flock.Readable.relation).weight join rowInDeployed final w
     (plainKSAbort_deployed join rowInDeployed final w) (binds_deployed _ _ _ _ join final w)

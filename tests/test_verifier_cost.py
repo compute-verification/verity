@@ -1,4 +1,4 @@
-"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules", Daniel, 18 Oct).
+"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
 A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
@@ -29,10 +29,11 @@ ALLOWED: dict[str, str] = {
         "template queries, which read the root body only)",
     "verity/core/service/flock/Flock/Qcall.lean":
         "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
-        "Call's Definition, batch members and scan iterations unrolled; no served window names Q_call",
-    "verity/core/service/sampled_proofs/SampledProofs/Partition.lean":
-        "open (PRF-72): committedBits is Q_call's width rule on one activation of a unit's Definition, as "
-        "Flock.Qcall.gates lays it out; served windows name template queries, which never reach it",
+        "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
+        "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
+    "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
+        "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
+        "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "

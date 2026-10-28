@@ -1,7 +1,7 @@
 import Definitions.Claims.IndexedTapes
 
 /-!
-# Claims: the ZK-recursion compiler (a draft, for Daniel's read before it freezes)
+# Claims: the ZK-recursion compiler (a draft, before it freezes)
 
 The compiler is code plus proof, so it has no claims of its own to read. The claims below are its output's: the
 compiled verifier's, parametric in the inner protocol (`Inner`, a `Deploy`-like record), the outer `--zk` Flock
@@ -17,7 +17,7 @@ eight items:
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
    variant: `x` parses with a circuit commitment, and `R_I(x_I, w)`, whose outputs bind it to the circuit (`RPriv`).
 4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts:
-   dense, holo (private inner circuits) and sparse (candidate 3's RecSparse phase and R). A fast100 inner table,
+   dense, holo (private inner circuits) and sparse (a RecSparse phase and R). A fast100 inner table,
    `k_log ≥ 6`, two claims and two per region, no circuit commitment; either no RecSparse phase and no R, or a valid
    RecSparse phase at `T_LOG = 0` with `6 ≤ ℓ ≤ k_log`, the inner statement's dimensions the form's and its unit range
    inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
@@ -54,12 +54,12 @@ eight items:
    strict birthday bound leaves `λ` unchanged: at `Br`'s calls `q`, `√(γe · q²/2^513)` is under `Be`'s term wherever
    `q ≤ 2^128 · t`. `ZK`'s errors are Flock's proved
    `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per commit string of the inner session and the
-   staging messages. `ZKStop` restates `ZK` for Daniel's card, statement only, and reads `Hm96Hiding` as `ZK` does: of
+   staging messages. `ZKStop` restates `ZK`, statement only, and reads `Hm96Hiding` as `ZK` does: of
    the masked record's own reference prover on the finite tape each statement's nonce and rest draw (`ZkDeploy.prover`,
    `ZKmalRx`), which stops where the statement and the public transcript before the sessions say the honest proof can
    be refused (`StopDeploy.stops`), at the simulator that stops there too and commits to the zero digest as many
    strings at each inner round as the reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁`
-   per string (`εzkStop`). In option (d)'s section, `KSBound` and `KSPrivBound` are `KS` and `KSPriv` at the compiled
+   per string (`εzkStop`). `KSBound` and `KSPrivBound` are `KS` and `KSPriv` at the compiled
    record whose inner view runs the verifier at the representation V* binds (`Bound.IVStar`: the inner session's
    commit strings and their openings), and `Bridge` states the inner claim they rest on, from Flock's at that
    representation. The bridge is proved at every bound record whose answers a decoder inverts
@@ -69,13 +69,13 @@ eight items:
    `coverW` of the deployed plain record's weight (`RecDeploy.bdCover`, ASK-72), where (P3) holds
    (`RecDeploy.ksBoundRoute_cover`). **The recursion's security level** there (`lam`) is about 65 bits per SHA-512
    call at the deployed shape (one inner table at `m = 35`; 69.4 at `C_DE`'s weight), below the 100-bit floor and the
-   `2^-128` target under every weight (ASK-73): its KS is stated and proved at that level, not at the floor. Route 2C's
-   bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
+   `2^-128` target under every weight: its KS is stated and proved at that level, not at the floor. `BitsLin2`'s
+   level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
    165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from
-   premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and the readers' three facts
-   (`RecDeploy.ksLin2_deployed_rec`, at the coin server's record, which reads back, and the last round's pieces at the
-   parts that commit the earlier rounds). Holo statements are candidate 3's own model, and
-   `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
+   premises still open: `PartChecksBV`, `PartOpensB` and `DecompB`
+   (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces at the
+   parts that commit the earlier rounds). Holo statements have a model of their own (`Model.holoTable`),
+   and `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -308,7 +308,7 @@ end OfFlock
 
 /-- **The recursion's form**, as the compiled verifier reads it (its inner shape, `RecVStar.Inner`): the inner table's
 `m`, `k_log`, regions and claims, whether the inner circuits are private (`holo`), the RecSparse phase's shape
-`(NU, ELL, S_LOG, T_LOG)` and R's shape `(m, claims)` (candidate 3's sparse phase; neither at a dense or holo inner
+`(NU, ELL, S_LOG, T_LOG)` and R's shape `(m, claims)` (the sparse phase; neither at a dense or holo inner
 session), and whether the RecSparse unit range's slots lie inside the block. -/
 structure Form where
   m : ℕ
@@ -349,7 +349,7 @@ def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 /-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session drawing every
 unit of its population. No circuit commitment; the inner table at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two
 claims and two per region, its circuits public or private (`holo` either way); and either no RecSparse phase and no R
-(a dense or holo inner session), or candidate 3's sparse phase: a RecSparse shape at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`,
+(a dense or holo inner session), or a sparse phase: a RecSparse shape at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`,
 `T_LOG = 0`, the inner statement's `(m, k_log, regions)` the form's, its unit range's slots inside the block, and R at
 the phase's `table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. Every V* session's
 record holds a draw, and it is the full draw (`Draw.Full`). -/
@@ -411,7 +411,11 @@ pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2
 type); its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that
 error and no other; and the inputs of the SHA-512 evaluations the V* setup makes outside the oracle at a V* statement
 (`setup`: its registered reads' leaves and climbs, and the roots it recomputes from public data, a function of the
-statement's bytes), none by default. -/
+statement's bytes), none by default; the inputs of the SHA-512 evaluations the inner verifier's setup makes at an
+inner statement (`innerSetup`, reading no message and no coin: the inner statement's own), none by default; and the
+inputs of the SHA-512 evaluations the inner verifier makes on the inner messages the outer witnesses give, at an oracle
+and the run's coins (`innerCalls`, the compiled verifier's coins, whose first are the inner session's), none by
+default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -433,6 +437,8 @@ structure Deploy (Coin : Type) where
   P : Flock.Wit → Prover Tape
   δc : (Msg → Msg) → Msg → ℝ
   setup : Msg → List Msg := fun _ => []
+  innerSetup : Msg → List Msg := fun _ => []
+  innerCalls : (Msg → Msg) → Msg → (ℕ → Coin) → List Flock.Wit → List Msg := fun _ _ _ _ => []
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 
@@ -658,12 +664,12 @@ noncomputable def cBe (D : Deploy Coin) (x : Msg) : ℕ :=
 
 /-- **The recursion's bits**: `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ, 128 − ½ log₂(γ_e · c_Be)) − 2`. At the deployment
 it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at
-`coverW`, ASK-72; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
-under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+`coverW`; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
+under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and the readers'
-three facts (`RecDeploy.ksLin2_deployed_rec`, at the coin server's record, which reads back, and the last round's pieces
-at the parts that commit the earlier rounds). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksBV`, `PartOpensB` and `DecompB`
+(`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces
+at the parts that commit the earlier rounds). Holo statements have a model of their own, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 noncomputable def lam (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
   min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
@@ -718,10 +724,10 @@ noncomputable def γzk (D : Deploy Coin) (t : ℕ) (x : Msg) : ℝ := D.nS x * (
 /-- **The recursion: KS**, at `E*` and every outer decoder that meets the list-decoding spec: on every prover,
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x) · Pr[B]) + √(γ_e(x) · Pr[Be]) + √(γ_e(x) · Pr[Br])`. Its level (`lam`) is
 about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the
-`2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed
+`2^-128` target under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed
 records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements having
+a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (R D I) (E H D I DO decO) x P ≤
@@ -731,10 +737,10 @@ def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : F
 /-- **The recursion: bits**, at every outer decoder that meets the spec: every prover making at most `t ≥ 1` SHA-512
 calls per run (both parties') has `Pr[acc ∧ ¬R] ≤ t · 2^{−λ(x)}`, where `B` and `Br` obey the strict birthday bound and
 `Be` the linear expected-time bound. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
-table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂
+table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight. `BitsLin2`'s level λ₂
 (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
+(`RecDeploy.ksLin2_deployed_open`), Holo statements having a model of their own, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
@@ -781,10 +787,10 @@ def Nontrivial (H : Msg → Msg) (D : Deploy Coin) (recs : List (Recorded D.V)) 
 
 /-- **The private variant: KS**, at `E*` and the same errors, so at the same level (`lam`): about 65 bits per SHA-512
 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every
-weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements having
+a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (RPriv D I) (E H D I DO decO) x P ≤
@@ -864,10 +870,10 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
 /-- **KS of the recursion over Flock**, at every inner and outer decoder that meets the spec: the inner Flock `DI` and
 the outer `DO` each on its own columns and traces (the deployed inner session is plain, the V* sessions masked). Its
 level (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit
-floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at
+floor and the `2^-128` target under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at
 the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements
 (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo
-statements being candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`).
+statements having a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`).
 -/
 def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
@@ -875,10 +881,10 @@ def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flo
 
 /-- **Bits of the recursion over Flock**, at every inner decoder that meets the spec, the inner and outer Flock each on
 its own columns and traces. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at
-`m = 35`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`)
+`m = 35`), below the 100-bit floor and the `2^-128` target under every weight. `BitsLin2`'s level λ₂ (`lamLin2`)
 evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
+(`RecDeploy.ksLin2_deployed_open`), Holo statements having a model of their own, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
@@ -886,7 +892,7 @@ def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : F
 
 end AtFlock
 
-/-! ## At the representation V* binds (option (d))
+/-! ## At the representation V* binds
 
 The deployed V* never reads the inner session's framed transcript. It binds what the firewall's coin server records
 (`rec/inner-transcript/v1`, the run's inner rounds) and what its parts hold:
@@ -898,7 +904,7 @@ The deployed V* never reads the inner session's framed transcript. It binds what
 * never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
 
 The firewall drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
-(never checked, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
+(each `0`, the only one the verifier accepts, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
 the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
 (`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
 key, its last message their openings with the element-level last message. `KSBound` is the recursion's KS there, and
@@ -1082,10 +1088,11 @@ collides on the salt hashes and a different row, at one salt, on the row digests
 committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
 (P4) is a premise of the bound record, not a consequence of `Binds`.
 
-**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` is false at the deployed
-bound record (`RecDeploy.lastBinds_deployed_rejects`). The deployed plain verifier reads the record's text only through
-`Json.parse`, so the same last message with a trailing space in the record is decided alike, with the same calls, while
-`final` reads the two apart. It stays stated because the route as first proved (`RecDeploy.KSBoundRoute`) reads it. -/
+**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` was false at the deployed
+bound record before S0, as the deployed plain verifier read the record's text only through `Json.parse`, so the same
+last message with a trailing space in the record was decided alike, with the same calls, while `final` reads the two
+apart. S0 refuses that text (`RecDeploy.LastGap.check_space`). It stays stated because the route as first proved
+(`RecDeploy.KSBoundRoute`) reads it. -/
 def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
@@ -1112,7 +1119,7 @@ They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
 of the opened view. Two accepted decisions share their decision, so what `E*` reads of them differs exactly where those
 columns differ. The calls are compared as well because the route's plurality prover makes `IVStar`'s calls on its own
 last message, and the route charges every call of a kept run to the calls `E_O`'s witnesses record. That charge reads
-the calls only by membership, so they are compared as sets (ASK-76): the record's stream order and its optional digest
+the calls only by membership, so they are compared as sets: the record's stream order and its optional digest
 of a table's empty publics change the list of calls the deployed verifier makes, not the set. Two last messages the
 deployed record reads alike, such as the trailing-space pair that refutes `LastBinds`, are one view to `E*` with the
 same calls, so they are no counterexample.
@@ -1150,9 +1157,9 @@ so at `DE` it rests on Flock's table bound there, at plain leaves. -/
 def Bound.PlainKSAbort [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ decI, decOK Bd.DE decI → Inner.KSAbort H (Inner.ofFlock Bd.DE decI)
 
-/-- **The bridge, option (d)'s inner claim** (proved where a decoder inverts the answers, `Bound.bridge_of_dec`). At
-every inner decoder that meets the list-decoding spec, `IVStar`'s KS against provers that may abort (`Inner.KSAbort` at
-the bound record) follows from three premises:
+/-- **The bridge, the inner claim at the representation V\* binds** (proved where a decoder inverts the answers,
+`Bound.bridge_of_dec`). At every inner decoder that meets the list-decoding spec, `IVStar`'s KS against provers that
+may abort (`Inner.KSAbort` at the bound record) follows from three premises:
 
 * (P1) the element-level Flock's KS against aborting provers at plain leaves (`Inner.KSAbort` at `DE`,
   `Bound.PlainKSAbort` at one decoder), which Flock's KS proof is to give through its table bound at `DE`;
@@ -1189,7 +1196,7 @@ structure RecAt (Coin : Type) [Inhabited Coin] where
   runs : ∀ (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin ((record IV).V.k x) → Coin) (ws : List Flock.Wit),
     (record IV).innerView H x r ws = (run H (replay (msgs x ws)) IV (xI x) () fun i => coinSeq r i.val).seen
 
-/-- **The recursion: KS at the representation V\* binds** (option (d)): `KS` at the compiled record whose inner view runs
+/-- **The recursion: KS at the representation V\* binds**: `KS` at the compiled record whose inner view runs
 `IVStar` (`D.record Bd.IVStar`), over the bound record (`Bound.deploy`), at every inner and outer decoder that meets the
 spec. `E*`'s inner views are what the compiled verifier reads off the outer witnesses (`Deploy.innerView`): at each
 round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
@@ -1198,11 +1205,11 @@ round before the last, the inner session's commit strings, and at the last, thei
 `RecDeploy.KSBoundRoute`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`,
 ASK-72), where (P3) holds (`RecDeploy.ksBoundRoute_cover`). Its level (`lam`) is about 65 bits per SHA-512 call at the
 deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight
-(ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(ASK-73). `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). `KSFlock` at the
-deployed framed Flock is false at the deployed record (counterexample B: an honest view's held rounds are free-element
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements having
+a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). `KSFlock` at the
+deployed framed Flock is false at the deployed record (an honest view's held rounds are free-element
 rows, never its framed bytes). -/
 def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
@@ -1211,10 +1218,10 @@ def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Boun
 /-- **The private variant: KS at the representation V\* binds**, at the compiled record whose inner view runs `IVStar`,
 over the bound record, at every inner and outer decoder that meets the spec. Its level (`lam`) is about 65 bits per
 SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under
-every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements having
+a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK Bd.DE decI → KSPriv H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO

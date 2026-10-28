@@ -175,17 +175,18 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
   unfold custody
   simp only [hB, hP, hX, hN, hR, check_true, ok_bind]
 
-/-- **B's checks pass** when each does: the statement, the draw, the live session's custody, the scope, and a drawn
-session. -/
+/-- **B's checks pass** when each does: the statement, the draw, the live session's custody, the scope, a drawn
+session, and the record's canonical text (S0). -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {lv : Live}
     (hS : (f.stmt == x) = true)
     (hD : drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true)
     (hL : liveOf spec f.record = .ok lv) (hC : custody spec lv link c₁ mids = .ok ())
-    (hQ : s.read.check = .ok ()) (hN : s.read.draw.isNone = false) :
+    (hQ : s.read.check = .ok ()) (hN : s.read.draw.isNone = false)
+    (hT : Flock.RecordText.check f.record = .ok ()) :
     checks zk s spec x link c₁ mids f = .ok () := by
   unfold checks
   simp only [hS, hD, check_true, ok_bind, hL, hC, hQ, hN, Bool.false_eq_true, ite_false]
-  rfl
+  exact hT
 
 end FlockComplete

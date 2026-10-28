@@ -18,6 +18,7 @@ import json
 import re
 import socket
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -35,6 +36,15 @@ from test_challenger import HOST, entropy, lms_key, lms_verify
 SCHEME = "verity/test/coins/v1"
 FAMILIES = [("positions", 3), ("replay", 2)]
 WINDOW = {"root": "11" * 64}
+#: main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: the first parent of the queue's merge
+#: 1018753ee5, whose second parent is 882770e600
+MAIN = R.main_lines(Path(__file__).parent / "fixtures" / "main-first-parent.txt")
+PIN = "c81c31e6d51f9c481cdead96221d65ad6d7afd2c"
+#: the host's pins log as its operator published it when it repinned vy-challenger-1 to `PIN`; every open seals it
+#: unless a
+#: test says otherwise
+HOST_PINS = ['{"commit":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c","main":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c",'
+             '"pinned_utc":"2026-10-22T11:07:28Z"}']
 #: the challenger key the window's deployment pins: sixteen leaves, four a session (the ledger's open, the record, the
 #: close and the ledger's end)
 PINNED = lms.keygen(lms.Params(64, 4, 4), bytes([9]) * 64)
@@ -78,7 +88,8 @@ def record_leaf(directory) -> int:
 
 
 class Ledger:
-    """The auditor's ledger at `path` (infra's ``windows.jsonl``): each entry signed with `sign` under key `private`, in
+    """The auditor's ledger at `path` (its operator's ``windows.jsonl``): each entry signed with `sign` under key
+    `private`, in
     `schema`."""
 
     def __init__(self, path, sign, private: lms.PrivateKey = PINNED, schema: str = C.LEDGER_SCHEMA) -> None:
@@ -92,7 +103,8 @@ class Ledger:
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
     def reserve(self, session: str, **changes) -> None:
-        """infra's reserve of `session`: the window's request, its start and its expiry; the session's open binds it."""
+        """The operator's reserve of `session`: the window's request, its start and its expiry; the session's open
+        binds it."""
         body = {k: v for k, v in {**RESERVE, **changes}.items() if v is not DROP}
         self.reserves[session] = (len(self.lines), body)
         self.append("reserve", session, body)
@@ -104,8 +116,8 @@ class Ledger:
             seq, r = self.reserves[session]
             extra = {**{k: r[k] for k in C.RESERVED if k in r}, "reserve": seq, "opened_by": r.get("for") or r["by"],
                      "started_utc": "2026-10-20T12:05:00Z", **extra}
-        body = {"window": window, "host": f"{HOST}.{session}", "pinned": "ab" * 20, "key_sha512": self.key_sha512,
-                "port": 7811, "by": "proofs", **extra}
+        body = {"window": window, "host": f"{HOST}.{session}", "pinned": PIN, "pins": C.pins_seal(HOST_PINS),
+                "key_sha512": self.key_sha512, "port": 7811, "by": "proofs", **extra}
         self.append("open", session, {k: v for k, v in body.items() if v is not DROP})
 
     def end(self, session: str, directory, closed: bool, **changes) -> None:
@@ -184,8 +196,8 @@ class Host:
 
     def trusted_of(self, window: dict = WINDOW):
         """`challenger.trusted_session_of` over this host's files as they are, past `remote`'s check of the sealed bytes."""
-        return C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), R.session_files(self.directory),
-                                    lms_verify)
+        return C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), HOST_PINS, MAIN,
+                                    R.session_files(self.directory), lms_verify)
 
 
 def honest(host: Host) -> dict[str, C.LiveRecord]:
@@ -1023,7 +1035,8 @@ def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-
 
 
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
-    """infra's signed `period-open` and `period-close` entries pass through the ledger's check (`verify_periods`): a
+    """The operator's signed `period-open` and `period-close` entries pass through the ledger's check
+    (`verify_periods`): a
     period's windows are the opens of its lane between them, and a close that lists other windows or outcomes is
     refused, as is a period entry under another key or under v1."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
@@ -1055,7 +1068,8 @@ def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is
 
 
 def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, signer):
-    """infra's two-step window: a reserve, then an open binding it (its seq), carrying its request, by its prover and
+    """The operator's two-step window: a reserve, then an open binding it (its seq), carrying its request, by its
+    prover and
     inside its minutes, is read, its period counting it at the reserve and closing an unopened reserve with root null.
     An open that misstates any of these, a malformed reserve, and a one-step open after the first reserve are refused."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
@@ -1139,7 +1153,7 @@ XOR8 = PrimitiveDefinition("RemoteTestXor8", 1, (("a", Value(8)), ("b", Value(8)
 
 
 def _declared(steps: int, annotate: bool = False) -> tuple[bytes, str]:
-    """A static window's declared Program of `steps` calls, as vllm's rehearsal writes it before it serves
+    """A static window's declared Program of `steps` calls, as the H1 rehearsal writes it before it serves
     (`pouw_h1_rehearsal.build_program`): its descriptor's canonical JSON without annotations, and its `program_digest`,
     the period's ``--circuit`` (with `annotate`, a descriptor that names its window in its annotations)."""
     def sig(S):
@@ -1155,8 +1169,8 @@ def _declared(steps: int, annotate: bool = False) -> tuple[bytes, str]:
 
 
 def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
-    """vllm's served H1 rehearsal's ledger (r20261021-024645-c83a): lane vllm's period opened with cap 1 and `circuit`,
-    its one window reserved, opened, served and ended complete, then the period closed (no period with `period` false)."""
+    """A served H1 rehearsal's ledger: a prover's period opened with cap 1 and `circuit`, its one window reserved, opened,
+    served and ended complete, then the period closed (no period with `period` false)."""
     tmp_path.mkdir()
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     if period:
@@ -1170,15 +1184,15 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
-    """PRF-126: the period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
-    window only when the descriptor of the circuit its sessions prove hashes to it. vllm's rehearsal shape is credited;
+    """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    window only when the descriptor of the circuit its sessions prove hashes to it. The rehearsal's shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""
     descriptor, digest = _declared(4)
     assert hashlib.sha512(descriptor).hexdigest() == digest == _declared(4, annotate=True)[1]
     host = _rehearsal(tmp_path / "honest", signer, digest)
     lines = R.ledger_lines(host.ledger.path)
-    audited = C.credited_session(lines, WINDOW, pinned_key(), descriptor, lms_verify)
+    audited = C.credited_session(lines, WINDOW, pinned_key(), HOST_PINS, MAIN, descriptor, lms_verify)
     assert (audited.session, audited.prover, audited.period, audited.cap, audited.circuit) == (
         RESERVED_SESSION, "vllm", "p-0", 1, digest)
     assert C.circuit_reason("p-0", digest, descriptor) is None
@@ -1190,23 +1204,25 @@ def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_p
                 f"the circuit the window's sessions prove (descriptor SHA-512 {got[:16]}...) is not {digest[:16]}..., "
                 "the one period p-0 committed: prove the period's declared circuit, or open a period whose --circuit "
                 "is this descriptor's SHA-512")):
-            C.credited_session(lines, WINDOW, pinned_key(), wrong, lms_verify)
+            C.credited_session(lines, WINDOW, pinned_key(), HOST_PINS, MAIN, wrong, lms_verify)
     for bad in (descriptor.decode(), json.loads(descriptor), bytearray(descriptor), None):
         with pytest.raises(C.CoinError, match=re.escape(C.DESCRIPTOR_FORM)):
-            C.credited_session(lines, WINDOW, pinned_key(), bad, lms_verify)
+            C.credited_session(lines, WINDOW, pinned_key(), HOST_PINS, MAIN, bad, lms_verify)
     assert C.circuit_reason("p-0", None, descriptor) == (
         "period p-0 commits no circuit, so no window counts toward it: open a period whose --circuit is the declared "
         "circuit's SHA-512")
     loose = _rehearsal(tmp_path / "loose", signer, digest, period=False)
     assert C.audited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), lms_verify).period is None
     with pytest.raises(C.CoinError, match=re.escape("holds the window's session in no period, so it counts toward none")):
-        C.credited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), descriptor, lms_verify)
+        C.credited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), HOST_PINS, MAIN, descriptor,
+                           lms_verify)
     with pytest.raises(C.CoinError, match="the auditor's ledger opens no challenger session for this window"):
-        C.credited_session(lines, {"root": "22" * 64}, pinned_key(), descriptor, lms_verify)
+        C.credited_session(lines, {"root": "22" * 64}, pinned_key(), HOST_PINS, MAIN, descriptor, lms_verify)
 
 
 MAIN_PIN, OLD_PIN, LATER_PIN, BRANCH_PIN = "c0" * 20, "c1" * 20, "c2" * 20, "dd" * 20
 PINS = [C.pin_line(OLD_PIN, "e0" * 20, "2026-10-20T08:00:00Z"), C.pin_line(MAIN_PIN, "e1" * 20, "2026-10-21T13:00:00Z")]
+FIRST_PARENT = [LATER_PIN, MAIN_PIN, OLD_PIN]
 
 
 def _pinned_host(tmp_path, pinned: str, **seal) -> Host:
@@ -1233,12 +1249,12 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
     lines = R.ledger_lines(_pinned_host(tmp_path / "honest", MAIN_PIN).ledger.path)
     later = PINS + [C.pin_line(LATER_PIN, LATER_PIN, "2026-10-21T14:00:00Z")]
     for log in (PINS, later):
-        assert C.pinned_session(lines, WINDOW, pinned_key(), log, lms_verify) == C.audited_session(
+        assert C.pinned_session(lines, WINDOW, pinned_key(), log, FIRST_PARENT, lms_verify) == C.audited_session(
             lines, WINDOW, pinned_key(), lms_verify)
 
     def refused(lines, pins, why):
         with pytest.raises(C.CoinError, match=re.escape(why)):
-            C.pinned_session(lines, WINDOW, pinned_key(), pins, lms_verify)
+            C.pinned_session(lines, WINDOW, pinned_key(), pins, FIRST_PARENT, lms_verify)
 
     for pin in (BRANCH_PIN, LATER_PIN):
         off = R.ledger_lines(_pinned_host(tmp_path / pin, pin).ledger.path)
@@ -1264,15 +1280,82 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
                                 "(pins: {lines, sha512}): open the window on a host whose gate seals its pins log in "
                                 "each open")
     with pytest.raises(C.CoinError, match="the auditor's ledger opens no challenger session for this window"):
-        C.pinned_session(lines, {"root": "22" * 64}, pinned_key(), PINS, lms_verify)
+        C.pinned_session(lines, {"root": "22" * 64}, pinned_key(), PINS, FIRST_PARENT, lms_verify)
     for bad in (("C0" * 20, MAIN_PIN, "2026-10-21T13:00:00Z"), (MAIN_PIN, "e1" * 19, "2026-10-21T13:00:00Z"),
                 (MAIN_PIN, MAIN_PIN, "2026-10-21 13:00:00Z")):
         with pytest.raises(ValueError, match=re.escape(C.PINS_FORM)):
             C.pin_line(*bad)
 
 
-def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(tmp_path, signer):
-    """Labels aren't authenticated, so the verifier checks every head infra published under the pin and takes the
+#: seven commits the challenger host was pinned to: a branch's commits, which landed through the queue's merge `MERGE`,
+#: so each is in main's history and none is on its first-parent line
+BRANCH_PINS = ("5902f9e85d36b0de284dd4de819cad464a801739", "63179aad879e4a38c025746abde7d747b6e73fe3",
+               "a655828a4fc022fd6527f64f1c20d30b610f0c18", "aa782259fb3b6d7ffee53fafa63bc571403f6d49",
+               "c33bf091a3f12522fd6e6be04046fdb05d06a6f6", "d2ad7bdea69504f6b4ed848207f65a4d37f31a8b",
+               "882770e6009e73bdf015f4069fa77ef698d7f326")
+MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
+
+
+def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
+    """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
+    A session whose open names `PIN`, main's tip when vy-challenger-1 was repinned and the one line of the pins log it
+    published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
+    its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
+    log, an open that seals none, no copy of main or a malformed one, and a logged pin that is in main's history but not
+    on its first-parent line (`BRANCH_PINS[-1]`, the second parent of `MERGE`, which landed it, as the other six)."""
+    assert MAIN[0] == PIN and MAIN[-1] == "6c2de12715770b0cb1662e5036e5ee239ff191c1" and MERGE in MAIN
+    assert not set(BRANCH_PINS) & set(MAIN)
+    descriptor, digest = _declared(4)
+    host = _rehearsal(tmp_path / "honest", signer, digest)
+    lines = R.ledger_lines(host.ledger.path)
+    audited = C.credited_session(lines, WINDOW, pinned_key(), HOST_PINS, MAIN, descriptor, lms_verify)
+    assert audited == C.pinned_session(lines, WINDOW, pinned_key(), HOST_PINS, MAIN, lms_verify) == C.audited_session(
+        lines, WINDOW, pinned_key(), lms_verify)
+    assert audited.circuit == digest
+    assert host.trusted_of()[0] == host.challenger.commitment
+
+    def refused(lines, pins, main, why):
+        for read in (lambda: C.credited_session(lines, WINDOW, pinned_key(), pins, main, descriptor, lms_verify),
+                     lambda: C.pinned_session(lines, WINDOW, pinned_key(), pins, main, lms_verify)):
+            with pytest.raises(C.CoinError, match=re.escape(why)):
+                read()
+
+    branch = BRANCH_PINS[-1]
+    logged = HOST_PINS + [C.pin_line(branch, MERGE, "2026-10-21T03:05:00Z")]
+    off = R.ledger_lines(_pinned_host(tmp_path / "branch", branch, pins=C.pins_seal(logged)).ledger.path)
+    refused(off, logged, MAIN, f"session {RESERVED_SESSION} ran commit {branch}, which the host's pins log records but "
+                               "which is not on main's first-parent line in the verifier's copy (`git rev-list "
+                               "--first-parent origin/main`): a branch commit merged into main is in main's history but "
+                               "no tree main's check ran on; repin the challenger host to a commit on main's "
+                               "first-parent line (vy-challenger-pin) and rerun the window there")
+    for pin in BRANCH_PINS:
+        assert "not on main's first-parent line" in C.first_parent_reason(RESERVED_SESSION, pin, MAIN)
+    assert C.first_parent_reason(RESERVED_SESSION, PIN, MAIN) is None
+    unlogged = R.ledger_lines(_pinned_host(tmp_path / "unlogged", MAIN[1], pins=C.pins_seal(HOST_PINS)).ledger.path)
+    refused(unlogged, HOST_PINS, MAIN, f"session {RESERVED_SESSION} ran commit {MAIN[1]}, which the host's pins log "
+                                       "doesn't record as a commit of main's history")
+    refused(lines, None, MAIN, C.NO_PINS)
+    unsealed = R.ledger_lines(_pinned_host(tmp_path / "unsealed", PIN, pins=DROP).ledger.path)
+    refused(unsealed, HOST_PINS, MAIN, f"the auditor's ledger's open of session {RESERVED_SESSION} seals no pins log")
+    refused(lines, HOST_PINS, None, C.NO_MAIN)
+    for bad in ("\n".join(MAIN), [PIN.upper()], [PIN[:10]], [PIN, None], tuple(MAIN)):
+        refused(lines, HOST_PINS, bad, f"the verifier's copy of main's history is malformed: {C.MAIN_FORM}")
+    with pytest.raises(C.CoinError, match=re.escape(f"{C.NO_MAIN} (none at {tmp_path / 'absent'})")):
+        R.main_lines(tmp_path / "absent")
+    wrong, _ = _declared(5)
+    with pytest.raises(C.CoinError, match="not on main's first-parent line"):
+        C.credited_session(off, WINDOW, pinned_key(), logged, MAIN, wrong, lms_verify)
+    opened = json.loads(next(line for line in lines if json.loads(line)["kind"] == "open"))["body"]
+    assert C.pins_reason(RESERVED_SESSION, opened, HOST_PINS) is None
+    assert C.pins_reason(RESERVED_SESSION, {k: v for k, v in opened.items() if k != "pinned"}, HOST_PINS) == (
+        f"session {RESERVED_SESSION} ran commit None, which the host's pins log doesn't record as a commit of main's "
+        "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window "
+        "there")
+
+
+def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_others(tmp_path, signer):
+    """Labels aren't authenticated, so the verifier checks every head the auditor host's operator published under the
+    pin and takes the
     longest only when any two extend one another: a head forked, cut and re-extended, or malformed is refused."""
     first = Host(tmp_path, signer, "s-1", "one")
     honest(first)
@@ -1307,8 +1390,9 @@ def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
     assert host.trusted(ledger=path)[0] == host.challenger.commitment
 
 
-def test_the_pin_is_read_from_infras_key_record():
-    """`key_of_record` reads a ``challenger-key/v1`` record (the store artifact infra labels ``challenger-key current``)
+def test_the_pin_is_read_from_the_operators_key_record():
+    """`key_of_record` reads a ``challenger-key/v1`` record (the store artifact the auditor host's operator labels
+    ``challenger-key current``)
     and refuses one whose public key isn't the one its SHA-512 names, or of another form."""
     public = lms.public_key(PINNED)
     record = {"schema": "challenger-key/v1", "W": 4, "H": 4, "pubkey": public.hex(),
@@ -1341,3 +1425,53 @@ def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
 def test_an_address_is_host_and_port(address):
     with pytest.raises(ValueError, match="HOST:PORT"):
         R.RemoteChallenger.connect(address)
+
+
+def _clock_and_sleep():
+    now, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    return (lambda: now[0]), sleep, slept
+
+
+def test_a_session_whose_tunnel_listens_late_is_connected_once_it_listens():
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def connect(address, secret):
+        tries.append((address, secret))
+        if len(tries) < 3:
+            raise ConnectionRefusedError(111, "Connection refused")
+        return "client"
+
+    assert R.connect_when_listening("127.0.0.1:7811", b"s", connect, 120, clock, sleep) == "client"
+    assert tries == [("127.0.0.1:7811", b"s")] * 3 and slept == [0.5, 0.5]
+
+
+def test_a_session_that_never_listens_raises_once_its_wait_is_over():
+    clock, sleep, slept = _clock_and_sleep()
+
+    def refused(address, secret):
+        raise ConnectionRefusedError(111, "Connection refused")
+
+    with pytest.raises(C.CoinError, match="nothing listened"):
+        R.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
+    assert slept == [0.5] * 4
+
+
+@pytest.mark.parametrize("error", [C.CoinError("the challenger refused the hello"), ConnectionResetError(104, "reset"),
+                                   ValueError("a challenger's address is HOST:PORT")])
+def test_any_other_failure_to_connect_raises_at_once(error):
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def failing(address, secret):
+        tries.append(address)
+        raise error
+
+    with pytest.raises(type(error)):
+        R.connect_when_listening("127.0.0.1:7811", None, failing, 120, clock, sleep)
+    assert len(tries) == 1 and slept == []

@@ -163,6 +163,18 @@ def test_exception_survives_with_a_note():
     assert rec.open == []
 
 
+def test_missing_reentry_impl_keeps_why_each_path_failed(monkeypatch):
+    from verity_vllm.observe import observer as O
+    monkeypatch.setattr(O, "_REENTER_IMPL", {})
+    monkeypatch.setattr(O, "_REENTER_MISSING", {})
+    monkeypatch.setitem(O.REENTER_IMPL_PATHS, "verity.no_such_op",
+                        [("verity_vllm.no_such_module", "impl"), ("verity_vllm.observe.observer", "no_such_impl")])
+    assert O.reenter_impl("verity.no_such_op") is None
+    why = O._REENTER_MISSING["verity.no_such_op"]
+    assert [w.split(":")[0] for w in why] == ["verity_vllm.no_such_module.impl", "verity_vllm.observe.observer.no_such_impl"]
+    assert "ModuleNotFoundError" in why[0] and "AttributeError" in why[1]
+
+
 def test_inactive_recorder_and_empty_mode_pass_through():
     rec, events = _rec()
     rec.active = False

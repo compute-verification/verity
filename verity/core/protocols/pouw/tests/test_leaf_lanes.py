@@ -216,3 +216,163 @@ def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root
     assert f["ports"]["receipt"]["root"] == "ff" * 64
     with pytest.raises(ValueError, match="does not hold"):
         LL.registered_file(LL.reads(8, 16, "lane", 0), entries, roots)
+
+
+def test_a_statements_row_ports_and_only_those_are_read_in_full():
+    """Lane l's ``a<s>``, ``b<t>`` and ``partials`` and the combine's ``p<x>`` are marked ``read_in_full``, which
+    flock-verify holds to one row of the registered row's words (`KnownRead.fullRows`, proofs'
+    `PouwWindow.Lanes.readFull`); ``zy``, which each lane reads only at its own cells, and ``receipt`` are not."""
+    reg, pd = "ab" * 64, "12" * 64
+    vals = [LL.PARTIALS, LL.RECEIPT, LL.A, LL.B, LL.ZY]
+    entries = {v: PR.entry(pd, v, 32, 2, reg) for v in vals}
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(vals)}
+    for kind, ln in LL.statements(32, 32):
+        ports = LL.reads(32, 32, kind, ln)
+        f = LL.registered_file(ports, entries, roots)
+        full = sorted(p for p, e in f["ports"].items() if e.get(LL.READ_IN_FULL) is True)
+        assert full == sorted(p for p, (v, _) in ports.items() if v in LL.FULL), (kind, ln)
+        assert full == (sorted([*(f"a{s}" for s in range(4)), *(f"b{t}" for t in range(8)), "partials"])
+                        if kind == LL.LANE else sorted(f"p{x}" for x in range(32)))
+        assert all(LL.READ_IN_FULL not in e for p, e in f["ports"].items() if p not in full)
+
+
+def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
+    """Each registered value's entry and root are the registration's first of its value; the partials' are the
+    verifier's own entry under the registration's digest at the produced record's root, over any registered entry of
+    that name (Lean's `PouwWindow.Lanes.roots?`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    e = {v: {"value": v, "root": f"{i:02x}" * 64, "leaves": 4, "words": 2, "domain": f"{i + 8:02x}" * 64}
+         for i, v in enumerate((LL.A, LL.B, LL.PARTIALS))}
+    rec = {"format": "verity/registration/v2", "program": "12" * 64,
+           "registered": [e[LL.A], e[LL.B], {**e[LL.A], "root": "ee" * 64}, e[LL.PARTIALS]]}
+    produced = {"produced": [{"value": "x", "root": "aa" * 64}, {"value": LL.PARTIALS, "root": "bb" * 64}]}
+    ent, roots = LL.verifier_entries(rec, produced, 32, 6)
+    assert roots == {LL.A: e[LL.A]["root"], LL.B: e[LL.B]["root"], LL.PARTIALS: "bb" * 64}
+    assert ent[LL.A] is rec["registered"][0] and ent[LL.PARTIALS] == PR.entry("12" * 64, LL.PARTIALS, 32, 6, R.digest(rec))
+    with pytest.raises(ValueError, match="no partials"):
+        LL.verifier_entries(rec, {"produced": [produced["produced"][0]]}, 32, 6)
+
+
+# -- a J10-R leaf ---------------------------------------------------------------------------------------------------------------
+
+def _j10r_definition(t, n: int, st: tuple):
+    return Z.combine(t) if st[0] == LL.COMBINE else Z.lane(t) if st[0] == LL.LANE else Z.lane_chunk(t, n, st[2])
+
+
+@pytest.mark.parametrize("k", [448, 8192, 12288])
+def test_a_j10r_leafs_statements_and_every_port_are_its_v2_definitions(k):
+    """A J10-R leaf's statements are `h1zy.lane_statements` lane by lane, then the combine, and each one's registered
+    ports (`own`) are exactly its Definition's C-Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
+    ``o0`` reads row i of ``oks`` and the combine's ``ok<i>`` the same row."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+
+    t, n = HW.h1_tile(k, (32, 32), H.PouwH1Tile5), LL.n_chunks(k)
+    sts = LL.statements(32, 32, j10r=k)
+    assert sts[-1] == (LL.COMBINE, None) and len(sts) == 32 * n + 1
+    assert [d.bindings.get("CHUNK") for d in Z.lane_statements(t)] == ([None] if n == 1 else list(range(n)))
+    assert sts[:-1] == [(LL.LANE, ln) if n == 1 else (LL.CHUNK, ln, ch) for ln in range(32) for ch in range(n)]
+    ports = {}
+    for i, st in enumerate(sts):
+        d = _j10r_definition(t, n, st)
+        key = (d.defn.id, d.bindings.get("CHUNK"))
+        ports.setdefault(key, {p for p, _f in Z.statement_ports(d)})
+        assert LL.own(32, 32, *st, j10r=k) == ports[key], st
+        rd, kn = LL.reads(32, 32, *st, j10r=k), LL.known(32, 32, *st, j10r=k)
+        assert not set(rd) & set(kn)
+        if st[0] == LL.COMBINE:
+            assert kn == {LL.OK: f"ok{32 * n}"} and {p: rd[p] for p in rd if p.startswith("ok")} == {
+                f"ok{j}": (LL.OKS, j) for j in range(32 * n)}
+        else:
+            assert rd[LL.OK] == (LL.OKS, i) and kn[LL.PUB] == f"pub{st[1]}"
+            assert (LL.ADMIT in kn) == (LL.ZY in rd) == (st[0] == LL.LANE or st[2] == n - 1)
+
+
+def test_a_j10r_chunks_rows_carries_and_partials():
+    """Chunk c of lane l in n reads its A and B rows' chunk c, leaf n i + c of a table at K (`h1zy.chunk_leaves`), what
+    chunk c - 1 handed on and what it hands on (row l of ``carry<c - 1>`` and ``carry<c>``, `h1zy.CARRY`'s widths), and
+    its last chunk the record and row l of the partials."""
+    k, n = 12288, 3
+    for ch in range(n):
+        r = LL.reads(32, 32, LL.CHUNK, 7, ch, j10r=k)
+        assert [r[f"a{s}"] for s in range(4)] == [(LL.A, n * i + ch) for i in LL.lane_rows(32, 32, 7)]
+        assert [r[f"b{t}"] for t in range(8)] == [(LL.B, n * j + ch) for j in LL.lane_cols(32, 32, 7)]
+        assert r.get("carry_in") == (None if ch == 0 else (LL.carry(ch - 1), 7))
+        assert r.get("carry_out") == (None if ch == n - 1 else (LL.carry(ch), 7))
+        assert (r.get(LL.ZY), r.get(LL.PARTIALS)) == (((LL.ZY, 0), (LL.PARTIALS, 7)) if ch == n - 1 else (None, None))
+    for ch in range(n - 1):
+        assert 16 * LL.carry_words(k, n, ch) == sum(Z.CARRY(H.Layout(32, 32, k), n, ch).leaf_widths())
+    assert LL.produced_values(32, 32, k, j10r=True) == {
+        LL.PARTIALS: (32, 2 * LL.words(k)), "carry0": (32, LL.carry_words(k, n, 0)), "carry1": (32, LL.carry_words(k, n, 1)),
+        LL.OKS: (96, 1)}
+    assert LL.produced_values(32, 32, k) == {LL.PARTIALS: (32, 2 * LL.words(k))}
+    for bad in ((LL.LANE, 7, None), (LL.CHUNK, 7, 3), (LL.CHUNK, 32, 0), (LL.COMBINE, None, 0)):
+        with pytest.raises(ValueError, match="lane"):
+            LL.reads(32, 32, *bad, j10r=k)
+    with pytest.raises(ValueError, match="hands on no carry"):
+        LL.carry_words(k, n, n - 1)
+    with pytest.raises(ValueError, match="lane with its index"):
+        LL.reads(32, 32, LL.CHUNK, 7, 0)
+
+
+def test_a_j10r_lanes_pub_row_is_v1s_then_its_call_and_blocks_then_its_index():
+    """A J10-R lane's ``pub`` row is v1's 100 words, then its call's and its two blocks' leaves as the unit reads them
+    (`seeds.position_leaves`), 12 words, then the index, at the fields `h1zy.statement_ports` states."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+
+    call, blocks = 0x0123456789ABCDEF, (5, 1 << 40)
+    w = LL.pub_words(SALT, POSITION, ROOTS, 9, call=call, blocks=blocks)
+    assert len(w) == 113 == sum(LL.PUBLIC_J10R_BITS) // 16 and w[:100] == LL.pub_words(SALT, POSITION, ROOTS, 9)[:100]
+    assert w[112] == 9
+    want = SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True) + SD.position_leaves(blocks[1], True)
+    assert [(w[t // 16] >> (t % 16)) & 1 for t in range(1600, 1792)] == want
+    pub = dict(Z.statement_ports(Z.lane_chunk(HW.h1_tile(8192, (32, 32), H.PouwH1Tile5), 2, 0)))["pub"]
+    at = dict(zip(LL.PUBLIC_J10R, zip(itertools.accumulate((0,) + LL.PUBLIC_J10R_BITS), LL.PUBLIC_J10R_BITS)))
+    assert [(p, lo, n) for p, lo, n in pub] == [(p, *at[p]) for p in LL.PUBLIC_J10R]
+    assert _bits_n(w, *at["call"]) == 0x89ABCDEF01234567, "a u64's high half, then its low, as the position's"
+    for bad in ({"call": call}, {"blocks": blocks}, {"call": call, "blocks": blocks[:1]}):
+        with pytest.raises(ValueError, match="call"):
+            LL.pub_words(SALT, POSITION, ROOTS, 9, **bad)
+
+
+def test_a_j10r_leafs_known_rows_and_registered_files():
+    """A J10-R leaf's known rows are each chunk's ``pub`` (with the call and blocks), its last chunk's ``admit`` and only
+    the combine's ``o0``; its files mark every carry and ``oks`` port read in full, and no ``o0``: the output row binds
+    only the ok bit the circuit returns, and the combine holds each ok row's other bits to 0."""
+    k, n = 8192, 2
+    data = {"admit": [1] * 32, "salt": SALT, "position": POSITION, "roots": ROOTS, "j10r": k, "call": 64,
+            "blocks": (3, 4)}
+    first, last = (LL.known_rows(32, 32, LL.CHUNK, 5, ch, **data) for ch in range(n))
+    pub = LL.pub_words(SALT, POSITION, ROOTS, 5, call=64, blocks=(3, 4))
+    assert first == {LL.PUB: ("pub5", pub)} and last == {LL.PUB: ("pub5", pub), LL.ADMIT: (LL.ADMIT, [0xFFFF, 0xFFFF])}
+    assert LL.known_rows(32, 32, LL.COMBINE, j10r=k) == {LL.OK: ("ok64", [1])}
+    with pytest.raises(ValueError, match="call and blocks"):
+        LL.known_rows(32, 32, LL.CHUNK, 5, 0, **{**data, "call": None})
+    with pytest.raises(ValueError, match="call and blocks"):
+        LL.known_rows(32, 32, LL.LANE, 5, **{**data, "j10r": None})
+    reg, pd = "ab" * 64, "12" * 64
+    vals = [LL.A, LL.B, LL.ZY, LL.RECEIPT, *LL.produced_values(32, 32, k, j10r=True)]
+    entries = {v: PR.entry(pd, v, 64, 2, reg) for v in vals}
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(vals)}
+    for st in LL.statements(32, 32, j10r=k):
+        ports = LL.reads(32, 32, *st, j10r=k)
+        f = LL.registered_file(ports, entries, roots)
+        full = {p for p, e in f["ports"].items() if e.get(LL.READ_IN_FULL) is True}
+        assert full == {p for p, (v, _) in ports.items() if v not in (LL.ZY, LL.RECEIPT) and p != LL.OK}, st
+        assert LL.OK not in full and all(LL.read_in_full(ports[p][0]) for p in full)
+    assert not LL.read_in_full("carryx") and LL.read_in_full("carry12") and not LL.read_in_full(LL.ZY)
+
+
+def test_the_verifiers_entries_of_a_j10r_leafs_produced_values():
+    """With ``values`` (`produced_values`) every after-draw value's entry is the verifier's own under the registration's
+    digest at the produced record's root, and a value the record lacks is refused by name."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    rec = {"format": "verity/registration/v2", "program": "12" * 64, "registered": []}
+    vals = LL.produced_values(32, 32, 8192, j10r=True)
+    produced = {"produced": [{"value": v, "root": f"{i:02x}" * 64} for i, v in enumerate(vals)]}
+    ent, roots = LL.verifier_entries(rec, produced, 32, 0, values=vals)
+    assert roots == {v: f"{i:02x}" * 64 for i, v in enumerate(vals)}
+    assert all(ent[v] == PR.entry("12" * 64, v, rows, w, R.digest(rec)) for v, (rows, w) in vals.items())
+    with pytest.raises(ValueError, match="no oks"):
+        LL.verifier_entries(rec, {"produced": produced["produced"][:-1]}, 32, 0, values=vals)

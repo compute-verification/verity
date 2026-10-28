@@ -6,7 +6,7 @@ A Build vouches for its own device only.  What the served Program binds is the d
     (wgmma), on cc 10.0 (tcgen05.mma kind::f16, silicon `sm100.tcgen05.mma.bf16`) and on cc 12.0 (mma.sync m16n8k16, silicon
     `sm120.mma.m16n8k16.bf16`): the same pipeline;
   * the attention kernel, FLASH_ATTN at the version `ATTENTION` names for the step family: vLLM's selection at its defaults on cc 9.0
-    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the row declares FLASH_ATTN
+    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the workload declares FLASH_ATTN
     FA2 (`engine.args`, with its `engine.reasons`), whose mma.sync m16n8k16 there is the same pipeline (`sm100.mma.m16n8k16.bf16`);
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
@@ -30,15 +30,15 @@ from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa3_model as FA3
-from verity_vllm.program.registry import attention_vocab
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import fa2_split as W
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import inductor as IR
-from verity_vllm.program.registry.hopper import Fa3InvSum
-from verity_vllm.program.registry.prims import Fa2InvSum
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fa3_model as FA3
+from verity.ml.definitions.registry import attention_vocab
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import fa2_split as W
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import inductor as IR
+from verity.ml.definitions.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.prims import Fa2InvSum
 
 #: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}

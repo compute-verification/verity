@@ -1,11 +1,13 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity_vllm.program.registry.fp8`)
+    fp8.py                    a Definition module (`verity.ml.definitions.registry.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
-                              `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries
-    fp8.circuit-check.json    its pins (`checks`' lowering counts by kind: ``definitions``, ``pieces``, ``units``)
+                              `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
+                              root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`)
+    fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
+                              ``pieces``, ``units``; and a gated Definition's circuit digest, ``digests``)
 
-A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the counts of its
+A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
 so a pin's file is a function of the tree, never of what a process built first.  circuit-check finds every sidecar under the packages
 that define Definitions or templates (`PACKAGES`) and loads a binding file by its path: its name is no module name, so no
@@ -35,7 +37,7 @@ PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", 
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines, one file per pin
 SHARED_PINS = Path(__file__).with_name("pins")
-PIN_KINDS = ("definitions", "pieces", "units")
+PIN_KINDS = ("definitions", "pieces", "units", "digests")
 
 
 def _roots() -> list[tuple[str, Path]]:

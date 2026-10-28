@@ -4,9 +4,10 @@
 # `Security/Properties/Pouw/Check.lean`, and the difftest (`tests/test_difftest.py`, on the shared harness) holds
 # `pouw-check serve` and `pouw-check-difftest` (a unit's opening, `PouwCheck.Opening`; the window's pass and draw,
 # `PouwCheck.Pass`; a live window's round coins, `PouwCheck.Rounds`; a served window's credit, `PouwCheck.Credit`) to
-# the Python on generated cases.
+# the Python on generated cases. `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's
+# `--registered` file at the unit's placement, from the window's descriptor and round log (`PouwCheck.LeafOwn`).
 name = "pouw_check"
-defaultTargets = ["PouwCheck", "pouw-check", "pouw-check-difftest"]
+defaultTargets = ["PouwCheck", "pouw-check", "pouw-check-difftest", "pouw-leaf-own-window"]
 
 [leanOptions]
 autoImplicit = false
@@ -28,7 +29,7 @@ text = true
 
 [[lean_lib]]
 name = "PouwCheck"
-roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest"]
+roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest", "PouwCheck.VerifiedDifftest"]
 needs = ["models"]
 
 [[lean_exe]]
@@ -38,3 +39,7 @@ root = "PouwCheck.Main"
 [[lean_exe]]
 name = "pouw-check-difftest"
 root = "PouwCheck.DifftestMain"
+
+[[lean_exe]]
+name = "pouw-leaf-own-window"
+root = "PouwCheck.LeafOwnMain"

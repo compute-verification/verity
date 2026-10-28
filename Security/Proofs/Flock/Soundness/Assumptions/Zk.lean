@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 The instances of `HashDerivedKey` and `PadNonvanishing` that `--zk` headlines take, stated as Prop constants so the
 audit names them, and the record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one
-table, `RecordCustodyZKJ` at `J`.
+table, `RecordCustodyZKJ` at `J` under the subset draw, `RecordCustodyZKJS` at `J` under a stratified draw.
 -/
 
 namespace FlockSoundness.Assumptions.Zk
@@ -50,5 +50,19 @@ def RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
     (kd : ℕ) : Prop :=
   Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.DrawFileZK dj (.subset kd) n
+
+/-- **The record is the live session's, at `J` tables, under a stratified draw** (`live-verifier`, as
+`RecordCustodyZKJ`): the record `verify --zk --session-tables J` reads is the one the challenger wrote for the live
+session (`RecordsLiveZKJ`: its draw, proofs and link points, and each table's root and rounds, are the live outcome's),
+and its draw file the one `flock-verify draw` printed for the verifier's own draw under the stratified law
+`stratified Kd strata` over `[0, pop)` (`DrawFileZK`). That one draw covers the sampling block's units, every stratum
+of every table, and `verify` gives table `j` part `j` of its units (`drawJ`, `partS`), so the tables' draws are its
+parts and form one stratified law together. Only the record's custody is assumed: the parts and their link points are
+flock-verify's own arithmetic (`ZkHidden.drawOkZKHJ_of_size`). -/
+def RecordCustodyZKJS {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
+    (Jf : Finset (Fin n) → Reg → ℕ)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
+    (Kd : ℕ) (strata : Array Flock.Draw.Stratum) (pop : ℕ) : Prop :=
+  Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.DrawFileZK dj (.stratified Kd strata) pop
 
 end FlockSoundness.Assumptions.Zk

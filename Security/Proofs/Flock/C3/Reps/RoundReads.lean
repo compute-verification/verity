@@ -34,7 +34,7 @@ open FlockVBridge.Family (partsOf)
 
 theorem mem_ownAt {ss : Array VStar.Stmt} {j : ℕ} {s : VStar.Stmt} (hj : ss[j]? = some s)
     {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts s) :
-    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, reads := q.2.2 } ∈ ownAt ss j := by
+    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, readsRel := q.2.2 } ∈ ownAt ss j := by
   simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray]
   exact List.mem_map_of_mem (List.mem_append_left _ hq)
 
@@ -240,7 +240,7 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 -- The session binders carry `ℐ` in their types, so they go on each theorem, never in a `variable` block: a
 -- `variable` whose binders use a local notation over section variables makes Lean silently drop every declaration
--- after it (the audit's `dropped` check, #1923, refuses the package).
+-- after it (the audit's `dropped` check refuses the package).
 
 /-- **`RoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`: `SessStmt` from the prover's sessions'
 tags (`sessStmt_checked`, the guarantee's `_hF`), `MsgNamesAt` from the verifier's checks (`msgNamesAt_of_accepted`,

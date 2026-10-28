@@ -13,20 +13,20 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program import boolean as SW
+from verity.ml.definitions import boolean as SW
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOCAB
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa3_model
-from verity_vllm.program.kernels import fa3_split_twins as TW
-from verity_vllm.program.registry import boolean_attention as BAt
-from verity_vllm.program.registry import boolean_fa3_split as BF
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import fa3_split as F
-from verity_vllm.program.registry import hopper
-from verity_vllm.program.registry import sparse_mla_split as W
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fa3_model
+from verity.ml.definitions.numerics import fa3_split_twins as TW
+from verity.ml.definitions.registry import boolean_attention as BAt
+from verity.ml.definitions.registry import boolean_fa3_split as BF
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import fa3_split as F
+from verity.ml.definitions.registry import hopper
+from verity.ml.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_attention import _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -159,6 +159,7 @@ AGREEMENT = [bind(BF.AttentionHeadSplitV2, T=17, D=16, BN=16, MASKED_FROM=1, PER
              bind(BF.AttentionHeadSplitV2, T=33, D=16, BN=16, MASKED_FROM=0, PER=1, **BAt.ATTENTION_FA3)]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT + [bind(BF.AttentionSplitV2, T=17, NH=2, KVH=1, D=16, BN=16, MASKED_FROM=1, PER=1,
                                                      **BAt.ATTENTION_FA3)], ids=lambda t: t.id)
 def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
@@ -168,6 +169,7 @@ def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
     assert SW.boolean_version(word).id == target.id
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_the_boolean_version_agrees_with_its_word_view(target) -> None:
     """Two and three splits, a partial last block: zeros, infinities, NaNs and subnormals through the blocks, each split's end and

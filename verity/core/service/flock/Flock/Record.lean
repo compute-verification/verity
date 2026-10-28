@@ -112,7 +112,8 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
   let cfg ← fld j "config"
-  check ((← fld cfg "require_link") == Json.bool true) "S3/F1: require_link is not true"
+  -- a match, not `Json`'s `==` (a `partial def`, so no proof can evaluate it)
+  check ((← fld cfg "require_link") matches Json.bool true) "S3/F1: require_link is not true"
   check ((← str j "link_mode") == "exchange") "S3/E1: link_mode is not exchange"
   let l ← fld j "link"
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"

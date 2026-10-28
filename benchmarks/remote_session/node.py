@@ -1,12 +1,13 @@
 """The prover of a serving node (run.sh's SERVE=node): the registered store is every engine's weights arena
 (`engine.py`, one vLLM engine a GPU) where it is served, read in place by `device.py`'s whole-node pass, beside an
-optional host tier of zero filler: the store `store_layout` lays out from the checkpoint, which `--model-dir` checks.
+optional host tier of zero filler: the store `remote_bandwidth.store` lays out from the checkpoint, which `--model-dir`
+checks.
 
 ~~~text
 arenas     each engine exports its arena over CUDA IPC (`engine.<g>.json` in --engines-dir); once every engine has run
            its plain baseline (status baseline), the prover opens each in its GPU's context and takes it as that GPU's
-           HBM shard (`device.DeviceStore`'s `hbm`): the store's blocks are the arenas' in GPU order, then the host
-           tier's, and the hello's layout labels each arena's weights blocks weights and the rest filler. With
+           HBM shard (`device.DeviceStore`'s `hbm`): the store's chunks are the arenas' in GPU order, then the host
+           tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler. With
            --model-dir each arena is first held to the checkpoint's (`held_to_checkpoint`)
 register   the payload tree over the plain weights as served, salted under the verifier's payload key (its first
            message); at the registration the engines pause (ctl.json's
@@ -35,6 +36,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[1]))
+
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 
 import device  # noqa: E402
 import store_layout  # noqa: E402
@@ -46,10 +50,10 @@ BLOCK = device.BLOCK
 
 
 def held_to_checkpoint(model_dir: Path, exports: list[dict], statuses: list[dict], workers: int) -> dict:
-    """Each engine's arena held to the one `store_layout.arena` lays out from the checkpoint in `model_dir`: its
-    weights' blocks, its entries (name, offset, bytes) and its plain SHA-256s a GiB, else RuntimeError with why. So a
+    """Each engine's arena held to the one `remote_bandwidth.store.arena` lays out from the checkpoint in `model_dir`: its
+    weights' chunks, its entries (name, offset, bytes) and its plain SHA-256s a GiB, else RuntimeError with why. So a
     store a verifier with `--model` would refuse is refused here, before the hello."""
-    arena = store_layout.arena_of(model_dir)
+    arena = rstore.arena_of(model_dir)
     want = [[e.name, e.offset, e.nbytes] for e in arena.entries]
     plain = {s["gpu"]: s.get("plain_sha256") for s in statuses}
     sha = {}
@@ -222,7 +226,7 @@ def main() -> int:
                          "--overlap-openings`), so the verifier checks while the session runs")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
                     help="the checkpoint the engines serve: before the hello each engine's arena is held to the one "
-                         "`store_layout` lays out from it (`held_to_checkpoint`), the store a verifier with --model "
+                         "`remote_bandwidth.store` lays out from it (`held_to_checkpoint`), the store a verifier with --model "
                          "binds the registration to")
     ap.add_argument("--layout-workers", type=int, default=16, help="--model-dir's hashing processes")
     ap.add_argument("--seed-payload-key", action="store_true",

@@ -63,14 +63,16 @@ from verity.ml.commitments.identity import identity_digest, identity_digest_sha5
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
+import r2_population as R2
+
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"
 #: M0's set-bound frame domains: each tag with its identity digest (`a0.STAND_IN_BINDINGS`)
 STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
-#: `registration.SERVED_DOMAIN`, today's and before it
-SERVED_TAGS = (R.SERVED_DOMAIN, "verity/one-stage/served-domain/v0")
+#: `registration.WINDOW_DOMAIN`, today's and before it
+SERVED_TAGS = (R.WINDOW_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
@@ -91,7 +93,7 @@ class Gap(Exception):
 
 def _registry() -> None:
     """Every Definition a recorded program may call: the circuit ops and vLLM's program registry."""
-    for name in ("verity.ml.circuits.ops", "verity_vllm.program.registry"):
+    for name in ("verity.ml.circuits.ops", "verity.ml.definitions.registry"):
         pkg = importlib.import_module(name)
         for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
             importlib.import_module(m.name)
@@ -412,7 +414,7 @@ def stand_in_ports(name: str, content_digest: str, n: int, layout: dict[str, tup
 
 
 def served_domain(form: tuple[str, str], program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
-    """`registration.served_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
+    """`registration.window_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
     tag, binding = form
     doc = {"program": program, "partition": partition, "port": port, "schema": schema, "leaves": int(leaves), "run": run}
     return _domain(SERVED_BINDINGS[binding](tag, doc), leaves)
@@ -769,7 +771,7 @@ def a0(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     draw = a["draw"]
     k = law["k"]
-    smaller = P.population_program(template, n - 1, version=population_version(program))
+    smaller = R2.program([(template, n)], mixed=False, version=population_version(program))
     spart = with_program(partition, smaller)
     first = rec["roots"][0]
     cases: dict[str, Callable[[dict], Case]] = {} if pc is None else {
@@ -982,7 +984,7 @@ def a2(run: Run) -> Iterator[Case]:
     yield c
     src = f"{base}/negatives.json"
     draw = a["draw"]
-    smaller = P.population_program(v2.template, n - 1, version=population_version(program))
+    smaller = R2.program([(v2.template, n)], mixed=False, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "public-file-b||c-byte-flipped (R4)": lambda v: c.but(
             "public-file-b||c-byte-flipped (R4)", "negative", recorded_codes(v, "registration", src),
@@ -1177,8 +1179,7 @@ def a3(run: Run) -> Iterator[Case]:
     union = {"law": "subset", "population": n, "k": law["k"], "units": sorted(a["draw"]["units"])}
     proved = sorted(a["proved_units"])
     bases = {name: (lo, lo + cnt) for (name, *_), (_, lo, cnt) in zip(mem, P.ranges(program, query))}
-    fewer = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt) in enumerate(mem)],
-                                       version=population_version(program))
+    fewer = R2.program([(d, cnt) for _, _, d, cnt in mem], mixed=True, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch": lambda v: c.but(
             "registration-partition-mismatch", "negative", recorded_codes(v, "registration", src), program=fewer,
@@ -1334,8 +1335,7 @@ def a4(run: Run) -> Iterator[Case]:
     n = rec["population"]
     draw = a["draw"]
     proved = sorted(a["proved_units"])
-    other = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt, _) in enumerate(mem)],
-                                       version=population_version(program))
+    other = R2.program([(d, cnt) for _, _, d, cnt, _ in mem], mixed=True, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=other,
@@ -1593,7 +1593,7 @@ for ell in levels:
     out["levels"][str(ell)] = {"n": n, "program": encode_program(PT.population_program(t, n)), "ports": SC.ports(params, ell)}
 print(json.dumps(out))
 '''
-#: served_zk's registered scheme before the proof service (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
+#: served_zk's registered scheme before the proof system (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
 SERVED_ZK_SCHEME = "verity/pouw/served-zk/window/hm96-sha512+frame-v3-sha512/v1"
 SERVED_ZK_W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
 #: served windows' recorded refusals that are not the protocol's, by name, with why
@@ -1618,12 +1618,12 @@ SERVED_OUTSIDE = (
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof service (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
+    """served_zk's window through the proof system (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the law of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
     (`outcome-<case>/`: honest, the selftest build's cases, the other request's proof), each its own audit record of the
-    request's registration (a stream of its own, order 0). Before the proof service (`verity/one-stage/audit/v0`) the
+    request's registration (a stream of its own, order 0). Before the proof system (`verity/one-stage/audit/v0`) the
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served draw or the sessions' roots, and
     no verdict of record reports registered reads."""
@@ -1704,7 +1704,7 @@ def served_window(run: Run) -> Iterator[Case]:
     first = run.json(outcomes[0])
     service = first.get("format") == "verity/proof-service/outcome/v0"
     scheme = SCHEME if service else SERVED_ZK_SCHEME
-    prov["scheme"] = "the proof service's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof service)"
+    prov["scheme"] = "the proof system's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof system)"
     p = params(program, query, law, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)
     base = None
     for path in outcomes:
@@ -1723,7 +1723,7 @@ def served_window(run: Run) -> Iterator[Case]:
         c = Case(run.id, "served-window", first.get("format", ""), name, "audit" if honest else "negative", program, p,
                  rec, e, recorded_audit(a, path),
                  {**prov, "evidence": f"{path}; instances the proved units; sessions "
-                                      + ("the delivered ones" if service else "none (before the proof service)")})
+                                      + ("the delivered ones" if service else "none (before the proof system)")})
         if stubs:
             c.provenance["opaque"] = stubs
         base = base or (c if name == "outcome-honest" else None)
@@ -1962,7 +1962,7 @@ def a5_audit(run: Run, base: str) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     n = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
+    fewer, _ = population(R2.resized(defs), version)
     first = members[0]["template"]
     flipped_body = bodies[first][:-1] + bytes([bodies[first][-1] ^ 1])
     cases: dict[str, Callable[[dict], Case]] = {
@@ -2055,7 +2055,7 @@ def a6(run: Run) -> Iterator[Case]:
     n_all = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
     drawn = set(draw["units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
+    fewer, _ = population(R2.resized(defs), version)
     ranges = P.ranges(program, query)
     first = summary["members"][0]["name"]
     cases: dict[str, Callable[[dict], Case]] = {
@@ -2187,7 +2187,7 @@ def a7(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     n_all = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
+    fewer, _ = population(R2.resized(defs), version)
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=fewer,

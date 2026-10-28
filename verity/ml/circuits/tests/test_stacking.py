@@ -1,7 +1,7 @@
 """`verity.ml.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
 and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy, too wide or input-holding one fails with
-its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam on cursor/property-redteam-6cd3)
-are cases here."""
+its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam) are
+cases here."""
 from __future__ import annotations
 
 import hashlib
@@ -54,7 +54,7 @@ SQACC = stand_in("PouwSqAcc", (("acc", Value(576)), ("x", S32)), Value(576))
 U8S8 = stand_in("BlackwellU8S8ImmaDot32", (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))))
 F64MUL = stand_in("F64Mul", (("a", Value(64)), ("b", Value(64))), Value(64))
 EXP2LUT = stand_in("Exp2Lut127", (("t", S8),))
-#: the sha256 of vLLM's LUT softmax table (`engine.int8_attention.LUT` at #2455's head) as 256 little-endian u32 words
+#: the sha256 of vLLM's LUT softmax table (`engine.int8_attention.LUT`) as 256 little-endian u32 words
 EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
 
 
@@ -194,7 +194,7 @@ BOUND = (-(1 << 20), 1 << 20)
 
 
 def test_a_run_inputs_declared_bound_is_refused():
-    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so a run input whose
+    """No declared `In(bound)` is taken on trust: evaluation doesn't enforce a run input's bound, so a run input whose
     port bounds it far from the s32 edge, whole or on some of its leaves, is refused when its Program is built (`E_PORT_BOUND`),
     and never judged as bounded."""
     with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c' leaves \[0, 1\)"):
@@ -559,7 +559,7 @@ def test_a_field_extraction_is_a_rounding_at_any_position():
 
 
 def test_the_bf16_widening_is_a_free_affine_map():
-    """The 18 Oct ruling: `Bf16ToF32` is its bf16 encoding times 2^16 read as signed, on its evaluator, so it never wraps and
+    """`Bf16ToF32` is its bf16 encoding times 2^16 read as signed, on its evaluator, so it never wraps and
     is free (an affine map), its value the operand's range times 2^16; a lift of it is budgeted."""
     w = prims.Bf16ToF32
     for x in [0, 1, 0x3F80, 0x7F80, 0x7FFF, 0x8000, 0xBF80, 0xFFFF] + random.Random(0).sample(range(1 << 16), 64):
@@ -827,5 +827,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("d3a9a7c7865f0dda20fc4d2d2b84c44b0d7c5cfce1d0769263a95eb61ca49257"
-          "c900e0257e24c125a60bf6e7e00a9985697ded79519766df7d8a7e6b13955d2b")
+PINNED = ("9d2ce91d019e29a91a9f180cdfa204a9bfeda9c71a755d60c795564330c4963d"
+          "a872af5a8c69326f1e319fcc9b8d7cc2b4fea1c7f60c714f23ec1571e1173f8f")

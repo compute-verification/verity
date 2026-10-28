@@ -18,7 +18,8 @@ The stager's check of the outputs against the IR reference (`UnitStager.referenc
 bit-sliced evaluation, hours at K = 4096) is replaced by `h1zy.reference`, the word reference, on each instance's codes,
 scales, record, salt, position and roots: the staged receipt and ok are the lowered circuit's, held to that reference
 word for word. `HZ_STAGE` as `hidden_zk/stage.py`'s: ``fast`` (`fast_stage`, the default) or ``library``. ``H1_TMPL``
-(`h1unit.layout`): the templated statement, the unit as its template, rather than the flat one.
+(`h1unit.layout`): unset or ``flat``, the flat statement, which `job.sh` stages; ``structural``, the templated statement of
+the unit's structural lowering (`h1unit.stager`).
 """
 from __future__ import annotations
 

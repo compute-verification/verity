@@ -14,15 +14,15 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa2_split_twins as TW
-from verity_vllm.program.kernels import sparse_mla_split_twins as SMT
-from verity_vllm.program.registry import boolean_fa2_split as BX
-from verity_vllm.program.registry import fa2_split as F
-from verity_vllm.program.registry import hopper
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.fa2_check_inf import AttentionHeadV5
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fa2_split_twins as TW
+from verity.ml.definitions.numerics import sparse_mla_split_twins as SMT
+from verity.ml.definitions.registry import boolean_fa2_split as BX
+from verity.ml.definitions.registry import fa2_split as F
+from verity.ml.definitions.registry import hopper
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry.fa2_check_inf import AttentionHeadV5
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 U16, U32 = np.uint16, np.uint32
@@ -89,7 +89,7 @@ def test_the_split_end_twin_is_the_word() -> None:
     assert (lse[:50] == NEG_INF).all()
 
 
-@pytest.mark.parametrize("NS,D", [(2, 16), (3, 16), (5, 64), (16, 128), (33, 128)])
+@pytest.mark.parametrize("NS,D", [(2, 16), (3, 16), (5, 64), pytest.param(16, 128, marks=pytest.mark.slow), pytest.param(33, 128, marks=pytest.mark.slow)])
 def test_the_combine_twin_is_the_word(NS: int, D: int) -> None:
     """Gaussian lse with empty (-inf, 0) splits planted, rows whose every split is empty, and `_inputs`' words with specials."""
     rng = np.random.default_rng(NS * 7 + D)
@@ -181,6 +181,7 @@ def _agrees(target, n: int) -> None:
         assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
     _agrees(target, 96)

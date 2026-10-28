@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Responder
+import Definitions.Accounting.Guarantees.Responder
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Memory
 
@@ -24,7 +24,7 @@ same next tick (`next_tick_eq`), so the same window, `acts` and answer, and the 
 `mem_X(t_j) + 1 + τ + H ≤ N` is on time and one the responder answers correctly. The deployed forms get `TicksIn`
 from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in `[t₀, t₀ + j·span]`).
 `B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
-check that the fixed-schedule statements of #1857 are the case `t x = t`, `τ = 0`.
+check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
 -/
 
 namespace Accounting.SecurityProofs
@@ -71,7 +71,7 @@ theorem TimelyTicks : Guarantees.TimelyTicks := by
 
 namespace Responder
 
-/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (v2.6: its state at the end of the window's
+/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (its state at the end of the window's
 last tick is among what it does). -/
 theorem image_state_eq_of_acts {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω → Actual.Run L} {X : Finset L}
     {t u : ℕ} (htu : t < u) {r r' : Ω} (h : (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)) :
@@ -467,14 +467,14 @@ theorem B2AddsP2Ring : Guarantees.B2AddsP2Ring := by
     (fun z => ticksIn_of_start (hinc z) (h0 z) hτ) hcount htime hm hζ
   rwa [Nat.cast_ofNat] at this
 
-/-! ### #1857's statements, on a fixed schedule
+/-! ### The fixed-schedule statements
 
-A fixed schedule `t : ℕ → ℕ` is the case `t x = t` for every outcome, with `span = t k` and `τ = 0`; each of #1857's six
-statements is proved here from its restatement, word for word as it read there (its `Passes` is `PassesFixed`). -/
+A fixed schedule `t : ℕ → ℕ` is the case `t x = t` for every outcome, with `span = t k` and `τ = 0`; each of the six
+fixed-schedule statements is proved here, word for word, from its restatement (its `Passes` is `PassesFixed`). -/
 
 namespace Responder
 
-/-- #1857's `Passes`, on a fixed schedule `t`. -/
+/-- `Passes` on a fixed schedule `t`. -/
 def PassesFixed {L : Type*} {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits sch.n)
     (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
     (x : Pous.Outcome sch k) : Prop :=
@@ -513,7 +513,7 @@ end
 end Responder
 
 open Responder in
-/-- **#1857's `B2`**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2` on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
     (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
@@ -533,7 +533,7 @@ theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pou
   exact ⟨A₁, A₂, fun x hm => hA x (fixed_timely ht k) hm⟩
 
 open Responder in
-/-- **#1857's `B2Audit`**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2Audit` on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p))
     (N k : ℕ) (δ ε : ℝ≥0∞) (hsec : Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε)
     (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
@@ -549,7 +549,7 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
     (B2Audit sch N k δ ε hsec W S X (fun _ => t) (t k) ans help 0 H hc (fun _ j => ht (Nat.lt_succ_self j))
       (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount)
 
-/-- **#1857's `B2P2Ring`**, from `B2Audit_fixed`. -/
+/-- **`B2P2Ring` on a fixed schedule**, from `B2Audit_fixed`. -/
 theorem B2P2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
@@ -572,7 +572,7 @@ theorem B2P2Ring_fixed :
   exact B2Audit_fixed _ _ _ _ _ hsec W S X t ans help H hc ht hset hin hcount
 
 open Responder in
-/-- **#1857's `B2Determines`**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2Determines` on a fixed schedule**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Determines_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k q : ℕ)
     (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
@@ -600,7 +600,7 @@ theorem B2Determines_fixed :
     (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht k) hm hζ
 
 open Responder in
-/-- **#1857's `B2Adds`**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
+/-- **`B2Adds` on a fixed schedule**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
 theorem B2Adds_fixed :
   ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N c : ℕ)
     (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 c δ ε →
@@ -623,7 +623,7 @@ theorem B2Adds_fixed :
       (fun _ _ j => ht (Nat.lt_succ_self j)) (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z))
       (fun _ => fixed_arrival) (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht c) hm hζ)
 
-/-- **#1857's `B2AddsP2Ring`**, from `B2Adds_fixed`. -/
+/-- **`B2AddsP2Ring` on a fixed schedule**, from `B2Adds_fixed`. -/
 theorem B2AddsP2Ring_fixed :
   Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
     ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)

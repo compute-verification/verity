@@ -1,4 +1,4 @@
-"""The proof service's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
 `SampledProofs.Challenger`, `verity/core/service/sampled_proofs`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
@@ -17,10 +17,16 @@ and never twice: a retry never redraws.  There is no beacon and no Fiat–Shamir
 a client derives what it draws from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
+**Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
+`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+`coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
+challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
+`os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
+
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
-`trusted-nebius-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+`trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
 recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
@@ -60,7 +66,8 @@ session: the record under its key, the close signed under it, the log the one th
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
-auditor (infra's `benchmarks/live_challenger/auditor.py` on the challenger's host) appends a signed entry, under the
+auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
+entry, under the
 challenger's key, when a lane reserves a window (its request, start and expiry), when it opens the reserved session for
 the window's root, before its first coin, and when the session ends; a window gets one session.  A lane's period is two
 more entries, its `period-open` and `period-close`:
@@ -77,9 +84,11 @@ more entries, its `period-open` and `period-close`:
 
 each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
-deployment; `key_of_record` reads infra's published pin), and refuses any open or period-open naming another key's
+deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
+key's
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
-infra's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs too): each
+the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs
+too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
 binding its session's reserve and carrying its request after the first reserve, one end a session after its open, each
@@ -109,14 +118,19 @@ auditor writes it (`pin_line`):
     open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
 
 and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
-verifier's copy of the log (infra's published one, any extension of it) begins with the sealed lines and one of them
-pins the open's commit (`pins_reason`).  Git's commit ids are SHA-1, and no verifier input names main's tip, so the
-verifier checks no ancestry itself: that each pinned commit was in main's history is the auditor-trusted host's word, as
-its pin wrapper checks it against origin/main (`trusted-nebius-host`).
+verifier's copy of the log (the operator's published one, any extension of it) begins with the sealed lines and one of
+them
+pins the open's commit (`pins_reason`), and that commit is on main's first-parent line in the verifier's own copy of it
+(`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
+prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
+main's history, but main's check ran on the merge's tree, never on the branch commit's.  That the host ran the commit
+its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
+through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
+`audited_session` checks no pin and credits nothing.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
-its round coins, round r's opened after round r's root.  The module reads only the standard library and
-`verity.ml.commitments`, so any client calls it as it is.
+its round coins, round r's opened after round r's root.  The module reads only the standard library,
+`verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -134,6 +148,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.core import claims
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import hm96
@@ -224,11 +239,51 @@ PINS_FORM = ("the host's pins log is a list of its lines, each {commit, main, pi
              "each), and when, YYYY-MM-DDTHH:MM:SSZ")
 NO_PINS = ("no pins log: the verifier trusts a challenger session only from a tree the host's pins log records as a "
            "commit of main's history")
+MAIN_FORM = ("a list of main's first-parent commits, each 40 lowercase hex (`git rev-list --first-parent origin/main` in "
+             "the auditor's own checkout)")
+NO_MAIN = ("the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's "
+           "check passed: give it the auditor's own `git rev-list --first-parent origin/main`")
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
+#: the property every coin source's claim instance is assumed of: independent uniform output
+COIN_PROPERTY = "uniform"
+NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
+            "assumption of verity.core.claims), so no assumption covers its coins: a served challenger draws from a named "
+            "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
 class CoinError(ValueError):
     """A layout, a coin commitment or an opening the challenger refuses, or a coin its commitment doesn't hold."""
+
+
+def coin_claim(entropy: Any) -> str | None:
+    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` assumption of
+    `verity.core.claims`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
+    `CoinError`: a misnamed source is refused, never taken for an unnamed one."""
+    claim = getattr(entropy, "claim", None)
+    if claim is None:
+        return None
+    prop, sep, instance = claim.partition("/") if type(claim) is str else ("", "", "")
+    if not (sep and prop == COIN_PROPERTY and instance in claims.INSTANCES):
+        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> assumption of verity.core.claims, "
+                        f"not {claim!r}")
+    return claim
+
+
+def served_claim(entropy: Any) -> str:
+    """`coin_claim` of a served challenger's entropy, which must have one (`NO_CLAIM`)."""
+    claim = coin_claim(entropy)
+    if claim is None:
+        raise CoinError(NO_CLAIM)
+    return claim
+
+
+def named(claim: str, entropy: Callable[[int], bytes]) -> Callable[[int], bytes]:
+    """`entropy` named by the claim instance `claim` (`coin_claim`): for a source whose bytes that assumption covers."""
+    def draw(n: int) -> bytes:
+        return entropy(n)
+    draw.claim = claim  # type: ignore[attr-defined]
+    coin_claim(draw)
+    return draw
 
 
 def _name(s: Any) -> bool:
@@ -430,7 +485,8 @@ class ChallengerKey:
 
 def key_of_record(doc: Any) -> ChallengerKey:
     """The challenger key a published key record pins (`KEY_RECORD_SCHEMA`, the store artifact the auditor's operator
-    labels ``challenger-key current``; the caller reads only one infra published): its `W`, `H` and public key, refused
+    labels ``challenger-key current``; the caller reads only one the operator published): its `W`, `H` and public key,
+    refused
     (`CoinError`) unless the record is of that form and the public key's SHA-512 is the one it names."""
     if not (isinstance(doc, dict) and doc.get("schema") == KEY_RECORD_SCHEMA and _digest_hex(doc.get("pubkey_sha512"))
             and _hex(doc.get("pubkey")) is not None):
@@ -737,7 +793,8 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
     minutes and before its period's close; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its
     session's open and end and no entry's or other record's; periods as `verify_periods` checks them. Returns root ->
     {"reserve" (None for a one-step open), "open", "end" or None}: S is the open's `session`, R its root; raises
-    ValueError at the first entry that fails. It reads one head: a verifier takes infra's newest published head, and refuses
+    ValueError at the first entry that fails. It reads one head: a verifier takes the operator's newest published head,
+    and refuses
     two that don't `extend` one another."""
     return _verify(lines, I, verify)[0]
 
@@ -991,8 +1048,9 @@ def _checked(ledger: Any, key: ChallengerKey, verify: Verify) -> tuple[dict[str,
 
 class Audited(NamedTuple):
     """The window's session as the auditor's ledger names it: its id, the host its open names, its prover, the SHA-512 of
-    each file its end sealed, the leaf its record was signed at, its commitment's root, how many hellos it refused, and
-    the period holding the window with the cap and circuit its open committed (all None when no period holds it)."""
+    each file its end sealed, the leaf its record was signed at, its commitment's root, how many hellos it refused, the
+    commit its open pinned the host's tree to (`pinned_session` holds it to the pins log and main), and the period
+    holding the window with the cap and circuit its open committed (all None when no period holds it)."""
     session: str
     host: str
     prover: str
@@ -1000,6 +1058,7 @@ class Audited(NamedTuple):
     record_leaf: int
     commitment: str
     refused_hellos: int
+    pinned: str = ""
     period: str | None = None
     cap: int | None = None
     circuit: str | None = None
@@ -1011,7 +1070,8 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     Raises `CoinError` naming why when there is no ledger, a line isn't of the ledger's form or names another key, the
     ledger fails `verify_ledger`, or the window's session is missing, opened under v1, unended, ended unclosed or its end
     names no record leaf, commitment, refused hellos or sealed file the verifier reads, or the period holding the window
-    committed no cap or circuit."""
+    committed no cap or circuit.  It checks no pin, so nothing credits a session read here alone: a credit path reads
+    it through `pinned_session`."""
     return _audited(ledger, window, key, verify)[0]
 
 
@@ -1042,11 +1102,12 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
     if name is not None and (p["cap"] is None or p["circuit"] is None):
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
-                   b["refused_hellos"], name, p["cap"], p["circuit"]), o["body"]
+                   b["refused_hellos"], o["body"]["pinned"], name, p["cap"], p["circuit"]), o["body"]
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
-    """The auditor's ledger as infra published it: every head of `heads` (each its lines; None when the verifier has none)
+    """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
+    when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
     the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
     rewritten between two publications is refused whichever head a verifier is shown."""
@@ -1104,13 +1165,14 @@ def session_named(audited: Audited, key: ChallengerKey, session: Any, verify: Ve
     return commitment, roots
 
 
-def trusted_session_of(ledger: Any, window: Any, key: ChallengerKey, session: Any, verify: Verify
+def trusted_session_of(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, session: Any, verify: Verify
                        ) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's session for window `window`: the one session the auditor's ledger
-    opens for it under `key` (`audited_session`), and that session's files `session` (`session_named`): the coin
+    opens for it under `key`, run from a commit the host's pins log `pins` records and the verifier's copy of main's
+    first-parent history `main` holds (`pinned_session`), and that session's files `session` (`session_named`): the coin
     commitment the challenger signed and the roots its release log shows it received.  Raises `CoinError` naming why, so
-    a window whose coins aren't that session's fails closed."""
-    return session_named(audited_session(ledger, window, key, verify), key, session, verify)
+    a window whose coins aren't that session's, or whose session ran any other tree, fails closed."""
+    return session_named(pinned_session(ledger, window, key, pins, main, verify), key, session, verify)
 
 
 def circuit_reason(period: str | None, circuit: Any, descriptor: Any) -> str | None:
@@ -1133,11 +1195,16 @@ def circuit_reason(period: str | None, circuit: Any, descriptor: Any) -> str | N
     return None
 
 
-def credited_session(ledger: Any, window: Any, key: ChallengerKey, descriptor: Any, verify: Verify) -> Audited:
-    """`audited_session`, counted toward its period: the window's session as the auditor's ledger names it, when
-    `descriptor`, the descriptor of the circuit the window's sessions prove, hashes to the circuit its period committed
-    (`circuit_reason`).  Raises `CoinError` naming why, so a window proving another circuit counts toward no period."""
-    audited = audited_session(ledger, window, key, verify)
+def credited_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, descriptor: Any,
+                     verify: Verify) -> Audited:
+    """`pinned_session`, counted toward its period: the window's session as the auditor's ledger names it, run from a
+    commit the host's pins log `pins` records on main's first-parent line `main`, when `descriptor`, the descriptor of
+    the circuit the window's sessions prove, hashes to the circuit its period committed (`circuit_reason`).  The pin
+    first, then the circuit; raises `CoinError` naming why, so a window whose session ran another tree, or that proves
+    another circuit, counts toward no period.  This is PoUW's per-window credit gate; the period-level pin hygiene over
+    the whole period (every window no older than the period's open pin, and none past the freshness floor) is
+    `pouw.credit`'s, which reads the pin this returns (`Audited.pinned`)."""
+    audited = pinned_session(ledger, window, key, pins, main, verify)
     why = circuit_reason(audited.period, audited.circuit, descriptor)
     if why is not None:
         raise CoinError(why)
@@ -1176,7 +1243,8 @@ def _pin(line: Any) -> str | None:
 def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     """Why session `session`, whose open's body is `opened`, didn't run main's code by the host's pins log `pins` (its
     lines, None when the verifier has none): the log malformed, the open sealing none of it, the log not beginning with
-    the lines the open sealed, or none of those lines pinning the open's `pinned`; None when one does."""
+    the lines the open sealed, or none of those lines pinning the open's `pinned`; None when one does.  An open the
+    ledger's check passed names its pin (`audited_session`); one that names none is refused as unrecorded."""
     if pins is None:
         return NO_PINS
     if type(pins) is not list:
@@ -1199,19 +1267,46 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
-    if opened["pinned"] not in commits[:n]:
-        return (f"session {session} ran commit {opened['pinned']}, which the host's pins log doesn't record as a "
-                "commit of main's history: repin the challenger host to a commit origin/main contains "
-                "(vy-challenger-pin) and rerun the window there")
+    pinned = opened.get("pinned")
+    if pinned not in commits[:n]:
+        return (f"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's "
+                "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
+                "window there")
     return None
 
 
-def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, verify: Verify) -> Audited:
+def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
+    """Why session `session`, run from commit `pinned`, didn't run a tree main's check passed by the verifier's own copy
+    of main's first-parent history `main` (its commits, the auditor's ``git rev-list --first-parent origin/main``; None
+    when the verifier has none): the copy missing or malformed, or `pinned` not on it; None when it is.  Ancestry is not
+    enough: a branch commit merged into main is in main's history, but main's check ran on the merge, never on it."""
+    if main is None:
+        return NO_MAIN
+    if type(main) is not list or not all(_digest_hex(c, 40) for c in main):
+        return f"the verifier's copy of main's history is malformed: {MAIN_FORM}"
+    if pinned not in main:
+        return (f"session {session} ran commit {pinned}, which the host's pins log records but which is not on main's "
+                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
+                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
+                "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+    return None
+
+
+def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, verify: Verify) -> Audited:
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
-    log `pins` (its lines; infra's published one) records the open's pin as a commit of main's history (`pins_reason`).
-    Raises `CoinError` naming why, so a session the host ran from any other tree fails closed."""
+    log `pins` (its lines; the auditor host's operator's published one) records the open's pin (`pins_reason`) and the
+    verifier's own copy of
+    main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
+    the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
+    session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
+    older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
+    that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
+    remote bandwidth audit (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
+    is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
-    why = pins_reason(audited.session, opened, pins)
+    why = (pins_reason(audited.session, opened, pins)
+           or first_parent_reason(audited.session, opened.get("pinned"), main))
     if why is not None:
         raise CoinError(why)
     return audited
@@ -1221,7 +1316,8 @@ class LiveChallenger:
     """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
     recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
-    Lean verifier of record's read of it (`IO.getRandomBytes`, A3)."""
+    Lean verifier's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
+    (`coin_claim`), None for an unnamed source, which a served challenger refuses (`served_claim`)."""
 
     def __init__(self, scheme: str, epoch: int, families: Sequence[tuple[str, int]],
                  entropy: Callable[[int], bytes]) -> None:
@@ -1229,6 +1325,7 @@ class LiveChallenger:
         why = layout_problem(scheme, epoch, families)
         if why is not None:
             raise CoinError(why)
+        self.claim = coin_claim(entropy)
 
         def draw(n: int) -> bytes:
             out = entropy(n)
@@ -1288,7 +1385,7 @@ class LiveRecord:
     def log(self) -> tuple[dict[str, Any], ...]:
         """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
         "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
-        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-nebius-host`'s."""
+        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-host`'s."""
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:
@@ -1340,11 +1437,11 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
-           "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
-           "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
+           "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
+           "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
            "RECORD_FORM", "RECORD_ROLE",
            "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
-           "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "key_of_record", "lane_of", "later", "layout_problem",
+           "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",

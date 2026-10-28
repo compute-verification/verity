@@ -4,7 +4,8 @@
 // stream, grid, block, dynamic shared memory, the 16 pointers and 16 ints of Args) is appended to $FAKE_LOG as one JSON line.
 // Streams are handles only: work runs in issue order, and a launch or wait on a destroyed stream fails.  Kernels do nothing, except
 // the *_smem probes, which write $FAKE_SMEM (default 197728).  Functions are the names in $FAKE_KERNELS (comma-separated).
-// Launches and asynchronous copies log their stream.
+// Launches and asynchronous copies log their stream; cuLaunchKernelEx takes programmatic stream serialization alone, and logs
+// "pdl":1 for a launch that allows it.
 // The device is an H100 unless $FAKE_NAME, $FAKE_SMS, $FAKE_MAXDYN (the opt-in dynamic shared memory limit), $FAKE_CC
 // ("major.minor") and $FAKE_UUID (32 hex digits) say otherwise.  A function's static shared memory is 0, so it may opt in to
 // all of $FAKE_MAXDYN.
@@ -24,6 +25,11 @@ enum { CUDA_SUCCESS = 0, CUDA_ERROR_INVALID_VALUE = 1, CUDA_ERROR_OUT_OF_MEMORY 
 enum { CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75,
        CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN = 97,
        CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES = 1, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8 };
+
+// cuLaunchKernelEx's config and attribute (CUlaunchAttributeValue is a 64-byte union; the one attribute taken is an int)
+typedef struct { int id; char pad[4]; int value; char rest[60]; } CUlaunchAttribute;
+typedef struct { unsigned gx, gy, gz, bx, by, bz, smem; CUstream s; CUlaunchAttribute* attrs; unsigned n; } CUlaunchConfig;
+enum { CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION = 6 };
 
 enum { MAX_ALLOC = 4096, MAX_FN = 128 };
 struct Alloc { uintptr_t base; size_t size; };
@@ -163,17 +169,16 @@ CUresult CUDAAPI cuStreamDestroy_v2(CUstream s) {
 }
 
 struct Args { uint64_t p[16]; int32_t i[16]; };
-CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned gx, unsigned gy, unsigned gz, unsigned bx, unsigned by, unsigned bz,
-                                unsigned smem, CUstream s, void** params, void** extra) {
-  (void)extra;
+static CUresult launch(CUfunction f, unsigned gx, unsigned gy, unsigned gz, unsigned bx, unsigned by, unsigned bz, unsigned smem,
+                       CUstream s, void** params, int pdl) {
   const int i = (int)(uintptr_t)f - 1;
   if (i < 0 || i >= g_nfn || !params || !stream_ok(s)) return CUDA_ERROR_INVALID_HANDLE;
   if (!gx || !gy || !gz || bx * by * bz > 1024 || !bx) return CUDA_ERROR_INVALID_VALUE;
   if ((int)smem > g_maxdyn[i]) return CUDA_ERROR_INVALID_VALUE;
   const struct Args* a = params[0];
   FILE* L = log_file();
-  fprintf(L, "{\"op\":\"launch\",\"name\":\"%s\",\"stream\":%llu,\"grid\":[%u,%u,%u],\"block\":%u,\"smem\":%u,\"p\":[", g_names[i],
-          (unsigned long long)(uintptr_t)s, gx, gy, gz, bx, smem);
+  fprintf(L, "{\"op\":\"launch\",\"name\":\"%s\",%s\"stream\":%llu,\"grid\":[%u,%u,%u],\"block\":%u,\"smem\":%u,\"p\":[",
+          g_names[i], pdl ? "\"pdl\":1," : "", (unsigned long long)(uintptr_t)s, gx, gy, gz, bx, smem);
   for (int j = 0; j < 16; j++) fprintf(L, "%s%llu", j ? "," : "", (unsigned long long)a->p[j]);
   fprintf(L, "],\"i\":[");
   for (int j = 0; j < 16; j++) fprintf(L, "%s%d", j ? "," : "", a->i[j]);
@@ -187,6 +192,21 @@ CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned gx, unsigned gy, unsigned
   }
   g_ms += 0.1;
   return CUDA_SUCCESS;
+}
+CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned gx, unsigned gy, unsigned gz, unsigned bx, unsigned by, unsigned bz,
+                                unsigned smem, CUstream s, void** params, void** extra) {
+  (void)extra;
+  return launch(f, gx, gy, gz, bx, by, bz, smem, s, params, 0);
+}
+CUresult CUDAAPI cuLaunchKernelEx(const CUlaunchConfig* c, CUfunction f, void** params, void** extra) {
+  (void)extra;
+  int pdl = 0;
+  if (!c || (c->n && !c->attrs)) return CUDA_ERROR_INVALID_VALUE;
+  for (unsigned j = 0; j < c->n; j++) {
+    if (c->attrs[j].id != CU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION) return CUDA_ERROR_INVALID_VALUE;
+    pdl = c->attrs[j].value != 0;
+  }
+  return launch(f, c->gx, c->gy, c->gz, c->bx, c->by, c->bz, c->smem, c->s, params, pdl);
 }
 struct Ev { double t; };
 CUresult CUDAAPI cuEventCreate(CUevent* e, unsigned flags) { (void)flags; *e = (CUevent)calloc(1, sizeof(struct Ev)); return CUDA_SUCCESS; }

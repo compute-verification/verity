@@ -1,4 +1,4 @@
-description = "vllm-int8 with lm_head on int8 too (VLLM-49): the output head's activations one scale per token (amax / 127), its weights one per row (top 127), rounded; float softmax"
+description = "vllm-int8 with lm_head on int8 too: the output head's activations one scale per token (amax / 127), its weights one per row (top 127), rounded; float softmax"
 
 [[linear]]
 step = "int8"

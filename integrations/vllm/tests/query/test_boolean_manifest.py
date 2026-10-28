@@ -1,10 +1,10 @@
 """A Boolean Program's manifest is its word Program's, apart from the Program digest it records.
 
-`TargetProfile.ir = "boolean"` derives the word Program and lifts it to bits (`program.boolean.derived`), which keeps every Call,
+`TargetProfile.ir = "boolean"` derives the word Program and lifts it to bits (`program.frontend.boolean.derived`), which keeps every Call,
 node index and word leaf.  The Build writes the Boolean Program's instance sequence through each Call's word link
 (`pipeline.build_instances`: the word Definition `trace.word_of` names, checked against the word node, with the Boolean Definition
 as the row's `bits`), so `ProgramView`, the population, the protocol declarations (`SAMPLING_EVENTS`, ...) and the word check read
-the word Program's Calls: the same units, boundaries and committed values whichever IR the Program is in.  The word check counts the
+the word Program's Calls: the same units, boundaries and committed values whichever profile (word or Boolean) the Program is in.  The word check counts the
 Boolean Program's size in Boolean gates beside its word gates.  The Build writes the word Program beside the Boolean one
 (`program.boolean.write_word`), and the workload composition and the Match read the dir through it (`word_descriptor`).  The row is
 a tiny registered-values greedy serve of B0.
@@ -26,8 +26,8 @@ from verity_vllm.check.match import program_compare as PC  # noqa: E402
 from verity_vllm.pipeline import components as CO, manifest as MF  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
-from verity_vllm.program import boolean as BB  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions import boolean as BB  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
 from verity_vllm.query.required import SAMPLING_EVENTS, request_manifest  # noqa: E402
 
@@ -55,6 +55,7 @@ def _write(d: Path, rep) -> str:
 @pytest.fixture(scope="module")
 def row(tmp_path_factory):
     from verity_vllm.program.frontend import derive_examples as ex
+    from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import derive_report
 
     with torch.device("meta"):
@@ -62,7 +63,7 @@ def row(tmp_path_factory):
     word = derive_report(m, (torch.empty(3, dtype=torch.int32, device="meta"),), mode="profile", profile="b1-eager", config=C,
                          name="Serve", registered_values=True)
     assert word.ok, word.unsupported
-    bits = BB.derived(word)
+    bits = derived(word)
     assert bits.ok, bits.unsupported
     dirs, digests = {}, {}
     for ir, rep in (("word", word), ("boolean", bits)):
@@ -83,6 +84,7 @@ def _placeholder(x, digest: str):
     return json.loads(s.replace(digest, "<program>"))
 
 
+@pytest.mark.slow
 def test_the_boolean_program_names_its_word_program_and_its_rows_are_the_word_rows(row):
     word, bits, dirs, digests = row
     assert bits.program.word is word.program and digests["word"] != digests["boolean"]
@@ -94,6 +96,7 @@ def test_the_boolean_program_names_its_word_program_and_its_rows_are_the_word_ro
     assert any(r["bits"] != r["spec"] for r in b["rows"])
 
 
+@pytest.mark.slow
 def test_programview_reads_the_word_families_and_the_boolean_spec_of_each_call(row):
     _word, _bits, dirs, _digests = row
     Pw, Pb = (from_instances(str(dirs[ir] / "instances.json.gz")) for ir in ("word", "boolean"))
@@ -104,6 +107,7 @@ def test_programview_reads_the_word_families_and_the_boolean_spec_of_each_call(r
     assert all(c.bits is None for c in Pw.calls) and all(c.bits for c in Pb.calls)
 
 
+@pytest.mark.slow
 def test_the_boolean_manifest_is_the_word_manifest_apart_from_the_program_digest(row):
     """Every identity and every header field but the Program's own: its digest, its function id (the Boolean root binds
     `IR='boolean'`) and what is digested over them (the manifest digest, the partition's)."""
@@ -119,6 +123,7 @@ def test_the_boolean_manifest_is_the_word_manifest_apart_from_the_program_digest
     assert {k for k in set(mw) | set(mb) if mw.get(k) != mb.get(k)} <= {"manifest_digest", "unreturned_digest"}
 
 
+@pytest.mark.slow
 def test_the_word_check_cuts_the_word_definitions_and_counts_boolean_gates_beside(row):
     _word, bits, dirs, _digests = row
     out = {}
@@ -137,6 +142,7 @@ def test_the_word_check_cuts_the_word_definitions_and_counts_boolean_gates_besid
     assert MF.word_record(b, strict=False)["boolean_gates"] == b["boolean_gates"]
 
 
+@pytest.mark.slow
 def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(row, tmp_path):
     """The word Program beside the Boolean one is the word derive's, and the workload composition (`pipeline.components`) and the
     Match (`program_compare.load_derived`) read it: the same component and the same Program as the word dir's, the Boolean

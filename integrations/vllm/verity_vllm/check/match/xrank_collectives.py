@@ -1,4 +1,4 @@
-"""[R16 tp TP-12, rev F-r16-18] CROSS-RANK REPLAY OF THE COLLECTIVE OUTPUTS from the two ranks' COMMITTED partials.
+"""[TP-12] CROSS-RANK REPLAY OF THE COLLECTIVE OUTPUTS from the two ranks' COMMITTED partials.
 
 What TP adds to a Commit is the all-reduce / all-gather OUTPUT every layer consumes; at TP2 the per-rank sampled replay evaluates the rank
 partial (`Gemm_v1{K/W}` on the shard) but the collective output itself had no registered evaluator (`AllReduce2_v1`, `AllGather2_v1`,
@@ -41,9 +41,9 @@ FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}         
 
 
 def collective_family(kind: str, world: int) -> str:
-    """[lane vllm-tp-n] the received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
+    """The received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
     selector (`b1_tp2.all_reduce` / `all_gather`): `AllReduce2_v1` / `AllGather2_v1` at world 2, `AllReduce_v2` / `AllGather_v1` beyond."""
-    from verity_vllm.program.registry import b1_tp2 as TP2
+    from verity.ml.definitions.registry import b1_tp2 as TP2
     sel = {"all_reduce": TP2.all_reduce, "all_gather": TP2.all_gather}.get(kind)
     return sel(int(world), 1).id.split("{", 1)[0] if sel else kind
 EMBED_MARKERS = ("embed_tokens", "embedding", "wte")
@@ -79,7 +79,7 @@ def spec_key(spec: str) -> tuple[str, tuple]:
     """(family, sorted (static, value)) of a bound Definition id such as ``AllReduceMultimem_v1{WORLD=8,SIZE=..,TREES=((..),..),FTZ=False}``:
     the statics split at top-level commas, each value the descriptor's JSON (``EPS={"f64":"0x1.4f8b588e368f1p-17"}``, ``FMA=true``,
     as a Program's rows spell it) or else a Python literal (``bind(..).id``'s ``EPS=1e-05``, nested tuples), so both spell one key."""
-    from verity_vllm.query.program_view import _static_value
+    from verity.ml.definitions.call_scope import static_value
 
     fam, _, rest = str(spec).partition("{")
     body = rest[:-1] if rest.endswith("}") else rest
@@ -97,7 +97,7 @@ def spec_key(spec: str) -> tuple[str, tuple]:
     for it in items:
         k, _, v = it.partition("=")
         try:
-            val = _static_value(json.loads(v.strip()))
+            val = static_value(json.loads(v.strip()))
         except ValueError:
             try:
                 val = ast.literal_eval(v.strip())
@@ -118,9 +118,9 @@ def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, row
                     w: np.ndarray | None = None) -> tuple[np.ndarray, ...]:
     """The routed Definition's words at the picked rows: `parts` (WORLD, R, N) the ranks' partial rows `rows` of an M x N call (the flat
     M * N words a Multimem / Custom call reads, row-major).  Returns (out,), or (normed, r) for the fused norm (`res` (R, N), `w` (N))."""
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import tp_allreduce as T
-    from verity_vllm.program.registry import tp_allreduce_check as TC
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import tp_allreduce as T
+    from verity.ml.definitions.registry import tp_allreduce_check as TC
 
     parts = np.asarray(parts, np.uint16)
     W, R, N = parts.shape
@@ -277,7 +277,7 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
     recv: Tensor|None, recv_member, why}]}.  Same pick order on every rank (same seed, same layout names).  Bit-exact rules per kind."""
     import torch
 
-    from verity_vllm.program.registry.b1_tp2 import allreduce_order
+    from verity.ml.definitions.registry.b1_tp2 import allreduce_order
 
     res: dict[str, Any] = {"result": None, "world": world, "picks": 0, "equal": 0, "mismatches": [], "missing": [], "by_family": {}, "by_stratum": {},
                            "rule": ("per pick (site, step, row subset): all_reduce -> committed received (each rank) == bf16(f32(part_rank0) + f32(part_rank1)) elementwise "
@@ -310,7 +310,7 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
         st["picks"] += 1
         res["picks"] += 1
         if p0["kind"] == "all_reduce" and is_embedding_site(p0["site"]):
-            # EmbeddingShard_v1 leg (ruling 27): each rank's committed partial rows == masked gather of the committed ids from the rank's pinned
+            # EmbeddingShard_v1 leg: each rank's committed partial rows == masked gather of the committed ids from the rank's pinned
             # vocab shard (evaluated on the rank: `emb` = {ok, n_diff, vocab_range, masked_rows, why}); missing on a rank = named FAIL
             ef = res["by_family"].setdefault("EmbeddingShard_v1", {"picks": 0, "equal": 0, "mismatch": 0, "missing": 0})
             ef["picks"] += 1
@@ -408,7 +408,7 @@ def fold_pairs(per_pair: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any]]) -> dict[str, Any]:
-    """[rev M-0418 hardening] the pass's strata SITES against the sites of the replay-unreplayable collective families named by the ranks'
+    """The pass's strata SITES against the sites of the replay-unreplayable collective families named by the ranks'
     Programs (`unreplayable_sites` from each rank dump: family -> [op_path]).  A family site with no stratum is a NAMED gap (a received
     output committed without a committed partial, a collective kind the partial hook missed): the pass result becomes False by name.
     Field read for the finalizer: coverage_of_unreplayable.complete."""

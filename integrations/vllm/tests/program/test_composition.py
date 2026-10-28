@@ -1,4 +1,4 @@
-"""Compositional reuse (lane CF1): the Ampere and Hopper B1 programs are two binding
+"""Compositional reuse: the Ampere and Hopper B1 programs are two binding
 records of one `Serve_v2`, and the factored functions evaluated standalone on *captured* operands give the profile's
 words under the profile's statics.
 
@@ -6,7 +6,7 @@ words under the profile's statics.
     under the Hopper records to HP's `ServeHopper_v1` (`correspond_rebound`: same bodies, callee identity through the
     pairing; digests differ by construction because the identities carry the statics). The two records differ in
     `GEMM` and `ATTENTION` only; the cross binding is a different program.
-§3  Standalone on captured operands (CPU, numpy, the IR oracle): GEMM on the 30 authenticated RTX 4090 coordinates and
+§3  Standalone on captured operands (CPU, numpy, the reference evaluator): GEMM on the 30 authenticated RTX 4090 coordinates and
     on the H100 wgmma tiles; RMSNorm on the RTX 4090 Triton rows and the SmolLM2 fused rows; attention on the RTX 4090
     FA2 calls. Same function + Ampere statics -> Ampere words; Hopper statics -> the Hopper words (tiles) / HP's FA3
     model (no Hopper attention operands are archived locally: CAPTURE_MISSING, composition.md §3); the cross recorded.
@@ -44,9 +44,9 @@ B0_DIV = FIX / "B0-divergence-20260907T1604Z"
 TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-artifacts" / "hp")) / "tc-hopper" / "r1"
 
 from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
+from verity.ml.circuits.evaluation import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
-from verity_vllm.program.registry import b1, hopper as H, prims as P  # noqa: E402
+from verity.ml.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
 from verity_vllm.program.frontend import serve_families
 from tests.program.crosscheck import _standalone  # noqa: E402
 
@@ -61,7 +61,7 @@ def _need(path: Path, what: str):
 
 
 def _ev(spec, *arrays) -> np.ndarray:
-    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the IR oracle."""
+    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the reference evaluator."""
     prog, call = _standalone(spec)
     args = [int(v) for a in arrays for v in np.asarray(a).ravel()]
     return np.array(evaluate_call(prog.circuit, call, args), dtype=np.uint32)
@@ -343,8 +343,8 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
     locally); the two differ on the recorded number of words. T = 100/193/300 are held-out positions (composition.md §3:
     2/4/5 FA2 blocks, the last-visited one partial; 1/2/3 FA3 blocks)."""
     _need(W11 / "natural" / "index.json", "W11 attention fixtures")
-    from verity_vllm.program.kernels import fa2_model as FA2, fa3_model as FA3
-    from verity_vllm.program.kernels.fa2_relation import tables_dir
+    from verity.ml.definitions.numerics import fa2_model as FA2, fa3_model as FA3
+    from verity.ml.definitions.numerics.fa2_relation import tables_dir
     try:
         FA3.lib()
     except Exception as e:  # noqa: BLE001
@@ -446,7 +446,7 @@ def test_authored_v2_corresponds_to_registry_v2(label, name, statics):
 
 
 # =====================================================================================================================
-# [E7 D54 2026-09-13] Serve_v4: the kernel-geometry attention chain beside the untouched Serve_v1
+# Serve_v4: the kernel-geometry attention chain beside the untouched Serve_v1
 # =====================================================================================================================
 
 
@@ -471,7 +471,7 @@ def test_serve_v1_is_untouched_and_serve_v4_is_registered_beside_it():
     assert dict(bind(b1.AttnBlock, D=64, NVIS=1, FIRST=True).signature()[0])["k"].n == 64
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=128).signature()[0])["k"].n == 128
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=64).signature()[0])["k"].n == 64
-    # the identity binder (D57): no geometry -> Serve_v1; a geometry -> Serve_v4{..., BN}; mismatched pairs refused
+    # the identity binder: no geometry -> Serve_v1; a geometry -> Serve_v4{..., BN}; mismatched pairs refused
     G = {"kernel": "fa2-splitkv-align", "kBlockM": 64, "kBlockN": 128, "num_splits": 1}
     assert serve_families.serve_program(TINY, 3, 2).id == bind(b1.Serve, C=TINY, LP=3, STEPS=2).id
     assert serve_families.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id == bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=128).id

@@ -15,7 +15,11 @@ default build on the same GPU, `--baseline`:
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so --baseline DIR/fa_tap_exactness.json --out DIR_G
 
 An FA3 build is checked under FA3's per-iteration `Check_inf` chain with `--construction check-inf-per-iteration` (property (g)): the MS
-words against `AttnBlock_v4` and every output row against `Attention_v4` on the launch's inputs.
+words against `AttnBlock_v4` and every output row against `Attention_v4` on the launch's inputs.  `--against-decode` runs the prefill
+cases only and also checks every row against the decode-shaped Definitions (`Attention_v4` at the one-row decode's tile and
+`MASKED_FROM`, which the window circuit binds at prompt positions too), ending in a `FA3-PREFILL-VS-DECODE EXACT|INEXACT` line:
+
+    $PY tests/properties/fa_tap_exactness_gpu.py --so .../verity_fa3_matReq.so --hdims 64 --construction check-inf-per-iteration --against-decode --out DIR
 """
 from __future__ import annotations
 
@@ -33,8 +37,9 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.properties.fa_tap_exactness import (CONSTRUCTIONS, FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_ms,
-                                                check_row3, expected_written, geometry, masked_digest, masked_from, negative_ok, negatives,
-                                                scale_log2_bits, seal, verify_record, visited_rows)
+                                                check_row3, decode_shaped, decode_tile, expected_written, geometry, masked_digest,
+                                                masked_from, negative_ok, negatives, prefill_cases, scale_log2_bits, seal, verify_record,
+                                                visited_rows)
 from verity_vllm.commit.hidden_stream import StreamLayout
 
 
@@ -147,32 +152,37 @@ def _words(x) -> np.ndarray:
     return x.contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
 
 
-def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, Any]) -> dict[str, Any]:
+def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, Any], decode: bool = False) -> dict[str, Any]:
     """Every output row of an FA3 case against `Attention_v4` on the launch's inputs: per query token, each head's query over the T keys
     its row sees (paged K/V gathered through the block table), block b guarded iff b >= the row's tile's `n_block_min_causal_local_mask`.
     The twin (`derived_rows.attention_head_states`) evaluates the heads it covers; a head with a non-finite operand or accumulator goes to
-    the reference evaluator (`AttentionHead_v4`, gate by gate)."""
+    the reference evaluator (`AttentionHead_v4`, gate by gate).  `decode`: each row against the decode-shaped Definition instead, the
+    one-row decode's tile (`decode_tile`) and `MASKED_FROM` (its row 0's).  Mismatched rows are counted, those of a token whose every score
+    is special (`SPECIAL`) apart, with the fewest keys a mismatched row sees."""
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import fa3_check_inf as F3
-    from verity_vllm.program.registry import attention_vocab
-    from verity_vllm.program.registry import hopper
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import fa3_check_inf as F3
+    from verity.ml.definitions.registry import attention_vocab
+    from verity.ml.definitions.registry import hopper
 
     q, k, v, o = _words(t["q"]), _words(t["k"]), _words(t["v"]), _words(out)
     bt = t["block_table"].cpu().numpy()
-    H, Hk, BN, kBM = c["H"], c["Hk"], geo["BN"], geo["kBM"]
+    H, Hk = c["H"], c["Hk"]
     g = H // Hk
+    kBM, BN = decode_tile(D, g) if decode else (geo["kBM"], geo["BN"])
     kvh = np.arange(H) // g
+    special = {tk for toks in (c.get("special") or {}).values() for tk in toks}
     dot16, inv = DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]
-    rec: dict[str, Any] = {"rows": 0, "heads": 0, "mismatch": 0, "reference_heads": 0, "unevaluated": 0}      # mismatch: heads
+    rec: dict[str, Any] = {"rows": 0, "heads": 0, "mismatch": 0, "mismatch_rows": 0, "special_mismatch_rows": 0, "min_T_mismatch": None,
+                           "reference_heads": 0, "unevaluated": 0, **({"tile": [kBM, BN]} if decode else {})}      # mismatch: heads
     tok = 0
     for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
         keys = np.arange(sk)
         kseq, vseq = k[bt[seq, keys // PAGE], keys % PAGE], v[bt[seq, keys // PAGE], keys % PAGE]      # (sk, Hk, D)
         for r in range(sq):
             T = r + 1 + sk - sq
-            mf = attention_vocab.fa3_masked_from(T, BN, r, kBM, g)
+            mf = attention_vocab.fa3_masked_from(T, BN, 0 if decode else r, kBM, g)
             kk = np.ascontiguousarray(np.transpose(kseq[:T], (1, 0, 2))[kvh])                            # (H, T, D)
             vv = np.ascontiguousarray(np.transpose(vseq[:T], (1, 0, 2))[kvh])
             st = DR.attention_head_states(q[tok + r], kk, vv, BN, dot16=dot16, inv=inv, masked_from=mf)
@@ -190,6 +200,10 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
             rec["rows"] += 1
             rec["heads"] += H
             rec["mismatch"] += int(bad.size)
+            if bad.size:
+                rec["mismatch_rows"] += 1
+                rec["special_mismatch_rows"] += int(tok + r in special)
+                rec["min_T_mismatch"] = T if rec["min_T_mismatch"] is None else min(rec["min_T_mismatch"], T)
             if bad.size and "first_mismatch" not in rec:
                 h = int(bad[0])
                 rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "masked_from": mf,
@@ -199,9 +213,10 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
 
 
 def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, baseline: dict[tuple[str, int], str] | None = None,
-               construction: str = CONSTRUCTIONS[0]) -> dict[str, Any]:
+               construction: str = CONSTRUCTIONS[0], against_decode: bool = False) -> dict[str, Any]:
     """One case at head dim `D`; a guarded-max build (`src.stats["row3"]`) also checks ROW word 3 and compares the rest of the six classes
-    with the default build's (`baseline`: (case, D) -> its `stream_sha256_masked`); a build with the MS class (`src.ms`) checks it."""
+    with the default build's (`baseline`: (case, D) -> its `stream_sha256_masked`); a build with the MS class (`src.ms`) checks it;
+    `against_decode` also checks every output row against the decode-shaped Definitions (`out_vs_decode`)."""
     import torch
 
     geo = geometry(fa_version, c, D)
@@ -233,6 +248,8 @@ def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, basel
         rec["ms"] = check_ms(words, layout, visited_rows(c, geo), scale_log2_bits(c, D), masked_from=masked_from(c, geo) if per_iteration else None)
     if per_iteration:
         rec["out_vs_ir"] = out_vs_ir(c, D, t, out_t, geo)
+    if against_decode:
+        rec["out_vs_decode"] = out_vs_ir(c, D, t, out_t, geo, decode=True)
     rec["ok"] = case_ok(rec)
     return rec
 
@@ -275,9 +292,10 @@ def _baseline(path: str | None, fa_version: int, env: dict[str, Any]) -> tuple[d
 
 
 def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, baseline: str | None = None,
-        construction: str = CONSTRUCTIONS[0]) -> dict[str, Any]:
+        construction: str = CONSTRUCTIONS[0], against_decode: bool = False) -> dict[str, Any]:
     """Check the tap build at `so` on this GPU (a guarded-max build against the default build's record `baseline`) and write the sealed
-    record to `<out>/fa_tap_exactness.json`."""
+    record to `<out>/fa_tap_exactness.json`.  `against_decode` (FA3, `check-inf-per-iteration`): the prefill cases only
+    (`prefill_cases`), each row also against the decode-shaped Definitions, and a `FA3-PREFILL-VS-DECODE` line."""
     import torch
     import vllm.vllm_flash_attn as vfa
 
@@ -299,6 +317,9 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
     base_ref, base = _baseline(baseline, fa_version, env)
     if construction != CONSTRUCTIONS[0] and fa_version != 3:
         raise SystemExit(f"--construction {construction}: only an FA3 build has another attention construction")
+    if against_decode and construction != "check-inf-per-iteration":
+        raise SystemExit("--against-decode: the decode-shaped Definitions are Attention_v4's, so give an FA3 build and "
+                         "--construction check-inf-per-iteration")
     doc: dict[str, Any] = {
         "schema": SCHEMA, "backend": f"fa{fa_version}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "argv": sys.argv,
         "environment": env,
@@ -307,12 +328,12 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
         "installed": {"op": ".".join(INSTALLED[fa_version]), "so": installed[0] if installed else None,
                       "sha256": _sha256(installed[0]) if installed else None},
         **({"baseline": base_ref} if base_ref else {}), **({"construction": construction} if construction != CONSTRUCTIONS[0] else {}),
-        "cases": [], "negatives": []}
+        **({"against_decode": True} if against_decode else {}), "cases": [], "negatives": []}
     for D in hdims or src.stats["hdims"]:
-        for i, c in enumerate(cases(fa_version, quick)):
-            rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i, base, construction)
+        for i, c in enumerate(prefill_cases(quick) if against_decode else cases(fa_version, quick)):
+            rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i, base, construction, against_decode)
             doc["cases"].append(rec)
-            g, ms, oi = rec.get("row3"), rec.get("ms"), rec.get("out_vs_ir")
+            g, ms, oi, od = rec.get("row3"), rec.get("ms"), rec.get("out_vs_ir"), rec.get("out_vs_decode")
             print(f"[fa-tap] fa{fa_version} hd{D} {c['name']:30s} " + (rec.get("error") or
                   f"tile {rec['kBM']}x{rec['BN']} HB={rec['HB']} M={rec['M']} NB={rec['NB']} skipped={rec['skipped']} "
                   f"==installed {rec['out_lse_eq_installed']} ==untapped {rec['out_lse_eq_untapped']} spill={rec['spill_outside_layout']} "
@@ -320,7 +341,9 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
                   f"{g['first_block_nonzero']} !=ir {g['ir_mismatch']}/{g['ir_sampled']} ==baseline {g['stream_eq_baseline']}" if g else "")
                   + (f" ms words={ms['ms_words']} !=ir-twin {ms['ms_mismatch']} (row_max -inf {ms['ms_mismatch_neg_inf_max']}) !=ir "
                      f"{ms['ir_mismatch']}/{ms['ir_sampled']}" + (f" unguarded {ms['unguarded_words']}" if "unguarded_words" in ms else "") if ms else "")
-                  + (f" out-vs-IR rows={oi['rows']} !={oi['mismatch']} ref-heads={oi['reference_heads']} uneval={oi['unevaluated']}" if oi else ""))
+                  + (f" out-vs-IR rows={oi['rows']} !={oi['mismatch']} ref-heads={oi['reference_heads']} uneval={oi['unevaluated']}" if oi else "")
+                  + (f" vs-decode {od['tile'][0]}x{od['tile'][1]} rows={od['rows']} !={od['mismatch']} heads in {od['mismatch_rows']} rows "
+                     f"(special {od['special_mismatch_rows']}) fewest keys {od['min_T_mismatch']} uneval={od['unevaluated']}" if od else ""))
                   + f" -> {'OK' if rec['ok'] else 'FAIL'}", flush=True)
         for j, (c, decl, why) in enumerate(negatives(fa_version, D)):
             rec = _guarded(check_negative, {"case": c["name"], "D": D, "why": why}, src, fa_version, c, D, decl, why, 7 * D + j)
@@ -333,6 +356,11 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, indent=1) + "\n")
     print(f"FA-TAP-EXACTNESS {'OK' if doc['ok'] else 'FAIL'} {doc['digest']} {path}", flush=True)
+    if against_decode:
+        s = decode_shaped(doc)
+        print(f"FA3-PREFILL-VS-DECODE {'EXACT' if s['exact'] else 'INEXACT'} rows={s['rows']} heads={s['heads']} mismatched heads={s['mismatch']} "
+              f"in rows={s['mismatch_rows']} (special-score rows {s['special_mismatch_rows']}) fewest keys mismatched={s['min_T_mismatch']} "
+              f"uneval={s['unevaluated']} cases={s['cases']} record {doc['digest']}", flush=True)
     return doc
 
 
@@ -346,6 +374,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="a guarded-max build: the default build's record on this GPU, whose six classes (but ROW word 3) it must equal")
     ap.add_argument("--construction", choices=CONSTRUCTIONS, default=CONSTRUCTIONS[0],
                     help="FA3: the attention construction the MS words and outputs are checked against (check-inf-per-iteration: Attention_v4)")
+    ap.add_argument("--against-decode", action="store_true",
+                    help="FA3, check-inf-per-iteration: only the prefill cases, every row also against the decode-shaped Definitions "
+                         "(Attention_v4 at the one-row decode's tile and MASKED_FROM)")
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
@@ -355,7 +386,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems or not doc.get("ok") else 0
     if not (a.so and a.out):
         ap.error("--so and --out are required (or --verify RECORD)")
-    doc = run(a.so, a.out, [int(h) for h in a.hdims.split(",")] if a.hdims else None, a.quick, a.baseline, a.construction)
+    doc = run(a.so, a.out, [int(h) for h in a.hdims.split(",")] if a.hdims else None, a.quick, a.baseline, a.construction,
+              a.against_decode)
     return 0 if doc["ok"] else 1
 
 

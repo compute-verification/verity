@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_flock.record_text import session_text
 
 FLOCK = Path(__file__).resolve().parents[1]
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
@@ -56,7 +57,7 @@ def sessions(tmp_path_factory):
 
     store = tmp_path_factory.mktemp("store")
     try:
-        root, circuit = ci.fetch(FIXTURE, store), ci.fetch(CIRCUIT, store)
+        root, circuit = ci.fetch_sessions(FIXTURE, store), ci.fetch(CIRCUIT, store)
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     pin = (root / "stage" / "circuit.sha512").read_text().split()[0]
@@ -172,7 +173,7 @@ def edited(sessions, tmp_path_factory):
         shutil.copytree(seed, d)
         record = json.loads((seed / "session.json").read_text())
         edit(record)
-        (d / "session.json").write_text(json.dumps(record))
+        (d / "session.json").write_text(session_text(record))
         dirs.append(str(d))
     p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(circuit),
                         "--public", str(root / "stage" / "pub-4.bin"), "--coins", "seed", "--session", *dirs],

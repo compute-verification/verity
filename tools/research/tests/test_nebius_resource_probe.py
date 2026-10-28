@@ -38,11 +38,11 @@ def test_all_clear_under_every_watermark():
     assert P.evaluate(reading("n2", ws_pct=40.0), None, lim("n2")) == []
 
 
-def test_workspace_watermarks_differ_by_node():
-    assert P.evaluate(reading("n1", ws_pct=60.0), None, lim("n1")) == []
-    assert P.evaluate(reading("n2", ws_pct=60.0), None, lim("n2"))[0].startswith("HARD /workspace")
-    assert P.evaluate(reading("n1", ws_pct=81.0), None, lim("n1"))[0].startswith("/workspace 81.0%")
-    assert P.evaluate(reading("n1", ws_pct=86.0), None, lim("n1"))[0].startswith("HARD /workspace")
+def test_workspace_watermarks_warn_at_80_and_stop_checks_at_85():
+    for node in ("n1", "n2"):
+        assert P.evaluate(reading(node, ws_pct=60.0), None, lim(node)) == []
+        assert P.evaluate(reading(node, ws_pct=81.0), None, lim(node))[0].startswith("/workspace 81.0%")
+        assert P.evaluate(reading(node, ws_pct=86.0), None, lim(node))[0].startswith("HARD /workspace")
 
 
 def test_root_free_alert_and_hard_stop():

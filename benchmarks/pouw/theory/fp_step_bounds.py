@@ -1,7 +1,6 @@
-"""FP-STEP: every MMA an exact-integer FP8 route issues lies inside premise (a)'s small-grid regime, on every input
-(note:20261019T0457Z-draft-fpx-machine, round 2).
+"""FP-STEP: every MMA an exact-integer FP8 route issues lies inside premise (a)'s small-grid regime, on every input.
 
-Premise (a), `Accounting.Assumptions.TS.Fp8GridExact p` over `FpGridSmall` (Security/Models/Accounting/Assumptions/
+Premise (a), `Accounting.Assumptions.TS.Fp8GridExact p` over `FpGridSmall` (Security/Definitions/Accounting/Assumptions/
 FpMma.lean), grants one k32 MMA step its exact sum when the accumulator's value c and the step's 32 products are integer
 multiples of one 2^g (-126 <= g, g + p <= 128) and |c| + sum |t| < 2^(g+p). It is claimed at p = 24 for sm_120's QMMA
 and B200's kind::f8f6f4 and at p = 14 for H200's wgmma E4M3. A route reads nothing else of the FP adder when every MMA it

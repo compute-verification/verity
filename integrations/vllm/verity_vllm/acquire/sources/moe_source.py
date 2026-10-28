@@ -1,4 +1,4 @@
-"""[R13 moe / MOE-03] The fused-MoE block's value families as an acquisition source of the native committer (`NativeHostCommitter.attach_source`,
+"""The fused-MoE block's value families as an acquisition source of the native committer (`NativeHostCommitter.attach_source`,
 the FA2 `HiddenM1Source` precedent): the values the Program's MoE instances produce are materialised device tensors BETWEEN the block's
 kernels, but inside ONE module's forward (`MoERunner`), in workspace buffers the next layer overwrites -- a module forward hook sees only
 the final [M, H] sum.  This source wraps the three Python launch sites of the pinned vLLM and snapshots each producer's output into the
@@ -35,11 +35,11 @@ vLLM fuses the SiLU and the quant (`ops.silu_and_mul_per_block_quant`): no bf16 
 A MoE module that does not all-reduce its output on a rank (GLM-5.3: `reduce_results=False`; the next layer's fused all-reduce norm
 sums it) returns a value no other binder sees: on a TP rank (`world` > 1) the source binds it as `<module>/out` after the forward.
 
-[R16 moe FLUSH-03] "right after its kernel" is only true of a committer that copies at `_acquire`.  The gather collector
+"Right after its kernel" is only true of a committer that copies at `_acquire`.  The gather collector
 (`native_collect_v2b`) STAGES a descriptor and copies at the next flush point -- a module hook -- and the fused-MoE block has no hook
 between its launches: vLLM's TritonExperts carves `intermediate_cache1` (up) and `intermediate_cache3` (down) out of the same workspace
 (`_resize_cache(workspace2, ...)` twice; byte-for-byte alias when 2I == H), so the block's own w2 launch overwrites `up` before the next
-layer's `input_layernorm` pre-flush reads it -> the committed `up` was the same layer's `down` (R16 lane-moe C2 v3 on the real OLMoE B1
+layer's `input_layernorm` pre-flush reads it -> the committed `up` was the same layer's `down` (on the real OLMoE B1
 record, 320/320 MoeExpertGemm_v1 VUs).  The source therefore asks the committer to flush right after staging `up`
 (`committer.flush_after_plane("up")`: one gather launch per MoE layer per step on the gather collector, a no-op on the arena committer);
 `act`, `down`, `sum` are overwritten only by the next layer, after that layer's pre-flush, and the router outputs are fresh allocations.
@@ -72,7 +72,7 @@ act at `SiluMulClamp_v1`'s, sum at `MoeSum_v1`'s, router_w and router_ids at `ds
 layer's ids are the module's `GatherI32x{V}` rows, committed as `ids`, and the token ids those gathers read as `in`
 (`hash_router_input`); router_ids and ids are committed as their 32-bit words, as those rows are (`f32`).  `layer_of` tells
 `identity_check` the source's names, a hash layer holding one more.  The call boundaries at those ports are this source's (`claims`,
-one of `call_boundary_source.CLAIMS`): every TP rank attaches it (`engine.rank_worker`), and the CPU gate counts them as the MoE
+one of `call_boundary_source.CLAIMS`): every TP rank attaches it (`pipeline.tp.rank_worker`), and the CPU gate counts them as the MoE
 source's on several ranks when the manifest names no `moe_block_stream` plane (`taps.attached`).
 
 `<k>` is the layer index of the MoE module whose forward is executing (forward pre-hooks on every `MoERunner`-family module set it, and
@@ -96,7 +96,7 @@ from typing import Any
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
-from verity_vllm.program.registry.moe import router_kernel
+from verity.ml.definitions.registry.moe import router_kernel
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
 
@@ -203,7 +203,7 @@ class MoeBlockSource:
         self.active = False
         self.stats = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
                       "unattributed": 0, "shapes": {}, "plane_flushes": 0, "router": {}, "outputs": 0}
-        # [FLUSH-03] the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
+        # the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
         self._flush_after_plane = getattr(committer, "flush_after_plane", None)
         self.act_scaled: bool | None = None          # set by the run's first w2 launch: True when its A carries group scales (block FP8)
         self.planes: tuple[str, ...] = MOE_PLANES    # the planes every MoE layer binds per step, fixed with act_scaled
@@ -304,7 +304,7 @@ class MoeBlockSource:
         name = f"{self.module_of[self.cur_layer] if self.at_calls else f'moe/L{self.cur_layer}'}/{what}"
         self.c._acquire(name, t, job)
         if what == "up" and self._flush_after_plane is not None and self._flush_after_plane("up"):
-            self.stats["plane_flushes"] += 1             # [FLUSH-03] `up` leaves the device before the block's w2 launch overwrites its workspace
+            self.stats["plane_flushes"] += 1             # `up` leaves the device before the block's w2 launch overwrites its workspace
         nb = t.numel() * t.element_size()
         self.stats["launches"] += 1
         self.stats["bytes"] += nb
@@ -526,16 +526,16 @@ class MoeBlockSource:
                  "at_calls": self.at_calls, "hash_layers": sorted(self.hash_layers),
                  "router": dict(self.stats["router"]), "router_kernel_steps": {k: list(v) for k, v in self.router_steps.items()},
                  "outputs": {"modules": len(self.outputs), "bound": self.stats["outputs"]},
-                 "evidence": ("MOE-03 source: wraps vllm._custom_ops.topk_softmax / moe_sum / moe_wna16_marlin_gemm, "
+                 "evidence": ("MoE block source: wraps vllm._custom_ops.topk_softmax / moe_sum / moe_wna16_marlin_gemm, "
                               "fused_moe.invoke_fused_moe_triton_kernel (also at experts.triton_moe), grouped_topk_router.grouped_topk, "
                               "fused_topk_bias_router.fused_topk_bias and torch.ops._C.per_token_group_fp8_quant; per MoE layer per step "
                               f"{', '.join(self.planes)} "
-                              "snapshotted into the packed step stream (same run root) right after each kernel; [FLUSH-03] the up plane is "
+                              "snapshotted into the packed step stream (same run root) right after each kernel; the up plane is "
                               "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
                               "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
-                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py (cp-moe, "
-                              f"registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
+                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py "
+                              f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
 __all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",

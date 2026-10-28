@@ -38,7 +38,8 @@ def test_the_lut_is_fattn_refs():
     assert A.LUT.tolist() == O.LUT.tolist() and A.LUT[0] == 127 and A.LUT.dtype == np.int64
 
 
-@pytest.mark.parametrize("s, h, g, d", [(1, 4, 4, 8), (5, 8, 2, 64), (16, 8, 2, 64), (17, 4, 1, 32), (37, 8, 2, 64), (70, 32, 8, 128)])
+@pytest.mark.parametrize("s, h, g, d", [(1, 4, 4, 8), (5, 8, 2, 64), (16, 8, 2, 64), (17, 4, 1, 32), (37, 8, 2, 64),
+                                        pytest.param(70, 32, 8, 128, marks=pytest.mark.slow)])
 @pytest.mark.parametrize("scale, spread", [(1e-3, 1.0), (1.0, 1.0), (300.0, 1.0), (1.0, 0.3)])
 def test_a_window_is_the_reference(s, h, g, d, scale, spread):
     q, k, v = _window(s, h, g, d, seed=s * 7 + h, scale=scale)
@@ -174,6 +175,55 @@ def test_a_paged_batch_is_each_request_alone():
         _same(got, alone)
 
 
+def _both(query, windows, qsl, lens, ks, scale):
+    """`paged_attention` and `window_attention` (the credited read's form) over the same requests: their two outputs."""
+    kc, vc, table = _paged(windows, 16, seed=len(windows))
+    paged, flat = torch.full_like(query, float("nan")), torch.full_like(query, float("nan"))
+    seq_lens, qsl = torch.tensor(lens, dtype=torch.int32), torch.tensor(qsl, dtype=torch.int32)
+    int8_ops.paged_attention(query, kc, vc, qsl, seq_lens, table, ks, scale, paged)
+    offsets = [0]
+    for s in lens:
+        offsets.append(offsets[-1] + s)
+    keys = torch.cat([k[:s] for (_, k, _), s in zip(windows, lens)])
+    values = torch.cat([v[:s] for (_, _, v), s in zip(windows, lens)])
+    int8_ops.window_attention(query, keys, values, offsets, qsl, seq_lens, ks, scale, flat)
+    return paged, flat
+
+
+@pytest.mark.parametrize("s, m", [(1, 1), (40, 1), (9, 9), (40, 40), (40, 7), (64, 33), (70, 64), (130, 64), (130, 2)])
+def test_a_chunk_is_the_whole_prompt_of_its_window_row_for_row(s, m):
+    """A request's m rows (1 <= m <= s, a chunked prefill's chunk between a decode step's 1 and a whole prompt's s) are positions
+    s - m .. s - 1 over its s-token window: the same rows of that window's whole prompt at once, bit for bit, by both forms."""
+    q, k, v = _window(s, 8, 2, 64, seed=s * 31 + m)
+    ks = _k_scales(k)
+    whole = A.window_attention(q, k, v, ks, 64 ** -0.5)
+    for got in _both(q[s - m:], [(q, k, v)], [0, m], [s], ks, 64 ** -0.5):
+        _same(got, whole[s - m:])
+        _same(got, O.attention(q[s - m:], k, v, ks, 64 ** -0.5))
+
+
+def test_a_prompt_served_in_chunks_beside_other_requests():
+    """A 130-token prompt prefilled 64 rows a step (max_num_batched_tokens = 64's chunks: 64, 64, 2) in a batch with a decode step
+    and a whole short prompt: each step's chunk is its window's whole prompt's rows, its last row the whole prompt's.  An earlier
+    chunk reads its own window's V scales, so the first chunk's rows are not the 130-token prompt's."""
+    scale = 32 ** -0.5
+    q, k, v = _window(130, 8, 2, 32, seed=11)
+    other = [_window(23, 8, 2, 32, seed=12), _window(5, 8, 2, 32, seed=13)]
+    ks = _k_scales(torch.cat([k, other[0][1], other[1][1]]))
+    whole = A.window_attention(q, k, v, ks, scale)
+    for lo, hi in ((0, 64), (64, 128), (128, 130)):
+        query = torch.cat([other[0][0][22:], q[lo:hi], other[1][0]])
+        qsl, lens = [0, 1, 1 + hi - lo, 6 + hi - lo], [23, hi, 5]
+        for got in _both(query, [other[0], (q, k, v), other[1]], qsl, lens, ks, scale):
+            _same(got[1:1 + hi - lo], A.window_attention(q[:hi], k[:hi], v[:hi], ks, scale)[lo:])
+            _same(got[:1], A.window_attention(*other[0], ks, scale)[22:])
+            _same(got[1 + hi - lo:], A.window_attention(*other[1], ks, scale))
+            if hi == 130:
+                _same(got[hi - lo:1 + hi - lo], whole[-1:])
+            if lo == 0:
+                assert not torch.equal(_words(got[1:1 + hi - lo]), _words(whole[lo:hi]))
+
+
 def test_refusals():
     q, k, v = _window(8, 6, 4, 16, seed=1)
     with pytest.raises(ValueError, match="query heads"):
@@ -181,15 +231,26 @@ def test_refusals():
     q, k, v = _window(8, 4, 2, 16, seed=1)
     with pytest.raises(ValueError, match="K scales"):
         A.window_attention(q, k, v, torch.ones(3), 0.25)                # a scale per KV head
-    with pytest.raises(ValueError, match="rows of a"):
+    with pytest.raises(ValueError, match="8 rows of a 4-key window"):
         A.window_attention(q, k[:4], v[:4], torch.ones(2), 0.25)        # more rows than keys
+    with pytest.raises(ValueError, match="0 rows of a 8-key window"):
+        A.window_attention(q[:0], k, v, torch.ones(2), 0.25)            # no rows
     q2, k2, v2 = _window(4, 2, 1, 264, seed=1)
     with pytest.raises(ValueError, match="head dim"):
         A.window_attention(q2, k2, v2, torch.ones(1), 0.25)
+
+
+@pytest.mark.parametrize("qsl, s, m", [([0, 9], 8, 9), ([0, 1], 0, 1), ([3, 2], 8, -1)])
+def test_a_request_whose_rows_are_not_its_windows_last_rows_is_refused(qsl, s, m):
+    """More rows than its window has keys (a window of none bringing a row among them), or a negative count, by either form."""
+    q, k, v = _window(9, 4, 2, 16, seed=1)
     kc, vc, table = _paged([(q, k, v)], 16, seed=0)
-    with pytest.raises(ValueError, match="chunked prefill"):
-        int8_ops.paged_attention(q[:3], kc, vc, torch.tensor([0, 3], dtype=torch.int32), torch.tensor([8], dtype=torch.int32), table,
-                          torch.ones(2), 0.25, torch.empty_like(q[:3]))
+    args = (torch.tensor(qsl, dtype=torch.int32), torch.tensor([s], dtype=torch.int32))
+    why = f"request 0 brings {m} rows of a {s}-token window; its rows are the window's last 1 .. {s}"
+    with pytest.raises(ValueError, match=why):
+        int8_ops.paged_attention(q, kc, vc, *args, table, torch.ones(2), 0.25, torch.empty_like(q))
+    with pytest.raises(ValueError, match=why):
+        int8_ops.window_attention(q, k[:s], v[:s], [0, s], *args, torch.ones(2), 0.25, torch.empty_like(q))
 
 
 def test_the_cache_is_pages_slots_heads_k_then_v():

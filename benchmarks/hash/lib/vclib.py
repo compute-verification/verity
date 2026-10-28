@@ -1,4 +1,4 @@
-"""libvc's Python binding (ctypes): plans built from the references' own prefix blocks, launches on raw device pointers.
+"""libvc's Python binding (ctypes): plans built from the references' own prefix chunks, launches on raw device pointers.
 
 A committer passes device pointers as ints (``tensor.data_ptr()``) and its stream as an int
 (``torch.cuda.current_stream().cuda_stream``); nothing here allocates on the device or synchronizes. Every prefix the
@@ -13,7 +13,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 ABI = 1
 ROW_NONE, ROW_V2, ROW_SEG, ROW_TILE = 0, 1, 2, 3
 SALT_GIVEN, SALT_PRF, SALT_CHACHA64, SALT_CHACHA_RFC = 0, 1, 2, 3
@@ -111,6 +114,13 @@ def hm96_rows(domain_id: bytes, row_bits: int, salt: tuple = ("given",), schema:
     return Spec(**row_v2_spec(domain_id, row_bits, schema=schema.encode(), **_hm96(), **_salt(salt)))
 
 
+def chunk_rows(domain_id: bytes, k: int, chunks: int, salt: tuple = ("given",)) -> tuple[Spec, int]:
+    """An H1 table's chunk leaves at K = k (vc_chunk_rows_launch's, chunks = weights.chunks(k)): their hm96-sha512/row/v2
+    spec under the value's domain, and the least out_stride their launch takes."""
+    lb = k // chunks + 4
+    return hm96_rows(domain_id, 8 * lb, salt), -(-lb // 16) * 16
+
+
 def served_rows(domain_id: bytes, n_words: int, salt: tuple = ("given",)) -> Spec:
     """verity_vllm's serving rows: u16 words, x their sha512/row/v1 digest (role x), hm96-sha512/row/v1 leaves."""
     from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
@@ -167,6 +177,7 @@ _SIGS = {
     "vc_init": (_I, []),
     "vc_sha512_launch": (_I, [_P, _U64, _U64, _U64, _P, _P]),
     "vc_compress_launch": (_I, [_P, _P, _U64, _P, _P]),
+    "vc_chunk_rows_launch": (_I, [_P, _U64, _P, _U64, ctypes.c_uint32, ctypes.c_uint32, _P, _U64, _P]),
     "vc_rows_scratch_bytes": (_U64, [_P, _U64]),
     "vc_rows_launch": (_I, [_P, _P, _P, _U64, _U64, _P, _P, _P]),
     "vc_tiles_count": (_U64, [_P]),
@@ -196,7 +207,7 @@ OPEN_HEAD = 16 + 192 + 128 + 64
 
 
 @dataclass(frozen=True)
-class Opening:
+class VcOpen:
     """One vc_open_launch record: ``offset`` is the leaf's byte offset in the levels (None outside the tree)."""
 
     position: int
@@ -207,7 +218,7 @@ class Opening:
     path: tuple[bytes, ...]
 
 
-def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[Opening]:
+def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[VcOpen]:
     """vc_open_launch's m records, read back from the device (``raw``: m * vc_open_bytes(n_leaves) bytes)."""
     depth = (n_leaves - 1).bit_length() if n_leaves > 1 else 0
     size = OPEN_HEAD + 64 * depth
@@ -217,7 +228,7 @@ def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[Opening]:
     for i in range(m):
         r = raw[size * i:size * (i + 1)]
         pos, off = int.from_bytes(r[:8], "little"), int.from_bytes(r[8:16], "little")
-        out.append(Opening(pos, None if off == (1 << 64) - 1 else off, r[16:208], r[208:336], r[336:400],
+        out.append(VcOpen(pos, None if off == (1 << 64) - 1 else off, r[16:208], r[208:336], r[336:400],
                            tuple(r[OPEN_HEAD + 64 * k:OPEN_HEAD + 64 * (k + 1)] for k in range(depth))))
     return out
 
@@ -230,7 +241,7 @@ class Lib:
     """libvc.so (``VC_LIB``, else build/libvc.so beside this file). A launch that returns nonzero raises `LaunchError`."""
 
     def __init__(self, path: str | os.PathLike | None = None) -> None:
-        self.path = str(path or os.environ.get("VC_LIB") or HERE / "build" / "libvc.so")
+        self.path = str(path or settings.VC_LIB or HERE / "build" / "libvc.so")
         self.so = ctypes.CDLL(self.path)
         for name, (res, args) in _SIGS.items():
             f = getattr(self.so, name)
@@ -295,7 +306,7 @@ class Cuda:
     """The few runtime calls the tests make (device memory, a stream, graph capture), on libcudart.so."""
 
     def __init__(self, path: str | None = None) -> None:
-        cands = [path] if path else [os.environ.get("VC_CUDART"), "/usr/local/cuda/lib64/libcudart.so", "libcudart.so", "libcudart.so.12",
+        cands = [path] if path else [settings.VC_CUDART, "/usr/local/cuda/lib64/libcudart.so", "libcudart.so", "libcudart.so.12",
                                      "libcudart.so.13"]
         err = None
         for p in [c for c in cands if c]:

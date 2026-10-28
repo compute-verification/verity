@@ -274,7 +274,6 @@ theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨_, h5, -⟩ := FlockSoundness.Refine.ebind_ok h
   exact h5
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -284,12 +283,6 @@ theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.check = .ok () :=
   _root_.FlockDeploy.KS.checks_scope (checks_base h)
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 /-- **An accepting step at SHA-512** is an accepting verdict at the statement's setup, after which the scope check
 passed. -/
@@ -360,33 +353,6 @@ theorem read_parse_of_setup {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} 
     ins.read.parse = some { ins.read with sts } :=
   Gen.read_parse_of_setup (S := S₀) (zk := ins.read.zk) (ins := ins) (spec := spec) (sts := sts) (hs := hs)
 
-/-- **The deployed verifier accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope. The
-checks after the verdict run the scope check (`checks_scope`), and the shipped `verify` serves only `m ≥ 22`
-(`served_plain`, `served_zk`). -/
-theorem acc_inScope (rel : Readable.Parsed → Readable.Relation) {zk : Bool} {x : Claims.Msg}
-    (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) : ∃ s, parse zk rel x = some s ∧ Claims.Flock.InScope zk s := by
-  obtain ⟨ins, spec, sts, record, proofs, hset, hv, hc⟩ := acc_check hacc
-  obtain ⟨hi, hs⟩ := setupOf_some hset
-  have hr : readOf zk x = some ins.read := by unfold readOf; rw [hi]; rfl
-  have hzk : ins.read.zk = zk := readOf_zk hr
-  have hrp := read_parse_of_setup hs
-  have hparse : parse zk rel x = some (Readable.toReadable rel { ins.read with sts }) := by
-    unfold parse Readable.parseOf Readable.parseBytes
-    rw [hr, Option.bind_some, hrp, Option.map_some]
-  refine ⟨_, hparse, ?_⟩
-  have hserved : 0 < sts.size ∧ 22 ≤ sts[0]!.m := by
-    cases zk
-    · obtain ⟨h0, hm⟩ := served_plain (by simpa using hv)
-      exact ⟨h0, by rw [getElem!_pos sts 0 h0]; exact (hm 0 h0).1⟩
-    · obtain ⟨h0, hm⟩ := served_zk (by simpa using hv)
-      exact ⟨h0, by rw [getElem!_pos sts 0 h0]; have := (hm 0 h0).1; omega⟩
-  have hin := (Readable.inScope_iff rel (Readable.parses_of_parse hrp)).2 ⟨hc, ?_⟩
-  · exact hzk ▸ hin
-  · obtain ⟨h0, h22⟩ := hserved
-    rw [getElem!_pos sts 0 h0] at h22
-    simpa only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some] using h22
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -418,6 +384,13 @@ theorem acc_inScope (rel : Readable.Parsed → Readable.Relation) {zk : Bool} {x
     simpa only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some] using h22
 
 end Gen
+
+/-- **The deployed verifier accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope. The
+checks after the verdict run the scope check (`checks_scope`), and the shipped `verify` serves only `m ≥ 22`
+(`served_plain`, `served_zk`). -/
+theorem acc_inScope (rel : Readable.Parsed → Readable.Relation) {zk : Bool} {x : Claims.Msg}
+    (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) : ∃ s, parse zk rel x = some s ∧ Claims.Flock.InScope zk s :=
+  Gen.acc_inScope (S := S₀) (rel := rel) (zk := zk) (x := x) (hacc := hacc)
 
 /-- **The plain verifier accepts only at one table**, at SHA-512: the plain scope admits one (`acc_inScope`). -/
 theorem plain_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :

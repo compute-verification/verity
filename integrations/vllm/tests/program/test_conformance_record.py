@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from verity_vllm.correspondence import capture_identities as CO
-from verity_vllm.program.registry import boolean_rope, ref_prims  # noqa: F401  (registration: the GPT-J RoPE v1 and v2)
+from verity.ml.definitions.registry import boolean_rope, ref_prims  # noqa: F401  (registration: the GPT-J RoPE v1 and v2)
 from verity_vllm.program.frontend import conformance as CF
 
 REPO = Path(__file__).resolve().parents[2]
@@ -38,9 +38,9 @@ def test_registry_record_has_the_qualifications():
 
 
 def test_the_fp8_block_moe_and_group_quant_forms_are_exact_model_tested():
-    """Their texts (`fp8._BLOCK_DOT_CONF`, `fp8_moe.DOT_CONF`, `fp8._QUANT_CONF`) cite P1's cc 12.0 capture, run
-    r20261003-220018-3f6a."""
-    from verity_vllm.program.registry import fp8, fp8_moe  # noqa: F401  (registers them)
+    """Their texts (`fp8._BLOCK_DOT_CONF`, `fp8_moe.DOT_CONF`, `fp8._QUANT_CONF`) cite P1's cc 12.0
+    capture."""
+    from verity.ml.definitions.registry import fp8, fp8_moe  # noqa: F401  (registers them)
     defs = CF.record()["definitions"]
     block = ("ScaledMmFp8BlockCoordinate", "ScaledMmFp8Block", "ScaledMmFp8BlockCoordinateGivenScale",
              "ScaledMmFp8BlockSharedScaleTile", "ScaledMmFp8BlockSharedScale")

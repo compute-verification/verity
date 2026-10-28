@@ -5,7 +5,7 @@ import Proofs.Accounting.TS.Session.Held.Layer
 
 `OkRealizes`: the session's key program computes, at each unit, the checks of one unit of the declared circuit `Cd`,
 so that its `ok` wires carrying the `ok` row means those checks hold. It belongs in
-`Security/Models/Accounting/Assumptions/TS`, but it reads `RowsSession`, which is in the proofs package, so it is here
+`Security/Definitions/Accounting/Assumptions/TS`, but it reads `RowsSession`, which is in the proofs package, so it is here
 beside `Accounting.Assumptions.TS`'s other session premises (`Proofs.Accounting.TS.Session.Assumptions`).
 -/
 
@@ -13,7 +13,7 @@ namespace Accounting.Assumptions.TS
 
 open Accounting.TS Accounting.TS.Held Flock.SoundAtBridge
 
-/-- `accounting-ts-ok-realizes` (the checked unit's circuit is its declared unit's; owner @proofs). **The key
+/-- `accounting-ts-ok-realizes` (the checked unit's circuit is its declared unit's). **The key
 program's `ok` wires carry `Cd`'s checks**: at the session `s`, for every wire assignment `vals` that the key
 program's evaluation (`Circuit.eval`) agrees with on every wire of unit `u`, and whose `ok` wires of `u` (`OkWire`)
 each carry the bit of a value that is the `ok` row at its position (`OkVal`, the one word `1`), every check of the

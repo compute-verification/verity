@@ -1,8 +1,10 @@
 """What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and 1/eta
 across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
 and 2, and the closed forms of the memory cap mu, NCI's term nu and the cheating share chi checked against
-``tiers.evaluate``. 1/eta is not the compute dampener D (``tiers.evaluate()["dampener"]``): at s = 0 and g = 1,
-D = MFU_0 / eta wherever D > 1. ``statement.py`` gives the thresholds on D.
+``tiers.evaluate``. 1/eta is not the compute dampener D (``statement.dampener``, the overhead calculator's
+``rho.theorem.multiple_bound``): eta counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
+s = 0, g = 1 and no memory cap, D = 1 / (r + (eta - r) / MFU_0) wherever D > 1. ``statement.py`` gives the thresholds
+on D.
 
     python benchmarks/nci/exposure.py           # terms, tornado, elasticities, thresholds and closed-form checks
     python benchmarks/nci/exposure.py --json    # the same, for renderers
@@ -27,10 +29,11 @@ import tiers as T  # noqa: E402
 #: a bound no parameter file, calibration or measurement gives
 RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
-    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.326 at the locked clock, 0.217 attested (C7 dossier); nothing credited today 1"),
-    "host_share": (0.0021, 0.131, "two EPYC 9015s without matrix units 0.21%; Xeon 6776P INT8 AMX 11.8%, 13.1% at fused maximum clocks"),
+    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
+    "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4 (draft #2638)"),
+    "host_share": (0.0, 0.14, "without the hosts assumption (hosts carry no compute sets it to 0), against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
     "eps_agg": (1e-6, 1e-3, "1e-6 needs per-window failure about 3 x 2^-47 for the same delta; 1e-3 lets delta fall tenfold"),
-    "clock_share": (0.0, 0.2, "0 with an attested clock; 6.4% from NVIDIA's dense headline; 0.2 the C4 dossier's adversarial phi = 1.25"),
+    "clock_share": (0.0, 0.2, "0: PoUW credits the card table's 2,430 MHz, the SKU's maximum (CMP-165, run r20261027-032043-e2d1); 0.2 the C4 dossier's adversarial phi = 1.25, a card whose SKU or firmware reaches past its table (unattested)"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
     "sigma": (10.0, 1e6, "guess: a shielded rack, to a loud channel"),
@@ -80,7 +83,7 @@ RANGES = {
     "years": (0.25, 3.0, "guess"),
 }
 
-#: compute-accounting's modelled design, where the residual sits below the memory cap
+#: the modelled design, where the residual sits below the memory cap
 DESIGN = {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
 SCENARIOS = {
     "defaults": {},
@@ -110,7 +113,8 @@ KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
-    ("2 GB streamed-label wipes", WIPE_2GB | KEYED, "T4", "mu", "the floor credit's residual is above the cap"),
+    ("1 GB streamed-label wipes", WIPE_2GB | KEYED | {"unfilled_gb": 0.83}, "T4", "mu",
+     "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
     ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
     ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
@@ -124,7 +128,7 @@ CHECKS = [
     ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),
     ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
-    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
+    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,

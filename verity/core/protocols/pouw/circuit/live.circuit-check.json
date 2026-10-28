@@ -1,0 +1,18 @@
+{
+ "definitions": {
+  "PouwLiveSlots_v1{T=32}": {
+   "and": 10749
+  },
+  "PouwLiveSlots_v1{T=96}": {
+   "and": 45812
+  },
+  "PouwLiveSlots_v2{T=32}": {
+   "and": 13853,
+   "type": "9f7d3edd5cf484cc7127c29806666055409399bd689ff7b4cd841156d98a3a74ed9b0db1dbccc2cd59a2c3ca67be1aebbbb467ae012e9f1fb543cdc49c30f3d8"
+  },
+  "PouwLiveSlots_v2{T=96}": {
+   "and": 55124,
+   "type": "6b32a2ed47e60c52c8080959662260f0bf93963de2655e93dfc02fa1397ee045228381b2210b38085876a8f433d66b737b76945431bd2c5f84b2e5b668d2ad00"
+  }
+ }
+}

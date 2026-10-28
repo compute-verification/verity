@@ -34,7 +34,8 @@ import numpy as np
 
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
-from verity_vllm.commit import row_tables as RTB, serving_rows as SR
+from verity_vllm.commit import row_tables as RTB
+from verity.ml.windows import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears and their K
@@ -66,8 +67,8 @@ def outputs(batch: int, layers: int, k_scale: int, seed: int = 7) -> dict[str, t
 
 def reference(ctx: bytes, step: int, outs: dict[str, Any], key: bytes) -> bytes:
     tables = []
-    ys, at = SR.step_salts(key, step, sum(len(v[0]) for v in outs.values())), 0
-    for op in sorted(outs, key=SR.table_key):
+    ys, at = SR.segment_salts(key, step, sum(len(v[0]) for v in outs.values())), 0
+    for op in sorted(outs, key=RTB.table_key):
         ids, x, s = outs[op]
         order = sorted(range(len(ids)), key=lambda b: ids[b])
         rows = [RT.s8_row(x[b].tobytes(), int(s[b:b + 1].view("<u4")[0])) for b in order]
@@ -112,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
             root = got.root
         by_workers[w] = {"cold_s": calls[0], "seconds": statistics.median(calls[1:]), "warm_s": calls[1:],
                          "cpu_s": statistics.median(cpus[1:])}
-    salts_s, salts_cpu = medians(lambda: SR.step_salts(key, step, rows), ns.reps)
+    salts_s, salts_cpu = medians(lambda: SR.segment_salts(key, step, rows), ns.reps)
     flat = [(x[b].tobytes() + s[b:b + 1].tobytes()) for _ids, x, s in outs.values() for b in range(len(x))]
     digest_s, digest_cpu = medians(lambda: [sha512_row_seg_digest(r, 8 * len(r)) for r in flat], ns.reps)
     floor, floor_cpu = {}, {}

@@ -4,7 +4,7 @@ vLLM; ``TargetProfile.int8_exact`` declares it).
 
 A window is a request's tokens 0..s-1 (its KV cache: K after RoPE and V, both bf16); a call computes the window's last n query
 rows (positions s-n..s-1).  A whole-prompt prefill is n = s; a decode step is n = 1, the last row of the window over every token
-so far.  For every KV group g (its `rep` query heads; RN32 / RN64 = float32 / float64 round to nearest even, one rounding per
+so far; a chunked prefill's chunk is the n rows it brings, over the s tokens cached by its end.  For every KV group g (its `rep` query heads; RN32 / RN64 = float32 / float64 round to nearest even, one rounding per
 operation; every division a true IEEE division):
 
 * Q [rep, n, d], one scale per (head, token): s_q = RN32(max(max |q|, RN32(1e-30)) / 127), Q' = clamp(round(RN32(q / s_q)),
@@ -25,8 +25,8 @@ operation; every division a true IEEE division):
   s_ch) with no dither, where O + 64 S is P V' over keys 1..pos and X(0) is V' at key 0.
 
 Every step is integer or one IEEE operation, so a CPU and a GPU compute the same bits.  V's scale reads every key of the window,
-so a row's output depends on the window's later tokens: a prefill split into chunks would be another window, and is refused.
-Nothing reads another request.
+so a row's output depends on the window's later tokens: each chunk of a chunked prefill is its own window, and its rows are the
+same rows of the whole prompt of its s tokens, not of the whole prompt the request ends with.  Nothing reads another request.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ TOP = E.TOP
 MAX_KEYS = E.MAX_K
 #: cuBLASLt (sm_120) refuses an s8 product whose k is an odd multiple of 8 up to 120 at n = 128 and m not a multiple of 64
 K_ALIGN = 16
-#: and, for every k below 128 and every m, one whose n is an odd multiple of 8 from 40 (r20261019-230516-524d): a head dim 64
+#: and, for every k below 128 and every m, one whose n is an odd multiple of 8 from 40: a head dim 64
 #: window of 33..40 keys
 N_ALIGN = 16
 LUT_SIZE = 256
@@ -141,6 +141,129 @@ def window_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, k_scales
     """out [n, H, d] bf16 of the window's last n query rows q [n, H, d] over its keys k and values v [s, G, d] (bf16, H a
     multiple of G), with the layer's K scales k_scales [G] (float32): `window_rows` over `kv_quant`."""
     return window_rows(q, *kv_quant(k, v, k_scales), k_scales, scale)
+
+
+def step_refusal(qsl: list[int], lens: list[int]) -> str | None:
+    """Why a step's requests (query start offsets qsl [B + 1] and window lengths lens [>= B], host lists) are not each its window's
+    last 1 .. s rows (None: they are; a request with no rows is skipped)."""
+    for r, s in enumerate(lens[:len(qsl) - 1]):
+        m = qsl[r + 1] - qsl[r]
+        if m and not 0 < m <= s:
+            return f"int8 attention: request {r} brings {m} rows of a {s}-token window; its rows are the window's last 1 .. {s}"
+    return None
+
+
+def token_rows(qsl: list[int], lens: list[int], device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+    """(request, position) of each of a step's query rows, int64 [T] on `device`: request r's rows qsl[r] .. qsl[r+1] - 1 are
+    positions s - m .. s - 1 of its s-token window."""
+    req, pos = [], []
+    for r in range(len(qsl) - 1):
+        m, s = qsl[r + 1] - qsl[r], lens[r]
+        req += [r] * m
+        pos += range(s - m, s)
+    return (torch.tensor(req, dtype=torch.int64).to(device, non_blocking=True),
+            torch.tensor(pos, dtype=torch.int64).to(device, non_blocking=True))
+
+
+def batch_check(k: torch.Tensor, k_scales: torch.Tensor, lens: list[int]) -> None:
+    b, s_max, g_heads, d = k.shape
+    if s_max > MAX_KEYS or d > MAX_HEAD_DIM or tuple(k_scales.shape) != (g_heads,) or len(lens) != b or max(lens, default=0) > s_max:
+        raise ValueError(f"int8 attention: windows {tuple(k.shape)} of lengths {lens[:8]}, {tuple(k_scales.shape)} K scales (head dim "
+                         f"at most {MAX_HEAD_DIM}, at most {MAX_KEYS} keys)")
+
+
+def paged_windows(key_cache: torch.Tensor, value_cache: torch.Tensor, block_table: torch.Tensor,
+                  lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
+    """k, v [B, s_max, G, d] of each request's first lens[r] tokens from paged caches [num_blocks, block_size, G, d] under its
+    block-table row (`window_of` of every request at once), zero past each window; s_max = max(lens)."""
+    b, s_max = len(lens), max(lens, default=0)
+    bs, dev = key_cache.shape[1], key_cache.device
+    pos = torch.arange(s_max, device=dev)
+    live = pos[None, :] < torch.tensor(lens, dtype=torch.int64).to(dev, non_blocking=True)[:, None]
+    col = (pos // bs).clamp_(max=max(block_table.shape[1] - 1, 0)).expand(b, -1)
+    blk = torch.where(live, block_table[:b].long().gather(1, col), 0)
+    off = (pos % bs).expand(b, -1)
+    zero = torch.zeros((), dtype=key_cache.dtype, device=dev)
+    return tuple(torch.where(live[..., None, None], c[blk, off], zero) for c in (key_cache, value_cache))
+
+
+def packed_windows(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
+    """k, v [B, s_max, G, d] of request r's window at rows starts[r] .. starts[r] + lens[r] - 1 of keys and values [rows, G, d] (a
+    credited read's step buffers, `engine.int8_window`), zero past each window."""
+    s_max, dev = max(lens, default=0), keys.device
+    pos = torch.arange(s_max, device=dev)
+    live = pos[None, :] < torch.tensor(lens, dtype=torch.int64).to(dev, non_blocking=True)[:, None]
+    row = torch.where(live, torch.tensor(starts, dtype=torch.int64).to(dev, non_blocking=True)[:, None] + pos[None, :], 0)
+    zero = torch.zeros((), dtype=keys.dtype, device=dev)
+    return tuple(torch.where(live[..., None, None], t[row], zero) for t in (keys, values))
+
+
+def kv_quant_batch(k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """`kv_quant` of every request's window at once, from k, v [B, s_max, G, d] (bf16, zero past each window, as `paged_windows`
+    and `packed_windows` give them): (K' int8 [B, G, s_max, d], V' int8 [B, G, s_max, d], s_v float32 [B, G, d], f32(V'(0))
+    float32 [B, G, d]).  Request r's K'[r, g, :s], V'[r, g, :s], s_v[r, g] and f32(V'(0))[r, g] are `kv_quant`'s of its s-key
+    window, bit for bit: the same IEEE operation per element, and the zero keys past a window quantize to 0 and leave each
+    channel's max |v| as it is."""
+    kf = k.float().permute(0, 2, 1, 3)
+    kq = torch.round(kf / k_scales.to(device=k.device, dtype=torch.float32)[None, :, None, None]).clamp_(-TOP, TOP).to(torch.int8)
+    vi, sv = quant(v.float().permute(0, 2, 1, 3), 2)
+    vq = vi.to(torch.int8).contiguous()
+    return kq.contiguous(), vq, sv[:, :, 0].contiguous(), vq[:, :, 0].float()
+
+
+def lut_core(qi: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, req: torch.Tensor, pos: torch.Tensor,
+             a: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """The integer heart of `window_rows` for every query row of a step at once: (Y [T, H, d], L [T, H], e(0) [T, H]), int64, of
+    Q' qi [T, H, d] (integers in [-127, 127]) over the K' and V' [B, G, s_max, d] of each row's request req [T] at its position
+    pos [T], under A a [T, H]: S = Q' K'^T, e = LUT[min(((m - S) A) >> 32, 255)] at keys 0..pos (0 past it), L = sum e, Y = P V'
+    with P = e at keys 1..pos.  Integer products and sums (exact in any order); `int8_attention_triton.lut_rows` computes it on CUDA inside the row."""
+    t, h, d = qi.shape
+    g_heads, s_max = kq.shape[1], kq.shape[2]
+    rep = h // g_heads
+    q = qi.long().view(t, g_heads, rep, d)
+    S = q @ kq[req].long().transpose(-1, -2)
+    causal = (torch.arange(s_max, device=qi.device)[None, :] <= pos[:, None])[:, None, None, :]
+    e, _ = lut_e(S, a.view(t, g_heads, rep, 1), causal)
+    y = F.pad(e[..., 1:], (1, 0)) @ vq[req].long()
+    return y.view(t, h, d), e.sum(-1).view(t, h), e[..., 0].view(t, h)
+
+
+def batch_rows(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor, k_scales: torch.Tensor,
+               req: torch.Tensor, pos: torch.Tensor, scale: float, core=lut_core) -> torch.Tensor:
+    """out [T, H, d] bf16 of a step's query rows query [T, H, d] (row i request req[i]'s row at position pos[i]) over
+    `kv_quant_batch`'s results: each row `window_rows`' row, bit for bit, with every row's integer part in one `core` call."""
+    t, h, d = query.shape
+    b, g_heads = kq.shape[:2]
+    if h % g_heads or tuple(sv.shape) != (b, g_heads, d):
+        raise ValueError(f"int8 attention: {h} query heads over {g_heads} KV heads, results {tuple(kq.shape)} / {tuple(sv.shape)}")
+    rep = h // g_heads
+    qi, sq = quant(query.float(), -1)
+    a = fixed_point_a(sq[..., 0], k_scales.to(query.device).repeat_interleave(rep)[None, :], scale)
+    y, el, e0 = core(qi.to(torch.int8), kq, vq, req, pos, a)
+    lf = el.float()
+    r = torch.ones_like(lf) / lf
+    z = e0.float() / lf
+    v0r, svr = (x[req].repeat_interleave(rep, dim=1) for x in (v0, sv))
+    return (((y.float() * r[..., None]) + (z[..., None] * v0r)) * svr).to(torch.bfloat16)
+
+
+def reference_requests(query: torch.Tensor, qsl: list[int], lens: list[int], window, k_scales: torch.Tensor, scale: float,
+                       output: torch.Tensor) -> None:
+    """The per-request form the batched ops are held to: request r's rows `window_rows` over `kv_quant` of `window(r, s)`, its k
+    and v [s, G, d], one request and one KV head at a time."""
+    if why := step_refusal(qsl, lens):
+        raise ValueError(why)
+    for r, s in enumerate(lens[:len(qsl) - 1]):
+        q0, q1 = qsl[r], qsl[r + 1]
+        if q1 > q0:
+            output[q0:q1] = window_rows(query[q0:q1], *kv_quant(*window(r, s), k_scales), k_scales, float(scale))
+
+
+def reference_paged(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
+                    seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
+    """`int8_ops.paged_attention`'s values, request by request (`reference_requests` over `window_of`)."""
+    reference_requests(query, query_start_loc.tolist(), seq_lens.tolist(),
+                       lambda r, s: window_of(key_cache, value_cache, block_table[r], s), k_scales, scale, output)
 
 
 def window_of(key_cache: torch.Tensor, value_cache: torch.Tensor, blocks: torch.Tensor, s: int) -> tuple[torch.Tensor, torch.Tensor]:

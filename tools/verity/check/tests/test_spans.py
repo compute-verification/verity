@@ -7,6 +7,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -23,6 +25,34 @@ FROZEN_KEYS = ["trace_id", "span_id", "parent_span_id", "name", "start_utc", "en
 
 def lines(out: Path) -> list[dict]:
     return [json.loads(l) for l in (out / "spans.jsonl").read_text().splitlines()]
+
+
+@pytest.fixture(autouse=True)
+def outside_a_scope(monkeypatch):
+    """These tests may run inside a check in its own scope, whose memory would otherwise join the pinned attributes."""
+    monkeypatch.delenv(SPANS.SCOPE_ENV, raising=False)
+
+
+def test_a_check_in_its_own_scope_records_its_memory_and_a_shared_scope_records_none(tmp_path, monkeypatch):
+    cg = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope"
+    cg.mkdir(parents=True)
+    (cg / "memory.peak").write_text("312400000000\n")
+    (cg / "memory.current").write_text("120049999999\n")
+    (tmp_path / "proc/self").mkdir(parents=True)
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope\n")
+    assert SPANS.check_memory(tmp_path) == {}, "no scope named: nothing"
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    assert SPANS.check_memory(tmp_path) == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0}
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r2")
+    assert SPANS.check_memory(tmp_path) == {}, "a cgroup that isn't the named scope (a shared session) is other runs' too"
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    monkeypatch.setattr(SPANS, "check_memory", lambda root=Path("/"): {"mem_peak_gb": 312.4, "mem_current_gb": 120.0})
+    log = SPANS.SpanLog(tmp_path, trace_id="r-test")
+    log.step({"step": "pytest", "status": "passed", "rc": 0, "seconds": 1.0, "ended_utc": "2026-10-14T20:00:00Z"})
+    log.close("ok")
+    got = lines(tmp_path)
+    assert got[1]["attributes"]["mem_peak_gb"] == 312.4 and got[-1]["attributes"] == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0}
+    assert all(list(line) == FROZEN_KEYS for line in got)
 
 
 def test_every_line_has_exactly_the_frozen_keys_and_flat_scalar_attributes(tmp_path):

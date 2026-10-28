@@ -248,6 +248,10 @@ fn native_plan(st: &Stmt) -> Option<&'static (Vec<u32>, i32)> {
 
 /// Whether the statement's units are evaluated on the host (`HOST_UNIT_LEVELS`).
 pub fn deep_unit(st: &Stmt) -> bool {
+    // the device kernel evaluates rows by column; a unit committed at a position map is evaluated in its order, on the host
+    if st.c.unit().order.is_some() {
+        return true;
+    }
     match std::env::var("FC_HOST_UNITS").as_deref() {
         Ok("0") => false,
         Ok("1") => true,
@@ -787,6 +791,7 @@ pub fn prove_circuit(
     reuse: Reuse,
     native_sha: bool,
 ) -> Result<(R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]), String> {
+    st.c.gpu_nnz_ok()?;
     let t_setup = Instant::now();
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);

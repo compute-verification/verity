@@ -256,12 +256,41 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   /-- not a typed template: `parse`'s `tmpl` is `none` -/
   typed : c.typed = none
 
+/-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind**: `ParseFacts` but with each net one of `pre`'s,
+`Built` or a lookup slot (a templated file's unit net, `Tmpl.unitNet`, is not `Built`). -/
+structure ParseFactsPre (tags : Tags) (pre : Array (String × Net)) (c : Circuit) : Prop where
+  nets : ∀ x ∈ c.nets.toList, x ∈ pre.toList ∨ Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
+  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
+  rowWires : ∃ rest, c.wires.toList = (HmRow.rowWires c.ports c.shaNet c.hmNet).toList ++ rest ∧
+    ∀ w ∈ rest, w.dst.1 ≠ c.shaNet ∧ w.dst.1 ≠ c.hmNet
+  unitNet : c.unitNet < c.nets.size
+  shaNet : c.shaNet < c.nets.size
+  hmNet : c.hmNet < c.nets.size
+  kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
+  check : ∃ ls, HmRow.check c tags ls = .ok ()
+  rowNets : HmNets.check c = .ok ()
+  recNet : RecOpen.check c = .ok ()
+  recResiduals : RecResiduals.check c = .ok ()
+  recSparse : RecSparse.check c = .ok ()
+  recOpening : RecOpening.check c = .ok ()
+  typed : c.typed = none
+
+/-- `ParseFactsPre` with `pre`'s nets `Built` is `ParseFacts`. -/
+theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsPre tags pre c)
+    (hpre : ∀ x ∈ pre.toList, Built x.2) : ParseFacts tags c :=
+  { nets := fun x hx => (P.nets x hx).elim (fun h => .inl (hpre x h)) id, portWords := P.portWords,
+    v1Segs := P.v1Segs, rowWires := P.rowWires, unitNet := P.unitNet, shaNet := P.shaNet, hmNet := P.hmNet,
+    kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
+    recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed }
+
 set_option maxHeartbeats 4000000 in
-/-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net, #307): its nets are `pre`'s,
-then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
-theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
-    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
-    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
+/-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, or a
+templated file's committed unit net): its nets are `pre`'s, then the file's own, each `Net.parse`'s or a lookup slot,
+and its unit is the first named `unit`. -/
+theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    ParseFactsPre tags pre c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∧
       c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
       (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET := by
@@ -518,14 +547,15 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
   obtain ⟨more, hm, hmore⟩ := hnets
-  have hbuilt : ∀ x ∈ nets2.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
+  have hbuilt : ∀ x ∈ nets2.toList,
+      x ∈ pre.toList ∨ Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
     intro x hx
     rw [hm, List.mem_append] at hx
     rcases hx with hx | hx
-    · exact Or.inl (hpre x hx)
+    · exact Or.inl hx
     · rcases hmore x hx with ⟨_, hp⟩ | hb
-      · exact Or.inl (parse_built hp)
-      · exact Or.inr hb
+      · exact Or.inr (Or.inl (parse_built hp))
+      · exact Or.inr (Or.inr hb)
   have hname : ∀ nm i, netOf nm = .ok i → (nets2.getD i default).1 = nm := by
     intro nm i hi
     simp only [netOf] at hi
@@ -550,6 +580,17 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           rowNets := by cases w'; exact hrows, recNet := by cases w''; exact hrec,
           recResiduals := by cases w'''; exact hres, recSparse := by cases w''''; exact hsparse,
           recOpening := by cases w5; exact hopening, typed := rfl }
+
+/-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net): its nets are `pre`'s,
+then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
+theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
+      (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∧
+      c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
+      (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET :=
+  let ⟨P, hm, hu, hs, hh⟩ := parse_factsPre_nets h
+  ⟨P.facts hpre, hm, hu, hs, hh⟩
 
 /-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
 the first named `unit`. -/

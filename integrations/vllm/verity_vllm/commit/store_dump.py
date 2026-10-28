@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit import hiding, scheme, step_rows
+from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 
@@ -185,6 +185,8 @@ def _refusal(com: Any) -> str | None:
     missing = sorted(s for s in com._layouts if s not in com._gpu_blocks)
     if missing:
         return f"steps {missing[:8]} are not packed GPU-tree blocks: not dumped"
+    if held := sorted(s for s, (b, _u) in com._gpu_blocks.items() if getattr(b, "on_device", False)):
+        return f"steps {held[:8]} are held on the device until their window's draw-gated release (--retain device): not dumped"
     return None
 
 
@@ -227,9 +229,13 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
              "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [_width(lv) for lv in lvs],
              **({} if nodes is None else {"nodes": [[d_, i] for d_, i in nodes]}),
-             **({} if salted is None else {"salted": [[a, b] for a, b in salted]}),
-             "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
-                       for m in com._layouts[s]]}, digests)
+             **({"drawn_only": True} if getattr(blk, "dropped", False) else {}),
+             **({} if salted is None else {"salted": [[a, b] for a, b in salted]})}, digests)
+
+
+def metas_of(metas: Iterable[Any]) -> list[list]:
+    """A step's metas as store.json lists them."""
+    return [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off] for m in metas]
 
 
 def _width(lv: Any) -> int:
@@ -242,11 +248,62 @@ def nbytes(com: Any) -> int:
         _width(lv) for lvs in com._gpu_levels.values() for lv in lvs)
 
 
+def not_retained(com: Any) -> dict[str, Any] | None:
+    """What a committer that excludes value families from retention (``retain_exclude``, `VERITY_RETAIN_EXCLUDE`) committed and
+    doesn't hold: by family the bytes of the chunk-aligned interiors (`host_retention._excluded_chunk_ranges`) its retained ranges
+    leave out, beside the bytes its steps committed and those it retains; None when it excludes nothing.  A committed byte it
+    doesn't hold outside those interiors is refused by name: its opening would fail with nothing to say why."""
+    fams = set(getattr(com, "retain_exclude", None) or ())
+    if not fams:
+        return None
+    return not_retained_of(fams, int(com.chunk), held_of(com), com._layouts)
+
+
+def held_of(com: Any) -> dict[int, tuple[list[tuple[int, int]], int]]:
+    """Each retained block's byte ranges of its step stream and its used bytes, by step."""
+    return {s: ([(int(lo), int(hi)) for lo, hi, _ in _ranges(blk)], int(used)) for s, (blk, used) in com._gpu_blocks.items()}
+
+
+def not_retained_of(fams: set[str], C: int, held: dict[int, tuple[list[tuple[int, int]], int]],
+                    layouts: dict[int, Any]) -> dict[str, Any]:
+    """`not_retained` over the blocks' retained ranges (`held_of`) and the steps' metas."""
+    from verity_vllm.commit.committer.host_retention import _excluded_chunk_ranges, outside
+
+    by, committed, retained, stray = dict.fromkeys(sorted(fams), 0), 0, 0, []
+    for s, (ranges, used) in sorted(held.items()):
+        held_s = sorted((lo, hi, "") for lo, hi in ranges)
+        excl = _excluded_chunk_ranges(layouts[s], fams, C)
+        committed, retained = committed + int(used), retained + sum(hi - lo for lo, hi, _ in held_s)
+        for lo, hi in outside(held_s, 0, -(-int(used) // C) * C):
+            stray += [f"step {s} [{a}, {b})" for a, b in outside(excl, lo, hi)]
+            for elo, ehi, fam in excl:
+                by[fam] += max(0, min(hi, ehi) - max(lo, elo))
+    if stray:
+        raise ValueError(f"{len(stray)} committed byte range(s) not retained outside the excluded families' interiors {sorted(fams)}: "
+                         f"{stray[:4]}")
+    return {"families": sorted(fams), "bytes": sum(by.values()), "by_family": by, "committed_bytes": committed,
+            "retained_bytes": retained}
+
+
 def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
          touched: Touched | None = None) -> dict[str, Any]:
     """Writes the committed store of `com` (run commitment `rc`) under `d`, its steps ``threads`` at a time; returns the `store.json`
     document.  ``digests``, when given, receives the sha256 of every step file written (by its path under `d`).  ``touched``: a slim dump
     of only what those reads opened."""
+    return write_doc(d, dump_files(com, rc, d, threads=threads, digests=digests, touched=touched), com._layouts)
+
+
+def write_doc(d: str | os.PathLike, doc: dict[str, Any], layouts: dict[int, Any]) -> dict[str, Any]:
+    """Writes `store.json` under `d` from `dump_files`'s document, each step's metas (`layouts`) added; returns it."""
+    for e in doc["steps"]:
+        e["metas"] = metas_of(layouts[e["step"]])
+    (Path(d) / "store.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+    return doc
+
+
+def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
+               touched: Touched | None = None) -> dict[str, Any]:
+    """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it)."""
     why = _refusal(com)
     rows = getattr(com, "rows", False)
     keys = getattr(com, "row_keys", None) or {}
@@ -270,7 +327,6 @@ def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: 
     doc = {"schema": SCHEMA, "chunk": int(com.chunk), "program_digest": com.program_digest.hex(), "geo_digest": com._geo_digest.hex(),
            "run_id": com.run_id, "layout_v2": bool(getattr(com, "layout_v2", False)), "gpu_tree_src": int(com.GPU_TREE_SRC),
            **({"commit_scheme": step_rows.NAME} if rows else {}), "run_root": rc.run_root.hex(), "steps": steps}
-    (d / "store.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
 
 
@@ -288,9 +344,11 @@ class _Seg:
 
 
 class _Block:
-    """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers."""
+    """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers.
+    ``dropped``: a step its window's draw-gated release kept only the drawn leaves of (`device_pool.DrawnRanges`)."""
 
     is_cuda = False
+    dropped = False
 
     def __init__(self, buf: memoryview, ranges: list[list[int]], used: int, chunk: int) -> None:
         self.buf, self.used = buf, int(used)
@@ -376,7 +434,7 @@ class DumpedRun:
     steps: list[DumpedStep]
 
 
-class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):
+class DumpedStore(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     """The committer's openings over a dumped store (`load`)."""
 
     name = "dumped-store"
@@ -414,6 +472,7 @@ class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):
             s = int(st["step"])
             self._layouts[s] = [TensorMeta(o, n, dt, tuple(sh), nb, c, fl, nl, stream_off=so) for o, n, dt, sh, nb, c, fl, nl, so in st["metas"]]
             self._gpu_blocks[s] = (_Block(self._map(d / "raw" / f"s{s}.bin"), st["ranges"], st["used"], self.chunk), int(st["used"]))
+            self._gpu_blocks[s][0].dropped = bool(st.get("drawn_only"))
             lv_buf, off, lvs = self._map(d / "levels" / f"s{s}.bin"), 0, []
             if "salted" in st:
                 at_leaf, k = [], 0

@@ -1,5 +1,5 @@
 """Per-op bindings for the graph `torch.export(strict=False)` produces from the ACTUAL pinned vLLM model classes under the
-eager batch-invariant profile (CB-A, R9 2026-09-18). Every rule here names an *operator* (a vLLM custom op, a Triton kernel
+eager batch-invariant profile. Every rule here names an *operator* (a vLLM custom op, a Triton kernel
 launched directly by vLLM's batch-invariant code, an ATen cast); none names a model class, a layer, or an op order.
 
 What the export of a real vLLM class contains that the vLLM-*shaped* examples (`derive_examples.py`) did not:
@@ -18,7 +18,7 @@ What the export of a real vLLM class contains that the vLLM-*shaped* examples (`
 * `aten.to.dtype(int32 ids, int64)` (`VocabParallelEmbedding.forward`): the I32 token id widened for `aten.embedding`;
   value-preserving for ids in [0, V) -> a reinterpretation, no gate.
 
-Profile pins (declared record, `verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py:60-80`; a launch that differs is
+Profile pins (declared record, `verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py:60-80`; a launch that differs is
 refused, never adapted to).
 """
 
@@ -55,13 +55,13 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), FusedQKvRmsNormRule(), TritonGemmRule
                       KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
                       CachePadRule(), KvPrefixRule(), CudaRmsNormRule(), CudaFusedAddRmsNormRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(),
                       GeluTanhAndMulRule(), SiluAndMulWithClampRule(), Bf16ScalarChainRule(),
-                      # [R15 dense] the unfused norm chain (forward_native norms as ATen on an f32 copy)
+                      # the unfused norm chain (forward_native norms as ATen on an f32 copy)
                       WidenBf16ToF32Rule(), NarrowF32ToBf16Rule(), SquareRule(), MeanDimBIRule(), RsqrtRule(), AddScalarRule(), AddWidenedRule(),
                       MulF32Rule(),
                       LayerNormAtenRule(),   # GPT-NeoX's nn.LayerNorm (torch's vectorized CUDA kernel)
                       AllReduce2Rule(), AllGather2Rule(), AllReduceRule(), FusedAllReduceRmsNormRule(), AllGatherRule(), EmbeddingShardRule(),
-                      # [lane vllm-tp-n] WORLD-ary rules after the world-2 ones
-                      # [R15 fp8] the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
+                      # WORLD-ary rules after the world-2 ones
+                      # the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
                       DynamicDeepGemmFp8LinearRule(), DeepGemmFp8EinsumRule(), PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(),
                       SameDtypeCastRule(),
                       # the exact-int8 profile's int8 linear and int8 attention (engine.int8_ops)
@@ -75,13 +75,13 @@ def vllm_ruleset():
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.base import RuleSet
     base = [r for r in DEFAULT_RULES.rules if type(r) is not _FusedAddRmsNormRule]
-    from verity_vllm.program.frontend.rules.vllm_moe import VLLM_MOE_RULES  # [R13 MOE-01] the fused-MoE block's leaf kernels
+    from verity_vllm.program.frontend.rules.vllm_moe import VLLM_MOE_RULES  # the fused-MoE block's leaf kernels
     from verity_vllm.program.frontend.rules.vllm_moe_fp8 import VLLM_MOE_FP8_RULES  # the block-FP8 fused_moe_kernel launches
     from verity_vllm.program.frontend.rules.vllm_moe_router import VLLM_MOE_ROUTER_RULES  # the one-group sigmoid router (grouped_topk)
     from verity_vllm.program.frontend.rules.vllm_dsa import (VLLM_DSA_PATTERN_RULES,  # the large q-nope/value absorb chain, before generic views
                                                              VLLM_DSA_RULES)  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
     from verity_vllm.program.frontend.rules.vllm_dsa_dense import VLLM_DSA_DENSE_RULES  # its prefill by dense MHA (the same shim's leaf)
-    from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES  # [R15 stoch] the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
+    from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES  # the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
     from verity_vllm.program.frontend.rules.vllm_mhc import VLLM_MHC_RULES  # DeepSeek-V4's mHC ops
     from verity_vllm.program.frontend.rules.vllm_dsv4 import VLLM_DSV4_RULES  # DeepSeek-V4's sparse MLA leaves
     from verity_vllm.program.frontend.rules.vllm_marlin_moe import VLLM_MARLIN_MOE_RULES  # the MXFP4 Marlin MoE's leaves

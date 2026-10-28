@@ -10,8 +10,8 @@ object, printable with the prover's nonce put in: `StmtOkZk`, from the case's se
 specification (`JsonSpec`), as `stmtOk` at the plain verifier.
 
 * `Σ`, the draw's instances and the session's draw are as in `stmtOk`, at the one table `readyZk` asks
-  (`CaseZk.one`). Under `--zk` the draw's law is stratified or a subset (`ProvedScope.lawWhy true`), and a subset draw
-  that decodes has exactly the keys it reads, each a string, a natural number or an array of them (`good_subset`).
+  (`CaseZk.one`). Under `--zk` the draw's law is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
+  plain verifier (`good_stratified`, `good_subset`).
 * The masked verifier's coins are the keyed coin tree (`Read.coins`), so the hello's `coins` is the tree's spec with an
   empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Json.parse` reads back an alike object
   (`JsonSpec.parse_canon`), printable as the printed one is (`Same.good`), and so after the prover's nonce is put in
@@ -112,49 +112,6 @@ theorem helloZk_of (S : Claims.JsonSpec printJ Flock.canon) {tags : Tags} {sigma
       | exact good_arr_strs _
       | exact good_mkObj (by simp) (by simp [good_toJson]; exact .str _)
 
-/-! ## A subset draw that decodes is printable -/
-
-set_option maxHeartbeats 4000000 in
-/-- **A subset draw that decodes is printable**: an object of exactly `law`, `population`, `units` and `k`, a string,
-natural numbers and an array of them. -/
-theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
-    (hl : D.law = .subset k) : Good j := by
-  unfold Draw.UnitDraw.ofJson at h
-  dsimp only at h
-  simp only [throw_bind'] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-  all_goals
-    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
-    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
-  all_goals
-    try simp only [reduceCtorEq] at hl
-  all_goals
-    have hj := getObj_ok ‹j.getObj? = _›
-    subst hj
-    cases hw with
-    | obj hm hwv =>
-    have hc := ‹¬ (_ != 4) = true›
-    simp only [bne_iff_ne, ne_eq, not_not] at hc
-    refine good_obj_of hm (L := ["law", "population", "units", "k"]) (by decide) (by simpa using hc) ?_
-    simp only [List.mem_cons, List.mem_nil_iff, or_false]
-    rintro key (rfl | rfl | rfl | rfl)
-    · exact ⟨_, str_ok ‹J.str _ "law" _ = _›, .str _⟩
-    · exact ⟨_, nat_ok ‹J.nat _ "population" _ = _›, .num _⟩
-    · exact ⟨_, arr_ok ‹J.arr _ "units" _ = _›, good_of_asNat_mapM ‹Array.mapM _ _ = Except.ok _›⟩
-    · exact ⟨_, nat_ok ‹J.nat _ "k" _ = _›, .num _⟩
-
-/-- Under `--zk`, a draw a soundness claim draws by is stratified or a subset. -/
-theorem law_of_lawWhy_true {D : Draw.UnitDraw} (h : ProvedScope.lawWhy true D = none) :
-    (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
-  revert h
-  cases hl : D.law with
-  | stratified K s => exact fun _ => Or.inl ⟨K, s, rfl⟩
-  | subset k => exact fun _ => Or.inr ⟨k, rfl⟩
-  | _ => simp [ProvedScope.lawWhy, hl]
-
 /-! ## The statement at a good masked case -/
 
 /-- A statement of the masked verifier decodes to inputs that `Raw.ins` read. -/
@@ -196,12 +153,12 @@ printable with the prover's nonce put in. -/
 theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello, -⟩ := setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := insOf_true (setupOf_some c.setup).1
   obtain ⟨hzk, -, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = true := hzk.trans hwz
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 c.ready_parts.2.1
-  have hu := unitDraw_of S hl (hd d hdd)
+  have hu := unitDraw_of hl (hd d hdd)
   have hU : c.spec.unitDraw = some d := by
     rw [hspec]
     simp [Stmt.spec, hu, Except.toOption]
@@ -217,15 +174,14 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
   have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.2.1
   rw [hdd, hz] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy true D = none := by
-    cases e : ProvedScope.lawWhy true D with
+  have hlw : ProvedScope.lawWhy true c.s.read.tags false D = none := by
+    cases e : ProvedScope.lawWhy true c.s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := draw_parse hdraw hdd
   have hg : Good d := by
-    rcases law_of_lawWhy_true hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact good_stratified (S.parse_wf _ _ ht) hD hK
-    · exact good_subset (S.parse_wf _ _ ht) hD hk
+    rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
+    · exact good_stratified (draw_wf hdraw hdd) hD hK
+    · exact good_subset (draw_wf hdraw hdd) hD hk
   refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
   rw [hn'] at hD
   cases hD

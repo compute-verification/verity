@@ -75,6 +75,16 @@ def pointsWhy : String :=
 #guard why (innerLink (transcript (top0 := [])) (record)) ==
   some "rec inner transcript: circuit/rep0 round 1's top 0 has no nodes"
 
+-- Every node kept is a `b ‖ c` of 128 bytes, which a top's piece length rests on; a shorter node is refused
+#guard link.root.all (·.size == 128) && link.tops.all (·.all fun (_, t) => t.all (·.size == 128))
+def shortTop : Json :=
+  (transcript).setObjVal! "rounds" (Json.arr #[round "circuit/rep1" 1 [[5]], round "circuit/rep0" 0 [],
+    (round "circuit/rep0" 1 []).setObjVal! "tops"
+      (Json.arr #[Json.arr #[hx 3, Json.str (hexOf (ByteArray.mk (Array.replicate 64 4)))]]),
+    round "circuit/rep1" 0 []])
+#guard why (innerLink (transcript) (record)) == none && why (innerLink shortTop (record)) ==
+  some "rec inner transcript: circuit/rep0 round 1's top 0: a b ‖ c of 64 bytes, not 128"
+
 -- `rec-top-L<l>`'s rows: root_B at level 0, both reps'; above it rep 0's top, then rep 1's
 def row (lk : InnerLink) (l x : Nat) : Option (List UInt8) := (topRow lk l x).toOption.map (·.2.data.toList)
 def is (n : Nat) : Option (List UInt8) := some (b n).data.toList
@@ -133,7 +143,7 @@ and 7; at level 0 both reps read `root_B` from row 0. -/
 
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := .empty, leaves := 8, words := some 64, wordBits := 16, domain := .empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def pos0 : Array Nat := #[5, 13, 6]
 def pos1 : Array Nat := #[1, 2, 15]
 def reads (own : Array Registered.Port) (l : Nat) : Option String :=
@@ -210,5 +220,16 @@ def c3i : Inner :=
 #guard why (checkSchedule i25 ((onSched i25).setObjVal! "hello" (Json.mkObj [("tables", toJson ["circuit", "x"])]))) ==
   offWhy i25 "Hello names no one table"
 #guard why (checkSchedule { i25 with m := 6 } (onSched i25)) == offWhy { i25 with m := 6 } "the shape has no schedule"
+
+/-! Below k_log 6 `SchedRound`'s absorb flag reads a 2-element round as z_partial's 64-element one, so `checkSchedule`
+alone passes a record on that misread schedule; `statements`, which every V* session's setup runs (`RecSetup.checks`,
+`checkStmt`, `check`), refuses the shape first. -/
+
+def i5 : Inner := { i25 with kLog := 5 }
+#guard why (checkSchedule i5 (onSched i5)) == none
+#guard why (statements i5) == some ("the inner session's shape (m 25, k_log 5, claims 8) is not V*'s: a fast100 " ++
+  "schedule, k_log at least 6, claims at least 2")
+#guard why (statements { c3i with kLog := 5 }) == some ("the inner session's shape (m 25, k_log 5, claims 8) is not " ++
+  "V*'s: a fast100 schedule, k_log at least 6, claims at least 2")
 
 end Flock.Test.InnerLink

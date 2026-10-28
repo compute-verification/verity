@@ -1,5 +1,5 @@
 """The Boolean re-verification of a deferred Commit: the Commit's own C2 replay from its sealed bundle (`pipeline.cpu_replay`), with
-every picked row evaluated by the Boolean version of its Definition (`verity_vllm.program.boolean.boolean_version`, the switch's
+every picked row evaluated by the Boolean version of its Definition (`verity.ml.definitions.boolean.boolean_version`, the switch's
 one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
 
     verity-vllm boolean-replay BUNDLE|KEEP --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
@@ -40,7 +40,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.config import option
 from verity_vllm.pipeline import cpu_replay as CR
-from verity_vllm.program.kernels.kernel_registry import Declined
+from verity.ml.definitions.numerics.kernel_registry import Declined
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.query.program_view import ports_of_type
 
@@ -58,8 +58,8 @@ class Options(CR.Options):
 
 
 _RUN_MAX = 1 << 20  # elements converted at once (an embedding table's 28M words would take 7 GB of temporaries whole)
-#: a worker's measured peak over `BooleanRows.peak_bytes`' bound: 1.145 for r20261001-200753-63d1's LM head (182.1 GiB measured, 159 GiB
-#: bound), the allocator keeping what the worker's previous pick freed
+#: a worker's measured peak over `BooleanRows.peak_bytes`' bound, up to 1.145 on an LM head (182.1 GiB against a 159 GiB bound): the
+#: allocator keeps what the worker's previous pick freed
 PEAK_MARGIN = 1.25
 
 
@@ -115,7 +115,7 @@ class BooleanRows:
         """The Boolean version of the Call ``nd``'s Definition, checked to keep its boundary; Declined by name otherwise (``nd``
         None: a spec already looked up)."""
         if spec not in self.sigma:
-            from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+            from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
             if nd is None:
                 raise Declined(f"{spec} is no row of the Program")
             try:
@@ -251,7 +251,7 @@ def _replay(o: Options, link: Path) -> dict[str, Any]:
 
 
 def run(o: Options) -> dict[str, Any]:
-    from verity_vllm.program.boolean import load_program
+    from verity.ml.definitions.boolean import load_program
 
     bundle, out = Path(o.bundle), Path(o.out)
     ctx = json.loads((bundle / "context.json").read_text())

@@ -14,7 +14,7 @@ import pytest
 LEAN = Path(__file__).parents[1] / "lean"
 #: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
 SECURITY = "../../../../../Security/"
-COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort\) > TRUSTED\.sha256)$", re.M)
+COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort -u\) > TRUSTED\.sha256)$", re.M)
 LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 
 
@@ -25,15 +25,16 @@ def sha256(p: Path) -> str:
 def command(pkg: Path) -> tuple[str, list[str], list[str]]:
     """The README's regeneration command on one line: (the command, the files it names, the trees whose `.lean` files follow)."""
     m = COMMAND.search(re.sub(r"\\\n\s*", "", (pkg / "README.md").read_text()))
-    assert m, (f"{pkg / 'README.md'} has no command `sha256sum FILES $(find TREES -name '*.lean' | LC_ALL=C sort) > "
+    assert m, (f"{pkg / 'README.md'} has no command `sha256sum FILES $(find TREES -name '*.lean' | LC_ALL=C sort -u) > "
                f"TRUSTED.sha256`; if the command changed shape, change `COMMAND` here with it")
     return m.group(1), m.group(2).split(), m.group(3).split()
 
 
 def trusted(pkg: Path) -> list[str]:
-    """The files the command hashes, in its order: those it names, then the trees' `.lean` files as `LC_ALL=C sort` orders them."""
+    """The files the command hashes, in its order: those it names, then the trees' `.lean` files as `LC_ALL=C sort -u`
+    orders them, once each however many trees hold them."""
     _, named, trees = command(pkg)
-    found = (p.relative_to(pkg).as_posix() for t in trees for p in (pkg / t).rglob("*.lean") if p.is_file())
+    found = {p.relative_to(pkg).as_posix() for t in trees for p in (pkg / t).rglob("*.lean") if p.is_file()}
     return named + sorted(found, key=str.encode)
 
 
@@ -77,7 +78,10 @@ def copy(tmp: Path) -> Path:
     for rel in ["README.md", *named, *trees]:
         dest = tmp / (LEAN / rel).resolve().relative_to(base.resolve())
         dest.parent.mkdir(parents=True, exist_ok=True)
-        (shutil.copytree if (LEAN / rel).is_dir() else shutil.copy2)(LEAN / rel, dest)
+        if (LEAN / rel).is_dir():
+            shutil.copytree(LEAN / rel, dest, dirs_exist_ok=True)
+        else:
+            shutil.copy2(LEAN / rel, dest)
     (pkg / "TRUSTED.sha256").write_text(regenerated(pkg, trusted(pkg)))
     return pkg
 
@@ -94,7 +98,7 @@ def edited(pkg: Path) -> None:
 
 
 def corrupted(pkg: Path) -> None:
-    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Models/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
+    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Definitions/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
 
 
 def dropped(pkg: Path) -> None:
@@ -102,7 +106,7 @@ def dropped(pkg: Path) -> None:
 
 
 def added(pkg: Path) -> None:
-    (pkg / SECURITY / "Models/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
+    (pkg / SECURITY / "Definitions/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
 
 
 def extra(pkg: Path) -> None:
@@ -115,9 +119,9 @@ def reordered(pkg: Path) -> None:
 
 @pytest.mark.parametrize("mutate, problems", [
     (edited, ["Grader/Registry.lean does not match its hash in TRUSTED.sha256"]),
-    (corrupted, [f"{SECURITY}Models/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
+    (corrupted, [f"{SECURITY}Definitions/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
     (dropped, ["lake-manifest.json is trusted but not listed"]),
-    (added, [f"{SECURITY}Models/Pous/Guarantees/Added.lean is trusted but not listed"]),
+    (added, [f"{SECURITY}Definitions/Pous/Guarantees/Added.lean is trusted but not listed"]),
     (extra, ["README.md is listed but the command does not hash it"]),
     (reordered, ["the files are listed in another order than the command's, or more than once"]),
 ], ids=lambda x: getattr(x, "__name__", None))

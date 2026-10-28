@@ -1,5 +1,5 @@
 """A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
-judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
@@ -39,7 +39,7 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
   the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
   ``prover.npz`` (rows, salts, b ‖ c) are the prover's.
-- **The fixed length** (Daniel, 19 Oct, ASK-39): the request is served at a public max_tokens under ignore_eos, so its
+- **The fixed length**: the request is served at a public max_tokens under ignore_eos, so its
   useful work is public.  The verifier's parameters hold its request's max_tokens (``length``), the committer registers
   the runner's record of how it served it (``served.json`` beside the pass, `served_length`), and PoUW's rule refuses an
   EOS-keyed row or a served length other than max_tokens (``window-form``).  A pass with no served record registers no
@@ -127,6 +127,7 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
 from verity.core.protocols.certifier.active import RUN_ID_BYTES
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
@@ -374,9 +375,9 @@ def _frame(tag: str, fields: dict, count: int) -> CommitmentDomain:
 
 
 def _served(params: dict, ell: int, port: str, schema: str, count: int) -> CommitmentDomain:
-    """One-stage's served domain (`registration.served_domain`) of the window's program and partition at level `ell`."""
+    """One-stage's window domain (`registration.window_domain`) of the window's program and partition at level `ell`."""
     _, _, part = population(params["k"], work_at(params, ell).n)
-    return _frame(R.SERVED_DOMAIN, {"program": part["program"], "partition": PT.digest(part), "port": port, "schema": schema,
+    return _frame(R.WINDOW_DOMAIN, {"program": part["program"], "partition": PT.digest(part), "port": port, "schema": schema,
                                     "leaves": int(count), "run": params["context"]}, count)
 
 
@@ -822,7 +823,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
 
 def _pd():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+    from verity_vllm.protocols.pouw import pearl_c as PD
     return PD
 
 
@@ -903,6 +904,7 @@ class Challenger:
         self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
         self.replays: dict[str, str] = {}
         self.passes: dict[str, str] = {}
+        self.manifests: dict[str, Any] = {}   # each registered window's pass manifest, read (`_distinct`)
         self.draws: dict[str, S.Draw] = {}
         self.sessions: dict[str, list[str]] = {}
         self.openings: dict[str, CoinOpening] = {}
@@ -1041,6 +1043,8 @@ class Challenger:
         st.ready()
         self.r1_r6(name, st, rec, own)
         reg = st.register(rec, own)
+        if replay is None:
+            self._distinct(name, manifest)
         self.regs[name] = (st, reg)
         self.recorded[name] = bool(recorded)
         if replay is None:
@@ -1086,6 +1090,7 @@ class Challenger:
             raise _refused("certifier", str(e)) from None
         how = self.pass_epoch(manifest, False, name, reveal=reveal, committed=committed, stream=sid, prover=self.prover)
         salt = CC.certified_salt(manifest, self.params["context"], reveal, committed, sid, self.prover)
+        self._distinct(name, manifest)
         try:
             self.registrations.admit(p, sid, self.prover, reg.digest)
         except PS.Reregistered as e:
@@ -1095,6 +1100,18 @@ class Challenger:
         self.passes[name] = how
         self.salts[name] = salt
         return reg
+
+    def _distinct(self, name: str, manifest: bytes | None) -> None:
+        """Window `name`'s pass, credited beside every pass a window registered before it (`manifests`): no call index
+        twice under one salt, each below 2^32 (`credit.passes_distinct`), so a pass registered again, on another stream,
+        is refused (``repeated-call``).  Raises `Refused`; held once it passes."""
+        if manifest is None:
+            return
+        m = json.loads(manifest)
+        why = CR.passes_distinct([*self.manifests.values(), m])
+        if why is not None:
+            raise _refused(*why)
+        self.manifests[name] = m
 
     def check(self, name: str, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
         """`check` of window `name`'s unit `unit` against its registration and draw, of record (`record`), under the salt
@@ -1427,9 +1444,14 @@ def cmd_challenger(a) -> int:
             raise SystemExit(f"no challenger state at {a.state}")
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
         from e2e import state_entropy
-        coins = Coins(a.epoch, state_entropy(a.state))
+        entropy = state_entropy(a.state)
     else:
-        coins = Coins(a.epoch, PV.coins)
+        entropy = PV.coins
+    try:
+        Ch.served_claim(entropy)
+    except Ch.CoinError as e:
+        raise SystemExit(f"the challenger refused to start: {e}") from None
+    coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
                     record=OR.Record(lean=False if a.python_record else None))

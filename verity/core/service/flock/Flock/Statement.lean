@@ -127,6 +127,46 @@ theorem checkInRange_ok (kLog nRegions mPts : Nat) :
       simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]; omega
     simp [this, throw, throwThe, MonadExceptOf.throw]
 
+/-- **Each region's bytes are its free bits, in every block**: the extra claims read block `b`'s bytes as the region's
+`2^|free|` bits (`Stmt.regionValue`), so `setupH` and `setupHidden` refuse a statement whose regions carry bytes of
+another size in any of the `2^nbl` blocks, before any proof is read. One pass over each region's bytes, as each
+`regionValue` makes. -/
+def checkRegionBytes (nbl : Nat) (regions : Array Region) : V Unit :=
+  if regions.all fun reg => Nat.all (2 ^ nbl) fun b _ => (reg.bytes b).size * 8 == 2 ^ reg.free.size then pure ()
+  else throw "a region's bytes are not its free bits in every block: the extra claims read 2^|free| bits per block"
+
+theorem nat_all_iff (n : Nat) (p : Nat → Bool) : (Nat.all n fun b _ => p b) = true ↔ ∀ b < n, p b = true := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [Nat.all_succ, Bool.and_eq_true, ih]
+    constructor
+    · intro h b hb
+      rcases Nat.lt_succ_iff_lt_or_eq.1 hb with hb | hb
+      · exact h.1 b hb
+      · exact hb ▸ h.2
+    · intro h
+      exact ⟨fun b hb => h b (Nat.lt_succ_of_lt hb), h n (Nat.lt_succ_self n)⟩
+
+/-- `checkRegionBytes` accepts exactly where every region's bytes are its free bits in every block. -/
+theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
+    checkRegionBytes nbl regions = .ok () ↔
+      ∀ reg ∈ regions.toList, ∀ b < 2 ^ nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size := by
+  have hall : (regions.all fun reg => Nat.all (2 ^ nbl) fun b _ => (reg.bytes b).size * 8 == 2 ^ reg.free.size) = true ↔
+      ∀ reg ∈ regions.toList, ∀ b < 2 ^ nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size := by
+    rw [← Array.all_toList, List.all_eq_true]
+    refine forall_congr' fun reg => imp_congr_right fun _ => ?_
+    rw [nat_all_iff]
+    simp only [beq_iff_eq]
+  unfold checkRegionBytes
+  split
+  · rename_i h
+    simp only [pure, Except.pure, true_iff]
+    exact hall.1 h
+  · rename_i h
+    simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
+    exact fun h' => h (hall.2 h')
+
 /-- The coin source named in `Hello` (§7). -/
 inductive Coins where
   | os
@@ -134,6 +174,11 @@ inductive Coins where
   /-- the verifier's keyed coin tree (`Flock.CoinTree`): `Hello`'s `coins` is its spec, with the prover's nonce -/
   | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
+
+/-- The keyed coin tree the coins name, which `Hello`'s `coins` carries (`helloOf`); none for the OS's coins or a seed's. -/
+def Coins.tree? : Coins → Option CoinTree.Spec
+  | .tree s => some s
+  | _ => none
 
 /-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
 (`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
@@ -158,6 +203,8 @@ structure Stmt where
   digest : ByteArray
   sigma : ByteArray
   hello : String
+  /-- the keyed coin tree `hello` names, from the setup's coins (`Coins.tree?`) -/
+  coinTree : Option CoinTree.Spec
   merkle : MerkleScheme
   /-- what the statement check established about the partition (`HmRow.PartitionFinding`), for the verdict; null before e51e2b86 -/
   partition : Json := Json.null
@@ -200,7 +247,8 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let digest := Sha256.hash h
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
-  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello, merkle }
+  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello,
+           coinTree := coins.tree?, merkle }
 
 namespace Stmt
 
@@ -208,12 +256,35 @@ namespace Stmt
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
-    sha512Digests := st.tags.hm96Rows, coinTree := CoinTree.ofHello st.hello }
+    sha512Digests := st.tags.hm96Rows, coinTree := st.coinTree }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=
   let eIn := eqTable rho
   Array.ofFn (n := lw.size * eIn.size) fun k => lw[k.val % lw.size]! * eIn[k.val / lw.size]!
+
+private theorem getElem!_map_of_lt {α β} [Inhabited α] [Inhabited β] (f : α → β) (xs : Array α) (i : Nat)
+    (h : i < xs.size) : (xs.map f)[i]! = f xs[i]! := by
+  rw [getElem!_pos (xs.map f) i (by simpa using h), getElem!_pos xs i h, Array.getElem_map]
+
+/-- `tensor` from each `lw[s]`'s table (`F128.mulBy_mulTableL`) once `eq(ρ)` has 1024 entries. -/
+def tensorFast (lw : Array F128) (rho : Array F128) : Array F128 :=
+  let eIn := eqTable rho
+  if eIn.size < 1024 then Array.ofFn (n := lw.size * eIn.size) fun k => lw[k.val % lw.size]! * eIn[k.val / lw.size]!
+  else
+    let tabs := lw.map F128.mulTableL
+    Array.ofFn (n := lw.size * eIn.size) fun k => F128.mulBy tabs[k.val % lw.size]! eIn[k.val / lw.size]!
+
+@[csimp] theorem tensor_eq_fast : @tensor = @tensorFast := by
+  funext lw rho
+  simp only [tensor, tensorFast]
+  split
+  · rfl
+  · congr 1
+    funext k
+    have hk := k.isLt
+    have hs : 0 < lw.size := Nat.pos_of_ne_zero fun h => by simp [h] at hk
+    rw [getElem!_map_of_lt _ _ _ (Nat.mod_lt _ hs), F128.mulBy_mulTableL]
 
 /-- `α·Aᵀe_lo + Bᵀe_lo` on a slot of `2^sl` bits, the product rows' B side read from the table for a lookup slot. -/
 def baseOf (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
@@ -222,6 +293,22 @@ def baseOf (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupT
     | some t => Lookup.foldB t eLo (b.foldT eLo)
     | none => b.foldT eLo
   (Array.range (2 ^ sl)).map fun i => alpha * fa[i]! + fb[i]!
+
+/-- `baseOf` from `α`'s table once the slot has 2048 bits. -/
+def baseOfFast (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
+  let fa := a.foldT eLo
+  let fb := match lk with
+    | some t => Lookup.foldB t eLo (b.foldT eLo)
+    | none => b.foldT eLo
+  if 2 ^ sl < 2048 then (Array.range (2 ^ sl)).map fun i => alpha * fa[i]! + fb[i]!
+  else
+    let ta := F128.mulTableL alpha
+    (Array.range (2 ^ sl)).map fun i => F128.mulBy ta fa[i]! + fb[i]!
+
+@[csimp] theorem baseOf_eq_fast : @baseOf = @baseOfFast := by
+  funext alpha eLo a b lk sl
+  simp only [baseOf, baseOfFast]
+  by_cases h : 2 ^ sl < 2048 <;> simp only [h, ↓reduceIte, F128.mulBy_mulTableL]
 
 /-- One slot type's fold on its local tensor `e_lo = lw ⊗ eq(ρ[.. sl − 6])`; a mask slot's is `(α + 1)·e_lo`. -/
 def slotBase (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × Nat) : V (Array F128) := do
@@ -241,6 +328,28 @@ def slotBase (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × Nat
 def placeSlot (s : F128) (base : Array F128) (at_ : Nat) : Nat → Nat → Array F128 → Array F128
   | 0, _, out => out
   | fuel + 1, i, out => placeSlot s base at_ fuel (i + 1) (out.set! (at_ + i) (s * base[i]!))
+
+/-- `placeSlot` with `s`'s products read from a table `t` (`s`'s `F128.mulTableL`). -/
+def placeSlotT (t : Array F128) (base : Array F128) (at_ : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, i, out => placeSlotT t base at_ fuel (i + 1) (out.set! (at_ + i) (F128.mulBy t base[i]!))
+
+theorem placeSlotT_eq (s : F128) (base : Array F128) (at_ : Nat) :
+    ∀ fuel i out, placeSlotT (F128.mulTableL s) base at_ fuel i out = placeSlot s base at_ fuel i out
+  | 0, _, _ => rfl
+  | fuel + 1, i, out => by
+    rw [placeSlotT, placeSlot, F128.mulBy_mulTableL, placeSlotT_eq s base at_ fuel]
+
+/-- `placeSlot` from `s`'s table once the slot has 2048 offsets. -/
+def placeSlotFast (s : F128) (base : Array F128) (at_ fuel i : Nat) (out : Array F128) : Array F128 :=
+  if fuel < 2048 then placeSlot s base at_ fuel i out else placeSlotT (F128.mulTableL s) base at_ fuel i out
+
+@[csimp] theorem placeSlot_eq_fast : @placeSlot = @placeSlotFast := by
+  funext s base at_ fuel i out
+  simp only [placeSlotFast]
+  split
+  · rfl
+  · rw [placeSlotT_eq]
 
 /-- Slots `k, …, k + fuel − 1` of range `r`, each scaled by `eq(ρ[sl − 6 ..], q)`. -/
 def placeRange (r : Range) (eHi base : Array F128) : Nat → Nat → Array F128 → Array F128

@@ -1,6 +1,6 @@
-# Sourced by the pod scripts that pin their own cores (74-gemm-hill.sh, 76-read-gadget.sh, 80-rec-inner.sh,
-# 81-rec-outer.sh, 83-rec-alg.sh), on node 1 and inside a check slot on a vy-cpu pod. Node 1 starts every `provers` job on the same cores (128-175), so jobs pinned side by side need
-# cores of their own. hold_slices splits the job's cores into slices of SLICE_SIZE (16) and takes a lock (flock, under
+# Sourced by the pod scripts that pin their own cores (74-gemm-hill.sh, 76-read-gadget.sh, 80-rec-inner.sh), on node 1
+# and inside a check slot on a vy-cpu pod. Node 1 starts every `provers` job on the same cores (128-175), so jobs pinned
+# side by side need cores of their own. hold_slices splits the job's cores into slices of SLICE_SIZE (16) and takes a lock (flock, under
 # SLICE_LOCKS) on every slice the job will pin, held by the job's open descriptors until its last process exits; another
 # job waits for them. In a Kubernetes container it then pins every process of the container (the harness included) to them.
 #   hold_slices CPUSET N: the slices CPUSET touches, taken in order (blocking), pinning CPUSET;

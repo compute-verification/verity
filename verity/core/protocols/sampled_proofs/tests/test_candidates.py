@@ -1,4 +1,4 @@
-"""The candidate generator (`candidates`): its dynamic program against every pure cut, the width rule's pruning, re-bound
+"""The candidate generator (`candidates`): its dynamic program against every pure cut, the size classes' pruning, re-bound
 statics, the hints, and the shape it reads off a Definition's body."""
 
 from __future__ import annotations
@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import CostModel, Objective, frontier
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
@@ -36,20 +37,29 @@ def test_cuts_are_alternatives_the_planner_chooses_among():
     assert {alts[p.choice["dot"]][0][0] for p in plans} >= {"Dot{K=1024}", "Dot{K=256}"}
 
 
-def test_width_rule_prunes_units_and_prices_itself():
+def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
     coord = Shape("Coord", 32 * 4190, 1024, 32, rows=(1024, 1024, 4), commit_bits=32, cap=4096)
     tile = Shape("Tile2", 2 * 32 * 4190, 2048, 64, out_gates=2, rows=(1024, 1024, 1024, 8), commit_bits=64, cap=4096,
                  parts=((coord, 2),))
-    cands, alts, hints = cuts("tile", tile, N, CostModel(per_and=1e-10, statement_fixed=1.0), OBJECTIVE, grid=21)
-    assert alts == {"c0": (("Coord", 2 * N),)}
-    assert [(h.kind, h.node) for h in hints] == [("width", "Tile2")] and hints[0].saving > 0.4
-    with pytest.raises(ValueError, match="no legal cut"):
-        cuts("tile", Shape("Tile2", 1, 1, 64, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
+    costs = CostModel(per_and=1e-10, statement_fixed=1.0)
+    _, alts, hints = cuts("tile", tile, N, costs, OBJECTIVE, grid=21)
+    assert (("Tile2", N),) in alts.values() and not [h for h in hints if h.kind == "width"]
+    row = Shape("Row{N=128}", 128 * 4190, 128 * 1024, 128 * 16, out_gates=128, rows=(2048, 256), commit_bits=2048,
+                cap=4096, parts=((coord, 128),))
+    _, alts, _ = cuts("row", row, N, costs, OBJECTIVE, grid=21)
+    assert (("Row{N=128}", N),) in alts.values()
+    n = UNIT_CLASS_MAX // 32 + 1
+    wide = Shape(f"Row{{N={n}}}", n * 4190, n * 1024, 32 * n, out_gates=n, rows=(4 * n,), commit_bits=32 * n,
+                 cap=4096, parts=((coord, n),))
+    _, alts, _ = cuts("wide", wide, N, costs, OBJECTIVE, grid=21)
+    assert alts == {"c0": (("Coord", n * N),)}
+    with pytest.raises(ValueError, match="fit no size class"):
+        cuts("wide", Shape("Wide", 1, 1, UNIT_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
 
 
 def test_boundary_pressure_names_the_unit_between_two_definitions():
     """With commitment against proving balanced at sqrt(c0 / (lam alpha)) between 32 and 1024 MACs, and no chunk
-    Definition to bind, units of an eighth of the dot beat both the dot and its steps."""
+    Definition to bind, proof blocks of an eighth of the dot beat both the dot and its steps."""
     dot = Shape("Dot{K=1024}", 32 * 4190, 1024, 16, rows=(1024, 1024, 2), commit_bits=16, cap=4096, parts=((STEP, 32),))
     _, alts, hints = cuts("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, grid=41)
     assert set(alts.values()) == {(("Dot{K=1024}", N),), (("Step", 32 * N),)}

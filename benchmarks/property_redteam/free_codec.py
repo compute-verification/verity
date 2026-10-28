@@ -1,4 +1,4 @@
-"""The whole codec word at 0 budgeted units, as Model.lean counts today: `EncodeChainHardness` is false for every `E > 0`.
+"""The whole codec word at 0 budgeted units, as Model.lean once counted: `EncodeChainHardness` false for every `E > 0`.
 
 `squaring.free_square` shows a squaring mod p1024 at 0 units through the one-word gather (`gather [idx, const c]` is
 `c·[idx ≤ 0]`, and `Gate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
@@ -17,7 +17,8 @@ and a folded product fit s32, which is what keeps this module small; at p1024 th
 (`free_square`), so the encode is free there too, only too large to build here (≈3 × 1,040 products of ≈26k gates).
 
 Under the fix (`Nat.clog 2 args.length`, property/v1's `ceil(log2(V + 1))`), every comparator is a unit, and the same
-circuit costs its comparator count (`Builder.fixed_units`).
+circuit costs its comparator count (`Builder.fixed_units`). In nonlinear units each AND of two run-time bits is also a
+data product, a unit (`Builder.nonlinear_units`).
 """
 
 from __future__ import annotations

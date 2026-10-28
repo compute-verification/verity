@@ -20,7 +20,7 @@ CIRCUIT_PINS = {1536: "861aaba839ead11166bd84e3f028a39988fc033022aab8f85494838a1
 
 
 def definition(subcircuit):
-    import verity_vllm.program.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
+    import verity.ml.definitions.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
 
     return subcircuit.definition()
 

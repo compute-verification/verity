@@ -26,6 +26,14 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
     assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
 
 
+def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
+    """27 Oct: `verity lean try --on vy-nebius-1` without `--pool` was refused, and the refusal named only slot.py by hand."""
+    (tmp_path / "proofs").write_text("p0 0-15\n")
+    why = S.refusal(tmp_path / "marker", {"proofs": str(tmp_path / "proofs"), "soundness": str(tmp_path / "soundness")})
+    assert "add `--pool proofs` to `research run` or `verity lean try`" in why
+    assert "slot.py [--by NAME] -- CMD" in S.refusal(tmp_path / "marker", {"soundness": str(tmp_path / "soundness")})
+
+
 def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
     """INF-27/28: a lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
     c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])
@@ -36,7 +44,7 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
         S.in_pool("gpu", "x", ["true"])
         raise AssertionError("an unknown pool must be refused")
     except ValueError as e:
-        assert "the pools are proofs, research" in str(e)
+        assert "the pools are network, proofs, research" in str(e)
     from research.cli import main
     for argv, why in ((["--pool", "research", "--", "true"], "needs --on MACHINE and --source"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--", "true"], "needs a lane"),
@@ -51,21 +59,22 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
 
 def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp_path, monkeypatch, capsys):
     """INF-61 (cpu-3, 18 Oct): a `--pool` run's --mem-gb reserved at launch and held that through its wait in the slot line, beside
-    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot's mem= admits it."""
+    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot admits it, with the
+    run's --mem-gb when that is more than its mem= (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)."""
     from research import remote
     from research.cli import main
 
     seen = []
 
     def launch(**kw):
-        seen.append(kw["mem_gb"])
+        seen.append((kw["mem_gb"], kw["env"].get("CHECK_RUN_MEM_GB")))
         return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
 
     monkeypatch.setattr(remote, "launch", launch)
     argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
             "--pool", "proofs", "--as", "proofs"]
     assert main([*argv, "--mem-gb", "96", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
-    assert seen == [None, None] and "--mem-gb 96 is dropped" in capsys.readouterr().err
+    assert seen == [(None, "96"), (None, None)] and "--mem-gb 96 goes to the slot" in capsys.readouterr().err
 
 
 def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monkeypatch, tmp_path, capsys):
@@ -186,12 +195,12 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
-    vy-verifier-gate) and goes, with the timer that enforces it, to the two auditor hosts only, each host's gate and units to it
-    alone; the nodes' shared peers file and the cluster's description name neither host."""
+    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate and units to it
+    alone; the nodes' shared peers file and the cluster's description name no auditor host."""
     import tomllib
     from pathlib import Path
 
-    hosts = ["vy-challenger-1", "vy-auditor-1"]
+    hosts = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
     rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
@@ -205,14 +214,16 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     gate = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/challenger/" in e.get("src", "")
             and not e["src"].endswith("/11-vy-admin.conf")}
     assert gate == {p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
-                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service")}
+                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
+                                                     "/etc/systemd/system/vy-certifier@.service")}
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
-    assert verifier == {p: ["vy-auditor-1"] for p in (
+    assert verifier == {p: ["vy-auditor-1", "vy-auditor-2"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",
         "/usr/local/sbin/vy-verifier-tunnel", "/etc/systemd/system/vy-verifier@.service",
         "/etc/systemd/system/vy-verifier-replay@.service", "/etc/systemd/system/vy-verifier-publish@.service",
         "/etc/ssh/sshd_config.d/12-vy-verifier.conf", "/etc/vy/verifier.json")}
-    assert "User=auditor" in (nebius / "challenger" / "vy-challenger@.service").read_text()
+    for unit in ("vy-challenger@.service", "vy-certifier@.service"):
+        assert "User=auditor" in (nebius / "challenger" / unit).read_text()
     for unit in ("vy-verifier@.service", "vy-verifier-replay@.service", "vy-verifier-publish@.service"):
         assert "User=auditor" in (nebius / "verifier" / unit).read_text()
     for host in hosts:

@@ -1,4 +1,4 @@
-"""Verity source identity + precheck (F-r17-tp-06 fixed by construction; BRIEF R18 Phase 0, adapted to the Verity tree in R19).
+"""Verity source identity + precheck: the job runs the tree it names, and a mixed tree is refused by construction.
 
     verity-vllm source-identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
         exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
@@ -97,7 +97,7 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
 
 def requested_tree(tree: str | os.PathLike[str] | None = None) -> str:
     """The tree this job must run from: the explicit argument, else THIS file's tree.  $VERITY_TREE is checked against it, never used
-    as the default -- a differing value is the mixed-tree case (F-r17-tp-06) and fails by name."""
+    as the default -- a differing value is the mixed-tree case and fails by name."""
     root = normalise_tree(tree)
     env = os.environ.get("VERITY_TREE")
     if env and normalise_tree(env) != root:

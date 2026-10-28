@@ -1,4 +1,4 @@
-"""R11 cb-harden (2) — MoE routing independence of the Bet A circuit builder.
+"""MoE routing independence of the Bet A circuit builder.
 
 The property: the Program Bet A produces for a mixture-of-experts block must be INDEPENDENT of the routing decisions taken on
 the example input used at export time; the per-token expert selection must appear as a VALUE of the Program, never as its
@@ -38,7 +38,7 @@ import torch.nn.functional as F
 
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 REF = dict(mode="reference")
 T, H, I, E, K = 4, 8, 16, 4, 2

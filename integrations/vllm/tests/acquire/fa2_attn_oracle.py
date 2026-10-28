@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-"""Verity-semantics reference for the FA2 attention chain (lane B-sem, R8) -- the P0 tap oracle.
+"""Verity-semantics reference for the FA2 attention chain -- the P0 tap oracle.
 
-Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (verity_vllm/program/registry/b1.py:727-822) with
-the registry primitives themselves (verity_vllm/program/registry/prims.py), so every emitted word is *the Definition's* word:
+Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (verity/ml/definitions/registry/b1.py:727-822) with
+the registry primitives themselves (verity/ml/definitions/registry/prims.py), so every emitted word is *the Definition's* word:
 FTZ f32 ops, `x > y ? x : y` max, the measured MUFU.EX2 / MUFU.RCP tables, the measured Ampere m16n8k16 model,
 RNE bf16.  Emits every online-state version the kernel holds in registers (mapping: p0-tap-spec.md).
 
@@ -15,7 +15,7 @@ bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.
 from __future__ import annotations
 import argparse, json, sys
 import numpy as np
-from verity_vllm.program.registry import prims as P  # PYTHONPATH=.
+from verity.ml.definitions.registry import prims as P  # PYTHONPATH=.
 
 NEG_INF = 0xFF800000
 BF16_KEYS = {"q", "k", "v", "pb", "out"}
@@ -25,7 +25,7 @@ CASES = {  # 1 head; BN = fa2_kblock_n(D); every case has row-schedule == kernel
     "p0b": dict(M=16, T=144, D=64, causal=True, seed=12, spread=1.0),   # two blocks: rescale path, mask, K/V zero pad
     "p0c": dict(M=3, T=160, D=64, causal=False, seed=13, spread=1.0),   # decode shape (3 rows = 3 heads of a KV group)
     "p0d": dict(M=8, T=200, D=64, causal=True, seed=14, spread=6.0),    # large |scores|: MUFU / FTZ ranges, scale << 1
-    # [R15 capacity] Gemma-2 shape: hd 256 (kBlockN 64), softcap 50, sliding window 4096 >= T (Is_local kernel, masks nothing)
+    # Gemma-2 shape: hd 256 (kBlockN 64), softcap 50, sliding window 4096 >= T (Is_local kernel, masks nothing)
     "g2a": dict(M=8, T=150, D=256, causal=True, seed=15, spread=1.0, softcap=50.0, window=4096),
     "g2b": dict(M=8, T=150, D=256, causal=True, seed=15, spread=30.0, softcap=50.0, window=4096),  # |s*scale| ~ 30-60: tanh table + saturation
 }
@@ -43,7 +43,7 @@ def fa2_kblock_n(D: int) -> int:               # b1.py:364-371 (the num_splits =
     return 128 if D <= 64 else 64
 
 
-# [R15 capacity] softcap (Gemma-2: attn_logit_softcapping 50.0).  flash_api.cpp:156-159 with softcap > 0:
+# softcap (Gemma-2: attn_logit_softcapping 50.0).  flash_api.cpp:156-159 with softcap > 0:
 #   params.softcap = softmax_scale / softcap (f32 / f32), params.scale_softmax = softcap, params.scale_softmax_log2 = softcap * M_LOG2E
 #   (double product narrowed to f32); the kernel then runs apply_softcap(acc_s, params.softcap): s = tanh.approx.f32(s * params.softcap)
 #   (cutlass::fast_tanh on sm >= 75 = MUFU.TANH, the measured `MufuTanh` word table) BEFORE the mask / online softmax, which therefore

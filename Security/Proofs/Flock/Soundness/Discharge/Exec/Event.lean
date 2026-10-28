@@ -1,4 +1,5 @@
 import Flock.HmRow
+import Flock.Norm
 import Flock.Verify
 import Proofs.Flock.Soundness.Audit.OneStage
 
@@ -52,13 +53,13 @@ structure Transcript where
   record : String
   proofs : Array ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null): `Main.recordDraw`, which the executable's root
-module defines and no library exports. -/
+/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`, which
+the executable's root module defines and no library exports. -/
 def recordDraw (record : String) : Option Json :=
   match Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 

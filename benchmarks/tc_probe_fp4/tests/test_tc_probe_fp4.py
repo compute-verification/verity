@@ -72,7 +72,7 @@ def test_mixed_product_is_the_exact_product(fa, fb):
 
 @pytest.mark.parametrize("fmt,bits", [("e4m3", 8), ("e2m1", 4)])
 def test_groupsum_candidate_is_verity_groupsum_on_one_format(fmt, bits):
-    """On a single format the candidate is ``GroupSum`` itself; E4M3 (32,)/26/-133 is the vLLM lane's measured sm_120 step."""
+    """On a single format the candidate is ``GroupSum`` itself; E4M3 (32,)/26/-133 is the vLLM port's measured sm_120 step."""
     cand = k32.GroupSumCandidate("t", fmt, fmt, (32,), 26, -133)
     ref = M.GroupSum("t", "sm_120", fmt, bits, (32,), 26, -133, "test")
     rng = np.random.default_rng(7)
@@ -133,7 +133,7 @@ def test_result_records_elide_chain_operands_only():
     assert slim["a"]["hex_chars"] == 32 * 1024 and len(json.dumps([slim] * 20)) < 1 << 16
 
 
-def test_fake_silicon_is_refused_under_a_research_run(no_nvcc, tmp_path, monkeypatch):
+def test_fake_silicon_is_refused_with_a_run_id(no_nvcc, tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     with pytest.raises(SystemExit):
         P.main(["--instruction", "f8f6f4", "--out", str(tmp_path), "--fake-silicon", "gs32_w26_native"])

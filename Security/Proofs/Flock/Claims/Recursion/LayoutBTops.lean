@@ -28,7 +28,7 @@ it; `CapPorts` holds at every shape too (`capPorts`, `CapPorts.lean`, from `capP
 drops it.
 
 `HeldB` is structural: it asks that every round is fixed, held or assembled from pieces of the parts. That the pieces
-read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksB`,
+read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksBV`,
 `PartOpensB` and `DecompB` take, unchanged here.
 -/
 
@@ -48,10 +48,12 @@ level 0's last. -/
 def capsFrom (r : XR) (rs : Array RecVStar.SchedRound) : ℕ := r.w.parts.length - 1 - (RecVStar.topSizes rs).length
 
 /-- **A top as its cap's part holds it**: at part `s`, the commit strings of rep `rep`'s `n` instances (`rep · n + t`)
-in order, each port `top`'s hm96 slot's output `b ‖ c`. -/
+in order, each port `top`'s hm96 slot's output `b ‖ c`. At a part with no circuit or no port `top` it is read at the
+default circuit and port 0 instead, so every top's piece is `128 · n` bytes (`pieceLen_topPiece`) wherever it sits; a
+staged cap has both (`RecCoins.checkCap`). -/
 def topPiece (r : XR) (s n rep : ℕ) : List (Msg × List HmNets.Lin) :=
-  ((r.w.parts[s]?.bind partCircuit).bind fun c => (capPort c).map fun q =>
-    (List.range n).map fun t => (([] : Msg), hmCommit c q (rep * n + t))).getD []
+  let c := (r.w.parts[s]?.bind partCircuit).getD default
+  (List.range n).map fun t => (([] : Msg), hmCommit c ((capPort c).getD 0) (rep * n + t))
 
 /-- **The row stream round `j` absorbs**: the first part with a held row of round `j` (`heldRows`), as that port's hm96
 slot's output. None where no part has one. -/
@@ -108,6 +110,124 @@ def layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) : Cl
     | 0 => none
     | j + 1 => (streamRound x j).bind fun sr => if sr.2.1.isEmpty && !sr.2.2.2 then some [] else none
   pieceAt x i := stepPieces fin x i
+
+/-! ## What the parts record
+
+Every call a part records at `layoutBTops` is an hm96 salt or row call, whose input starts with the salt's tag
+`verity/hm96-sha512/salt/v1` or a row's `verity/sha512-row/v1`, byte 7 `h` or `s` (`calls_layoutBTops_tagged`). The
+plain setup's statement digest, `SHA-512(h)` with `h` starting with the statement's tag (`Stmt.setupHWith`), reads
+`verity/flock-circuit` at the inner tags, byte 7 `f`, so no part records it (`calls_layoutBTops_not_stmt`). Every
+deciding step of the plain verifier makes that call first (`next_decide_calls`), so a premise asking the inner run's
+calls to be recorded ones, or a collision among them, fails at every honest accepted run. -/
+
+/-- **A tagged hm96 input**: byte 7 is `h` (104), as in the salt's `verity/hm96-sha512/salt/v1`, or `s` (115), as in a
+row's `verity/sha512-row/v1`. -/
+def HmTagged (m : Msg) : Prop := m[7]? = some 104 ∨ m[7]? = some 115
+
+theorem pad_data (b : ByteArray) (n : ℕ) :
+    (Hm96.pad b n).data.toList = b.data.toList ++ List.replicate (n - min n b.size) 0 := by
+  simp [Hm96.pad, ByteArray.data_append]
+
+theorem saltPrefix_tagged :
+    8 ≤ Hm96.Default512.saltPrefix.data.toList.length ∧ HmTagged Hm96.Default512.saltPrefix.data.toList := by
+  rw [Hm96.Default512.saltPrefix, pad_data]
+  have h : 8 ≤ Hm96.sha512.saltTag.data.toList.length ∧ Hm96.sha512.saltTag.data.toList[7]? = some 104 := by decide
+  refine ⟨by simp only [List.length_append]; omega, Or.inl ?_⟩
+  rw [List.getElem?_append_left (by omega)]
+  exact h.2
+
+theorem rowPrefix_tagged (words : ℕ) :
+    8 ≤ (HmRow.rowPrefix words).data.toList.length ∧ HmTagged (HmRow.rowPrefix words).data.toList := by
+  rw [HmRow.rowPrefix, pad_data]
+  simp only [ByteArray.data_append, Array.toList_append, List.append_assoc]
+  have h : 8 ≤ ("verity/sha512-row/v1".toUTF8.push 0).data.toList.length ∧
+      ("verity/sha512-row/v1".toUTF8.push 0).data.toList[7]? = some 115 := by decide
+  refine ⟨by simp only [List.length_append]; omega, Or.inr ?_⟩
+  rw [List.getElem?_append_left (by omega)]
+  exact h.2
+
+theorem hmCalls_tagged (c : Circuit) (nm : String) {q : ℕ} (hq : q < c.ports.size) (n : ℕ) :
+    ∀ p ∈ hmCalls c nm q n, 8 ≤ p.1.length ∧ HmTagged p.1 := by
+  intro p hp
+  simp only [hmCalls, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl
+  · exact saltPrefix_tagged
+  · simp only [Array.getElem?_eq_getElem hq, Option.map_some, Option.getD_some]
+    exact rowPrefix_tagged _
+
+/-- A held row's port is one of its part's circuit's ports. -/
+theorem heldRows_port {r : XR} {s : ℕ} {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
+    {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) : h.2.2.1 < c.ports.size := by
+  unfold heldRows at hh
+  rw [hc] at hh
+  rcases hst : (RecVStar.statements r.shape).toOption.bind (fun vs => vs[s]?) with _ | st
+  · simp only [hst] at hh; simp at hh
+  rcases hrs : repSched r.shape with _ | rs
+  · simp only [hst, hrs] at hh; simp at hh
+  simp only [hst, hrs, List.mem_flatMap] at hh
+  obtain ⟨q, -, hq⟩ := hh
+  rcases hk : RecVStar.cIndex q.2.1 with _ | k
+  · simp only [hk, List.not_mem_nil] at hq
+  simp only [hk, List.mem_filterMap] at hq
+  obtain ⟨row, -, hrow⟩ := hq
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hrow
+  obtain ⟨rep, -, j, -, qi, hqi, rfl⟩ := hrow
+  exact (Array.findIdx?_eq_some_iff_getElem.1 hqi).1
+
+theorem capsCalls_tagged (r : XR) (s : ℕ) : ∀ p ∈ capsCalls r s, 8 ≤ p.1.length ∧ HmTagged p.1 := by
+  intro p hp
+  unfold capsCalls at hp
+  rcases hv : (RecVStar.statements r.shape).toOption.bind (·[s]?) with _ | v
+  · simp [hv] at hp
+  simp only [hv, Option.bind_some] at hp
+  cases v with
+  | cap l N =>
+    rcases hc : r.w.parts[s]?.bind partCircuit with _ | c
+    · simp [hc] at hp
+    rcases hq : capPort c with _ | q
+    · simp [hc, hq] at hp
+    simp only [hc, hq, Option.bind_some, Option.map_some, Option.getD_some, List.mem_flatMap, List.mem_range] at hp
+    obtain ⟨n, -, hn⟩ := hp
+    exact hmCalls_tagged c "top" (Array.findIdx?_eq_some_iff_getElem.1 hq).1 n p hn
+  | _ => simp at hp
+
+theorem shaAt_layoutBTops_tagged (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ) :
+    ∀ p ∈ (layoutBTops fin).shaAt x s, 8 ≤ p.1.length ∧ HmTagged p.1 := by
+  intro p hp
+  change p ∈ layoutBDeployed.shaAt x s ++ ((readX x).map fun r => capsCalls r s).getD [] at hp
+  rcases hr : readX x with _ | r
+  · simp [layoutBDeployed, hr] at hp
+  simp only [layoutBDeployed, hr, Option.bind_some, Option.map_some, Option.getD_some, List.mem_append] at hp
+  rcases hp with hp | hp
+  · rcases hc : r.w.parts[s]?.bind partCircuit with _ | c
+    · simp [hc] at hp
+    simp only [hc, Option.map_some, Option.getD_some, List.mem_flatMap] at hp
+    obtain ⟨h, hh, hp⟩ := hp
+    exact hmCalls_tagged c h.2.1 (heldRows_port hc hh) h.2.2.2 p hp
+  · exact capsCalls_tagged r s p hp
+
+/-- **Every call a part records at `layoutBTops` has a tagged input**: an hm96 salt or row call's. -/
+theorem calls_layoutBTops_tagged (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ)
+    (w : Claims.Flock.Wit) : ∀ e ∈ (layoutBTops fin).calls x s w, HmTagged e.1 := by
+  intro e he
+  simp only [Claims.Recursion.VStarB.LayoutB.calls, List.mem_map] at he
+  obtain ⟨p, hp, rfl⟩ := he
+  obtain ⟨hl, ht⟩ := shaAt_layoutBTops_tagged fin x s p hp
+  unfold HmTagged at ht ⊢
+  rwa [List.getElem?_append_left (by omega)]
+
+/-- **No part records the plain setup's statement digest at the inner tags**: no recorded input starts with the inner
+statement's tag, `verity/flock-circuit`, as `Stmt.setupHWith`'s digest input `h` does. -/
+theorem calls_layoutBTops_not_stmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ)
+    (w : Claims.Flock.Wit) (t : Msg) :
+    ∀ e ∈ (layoutBTops fin).calls x s w, e.1 ≠ RecVStar.innerTags.statement.toUTF8.data.toList ++ t := by
+  intro e he heq
+  have h : 8 ≤ RecVStar.innerTags.statement.toUTF8.data.toList.length ∧
+      RecVStar.innerTags.statement.toUTF8.data.toList[7]? = some 102 := by decide
+  have ht := calls_layoutBTops_tagged fin x s w e he
+  unfold HmTagged at ht
+  rw [heq, List.getElem?_append_left (by omega), h.2] at ht
+  simp at ht
 
 /-! ## The pieces' parts -/
 
@@ -300,7 +420,7 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
 `ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap and each tops round at its level's caps, where at
 the dense form `HeldB` comes from `heldB_layoutBTops`. What stays at the dense form is the schedule (`SchedMatches`),
 RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the last round's pieces (`FinPieces`, which holds at
-`finOpen`: `finPieces_finOpen`), and `VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the
+`finOpen`: `finPieces_finOpen`), and `VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the
 readers' three facts. `ksLin2_deployed_cap`'s `TopsHeld` is not among them. -/
 theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -318,18 +438,18 @@ theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hP hRT hRL hRP
-  refine ksLin2_deployed_plain_closed b L wE join final w ?_ hRT hRL hRP
+  intro L Bd D bL hP hRT hRP
+  refine ksLin2_deployed_plain_closed b L (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl) wE join
+    final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain ⟨hM, hC, hRw, hF, chk, shows, cmt, hV, hPC, hPO, hD⟩ := hS shape hsh

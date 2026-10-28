@@ -48,7 +48,7 @@ is a **stop**: the coin server's record says so (``end``: ``stop``, not why), an
 session.
 
 **Live coins.** Each round's coins are drawn by the coin server when the round's commitments reach it, never before
-(`RecursiveSound`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
+(`RecursiveKS`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
 points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those
@@ -64,7 +64,7 @@ is refused (D12), and the soundness headline at the full draw has no sampling te
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
-top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
+top), a proof-of-work nonce (8 bytes, `0`, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
 statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
 laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
 block zero-padded) and committed as a registered row is (``verity.core.protocols.sampled_proofs.one_stage.registered``:
@@ -94,6 +94,7 @@ from pathlib import Path
 from verity.ml.commitments import hm96
 
 from .rec_algebra import fast100
+from .record_text import session_text
 
 KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
@@ -1039,7 +1040,7 @@ class Proxy:
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
-        (sess / "session.json").write_text(json.dumps(self.session_record(), indent=1))
+        (sess / "session.json").write_text(session_text(self.session_record()))
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
         (out / "public.json").write_text(record_bytes(self.coins.record()))

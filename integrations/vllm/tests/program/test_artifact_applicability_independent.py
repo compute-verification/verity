@@ -1,6 +1,6 @@
-"""CB-TEST (R10 owner 9): INDEPENDENT black-box tests of Bet A's artifact applicability contract (R10 brief §5).
+"""Independent black-box tests of the artifact applicability contract.
 
-Written from the contract BEFORE reading owner 8's implementation (`lane/r10-cb-fix`). The contract (brief §5, Daniel's ruling):
+Written from the contract BEFORE reading the implementation. The contract:
 
   1. one authoritative target/profile input rather than duplicated literals;
   2. the reported manifest describes the facts actually used during construction;
@@ -9,12 +9,11 @@ Written from the contract BEFORE reading owner 8's implementation (`lane/r10-cb-
   5. the Program digest is NOT required to change when the circuit is genuinely unchanged (an identical digest across targets is
      not the bug; the bug is that construction assumptions, target declaration and cache identity can DISAGREE).
 
-Every "dynamic" test here drives A's real builder (`verity_vllm.pipeline.build`, B0 `request 8/4`, GPU-free) in a
-subprocess over a byte-copy of this tree with at most a one-fact mutation, exactly as the R9 validator did (`out/gen/r9/cb-c/validation/
-sens/mutations.patch`), and asserts on the ARTEFACTS (`result.json`, `construction_manifest.json`, any artifact/applicability file the
-fix writes). Nothing here imports owner 8's code; the only owner-8-specific knowledge allowed is the ADAPTER block (names taken from
-their `design.md`), and every adapter entry has a generic fallback so the tests run unchanged on the unpatched base (where the
-contract tests are EXPECTED to fail — that is the reproduced R9 bug).
+Every "dynamic" test here drives the real builder (`verity_vllm.pipeline.build`, B0 `request 8/4`, GPU-free) in a
+subprocess over a byte-copy of this tree with at most a one-fact mutation, and asserts on the ARTEFACTS (`result.json`,
+`construction_manifest.json`, any artifact/applicability file the build writes). Nothing here imports the implementation; the only
+implementation-specific knowledge allowed is the ADAPTER block, and every adapter entry has a generic fallback so the tests run
+unchanged on a base without the contract (where the contract tests are EXPECTED to fail).
 
 Run (pod, venv with the pinned vLLM, SmolLM2 snapshot under $HF_HOME):
     CUDA_VISIBLE_DEVICES="" HF_HUB_OFFLINE=1 HF_HOME=/workspace/hf PYTHONPATH=. CBTEST_OUT=/workspace/cp/cbtest/tests \
@@ -44,14 +43,14 @@ FRONTEND = REPO / "verity_vllm" / "program" / "frontend"
 #: frontend modules that are not its rules: the registered target records and the GEMM targets name every GPU's arch (tables,
 #: not the declared input)
 NOT_RULES = (FRONTEND / "targets.py", FRONTEND / "gemm_targets.py")
-#: the R9 baseline (A's `request_8_4` on cp-cba with a GPU, CB-C's `sens/base` on cp-cbc without one, owner 9's `repro_base` on cp-cb8)
+#: the baseline builds (`request_8_4` on a 4090 with its GPU visible, `sens/base` without a GPU, `repro_base` on an L40S with it hidden)
 B0_REQUEST_8_4_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"
 R9_REFERENCE_MANIFESTS = [  # other construction hosts, same profile (pre-fix manifests: Program digest only)
-    REPO / "out/gen/r9/cb-c/validation/sens/base/construction_manifest.json",                 # cp-cbc, cuda_available false
-    REPO / "out/gen/r9/cb-a/request_8_4/construction_manifest.json",                          # cp-cba (4090), cuda_available true
-    REPO / "out/gen/r10/cb-test/repro_base/sens/base/construction_manifest.json",             # cp-cb8 (L40S hidden), owner 9
+    REPO / "out/gen/r9/cb-c/validation/sens/base/construction_manifest.json",                 # no GPU, cuda_available false
+    REPO / "out/gen/r9/cb-a/request_8_4/construction_manifest.json",                          # 4090, cuda_available true
+    REPO / "out/gen/r10/cb-test/repro_base/sens/base/construction_manifest.json",             # L40S, GPU hidden
 ]
-SOURCE_ROOTS = ("verity.ml.circuits", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
+SOURCE_ROOTS = ("verity.ml.circuits", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (the driver imports only these)
 #: core `verity` is not copied into the build trees (only the integration is mutated); the builds import it from the repo
 CORE_SRC = REPO.parents[1]
 
@@ -60,7 +59,7 @@ def _pythonpath(tree: pathlib.Path) -> str:
     return os.pathsep.join([str(tree), str(CORE_SRC)])
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# ADAPTER — the ONLY place allowed to know owner 8's names (from `out/gen/r10/cb-fix/design.md`). Every entry has a generic fallback.
+# ADAPTER — the ONLY place allowed to know the implementation's names. Every entry has a generic fallback.
 # ---------------------------------------------------------------------------------------------------------------------------------
 ADAPTER: dict = {
     # regex on manifest KEY names whose subtree is the artifact/cache identity (fallback: generic name search, see identity_of)
@@ -68,12 +67,12 @@ ADAPTER: dict = {
     # regex on manifest KEY names under which the declared/applied target facts live (fallback: any key matching /capab|num_sms/)
     "target_key_re": r"capab|num_sms|sm_count",
     # files the fix may write next to result.json that carry the identity (globbed; hashed as a fallback identity source)
-    # design.md §3 (22:15Z): `artifact.json` next to `descriptor.json.gz` (identity + construction_version, target_profile, applicability, program.digest)
+    # `artifact.json` next to `descriptor.json.gz` (identity + construction_version, target_profile, applicability, program.digest)
     "identity_file_globs": ("artifact*.json", "applicab*.json", "cache_key*", "identity*.json", "*.artifact.json"),
     # reuse check (contract bullet 4): callable(artifact_dir: Path, mismatched_profile: dict, tree: Path, python: str) -> (rejected: bool|None, reason: str)
-    # design.md §1/§4 names: `verity_vllm.program.frontend.target_profile.TargetProfile(compute_capability=(8, 9), num_sms=128, …)`,
+    # the implementation's names: `verity_vllm.program.frontend.target_profile.TargetProfile(compute_capability=(8, 9), num_sms=128, …)`,
     # `load_artifact(dir, profile)` / `check_reuse(artifact, profile, applicability_now)`; module of the latter two unstated → probed.
-    "reuse_check": None,  # None → reuse_check_cbfix (design.md names) then reuse_check_generic
+    "reuse_check": None,  # None → reuse_check_cbfix (the implementation's names) then reuse_check_generic
     "target_profile_module": "verity_vllm.program.frontend.target_profile",
     "reuse_api_modules": (
         "verity_vllm.program.frontend.target_profile",
@@ -141,7 +140,7 @@ def _strip_comments_and_docstrings(src: str) -> str:
 
 
 def literal_sites(patterns) -> dict[str, list[str]]:
-    """{relative file: [matched literals]} over the CODE (comments/docstrings stripped) of A's builder + the frontend rules."""
+    """{relative file: [matched literals]} over the CODE (comments/docstrings stripped) of the builder + the frontend rules."""
     hits: dict[str, list[str]] = {}
     for p in _source_files():
         code = _strip_comments_and_docstrings(p.read_text())
@@ -152,9 +151,9 @@ def literal_sites(patterns) -> dict[str, list[str]]:
 
 
 def test_static_capability_literal_has_one_authoritative_site():
-    """Contract bullet 1. The declared compute capability (8.9 / sm_89) must be spelled in ONE module. On the R9 base it is spelled
+    """Contract bullet 1. The declared compute capability (8.9 / sm_89) must be spelled in ONE module. On a base without the contract it is spelled
     twice: `cb_a/export_compat.py:71` (applied by the shim) and `frontend/rules/vllm_bindings.py:206` (written into the manifest) —
-    the two copies are what let the manifest go stale (R9 §8.1 a1)."""
+    the two copies are what let the manifest go stale (a1)."""
     sites = literal_sites(CAP_LITERAL_PATTERNS)
     report = json.dumps(sites, indent=1)
     print("\n[cb-test] capability literal sites (code only):\n" + report)
@@ -162,7 +161,7 @@ def test_static_capability_literal_has_one_authoritative_site():
 
 
 def test_static_num_sms_pin_has_one_authoritative_site():
-    """Contract bullet 1 for the SM count: `NUM_SMS = 128` spelled once (R9 base: only `GEMM_PINS` — the shim reads it through
+    """Contract bullet 1 for the SM count: `NUM_SMS = 128` spelled once (a base without the contract: only `GEMM_PINS` — the shim reads it through
     `declared_num_sms()`; kept as a regression guard so the fix does not introduce a second copy)."""
     sites = literal_sites(NUM_SMS_LITERAL_PATTERNS)
     print("\n[cb-test] NUM_SMS literal sites (code only):\n" + json.dumps(sites, indent=1))
@@ -177,12 +176,12 @@ def test_static_manifest_declared_capability_is_not_a_string_literal():
         code = _strip_comments_and_docstrings(p.read_text())
         for m in re.finditer(r"compute capability[\"']\s*,\s*[\"']value[\"']\s*:\s*([\"'][^\"']*[\"'])", code):
             bad.append((str(p.relative_to(REPO)), m.group(1)))
-    assert not bad, f"manifest 'compute capability' value is a string literal (stale-manifest bug, R9 §8.1 a1): {bad}"
+    assert not bad, f"manifest 'compute capability' value is a string literal (stale-manifest bug, a1): {bad}"
 
 
 def test_static_reference_hosts_share_the_program_digest():
-    """(iii)/(v) on the recorded R9/R10 artefacts (laptop-runnable): every construction host that built B0 request 8/4 for the sm_89
-    profile — cp-cba (4090, GPU), cp-cbc (no GPU), cp-cb8 (L40S hidden) — recorded the same Program digest."""
+    """(iii)/(v) on the recorded artefacts (laptop-runnable): every construction host that built B0 request 8/4 for the sm_89
+    profile — a 4090 with its GPU visible, a host without a GPU, an L40S with it hidden — recorded the same Program digest."""
     seen = []
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
@@ -195,7 +194,7 @@ def test_static_reference_hosts_share_the_program_digest():
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# Build harness: A's driver in a subprocess over a mutated byte-copy of the tree (R9 validator procedure), GPU-free
+# Build harness: the driver in a subprocess over a mutated byte-copy of the tree, GPU-free
 # ---------------------------------------------------------------------------------------------------------------------------------
 def _hf_snapshot_present() -> bool:
     home = os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface")
@@ -331,7 +330,7 @@ class Harness:
             return {k: f.result() for k, f in futs.items()}
 
 
-# -- mutators (the R9 validator's one-fact edits, expressed as regex rewrites so they apply to any layout of the same literals) ----
+# -- mutators (one-fact edits, expressed as regex rewrites so they apply to any layout of the same literals) ----
 def _rewrite(tree: pathlib.Path, subs: list[tuple[re.Pattern, str]], only: str | None = None) -> list[dict]:
     done = []
     for p in sorted(tree.rglob("*.py")):
@@ -386,10 +385,10 @@ def mutate_target(major: int, minor: int, num_sms: int | None):
 
 
 def host_capability_preamble(major: int, minor: int) -> str:
-    """The HOST answers capability (major, minor) everywhere (instantiation + export): the R9 a2/a3 'consistent' declaration, applied
+    """The HOST answers capability (major, minor) everywhere (instantiation + export): the a2/a3 'consistent' declaration, applied
     as an environmental fact of the build process rather than a tree edit (so it composes with any shim the fix installs)."""
     return (
-        "import verity_vllm.program.frontend.vllm_meta  # A's env defaults (VLLM_USE_LAYERNAME=0, …) before vLLM reads them, as in R9 a2\n"
+        "import verity_vllm.program.frontend.vllm_meta  # the driver's env defaults (VLLM_USE_LAYERNAME=0, …) before vLLM reads them, as in a2\n"
         "from vllm.platforms import current_platform as _cbt_cp\n"
         "from vllm.platforms.interface import DeviceCapability as _cbt_DC\n"
         f"type(_cbt_cp).get_device_capability = classmethod(lambda cls, device_id=0: _cbt_DC(major={major}, minor={minor}))\n"
@@ -398,7 +397,7 @@ def host_capability_preamble(major: int, minor: int) -> str:
 
 # -- manifest readers (schema-agnostic: the fix may rename/move fields; we search by meaning) ----------------------------------------
 def walk(obj, path=()):
-    """(path, leaf) over a JSON tree; a `{"field": F, "value": V}` row (A's `declared[]`/`derived[]` form) is yielded as path+(F,) -> V."""
+    """(path, leaf) over a JSON tree; a `{"field": F, "value": V}` row (the `declared[]`/`derived[]` form) is yielded as path+(F,) -> V."""
     if isinstance(obj, dict):
         if "field" in obj and "value" in obj and isinstance(obj["field"], str):
             yield from walk(obj["value"], path + (obj["field"],))
@@ -473,7 +472,7 @@ def declared_paths_with_key(m: dict, key: str) -> list[tuple]:
 
 def identity_of(b: Build):
     """The artifact/cache identity the fix binds (contract bullet 3): the manifest subtree(s) under an identity-named key, else the
-    content of any identity/applicability file written beside `result.json`. None when the artefact carries no identity (R9 base)."""
+    content of any identity/applicability file written beside `result.json`. None when the artefact carries no identity (a base without the contract)."""
     key_re = re.compile(ADAPTER["identity_key_re"], re.I)
     found = {}
     for path, v in walk(b.manifest):
@@ -518,16 +517,16 @@ CAP_SITES = sorted(literal_sites(CAP_LITERAL_PATTERNS)) or ["<no-capability-lite
 
 @pytest.fixture(scope="session")
 def builds(harness: Harness) -> dict[str, Build]:
-    """All dynamic builds, in parallel (each ≈ 25–60 s GPU-free): the R9 validator's matrix plus the host/env cases of this contract."""
+    """All dynamic builds, in parallel (each ≈ 25–60 s GPU-free): the mutation matrix plus the host/env cases of this contract."""
     if not CAN_BUILD:
         pytest.skip(WHY_NOT)
     specs = [
         ("base", {}),
         ("hostB", {"env": {"HOSTNAME": "cbtest-host-B"}}),  # (iii) another construction host, same profile (other hostname/out/tree paths/utc)
-        ("cap90_consistent", {"mutate": mutate_capability_all(9, 0), "preamble": host_capability_preamble(9, 0)}),  # (ii-a) R9 a2
-        ("cap80_sms108_consistent", {"mutate": mutate_target(8, 0, 108), "preamble": host_capability_preamble(8, 0)}),  # (ii-b) R9 a3
-        ("sms132_pin", {"mutate": mutate_target(8, 9, 132)}),  # (ii-c) R9 b2: NUM_SMS re-pinned consistently
-        ("attn_env_dead", {"env": {"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"}}),  # (vi) R9 d1: inert env var
+        ("cap90_consistent", {"mutate": mutate_capability_all(9, 0), "preamble": host_capability_preamble(9, 0)}),  # (ii-a) a2
+        ("cap80_sms108_consistent", {"mutate": mutate_target(8, 0, 108), "preamble": host_capability_preamble(8, 0)}),  # (ii-b) a3
+        ("sms132_pin", {"mutate": mutate_target(8, 9, 132)}),  # (ii-c) b2: NUM_SMS re-pinned consistently
+        ("attn_env_dead", {"env": {"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"}}),  # (vi) d1: inert env var
         ("host_says_90_profile_89", {"preamble": host_capability_preamble(9, 0)}),  # (i-d) host platform answers 9.0, declared profile 8.9
     ]
     for s in CAP_SITES:  # (i-b) mutate ONE capability literal site at a time (export-time only, as the shim applies it)
@@ -545,7 +544,7 @@ def builds(harness: Harness) -> dict[str, Build]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# (v) the Program digest of B0 request 8/4 is unchanged by the patch (Daniel: identical digests across targets are not the bug)
+# (v) the Program digest of B0 request 8/4 is unchanged by the patch (identical digests across targets are not the bug)
 # ---------------------------------------------------------------------------------------------------------------------------------
 @needs_builder
 def test_v_program_digest_unchanged_by_the_patch(builds):
@@ -576,8 +575,8 @@ def test_i_a_base_manifest_declares_the_capability_the_shim_applied(builds):
 @needs_builder
 @pytest.mark.parametrize("site", CAP_SITES)
 def test_i_b_mutating_the_applied_capability_changes_the_manifest(builds, site):
-    """Contract bullets 1–2 (mutation test, R9 §8.1 a1): change the capability literal at ONE site (export-time only, as the shim applies
-    it) → the manifest's declared capability must follow (9.0), or the build must refuse naming the capability. On the R9 base the
+    """Contract bullets 1–2 (mutation test, a1): change the capability literal at ONE site (export-time only, as the shim applies
+    it) → the manifest's declared capability must follow (9.0), or the build must refuse naming the capability. On a base without the contract the
     `export_compat.py` site is applied but the manifest keeps saying "8.9 (sm_89, Ada)" — the stale-manifest FAIL."""
     if site.startswith("<"):
         pytest.skip("no capability literal site left in the code — the single input is not a literal; covered by the consistent-target tests")
@@ -588,13 +587,13 @@ def test_i_b_mutating_the_applied_capability_changes_the_manifest(builds, site):
         assert re.search(r"capab|sm_9|9\.0|flash_attn_version", b.refusal, re.I), f"refused for an unrelated reason: {b.refusal[:600]}"
         return
     assert caps == {"9.0"}, (f"site {site} mutated to 9.0 (subs={b.mutations}); build ok, digest={b.digest}, but the manifest declares {caps} "
-                             f"— the declaration is not the applied value (stale manifest, R9 a1)")
+                             f"— the declaration is not the applied value (stale manifest, a1)")
 
 
 @needs_builder
 def test_i_c_artifact_identity_distinguishes_targets_even_when_digests_are_equal(builds):
     """Contract bullet 3: an 8.9 construction and a construction for another target must not share an artifact/cache identity, even
-    when the Program digest is identical (R9 a3/b2: digest 59b35d80… for 8.9/128, 8.0/108 and 8.9/132 alike)."""
+    when the Program digest is identical (a3/b2: digest 59b35d80… for 8.9/128, 8.0/108 and 8.9/132 alike)."""
     base = builds["base"]
     ib = identity_of(base)
     assert ib is not None, f"base artefact carries NO artifact/cache identity (files: {base.files()}; manifest keys: {sorted(base.manifest)})"
@@ -618,7 +617,7 @@ def test_i_d_host_answering_another_capability_than_declared(builds):
     """The inconsistent case from the HOST side: the platform answers 9.0 (instantiation + export) while the declared profile is 8.9.
     Contract: never a silently built 8.9-labelled artefact of a 9.0 construction. Either the declared target is applied over the host's
     answer everywhere (then manifest declared == applied == 8.9, FA2 observed, identity == base's) or the build refuses naming the
-    capability / FA version with both values. On the R9 base this is a2 (refused on FA3)."""
+    capability / FA version with both values. On a base without the contract this is a2 (refused on FA3)."""
     b, base = builds["host_says_90_profile_89"], builds["base"]
     if not b.ok:
         _assert_refusal_names_field_and_both_values(b, r"capab|flash_attn_version|target profile mismatch", ())
@@ -647,7 +646,7 @@ def _assert_refusal_names_field_and_both_values(b: Build, field_re: str, values:
 
 @needs_builder
 def test_ii_a_capability_9_0_declared_consistently(builds):
-    """R9 a2. Host answers 9.0 at instantiation + export and the profile input says 9.0: on this vLLM pin FA3 is selected, so the
+    """a2. Host answers 9.0 at instantiation + export and the profile input says 9.0: on this vLLM pin FA3 is selected, so the
     attention rule must refuse naming `vllm_flash_attn_version` 3 vs 2 (fail-closed, verbatim). If the fix instead builds, the manifest
     must declare 9.0 and the identity must differ from base."""
     b = builds["cap90_consistent"]
@@ -661,7 +660,7 @@ def test_ii_a_capability_9_0_declared_consistently(builds):
 
 @needs_builder
 def test_ii_b_target_8_0_with_108_sms_declared_consistently(builds):
-    """R9 a3. An A100 target declared consistently: no derived consequence differs for B0 (FA2, default tiling), so the build may
+    """a3. An A100 target declared consistently: no derived consequence differs for B0 (FA2, default tiling), so the build may
     legitimately produce the SAME Program digest — but the manifest must say 8.0 / 108 (not "8.9") and the artifact identity must differ
     from base's. Or the build refuses naming the field and both values."""
     b = builds["cap80_sms108_consistent"]
@@ -671,7 +670,7 @@ def test_ii_b_target_8_0_with_108_sms_declared_consistently(builds):
         _assert_refusal_names_field_and_both_values(b, r"capab|NUM_SMS|flash_attn_version", ())
         return
     caps, sms = declared_capabilities(b.manifest), declared_num_sms(b.manifest)
-    assert caps == {"8.0"}, f"manifest declares capability {caps} for an 8.0 construction (stale manifest, R9 a3)"
+    assert caps == {"8.0"}, f"manifest declares capability {caps} for an 8.0 construction (stale manifest, a3)"
     assert sms == {108}, f"manifest declares NUM_SMS {sms} for a 108-SM construction"
     if b.digest == base.digest:
         print(f"\n[cb-test] ii-b: identical Program digest {b.digest} for 8.0/108 — allowed (circuit unchanged)")
@@ -682,7 +681,7 @@ def test_ii_b_target_8_0_with_108_sms_declared_consistently(builds):
 
 @needs_builder
 def test_ii_c_num_sms_repinned_132_consistently(builds):
-    """R9 b2. NUM_SMS re-pinned 128 → 132 (shim and rule agree): identical Program (NUM_SMS sizes the persistent grid only), manifest
+    """b2. NUM_SMS re-pinned 128 → 132 (shim and rule agree): identical Program (NUM_SMS sizes the persistent grid only), manifest
     NUM_SMS = 132, and the artifact identity must differ from base's."""
     b = builds["sms132_pin"]
     base = builds["base"]
@@ -705,7 +704,7 @@ def test_iii_two_hosts_same_profile_same_identity(builds):
     ia, ib = identity_of(a), identity_of(b)
     assert ia is not None and ib is not None, f"no artifact identity (base: {ia is not None}, hostB: {ib is not None})"
     assert ia == ib, f"same profile, two hosts (hostname/out path/tree path/utc differ) → different identity:\n{ia}\n{ib}"
-    # the R9 hosts (cp-cba with a GPU, cp-cbc without) built the same Program; their pre-fix manifests carry only the digest
+    # the baseline hosts (one with a GPU, one without) built the same Program; their pre-fix manifests carry only the digest
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
             assert (json.load(open(p)).get("program") or {}).get("digest") == a.digest
@@ -750,7 +749,7 @@ except Exception as e:
             continue
         if j.get("api"):
             return (bool(j.get("rejected")), j.get("reason") or j.get("ret") or "")
-    return None, "no applicability/reuse API found among ADAPTER['reuse_probe_candidates'] (fill ADAPTER from owner 8's design.md)"
+    return None, "no applicability/reuse API found among ADAPTER['reuse_probe_candidates'] (fill ADAPTER from the implementation's names)"
 
 
 REUSE_PROBE_CBFIX = r'''
@@ -838,7 +837,7 @@ print(json.dumps(out, default=str))
 
 
 def reuse_check_cbfix(artifact_dir: pathlib.Path, requested: dict, tree: pathlib.Path, python: str, tweak_applicability: dict | None = None) -> tuple[bool | None, str]:
-    """Reuse check through the names in owner 8's design.md (§1 `TargetProfile`, §4 `load_artifact` / `check_reuse`); the module of the
+    """Reuse check through the implementation's names (`TargetProfile`, `load_artifact` / `check_reuse`); the module of the
     latter two is probed. Returns (rejected, reason); rejected=None when the API is absent (e.g. on the unpatched base)."""
     code = REUSE_PROBE_CBFIX.format(tp_mod=ADAPTER["target_profile_module"], mods=tuple(ADAPTER["reuse_api_modules"]))
     p = subprocess.run([python, "-c", code, str(artifact_dir), json.dumps(requested), json.dumps(tweak_applicability or {})], cwd=str(tree),
@@ -1049,7 +1048,7 @@ def test_iv_reuse_under_the_matching_profile_is_accepted(builds, harness):
 # ---------------------------------------------------------------------------------------------------------------------------------
 @needs_builder
 def test_vi_dead_env_var_is_not_recorded_as_a_declared_fact(builds):
-    """R9 d1: `VLLM_ATTENTION_BACKEND` is not read by this vLLM pin; setting it changes nothing (same digest, FA2 observed) so it must not
+    """d1: `VLLM_ATTENTION_BACKEND` is not read by this vLLM pin; setting it changes nothing (same digest, FA2 observed) so it must not
     appear among the facts the manifest DECLARES the build used (a cache keyed on it would key on noise), and it must not alter the
     artifact identity."""
     b, base = builds["attn_env_dead"], builds["base"]
@@ -1068,7 +1067,7 @@ def test_vi_dead_env_var_is_not_recorded_as_a_declared_fact(builds):
 @pytest.mark.skipif(os.environ.get("CBTEST_GPU_HOST") != "1", reason="CBTEST_GPU_HOST=1 to run the GPU-visible host-mismatch build")
 def test_vii_construction_on_a_mismatched_host_never_mislabels(builds):
     """The construction host is an L40S (142 SMs, sm_89); the declared profile is the 4090 record (128 SMs). Two acceptable outcomes:
-    (a) refuse, naming NUM_SMS with both values (the R9 base: the real query answers 142 and the GEMM rule refuses against the pin), or
+    (a) refuse, naming NUM_SMS with both values (a base without the contract: the real query answers 142 and the GEMM rule refuses against the pin), or
     (b) build FOR THE DECLARED TARGET — then the manifest's declared == applied == 128 / 8.9, the Program digest and the artifact
     identity equal the GPU-free build's (a host fact must not enter the identity), and the host GPU is recorded as a host fact.
     Unacceptable: a built artefact whose declared/applied facts show the host's 142, or whose identity differs from base's."""
@@ -1089,8 +1088,8 @@ def test_vii_construction_on_a_mismatched_host_never_mislabels(builds):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# Coordinator ruling 22:45Z (host != target is acceptable iff ...): (c) construction on cp-cb8 (L40S, 142 SMs, GPU visible) with the
-# 128-SM/8.9 profile yields the SAME Program digest AND the same artifact identity as the R9 constructions (cp-cbc no GPU, cp-cba 4090)
+# host != target is acceptable iff (c) construction on an L40S (142 SMs, GPU visible) with the 128-SM/8.9 profile yields the SAME
+# Program digest AND the same artifact identity as the baseline constructions (no GPU; a 4090)
 # ---------------------------------------------------------------------------------------------------------------------------------
 def _wrapper_doc(b: "Build") -> dict | None:
     for g in ADAPTER["identity_file_globs"]:
@@ -1131,7 +1130,7 @@ def _identity_recomputer(doc: dict):
 
 
 def _r9_recorded_applicability(m: dict) -> dict:
-    """The applicability facts a PRE-FIX (R9) manifest recorded, mapped onto the fix's applicability field names: attention impl /
+    """The applicability facts a PRE-FIX manifest recorded, mapped onto the fix's applicability field names: attention impl /
     backend / FA version (observed on every layer), the numerics profile, torch/triton/vLLM versions (site-packages dist-info names)."""
     out: dict = {}
     impls = (m.get("observed") or {}).get("attention_impls") or {}
@@ -1153,15 +1152,15 @@ def _r9_recorded_applicability(m: dict) -> dict:
 @needs_builder
 @pytest.mark.skipif(os.environ.get("CBTEST_GPU_HOST") != "1", reason="CBTEST_GPU_HOST=1 to run the GPU-visible host-mismatch build")
 def test_ruling_c_cp_cb8_gpu_construction_equals_the_r9_hosts(builds):
-    """Coordinator ruling (c): the GPU-visible construction on cp-cb8 (L40S, 142 SMs) for the 128-SM/8.9 profile must carry the same
-    Program digest AND the same artifact identity as the R9 constructions on cp-cbc (no GPU) and cp-cba (4090). The R9 hosts built
+    """Rule (c): the GPU-visible construction on an L40S (142 SMs) for the 128-SM/8.9 profile must carry the same
+    Program digest AND the same artifact identity as the baseline constructions without a GPU and on a 4090. The baseline hosts built
     on the pre-fix code (no identity), so their identity is RECOMPUTED under the fix's published definition from what they recorded:
     same construction code (the fix's `construction_version`, a code fact), the default profile, and their recorded applicability
     facts (attention impl/backend/FA version, numerics profile, torch/triton/vLLM versions) substituted into the applicability block;
-    applicability fields the R9 manifests did not record (kernel-source / tuned-table hashes, dispatch) are functions of the identical
-    vLLM wheel pin and are taken from cp-cb8's record — reported as such."""
+    applicability fields the baseline manifests did not record (kernel-source / tuned-table hashes, dispatch) are functions of the identical
+    vLLM wheel pin and are taken from the GPU-visible record — reported as such."""
     gpu, base = builds["gpu_host_mismatch"], builds["base"]
-    assert gpu.result.get("cuda_available") is True and gpu.ok, f"GPU-visible construction on cp-cb8 did not build: {gpu.refusal[:400]}"
+    assert gpu.result.get("cuda_available") is True and gpu.ok, f"GPU-visible construction did not build: {gpu.refusal[:400]}"
     assert gpu.digest == base.digest == B0_REQUEST_8_4_DIGEST, (gpu.digest, base.digest)
     doc_gpu, doc_free = _wrapper_doc(gpu), _wrapper_doc(base)
     assert doc_gpu and doc_free, "no identity wrapper"
@@ -1169,7 +1168,7 @@ def test_ruling_c_cp_cb8_gpu_construction_equals_the_r9_hosts(builds):
     recompute = _identity_recomputer(doc_gpu)
     refs = [p for p in R9_REFERENCE_MANIFESTS if p.exists() and "r9/" in str(p)]
     if not refs:
-        pytest.skip("R9 reference manifests (cp-cbc, cp-cba) not in this checkout")
+        pytest.skip("baseline reference manifests not in this checkout")
     unrecorded = None
     for p in refs:
         m = json.load(open(p))
@@ -1178,11 +1177,11 @@ def test_ruling_c_cp_cb8_gpu_construction_equals_the_r9_hosts(builds):
         assert rec.get("vllm_flash_attn_version") and rec.get("torch_version"), f"{p}: recorded facts too thin: {rec}"
         app = dict(doc_gpu["applicability"])
         mism = {k: (v, app.get(k)) for k, v in rec.items() if app.get(k) != v}
-        assert not mism, f"{p.name} ({p.parent.parent.name}): recorded applicability facts differ from cp-cb8's: {mism}"
+        assert not mism, f"{p.name} ({p.parent.parent.name}): recorded applicability facts differ from the GPU-visible build's: {mism}"
         unrecorded = sorted(set(app) - set(rec))
         substituted = {**doc_gpu, "applicability": {**app, **rec}}
         ident_ref = recompute(substituted)
-        assert ident_ref == doc_gpu["identity"], f"identity recomputed for {p} differs: {ident_ref} vs cp-cb8 {doc_gpu['identity']}"
+        assert ident_ref == doc_gpu["identity"], f"identity recomputed for {p} differs: {ident_ref} vs the GPU-visible build's {doc_gpu['identity']}"
         host = (m.get("construction") or {}).get("cuda_available")
-        print(f"\n[cb-test] ruling (c): {p.relative_to(REPO)} (cuda_available={host}) -> digest {m['program']['digest'][:16]}…, identity {ident_ref[:16]}… == cp-cb8 GPU-visible")
-    print(f"[cb-test] applicability fields not recorded by the R9 manifests (taken from the identical vLLM wheel pin on cp-cb8): {unrecorded}")
+        print(f"\n[cb-test] ruling (c): {p.relative_to(REPO)} (cuda_available={host}) -> digest {m['program']['digest'][:16]}…, identity {ident_ref[:16]}… == the GPU-visible build's")
+    print(f"[cb-test] applicability fields not recorded by the baseline manifests (taken from the identical vLLM wheel pin on the GPU-visible host): {unrecorded}")

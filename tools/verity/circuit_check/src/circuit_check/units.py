@@ -7,7 +7,8 @@ made now, unbuilt, so a registry a binding enumerates is read as it is now.  A b
 the request ``catalog-unit``, keyed by the binding's units and which of that binding's occurrences it is) holds the ids of its
 roots and what they reach (`_reach`): each primitive, specialization and reference by id, with its kind, family, gate count,
 whether it is Boolean, the ids its body calls (in the order `targets.reachable` visits them) and, where `targets.select` could
-keep it, its descriptor (`cache.descriptor`), name and descriptor id.  Its reads (`cache.unit_reads`) are what its units read
+keep it, its descriptor (`cache.descriptor`), name and descriptor id; a by-calls root (`targets.is_by_calls`) as ``bc``, its
+body unbuilt, so with no gates and no calls.  Its reads (`cache.unit_reads`) are what its units read
 and ran while they made its roots, the build of every Definition they reach, the bindings that made those, those modules' import
 closures, its units by digest and what the process read outside every recording; and the units of every binding that makes no
 root (one run for what it sets, as `syn.knob`'s), whose reads every record holds.  The registered primitives and static-free
@@ -30,10 +31,18 @@ it built (`cli._record_units`).
 Not covered, beyond what `circuit_check.cache` leaves out: a body whose structure depends on module state a binding that makes
 roots sets (a binding's own state is in its reads; one that makes no root is held by every record), when no other record
 reaches the Definitions that state shapes.  The nightly uncached check is what disagrees then.
+
+The circuit_check suite builds the catalog from these same entries without a cache (`made_entries`, `built_apart`): every
+binding's roots made in one process, then each binding's bodies built in a process forked for it alone, which returns what
+they reach (`_reach`) with a mark on each Definition whose id makes the very object reached (`_by_id`).  Its xdist workers
+share that as JSON (`manifest`, `from_manifest`), and each makes the suite from it (`planned`) and each target from its id
+where it can, building no body (`make`).
 """
 from __future__ import annotations
 
 import json
+import os
+import sys
 from collections import Counter, deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field
@@ -97,8 +106,9 @@ def _calls(fn: Any) -> list[str]:
     return out[::-1]
 
 
-def _reach(roots: list[Any]) -> tuple[dict[str, dict], dict[str, Any]]:
-    """What ``roots`` reach (`targets.reachable`, building every body), each as a record holds it, and the objects."""
+def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], dict[str, Any]]:
+    """What ``roots`` reach (`targets.reachable`, building every body), each as a record holds it, and the objects; without
+    ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against)."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits import codec as C
 
@@ -106,13 +116,20 @@ def _reach(roots: list[Any]) -> tuple[dict[str, dict], dict[str, Any]]:
     nodes: dict[str, dict] = {}
     for fid, fn in objs.items():
         k = _kind(fn)
+        if TG.is_by_calls(fn):
+            nodes[fid] = {"k": k, "f": TG.family(fn), "g": 0, "b": False, "bc": 1}
+            continue
         info = {"k": k, "f": TG.family(fn), "g": getattr(fn, "gates", 1), "b": bool(BL.is_boolean(fn))}
         if k == "S":
             info["c"] = _calls(fn)
         nodes[fid] = info
+    if not described:
+        return nodes, objs
     least: dict[str, int] = {}
     bits: dict[str, int] = {}
     for info in nodes.values():
+        if info.get("bc"):
+            continue
         least[info["f"]] = min(least.get(info["f"], info["g"]), info["g"])
         if info["b"]:
             bits[info["f"]] = min(bits.get(info["f"], info["g"]), info["g"])
@@ -132,9 +149,12 @@ def _reach(roots: list[Any]) -> tuple[dict[str, dict], dict[str, Any]]:
 def _select(reached: dict[str, dict]) -> set[str]:
     """`targets.select` over records."""
     by: dict[str, list[tuple[str, dict]]] = {}
-    for fid, info in reached.items():
-        by.setdefault(info["f"], []).append((fid, info))
     out: set[str] = set()
+    for fid, info in reached.items():
+        if info.get("bc"):
+            out.add(fid)
+        else:
+            by.setdefault(info["f"], []).append((fid, info))
     for fns in by.values():
         keep = [f for f in fns if f[1]["g"] <= TG.MAX_GATES]
         if not keep:
@@ -155,11 +175,12 @@ class Derived:
     via: dict[str, Entry] = field(default_factory=dict)
 
 
-def derive(entries: list[Entry]) -> Derived:
+def derive(entries: list[Entry], described: bool = True) -> Derived:
     """`targets.suite` and its `targets.BINDINGS` over records: what the catalog's roots (each entry's, in catalog order)
     reach, in `targets.reachable`'s order, `select`'s, PoUW's roots whole.  Each id is the record's of the binding it is first
     reached through, as `reachable` keeps the object it pops first, and each binding's units go to what its own record
-    reaches, as `targets.suite` gives each binding what its own roots reach."""
+    reaches, as `targets.suite` gives each binding what its own roots reach.  ``described``: each suite id's record holds its
+    descriptor, as a stored one does."""
     stack = [(fid, e) for e in entries for fid in e.root_ids]
     nodes: dict[str, dict] = {}
     via: dict[str, Entry] = {}
@@ -181,7 +202,7 @@ def derive(entries: list[Entry]) -> Derived:
             continue
         for fid in e.nodes.keys() & out:
             units.setdefault(fid, set()).update(e.units)
-    for fid in out:
+    for fid in out if described else ():
         if "d" not in nodes[fid]:
             raise Stale(f"{fid}: its record has no descriptor")
     return Derived(sorted(out), units, nodes, via)
@@ -380,6 +401,218 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
     return n
 
 
+def made_entries() -> list[Entry]:
+    """Every binding as the catalog makes it (`targets.catalog_units`, in catalog order), its roots made now and no body built,
+    the registered roots first; a model that raises is named in `targets.ROOT_ERRORS`, as the catalog names it."""
+    TG.load_registries()
+    entries = [Entry(REGISTERED, "registered", "", key(REGISTERED, 0), TG._registered())]
+    TG.ROOT_ERRORS.clear()
+    seen: Counter = Counter()
+    for units, make, kind, label in TG.catalog_units():
+        n, seen[units] = seen[units], seen[units] + 1
+        try:
+            roots = TG._produce(units, make)
+        except Exception as e:  # noqa: BLE001  (a model's error is named, as the catalog names it)
+            if kind != "model":
+                raise
+            TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
+            continue
+        entries.append(Entry(units, kind, label, key(units, n), roots))
+    return entries
+
+
+def _no_suite() -> dict:
+    raise KeyError("no catalog here")
+
+
+def _by_id(nodes: dict[str, dict], objs: dict[str, Any]) -> None:
+    """Mark ``"i"`` on each node whose id `targets.definition` makes into the very object reached (`defs.bind` shares a
+    specialization per binding record), so a process that builds no body makes it the same from its id (`make`)."""
+    real = TG.suite
+    TG.suite = _no_suite
+    try:
+        for fid, info in nodes.items():
+            if info["k"] == "R" or TG._RECORD.search(fid):
+                continue
+            try:
+                if TG.definition(fid) is objs[fid]:
+                    info["i"] = 1
+            except Exception:  # noqa: BLE001  (an id that doesn't make its object is made along its record's path)
+                continue
+    finally:
+        TG.suite = real
+
+
+def _from_id(fid: str) -> Any | None:
+    """``fid``'s Definition as `targets.definition` makes it without the catalog, or None."""
+    real = TG.suite
+    TG.suite = _no_suite
+    try:
+        fn = TG.definition(fid)
+    except Exception:  # noqa: BLE001  (a Definition only tracing registers: made along its record's path)
+        return None
+    finally:
+        TG.suite = real
+    return fn if fn.id == fid else None
+
+
+def _reach_one(e: Entry) -> dict[str, dict]:
+    """``e``'s nodes, undescribed (`_reach`), each body built here (a model's under its units, as the catalog builds it)."""
+    if e.kind == "model":
+        with CC.producing(e.units):
+            _ = e.roots[0].body
+    nodes, objs = _reach(e.roots, described=False)
+    _by_id(nodes, objs)
+    return nodes
+
+
+def _child(e: Entry, out: Path) -> None:
+    """In a process forked for ``e``: its nodes or its error to ``out``, and out through `os._exit`, so nothing of the parent's
+    (its atexit, its buffers) runs twice."""
+    from . import cli
+
+    code = 0
+    try:
+        start = cli._rss_gb()
+        try:
+            got = {"nodes": _reach_one(e), "start": start}
+        except BaseException as ex:  # noqa: BLE001  (a model's is named, as the catalog names it; any other fails the build)
+            got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
+        out.write_text(json.dumps(got))
+    except BaseException:  # noqa: BLE001
+        code = 1
+    finally:
+        os._exit(code)
+
+
+#: the GiB a binding's process is counted at in `built_apart` when `heavy.json` (`cache.HEAVY`) lists none for it: most bindings
+#: grow less than 1.5 GiB past the process they were forked from, and it lists those that grow past 3 GiB
+APART_GB = 2.0
+
+
+def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), weights: dict[str, float] | None = None) \
+        -> tuple[list[Entry], list[tuple[str, ...]], dict[str, float]]:
+    """``entries`` (`made_entries`) with each one's nodes (`_reach_one`), each binding built in a process forked from this one for
+    it alone: this process builds no body, and each binding's bodies go with its process.  Up to ``jobs`` at once, the heaviest
+    first, each started only while the ``weights`` (GiB by binding name, `cli.heavy`; `APART_GB` unlisted) of those running and
+    its own fit ``budget``, as `cli.run` schedules its targets (`cli.admit`).  A model whose body raises, or whose process dies,
+    is dropped (its units returned beside) and named in `targets.ROOT_ERRORS`, as the catalog names it; any other binding's
+    error raises.  Returned with how far each binding's process grew, in GiB: its peak RSS past the RSS it started with, which it
+    shares with this process."""
+    import gc
+    import tempfile
+    import warnings
+
+    from . import cli
+
+    def weigh(i: int) -> float:
+        return (weights or {}).get(entries[i].name, APART_GB)
+
+    failed: dict[int, str] = {}
+    peaks: dict[str, float] = {}
+    running: dict[int, int] = {}
+    queue = sorted(range(len(entries)), key=lambda i: -weigh(i))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    gc.collect()
+    gc.freeze()                       # the children's collections then leave this process's pages shared
+    try:
+        with tempfile.TemporaryDirectory(prefix="circuit-check-apart-") as tmp:
+            while queue or running:
+                picked = cli.admit([weigh(i) for i in queue], [weigh(i) for i in running.values()], max(1, jobs), budget)
+                for i in [queue[k] for k in picked]:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
+                        pid = os.fork()
+                    if pid == 0:
+                        _child(entries[i], Path(tmp, f"{i}.json"))
+                    running[pid] = i
+                queue = [i for i in queue if i not in running.values()]
+                pid, status, usage = os.wait4(-1, 0)
+                if (i := running.pop(pid, None)) is None:
+                    continue
+                path = Path(tmp, f"{i}.json")
+                if path.exists():
+                    got = json.loads(path.read_text())
+                    path.unlink()
+                else:
+                    code = os.waitstatus_to_exitcode(status)
+                    how = f"signal {-code}" if code < 0 else f"exit {code}"
+                    got = {"error": f"its process died ({how}), its result unwritten"}
+                peaks[entries[i].name] = round(cli._maxrss_gb(usage.ru_maxrss) - (got.get("start") or 0.0), 2)
+                if "error" in got:
+                    failed[i] = got["error"]
+                else:
+                    entries[i].nodes = got["nodes"]
+    finally:
+        gc.unfreeze()
+    for i, err in sorted(failed.items()):
+        if entries[i].kind != "model":
+            raise RuntimeError(f"{entries[i].name}: {err}")
+        TG.ROOT_ERRORS.append((entries[i].label, err))
+    return [e for i, e in enumerate(entries) if i not in failed], [entries[i].units for i in sorted(failed)], peaks
+
+
+def planned(entries: list[Entry]) -> Plan:
+    """The catalog of ``entries`` whose nodes `built_apart` set (or a manifest of them): no body built here, each root an object
+    made now where its binding is the one `derive` took its id from.  No Call families: those nodes name no descriptor for
+    `call_families` to match, and `targets.call_families` answers from the suite."""
+    d = derive(entries, described=False)
+    objects: dict[str, Any] = {}
+    for e in entries:
+        for fn in e.roots:
+            fid = fn.id if _kind(fn) is not None else None
+            if fid is not None and fid not in objects and d.via.get(fid) is e:
+                objects[fid] = fn
+    return Plan(entries, objects, d, set())
+
+
+def make(plan: Plan, fid: str) -> Any:
+    """``fid``'s object: a root made now, else from its id where its binding's record says that makes the very object it reached
+    (`_by_id`), else from the nearest Definition on the record's path to it that is so made, building each body below it on the
+    path; else from the binding's root (`_materialize`)."""
+    if fid in plan.objects:
+        return plan.objects[fid]
+    via = plan.derived.via.get(fid)
+    if via is not None and via.nodes.get(fid, {}).get("i") and (fn := _from_id(fid)) is not None:
+        plan.objects[fid] = fn
+        return fn
+    path = _path(via, fid) if via is not None else None
+    for j in range(len(path or ()) - 2, 0, -1):
+        if via.nodes[path[j]].get("i") and (fn := _from_id(path[j])) is not None:
+            for nxt in path[j + 1:]:
+                fn = next((n.fn for n in fn.body.nodes if n.fn.id == nxt), None)
+                if fn is None:
+                    raise Stale(f"{fid}: {via.name}'s record lists a call to {nxt} that its body no longer makes")
+            plan.objects[fid] = fn
+            return fn
+    return _materialize(plan.entries, plan.objects, fid, via=via)
+
+
+def manifest(entries: list[Entry], dropped: list[tuple[str, ...]]) -> dict:
+    """`built_apart`'s ``entries`` and ``dropped`` with `targets.ROOT_ERRORS`, as JSON: what `from_manifest` takes in another
+    process."""
+    return {"entries": [{"units": list(e.units), "kind": e.kind, "label": e.label, "roots": e.root_ids, "nodes": e.nodes}
+                        for e in entries],
+            "dropped": [list(u) for u in dropped], "root_errors": [list(x) for x in TG.ROOT_ERRORS]}
+
+
+def from_manifest(entries: list[Entry], got: dict) -> list[Entry]:
+    """``entries`` (`made_entries`, made in this process) with the nodes ``got`` (`manifest`) holds for them, in order, each the
+    same binding with the same roots; a model whose body raised there is dropped and named, as the catalog does."""
+    dropped = {tuple(u) for u in got["dropped"]}
+    want = got["entries"]
+    out = [e for e in entries if e.units not in dropped]
+    if len(out) != len(want):
+        raise Stale(f"the manifest holds {len(want)} bindings, this process made {len(out)}")
+    for e, w in zip(out, want):
+        if (list(e.units), e.kind, e.label, e.root_ids) != (w["units"], w["kind"], w["label"], w["roots"]):
+            raise Stale(f"{e.name}: the manifest's binding differs")
+        e.nodes = w["nodes"]
+    TG.ROOT_ERRORS[:] = [tuple(x) for x in got["root_errors"]]
+    return out
+
+
 def built_entries() -> list[Entry] | None:
     """The bindings of this process's first full catalog (`targets.CATALOGS`), with what they reach; None when the registry
     grew between its catalogs (a record would not say what a later run's catalog starts from)."""
@@ -398,4 +631,5 @@ def built_entries() -> list[Entry] | None:
     return entries
 
 
-__all__ = ["REQUEST", "Derived", "Entry", "Plan", "Stale", "built_entries", "call_families", "derive", "key", "plan", "store"]
+__all__ = ["APART_GB", "REQUEST", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries", "call_families", "derive",
+           "from_manifest", "key", "made_entries", "make", "manifest", "plan", "planned", "store"]

@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditSketch
+import Definitions.Accounting.Guarantees.RateAuditSketch
 import Proofs.Accounting.Bandwidth.AuditRO
 import Proofs.Accounting.RateAudit.Chip
 
@@ -28,14 +28,6 @@ open Bandwidth (card_line_le)
 namespace Chip
 
 variable {N m ρ h : ℕ} {X Dg α : Type}
-
-/-- The positions a run's reads were answered at: device memory and rebuilding at store sectors, the link at any. -/
-def reads (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Chip N m ρ h X Dg α → Finset (Pos N m ρ)
-  | done _ => ∅
-  | tag x k => (k (O x)).reads O D
-  | mem p k => insert (.inl p) ((k (D (.inl p))).reads O D)
-  | link p k => insert p ((k (D p)).reads O D)
-  | rebuild p k => insert (.inl p) ((k (D (.inl p))).reads O D)
 
 /-- Changing the oracle off the points a run queries, and the data off the positions it read, changes neither its
 value, nor its queries, nor what it read. -/
@@ -98,11 +90,6 @@ end Chip
 namespace Device
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
-
-/-- The positions a run obtained: the sectors held on chip and every position it read. -/
-def obtained (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
-    Finset (Pos N m ρ) :=
-  A.held.map Function.Embedding.inl ∪ (A.prog σ D).reads O D
 
 /-- Changing the data off the positions a run obtained changes neither its queries nor what it obtained. -/
 theorem obtained_congr (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)

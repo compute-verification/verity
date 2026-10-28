@@ -20,9 +20,9 @@ namespace PousStreamedWipe
 open Pous Pous.StreamedWipe
 open scoped ENNReal
 
-/-- **Sampling.** `((N − D)/N)^k ≤ 2^-41` once `k · D / N ≥ 41 · 0.6931471808`. -/
-theorem sampling_le {N D k : ℕ} (hDN : D ≤ N) (hN : 0 < N) (h : (41 : ℝ) * 0.6931471808 ≤ k * D / N) :
-    (((N - D : ℕ) : ℝ≥0∞) / N) ^ k ≤ (2⁻¹ : ℝ≥0∞) ^ 41 := by
+/-- **Sampling.** `((N − D)/N)^k ≤ 2^-t` once `k · D / N ≥ t · 0.6931471808`. -/
+theorem sampling_le {N D k t : ℕ} (hDN : D ≤ N) (hN : 0 < N) (h : (t : ℝ) * 0.6931471808 ≤ k * D / N) :
+    (((N - D : ℕ) : ℝ≥0∞) / N) ^ k ≤ (2⁻¹ : ℝ≥0∞) ^ t := by
   have hNr : (0 : ℝ) < N := by exact_mod_cast hN
   set x : ℝ := ((N - D : ℕ) : ℝ) / N with hx
   have hx0 : 0 ≤ x := by positivity
@@ -30,24 +30,23 @@ theorem sampling_le {N D k : ℕ} (hDN : D ≤ N) (hN : 0 < N) (h : (41 : ℝ) *
     rw [hx, Nat.cast_sub hDN]
     field_simp
     ring
-  have hexp : x ^ k ≤ Real.exp (-(41 * Real.log 2)) := by
+  have hexp : x ^ k ≤ Real.exp (-(t * Real.log 2)) := by
     calc x ^ k ≤ Real.exp (-((D : ℝ) / N)) ^ k := by
           gcongr
           rw [hx1]
           exact Real.add_one_le_exp _
       _ = Real.exp (k * -((D : ℝ) / N)) := (Real.exp_nat_mul _ _).symm
-      _ ≤ Real.exp (-(41 * Real.log 2)) := by
+      _ ≤ Real.exp (-(t * Real.log 2)) := by
           rw [Real.exp_le_exp]
-          have hl := Real.log_two_lt_d9
+          have hl := mul_le_mul_of_nonneg_left Real.log_two_lt_d9.le (Nat.cast_nonneg (α := ℝ) t)
           have : (k : ℝ) * ((D : ℝ) / N) = k * D / N := by ring
           nlinarith
-  have htwo : Real.exp (-(41 * Real.log 2)) = (2⁻¹ : ℝ) ^ 41 := by
-    rw [Real.exp_neg, show (41 : ℝ) * Real.log 2 = ((41 : ℕ) : ℝ) * Real.log 2 by norm_num, Real.exp_nat_mul,
-      Real.exp_log two_pos, inv_pow]
-  have hreal : x ^ k ≤ (2⁻¹ : ℝ) ^ 41 := htwo ▸ hexp
+  have htwo : Real.exp (-(t * Real.log 2)) = (2⁻¹ : ℝ) ^ t := by
+    rw [Real.exp_neg, Real.exp_nat_mul, Real.exp_log two_pos, inv_pow]
+  have hreal : x ^ k ≤ (2⁻¹ : ℝ) ^ t := htwo ▸ hexp
   have hl : (((N - D : ℕ) : ℝ≥0∞) / N) ^ k = ENNReal.ofReal (x ^ k) := by
     rw [ENNReal.ofReal_pow hx0, hx, ENNReal.ofReal_div_of_pos hNr, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
-  have hr : (2⁻¹ : ℝ≥0∞) ^ 41 = ENNReal.ofReal ((2⁻¹ : ℝ) ^ 41) := by
+  have hr : (2⁻¹ : ℝ≥0∞) ^ t = ENNReal.ofReal ((2⁻¹ : ℝ) ^ t) := by
     rw [ENNReal.ofReal_pow (by norm_num), ENNReal.ofReal_inv_of_pos two_pos, ENNReal.ofReal_ofNat]
   rw [hl, hr]
   exact ENNReal.ofReal_le_ofReal hreal
@@ -75,9 +74,8 @@ theorem compression_le {N D k b q M E : ℕ} (hD : 1 ≤ D) (hDN : D ≤ N) (hN 
     ENNReal.le_div_iff_mul_le (Or.inl (pow_ne_zero _ two_ne_zero)) (Or.inl (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))]
   exact_mod_cast hnat
 
-theorem half_pow_41_add : (2⁻¹ : ℝ≥0∞) ^ 41 + (2⁻¹ : ℝ≥0∞) ^ 41 = (2⁻¹ : ℝ≥0∞) ^ 40 := by
-  rw [← two_mul, show (41 : ℕ) = 40 + 1 from rfl, pow_succ, mul_comm, mul_assoc,
-    ENNReal.inv_mul_cancel two_ne_zero ENNReal.ofNat_ne_top, mul_one]
+theorem half_pow_succ_add (t : ℕ) : (2⁻¹ : ℝ≥0∞) ^ (t + 1) + (2⁻¹ : ℝ≥0∞) ^ (t + 1) = (2⁻¹ : ℝ≥0∞) ^ t := by
+  rw [← two_mul, pow_succ, mul_comm, mul_assoc, ENNReal.inv_mul_cancel two_ne_zero ENNReal.ofNat_ne_top, mul_one]
 
 /-- **`StreamedWipeMeets2600GB`**: `streamed_wipe` at `g = N − 15,610,000`, with the error split `2^-41 + 2^-41`. -/
 theorem streamed_wipe_meets_2600GB : Pous.Guarantees.StreamedWipeMeets2600GB := by
@@ -88,6 +86,6 @@ theorem streamed_wipe_meets_2600GB : Pous.Guarantees.StreamedWipeMeets2600GB := 
   calc _ ≤ (2⁻¹ : ℝ≥0∞) ^ 41 + (2⁻¹ : ℝ≥0∞) ^ 41 :=
         add_le_add (sampling_le (by norm_num) (by norm_num) (by norm_num))
           (compression_le (by norm_num) (by norm_num) (by norm_num) (by norm_num) rfl (by omega))
-    _ = (2⁻¹ : ℝ≥0∞) ^ 40 := half_pow_41_add
+    _ = (2⁻¹ : ℝ≥0∞) ^ 40 := half_pow_succ_add 40
 
 end PousStreamedWipe

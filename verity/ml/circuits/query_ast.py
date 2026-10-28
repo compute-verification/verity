@@ -1,7 +1,7 @@
-"""General structural query API over Programs (query track, 2026-09-17): `GateSet`, `Family`, the query AST, `evaluate`.
+"""General structural query API over Programs: `GateSet`, `Family`, the query AST, `evaluate`.
 
-One general API, not a proof-unit language: a query returns a `GateSet` or an ordered lazy `Family` of GateSets.  Results may
-overlap or omit gates; nothing here assumes partitions and Definitions know nothing about proof units.  The Program hierarchy
+One general API, not a proof-block language: a query returns a `GateSet` or an ordered lazy `Family` of GateSets.  Results may
+overlap or omit gates; nothing here assumes partitions and Definitions know nothing about proof blocks.  The Program hierarchy
 (`Scope`, `Body.offsets`, specialization sharing) is used as a compact *index*: a family is a per-body **plan** (one
 entry per body node it touches; entries are memoised per specialization, so every activation of a body shares them),
 counts are structural (`n` x callee count, prefix sums), `by_index` is mixed-radix over the prefix sums -- the

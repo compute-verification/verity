@@ -1,4 +1,4 @@
-"""The opaque node a DIRECT Triton launch becomes under export (CB-A, 2026-09-18). Pure torch: defines the op and its fake
+"""The opaque node a DIRECT Triton launch becomes under export (CB-A). Pure torch: defines the op and its fake
 impl; the interception itself (patching `triton.runtime.jit.JITFunction.run` while exporting) lives in
 `verity_vllm/program/frontend/triton_capture.py`, where triton is importable.
 

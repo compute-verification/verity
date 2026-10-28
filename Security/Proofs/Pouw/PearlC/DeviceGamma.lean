@@ -1,12 +1,13 @@
 import Proofs.Pouw.PearlC.TileGamma
 
 /-!
-# TT_OUT and γ at a device record (the cheap-binding lane's file)
+# TT_OUT and γ at a device record
 
 Staged; nothing pinned.
-* **The H100 record is the granted statement:** `pearlCProtocolDev_h100`, `pearlCDomainDev_h100` and
-  `pearlCTilesDev_h100`, so `TTOutPearlCDev CM devH100` is `TTOutPearlC CM · Costs.adopted` (`ttOutPearlCDev_h100`) and
-  likewise per tile (`ttOutTilePearlCDev_h100`).
+* **The H100 record is the granted statement on a narrower domain:** `pearlCProtocolDev_h100` and
+  `pearlCTilesDev_h100`, and `pearlCDomainDev_h100` (the granted domain with `n ≥ 64`, `64 ∣ n`), so
+  `TTOutPearlC CM · Costs.adopted` gives `TTOutPearlCDev CM devH100` (`ttOutPearlCDev_h100`), and likewise per tile
+  (`ttOutTilePearlCDev_h100`).
 * **γ at any device record,** on the one-shape domain where `wrefDev = ω·(1 − ρ)·creditDev`: `G_γ` from TT_OUT
   (`pearlCGammaDevAt`) and `GγSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `γ = 1 − (399/400)/ω`.
   `pearlCTilesDev_total`: the audit tiles' `W_ref` is the layout's `∑_u wrefDev`.
@@ -54,32 +55,39 @@ theorem pearlCProtocolDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
     wrefDev_h100]
   rfl
 
-theorem pearlCDomainDev_h100 : pearlCDomainDev devH100 = pearlCDomain Params.pi := by
-  funext L
-  apply propext
+/-- The H100 record's domain is the granted one with `n`'s floor (`pearlCDomainDev`). -/
+theorem pearlCDomainDev_h100 (L : Layout) : pearlCDomainDev devH100 L ↔
+    pearlCDomain Params.pi L ∧ ∀ u < L.N, 64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n := by
   simp only [pearlCDomainDev, pearlCDomain, Shape.Tiled, devH100, Params.pi]
   constructor
-  · intro h u hu
+  · intro h
+    refine ⟨fun u hu => ?_, fun u hu => (h u hu).2.1⟩
     obtain ⟨h1, h2, h3, _, h5, h6⟩ := h u hu
-    exact ⟨h1, h2, h3, h5.resolve_left (by norm_num), h6, trivial⟩
+    exact ⟨h1, by have := h2.1; omega, h3, h5.resolve_left (by norm_num), h6, trivial⟩
   · intro h u hu
-    obtain ⟨h1, h2, h3, h4, h5, _⟩ := h u hu
-    exact ⟨h1, h2, h3, h4, Or.inr h4, h5⟩
+    obtain ⟨h1, _, h3, h4, h5, _⟩ := h.1 u hu
+    exact ⟨h1, h.2 u hu, h3, h4, Or.inr h4, h5⟩
 
 /-- The H100 record's tiles are the granted delta's. -/
 theorem pearlCTilesDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
     pearlCTilesDev devH100 sem ρ = pearlCTiles sem Costs.adopted ρ := by
   simp only [pearlCTilesDev, pearlCTiles, tileDebitDev_h100, creditDev_h100, wrefDev_h100]
 
+/-- The granted `TTOutPearlC` gives TT_OUT at the H100 record, whose domain is the granted one's with `n`'s floor. -/
 theorem ttOutPearlCDev_h100 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (sem : PearlCSem Q R S) (ρ : ℚ) : TTOutPearlCDev CM devH100 sem ρ ↔ TTOutPearlC CM sem Costs.adopted ρ := by
-  unfold TTOutPearlCDev TTOutPearlC
-  rw [pearlCProtocolDev_h100, pearlCDomainDev_h100]
+    (sem : PearlCSem Q R S) (ρ : ℚ) (h : TTOutPearlC CM sem Costs.adopted ρ) : TTOutPearlCDev CM devH100 sem ρ := by
+  unfold TTOutPearlCDev
+  unfold TTOutPearlC at h
+  rw [pearlCProtocolDev_h100]
+  exact ttOut_mono_domain (D := pearlCDomain Params.pi) (fun L hL => ((pearlCDomainDev_h100 L).1 hL).1) h
 
 theorem ttOutTilePearlCDev_h100 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (sem : PearlCSem Q R S) (ρ : ℚ) : TTOutTilePearlCDev CM devH100 sem ρ ↔ TTOutTilePearlC CM sem Costs.adopted ρ := by
-  unfold TTOutTilePearlCDev TTOutTilePearlC
-  rw [pearlCProtocolDev_h100, pearlCTilesDev_h100, pearlCDomainDev_h100]
+    (sem : PearlCSem Q R S) (ρ : ℚ) (h : TTOutTilePearlC CM sem Costs.adopted ρ) :
+    TTOutTilePearlCDev CM devH100 sem ρ := by
+  unfold TTOutTilePearlCDev
+  unfold TTOutTilePearlC at h
+  rw [pearlCProtocolDev_h100, pearlCTilesDev_h100]
+  exact ttOutTile_mono_domain (D := pearlCDomain Params.pi) (fun L hL => ((pearlCDomainDev_h100 L).1 hL).1) h
 
 end
 

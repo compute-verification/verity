@@ -3,8 +3,8 @@ import Definitions.Accounting.Gates.Model
 /-!
 # The registry's primitives, each in one class (trusted)
 
-Every primitive of the registry in exactly one class of the model (`Model.lean`), as the 19:15Z ruling closes the free
-set (note:20261017T1859Z-report-property-redteam), 258 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
+Every primitive of the registry in exactly one class of the model (`Model.lean`), as the ruling closes the free
+set, 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
@@ -15,7 +15,8 @@ and the H1 + fx1 tile's (`verity/core/protocols/pouw/circuit/`'s `segment.py`, `
 `PouwUnitSeeds` and `PouwNoiseBlock`), its digits (`PouwDigitLo`, `PouwDigitHi`, `PouwDigitZ`, `PouwLow8`, `PouwSx8`,
 `PouwResAdd`), its fold (`PouwFx1Absorb`, `PouwXinFinal`, and `PouwXor32`'s `_v2` across lanes) and its one stream
 (`PouwOneStream2`, `PouwOneStream3`, `PouwWrapBits`, `PouwWrapSeg`, `PouwXWrap`, `PouwPeelSeg`), with v4's dead-tile
-mask (`PouwOrBit`, `PouwMask32`, #2902's `PouwH1Tile_v4`). Its exact accumulator
+mask (`PouwOrBit`, `PouwMask32`, `PouwH1Tile_v4`) and J10-R's call-scope noise (`PouwCallSeeds`, seed_c and
+σ_R a call, and `PouwAdd64`, a block's counter, `PouwH1Tile_v5` and `_v6`). Its exact accumulator
 `GemmAccumulatorS8_v2{K}` is a body of `BlackwellS8ImmaDot32_v2` steps, not a primitive, and isn't listed.
 
 * **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), each the exact dot mod
@@ -54,11 +55,11 @@ mask (`PouwOrBit`, `PouwMask32`, #2902's `PouwH1Tile_v4`). Its exact accumulator
 * **refused:** any id neither list names (`classOf id = none`: another version of a family, or a numeral it lacks,
   among them), and any gate whose operation isn't in its primitive's class (`Classed`).
 
-`classOf` is what property/v1's closed table is to agree with, id for id. It agrees with the red team's closed table
-(art:d013436943c9bd70e44e92a229805087ac531a2f59023750030d78353e7bb784) on every id but `PouwDot16U8S8_v1`, free here
-under `Proven` as the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts it (`×65536` on the
-s16 reading, no wrap: the coordinator's ruling of 18 Oct, 03:30Z), and the table's nine other `other` ids, roundings
-here: the ruling caps three classes and no fourth, and both are budgeted the same.
+`classOf` is what property/v1's closed table is to agree with, id for id. It agrees with
+`benchmarks/property_redteam/cases.py`'s closed table on every id but `PouwDot16U8S8_v1`, free here under `Proven` as
+the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts it (`×65536` on the s16 reading, no wrap,
+as ruled), and the table's nine other `other` ids, roundings here: the ruling caps three classes and no fourth, and both
+are budgeted the same.
 -/
 
 namespace Accounting.Gates
@@ -224,11 +225,15 @@ def registry : List (String × Class) := [
   ("NvLogf_v2", .budgeted .rounding),
   ("PouwAdd64Hi_v1", .budgeted .rounding),
   ("PouwAdd64Lo_v1", .budgeted .rounding),
+  ("PouwAdd64_v1", .budgeted .rounding),
+  ("PouwAdd64_v2", .budgeted .rounding),
   ("PouwAdd8_v1", .budgeted .rounding),
   ("PouwAddSub8_v1", .budgeted .rounding),
   ("PouwBf16Neg_v1", .budgeted .rounding),
   ("PouwBlackwellE4m3SaltDead_v1", .budgeted .compareSelect),
   ("PouwBlackwellE4m3Window_v1", .budgeted .rounding),
+  ("PouwCallSeeds_v1", .budgeted .rounding),
+  ("PouwCallSeeds_v2", .budgeted .rounding),
   ("PouwCh32_v1", .budgeted .rounding),
   ("PouwChi32_v1", .budgeted .rounding),
   ("PouwDigitHi_v1", .budgeted .rounding),

@@ -23,10 +23,10 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import fp8_moe_rows as MR
-from verity_vllm.program.registry import boolean_fp8_moe as BM
-from verity_vllm.program.registry import fp8_moe as M
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import fp8_moe_rows as MR
+from verity.ml.definitions.registry import boolean_fp8_moe as BM
+from verity.ml.definitions.registry import fp8_moe as M
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_fp8_moe import _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
 

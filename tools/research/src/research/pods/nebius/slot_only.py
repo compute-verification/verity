@@ -41,8 +41,11 @@ SLOT_PATHS = ("tools/verity/check/slot.py",)
 #: `proofs` pool, 13 Oct), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
 #: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills (INF-27,
-#: cpu-1's /workspace/research/locks/research/slots: 8-53 since 19 Oct, cores no check slot holds), `proofs` is proofs' Lean pool
-POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots"}
+#: cpu-1's /workspace/research/locks/research/slots: 8-53 since 19 Oct, cores no check slot holds), `proofs` is proofs' Lean pool,
+#: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4, cpu-5 and node 1 hold one), `soundness` is soundness's
+#: Lean pool (cpu-4, s0-s11, since 26 Oct)
+POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots",
+         "network": "/workspace/research/locks/network/slots", "soundness": "/workspace/research/locks/soundness/slots"}
 #: how long a timed `research run --pool` waits in its pool's line for a slot by default (slot.py --wait-max; `--pool-wait`): an
 #: hour lost proofs' runs their place in a saturated pool each hour (INF-153)
 POOL_WAIT_S = 14400
@@ -73,9 +76,13 @@ def through_slot(command: object) -> bool:
     return command.index("--", 2) < len(command) - 1
 
 
-def refusal(machine_marker: Path = MARKER) -> str:
-    return (f"this machine takes a `research run` only through its check slots ({machine_marker}): send it as "
-            f"`python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) -> str:
+    """Why the launcher refuses a run outside slot.py here, naming the `research run --pool` pools this machine has (27 Oct: lanes
+    sent `verity lean try --on vy-nebius-1` without `--pool`, and one wrapped slot.py by hand)."""
+    have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
+    send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
+            if have else "send it as `python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+    return f"this machine takes a `research run` only through its check slots ({machine_marker}): {send}"
 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:

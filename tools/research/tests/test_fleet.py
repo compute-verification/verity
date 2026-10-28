@@ -40,8 +40,24 @@ def test_the_report_prices_hours_seen_running_and_counts_idle_hours_and_unread_s
     assert text.startswith("Compute, the 1 h to") and "$43 of it on idle hours" in text and "$? (no rate registered)" in text
 
 
+def test_a_memory_bound_job_on_few_cores_is_not_idle(tmp_path, monkeypatch):
+    """vy-glm53-cpu-2, 25 Oct: circuits' GLM folds ran back to back on 2-4 of 192 cores holding 150-700 GB of 755 GB, and the
+    daily post called it idle 22.3 h of 24. Memory in use at IDLE_MEM_SHARE or more counts as use."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
+    t0 = 1_800_000_000
+
+    def row(i, name, used):
+        return {"t": F.utc(t0 + i * F.INTERVAL_S), "name": name, "preset": "p", "rate_usd_per_hour": 6.34, "read": True,
+                "gpu_util": [], "load": 3.0, "cores": 192, "mem_used_gib": used, "mem_total_gib": 755}
+
+    rows = [row(i, "glm53-cpu-2", 292) for i in range(12)] + [row(i, "spare", 20) for i in range(12)]
+    (tmp_path / f"samples-{F.utc(t0)[:10].replace('-', '')}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    by = {r["name"]: r for r in F.report(F.load_samples(t0, t0 + 3600), 1)}
+    assert by["glm53-cpu-2"]["idle_hours"] == 0.0 and by["spare"]["idle_hours"] == 1.0
+
+
 def test_the_daily_post_rings_each_owning_lane_with_only_its_own_idle_machines(tmp_path, monkeypatch):
-    """The lane whose budget line pays for a node stops it (Daniel, 19 Oct 18:11Z, lane contract v2.19 §3c): besides the whole
+    """The lane whose budget line pays for a node stops it (the lane contract, §3c): besides the whole
     report, each lane that owns an idle machine gets one doorbell with only its machines' idle hours and idle $. A machine with no
     `lane`, or no registry entry, is infra's; a lane whose machines were never idle gets nothing."""
     monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")

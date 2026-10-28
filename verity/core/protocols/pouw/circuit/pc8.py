@@ -1,5 +1,5 @@
 """Pearl-C's tile check as a Program (``pearl-c-h100-v1``, ``pearl-c-sm120-v1``, and the unpromoted sm_120 record): forming
-v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof units as `pc4` cuts Pearl-C4's, so sampled proofs can
+v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof blocks as `pc4` cuts Pearl-C4's, so sampled proofs can
 establish a drawn tile's checked words (C̃ and U) and its rows' admission without the verifier reading a row.
 
     template              one instance per        reads                                   computes and returns
@@ -12,7 +12,7 @@ The roots are `pc4`'s: `Pc8Weight{K,N,DEV}` holds the B rows; `Pc8Call{M,K,N,TM,
 reading the weight's B̃ and P_B as committed inputs; `Pc8Check` is both in one root.  Down the rows the domain is the
 scheme's (whole 16-row ticket subtiles), so a short last tile row, r = m mod TM rows, is its own batch of `Pc8Tile` at
 r × TN (`Shape.tile_rows`, `tile_templates`).  The partition is `Q_template_instances` over the templates (`query`), and
-every value is computed in exactly one unit.  Forming v0 (#311's
+every value is computed in exactly one unit.  Forming v0 (Pearl v4's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, the row its ``sha512/row-seg/v1`` leaf
 hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet; and an audit window's tile,
@@ -409,7 +409,8 @@ class _Ports(pc4.RowK):
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
     ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile cap, cut into word, tile and tally
-    units (`cap`); ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's Programs).
+    units (`cap`), and ``row_rho`` its per-row cap at ρr = 1/row_rho (`cap.row_rho`, the -h3 tile rule's; None, the tile
+    cap alone); ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's Programs).
     `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
@@ -420,6 +421,7 @@ class Shape:
     hidden: bool = False
     cap: bool = False
     row_k: int | None = None
+    row_rho: int | None = None
     ports = _Ports(PORTS, "PORTS8")
     derivations = pc4.RowK(DERIVATIONS, "DERIVATIONS8")
     seeds: ClassVar[dict] = SEEDS
@@ -438,6 +440,8 @@ class Shape:
                               f"(whole tiles across, whole ticket subtiles down): {self}")
         if self.cap and self.row_k is not None:
             raise DomainError(f"Pearl-C's circuit has no cap on rows cut along k: {self}")
+        if self.row_rho is not None and not self.cap:
+            raise DomainError(f"Pearl-C's per-row cap is the cap's: {self} has row_rho and not cap")
         if self.cap:
             if self.m % tm:
                 raise DomainError(f"Pearl-C's cap takes whole tiles only, {tm} | m: {self}")
@@ -620,7 +624,7 @@ def query(shape: Shape, side: str = "check") -> dict[str, Any]:
         return PO.template_instances_query(rowk.unit_templates8(shape, side))
     if shape.cap:
         from . import cap
-        tp = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n)
+        tp = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n, row_rho=shape.row_rho)
         return PO.template_instances_query([tp[r] for r in cap.ROLES[side]])
     tp = templates(shape.k, shape.tile, shape.dev, shape.hidden)
     return PO.template_instances_query([t for r in ROLES[side] for t in (tile_templates(shape) if r == "tile" else [tp[r]])])

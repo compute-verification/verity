@@ -1,11 +1,13 @@
-"""The audit's coins from the proof service's challenger as a service (`sampled_proofs.remote`), served on a thread over a
+"""The audit's coins from the proof system's challenger as a service (`sampled_proofs.remote`), served on a thread over a
 socket pair: a session whose coins that service released is accepted, and what it signed holds them
 (`Session.released_reason`). Under the auditor's ledger (`Session.trusted_reason`) a session's coins are those of the one
-challenger session the ledger opens for the session's own window R inside its period, so coins from a second challenger
-session over the same registration are refused, as is a ledger that opens a second session for R; a coin opened
-before its window's root is refused; a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin
-before it, the challenger's log as if each had gone alone; and a session that appends nothing reserves no append
-family, so its challenger releases every coin it committed to."""
+challenger session the ledger opens for the session's own window R inside its period, run from a tree the host's pins
+log records on main's first-parent line (`challenger.pinned_session`), so coins from a second challenger session over
+the same registration are refused, as is a ledger that opens a second session for R, and a session with no pins log,
+an unsealed open, an unlogged pin, a pin off main's first-parent line or no copy of main; a coin opened before its
+window's root is refused; a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin before it, the
+challenger's log as if each had gone alone; and a session that appends nothing reserves no append family, so its
+challenger releases every coin it committed to."""
 from __future__ import annotations
 
 import contextlib
@@ -14,6 +16,7 @@ import itertools
 import json
 import socket
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -29,6 +32,15 @@ HOST = "vy-test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
+MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "tests" / "fixtures" /
+                    "main-first-parent.txt")
+"""Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: sampled_proofs' fixture."""
+PIN = MAIN[0]
+PINS = [C.pin_line(PIN, PIN, "2026-10-22T11:07:28Z")]
+"""The host's pins log as infra published it when it repinned vy-challenger-1 to `PIN`; every open seals it unless a
+test says otherwise."""
+BRANCH, MERGE = "882770e6009e73bdf015f4069fa77ef698d7f326", "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
+"""A 20 Oct pin, #2953's head: in main's history through the queue's merge `MERGE`, never on its first-parent line."""
 
 
 def key() -> C.ChallengerKey:
@@ -54,10 +66,11 @@ class Service:
     to `directory` before it serves (`remote.open_session`), served on a thread over a socket pair whose other end is
     `client`, the verifier's `remote.RemoteChallenger`."""
 
-    def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes, appends: int = APPENDS) -> None:
+    def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes, appends: int = APPENDS,
+                 per_coin: int = 1) -> None:
         directory.mkdir()
         self.directory, self.id, self.reason = directory, sid, None
-        challenger = C.LiveChallenger(coins.SCHEME, epoch, coins.families(windows, appends), Entropy(label))
+        challenger = C.LiveChallenger(coins.SCHEME, epoch, coins.families(windows, appends, per_coin), Entropy(label))
         self.session = R.open_session(challenger, key(), f"{HOST}.{sid}", sign, directory, sid)
         (directory / R.HELLOS).write_text("")
         ours, theirs = socket.socketpair()
@@ -69,8 +82,9 @@ class Service:
         with sock:
             self.reason = R.serve(sock, self.session, itertools.count().__next__)
 
-    def coins(self, store, session: int, windows: int) -> coins.Coins:
-        return coins.Coins(self.client, store.registration.digest, session, windows, clock=itertools.count().__next__)
+    def coins(self, store, session: int, windows: int, per_coin: int = 1) -> coins.Coins:
+        return coins.Coins(self.client, store.registration.digest, session, windows, per_coin=per_coin,
+                           clock=itertools.count().__next__)
 
     def close(self) -> str | None:
         self.client.close()
@@ -99,9 +113,12 @@ class Ledger:
         self.append("period-open", None, {"period": name, "lane": LANE, "key_sha512": self.key_sha512, "cap": 4,
                                           "circuit": CIRCUIT})
 
-    def open(self, sid: str, root: bytes) -> None:
-        self.append("open", sid, {"window": {"root": root.hex()}, "host": f"{HOST}.{sid}", "pinned": "ab" * 20,
-                                  "key_sha512": self.key_sha512, "port": 7811, "by": LANE})
+    def open(self, sid: str, root: bytes, pinned: str = PIN, pins: list[str] | None = PINS) -> None:
+        """Session `sid`'s open for window `root` on a host pinned to `pinned`, sealing its pins log `pins` (None: no
+        seal, as every gate's open before RT4-INT-40)."""
+        body = {"window": {"root": root.hex()}, "host": f"{HOST}.{sid}", "pinned": pinned,
+                "key_sha512": self.key_sha512, "port": 7811, "by": LANE}
+        self.append("open", sid, body if pins is None else {**body, "pins": C.pins_seal(pins)})
 
     def end(self, service: Service) -> None:
         d = service.directory
@@ -182,16 +199,19 @@ def test_coins_from_a_second_session_for_the_registration_are_refused(store, tmp
     assert all(v.accepted for v in verdicts) and second.close() is None
     ledger.end(second)
     assert s.released_reason(*second.signed()) is None
-    why = s.trusted_reason(first.directory, [ledger.path], key(), verify)
+    why = s.trusted_reason(first.directory, [ledger.path], key(), PINS, MAIN, verify)
     assert why == "the challenger signed another coin commitment than the one the session's coins open against"
-    why = s.trusted_reason(second.directory, [ledger.path], key(), verify)
+    why = s.trusted_reason(second.directory, [ledger.path], key(), PINS, MAIN, verify)
     assert why is not None and why.startswith("the challenger's session for this session's window is not trusted")
     ledger.open("s-again", r)
-    why = s.trusted_reason(first.directory, [ledger.path], key(), verify)
+    why = s.trusted_reason(first.directory, [ledger.path], key(), PINS, MAIN, verify)
     assert why is not None and "a second open for root" in why
 
 
 def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path, sign):
+    """An honest session whose open sealed the host's pins log, which records its pin, c81c31e6d5, on main's
+    first-parent line: trusted, inside the audit's period or with none named, and under a later log that extends the
+    one the open sealed."""
     ledger = Ledger(tmp_path / "windows.jsonl", sign)
     ledger.period()
     ledger.open("s-r", coins.window_root(store.registration.digest, 0))
@@ -199,8 +219,62 @@ def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path,
     s, verdicts = served_session(store, service)
     assert all(v.accepted for v in verdicts) and service.close() is None
     ledger.end(service)
-    assert s.trusted_reason(service.directory, [ledger.path], key(), verify) is None
-    assert s.trusted_reason(service.directory, [ledger.path], key(), verify, "p-1") is None
+    assert s.trusted_reason(service.directory, [ledger.path], key(), PINS, MAIN, verify) is None
+    assert s.trusted_reason(service.directory, [ledger.path], key(), PINS, MAIN, verify, "p-1") is None
+    later = PINS + [C.pin_line(MAIN[0], MAIN[0], "2026-10-23T09:00:00Z")]
+    assert s.trusted_reason(service.directory, [ledger.path], key(), later, MAIN, verify, "p-1") is None
+
+
+OFF_MAIN = ("session s-r ran commit {}, which the host's pins log records but which is not on main's first-parent line "
+            "in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main is in "
+            "main's history but no tree main's check ran on; repin the challenger host to a commit on main's "
+            "first-parent line (vy-challenger-pin) and rerun the window there")
+
+
+@pytest.mark.parametrize("case", ["no-pins", "unsealed", "unlogged", "branch", "no-main", "stale-main"])
+def test_a_session_is_trusted_only_from_a_logged_pin_on_mains_first_parent_line(store, tmp_path, sign, case):
+    """`coins.trusted` reads the window's session through `challenger.pinned_session`, so an honest session whose coins
+    are the challenger's is refused, with the reason, when the verifier has no pins log; when its open sealed none
+    (every gate before RT4-INT-40); when the log its open sealed doesn't record its pin (c81c31e6d5's parent); when the
+    log records a pin in main's history but off its first-parent line (882770e600); when the verifier has no copy of
+    main; and when its copy predates the pin, as a verifier host's list infra wrote before it repinned the challenger.
+    The pin is read before the period, so the refusal is the same inside the audit's period."""
+    assert MERGE in MAIN and BRANCH not in MAIN and MAIN[-1] == "6c2de12715770b0cb1662e5036e5ee239ff191c1"
+    pinned, sealed, pins, main = PIN, PINS, PINS, MAIN
+    if case == "no-pins":
+        pins = None
+    elif case == "unsealed":
+        sealed = None
+    elif case == "unlogged":
+        pinned = MAIN[1]
+    elif case == "branch":
+        pinned = BRANCH
+        sealed = pins = [C.pin_line(BRANCH, MERGE, "2026-10-20T21:05:00Z"), *PINS]
+    elif case == "no-main":
+        main = None
+    else:
+        main = MAIN[1:]
+    ledger = Ledger(tmp_path / "windows.jsonl", sign)
+    ledger.period()
+    ledger.open("s-r", coins.window_root(store.registration.digest, 0), pinned, sealed)
+    service = Service(tmp_path / "s-r", sign, "s-r", 0, params().windows, b"service")
+    s, verdicts = served_session(store, service)
+    assert all(v.accepted for v in verdicts) and service.close() is None
+    ledger.end(service)
+    assert s.released_reason(*service.signed()) is None
+    why = {"no-pins": C.NO_PINS, "no-main": C.NO_MAIN,
+           "unsealed": ("the auditor's ledger's open of session s-r seals no pins log (pins: {lines, sha512}): open the "
+                        "window on a host whose gate seals its pins log in each open"),
+           "unlogged": (f"session s-r ran commit {MAIN[1]}, which the host's pins log doesn't record as a commit of "
+                        "main's history: repin the challenger host to a commit origin/main contains "
+                        "(vy-challenger-pin) and rerun the window there"),
+           "branch": OFF_MAIN.format(BRANCH), "stale-main": OFF_MAIN.format(PIN)}[case]
+    for period in (None, "p-1"):
+        assert s.trusted_reason(service.directory, [ledger.path], key(), pins, main, verify, period) == (
+            f"the challenger's session for this session's window is not trusted: {why}")
+        with pytest.raises(C.CoinError) as e:
+            coins.trusted(s.coins, service.directory, [ledger.path], key(), pins, main, verify, period)
+        assert str(e.value) == why
 
 
 @pytest.mark.parametrize("held", ["p-2", None])
@@ -215,8 +289,8 @@ def test_a_session_is_bound_to_the_audits_period(store, tmp_path, sign, held):
     s, verdicts = served_session(store, service)
     assert all(v.accepted for v in verdicts) and service.close() is None
     ledger.end(service)
-    assert s.trusted_reason(service.directory, [ledger.path], key(), verify) is None
-    why = s.trusted_reason(service.directory, [ledger.path], key(), verify, "p-1")
+    assert s.trusted_reason(service.directory, [ledger.path], key(), PINS, MAIN, verify) is None
+    why = s.trusted_reason(service.directory, [ledger.path], key(), PINS, MAIN, verify, "p-1")
     assert why == ("the challenger's session for this session's window is not trusted: the auditor's ledger holds the "
                    f"session's window in period {held}, not the audit's period p-1")
 

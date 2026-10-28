@@ -57,18 +57,19 @@ theorem verifyRepWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String 
   dsimp only
   rw [hP, hB, hr]
 
-theorem verdict_log {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
-    {proofs : Array ByteArray} {l₀ : Array ByteArray} :
-    RetL (verifyWithM (Hashes.logged h) spec tabs record proofs) l₀ fun _ l' =>
+/-- `verdict_log` at `verifyWithMK keep`. -/
+theorem verdictK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup}
+    {record : String} {proofs : Array ByteArray} {l₀ : Array ByteArray} :
+    RetL (verifyWithMK keep (Hashes.logged h) spec tabs record proofs) l₀ fun _ l' =>
       ∃ (sess : Session) (schs : Array Schedule) (l₁ : Array ByteArray),
-        (Record.decodeWith (Hashes.logged h) spec record).go l₀ = (.ok sess, l₁) ∧
+        (Record.decodeWithK keep (Hashes.logged h) spec record).go l₀ = (.ok sess, l₁) ∧
         List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
         tabs.size = spec.tables.size ∧ proofs.size = spec.repStreams.size ∧
         l'.toList = l₁.toList ++ (spec.repStreams.zip proofs).toList.flatMap (fun x => dgl spec x.2) ++
           (List.range tabs.size).flatMap fun i =>
             repLog h spec tabs[i]! schs[i]! sess i 0 proofs[2 * i]! ++
               repLog h spec tabs[i]! schs[i]! sess i 1 proofs[2 * i + 1]! := by
-  unfold verifyWithM
+  unfold verifyWithMK
   retl_walk []
   all_goals
     subst_vars
@@ -110,5 +111,18 @@ theorem verdict_log {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : A
         flatten_snd (R := fun (x : Setup) y => fast100 x.m = some y) (F := fun _ => []) fs, flatMap_nil',
         flatten_eq_flatMap (fun _ _ h => h) f17, flatten_eq_flatMap (fun _ _ h => h) fr]
       simp only [List.append_nil, List.append_assoc]
+
+theorem verdict_log {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
+    {proofs : Array ByteArray} {l₀ : Array ByteArray} :
+    RetL (verifyWithM (Hashes.logged h) spec tabs record proofs) l₀ fun _ l' =>
+      ∃ (sess : Session) (schs : Array Schedule) (l₁ : Array ByteArray),
+        (Record.decodeWith (Hashes.logged h) spec record).go l₀ = (.ok sess, l₁) ∧
+        List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
+        tabs.size = spec.tables.size ∧ proofs.size = spec.repStreams.size ∧
+        l'.toList = l₁.toList ++ (spec.repStreams.zip proofs).toList.flatMap (fun x => dgl spec x.2) ++
+          (List.range tabs.size).flatMap fun i =>
+            repLog h spec tabs[i]! schs[i]! sess i 0 proofs[2 * i]! ++
+              repLog h spec tabs[i]! schs[i]! sess i 1 proofs[2 * i + 1]! :=
+  verdictK_log id
 
 end FlockDeploy.KS

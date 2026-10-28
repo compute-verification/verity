@@ -1,14 +1,14 @@
 """The difftest of `active.Proxy` against the Lean package `certifier_device`'s `step`: the Python half.
 
-`verity/core/devices/certifier/lean/scripts/difftest_vectors.py` writes 1,500 traces and what this package's
+`verity/core/devices/certifier/lean/scripts/difftest_vectors.py` writes 2,400 traces and what this package's
 real `active.Proxy` does on each, driven event by event in a world the script holds (every action in order, then the
 declared syncs, hand times, frames read and counts). `check` runs the Lean half in its Lean audit (`runs` in that
 package's `lean-audit.json`): `CertifierDevice/DifftestMain.lean` replays each trace through `step` and fails on any
 action or result that differs. The audit checks the data against the record's SHA-256, and its pass is cached on the Lean
 package's files alone, so the test here is what says the data is still what this package does: a change to the proxy, its
 certifiers or its prover changes the data, fails this test, and `check.py --update` records the new data, which makes
-`check` run the Lean half on it. The other test checks, on the first 300 traces, that the generator reaches what its
-docstring says.
+`check` run the Lean half on it. The other test checks, on one round of every path under every mode, that the generator
+reaches what its docstring says.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import random
 import sys
 import threading
 from collections import Counter
@@ -32,7 +33,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["CertifierDevic
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 1,500 traces and the proxy's actions on them, byte for byte as the record pins them."""
+    """All 2,400 traces and the proxy's actions on them, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", str(vectors.COUNT)]
@@ -50,7 +51,7 @@ def read_before_choice(inst: dict) -> bool:
 
 
 def test_the_generator_covers_what_it_says():
-    insts = [vectors.instance(s) for s in range(300)]
+    insts = [vectors.instance(s) for s in range(len(vectors.PATHS) * len(vectors.MODES))]
     results = [vectors.python_results(i) for i in insts]
     outcomes, refused = Counter(), Counter()
     for inst, res in zip(insts, results, strict=True):
@@ -64,8 +65,9 @@ def test_the_generator_covers_what_it_says():
         if inst["path"] == "early-tick":  # the prover's refusal, where the early tick can make one
             refused["monitor-unavailable" in statuses] += 1
     assert {p for p, _ in outcomes} == set(vectors.PATHS)
+    assert {i["mode"] for i in insts} == set(vectors.MODES)
     assert refused[True] > refused[False]
-    for path in set(vectors.PATHS) - {"honest", "prover", "link-garbage"}:
+    for path in set(vectors.PATHS) - {"honest", "prover", "link-garbage", "salt-stall"}:  # a stalled salt faults nothing
         assert outcomes[path, "faulted"] > outcomes[path, "accepted"], path
     late = [{a[1]["status"] for a in r["actions"] if a[0] == "publish"} - {None}
             for i, r in zip(insts, results, strict=True) if i["path"] == "slow-server"]
@@ -88,12 +90,49 @@ def test_the_generator_covers_what_it_says():
     assert any(e[3] == bucket(i) for i, e in ticks) and any(e[3] == 4 * bucket(i) for i, e in ticks)
     assert any(e[3] > 4 * bucket(i) for i, e in ticks)
     assert any([f[0] for f in r["frames"]] != sorted(f[0] for f in r["frames"]) for r in results)  # read out of order
+    salted = [(i, r) for i, r in zip(insts, results) if i["config"]["salt"] is not None]
+    assert {i["config"]["salt"]["pouw_window"] for i, _ in salted} == {1, 2, 3}
+    for i, r in salted:  # each write is a released salt's frame: its header, its PoUW window and its value, no fill
+        values = [bytes.fromhex(v) for v in i["config"]["salt"]["values"]]
+        frames = [bytes.fromhex(a[1]) for a in r["actions"] if a[0] == "salt"]
+        first = -(-i["config"]["start"] // i["config"]["salt"]["pouw_window"])
+        assert frames == [active.salt_frame(p, values[p], active.HEADER.size + 8 + len(values[p]))
+                          for p in range(first, first + len(frames))]
+        assert r["salts_delivered"] <= len(frames) <= r["salts_released"]
+    assert any(r["salts_delivered"] > 1 for _, r in salted)
+    assert any(r["salts_released"] > r["salts_delivered"] for i, r in salted if i["path"] == "salt-stall")
+    restarted = [(i, r) for i, r in zip(insts, results) if i["config"]["start"]]
+    assert all(min(a[1]["window"] for a in r["actions"] if a[0] == "publish") == i["config"]["start"]
+               for i, r in restarted)
+    assert any(i["config"]["position"] for i, _ in restarted) and any(i["program"] for i, _ in restarted)
+    served = [s for s in range(len(insts)) if "served" in insts[s]["mode"]]
+    assert any(insts[s]["program"] for s in served)
+    traces = [vectors.Trace(random.Random(s), insts[s]["path"], insts[s]["mode"]) for s in served]
+    for t in traces:
+        t.build()
+    # the admission rule holds a request back to a later window than the one it arrives in
+    assert any(x.release[-1] // t.T_in > (x.send + 1) // t.T_in for t in traces for x in t.sessions)
+    for i, r in zip(insts, results):  # under ordinals a connection's first write is its stream's header
+        firsts = {}
+        for a in r["actions"]:
+            if a[0] == "upstream":
+                firsts.setdefault(a[1], a[2])
+        header = lambda s: active.HEADER.pack(active.ORDINAL, s, 0).hex()  # noqa: E731
+        assert all((h == header(s)) == i["config"]["ordinals"] for s, h in firsts.items())
+    compact = [(i, r) for i, r in zip(insts, results) if i["config"]["compact"]]
+    assert {i["config"]["egress"]["B"] for i, _ in compact} == {8, 12, 48}
+    assert any(i["program"] for i, _ in compact) and any(i["config"]["salt"] for i, _ in compact)
+    assert any(i["config"]["start"] for i, _ in compact)
+    malformed = Counter(("malformed" in {a[1]["status"] for a in r["actions"] if a[0] == "publish"}, i["path"])
+                        for i, r in compact if i["path"] in ("no-id", "long", "trailing", "duplicate"))
+    for path in ("no-id", "long", "trailing", "duplicate"):  # a record that isn't one, of another request, cut short
+        assert malformed[True, path] > malformed[False, path], path
 
 
 def test_the_proxys_shutdown_runs_on_the_harness_thread(monkeypatch):
     """A run with a prover ends in the proxy's executor shutdown (`asyncio.to_thread`). On a real thread it finishes
     when the host gets to it, possibly after `settle` has taken the loop as quiet, and the generator then raises "the
-    trace leaves ticks unrun" under load (r20261010-073331-ef9b). The harness runs it inline, on the loop's thread."""
+    trace leaves ticks unrun" under load. The harness runs it inline, on the loop's thread."""
     threads = []
     monkeypatch.setattr(active.InlineExecutor, "shutdown", lambda self, *a, **k: threads.append(threading.get_ident()),
                         raising=False)

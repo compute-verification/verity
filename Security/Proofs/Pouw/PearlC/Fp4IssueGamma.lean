@@ -1,9 +1,9 @@
 import Proofs.Pouw.PearlC.DeviceFp4Gamma
 import Definitions.Pouw.PearlC.DeviceFp4Issue
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 
 /-!
-# Pearl-C4 at the issue-bound FP32 price (the price-twins lane's file; staged)
+# Pearl-C4 at the issue-bound FP32 price (staged)
 
 γ's price rule computes γ at the issue-bound FP32 operation (8.00, `Prices.sm120`'s FADD) and at the measured in-loop
 one (8.38), and publishes the larger. `Fp4Prices.sm120` is the in-loop price; this file holds γ at the issue-bound one

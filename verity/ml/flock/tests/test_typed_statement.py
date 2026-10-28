@@ -18,7 +18,7 @@ from verity_flock import layouts as LY
 from verity_flock import typed_statement as TS
 
 pytest.importorskip("verity_numerical")
-pytest.importorskip("verity_vllm.program.registry.prims")
+pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_numerical.bench import lowerings  # noqa: E402
 from verity_numerical.bench import templates as TM  # noqa: E402
 

@@ -42,7 +42,12 @@ the ones the end sealed. `ledgerHead` takes infra's published heads: each checke
 longest. A window counts toward its period only when the descriptor of the circuit its sessions prove hashes (SHA-512)
 to the circuit the period's open committed (`creditedSession`, `credited_session`). A session counts as main's code
 only when the host's pins log, whose first lines its open seals (`pins: {lines, sha512}`), pins the open's `pinned`
-commit (`pinnedSession`, `pinned_session`). Each refusal throws Python's `CoinError` text.
+commit (`pinsReason`) and the verifier's own copy of main's first-parent history (`main`, the auditor's
+`git rev-list --first-parent origin/main`) holds it (`firstParentReason`): a branch commit merged into main is in
+main's history but on no tree main's check ran (`pinnedSession`, `pinned_session`). Only the open's pin is held: a repin
+of the host after the open neither helps nor harms the session, credited by the commit its open sealed. Every path that
+credits a session reads it there: `creditedSession` (the pin first, then the circuit) and `trustedSessionOf`. Each
+refusal throws Python's `CoinError` text.
 
 The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `close_message`), `challenger_released`
 (`log_chain` and `released_roots_of`), `challenger_ledger` (`audited_session`), `challenger_head` (`ledger_head`),
@@ -121,6 +126,12 @@ def NO_PINS : String :=
   "commit of main's history"
 def NO_AUDIT : String :=
   "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
+def MAIN_FORM : String :=
+  "a list of main's first-parent commits, each 40 lowercase hex (`git rev-list --first-parent origin/main` in " ++
+  "the auditor's own checkout)"
+def NO_MAIN : String :=
+  "the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's " ++
+  "check passed: give it the auditor's own `git rev-list --first-parent origin/main`"
 
 /-- A session id: a host's characters, at most `MAX_SESSION_ID` of them. -/
 def isSessionId (s : String) : Bool := s.length ≤ MAX_SESSION_ID && isHost s
@@ -255,6 +266,16 @@ private def nameAt (j : Json) : Bool := match j with | .str s => isLedgerName s 
 private def isStr (j : Json) : Bool := match j with | .str _ => true | _ => false
 
 private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
+
+/-- `j == Json.bool true`, by a match the kernel reduces (`BEq Json` is a `partial def`, opaque to the kernel). -/
+private def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
+
+example : jsonTrue (getD (Json.mkObj [("closed", .bool true)]) "closed") = true := by decide
+example : jsonTrue (getD (Json.mkObj [("closed", .bool false)]) "closed") = false := by decide
+example : jsonTrue (getD (Json.mkObj [("files", .null)]) "closed") = false := by decide
+example : (getD (Json.mkObj [("record_leaf", .null)]) "record_leaf").isNull = true := by decide
+example : (getD (Json.mkObj [("schema", .str "x")]) "record_leaf").isNull = true := by decide
+example : (getD (Json.mkObj [("record_leaf", .str "7")]) "record_leaf").isNull = false := by decide
 
 /-- `_window`: a window's identity `{root}`. -/
 def isWindow (j : Json) : Bool := keys? j == some #["root"] && isDigest (getD j "root")
@@ -531,7 +552,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
       let w := wins[k]!
       if w.ended.isSome then throw s!"entry {i}: an end for session {s}, which has no open or has ended"
       let r := getD e.body "record_leaf"
-      if e.schema == LEDGER_SCHEMA && r != Json.null then
+      if e.schema == LEDGER_SCHEMA && !r.isNull then
         let some r := nat? r | throw s!"entry {i}: record leaf {r.compress} isn't between its open's and its end's, once"
         unless w.leaf < r && r < q && !records.any (·.1 == r) do
           throw s!"entry {i}: record leaf {r} isn't between its open's and its end's, once"
@@ -609,6 +630,7 @@ structure Audited where
   recordLeaf : Nat
   commitment : String
   refusedHellos : Nat
+  pinned : String
   period : Option String
   cap : Json
   circuit : Json
@@ -629,7 +651,7 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
   let some e := w.ended
     | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
   let b := e.body
-  unless getD b "closed" == Json.bool true do
+  unless jsonTrue (getD b "closed") do
     throw s!"the auditor's ledger ends session {s} unclosed: its client didn't close it"
   let files := getD b "files"
   let malformed := s!"the auditor's ledger's end of session {s} is malformed: {END_FORM}"
@@ -641,8 +663,9 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
     if p.cap == Json.null || p.circuit == Json.null then
       throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
   return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
-            commitment := strOf (getD b "commitment"), refusedHellos, period := p.map (·.name),
-            cap := (p.map (·.cap)).getD Json.null, circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+            commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
+            period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
+            circuit := (p.map (·.circuit)).getD Json.null }, o.body)
 
 /-- `audited_session` (module docstring): `auditedOpen`'s session. -/
 def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited :=
@@ -699,10 +722,6 @@ def sessionNamed (a : Audited) (key : ChallengerKey) (session : Json) : V (LiveC
     throw s!"the challenger's refused hellos are not the {a.refusedHellos} the auditor's ledger sealed at its session's end"
   return (c, roots)
 
-/-- `trusted_session_of` (module docstring): the coin commitment and the roots of the one session the auditor's ledger
-opens for `window` under `key`, from that session's files `{close, hellos, log, record}`. -/
-def trustedSessionOf (ledger window : Json) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Roots) := do
-  sessionNamed (← auditedSession ledger window key) key session
 
 /-- `circuit_reason` (module docstring): why a window doesn't count toward `period` (`none`: no period holds it), whose
 open committed `circuit`, given the bytes of the descriptor of the circuit its sessions prove; `none` when their SHA-512
@@ -721,12 +740,6 @@ def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteAr
         some s!"the circuit the window's sessions prove (descriptor SHA-512 {got.take 16}...) is not {c.take 16}..., the one period {p} committed: prove the period's declared circuit, or open a period whose --circuit is this descriptor's SHA-512"
       else none
 
-/-- `credited_session` (module docstring): `auditedSession`, counted toward its period when `descriptor` hashes to the
-circuit the period committed (`circuitReason`). -/
-def creditedSession (ledger window : Json) (key : ChallengerKey) (descriptor : ByteArray) : V Audited := do
-  let a ← auditedSession ledger window key
-  if let some why := circuitReason a.period a.circuit descriptor then throw why
-  return a
 
 /-- `_pin`: a pins log line's commit when the line is its own `ledger_text` (`PyJson.canonical`) of the pins log's form,
 `{commit, main, pinned_utc}`, two commits in 40 lowercase hex and a time `later` holds fixed. -/
@@ -766,11 +779,44 @@ def pinsReason (session : String) (opened pins : Json) : Option String := Id.run
     return some s!"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window there"
   return none
 
-/-- `pinned_session` (module docstring): `auditedSession`, when the host's pins log `pins` records the open's pin as a
-commit of main's history (`pinsReason`). -/
-def pinnedSession (ledger window : Json) (key : ChallengerKey) (pins : Json) : V Audited := do
+/-- `first_parent_reason` (module docstring): why session `session`, run from commit `pinned`, didn't run a tree main's
+check passed by the verifier's own copy of main's first-parent history `main` (its commits, `null` when the verifier has
+none); `none` when `pinned` is on it. Ancestry is not enough: a branch commit merged into main is in its history, but
+main's check ran on the merge. -/
+def firstParentReason (session pinned : String) (main : Json) : Option String :=
+  let malformed := s!"the verifier's copy of main's history is malformed: {MAIN_FORM}"
+  match main with
+  | .null => some NO_MAIN
+  | .arr cs =>
+    if !cs.all (isDigest · 40) then some malformed
+    else if cs.contains (Json.str pinned) then none
+    else some (s!"session {session} ran commit {pinned}, which the host's pins log records but which is not on " ++
+      "main's first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit " ++
+      "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a commit " ++
+      "on main's first-parent line (vy-challenger-pin) and rerun the window there")
+  | _ => some malformed
+
+/-- `pinned_session` (module docstring): `auditedSession`, when the host's pins log `pins` records the open's pin
+(`pinsReason`) and the verifier's copy of main's first-parent history `main` holds it (`firstParentReason`). -/
+def pinnedSession (ledger window : Json) (key : ChallengerKey) (pins main : Json) : V Audited := do
   let (a, opened) ← auditedOpen ledger window key
   if let some why := pinsReason a.session opened pins then throw why
+  if let some why := firstParentReason a.session (strOf (getD opened "pinned")) main then throw why
+  return a
+
+/-- `trusted_session_of` (module docstring): the coin commitment and the roots of the one session the auditor's ledger
+opens for `window` under `key`, run from a commit the host's pins log `pins` records on main's first-parent line `main`
+(`pinnedSession`), from that session's files `{close, hellos, log, record}`. -/
+def trustedSessionOf (ledger window : Json) (key : ChallengerKey) (pins main session : Json)
+    : V (LiveCommitment × Roots) := do
+  sessionNamed (← pinnedSession ledger window key pins main) key session
+
+/-- `credited_session` (module docstring): `pinnedSession`, counted toward its period when `descriptor` hashes to the
+circuit the period committed (`circuitReason`): the pin first, then the circuit. -/
+def creditedSession (ledger window : Json) (key : ChallengerKey) (pins main : Json) (descriptor : ByteArray)
+    : V Audited := do
+  let a ← pinnedSession ledger window key pins main
+  if let some why := circuitReason a.period a.circuit descriptor then throw why
   return a
 
 /-! The difftest's pieces. -/
@@ -805,7 +851,7 @@ def releasedPiece (j : Json) : V Json := do
 private def auditedJson (a : Audited) : Json :=
   Json.mkObj [("cap", a.cap), ("circuit", a.circuit), ("commitment", Json.str a.commitment),
     ("files", a.files), ("host", Json.str a.host), ("period", a.period.elim Json.null Json.str),
-    ("prover", Json.str a.prover), ("record_leaf", Lean.toJson a.recordLeaf),
+    ("pinned", Json.str a.pinned), ("prover", Json.str a.prover), ("record_leaf", Lean.toJson a.recordLeaf),
     ("refused_hellos", Lean.toJson a.refusedHellos), ("session", Json.str a.session)]
 
 /-- `{"key", "ledger", "window"}` to `audited_session`'s `Audited`, its fields by Python's names. -/
@@ -814,19 +860,21 @@ def ledgerPiece (j : Json) : V Json := do
   pure <| refusing do
     return auditedJson (← auditedSession (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key")))
 
-/-- `{"descriptor", "key", "ledger", "window"}` to `credited_session`'s `Audited`, the descriptor in lowercase hex. -/
+/-- `{"descriptor", "key", "ledger", "main", "pins", "window"}` to `credited_session`'s `Audited`, the descriptor in
+lowercase hex. -/
 def creditedPiece (j : Json) : V Json := do
-  request j #["descriptor", "key", "ledger", "window"]
+  request j #["descriptor", "key", "ledger", "main", "pins", "window"]
   let some d := hexAt? (getD j "descriptor") | throw "descriptor is not lowercase hex"
   pure <| refusing do
-    return auditedJson (← creditedSession (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key")) d)
+    return auditedJson (← creditedSession (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
+      (getD j "pins") (getD j "main") d)
 
-/-- `{"key", "ledger", "pins", "window"}` to `pinned_session`'s `Audited`. -/
+/-- `{"key", "ledger", "main", "pins", "window"}` to `pinned_session`'s `Audited`. -/
 def pinnedPiece (j : Json) : V Json := do
-  request j #["key", "ledger", "pins", "window"]
+  request j #["key", "ledger", "main", "pins", "window"]
   pure <| refusing do
     return auditedJson (← pinnedSession (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
-      (getD j "pins"))
+      (getD j "pins") (getD j "main"))
 
 /-- `{"heads", "key"}` to `ledger_head`'s, `{"ledger": lines}`. -/
 def headPiece (j : Json) : V Json := do
@@ -835,12 +883,12 @@ def headPiece (j : Json) : V Json := do
     let k ← ChallengerKey.ofJson (getD j "key")
     return Json.mkObj [("ledger", ← ledgerHead (getD j "heads") k)]
 
-/-- `{"key", "ledger", "session", "window"}` to `trusted_session_of`'s. -/
+/-- `{"key", "ledger", "main", "pins", "session", "window"}` to `trusted_session_of`'s. -/
 def sessionPiece (j : Json) : V Json := do
-  request j #["key", "ledger", "session", "window"]
+  request j #["key", "ledger", "main", "pins", "session", "window"]
   pure <| refusing do
     let (c, roots) ← trustedSessionOf (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
-      (getD j "session")
+      (getD j "pins") (getD j "main") (getD j "session")
     return Json.mkObj [("commitment", c.toJson), ("roots", rootsJson roots)]
 
 end SampledProofs.Challenger

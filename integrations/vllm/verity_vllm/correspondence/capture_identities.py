@@ -1,6 +1,6 @@
 """Correspondence between capture-format-v2 identities and the canonical B1 circuit.
 
-Two namespaces (IR §C.5), kept separate in every record this tool emits:
+Two namespaces, kept separate in every record this tool emits:
 
   * `value_identity`  -- the *logical* namespace: which `FunctionCall` of the canonical circuit produced the
     value(s), i.e. the gate indices of `call.returns` (or, for prescribed inputs, the `Input` gates).
@@ -13,7 +13,7 @@ Two namespaces (IR §C.5), kept separate in every record this tool emits:
     of gate outputs.
 
 Checks performed per located call: (i) shape/type consistency between the captured tensor and the call's
-return type, (ii) bit-for-bit comparison of the captured words with the IR's own gate-by-gate evaluation of
+return type, (ii) bit-for-bit comparison of the captured words with the circuit's own gate-by-gate evaluation of
 that call, where the call's *argument* values are read from other captured leaves (production values) and
 from the registered checkpoint (the values of the weight `Input` gates). A prescribed-input record states
 that the committed weight leaf words *are* the outputs of the `Input` gates (one scalar per gate) and gives
@@ -33,11 +33,11 @@ from typing import Any, Iterable
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import MissingValue, evaluate_region
+from verity.ml.circuits.evaluation import MissingValue, evaluate_region
 from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import Program
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 _ID_RE = re.compile(r"^p=(?P<p>[^/]+)/r=(?P<r>[^/]+)/t=(?P<t>\d+)/ph=(?P<ph>[^/]+)/l=(?P<l>[^/]+)/op=(?P<op>[^/]+)/port=(?P<output>\d+)$")
 
@@ -240,7 +240,7 @@ class LazyTranscript(dict):
 # weights: the checkpoint gives the values of the weight Input gates; the weights leaf authenticates them
 # ---------------------------------------------------------------------------------------------------------
 
-_WEIGHT_FIELDS = {  # IR weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
+_WEIGHT_FIELDS = {  # circuit weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
     "embed": ("w=embed_tokens.weight", ["model.embed_tokens.weight"]),
     "norm": ("w=norm.weight", ["model.norm.weight"]),
     "cos_sin": ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None),
@@ -689,7 +689,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
     if program_factory is None and port.serve is None and port.program_factory is not None:
         program_factory = port.program_factory  # a port whose Serve is specialised under a binding record (CF2)
     if circuit_map is None and port.circuit_map is not None:
-        # a port-supplied mapping: QZ's `CIRCUIT_MAP(program)` or CF2's `CIRCUIT_MAP(program, names)` (merge 2026-09-08)
+        # a port-supplied mapping: QZ's `CIRCUIT_MAP(program)` or CF2's `CIRCUIT_MAP(program, names)`
         import inspect
         _cm, _names = port.circuit_map, port.names
         try:

@@ -115,12 +115,12 @@ class Session(audit.Session):
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
         """Window t's verdict from check 3's outcome on each of its draws, in the order drawn: the first failure (one of
-        `audit.FAILURES`) rejects it."""
+        `audit.FAILURES`) rejects it, and a window with no draws is `malformed`, as `verify` has it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
             raise audit.SessionError(f"window {t} has no draws awaiting check 3")
-        if len(failures) != len(w.draws):
+        if not w.draws or len(failures) != len(w.draws):
             return self._fail(t, "malformed")
         for at, f in zip(w.draws, failures):
             if f is not None:
@@ -172,7 +172,7 @@ def witness(d: Draw, ps: audit.Pass, store: Store, plan_row: Sequence[int], S, v
 
 def commit(bits: int, words: Sequence[int], salt: bytes) -> bytes:
     """A bit row's ``b || c`` under ``salt``: hm96-sha512 over its sha512/row/v2 digest, the row of ``bits`` bits held in
-    ``words`` (u16, low bit first), as the proof service commits a unit's witness row."""
+    ``words`` (u16, low bit first), as the proof system commits a unit's witness row."""
     if len(words) != -(-bits // 16):
         raise ValueError(f"a row of {bits} bits is {-(-bits // 16)} u16 words, not {len(words)}")
     row = b"".join(int(w).to_bytes(2, "little") for w in words)[:-(-bits // 8)]

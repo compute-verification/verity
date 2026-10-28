@@ -1,4 +1,4 @@
-"""Small-statics Program fixtures and explicit-oracle helpers for the query track (window 2026-09-17).
+"""Small-statics Program fixtures and explicit-oracle helpers for the query track.
 
 Shared by the boundary / query-API / partition test suites (import as `tests.program.fixtures_query`).  Every
 constructor returns a `Program` small enough for the explicit oracle (`layout.GateSelection.in_` / `.out` on the expanded
@@ -6,7 +6,7 @@ circuit); `FIXTURES` maps a short name to a memoised constructor so suites can p
 
 Families (the query design's §5 table + the counterexample shapes of the query-interface freeze):
 
-  registry (verity_vllm/program/registry/b1.py and the quarantines)
+  registry (verity/ml/definitions/registry/b1.py and the quarantines)
     gemm                 Gemm_v1{K=32,N=6}                         members of the GemmCoordinate batch; DotBf16 chain inside
     rmsnorm_triton       RMSNormTriton_v1{N=32}                    reduction tree + normalize path (merged per output)
     rmsnorm_fused        RMSNormFusedCuda_v2{N=32}                 tuple return (normed, res')
@@ -47,9 +47,9 @@ from verity.ml.circuits.layout import Scope, GateSelection
 from verity.ml.circuits.parts import Item, Part, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import BF16, F32, I32
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry.prims import BF16, F32, I32
 from verity.ml.circuits.types import Array, Tuple
 
 # ---------------------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def attn_block_program(FIRST: bool, D: int = 16, BN: int = 16, NVIS: int | None 
 
 
 def attention_head_v1_program(T: int = 72, D: int = 16) -> Program:
-    """`AttentionHead_v1{T,D}`: the legacy chain of every pre-D54 record (`Serve_v1`), kBlockN = 64 as the module constant:
+    """`AttentionHead_v1{T,D}`: the legacy chain of every record without a geometry (`Serve_v1`), kBlockN = 64 as the module constant:
     T=72 -> two blocks (the FIRST one with 8 visible columns, then a full 64-column block with FOUR PV k-step batches)."""
     return Program(bind(b1.AttentionHead, T=T, D=D))
 
@@ -111,28 +111,28 @@ def gemm_v2_program(K: int = 32, N: int = 6) -> Program:
 
 
 def layer_norm_aten_program(N: int = 32, EPS: float = 1e-5) -> Program:
-    from verity_vllm.program.registry import layer_norm as LN
+    from verity.ml.definitions.registry import layer_norm as LN
     return Program(bind(LN.LayerNormAten, N=N, EPS=EPS))
 
 
 def moe_router_program(E: int = 8, TOPK: int = 2, VPT: int = 8) -> Program:
-    from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+    from verity_vllm.program.quarantine.ov_moe import moe as Q
     return Program(bind(Q.MoeRouterTopK, E=E, TOPK=TOPK, VPT=VPT))
 
 
 def moe_expert_gemm_program(E: int = 4, K: int = 16, N: int = 3) -> Program:
-    from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+    from verity_vllm.program.quarantine.ov_moe import moe as Q
     return Program(bind(Q.MoeExpertGemm, E=E, K=K, N=N))
 
 
 def moe_sum_program(TOPK: int = 2, H: int = 4) -> Program:
-    from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+    from verity_vllm.program.quarantine.ov_moe import moe as Q
     return Program(bind(Q.MoeSum, TOPK=TOPK, H=H))
 
 
 def gumbel_program(V: int = 8, SEED: int = 12345, POS: int = 3) -> Program:
     """`GumbelArgmaxBf16_v1{V,SEED,POS}`: the only supported family with gates wider than 32 bits (two `Const64`)."""
-    from verity_vllm.program.registry import sampling as G
+    from verity.ml.definitions.registry import sampling as G
     return Program(bind(G.GumbelArgmaxBf16, V=V, SEED=SEED, POS=POS))
 
 

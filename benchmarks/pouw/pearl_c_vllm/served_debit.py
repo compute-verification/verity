@@ -14,19 +14,19 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
   `laterZeroPromos`), whose adds the debit already holds.  Under a format with the row cap (-h3) the rule also caps each
-  credited A row (`clear_work.row_cap`), and ``row_ratio_max`` is the largest row's debit over its cap (the tile rule
-  checked as far as it ran: the rows up to the first one over).
+  credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
+  its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
-**Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs (lean's ruling on #923):
+**Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs:
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
 and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
 derived from ``--fresh-source`` (recorded OS randomness drawn after the pass, fixed in the command), so that the trials
 are independent draws of the input's rate itself (`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and
-Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (lean's ruling: `HonestCap.lean`'s
+Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestCap.lean`'s
 fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
 
 A tile is replayed on `fast_tile`'s batch forms (``--scalar``: the scalar reference only), every ``--cross-check``-th tile
@@ -44,13 +44,13 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
   research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-         PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+         PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
 
 A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of node 2's queue cores (Llama-3.1-8B's
-1,023 sampled tiles: 98 min on 44, r20261002-173355-4eef).  Add no ``taskset`` of your own: the queue pins the job's cores.
+1,023 sampled tiles: 98 min on 44).  Add no ``taskset`` of your own: the queue pins the job's cores.
 """
 from __future__ import annotations
 
@@ -88,8 +88,10 @@ from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
+from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
 FRESH = "verity/pouw/fp8-served-table-fresh-trials/v1"
@@ -306,7 +308,8 @@ def _measure(item) -> dict:
         if chains:
             out["atoms"], out["later_zero_promotions"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
-            out["row_ratio_max"] = max(float(d / c) for (d, c), _ in _SEEN[1:])
+            widen = CW.row_cap_multiple(scheme, u.shape.k)
+            out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
 
@@ -405,7 +408,8 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
-    tile_of = lambda item: item if isinstance(item, int) else item[0]
+    def tile_of(item):
+        return item if isinstance(item, int) else item[0]
     got: dict = {}
     for item in picks:
         t = prior.get(_item_key(item))
@@ -525,7 +529,8 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
     L = math.log(1 / delta)
-    ok = lambda mu: mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
+    def ok(mu):
+        return mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
     lo, hi = x, total
     for _ in range(100):
         mid = (lo + hi) / 2
@@ -534,9 +539,9 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
 
 
 def input_bound(row: dict, delta: float) -> tuple[float, str]:
-    """Lean's ruling on #923: each input's rate p = E[X] (X its work-weighted failing fraction under the tiles' noise) at a
-    simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail independently (each tile's
-    noise is the oracle at points of its own).  With a = w_max/W:
+    """The completeness citation's bound: each input's rate p = E[X] (X its work-weighted failing fraction under the
+    tiles' noise) at a simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail
+    independently (each tile's noise is the oracle at points of its own).  With a = w_max/W:
     - a census with no failure: ln(1/δ)·a (P[none fail] = Π(1 - p_g) <= exp(-p/a));
     - n work-weighted draws with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
       Clopper–Pearson on the draws would bound the realized X, not p;
@@ -668,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         p.error("give --tiles (pooled strata) or --per-input (each input bounded)")
     if a.tiles is not None and len(a.tiles) != len(a.manifests):
         p.error("one --tiles per manifest")
-    out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
+    out_dir = a.out or Path(settings.RESEARCH_RUN_DIR or ".") / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
     opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check, "resumed_only": a.resumed_only,
             "coins": CoinCommitment.from_json(json.loads(a.coins.read_text())) if a.coins else None}

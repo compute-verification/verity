@@ -1,4 +1,4 @@
-"""SHARED-CODE (lane ov-moe): `bench.resolve_log.short_label` labels a `resolver.Group` root (D70) instead of raising
+"""`bench.resolve_log.short_label` labels a `resolver.Group` root instead of raising
 `AttributeError: 'Group' object has no attribute 'reason'` — which made the resolve stage (and so G2) fail for any profile
 whose scope pattern returns a Group, e.g. `MoEFusedExperts` on `vllm.moe_forward`."""
 
@@ -8,7 +8,7 @@ from verity_vllm.observe.fold.resolve_log import short_label
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.resolver import Compute, Group, PerRow, Transparent, Unsupported
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 
 def _v(alloc, shape):

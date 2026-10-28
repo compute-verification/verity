@@ -1,13 +1,16 @@
 {
  "definitions": {
   "MemoryMapStep_v3{K=2,C=1,V=8,E=2,M=4,N=16,SLOTS=8,T=4}": {
-   "and": 101382
+   "and": 101382,
+   "type": "84576ca50c6e4b152481c3ff4d8cf9e5fcb98e8490754e00d21915e4fe682660fe50bd013f00355d8543905e0a29330748bd2eaa44495a48194b33101785f122"
   },
   "PlanMatch_v1{P=4,NR=16,V=16,G=2,TB=8,RPB=2}": {
-   "and": 2159
+   "and": 2159,
+   "type": "ea96fbf71ec4b18c142f0854e04a65aa43818e6a9bae9e0a77a19fb760152c97cedf2f2053245ed3cf0f2fabf7b0f6fba7a0409c70855316e57a4f6894fac191"
   },
   "PlanShard_v1{S=32,GAPS=2}": {
-   "and": 3053
+   "and": 3053,
+   "type": "475a62ff2cbcec7785c01e0e60c09b348c1fe1e586cf547954a2be6ee5577e782d7619f53084e3efd3e6f3031ad033c51fb9016ce2aee2138ea26030f0ec900f"
   }
  }
 }

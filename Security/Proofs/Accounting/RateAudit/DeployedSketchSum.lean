@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditDeployed
+import Definitions.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.RateAudit.DeployedSketch
 
@@ -48,22 +48,6 @@ local instance instFintypeOracleFam (N ρ h ks G : ℕ) :
     Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
   letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
   exact inferInstance
-
-/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
-`g/m` (restating `DeployedSketch.lean`'s private lemma). -/
-private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
-    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
-    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
-    pr P ≤ (g : ℝ≥0∞) / m := by
-  unfold pr
-  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
-  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
-      ((g : ℝ≥0∞) * Fintype.card α) / m by
-        simp only [ENNReal.div_eq_inv_mul]
-        ac_rfl]
-  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
-  rw [Finset.filter_congr_decidable]
-  exact_mod_cast h
 
 /-- **Resampling, counted against its ground set.** `card_resample` with the image kept in `G`: if every point of `G`
 has a direction along which `G` and `dir` are constant, and each such line meets `B` in at most `g` points, then
@@ -373,10 +357,10 @@ theorem pr_guess_le
   refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
   change pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
     t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D) ≤ (1 : ℝ≥0∞) / 2 ^ h
-  have hbound := pr_le_div_of_card_mul_le
-    (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
+  have hbound := Bandwidth.pr_le_of_card
+    (Ω := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
     (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
-    1 (2 ^ h) Fintype.card_ne_zero (by positivity)
+    (2 ^ h) 1 (by positivity)
     (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
   push_cast at hbound
   simpa using hbound
@@ -435,9 +419,9 @@ theorem pr_unpaid_rank_family_le {G : ℕ}
   · -- the query term: one budgeted union over the shared data, fibered at each oracle family
     refine Rate.pr_le_of_fiber _ _ (fun Os => ?_)
     have hcard := card_bad_family_le A sketch σ Os g qtot (fun D => hq Os D)
-    have hbound := pr_le_div_of_card_mul_le
+    have hbound := Bandwidth.pr_le_of_card
       (fun D : Data N m ρ Sector => ∃ c, ∃ i : Fin q, Bad (A c) sketch σ (Os c) D i g)
-      (g * qtot) (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector]) (by
+      (Fintype.card Sector) (g * qtot) (by simp [Sector]) (by
         simpa using hcard)
     have hXc : (Fintype.card Sector : ℝ≥0∞) = 2 ^ 256 := by
       norm_num [Sector]

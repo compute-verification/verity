@@ -7,7 +7,7 @@
   (what `moe_kernel_quantize_input` passes when DeepGEMM is on, vLLM's sm_90 default) to `Fp8GroupQuantUe8m0_v1{K,G}`
   (registry.deepgemm) -- each equal to its twin;
 * on cc 9.0 without batch invariance a block-FP8 `fused_moe_kernel` launch derives to
-  `MoeExpertFp8Gemm(W)_v1{...,KB,SWAP,DOT}` with #1944's tile-dependent MMAv2/QGMMA step, and a SWAP_AB that is not
+  `MoeExpertFp8Gemm(W)_v1{...,KB,SWAP,DOT}` with `fp8_moe.sm90_dot`'s tile-dependent MMAv2/QGMMA step, and a SWAP_AB that is not
   `enable_swap_ab` refuses by name;
 * the chain router -> w13 -> fused activation quant -> w2, as `TritonExperts` runs it for GLM-5.3-FP8, derives in one Program whose
   words are the twins' on the routed experts;
@@ -35,10 +35,10 @@ from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.targets import wgmma_tile
-from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
-from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import fp8_moe
-from verity_vllm.program.registry import moe as MOE
+from verity.ml.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
+from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import fp8_moe
+from verity.ml.definitions.registry import moe as MOE
 
 F8 = torch.float8_e4m3fn
 PROF = dict(mode="profile", profile="b1-eager-v3")
@@ -170,6 +170,7 @@ class _ActQuant(nn.Module):
         return q, s
 
 
+@pytest.mark.slow
 def test_silu_and_mul_per_block_quant_derives_one_row_form_per_row_equal_to_the_twin(on_target):
     on_target(H200)
     gu = _bf16(np.random.default_rng(4), NV, 2 * I)
@@ -213,8 +214,8 @@ class _InputQuant(nn.Module):
 
 @pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
 def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
-    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_row
-    from verity_vllm.program.kernels.derived_rows import fp8_group_quant_row
+    from verity.ml.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
+    from verity.ml.definitions.numerics.derived_rows import fp8_group_quant_row
 
     on_target(H200)
     x = _bf16(np.random.default_rng(6), M, 2 * G)
@@ -307,6 +308,7 @@ def _np(t: torch.Tensor) -> np.ndarray:
     return t.view(torch.uint8).numpy() if t.dtype == F8 else t.numpy().view(np.uint32)
 
 
+@pytest.mark.slow
 def test_a_tuned_hopper_launch_binds_its_tile_and_the_hopper_step(on_target):
     on_target(H200)
     xq, sx = _activations()
@@ -365,7 +367,7 @@ H200_EXPERT_CONFIG = {
 def test_the_fp8_expert_rule_binds_1944s_dot_across_the_served_envelope(on_target, monkeypatch):
     """Pin vLLM's nearest-key H200 table at decode M=1..16 and prefill M=256: MMAv2 exactly at M<=6, QGMMA otherwise.
 
-    Spying on `fp8_moe.sm90_dot` proves the frontend delegates to #1944's lowering rule instead of restating it.
+    Spying on `fp8_moe.sm90_dot` proves the frontend delegates to that lowering rule instead of restating it.
     """
     on_target(H200)
     original, calls = fp8_moe.sm90_dot, []
@@ -405,11 +407,12 @@ class _ExpertsDefault(nn.Module):
         return self.experts(logits, xq, sx)
 
 
+@pytest.mark.slow
 def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_program_equal_to_the_twins(on_target):
     """The refusal of the GLM-5.3 rank-0 derive at layer 3's `mlp.experts` (`_C.per_token_group_fp8_quant(use_ue8m0=True)` had no
     registered Definition) cleared: the step's whole chain derives, its input quant `Fp8GroupQuantUe8m0_v1` per token row, and the
     Program's words are the twins'."""
-    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_rows
+    from verity.ml.definitions.numerics.deepgemm_twins import ue8m0_group_quant_rows
 
     on_target(H200)
     logits, x = _logits(E), _bf16(np.random.default_rng(7), M, H)
@@ -440,6 +443,7 @@ def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_pro
     assert got == want
 
 
+@pytest.mark.slow
 def test_the_routed_experts_chain_derives_in_one_program_equal_to_the_twins(on_target):
     on_target(H200)
     x = _logits(E)

@@ -11,7 +11,7 @@ model's linears in call order, each its `(K, N)`. Call `(s, w)` is step `s`'s ca
 `rows/tileRows × N_w/tileCols` tiles at positions `base s w + u`, `base s w = s·U + off w`, `U` the units of one step
 (`Layout.perStep`). Every one of the window's `steps·U` units exists whatever the requests are (`Layout.population`).
 The unit is the proof unit: SERVE-H1 receipts 32 × 32 units, which C-Flock can't prove at `K` = 4096 (about 5 G ANDs),
-while W2 (#2657) proves 4 × 8 ones; the layout takes the size as a parameter, and the receipts must be per proof unit.
+while W2 proves 4 × 8 ones; the layout takes the size as a parameter, and the receipts must be per proof unit.
 
 Three forms have one live round a step (`window.live_challenger`, `sampled_proofs.challenger.LiveRecord`) and one has a
 live round a call; they differ in the served output and in what a receipt unit reads of it (`Form`):
@@ -43,28 +43,28 @@ output words. Under `ValueChecked` (below) a `zTree` unit's `z` and `y` are the 
 `Tie.outWords`), which a `check` word of the unit (its `ok`) holds to the unit's product and its `dq`. Its link is
 then `perCall`'s run-time `y`-root check, and `zTree` needs no premise on the kernel: what the kernel serves is held,
 on every drawn unit, to what its proof checks. The input side is ROOTS1's run-time check: each call's A table root is
-the Commit's root of its linear's input (RT4-INT-14). Without it a credited product could be over an A that isn't the
+the Commit's root of its linear's input. Without it a credited product could be over an A that isn't the
 served input, and on the drawn units the served `y` would be `dq` of that A's product, the forward pass broken at the
 linear with nothing to see it.
 
-The link is an equality of values, which useful-work credit needs and which doesn't give it. Useful-work credit is
-Daniel's ASK-71 (19 Oct, 22:09Z): the credited noised work was done on the operands `A`, `B` of a served product that is
+The link is an equality of values, which useful-work credit needs and which doesn't give it. Useful-work credit
+means the credited noised work was done on the operands `A`, `B` of a served product that is
 value-checked on every drawn unit, `z_u = A_u B_uᵀ` proved and committed before the draw coin, with the served `y`
 computed from that committed `z_u`. `ValueChecked` states it of the circuit, and `CreditTie` is `Tie` with it. Each
 receipt's unit has an `outY` word `y` whose value is the Program's public dequant `dq` of an `outZ` word `z` of the unit
 and the call's two scales, `s_a` with the A row and `s_w` registered (`DequantOf`), and every `outZ` word's value, on
 every typed input, is the dot of its call's committed A row with the registered B column over the linear's whole `K`
-(`ProductOf`), no two of them with one value (RT4-LOGIC-13). `z` and `y` have their own classes, so a served `y` is
-never a raw product (RT4-LOGIC-15), and a scale is no product's operand (RT4-LOGIC-14). Both are function-of statements:
-a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`, RT3-INT-3) fails `DequantOf`. On a unit
+(`ProductOf`), no two of them with one value. `z` and `y` have their own classes, so a served `y` is
+never a raw product, and a scale is no product's operand. Both are function-of statements:
+a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`) fails `DequantOf`. On a unit
 with `check` words both read the inputs on which its checks hold (`Held`), so a record `z` or `y` meets them when a
 check of its unit holds it to the dot or to `dq`, and `ValueChecked` asks that the records alone can meet every check
 on every input, so that no check no record meets holds them vacuously, and that a `check`, `outZ` or `outY` word read
-no other unit's computed word, which its unit's proof would see as that unit's commitment (RT4-LOGIC-28). The
+no other unit's computed word, which its unit's proof would see as that unit's commitment. The
 receipt reads `z`'s operands (`Feeds`), which is reachability; that it is their noised product is its public
 Program's. The credited work is computation on the served operands, not necessarily the computation that produced the
 served bytes: a prover may serve from a plain GEMM beside the noised one. No check can tell a `z` derived from the noised accumulators (kernels'
-`z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ`, `X = A + b`, `xa` its wrap) from one computed beside them (RT3-INT-11), so
+`z = O − X cᵀ − b Bᵀ + 256·xa Bᵀ`, `X = A + b`, `xa` its wrap) from one computed beside them, so
 `ValueChecked` asks neither: a `z` of either kind meets it if its value is `A_u B_uᵀ`'s. `CreditTie` reads no form:
 `zTree` meets it at one round a step (`Properties.Served.witCreditTie`), so credit needs neither `perCall`'s schedule
 nor its rounds, and with a checked record (`Properties.Served.witCheckedCredit`), and `perCall` meets it with a `z`
@@ -94,7 +94,7 @@ under its round's root, before its coin (`perCall`'s `z` and `y` under the next 
 of any later round, up to the draw's: the next round's at the earliest (`commitCoin`'s), round `r + D − 1`'s in a ring
 of depth `D`, and the last rounds' in the manifest before the draw coin (`Tie.receipt`), and a unit's check words
 with them (`Tie.checked`); a public input before the coin of each round that reads it (`Tie.pub`). Every served arm is
-to commit in this order, each round's coin live and drawn after its root (RT4-INT-12, 20 Oct).
+to commit in this order, each round's coin live and drawn after its root.
 
 A receipt's commit coin is a range because only gates of its own unit read it (`Tie.readers`), and so is a check
 word's. It is then in its own
@@ -102,16 +102,16 @@ unit's late cone and in no other unit's, so committing it after later coins leav
 value chosen after that unit's noise, and no reader whose skip goes uncharged: its own unit's proof checks it when the
 unit is drawn, and the unit's cone pays for it when it isn't. The draw coin still follows every commitment. That
 is `Accounting.Compose.LayerCommitted`'s second case. The ring hides the live coins' round trip off the prover's node,
-about 100 ms, behind `D` steps: about 104 ms a token at `D = 2` (the next round's root), 0.09 ms at `D = 6` (kernels'
-#3003; `Properties.Served.witTieRing`). An A row gets no such range: written after its reader's coin, `A = −b` cancels a
-one-bit dither (RT4-INT-12). An arm that forms a call's A rows
+about 100 ms, behind `D` steps: about 104 ms a token at `D = 2` (the next round's root), 0.09 ms at `D = 6`
+(`Properties.Served.witTieRing`). An A row gets no such range: written after its reader's coin, `A = −b` cancels a
+one-bit dither. An arm that forms a call's A rows
 after the coin or salt its noise reads is in no form here: dither-a, dither-one and `serve.py`'s seeded mode do today,
-and kernels moves dither-a to this order (#2889). A request entry is a run input (`act`), not a registered one:
-certified serving releases a window's requests after its salt frame, so no queue root can precede the salt (RT3-INT-9).
+and dither-a is to move to this order. A request entry is a run input (`act`), not a registered one:
+certified serving releases a window's requests after its salt frame, so no queue root can precede the salt.
 Today's code commits the receipts at the draw (`serve.py`'s receipt trees, built after serving), which this schedule is
 the fix of, and its round root covers the A and admit roots only. The admit words and the tally have no class: their
 always-proved units are not in the per-call Program `Properties.Served.ServedUnits` names, so no gate of a served
-circuit is one (RT2-INT-5). They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
+circuit is one. They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
 
 `Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
 rounds the layout's, each value's commit coin `commitCoin` of its class (a receipt's any coin after its round's, by
@@ -135,15 +135,20 @@ statement is over the declared circuit; these are the checks that make its `comm
   entries the round admits, admit (PADCREDIT's), and `z` or Commit `y` roots of exactly round `r`'s calls (`perCall`'s
   `y` roots in round `r + 1`'s; both under `ValueChecked`); each drawn unit's rows of them opened under it; in
   `perCall`, and in any form under `ValueChecked`, each call's Commit `y` root equal to its units' `y` root; and each
-  call's A table root equal to the Commit's root of its linear's input (ROOTS1, RT4-INT-14), so the A rows a call
-  commits are the linear's input as the Commit commits it. In `zTree` a unit's record (`PouwH1TileZy_v1`'s `zy`, which
+  call's A table root equal to the Commit's root of its linear's input (ROOTS1), so the A rows a call
+  commits are the linear's input as the Commit commits it. Layer 0's input alike: round `r`'s input-ids table (slot
+  i's input token id, `ids@<r>`) under round `r`'s root before its coin, its root, domain and leaf count the Commit's
+  `input-ids/<r>`, so the token ids the Commit's first layer reads are the ones fixed under that root; round 0's
+  input-ids table also inside round 0's request table, under the window's open root before the salt coin
+  (`credit.requests_root`), its domain binding the window's session in place of that root; the Commit
+  record's digest under the manifest's `calls_root`, before the draw coin (`credit._arow`). In `zTree` a unit's record (`PouwH1TileZy_v1`'s `zy`, which
   its proof reads at a committed table, `--registered`) is among them: its call's record table (h1_prove's `zy@<c>`),
   under round `r`'s root before its coin;
 * the challenger: every round's coin opened by the live challenger, the auditor's device (AGENTS.md, auditor-trusted
-  devices; `trusted-nebius-host`), on a machine the prover doesn't control and never a process on the prover's node.
+  devices; `trusted-host`), on a machine the prover doesn't control and never a process on the prover's node.
   A challenger in the prover's process gives the prover its coins as they are drawn, so its coins are seeded ones,
-  whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today (#2639 l.446–454,
-  `window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins (RT2-INT-6, SG-11);
+  whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today
+  (`window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins;
 * `receipt`: round `r`'s receipt roots under the root of one later round, recorded before that round's coin (round
   `r + D − 1`'s in a ring of depth `D`), or under the manifest before the draw coin, at the commit coin the declared
   circuit gives them; each drawn unit's receipt opened under it;
@@ -154,14 +159,14 @@ statement is over the declared circuit; these are the checks that make its `comm
   record (`PouwH1TileZy_v1`'s `pub` row, whose salt is public, so the verifier computes it); the unit's salt
   `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier from the challenger's opening of
   round `r`'s coin and the recorded root, never read from the record (`serve.py`'s reference recomputation reads the
-  record's `salt` today, and `h1_prove`'s units PoUW's window salt `pouw_salt`, #3030, which no round's coin keys);
+  record's `salt` today, and `h1_prove`'s units PoUW's window salt `pouw_salt`, which no round's coin keys);
 * every window of a salt timed from the salt's release (`EpochTie.salted`): the challenger's one `salted_at` an epoch,
   never a window's own start;
 * the window's `F.rounds L` live rounds (`Llama31Rounds`). Compose's bound reads the largest round's share of the
   words, not the count, which is `1/F.rounds L` only when the rounds are equal (`Llama31Rounds` has the numbers);
 * the draw: `K_d` units of `population` from the draw coin opened after the manifest;
 * for credit (`CreditTie`), `ValueChecked` of each call's compiled Program at the Program's `dq`, once per Program
-  as `ServedUnits` is. No gate checks it yet: SERVE-GATE's (#2731) has no such check. A fact of the Program's IR, it
+  as `ServedUnits` is. No gate checks it yet: SERVE-GATE's has no such check. A fact of the Program's IR, it
   says nothing of the prover's kernel, which may serve from a GEMM beside the noised one; the credited work is the
   receipts' noised GEMM on the served operands. `ProductOf` and `DequantOf` bear on a run whose inputs are typed
   (`Gates.Typed`): each drawn unit's opened input word in the declared range of every input gate of its slot.
@@ -175,22 +180,24 @@ is that realization's to prove, at the premises `Accounting.Guarantees.TS.Sessio
 * `pf.rel` holds its record to the product and its `dq`, as `Held` reads them, and the layer pins each committed value's
   derivation (`ProofLayer.Pins`; `ServedChecksHold` at the session's value layer). The unit's Definition with its check
   words fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`) is `Accounting.Guarantees.TS.TileSessionSound`'s relation
-  (`TileRel`), under its premise `Accounting.Assumptions.TS.TileChecks`. `CheckedSessionSound`'s relation (`CheckedRel`)
-  is only that the opened rows are an assignment the circuit's evaluation agrees with, which says nothing of the
-  product or `dq`;
+  (`TileRel`), under its premise `Accounting.TS.Tile.TileComputes` (the circuit computes its Definition at its
+  registered reads; that the Definition's `ok = 1` gives the cells' checks is proved, at a `K` its EXACT binds at).
+  `CheckedSessionSound`'s relation (`CheckedRel`) is only that the opened rows are an assignment the circuit's
+  evaluation agrees with, which says nothing of the product or `dq`;
 * `pf.opened` holds the leaves of the round's record tables, the records committed under its root before σ_w;
 * `ServedRootsLinked`'s `rows` read the unit's `zy` and A ports at its round root's tables, which
-  `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered` and a circuit
-  that names each port once.
+  `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered`.
 
-A leaf proved as several statements is one unit (RT4-LOGIC-30): option A's 33 statements (#3109's 32 lanes
+A leaf proved as several statements is one unit: option A's 33 statements (32 lanes
 `PouwH1LaneZy_v1` and their combine `PouwH1Combine_v1`) are one `Cd` unit, the leaf's, and the lanes' partials are
 values of the proof layer that realizes it, not gates of `Cd`. They take no class, `ValueChecked`'s fifth clause ranges
 over the unit's records only, and no gate of the unit reads another unit's computed word through them. That the 33
 statements, accepted over shared committed values, realize the one unit's checks is that linked realization's to
 prove: BRIDGE2's `Accounting.Guarantees.TS.LeafLanesSound`, from `CheckedSessionSound` at each statement, under its
-premises `LeafChecks` (each statement's circuit realizes its Definition at its decoded ports) and `LeafReads` (the
-statements' data ports' openings hold one leaf, one partials record and the receipt; the known ports' are checked).
+premises `LaneLowers` and `CombineLowers` (each statement's pieces at their lowerings, whose composition computing its
+Definition is proved), with the leaf and the
+receipt the ones the statements' committed rows decode to (the known ports' are checked, and each A, B and partials
+row is one row of one registered tree that every statement reading it reads in full).
 -/
 
 namespace Accounting.Served
@@ -256,7 +263,7 @@ end Layout
 (`N` 2·14336) and `down`. -/
 def llamaLayer : List (ℕ × ℕ) := [(4096, 6144), (4096, 4096), (4096, 28672), (14336, 4096)]
 
-/-- **The served Llama-3.1-8B window** (SERVE-H1 round 4, r20261019-012935-2c52): 18 steps, 64 slot rows a call, 32 × 32
+/-- **The served Llama-3.1-8B window**: 18 steps, 64 slot rows a call, 32 × 32
 units, and 32 decoder layers of `llamaLayer`, 128 calls a step; `U` is 86,016 and the population 1,548,288. -/
 def llama31_8b : Layout where
   steps := 18
@@ -297,7 +304,7 @@ def Form.outLag : Form → ℕ
 * `registered`: a row of a linear's B table, or its scale, under the weights' root, the registration root;
 * `act`: a row of a call's A table, its slot's s8 row and scale (the empty row in a slot no request is assigned to),
   or a request entry its round admits: a run input under its round's root. Certified serving releases a window's
-  requests after its salt frame, so a request entry can't be committed before the salt (RT3-INT-9);
+  requests after its salt frame, so a request entry can't be committed before the salt;
 * `pub`: a public input of a unit's Program that no request or product brings, which the verifier derives (the unit's
   position, from the layout; its round's roots, from the round log): a run input committed before the coin of every
   round whose gates read it (`Tie.pub`), never a word Compose credits (`isWord`), and no product's operand or scale,
@@ -308,13 +315,13 @@ def Form.outLag : Form → ℕ
   of known content): computed, committed after its round's coin and by the draw (`Tie.checked`), and read by no gate
   of another unit. `ProductOf`, `DequantOf` and `ValueChecked`'s distinctness read the inputs on which every check
   word of the unit is `1` (`Held`). Under `ValueChecked` it reads no computed gate of another unit, directly or
-  through computed gates, and neither does an `outZ` or `outY` word (RT4-LOGIC-28);
+  through computed gates, and neither does an `outZ` or `outY` word;
 * `outZ`: a word of the exact product `z` of a call's unit, committed in a row table (`zTree`, and under `ValueChecked`
   `perCall`): a word the unit computes, or in `zTree` a word of the unit's record, the run input the served kernel
   commits under its round's root, which a `check` word of the unit holds to the unit's product (`Tie.outWords`);
 * `outY`: a word of the served `y = dequant(z)` of a call's unit, committed in a row table, the words the Commit's `y`
   root is over (`perCall`, and under `ValueChecked` `zTree`): computed by the unit, or in `zTree` a word of its record,
-  as `outZ`. Under `ValueChecked` each is `dq` of an `outZ` word, never a raw product (RT4-LOGIC-15);
+  as `outZ`. Under `ValueChecked` each is `dq` of an `outZ` word, never a raw product;
 * `served`: a word of the Commit's served output `y` of a call, which its unit opens (`yOpen` only);
 * `inner`: a value no opening reads, a proof unit's own wire (`z` in `beside` and `yOpen`, and the unit's own `z` and
   `y` beside a record it checks);
@@ -387,7 +394,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   the form's (`Form.rounds`), and each call site's round its form's (`Form.roundOf`: its step's, or `perCall`'s own);
 * `inRange`: every gate's call site is one of them;
 * `live`: every round's coin is live: the live challenger's, which runs off the prover's node, on the auditor's device
-  (AGENTS.md, auditor-trusted devices; `trusted-nebius-host`). A challenger in the prover's process gives seeded coins,
+  (AGENTS.md, auditor-trusted devices; `trusted-host`). A challenger in the prover's process gives seeded coins,
   however `coinMode` records them, so a `Declared` with `.live` rounds is the run's only under the module docstring's
   challenger check, which today's `serve.py` doesn't meet;
 * `coin`, `registered`, `act`, `pub`, `computed`, `outWords`: a gate is a coin input exactly when it is of class
@@ -396,7 +403,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   coin of every round with a gate that reads it; a `receipt`, `check` or `inner` gate is no input; an `outZ` or
   `outY` gate is no input, or in `zTree` a run input (its unit's record) read only by gates of its own call and unit;
   so every input's class is its binding's. A record committed after its reader's coin fits no case of
-  `LayerCommitted` (an input has no second case, RT4-INT-12), so `perCall`'s `z` and `y`, committed the round after,
+  `LayerCommitted` (an input has no second case), so `perCall`'s `z` and `y`, committed the round after,
   are words the unit computes;
 * `committed`: a gate that is no input is `inner` exactly when the IR doesn't mark it a committed output
   (`Gates.Gate.commit`), so no opened value is declared inner and committed at its cut by fiat;
@@ -486,7 +493,7 @@ the unit it holds of every input. -/
 def Held {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) (u : ℕ) (x : ι → ℤ) : Prop :=
   ∀ k, k < Cd.dag.length → cls k = .check → Cd.unit k = u → Gates.val Cd.dag x k = 1
 
-/-- **Gate `z` is the product of its call's committed A row and a registered B column** (ASK-71's value check): its
+/-- **Gate `z` is the product of its call's committed A row and a registered B column** (the value check): its
 operands `as`, run inputs of `z`'s call (`act`), and `bs` (`registered`), each declared an s8 word (`S8`), are as many
 as its linear's `K`, each list without repeats, and on every typed input (`Gates.Typed`: each input slot a word of its
 type) on which its unit's checks hold (`Held`) `z`'s value is `Σ_k a_k·b_k`, a coordinate of `A_u B_uᵀ`. A function-of
@@ -495,7 +502,7 @@ its corrections cancel the noise on every typed input), of a record `z` that a c
 dot, and of no `z` whose value differs from it on some typed input its unit's checks hold on. A constant check, or one
 with an escape (`ok = (z = Σ) ∨ e`), holds on an input with any record, and fails it
 (`Properties.Served.witConst_notValueChecked`, `witHatch_notValueChecked`). `S8` keeps the typed inputs the served
-rows' words: an operand declared `[0, 0]` would leave only `a = 0` typed. `Nodup` (RT4-LOGIC-11) keeps the `K`
+rows' words: an operand declared `[0, 0]` would leave only `a = 0` typed. `Nodup` keeps the `K`
 products distinct: an A word read `K` times would give `a·Σ_k b_k`, one product's work credited as `K`. Which row and
 column `as` and `bs` are is the call's Program's (`Properties.Served.ServedUnits`). -/
 def ProductOf {ι : Type} (L : Layout) (Cd : Declared ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
@@ -510,12 +517,12 @@ def ProductOf {ι : Type} (L : Layout) (Cd : Declared ι) (cls : ℕ → Cls) (z
 weights' root), neither declared an s8 word (`S8`), and on every typed input on which `y`'s unit's checks hold
 (`Held`) `y`'s value is `dq` of `z`'s, `sa`'s and `sw`'s, so no other value reaches `y`'s: a word `y` computes, or a
 record `y` a check word of its unit holds to it. Since `ProductOf` declares every operand s8, no A or B word of a
-product is a scale (RT4-LOGIC-14: `y = dq(z, A_1, B_1)` fails it). Which of the call's other run inputs is its row's
+product is a scale (`y = dq(z, A_1, B_1)` fails it). Which of the call's other run inputs is its row's
 scale is the call's Program's (`Properties.Served.ServedUnits`), as which row and column a product's operands are. A
-function-of statement: a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`, RT3-INT-3) fails it
+function-of statement: a `y` that reads `z` and takes another product's value (`y = 0·z + 1·p`) fails it
 unless that value is `dq` of `z`'s on every typed input. It is `dq` at every `outY` word, an empty slot's included,
 with no case for zero: an empty slot's `s_a` is `+0` and its `y` is `dq(0, +0, s_w)`, which is `+0` only at a finite
-positive `s_w` (0x8000 at a negative one, 0x7FFF at an infinite or NaN one; kernels' #3063). That `dq` is the dequant
+positive `s_w` (0x8000 at a negative one, 0x7FFF at an infinite or NaN one). That `dq` is the dequant
 the served code computes is the Definition's review. -/
 def DequantOf {ι : Type} (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) (y z sa sw : ℕ) : Prop :=
   sa < Cd.dag.length ∧ cls sa = .act ∧ Cd.call sa = Cd.call z ∧ ¬ S8 Cd sa ∧
@@ -523,16 +530,15 @@ def DequantOf {ι : Type} (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ 
     ∀ x, Gates.Typed Cd.dag x → Held Cd cls (Cd.unit y) x →
       Gates.val Cd.dag x y = dq [Gates.val Cd.dag x z, Gates.val Cd.dag x sa, Gates.val Cd.dag x sw]
 
-/-- **Every drawn unit's served product is value-checked** (ASK-71, Daniel, 19 Oct, 22:09Z), what useful-work credit
+/-- **Every drawn unit's served product is value-checked**, what useful-work credit
 needs of the circuit. With `ops z` the operands of `outZ` word `z` and `src y` the `outZ` word and scales `outY` word
 `y` is dequantized from:
 * every `outZ` word is the product of its call's A row and a B column (`ProductOf`);
 * no two `outZ` words have one value on every typed input on which both their units' checks hold, so each credited
-  unit has its own products, and a unit's receipt is credited for no product another unit's is (RT4-LOGIC-13: a
+  unit has its own products, and a unit's receipt is credited for no product another unit's is (a
   `z' = 0 + 1·z` in a second unit fails it);
 * every `outY` word is `dq` of an `outZ` word of its unit at its scales (`DequantOf`), so the served `y` words, the
-  Commit's under the run-time `y`-root check, are each `dq` of a value-checked `z` and never a raw product
-  (RT4-LOGIC-15);
+  Commit's under the run-time `y`-root check, are each `dq` of a value-checked `z` and never a raw product;
 * each receipt `r`'s unit has an `outY` word, which with its `outZ` word is committed before the draw coin, and `r`
   reads each of that `z`'s operands (`Feeds`);
 * the checks can be met: on every typed input some typed input that differs from it only in the `outZ` and `outY`
@@ -541,7 +547,7 @@ needs of the circuit. With `ops z` the operands of `outZ` word `z` and `src y` t
   this keeps them about every run. Since they then fix each record on such an input to its unit's `Σ` and `dq`, the
   records that meet the checks are those values, which the served code has before its round's coin;
 * every computed gate that a `check`, `outZ` or `outY` word reads, directly or through computed gates
-  (`ComputedFeeds`), is of the word's unit (RT4-LOGIC-28). `Held`, `ProductOf` and `DequantOf` evaluate every gate
+  (`ComputedFeeds`), is of the word's unit. `Held`, `ProductOf` and `DequantOf` evaluate every gate
   honestly, but a unit's proof sees another unit's computed word as whatever that unit's prover committed, which
   nothing checks when that unit isn't drawn, and which `Declared.Late` doesn't charge, being committed before the
   reader's coin. A check `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′` over another unit's computed `z₁`, `Σ₁′` its own
@@ -557,7 +563,7 @@ premise on its code (`Properties.Served.witCheckedCredit`), and a check no recor
 doesn't say the receipt is their noised product; that is its public Program's (`Properties.Served.ServedUnits`).
 The credited work is the receipts' noised GEMM on the served operands, not necessarily the computation that produced
 the served bytes: a prover may serve from a plain GEMM beside the noised one, which no check can tell from a `z` peeled
-from the noised accumulators (RT3-INT-11), and this asks neither. `dq` is the Program's public dequant,
+from the noised accumulators, and this asks neither. `dq` is the Program's public dequant,
 `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))` in today's code (`int8_ops.scaled_mm` at 14e4c23a). -/
 def ValueChecked {ι : Type} (L : Layout) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
   ∃ (ops : ℕ → List ℕ × List ℕ) (src : ℕ → ℕ × ℕ × ℕ),
@@ -577,10 +583,10 @@ def ValueChecked {ι : Type} (L : Layout) (dq : List ℤ → ℤ) (Cd : Declared
     ∀ w, w < Cd.dag.length → (cls w = .check ∨ cls w = .outZ ∨ cls w = .outY) →
       ∀ g, ComputedFeeds Cd g w → Cd.unit g = Cd.unit w
 
-/-- **A tied window meets what useful-work credit needs of its circuit** (ASK-71): the tie, in any form, with every
+/-- **A tied window meets what useful-work credit needs of its circuit**: the tie, in any form, with every
 drawn unit's served product value-checked at the Program's public dequant `dq` (`ValueChecked`). It is necessary, not
 sufficient: no credit statement reads it yet, and it is of the declared circuit, not of the prover's kernel. No gate
-checks it yet (SERVE-GATE's, #2731, has no such check). -/
+checks it yet (SERVE-GATE's has no such check). -/
 def CreditTie {ι : Type} (L : Layout) (F : Form) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
   Tie L F Cd cls ∧ ValueChecked L dq Cd cls
 
@@ -594,7 +600,7 @@ def Llama31Shape : Prop :=
 (`Tie`, which fixes its live rounds at `F.rounds L`), and each window's timed run
 starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `sampled_proofs.service`), so
 every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epoch's windows (`SaltWindows`,
-`PouwCheck.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use (RT4-INT-12, 20 Oct):
+`PouwCheck.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use:
 * a call's A rows and their scales go under its round's root before that round's live coin, and so do its `z` and `y`
   leaves in a form of a round a step;
 * its receipts, which read the coin, follow it under a later round's root, by the draw (the next round's at the
@@ -602,7 +608,7 @@ every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epo
 A unit's noise reads its round's coin and its round's root, which is over its call's A table (the unit's salt in the
 module docstring's run-time list), so no noise exists before the A rows it noises are committed. A key that read only
 the salt and the call index would let a prover that holds the salt write A after its noise: `A = −b` cancels a one-bit
-dither, and the receipt is then the same for every B (RT4-INT-12's witness). There is no seeded form: `Tie.live` makes
+dither, and the receipt is then the same for every B. There is no seeded form: `Tie.live` makes
 every round's coin live and `Tie.noised` has each receipt read its round's coin, so a window whose noise the salt fixes
 before its A rows are committed isn't tied. What a window spends between `release` and its own start (its requests come
 after the salt frame, and its A rows from them) is inside the interval. A window timed from its own start would leave
@@ -617,11 +623,11 @@ structure EpochTie {ι Q R S : Type} (L : Layout) (F : Form) (W : ℕ) (Cd : ℕ
 /-- **The served Llama-3.1-8B window's live rounds**: 18 in each form of a round a step and 2,304 in `perCall`.
 Compose's bound reads the largest round's share of the words (`CircuitWork`'s `∀ j, stageShare … j ≤ wmax`), not the
 count. The count enters only because the shares sum to `1`, so some share is at least `1/M`, and `1/M` bounds every
-share only when the rounds are equal. RT-INT-1's 10,552 rounds for `ε < 1%` (`eps.py`, and r20261019-055920-6d6f's
-`rounds_floor_live_scope`, a statement not on main) are equal rounds. `perCall`'s are not: gate_up's call (`K` 4096,
+share only when the rounds are equal. The 10,552 rounds for `ε < 1%` (`eps.py`) are equal
+rounds. `perCall`'s are not: gate_up's call (`K` 4096,
 `N` 28,672) holds 1.687% of a step's words, 2.16 times an equal 1/128. So `perCall` is at `ε ≥ 4.80%` at 18 steps
-and needs at least 178 steps (22,784 rounds) for `ε < 1%` (RT2-INT-2, from `CircuitWork`'s premises at
-`ε_♭ = 0.571%`, its share lemma checked by r20261019-112735-692e and not stated here). No 18-step form reaches 1%. -/
+and needs at least 178 steps (22,784 rounds) for `ε < 1%` (from `CircuitWork`'s premises at
+`ε_♭ = 0.571%`, its share lemma checked numerically and not stated here). No 18-step form reaches 1%. -/
 def Llama31Rounds : Prop :=
   (∀ F : Form, F ≠ .perCall → Form.rounds llama31_8b F = 18) ∧ Form.rounds llama31_8b .perCall = 2304
 

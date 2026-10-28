@@ -5,41 +5,38 @@
 # kv.cu (p1024, masked), start the verifier, then the prover, which gates its devices against the driver before
 # anything is timed. Results go to $RESEARCH_RUN_DIR/out (verifier.json, prover.json and their logs).
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 96 \
-#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-first-session \
-#     --env PLAN=honest --env GIB=16 -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-first-session PLAN=honest GIB=16 taskset -c 48-95 \
+#     bash benchmarks/remote_session/run.sh      # on an RTX PRO 6000 node, 96 GB of host memory
 #
 # PLAN is the prover's sessions (honest, skip:F; comma-separated, one session each); GIB the store across every GPU
-# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; CHECK_WORKERS the verifier's opening
-# checkers (default a core less than it may use); VERIFIER_CPUS and PROVER_CPUS the cores
+# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; CHECK_WORKERS the verifier's processes
+# computing each window's exact bound (default a core less than it may use); VERIFIER_CPUS and PROVER_CPUS the cores
 # each process is pinned to; MAXMIN the lease's minutes; PY the Python (default the fill's torch venv; a verifier needs
 # only numpy, so on a CPU node any venv with it).
 #
 # With PROVER_SLICE the prover runs at nice 0 in a scope of that top-level slice (root's systemd-run, then this user
-# again), on PROVER_CPUS and in at most PROVER_MEM_GB. Node 2's user slice holds only 0-119, where nice 19 doesn't make
+# again), on PROVER_CPUS and in at most PROVER_MEM_GB. The node's user slice holds only 0-119, where nice 19 doesn't make
 # another session's CPU jobs yield to the prover (cgroups share CPU by weight, a session's as much as every lease's
-# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass (r20261015-185416-ac65).
-# vy-timing.slice's CPUs 128-191 are fill's timing jobs', each of which holds a GPU, so none runs in a whole-node lease.
+# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass.
+# The timing slice's CPUs 128-191 are fill's timing jobs', each of which holds a GPU, so none runs in a whole-node lease.
 #
-# The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so --mem-gb 260):
+# The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so 260 GB of it):
 #
-#   research run --on vy-nebius-2 ... --mem-gb 260 --env GPUS=8 --env TIMED=1 --env GIB=700 --env ROLE=prover \
-#     --env PROVER_SLICE=vy-timing.slice --env PROVER_CPUS=128-191 ...
+#   GPUS=8 TIMED=1 GIB=700 ROLE=prover PROVER_SLICE=<the timing slice> PROVER_CPUS=128-191 ... \
+#     bash benchmarks/remote_session/run.sh
 #
 # On two machines, two runs with the same PORT and SESSIONS: ROLE=verifier on the verifier's machine (no GPU), which
 # opens `ssh -R PORT` to PEER (the prover's machine, a name in /etc/vy/peers) and listens behind it, so the prover's
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
-# Against the verifier host (vy-auditor-1, `benchmarks/live_verifier/host.py`), the lane starts the run there with its
-# gate key (`vy-verifier-gate run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
+# Against the auditor's verifier host (`benchmarks/live_verifier/host.py`), the lane starts the run there with its
+# gate key (its gate's `run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
 # prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
 # that account says the run's verifier listens.
 #
-#   research run --on vy-nebius-1 ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7791 --env SESSIONS=2 \
-#     -- taskset -c 96-127 bash benchmarks/remote_session/run.sh
-#   research run --on vy-nebius-2 ... --env ROLE=prover --env PORT=7791 --env PLAN=honest,skip:0.0625 \
-#     -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
+#   ROLE=verifier PEER=PROVER_NODE PORT=7791 SESSIONS=2 taskset -c 96-127 bash benchmarks/remote_session/run.sh
+#   ROLE=prover PORT=7791 PLAN=honest,skip:0.0625 taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
 # ROLE=verifier is the audit's verifier as a service, on a machine the prover doesn't control (AGENTS.md's
 # auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
@@ -49,16 +46,17 @@
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-# --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
+# --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
+# from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
-# CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
-# python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
+# CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
 # the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
-# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it.
+# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
+# windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
@@ -66,30 +64,27 @@
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
 # tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
-# run, a pass an engine step (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling declared in the
+# run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
 # row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
-#   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \
-#     --env SESSIONS=1 --env WINDOWS=7 --env WINDOW_MS=100 --env LIFETIME=4 -- bash benchmarks/remote_session/run.sh
-#   research run --on vy-nebius-2 --preemptible --gpus 1 ... --env ROLE=prover --env PORT=7797 --env SERVE=row \
-#     --env ROW=<the int8 Llama-3.1-8B row> -- bash benchmarks/remote_session/run.sh
+#   ROLE=verifier PEER=PROVER_NODE PORT=7797 SESSIONS=1 WINDOWS=7 WINDOW_MS=100 LIFETIME=4 \
+#     bash benchmarks/remote_session/run.sh                                           # on the verifier's machine
+#   ROLE=prover PORT=7797 SERVE=row ROW=<the int8 Llama-3.1-8B row> bash benchmarks/remote_session/run.sh   # one GPU
 #
 # SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
 # their weights arenas as the store, where they are served, the engines decoding each weight as they use it
 # (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
-# node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on vy-nebius-1:
+# node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on a second node's CPUs:
 #
-#   research run --queue --on vy-nebius-1 --phase cpu --cpus 16 ... --env ROLE=verifier --env PEER=vy-nebius-2 \
-#     --env PORT=7799 --env SESSIONS=2 --env WINDOWS=7 --env WINDOW_MS=60000 --env SAMPLES=33273 --env QUANTILE=max \
-#     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040' -- bash benchmarks/remote_session/run.sh
-#   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 --max-min 60 --timeout 5h ... \
-#     --env ROLE=prover --env PORT=7799 --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 \
-#     --env PROVER_CPUS=24-47 --env ENGINE_ARGS='--step-hz 2 --align-steps' \
-#     --env NODE_ARGS='--decode-s 60 --warm-openings 33273' -- bash benchmarks/remote_session/run.sh
+#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
+#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/remote_session/run.sh   # 16 CPUs
+#   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
+#     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
+#     bash benchmarks/remote_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
 #
-# Queue the prover first: its lease waits for all 8 GPUs (--timeout covers that wait, --max-min the lease), and once it
-# holds them it waits for the verifier's tunnel; start the verifier then.
+# Start the prover first: its lease waits for all 8 GPUs, and once it holds them it waits for the verifier's tunnel;
+# start the verifier then.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -105,12 +100,12 @@ export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87} P
 export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))} ROLE=${ROLE:-both}
 VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
-  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"} ${VERDICT:+--verdict "$VERDICT"})
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" ${VERDICT:+--verdict "$VERDICT"} \
+    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"

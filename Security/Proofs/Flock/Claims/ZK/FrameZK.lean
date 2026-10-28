@@ -2,7 +2,7 @@ import Proofs.Flock.Claims.ZK.FrameInner
 import Flock.Firewall.Session
 
 /-!
-# `Flock.zk_server_lean` at the session loop's own frames (Stage B)
+# `Flock.zk_server_lean` at the session loop's own frames
 
 `Flock.zk_server_lean_loop` took the transport's frame state as given (`ProgReads`, at a `pc` of the caller's). At
 `LeanRelease.ofLoop` that state is a Lean function, so `ProgReads` holds by definition (`ofLoop_progReads`) and what it
@@ -18,8 +18,8 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
 * `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
   (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
 * `LeanRelease.ofLoop_progChecks_sizes`: `ofLoop_progChecks` with its size premises (`hS`, `hP`, `hRow`) from that check.
-* **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf`, with no `ProgReads`, and
-  `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
+* **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
+  with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
   tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
   level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some
   `final_c'` (`hL0`: Rust's firewall sends that round, `check_self`, at the inner proof's label).
@@ -154,8 +154,9 @@ end LeanRelease
 open FlockSoundness.Discharge
 
 /-- **`Flock.zk_server_lean_loop` at the session loop's own frames** (`LeanRelease.ofLoop`): the transport's frame
-state is `Loop.progOf` of the decoded coins, so `ProgReads` is a theorem (`ofLoop_progReads`), and the deployed frame's
-state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion here, at every `x` the loop
+states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, so `ProgReads` is a theorem (`ofLoop_progReads`),
+and the deployed frame's state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion
+here, at every `x` the loop
 serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.sizesOk`). In `ProgReads`' place it reads
 the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
@@ -209,33 +210,34 @@ theorem Flock.zk_server_lean_ofLoop
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
       2 * (Pr (fun c : (leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (LeanRelease.ofLoop T L₀ real).toSrv.stop).C x =>
           Ev ((LeanRelease.ofLoop T L₀ real).toSrv.timed x ((leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (LeanRelease.ofLoop T L₀ real).toSrv.stop).out
               CoinOpen.shaH Vs θ x c))) +
           (8 * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T)
-              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.readCoins)
+              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.freshOf Loop.readCoins)
               (LeanRelease.ofLoop T L₀ real).stop).nLeaves x * δ₁.toReal +
             8 * t * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T)
-              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.readCoins)
+              (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.freshOf Loop.readCoins)
               (LeanRelease.ofLoop T L₀ real).stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
           4 * t * 3 ^ t *
             (Fork CoinOpen.shaH ((((CoinLayer.session Loop.loopNr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) (LeanRelease.ofLoop T L₀ real) Loop.progOf
-                  Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).swP vs).prover w) Vs θ x).Pr
+                  Loop.freshOf Loop.readCoins) (LeanRelease.ofLoop T L₀ real).stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) :=
   ⟨LeanRelease.ofLoop_progChecks_sizes T L₀ real x w (Loop.sizesOk_of_serves hServe) hRt hL0,
     Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT (LeanRelease.withFrames T L₀ real)
-      (LeanRelease.ofLoop T L₀ real) rfl wk x w hR Loop.progOf (LeanRelease.ofLoop_progReads T L₀ real x)
+      (LeanRelease.ofLoop T L₀ real) rfl wk x w hR Loop.progOf Loop.freshOf
+      (LeanRelease.ofLoop_progReads T L₀ real x)
       hLk hF hE hEf Vs θ hk Ev⟩
 
 end Claims.ZKServer

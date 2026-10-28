@@ -1,7 +1,6 @@
-"""The SASS gate: no shipped kernel computes a value the verifier's scalar model can't replay (09:34Z, 09:58Z, 10:07Z,
-10:21Z, 11:00Z; the assessor's fp-model/sm120-scalar check `r20260930-091638-9747`). Before anything is timed, `bench.py` passes
-it every binary an arm declares (its build record's ``binaries``) and every library with device code mapped into the run;
-NVIDIA's own libraries (cuBLASLt, the runtime, the driver) are listed as not scanned.
+"""The SASS gate: no shipped kernel computes a value the verifier's scalar model can't replay. Before anything is timed,
+`bench.py` passes it every binary an arm declares (its build record's ``binaries``) and every library with device code
+mapped into the run; NVIDIA's own libraries (cuBLASLt, the runtime, the driver) are listed as not scanned.
 
 Two kinds of SASS instruction are flagged: any with .FTZ among its suffixes (FADD, FFMA, FMUL, and also FSETP, FMNMX, F2I,
 F2F, HADD2 and every other), which -ftz=true and --use_fast_math emit and which flush subnormals the model keeps; and any FP32
@@ -16,14 +15,25 @@ or no numeric run, and nothing is exempt:
   moves between them and the way an immediate is loaded aside): ``__cuda_sm20_rcp_rn_f32_slowpath``,
   ``__cuda_sm20_sqrt_rn_f32_slowpath``, ``__cuda_sm3x_div_rn_noftz_f32_slowpath``, ``__cuda_sm20_div_u16`` (two at 13.0:
   ptxas specializes it to its call sites), ``__cuda_sm20_div_u64``, ``__cuda_sm20_rem_s64``. ptxas folds a constant
-  numerator into a function's copy of the div slow path when it is the function's only division; that body isn't pinned;
+  numerator into a function's copy of the div slow path when it is the function's only division: a body that loads it from
+  a kernel parameter's slot is pinned like any other (the call passes that slot), one with an immediate isn't;
 - rcp.rn's and sqrt.rn's fast path around a call into a pinned body (`FAST`): the range check, the branch, the call and the
   four-instruction fast block;
 - div.rn's fast path (`DIV`): MUFU.RCP b, its five FFMAs and FCHK, and the branch around a call into a pinned body; a
-  constant numerator is an immediate in the FFMAs, and FCHK's numerator register must hold the same bits;
+  constant numerator is an immediate in the FFMAs, and FCHK's numerator register must hold the FFMAs' numerator (`value`:
+  the same register unchanged, a copy, the same immediate or a load of the same slot of constant bank 0);
 - integer division's seed (`match_int_seed`): I2F.RP d, MUFU.RCP, +2 ulp (IADD3 0xffffffe, or 0x1ffffffe at 64 bits), then
   F2I(.FTZ).U32/U64.TRUNC, each step the one reader of the last that only its value reaches; the F2I's input is a normal
   float, so .FTZ can't change it.
+ptxas for sm_90a writes the range checks' and the seed's add of an immediate as VIADD R, R, imm or IADD3 R, R, imm, RZ
+where sm_120a's writes IADD3 R, PT, PT, R, imm, RZ, and a constant numerator's move from a uniform register as IMAD.U32
+R, RZ, RZ, UR: each sequence takes every spelling of the same 32-bit integer operation, and nothing else.
+Each fast path's call passes the slow path exactly the fast path's operands (`_passes`): the registers the body may read
+before writing them and the constant-bank slots it loads hold, as `value` keys them, x (rcp, sqrt) or a and b (div) each
+in its role (the div body's divisor is the one input its MUFU.RCP's operand may derive from, `_sources`), with the return
+address besides, so a call block may move them into place or reload them from their slot (ULDC, IMAD.U32).
+A BRX branches to its ``BRANCH_TARGETS`` (the cubin's EIATTR_INDIRECT_BRANCH_TARGETS, as nvdisasm prints them); any other
+indirect branch is a path the gate can't follow.
 rsqrt has no entry: at default flags ptxas builds __frsqrt_rn from bare MUFU.RSQ, so it's refused.
 Every operand of a matched sequence is the one definition that reaches it on every path (a sequence may straddle blocks, as
 when ptxas hoists a loop's next range check and seed above the last iteration's tail), inputs unchanged between their
@@ -33,6 +43,12 @@ overwritten, on every path through branches (whose predicates it follows), calls
 merge the gate can't rule out, such as a read on a path it can't show infeasible, and is listed (``merged_reads``). The
 numeric evidence that each sequence is exact on subnormal inputs and outputs, as each pinned ptxas builds it, is
 `ieee_pin.cu`, run by `ieee_pin.py`, whose run each toolkit's ``numeric`` names; its builds are where the pins come from.
+
+A flagged instruction also passes, alone and in any function, when its toolkit's entry lists it under ``exceptions``: an
+instruction of `EXCEPTABLE`, in that one form, which a Definition the verifier replays models bit for bit, named in the
+entry (``definition``) with the numeric run that held the toolkit's target card to it on every operand word (``numeric``,
+its ``runs``). MUFU.EX2 is one under 13.0.1-sm_90a: `verity.ml.circuits.ops.mufu.MufuEx2Ftz` on all 2^32 operands on two
+H200s. An entry without both, or an instruction `EXCEPTABLE` doesn't list, fails the pins.
 
 The cubins come from a .cubin, a fatbin, or a host ELF's .nv_fatbin section (parsed here, since ``cuobjdump -xelf`` writes
 same-named cubins over each other), each disassembled by nvdisasm; ``cuobjdump -sass`` of the whole binary must list the same
@@ -83,12 +99,17 @@ SHT_NOTE = 7
 MAX_LISTED = 20
 MAX_STATES = 1 << 20
 FP64_MUFU = frozenset({"RCP64H", "RSQ64H"})
+#: the flagged instructions a toolkit's ``exceptions`` may list, each in the one form (guard aside) its numeric run measured:
+#: a register operand, no modifier
+EXCEPTABLE = {"MUFU.EX2": re.compile(r"MUFU\.EX2 R\d+, R\d+")}
 
 _INSN = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(.*?)\s*;")
 _PRED = re.compile(r"^@!?U?P[T0-9]+\s+")
 _GUARD = re.compile(r"^@(!?)(U?P[T0-6])\s+")
 _REG = re.compile(r"(?<![\w.$])(UR\d+|R\d+|UP[0-6]|P[0-6]|PR)(\.64)?(?!\w)")
 _TARGET = re.compile(r"`\(([^)\s]+)\)")
+# nvdisasm's rendering of a BRX's EIATTR_INDIRECT_BRANCH_TARGETS, which ptxas writes into the cubin as it does the tkinfo note
+_BRANCH_TARGETS = re.compile(r'\(\*"BRANCH_TARGETS ([^"]+)"\*\)')
 _SUBROUTINE = re.compile(r"\$__internal_\d+_\$(\w+)")
 
 
@@ -192,9 +213,10 @@ def _split(s: str) -> list[str]:
 
 class Insn:
     """One instruction: its guard (``!P0``), opcode, operands, the registers it may read, surely writes when it executes
-    (``writes``; ``kills`` is the same, empty when guarded) and may write, and its branch targets (label names)."""
+    (``writes``; ``kills`` is the same, empty when guarded) and may write, its branch targets (label names: a BRX's are its
+    ``BRANCH_TARGETS``), and whether it branches where the gate can't follow (``indirect``: JMX, JMP, a BRX without them)."""
 
-    __slots__ = ("addr", "text", "guard", "op", "args", "reads", "writes", "kills", "maydef", "targets")
+    __slots__ = ("addr", "text", "guard", "op", "args", "reads", "writes", "kills", "maydef", "targets", "indirect")
 
     def __init__(self, addr: int, text: str):
         self.addr, self.text = addr, text
@@ -206,6 +228,11 @@ class Insn:
         self.op = head.split(".")
         self.args = _split(rest)
         self.targets = _TARGET.findall(rest)
+        bt = _BRANCH_TARGETS.search(rest) if self.op[0] == "BRX" else None
+        if bt:
+            self.targets = [x.strip() for x in bt.group(1).split(",")]
+            self.args = _split(rest[:bt.start()])
+        self.indirect = self.op[0] in INDIRECT and not bt
         o, (dw, rw) = self.op[0], _widths(self.op)
         a, mem = self.args, o in MEMORY
         reads = {g.group(2)} - {"PT", "UPT"} if g else set()
@@ -225,9 +252,17 @@ class Insn:
                 for arg, w in zip(srcs, ws):
                     reads |= _regs(arg, w)
                 srcs = srcs[len(ws):]
+            elif self.op == ["P2R"] and len(srcs) == 3 and srcs[0] == "PR" and re.fullmatch(r"0x[0-9a-f]+", srcs[2]):
+                # P2R R, PR, R', mask reads the predicates whose bits the mask sets
+                reads |= {p for i, p in enumerate(_PREDS) if int(srcs[2], 16) >> i & 1}
+                srcs = srcs[1:]
             for arg in srcs:
                 reads |= _regs(arg, rw, address=mem)
-            maydef = set().union(*(_regs(arg, rw, brackets=False) for arg in outs)) if outs else set()
+            # F2F.<to>.<from> names its destination's type, so that type's width is all it writes (sm_90a's ptxas
+            # schedules an F2F.F32.F64 inside a div.rn fast path that reads the register after its destination)
+            types = [s for s in self.op[1:] if s in ("F16", "BF16", "F32", "F64")]
+            ow = (2 if types[0] == "F64" else 1) if o == "F2F" and len(types) == 2 else rw
+            maydef = set().union(*(_regs(arg, ow, brackets=False) for arg in outs)) if outs else set()
             maydef |= {r for arg in a[1:3] for r in _regs(arg, 1, brackets=False) if r in _PREDS or r.startswith("UP")}
         elif o in NODEST:
             for arg in a:
@@ -277,7 +312,7 @@ class Function:
             if ins.guard:
                 for r in ins.reads | ins.maydef:
                     self._guards.setdefault(r, set()).add(ins.guard.lstrip("!"))
-        self.entries = Counter(self.labels.get(t) for i in self.insns if i.op[0] == "BRA" for t in i.targets)
+        self.entries = Counter(self.labels.get(t) for i in self.insns if i.op[0] in ("BRA", "BRX") for t in i.targets)
 
     def target(self, k: int) -> int | None:
         t = self.insns[k].targets
@@ -287,9 +322,9 @@ class Function:
         """The instructions that may follow k; None when unknown (an indirect branch)."""
         ins = self.insns[k]
         o = ins.op[0]
-        if o in INDIRECT or (o == "BRA" and not ins.targets):
+        if ins.indirect or (o == "BRA" and not ins.targets):
             return None
-        if o == "BRA":
+        if o in ("BRA", "BRX"):
             t = [self.labels.get(x) for x in ins.targets]
             if None in t:
                 return None
@@ -326,8 +361,9 @@ class Function:
         return [i - 1] if s is not None and i in s else []
 
     def reach(self, k: int, reg: str) -> int | None:
-        """The instruction whose result `reg` holds at k on every path to k: None when paths differ, or one meets a call, an
-        entry, a guarded or partial write, or a label it can't see behind (a function with an indirect branch)."""
+        """The instruction whose result `reg` holds at k on every path to k: None when paths differ, or one meets a call that
+        may change it (`preserves`), an entry, a guarded or partial write, or a label it can't see behind (a function with an
+        indirect branch)."""
         found, seen, stack = None, set(), [k]
         while stack:
             ps = self.before(stack.pop())
@@ -338,7 +374,7 @@ class Function:
                     continue
                 seen.add(j)
                 p = self.insns[j]
-                if p.op[0] == "CALL" or p.op[0] in INDIRECT:
+                if (p.op[0] == "CALL" and not self.preserves(j, reg)) or p.indirect:
                     return None
                 if reg in p.maydef:
                     if reg not in p.kills or found not in (None, j):
@@ -349,8 +385,8 @@ class Function:
         return found
 
     def steady(self, reg: str, i: int, j: int) -> bool:
-        """`reg` holds the same value when j reads it as when i does: every path to j passes i, and nothing from i on writes
-        `reg` or calls."""
+        """`reg` holds the same value when j reads it as when i does: every path to j passes i, and nothing from i on may
+        write `reg` (a call, unless it `preserves` it)."""
         seen, stack = set(), [j] if i != j else []
         while stack:
             ps = self.before(stack.pop())
@@ -361,7 +397,7 @@ class Function:
                     continue
                 seen.add(t)
                 p = self.insns[t]
-                if reg in p.maydef or p.op[0] == "CALL" or p.op[0] in INDIRECT:
+                if reg in p.maydef or (p.op[0] == "CALL" and not self.preserves(t, reg)) or p.indirect:
                     return False
                 if t != i:
                     stack.append(t)
@@ -381,6 +417,13 @@ class Function:
             t = None if sub is None else self._trace([sub[1]], reg, sub)
             self._effects[lab, reg] = None if t is None else (bool(t[0]), not t[1])
         return self._effects[lab, reg]
+
+    def preserves(self, k: int, reg: str) -> bool:
+        """The CALL at k returns with `reg` unchanged: it enters a subroutine of this section that may leave only by its
+        return, and none of whose instructions may write `reg`."""
+        sub = self.subroutines.get(self.insns[k].targets[0] if self.insns[k].targets else None)
+        return sub is not None and self.callee_effect(k, reg) is not None \
+            and not any(reg in self.insns[t].maydef for t in range(sub[1], sub[2]))
 
     def defined_elsewhere(self, u: int, reg: str, d: int) -> bool:
         """Whether a write of `reg` besides d reaches u, so that u reads a merge of d's value and another: an unguarded
@@ -449,7 +492,7 @@ class Function:
             sure = lit is None or lit in facts
             if reg in ins.reads and not (lit and lit in pending):
                 out.add(i)
-            if o in INDIRECT or (sub and o in ("CALL", "EXIT")):
+            if ins.indirect or (sub and o in ("CALL", "EXIT")):
                 return None
             if o == "CALL":
                 eff = self.callee_effect(i, reg)
@@ -466,7 +509,7 @@ class Function:
             if gone:
                 facts = frozenset(f for f in facts if f[0] not in gone)
                 pending = frozenset(f for f in pending if f[0] not in gone)
-            if o in ("BRA", "RET", "EXIT"):
+            if o in ("BRA", "BRX", "RET", "EXIT"):
                 if lit:
                     alts = [(lit, True)] + ([] if lit in facts else [((lit[0], not lit[1]), False)])
                 else:
@@ -486,7 +529,7 @@ class Function:
                         if not back:
                             return None
                         stack.extend((x, f2, p2) for x in back)
-                    elif o == "BRA":
+                    elif o in ("BRA", "BRX"):
                         t = [self.labels.get(x) for x in ins.targets]
                         if not t or None in t:
                             return None
@@ -560,18 +603,23 @@ def _block(fn: Function, start: int, block: list[tuple], env: dict) -> tuple[dic
     return go(0, env, {})
 
 
+# A call block's moves of the slow path's operands and return address into place (`_passes` checks what they pass): an
+# immediate, a register, or a reload of a fixed slot of constant bank 0 (ULDC, then IMAD.U32 R, RZ, RZ, UR)
 SETUP = re.compile(r"(MOV|MOV32I) U?R\d+, (0x[0-9a-f]+|-?\d+|U?R\d+)|IMAD\.MOV\.U32 R\d+, RZ, RZ, (0x[0-9a-f]+|-?\d+|R\d+)"
-                   r"|HFMA2(\.MMA)? R\d+, -RZ, RZ, \S+, \S+")
+                   r"|HFMA2(\.MMA)? R\d+, -RZ, RZ, \S+, \S+|ULDC UR\d+, c\[0x0\]\[0x[0-9a-f]+\]|IMAD\.U32 R\d+, RZ, RZ, UR\d+")
 COPY = re.compile(r"MOV R\d+, R\d+|IMAD\.MOV\.U32 R\d+, RZ, RZ, R\d+")
 
 FAST = {
     "rcp": {"slowpath": "__cuda_sm20_rcp_rn_f32_slowpath", "negated": False,
             "check": [("ISETP.GT.U32.AND $P, PT, $m, 0x1ffffff, PT",), ("LOP3.LUT $m, $t, 0x7f800000, RZ, 0xc0, !PT",),
-                      ("IADD3 $t, PT, PT, $x, 0x1800000, RZ",)],
+                      ("IADD3 $t, PT, PT, $x, 0x1800000, RZ", "IADD3 $t, $x, 0x1800000, RZ",
+                       "VIADD $t, $x, 0x1800000")],
             "block": [("MUFU.RCP $y, $x",), ("FFMA $e, $x, $y, -1", "FFMA $e, $y, $x, -1"), ("FADD.FTZ $f, -$e, -RZ",),
                       ("FFMA $z, $y, $f, $y", "FFMA $z, $f, $y, $y")]},
     "sqrt": {"slowpath": "__cuda_sm20_sqrt_rn_f32_slowpath", "negated": True,
-             "check": [("ISETP.GT.U32.AND $P, PT, $t, 0x727fffff, PT",), ("IADD3 $t, PT, PT, $x, -0xd000000, RZ",)],
+             "check": [("ISETP.GT.U32.AND $P, PT, $t, 0x727fffff, PT",),
+                       ("IADD3 $t, PT, PT, $x, -0xd000000, RZ", "IADD3 $t, $x, -0xd000000, RZ",
+                        "VIADD $t, $x, 0xf3000000")],
              "seed": ("MUFU.RSQ $r, $x",),
              "block": [("FMUL.FTZ $y, $r, $x", "FMUL.FTZ $y, $x, $r"), ("FMUL.FTZ $h, $r, 0.5",), ("FFMA $e, -$y, $y, $x",),
                        ("FFMA $z, $e, $h, $y", "FFMA $z, $h, $e, $y")]},
@@ -581,7 +629,7 @@ DIV = {"slowpath": "__cuda_sm3x_div_rn_noftz_f32_slowpath",
        "chain": [("FFMA $t, -$b, $r, 1", "FFMA $t, $r, -$b, 1"), ("FFMA $u, $r, $t, $r", "FFMA $u, $t, $r, $r"),
                  ("FFMA $q, $a, $u, RZ", "FFMA $q, $u, $a, RZ"), ("FFMA $e, -$b, $q, $a", "FFMA $e, $q, -$b, $a"),
                  ("FFMA $z, $u, $e, $q", "FFMA $z, $e, $u, $q")],
-       "check": ("FCHK $P, $a, $b",), "check_constant": ("FCHK $P, $n, $b",)}
+       "check": ("FCHK $P, $n, $b",)}
 INT_ROUND_UP = {"0xffffffe", "0x1ffffffe"}
 
 
@@ -715,6 +763,8 @@ def match_fast(fn: Function, c: int, kind: str, bodies: frozenset[str]) -> Match
     res = _returned(fn, c, copies, env["z"])
     if res is None:
         return "the slow path doesn't return its result in $z on every path"
+    if (e := _passes(fn, c, [value(fn, g, env["x"])])) is not None:
+        return e
     m = Match(f"{kind}-fast-path", members, inner)
     return _escape(fn, m) or m
 
@@ -742,15 +792,130 @@ def _immediate(ins: Insn) -> int | None:
     return None
 
 
-def constant(fn: Function, k: int, reg: str) -> int | None:
-    """The 32 bits `reg` holds at k when a load of an immediate set them on every path to k, else None."""
-    d = fn.reach(k, reg)
-    if d is None:
+_SLOT = re.compile(r"c\[0x0\]\[(0x[0-9a-f]+)\]")
+
+
+def _slot(ins: Insn, reg: str) -> str | None:
+    """The slot of constant bank 0 whose 32 bits `reg` holds after a load of a fixed slot (LDC or ULDC, or the pair .64
+    loads), else None."""
+    m = _SLOT.fullmatch(ins.args[1]) if len(ins.args) == 2 and ins.op[0] in ("LDC", "ULDC") else None
+    d = re.fullmatch(r"(U?R)(\d+)", ins.args[0]) if ins.args else None
+    if m is None or d is None or ins.op[1:] not in ([], ["64"]):
         return None
+    regs = [f"{d.group(1)}{int(d.group(2)) + i}" for i in range(2 if ins.op[1:] else 1)]
+    return f"c[0x0][0x{int(m.group(1), 16) + 4 * regs.index(reg):x}]" if reg in regs else None
+
+
+def _copied(ins: Insn) -> str | None:
+    """The register a 32-bit copy (MOV, UMOV, IMAD.MOV.U32 or IMAD.U32 R, RZ, RZ, src) reads, else None."""
+    a = ins.args
+    if ins.name in ("MOV", "UMOV") and len(a) == 2 and re.fullmatch(r"U?R\d+", a[1]):
+        return a[1]
+    if ins.name in ("IMAD.MOV.U32", "IMAD.U32") and len(a) == 4 and a[1:3] == ["RZ", "RZ"] and re.fullmatch(r"U?R\d+", a[3]):
+        return a[3]
+    return None
+
+
+def value(fn: Function, k: int, reg: str, seen: frozenset = frozenset()) -> tuple:
+    """What `reg` holds at k, through the copies that set it on every path to k: ``("imm", bits)`` from a load of an
+    immediate (RZ is 0), ``("const", slot)`` from a 32-bit LDC or ULDC of a fixed slot of constant bank 0 (the kernel's
+    parameters, which nothing writes while it runs), else ``("reg", r, j)``: register r's value when j reads it."""
+    if reg in ("RZ", "URZ"):
+        return ("imm", 0)
+    d = fn.reach(k, reg)
+    if d is None or d in seen:
+        return ("reg", reg, k)
     ins = fn.insns[d]
-    if ins.name in ("MOV", "UMOV") and len(ins.args) == 2 and re.fullmatch(r"U?R\d+", ins.args[1]):
-        return constant(fn, d, ins.args[1])
-    return _immediate(ins)
+    if (src := _copied(ins)) is not None:
+        return value(fn, d, src, seen | {d})
+    if (v := _immediate(ins)) is not None:
+        return ("imm", v)
+    if (slot := _slot(ins, reg)) is not None:
+        return ("const", slot)
+    return ("reg", reg, k)
+
+
+def same(fn: Function, x: tuple, y: tuple) -> bool:
+    """Two `value` keys are the same 32 bits: equal constants, or one register unchanged from one's read to the other's."""
+    if x[0] == y[0] == "reg":
+        return x[1] == y[1] and (fn.steady(x[1], x[2], y[2]) or fn.steady(x[1], y[2], x[2]))
+    return x == y
+
+
+def _sources(fn: Function, lo: int, hi: int, k: int, reg: str) -> frozenset | None:
+    """The inputs of the body [lo, hi) that `reg` may derive from when k reads it: ``("in", r)`` for a register the body
+    reads before writing, ``("const", slot)`` for a fixed slot of constant bank 0 it loads. Every operand and the guard of
+    each instruction on some path count, so this is a superset; None when a path leaves the body other than by RET."""
+    def get(s: dict, r: str) -> frozenset:
+        return s.get(r, frozenset({("in", r)}))
+
+    state: dict[int, dict] = {lo: {}}
+    work = [lo]
+    while work:
+        t = work.pop()
+        s, ins = state[t], fn.insns[t]
+        if ins.indirect or ins.op[0] in ("CALL", "EXIT"):
+            return None
+        src = frozenset().union(*(get(s, r) for r in ins.reads))
+        out = dict(s)
+        for r in ins.maydef:
+            new = frozenset({("const", sl)}) if (sl := _slot(ins, r)) is not None else src
+            out[r] = new if r in ins.kills else get(s, r) | new
+        nxt = fn.succ(t)
+        if nxt is None:
+            return None
+        if ins.op[0] == "RET" and ins.guard is None:
+            continue
+        for u in nxt:
+            if not lo <= u < hi:
+                return None
+            old = state.get(u)
+            merged = out if old is None else {r: get(old, r) | get(out, r) for r in old.keys() | out.keys()}
+            if merged != old:
+                state[u] = merged
+                work.append(u)
+    if k not in state:
+        return frozenset()
+    return get(state[k], reg)
+
+
+def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
+    """None when the slow path the CALL at c enters reads exactly the operands `want` (`value` keys), each in its role: the
+    registers its body may read before writing them, the constant-bank slots it loads, and the return address (the
+    instruction after c). `want` is [x] (rcp, sqrt) or [a, b] (div): the div body's divisor is the one input its MUFU.RCP's
+    operand may derive from (`_sources`), and its numerator the other."""
+    lo, hi = fn.subroutines[fn.insns[c].targets[0]][1:]
+    inputs, slots = [], set()
+    for t in range(lo, hi):
+        ins = fn.insns[t]
+        if "c[" in ins.text:
+            if ins.name not in ("LDC", "ULDC") or (slot := _slot(ins, ins.args[0])) is None:
+                return f"the slow path reads the constant bank at 0x{ins.addr:04x} other than one fixed 32-bit slot"
+            slots.add(slot)
+    for reg in sorted({r for t in range(lo, hi) for r in fn.insns[t].reads}):
+        eff = fn.callee_effect(c, reg)
+        if eff is None:
+            return "the slow path may leave other than by its return"
+        if eff[0]:
+            inputs.append((("in", reg), value(fn, c, reg)))
+    back = ("imm", fn.insns[c + 1].addr) if c + 1 < len(fn.insns) else None
+    if back not in [v for _, v in inputs]:
+        return "the slow path isn't passed its return address"
+    inputs.remove(next(p for p in inputs if p[1] == back))
+    inputs += [(("const", s), ("const", s)) for s in sorted(slots)]
+    if len(inputs) != len(want):
+        return "the slow path isn't passed the fast path's operands"
+    if len(want) == 2:
+        rcp = [t for t in range(lo, hi) if fn.insns[t].name == "MUFU.RCP" and len(fn.insns[t].args) == 2]
+        d = _sources(fn, lo, hi, rcp[0], fn.insns[rcp[0]].args[1]) if len(rcp) == 1 else None
+        roles = [o for o, _ in inputs]
+        if d is None or len(d & set(roles)) != 1:
+            return "the slow path's MUFU.RCP doesn't take exactly one of its inputs as the divisor"
+        if roles[0] in d:
+            inputs.reverse()
+    if not all(same(fn, x, y) for (_, x), y in zip(inputs, want)):
+        return "the slow path isn't passed the fast path's operands" + (" in their roles" if len(want) == 2 else "")
+    return None
 
 
 def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
@@ -777,14 +942,22 @@ def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
     g = at + 1
     while g < n and g not in fn.label_at and not _control(fn.insns[g]):
         g += 1
-    check = DIV["check" if re.fullmatch(r"U?R\d+", env["a"]) else "check_constant"][0]
-    fchk = [t for t in range(start, g) if unify(check, fn.insns[t], env) is not None]
+    qa = next(t for t, p in pats.items() if _defines(p) == "q")
+    if re.fullmatch(r"U?R\d+", env["a"]):
+        a = value(fn, qa, env["a"])
+    elif (bits := _f32(env["a"])) is not None:
+        a = ("imm", bits)
+    else:
+        return f"the numerator {env['a']} isn't an FP32 immediate"
+    b = value(fn, k0, env["b"])
+    check = DIV["check"][0]
+    fchk = [(t, e) for t in range(start, g) if (e := unify(check, fn.insns[t], env)) is not None
+            and same(fn, value(fn, t, e["n"]), a)]
     if len(fchk) != 1:
-        return f"no {check} in the block"
-    env = unify(check, fn.insns[fchk[0]], env)
-    pats[fchk[0]] = check
-    if "n" in env and (constant(fn, fchk[0], env["n"]) != _f32(env["a"]) or _f32(env["a"]) is None):
-        return f"FCHK's numerator {env['n']} isn't the constant {env['a']}"
+        return f"no {check} in the block whose $n holds $a"
+    (t, env), = fchk
+    fchk = [t]
+    pats[t] = check
     br = fn.insns[g] if g < n else None
     if br is None or g in fn.label_at or br.name != "BRA" or br.guard != "!" + env["P"] or len(br.args) != 1:
         return "no @!$P BRA after the fast path"
@@ -801,9 +974,23 @@ def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
     res = _returned(fn, c, copies, env["z"])
     if res is None:
         return "the slow path doesn't return its result in $z on every path"
+    if (e := _passes(fn, c, [a, b])) is not None:
+        return e
     inner = [(t, env[_defines(p)]) for t, p in pats.items() if _defines(p) not in ("z", "P")]
     m = Match("div-fast-path", {g, c, *setup, *copies, *pats}, inner)
     return _escape(fn, m) or m
+
+
+def _add_immediate(ins: Insn) -> tuple[str, str] | None:
+    """(the register, the immediate) of a 32-bit add of the two, in any of its spellings: IADD3 R, PT, PT, R, imm, RZ
+    (or UIADD3 with UPT and URZ), and sm_90a's IADD3 R, R, imm, RZ and VIADD R, R, imm; else None."""
+    a = ins.args
+    pt, zero = ("UPT", "URZ") if ins.name == "UIADD3" else ("PT", "RZ")
+    if ins.name in ("IADD3", "UIADD3") and len(a) == 6 and a[1:3] == [pt, pt] and a[5] == zero:
+        return a[3], a[4]
+    if (ins.name == "IADD3" and len(a) == 4 and a[3] == "RZ") or (ins.name == "VIADD" and len(a) == 3):
+        return a[1], a[2]
+    return None
 
 
 def match_int_seed(fn: Function, k0: int) -> Match | str:
@@ -838,9 +1025,7 @@ def match_int_seed(fn: Function, k0: int) -> Match | str:
         if u is None:
             return "the uniform seed has no one next step"
         ui = fn.insns[u]
-    pt, zero = ("UPT", "URZ") if ui.name == "UIADD3" else ("PT", "RZ")
-    if ui.guard or ui.name not in ("IADD3", "UIADD3") or ui.args[1:3] != [pt, pt] or ui.args[3:] != [val, ui.args[4], zero] \
-            or ui.args[4] not in INT_ROUND_UP:
+    if ui.guard or (added := _add_immediate(ui)) is None or added[0] != val or added[1] not in INT_ROUND_UP:
         return "the seed isn't rounded up by IADD3 +2 ulp"
     s = ui.args[0]
     members.add(u)
@@ -940,6 +1125,13 @@ def parse_pins(data: bytes | str, where: str) -> dict:
     pins = json.loads(data)
     if pins.get("version") != PINS_VERSION:
         raise SassGateFailed(f"{where} is {pins.get('version')!r}, not {PINS_VERSION}")
+    for tk, rec in pins["toolkits"].items():
+        for insn, exc in rec.get("exceptions", {}).items():
+            if insn not in EXCEPTABLE:
+                raise SassGateFailed(f"{where}: {tk} excepts {insn}, which sass_gate.EXCEPTABLE doesn't list (only "
+                                     f"{', '.join(EXCEPTABLE)}): add it there with the one form its numeric run measured")
+            if not exc.get("definition") or not (exc.get("numeric") or {}).get("runs"):
+                raise SassGateFailed(f"{where}: {tk}'s exception for {insn} names no definition or no numeric runs")
     return pins
 
 
@@ -948,18 +1140,23 @@ def load_pins(path: Path = PINS) -> dict:
 
 
 def toolkit_of(notes: list[dict], pins: dict) -> tuple[str | None, str | None]:
-    """The pinned toolkit every ptxas (and nvlink) note of a cubin names, with pinned ptxas arguments; else (None, why)."""
+    """The pinned toolkit every ptxas (and nvlink) note of a cubin names, with pinned ptxas arguments; else (None, why).
+    One ptxas build may have an entry per target (13.0.1 for sm_120a, 13.0.1-sm_90a), each with its own arguments and run."""
     if not any(n["tool"] == "ptxas" for n in notes):
         return None, "no ptxas record (.note.nv.tkinfo)"
+    unpinned = None
     for tk, rec in pins["toolkits"].items():
         if all(n["version"] == rec["version"] and n["branch"] == rec["branch"] for n in notes):
             bad = [n["args"] for n in notes if n["tool"] == "ptxas"
                    and " ".join(a for a in n["args"].split() if a != "-v") not in rec["args"]]
             if bad:
-                return None, f"ptxas {rec['version']} with unpinned arguments {bad[0]!r}"
+                unpinned = unpinned or f"ptxas {rec['version']} with unpinned arguments {bad[0]!r}"
+                continue
             if not rec.get("numeric"):
                 return None, f"ptxas {rec['version']} is pinned without a numeric run"
             return tk, None
+    if unpinned:
+        return None, unpinned
     tools = sorted({f"{n['tool']} {n['version']!r} ({n['branch']})" for n in notes})
     return None, f"no pinned toolkit built it: {'; '.join(tools)}"
 
@@ -969,6 +1166,7 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
     fns = [Function(f) for f in funcs]
     tk, why = toolkit_of(notes, pins) if any(f.insns for f in fns) else (None, None)
     pinned = pins["toolkits"][tk]["subroutines"] if tk else {}
+    excepted = pins["toolkits"][tk].get("exceptions", {}) if tk else {}
     flagged_at, covered, hints, misses, merged = [], {}, {}, [], []
     fp64 = 0
     for fi, fn in enumerate(fns):
@@ -1013,6 +1211,15 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
                     covered.setdefault((fi, k), m.kind)
             merged += [{"function": fn.name, "sequence": m.kind, "value": f"{reg} from 0x{fn.insns[k].addr:04x}",
                         "reader": f"0x{fn.insns[u].addr:04x} {fn.insns[u].text}"} for k, reg, u in m.merged]
+        for k, ins in enumerate(fn.insns):
+            if (fi, k) in covered or ins.name not in EXCEPTABLE:
+                continue
+            if ins.name not in excepted:
+                hints.setdefault((fi, k), f"{tk} lists no exception for {ins.name}")
+            elif EXCEPTABLE[ins.name].fullmatch(ins.body()):
+                covered[(fi, k)] = ins.name
+            else:
+                hints.setdefault((fi, k), f"{ins.name} is excepted only as {EXCEPTABLE[ins.name].pattern}")
     bad = [(fi, k) for fi, k in flagged_at if (fi, k) not in covered]
     return {"tool_notes": notes, "toolkit": tk, "unpinned": why, "functions": len(fns),
             "flagged": len(flagged_at), "covered": dict(Counter(covered[x] for x in flagged_at if x in covered)),
@@ -1238,7 +1445,8 @@ def why_failed(rec: dict) -> str:
         c = rec["cubins"][o["cubin"]]
         where = (f" (cubin {o['cubin']}: {c['unpinned']}, so nothing is exempt)" if c["unpinned"]
                  else f" ({o['why']})" if o.get("why") else "")
-        return (f"{rec['offending_n']} flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence, first "
+        return (f"{rec['offending_n']} flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence or "
+                f"exception, first "
                 f"{o['function']} {o['address']}: {o['instruction']}{where}")
     if rec["ptx_bad_n"]:
         return f"{rec['ptx_bad_n']} .ftz, .approx or div.full PTX instruction(s), first: {rec['ptx_bad'][0]}"
@@ -1376,7 +1584,8 @@ def pin_record(paths: list[Path], tools: dict) -> list[dict]:
 def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
     """Pin `toolkit` from `pin_record`s of its builds: the one ptxas version and build their notes name, the arguments
     (-v aside), and every signature of each subroutine with a flagged instruction (ptxas specializes a body to its
-    callers, so one name may have several). Its numeric run is kept while those signatures are unchanged."""
+    callers, so one name may have several). Its numeric run is kept while those signatures are unchanged, and its
+    exceptions while the ptxas is."""
     notes = [n for r in records for n in r["tool_notes"] if n["tool"] == "ptxas"]
     builds = {(n["version"], n["branch"]) for n in notes}
     if len(builds) != 1:
@@ -1398,7 +1607,9 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
         "version": version, "branch": branch,
         "args": sorted({" ".join(a for a in n["args"].split() if a != "-v") for n in notes}),
         "subroutines": pinned,
-        "numeric": old.get("numeric") if old.get("subroutines") == pinned else None}
+        "numeric": old.get("numeric") if old.get("subroutines") == pinned else None,
+        **({"exceptions": old["exceptions"]} if old.get("exceptions") and (old["version"], old["branch"]) == (version, branch)
+           else {})}
     live = {sid for t in pins["toolkits"].values() for sids in t["subroutines"].values() for sid in sids}
     pins["signatures"] = {sid: b for sid, b in sorted({**pins["signatures"], **blocks}.items()) if sid in live}
     path.write_text(json.dumps(pins, indent=1) + "\n")

@@ -1,9 +1,9 @@
-"""The requirement's two proof units (I4): the plan unit, which holds a pass's plan to hold every block the declared circuit
-reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the blocks a step writes to the
-circuit's values and every free, of a written block or a registered one, to its values' last read (`StoreMatches`' L1, L2 and
-L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or PlanShard for a store past PlanMatch's 16-bit
-indices. Each is a Boolean Definition, one instance per step (PlanShard's one per shard of the store), each returning one ok
-word: bit 0 the clause's verdict, bits 1-15 zero in gates.
+"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the declared
+circuit reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
+blocks a step writes to the circuit's values and every free, of a written block or a registered one, to its values' last
+structural reader (`StoreMatches`' L1, L2 and L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or
+PlanShard for a store past PlanMatch's 16-bit indices. Each is a Boolean Definition, one instance per step (PlanShard's
+one per shard of the store), each returning one ok word: bit 0 the clause's verdict, bits 1-15 zero in gates.
 
     PlanMatch_v1{P, NR, V, G, TB, RPB}
         (count: U16, regmask: Array<NR / 16, U16>, kvmask: Array<V / 16, U16>, gmask: U16, lam: Array<2 V, U16>,
@@ -28,16 +28,17 @@ wrote it (word N + 2 b) and the step that freed it (word N + 2 b + 1), `WORD - 1
 takes effect after f's reads, as `Store.resident` and memory-map/v1 read it. The pass row ``pi`` holds, for each of the
 session's T windows, the step of its last pass (the previous window's for a window without one, 0 before any).
 
-**What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last read, which
-values each step reads; `requirement.Requirement`), the registered store's layout (which registered block holds which
-registered value), each step's count of written blocks and so its first fresh index, each value's epochs (the step each
-re-key moves it at), the session's windows T and lifetime cap L (`Params`), and each pass's plan length. Each
-instance's public row (``count``, ``regmask``, ``kvmask``, ``gmask`` of the plan unit; ``t``, ``first``, ``count``,
-``present``, ``pos``, ``ep``, ``last``, ``rfree``, ``life`` of the memory-map unit) is that data, which the verifier holds the
-committed row to by its opening. The layout, the map, the passes' steps, the payloads, the plans and the circuit's values
-are witness: committed rows, read only inside the proof, each bound to its one commitment by its commit string (`b || c`).
-So is the stale bound, the store index below which every written block is past the cap: the unit derives it from the
-pass row as a step, the cap, and holds a re-key's old block's write step in the map below it; no input names it.
+**What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last structural
+reader, which values each step reads; `requirement.Requirement`), the registered store's layout (which registered block
+holds which registered value), each step's count of written blocks and so its first fresh index, each value's epochs
+(the step each re-key moves it at), the session's windows T and lifetime cap L (`Params`), and each pass's plan length.
+Each instance's public row (``count``, ``regmask``, ``kvmask``, ``gmask`` of the plan unit; ``t``, ``first``, ``count``,
+``present``, ``pos``, ``ep``, ``last``, ``rfree``, ``life`` of the memory-map unit) is that data, which the verifier
+holds the committed row to by its opening. The layout, the map, the passes' steps, the payloads, the plans and the
+circuit's values are witness: committed rows, read only inside the proof, each bound to its one commitment by its commit
+string (`b || c`). So is the stale bound, the store index below which every written block is past the cap: the unit
+derives it from the pass row as a step, the cap, and holds a re-key's old block's write step in the map below it; no
+input names it.
 
 **The appends.** A step's written blocks are the remote audit's append for that step. A payload row's commit string is the
 append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
@@ -74,32 +75,32 @@ allowed, unlike PlanMatch's ``plan = readBlocks t``, so a planned block may carr
 ``count`` is public, the pass's plan length their sum. Every word is below 2^16 at any N: no index past a shard's reaches
 a unit.
 
-**MemoryMapStep**, at step t: the step wrote blocks ``first .. first + count`` (at most C). Each value it produced that a
-later step reads is present at epoch 0, and each value a re-key at t moves is present at its new epoch (``present``'s bit
-k, its position ``pos[k]``, its epoch ``ep[k]`` and its last read in that epoch ``last[k]``: its last read, or the step of
-its next re-key), and its committed value is ``val[k]``. Its ok is that, for every present k: ``lam``'s entry
-``ep[k] V + pos[k]`` puts it in a block the step wrote, in a slot below SLOTS,
-no two in one slot, and that block's payload ``pay[j - first]`` carries ``val[k]`` there (L4, Carries); and, for each block
-the step wrote: ``phi`` records it written at t (each write at its values' production step or their re-key's), it holds at
-least one value (so no re-key carries a payload the map doesn't), its
-empty slots are zero, and ``phi`` frees it at the last read of its
-values, the greatest ``last[k]`` among them: an earlier free drops a value still to be read (L2), a later one keeps a block
-no step reads (L1). And each registered block whose values' last read is t (``rfree``'s bit j, from the public schedule and
-the registered layout) is freed at t, ``phi[j] = t``: each registered block's free is pinned by the one instance at its last
-read. ``first`` is at least N, and ``first - N + count`` at most M.
+**MemoryMapStep**, at step t: the step wrote blocks ``first .. first + count`` (at most C). Each value it produced that
+a later step reads is present at epoch 0, and each value a re-key at t moves is present at its new epoch (``present``'s
+bit k, its position ``pos[k]``, its epoch ``ep[k]`` and its last structural reader in that epoch ``last[k]``:
+`Requirement.last`, a gather that may select it included, or the step of its next re-key), and its committed value is
+``val[k]``. Its ok is that, for every present k: ``lam``'s entry ``ep[k] V + pos[k]`` puts it in a block the step wrote,
+in a slot below SLOTS, no two in one slot, and that block's payload ``pay[j - first]`` carries ``val[k]`` there (L4,
+Carries); and, for each block the step wrote: ``phi`` records it written at t (each write at its values' production step
+or their re-key's), it holds at least one value (so no re-key carries a payload the map doesn't), its empty slots are
+zero, and ``phi`` frees it at the last structural reader of its values, the greatest ``last[k]`` among them: an earlier
+free drops a value still to be read (L2), a later one keeps a block no step reads (L1). And each registered block whose
+values' last structural reader is t (``rfree``'s bit j, from the public schedule and the registered layout) is freed at
+t, ``phi[j] = t``: each registered block's free is pinned by the one instance at its last structural reader. ``first``
+is at least N, and ``first - N + count`` at most M.
 
 **Re-keys at the cap.** A re-key at t moves a block's live values into a fresh block of t at the same slots, so its
 payload is the old one's with any dead value's slot zeroed, and the old block's own instance frees it at t (its values'
-last read in the old epoch). For each value present at an epoch e ≥ 1, the unit reads its old block o from entry
-``(e - 1) V + pos[k]``, private, and holds it to the cap: o is a written block below ``first``, its slot is the new
-one's, and its write step ``phi[N + 2 (o - N)]`` is below the cap. The cap is a step the unit computes from the pass row
-and ``life`` (L): with W the windows whose last pass is at or before t (so W is the window of the first pass after t),
-it is ``pi[W - L]``, and 0 if W < L or no pass follows t (W = T). A block's append joins the window of the first pass
-after its write step (each writing instance pins the step, and the record's heads pin the append between the passes
+last structural reader in the old epoch). For each value present at an epoch e ≥ 1, the unit reads its old block o from
+entry ``(e - 1) V + pos[k]``, private, and holds it to the cap: o is a written block below ``first``, its slot is the
+new one's, and its write step ``phi[N + 2 (o - N)]`` is below the cap. The cap is a step the unit computes from the pass
+row and ``life`` (L): with W the windows whose last pass is at or before t (so W is the window of the first pass after
+t), it is ``pi[W - L]``, and 0 if W < L or no pass follows t (W = T). A block's append joins the window of the first
+pass after its write step (each writing instance pins the step, and the record's heads pin the append between the passes
 around it: `remote_bandwidth`'s `RequirementLink.mapped`), so a write step below the cap is an age, counted from the
-first root sent after the append, of at least L windows at the first pass after t, and o is below that pass's stale bound
-(the blocks whose appends joined a window at least L before it): the cap is that bound in step form (`rekey_cap`). It reads the passes' steps only through ``pi``, which is bound to the record's passes
-by its commitment.
+first root sent after the append, of at least L windows at the first pass after t, and o is below that pass's stale
+bound (the blocks whose appends joined a window at least L before it): the cap is that bound in step form (`rekey_cap`).
+It reads the passes' steps only through ``pi``, which is bound to the record's passes by its commitment.
 
 **Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
 P (NR + G + V) 16 ANDs. PlanShard: each entry's order, range and tail checks and its count comparison, and each named
@@ -124,7 +125,7 @@ from typing import Sequence
 
 from . import boolean as BL
 from .boolean import trace as TR
-from .boolean.forms import ONE, ZERO, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from .boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array
@@ -225,9 +226,9 @@ def memory_map(S, t: int, first: int, count: int, present: int, pos: Sequence[in
                val: Sequence[int], pay: Sequence[int]) -> int:
     """`MemoryMapStep`'s reference over the values and payloads as ints (bit s VW + u of ``pay[c]`` is slot s's bit u): 1 iff
     every present value is in a slot of a block the step wrote that carries it, each such block is written at ``t``, holds a
-    value, has its empty slots zero and is freed at its values' last read, each registered block ``rfree`` names is freed at
-    ``t``, and each value present at an epoch past 0 comes from the same slot of a written block below ``first`` whose write
-    step is below the cap (`rekey_cap`)."""
+    value, has its empty slots zero and is freed at its values' last structural reader, each registered block ``rfree``
+    names is freed at ``t``, and each value present at an epoch past 0 comes from the same slot of a written block below
+    ``first`` whose write step is below the cap (`rekey_cap`)."""
     _check_map(S)
     vw, cap = value_bits(S.SLOTS), rekey_cap(S, pi, life, t)
     if first < S.N or count > S.C or first - S.N + count > S.M:
@@ -484,10 +485,10 @@ PlanShard = _unit(
 MemoryMapStep = _unit(
     "MemoryMapStep", 3, ("K", "C", "V", "E", "M", "N", "SLOTS", "T"), _map_signature, _map_build,
     "1 iff every present value k is in a slot of a block first .. first + count that carries val[k] there, no two in one "
-    "slot, each such block is written at t, holds a value, has its empty slots zero and is freed at its values' last read, "
-    "each registered block rfree names is freed at t, and each value present at epoch ep[k] > 0 comes from the same slot "
-    "of a written block below first whose write step is below the cap pi[W - life], W the windows whose last pass is at "
-    "or before t (0 if W < life or W = T)")
+    "slot, each such block is written at t, holds a value, has its empty slots zero and is freed at its values' last "
+    "structural reader, each registered block rfree names is freed at t, and each value present at epoch ep[k] > 0 comes "
+    "from the same slot of a written block below first whose write step is below the cap pi[W - life], W the windows "
+    "whose last pass is at or before t (0 if W < life or W = T)")
 
 
 # --- each instance's rows -------------------------------------------------------------------------------------------------
@@ -555,8 +556,8 @@ def map_words(S, store: Store) -> list[int]:
 
 
 def registered_frees(req: Requirement, registered_block: dict[int, int]) -> dict[int, int]:
-    """Each registered block's free step from public data alone: the last read of the values the registered layout puts in
-    it (a block holding no value any step reads has none)."""
+    """Each registered block's free step from public data alone: the last structural reader of the values the registered layout
+    puts in it (a block holding no value any step reads has none)."""
     out: dict[int, int] = {}
     for v, j in registered_block.items():
         if v in req.last:
@@ -613,7 +614,7 @@ def shard_inputs(S, first: int, size: int, plan: Sequence[int], need: Sequence[i
 def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[int], lam: Sequence[int],
                phi: Sequence[int], registered_block: dict[int, int], pi: Sequence[int], life: int) -> dict:
     """MemoryMapStep's arguments at step ``t``: the values t produces that a later step reads, at epoch 0, the blocks it
-    wrote and their payloads (``store.payload``), the registered blocks whose values t reads last (``registered_block`` each
+    wrote and their payloads (``store.payload``), the registered blocks whose values' last structural reader t is (``registered_block`` each
     registered value's block, public), the lifetime cap ``life``, the layout row ``lam``, the map row ``phi`` and the pass
     row ``pi`` (`pass_words`)."""
     vw = value_bits(S.SLOTS)

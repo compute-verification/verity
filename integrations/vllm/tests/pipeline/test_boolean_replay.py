@@ -15,9 +15,9 @@ from verity.ml.circuits.defs import Builder, bind, composite
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.pipeline import boolean_replay as BR
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_silu as BSL
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_silu as BSL
 
 W16 = Value(16)
 SPECIAL = [0x0000, 0x8000, 0x3F80, 0xBF80, 0x7F80, 0xFF80, 0x7FC0, 0x0001, 0x8001, 0x7F7F, 0x4120, 0xC2C8]
@@ -121,7 +121,7 @@ def test_a_picks_stated_peak_bounds_what_its_evaluation_allocates(tmp_path) -> N
 
 
 def test_a_boolean_version_that_changes_the_calls_boundary_is_refused(monkeypatch) -> None:
-    import verity_vllm.program.boolean as BB
+    import verity.ml.definitions.boolean as BB
 
     monkeypatch.setattr(BB, "boolean_version", lambda fn: bind(BSL.SiluMul, I=4))
     nodes, r = _row(bind(b1.SiluMul, I=8), Array(16, W16))

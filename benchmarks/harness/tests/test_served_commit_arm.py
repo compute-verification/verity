@@ -1,14 +1,19 @@
-"""served_commit's arm (`benchmarks/served_commit/arm.py`) gates on the harness's run phases: under bounded staging its gate and
+"""served_commit's arm (`benchmarks/served_commit/arm.py`) installs only a scheme other than vllm-v1, which it refuses by name.
+It gates on the harness's run phases: under bounded staging its gate and
 warm-up runs are learn-only, a run of theirs left without a root is a declared warm-up named in the custom gate's verdict, and a
 measured run without a root fails the gate. Its ``ready``, and the stock profiling arm's (`prof_arm.py`), read only the engine's
 public names (``vllm``, ``model``, ``pin``), for ``verity_vllm.LLM`` and for the harness's local checkpoint, and the committer
-gets every field it reads of its engine. The committer and the compiled source are fakes; the roots are the GPU suites'."""
+gets every field it reads of its engine. The profiling arms write each run's records after its timed run (``end_run`` writes
+nothing). The committer and the compiled source are fakes; the roots are the GPU suites'."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+
+import pytest
 
 ARM = Path(__file__).resolve().parents[2] / "served_commit" / "arm.py"
 PROF_ARM = ARM.parent / "prof_arm.py"
@@ -63,7 +68,7 @@ def _sweep(arm, com, runs) -> dict:
 
 def test_a_rootless_gate_or_warmup_run_is_a_declared_warmup():
     mod = _arm_module()
-    arm, com = mod.ServedCommitArm("served-commit-noretain", retain="none"), _Committer(bounded=True)
+    arm, com = mod.ServedCommitArm("served-commit-rows", retain="none"), _Committer(bounded=True)
     arm.committer, arm.source = com, _Source()
     got = _sweep(arm, com, [("gate", "B8", b"r" * 32, 0), ("gate", "B32", b"", 4), ("warmup", "B32", b"", 4),
                             ("measure", "B32", b"r" * 32, 0)])
@@ -74,16 +79,30 @@ def test_a_rootless_gate_or_warmup_run_is_a_declared_warmup():
 
 def test_a_measured_run_without_a_root_fails_the_gate():
     mod = _arm_module()
-    arm, com = mod.ServedCommitArm("served-commit-noretain", retain="none"), _Committer(bounded=True)
+    arm, com = mod.ServedCommitArm("served-commit-rows", retain="none"), _Committer(bounded=True)
     arm.committer, arm.source = com, _Source()
     got = _sweep(arm, com, [("gate", "B32", b"r" * 32, 0), ("measure", "B32", b"", 4)])
     assert not got["passed"] and not got["warmups"]
     assert got["failed"][0]["run"] == "measure:B32" and "not a declared warm-up" in got["failed"][0]["errors"][0]
 
 
+def test_a_vllm_v1_arm_refuses_to_install_by_name_and_a_rows_arm_installs(monkeypatch):
+    mod = _arm_module()
+    v1 = mod.ServedCommitArm("served-commit-v1", retain="none")
+    with pytest.raises(RuntimeError, match=r"served-commit-v1 arm commits 'vllm-v1' \(SHA-256\), not 'rows-sha512'"):
+        v1.install(SimpleNamespace(hooks=None))
+    assert v1.source is None
+    source = ModuleType("verity_vllm.acquire.sources.served_compiled_source")
+    source.ServedCompiledSource = lambda into, batch_copies: SimpleNamespace(install_hooks=lambda: None)
+    monkeypatch.setitem(sys.modules, source.__name__, source)
+    rows = mod.ServedCommitArm("served-commit-rows", retain="none")
+    rows.commit_scheme = "rows-sha512"
+    assert rows.install(SimpleNamespace(hooks=None)) is rows and rows.source is not None
+
+
 def test_unbounded_staging_runs_no_learn_only_pass():
     mod = _arm_module()
-    arm, com = mod.ServedCommitArm("served-commit-noretain", retain="none"), _Committer(bounded=False)
+    arm, com = mod.ServedCommitArm("served-commit-rows", retain="none"), _Committer(bounded=False)
     arm.committer, arm.source = com, _Source()
     got = _sweep(arm, com, [("gate", "B32", b"r" * 32, 0), ("warmup", "B32", b"r" * 32, 0)])
     assert got["learn_only"] == [False, False] and got["passed"] and not got["warmups"]
@@ -104,7 +123,7 @@ class _Runner:
 
 
 def _vllm(runner: _Runner, *, path: str = "/models/local"):
-    """A ``vllm.LLM`` as far as the arms and the committer read it: the in-process runner (`get_model_runner`'s path) and the
+    """A ``vllm.LLM`` as far as the arms and the committer read it: the in-process runner (`engine.handle.model_runner`'s path) and the
     config."""
     hf = SimpleNamespace(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2, head_dim=16,
                          intermediate_size=128, vocab_size=1000, model_type="llama")
@@ -142,7 +161,7 @@ def _ready(monkeypatch, engine):
     native_collect.NativeCollectCommitter = _Collector
     monkeypatch.setitem(sys.modules, native_collect.__name__, native_collect)
     monkeypatch.setenv("VERITY_RETAIN", "")
-    arm = _arm_module().ServedCommitArm("served-commit-noretain", retain="none")
+    arm = _arm_module().ServedCommitArm("served-commit-rows", retain="none")
     arm.source = _ReadySource()
     arm.ready(SimpleNamespace(engine=engine))
     return arm
@@ -174,16 +193,14 @@ def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_e
 
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
-    vars(direct).pop("_engine", None)
     com = _ready(monkeypatch, direct).committer
     assert (com.engine.runner, com.engine.model) == (runner, runner.model)
     assert com.engine.cp == {"repo": "/models/local", "revision": None}
     assert len(_geo_digest(com.engine)) == 32
 
 
-def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.runner import _DirectLLM
-
+def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:
+    """prof_arm.py with torch's NVTX ranges recorded; the module and the ranges."""
     ranges: list[str] = []
     nvtx = SimpleNamespace(range_push=ranges.append, range_pop=lambda: ranges.append("pop"))
     monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(nvtx=nvtx)))
@@ -191,10 +208,72 @@ def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without
     spec = importlib.util.spec_from_file_location("served_commit_prof_arm", PROF_ARM)
     prof = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(prof)
+    return prof, ranges
+
+
+def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
+    from verity_bench.vllm.runner import _DirectLLM
+
+    prof, ranges = _prof_module(monkeypatch)
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
-    vars(direct).pop("_engine", None)
     prof.StockProfArm("stock-prof").ready(SimpleNamespace(engine=direct))
     assert runner.execute_model(SimpleNamespace(total_num_scheduled_tokens=7)) == "executed"
     assert runner.sample() == "sampled"
     assert ranges == ["exec:7", "pop", "sample", "pop"]
+
+
+class _RootsCommitter(_Committer):
+    name, native_end, rows_off_thread = "native_collect", True, True
+
+    def __init__(self) -> None:
+        super().__init__(bounded=True)
+        self.runner = _Runner()
+        self._nc = SimpleNamespace(slot_fast=True, stats=lambda: {"plans": 1})
+        self.spans = SimpleNamespace(total={"hashing": 0.5}, calls={"hashing": 2})
+
+
+def _lines(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def test_the_roots_arm_writes_each_runs_records_after_its_timed_run(monkeypatch, tmp_path):
+    prof, ranges = _prof_module(monkeypatch)
+    (tmp_path / "out").mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setattr(prof.RootsArm, "dumped", set())
+    arm, com = prof.RootsArm("served-commit-rows", retain="none"), _RootsCommitter()
+    arm.committer, arm.windows = com, {}
+    arm.source = SimpleNamespace(stats=dict(_Source.stats), errors=[], codegen={}, native_drain=True, begin_run=lambda: None,
+                                 summary=dict)
+    roots, layouts = tmp_path / "out" / "roots.jsonl", tmp_path / "out" / "layouts.jsonl"
+    written = []
+    for phase, root in (("warmup", b"w" * 32), ("measure", b"m" * 32)):
+        target = SimpleNamespace(phase=phase, point="B8")
+        arm.begin_run(target)
+        com._layouts = {0: [SimpleNamespace(name="lm_head", dtype="bfloat16", shape=(8, 16), nbytes=256)]}
+        arm.plan_log.append((0, 7, 0))
+        com.result = SimpleNamespace(run_root=root, extra={"bounded_staging": {"enabled": True}})
+        arm.end_run(target)
+        written.append(len(_lines(roots)))
+    assert written == [0, 1] and ranges[-1] == "pop"
+    assert arm.extras(target)["steps"] == 1
+    got = [(r["name"], r["run"], r["run_root"], r["steps_log"], r["plan_hits"]) for r in _lines(roots)]
+    assert got == [("warmup:B8", 0, (b"w" * 32).hex(), [[0, 7, 0, 256]], 1), ("measure:B8", 1, (b"m" * 32).hex(), [[0, 7, 0, 256]], 1)]
+    assert [(r["run"], r["steps"]) for r in _lines(layouts)] == [(0, {"0": [["lm_head", "bfloat16", [8, 16], 256]]})]
+    assert [r["run"] for r in arm.runs] == ["warmup:B8", "measure:B8"]
+
+
+def test_the_stock_profiling_arm_writes_its_cpu_line_after_the_timed_run(monkeypatch, tmp_path):
+    prof, _ = _prof_module(monkeypatch)
+    (tmp_path / "out").mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    roots, arm, target = tmp_path / "out" / "roots.jsonl", prof.StockProfArm("stock-prof"), SimpleNamespace()
+    arm.begin_run(target)
+    arm.end_run(target)
+    assert not roots.exists()
+    assert arm.extras(target) == {}
+    arm.begin_run(target)
+    arm.end_run(target)
+    arm.begin_run(target)
+    assert [r["arm"] for r in _lines(roots)] == ["stock-prof", "stock-prof"]

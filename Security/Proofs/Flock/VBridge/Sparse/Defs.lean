@@ -1,16 +1,16 @@
-import Proofs.Flock.Soundness.Model.Sparse
+import Definitions.Flock.Sparse
 import Flock.RecAlgebra
 
 /-!
 # `RecSparse_v1` over F
 
-`rec_sparse.py` (circuits' #1710, d4ce10b6e) restated value for value over F: the verifier row `verifierRow`
+`rec_sparse.py` restated value for value over F: the verifier row `verifierRow`
 (`verifier_row`: every value the coins and the public layout decide), the `GfResiduals_v1` structure of its products
 `sparseS` (`products_structure`, with `Flock.RecAlgebra`'s semantics), and its output `out` (`_steps`): H2's and H3's
 claim chains on the residuals, Φ's product, with `T > 1` the plane batch against the type-selected sum and the
 registered claim's residual, then the slots' types past their low `T_LOG` bits. The circuit takes Φ's product as a tree
 of `Gf128Mul`, the selects as a demultiplexer of AND gates and its sums as trees of XOR; over F those are the product,
-the selected entries and the sums `out` takes, which is what a forms bridge for its unit (circuits' #1731) proves.
+the selected entries and the sums `out` takes, which is what a forms bridge for its unit proves.
 
 w is the message ports' elements in order (`message_ports`): `h` (64), `pre0 … pre5` (`c₀, c₂`), `v2`, `sc<j>`
 (`c₀, c₂ … c_deg`), `u` (`P'`), with `T > 1` `vt` (`T`), and `claim`. `SCoins` is `rec_sparse.Coins`: the inner rep's

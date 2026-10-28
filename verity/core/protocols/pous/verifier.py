@@ -2,15 +2,15 @@
 
 ~~~text
 row(c)  = SHA512(P(8·|c|) || c)                      sha512/row/v2, P = ("verity/sha512-row/v2\0" || u64be bits) to 128 B
-leaf(i) = SHA512(0x00 || tag_s || u16(v) || row(c²_v))   block i = s * n + v, tag_s = salt || u64(s), little-endian
+leaf(i) = SHA512(0x00 || tag_s || u16(v) || row(c²_v))   label i = s * n + v, tag_s = salt || u64(s), little-endian
 node    = SHA512(0x01 || left || right)
 ~~~
 
 The tree has the shape of RFC 6962 (Certificate Transparency): over `k` leaves it splits at the largest power of two
 below `k`, and an audit path lists the siblings from the leaf up, verified as in RFC 9162 §2.1.3.2.  Binding is SHA-512's
-collision resistance, a single-stage property.  A leaf wraps the block's `sha512/row/v2` digest, the digest a
+collision resistance, a single-stage property.  A leaf wraps the label's `sha512/row/v2` digest, the digest a
 row-digest gadget checks, in one more compression (99 bytes) that binds it to its salt, segment and index.  Lean's audit
-compares each answer with the true block (`Model/Audit.lean`: "no verifier key ... idealizes the per-block tags"); these
+compares each answer with the true label (`Model/Audit.lean`: "no verifier key ... idealizes the per-block tags"); these
 digests are that idealization's instance.
 
 The verifier builds `vk` from its own encoding (`setup.verifier_key`) and keeps every leaf digest (0.1% of `C` at
@@ -36,7 +36,7 @@ DIGEST_BYTES = 64
 
 
 def row_digest(block_bytes: int, block: bytes | Iterable[bytes]) -> bytes:
-    """`sha512_row_v2_digest(block, 8 * block_bytes)`; `block` is the block or its bytes in chunks, in order."""
+    """`sha512_row_v2_digest(block, 8 * block_bytes)`; `block` is the label or its bytes in chunks, in order."""
     h = hashlib.sha512(sha512_row_v2_prefix(8 * block_bytes))
     count = 0
     for chunk in (block,) if isinstance(block, (bytes, bytearray, memoryview)) else block:
@@ -48,18 +48,18 @@ def row_digest(block_bytes: int, block: bytes | Iterable[bytes]) -> bytes:
 
 
 def row_leaf(params: Geometry, salt: bytes, i: int, row: bytes) -> bytes:
-    """Leaf `i`'s digest from block `i`'s `sha512/row/v2` digest `row`."""
+    """Leaf `i`'s digest from label `i`'s `sha512/row/v2` digest `row`."""
     s, v = divmod(i, params.blocks_per_segment)
     return hashlib.sha512(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little") + row).digest()
 
 
 def leaf_hash(params: Geometry, salt: bytes, i: int, block: bytes | Iterable[bytes]) -> bytes:
-    """Leaf `i`'s digest; `block` is the block or its bytes in chunks, in order."""
+    """Leaf `i`'s digest; `block` is the label or its bytes in chunks, in order."""
     return row_leaf(params, salt, i, row_digest(params.block_bytes, block))
 
 
 def segment_leaves(params: Geometry, salt: bytes, s: int, blocks: Sequence[bytes]) -> list[bytes]:
-    """The leaf digests of segment `s`'s blocks."""
+    """The leaf digests of segment `s`'s labels."""
     n = params.blocks_per_segment
     if len(blocks) != n:
         raise ValueError(f"segment {s} has {n} blocks")
@@ -154,7 +154,7 @@ class VerifierKey:
 
     @classmethod
     def from_leaves(cls, params: Geometry, salt: bytes, leaves: Sequence[bytes]) -> VerifierKey:
-        """`vk` from every leaf digest, in block order; the root is recomputed."""
+        """`vk` from every leaf digest, in label order; the root is recomputed."""
         leaves = tuple(leaves)
         if len(leaves) != params.blocks or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in leaves):
             raise ValueError(f"expected {params.blocks} {DIGEST_BYTES}-byte leaf digests")
@@ -162,25 +162,25 @@ class VerifierKey:
 
     @classmethod
     def from_row_digests(cls, params: Geometry, salt: bytes, rows: Sequence[bytes]) -> VerifierKey:
-        """`vk` from every block's `sha512/row/v2` digest, in block order: the memory challenger's table of `C*`."""
+        """`vk` from every label's `sha512/row/v2` digest, in label order: the memory challenger's table of `C*`."""
         if len(rows) != params.blocks or any(type(r) is not bytes or len(r) != DIGEST_BYTES for r in rows):
             raise ValueError(f"expected {params.blocks} {DIGEST_BYTES}-byte row digests")
         return cls.from_leaves(params, salt, [row_leaf(params, salt, i, r) for i, r in enumerate(rows)])
 
     @classmethod
     def from_segments(cls, params: Geometry, salt: bytes, segments: Iterable[Sequence[bytes]]) -> VerifierKey:
-        """`vk` from each segment's blocks in order (a codec's `encode_segment` results), one segment at a time."""
+        """`vk` from each segment's labels in order (a codec's `encode_segment` results), one segment at a time."""
         leaves: list[bytes] = []
         for s, blocks in enumerate(segments):
             leaves += segment_leaves(params, salt, s, blocks)
         return cls.from_leaves(params, salt, leaves)
 
     def check(self, i: int, block: bytes) -> bool:
-        """The answer to challenge `i` is block `i`."""
+        """The answer to challenge `i` is label `i`."""
         return (type(block) is bytes and len(block) == self.params.block_bytes
                 and leaf_hash(self.params, self.salt, i, block) == self.leaves[i])
 
     def check_path(self, i: int, block: bytes, path: Sequence[bytes]) -> bool:
-        """Root-only check: `block` with the server's audit `path` is block `i` under `root`."""
+        """Root-only check: `block` with the server's audit `path` is label `i` under `root`."""
         return (type(block) is bytes and len(block) == self.params.block_bytes
                 and verify_path(self.root, self.params.blocks, i, leaf_hash(self.params, self.salt, i, block), path))

@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "ReplayStep_v1{R=4,W=8,A=4,M=256,T=2048,L=2048,B=16,H=0,CH=1,WM=0,FULL=1,PC=1,NB=512,IW=10,AS=0,EW=0}": {
+   "and": 12235
+  },
+  "ReplayStep_v1{R=4,W=8,A=4,M=256,T=2048,L=2048,B=16,H=0,CH=1,WM=0,FULL=1,PC=1,NB=512,IW=10,AS=1,EW=9}": {
+   "and": 12574
+  }
+ }
+}

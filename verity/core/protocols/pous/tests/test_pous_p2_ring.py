@@ -1,4 +1,4 @@
-"""Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Models/Pous/Assumptions/P2.lean`), the
+"""Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Definitions/Pous/Assumptions/P2.lean`), the
 test that `shape.conjectures` in `Security/lean-audit.json` and `Security/Properties/lean-audit.json` names for it and
 for `P2RingReducesToM1p`, which implies it: P2 in the ring model, with sequential reveal, accepts every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder with probability at
 most `δ + ε`. The same draws test the per-round form `P2RingRoundSecure`
@@ -9,18 +9,18 @@ The audit is `p2ring` as `Security/Definitions/Pous/P2/Cost.lean` defines it: a 
 as labels through metered `add`, `mul`, `one` and `key` queries, and the trusted encoder `ρ(σ_K(ρ(m + t)))`, which at
 the identity labeling is `schemes/p2.py`'s field (`test_the_model_is_the_reference_codec`). It is played at a scaled
 point with the deployed structure (`ρ = 18/19`, `δ = 1%`, `p = 2^w − c0` prime and `≡ 3 mod 4`, 16 payload bits less
-than a block), at `w = 184`, `p = 2^184 − 33` and 16 blocks:
+than a label), at `w = 184`, `p = 2^184 − 33` and 16 labels:
 
-* the conjecture's bound is the ideal row's with `λ` bits of slack per block: a responder holding `⌊ρ·|C|⌋ + λ·B`
-  bits keeps at most `KEPT = ⌊(⌊ρ·|C|⌋ + λ·B)/w⌋` blocks, and `K` is the least `k` with `(KEPT/B)^k ≤ δ` (the
+* the conjecture's bound is the ideal row's with `λ` bits of slack per label: a responder holding `⌊ρ·|C|⌋ + λ·B`
+  bits keeps at most `KEPT = ⌊(⌊ρ·|C|⌋ + λ·B)/w⌋` labels, and `K` is the least `k` with `(KEPT/B)^k ≤ δ` (the
   deployed `k = 105` is the `λ = 128` row's), so the bound is `δ` and the crypto terms are zero;
-* the region is the `(D, Q, L)` a deadline gives: `D_CAP` one multiplication round short of a recomputed block
+* the region is the `(D, Q, L)` a deadline gives: `D_CAP` one multiplication round short of a recomputed label
   (`PousP2Ring.tight`'s `2(n + 1)`), two key queries, and `L_CAP` the ring work of searching `λ` dropped bits.
-  As at the deployed point (a root in `65,789` ring queries, `λ = 128`, `w/19 = 865`), a recomputed block's ring work
+  As at the deployed point (a root in `65,789` ring queries, `λ = 128`, `w/19 = 865`), a recomputed label's ring work
   is below `2^λ` and `λ < w/19`, so the depth-limited recompute is inside the region and the slack is not vacuous.
 
-A responder's answer to block `i` depends only on `i`, its state and the oracle (`Responder`), so given the draw
-`ω` it is accepted with probability exactly `(s_ω/B)^K`, `s_ω` the blocks it answers right; the test averages that
+A responder's answer to label `i` depends only on `i`, its state and the oracle (`Responder`), so given the draw
+`ω` it is accepted with probability exactly `(s_ω/B)^K`, `s_ω` the labels it answers right; the test averages that
 over seeded draws, and a responder inside the region whose average is above `δ + margin(TRIALS)` (Hoeffding, at
 `1 − 10⁻⁹`) is a counterexample, which fails the test with the responder and the draws. Outside the region the test
 shows the known-false side as expected failures: the honest responder (it holds all of `C`), `PousP2Ring.tight`'s
@@ -67,7 +67,7 @@ class Counterexample(AssertionError):
 
 class Ring:
     """One draw `ω` of `ringRO B w p`: an odd labeling `φ` (`φ(−x) = p − φ(x)`), sampled lazily and uniformly, and
-    block `j`'s keys `(K_j, τ_j)`. `identity` fixes `φ = id`, the reference codec's."""
+    label `j`'s keys `(K_j, τ_j)`. `identity` fixes `φ = id`, the reference codec's."""
 
     def __init__(self, rng: random.Random, identity: bool = False) -> None:
         self.rng, self.identity = rng, identity
@@ -185,9 +185,9 @@ def draw(trial: int, salt: str) -> Draw:
 
 @dataclass(frozen=True)
 class Responder:
-    """A preprocessor and a sequential responder whose answer to block `i` reads only `i`, its state and the oracle.
-    `plan[i]` is what it does for block `i`: `("keep", t)` stores the block without its low `t` bits and searches the
-    `2^t` completions with the decoder (`truncProg`; `t = 0` answers the stored block); `("recompute", n)` takes both
+    """A preprocessor and a sequential responder whose answer to label `i` reads only `i`, its state and the oracle.
+    `plan[i]` is what it does for label `i`: `("keep", t)` stores the label without its low `t` bits and searches the
+    `2^t` completions with the decoder (`truncProg`; `t = 0` answers the stored label); `("recompute", n)` takes both
     roots from `W` with `n` bits of the exponent (`recBlock`, right only at `n ≥ N`); `("guess",)` answers `0`."""
     name: str
     plan: tuple[tuple, ...]
@@ -238,7 +238,7 @@ def keep_first(name: str, count: int, t: int, rest: tuple = ("guess",)) -> Respo
 
 
 def random_responder(index: int) -> Responder:
-    """Within the region: blocks in a random order, each kept with a random truncation `t ≤ λ` while the state
+    """Within the region: labels in a random order, each kept with a random truncation `t ≤ λ` while the state
     allows, recomputed with fewer than `N` exponent bits, or guessed."""
     rng, plan, budget = random.Random(f"{SEED}/responder/{index}"), [None] * B, S
     for i in rng.sample(range(B), B):
@@ -343,7 +343,8 @@ def test_p2_ring_audit_secure_at_a_scaled_point(case: Case):
 
 @pytest.mark.parametrize("case", cases())
 def test_p2_ring_round_secure_at_a_scaled_point(case: Case):
-    """`Pous.P2.Assumptions.P2RingRoundSecure` at the same point, with `1 − p = KEPT/B`: given the first `j` answers
+    """`Pous.P2.Assumptions.P2RingRoundSecure` at the same point, and so `P2RingRoundSecureWide`, the same statement to
+    `2^27` labels, which the scaled point doesn't tell apart, with `1 − p = KEPT/B`: given the first `j` answers
     right, the next uniform challenge is answered right with probability at most `KEPT/B`, at every `j < K`. Given the
     draw `ω` a responder answers each challenge right with probability exactly `s_ω/B`, so over the draws the rate at
     round `j` is `Σ (s_ω/B)^(j+1) / Σ (s_ω/B)^j`, and it is above `KEPT/B` only if some draw has `s_ω > KEPT`. That

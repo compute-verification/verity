@@ -6,7 +6,7 @@ import Properties.SampledProofs.Draw
 
 `Accounting.Compose.Declared` gives each gate its proof unit (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
-(`Models.Accounting.Guarantees.Compose`) draws, proves and charges tiles by them, its draw `Pouw.Window.subsetDraw`
+(`Definitions.Accounting.Guarantees.Compose`) draws, proves and charges tiles by them, its draw `Pouw.Window.subsetDraw`
 (`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
 program `p` and query:
 * **units**: the service draws and proves the units of the verifier's own partition of its program
@@ -34,10 +34,10 @@ program `p` and query:
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
-faithfulness gap (note:compute-accounting/20261018T1758Z-draft-compose-r6, Open). The extractor that builds one, with
-this property proved of it, closes it; tying each value to its leaf under the weights' or the transcript's root is the
-extractor's too. The draw conjunct is over the code alone and could be proved first (`Select.select`'s subset draw from
-bytes, `Draw.drawUnits`), beside `Properties.SampledProofs.DrawMisses`.
+open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
+its leaf under the weights' or the transcript's root is the extractor's too. The draw conjunct is over the code alone
+and could be proved first (`Select.select`'s subset draw from bytes, `Draw.drawUnits`), beside
+`Properties.SampledProofs.DrawMisses`.
 -/
 
 open Lean (Json)

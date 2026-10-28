@@ -18,7 +18,7 @@ def ks : Array (Array Nat × ByteArray) := #[(#[1], salt 0), (#[1], salt 1)]
 
 def reg : Registered.Port :=
   { name := "o1", value := "ok", root := .empty, leaves := 2, words := some 1, wordBits := 16, domain := dom,
-    reads := #[some 0, some 1], schema := HmRow.ROW_SCHEMA_V2 }
+    readsRel := #[some 0, some 1], schema := HmRow.ROW_SCHEMA_V2 }
 
 def root (k : Array (Array Nat × ByteArray)) : ByteArray := FV3.root dom (Registered.knownLeaves reg k) Sha512.hash
 
@@ -40,6 +40,8 @@ def run (f : Json) : Except String Unit := do
 
 def passes (f : Json) : Bool := (run f).toBool
 
+-- a `verity/registered-reads/v1` port may name its known content
+#guard Registered.PORT_KEYS.contains Registered.KNOWN_KEY
 -- the root of the known rows
 #guard passes (file (hexOf (root ks)) (some (knownJ ks)))
 -- no known content: nothing to check

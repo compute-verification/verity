@@ -42,13 +42,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "PULLED: superseded by art:bb289d473743516d703d2245f4bde769c0 (flock-backend)"
+     "withdrawn as a measurement: superseded by art:bb289d473743516d703d2245f4bde769c0, the same cell with its interaction fields corrected (coin waits leave out the verifier's end-of-session replay); its sessions still verify"
     ]
    },
    "vectors": [
@@ -108,13 +108,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "PULLED: superseded by art:ed0047be9b1774b157ee82d8abb7e6e132 (flock-backend)"
+     "withdrawn as a measurement: superseded by art:ed0047be9b1774b157ee82d8abb7e6e132, the same cell with its interaction fields corrected (coin waits leave out the verifier's end-of-session replay); its sessions still verify"
     ]
    },
    "vectors": [
@@ -174,14 +174,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "SHA-256 layout grant (23:32Z/23:40Z): verifier commit c058c3 (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the SHA-256 row layout (sha256/row/v1) at the verifier commit the cell names, so its rows are committed by SHA-256 row digests; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -241,14 +241,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "SHA-256 layout grant (23:32Z/23:40Z): verifier commit c058c3 (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the SHA-256 row layout (sha256/row/v1) at the verifier commit the cell names, so its rows are committed by SHA-256 row digests; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -308,15 +308,15 @@
    },
    "labels": {
     "finding": [
-     "red-team-flock placement ruling (FA1): separate-verifier cel (red-team-flock)",
-     "red-team-flock-2 10:25Z: Fp4 (blake3-keyed/row-nvfp4/v1), pl (red-team-flock-2)",
-     "red-team-flock-2 10:30Z (supersedes 10:25Z): proof_class NON (red-team-flock-2)"
+     "placement reviewed: the verifier runs as its own serve process on a machine of its own, with its own coins, in another datacenter (3.2 ms round trip). Soundness does not depend on the distance, but t.total includes about 3.3 ms of coin wait a round, so compare the cell on prover compute rather than t.total",
+     "an earlier review of the NVFP4 cell with keyed-BLAKE3 rows (row-nvfp4/v1), superseded by its final proof_class review",
+     "final review, NON_ZK_PROOF: the NVFP4 statement (verity/flock-pure-block/v2 fp4-nvf4, netlist pin fb52a87c) over a synthetic NVFP4 input set, whose y is the IR program's rather than a GPU capture. Every verifier-written file was checked independently: the rows are the set's NVFP4 row bytes, the 24 accumulators follow the sm_120 NVFP4 chain, out = y, and the digests, roots, domain ids and bindings recompute; every served session accepted"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ]
    },
    "vectors": [
@@ -376,15 +376,15 @@
    },
    "labels": {
     "finding": [
-     "red-team-flock placement ruling (FA1): separate-verifier cel (red-team-flock)",
-     "red-team-flock-2 10:25Z: ShaFp4 (sha256/row-nvfp4/v1), plate (red-team-flock-2)",
-     "red-team-flock-2 10:30Z (supersedes 10:25Z): proof_class NON (red-team-flock-2)"
+     "placement reviewed: the verifier runs as its own serve process on a machine of its own, with its own coins, in another datacenter (3.2 ms round trip). Soundness does not depend on the distance, but t.total includes about 3.3 ms of coin wait a round, so compare the cell on prover compute rather than t.total",
+     "an earlier review of the NVFP4 cell with SHA-256 rows (row-nvfp4/v1), superseded by its final proof_class review",
+     "final review, NON_ZK_PROOF: the NVFP4 statement (verity/flock-pure-block/v2 fp4-nvf4, netlist pin fb52a87c) over a synthetic NVFP4 input set, whose y is the IR program's rather than a GPU capture. Every verifier-written file was checked independently: the rows are the set's NVFP4 row bytes, the 24 accumulators follow the sm_120 NVFP4 chain, out = y, and the digests, roots, domain ids and bindings recompute; every served session accepted"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ]
    },
    "vectors": [
@@ -444,14 +444,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)",
-     "accepted (red-team-flock)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins",
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell (spine input sets): PB1 verifier 3a (red-team-flock)"
+     "reviewed per cell (chunked rows over the spine's input sets): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier's out equals y << 10 (y < 2^22); n * VUs per proof <= 15360; the netlists are the pinned ones"
     ]
    },
    "vectors": [
@@ -511,14 +511,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell: PB1 verifier commit+binary named ( (red-team-flock)"
+     "reviewed per cell (chunked rows): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier binary checks that the opened outputs are the committed y; n * VUs per proof <= 32768"
     ]
    },
    "vectors": [
@@ -578,14 +578,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "L40S #101 K2048 re-run, Chunk(4) per-cell (red-team-flock, C (red-team-flock)"
+     "reviewed per cell (Chunk(4) at K = 2048, an L40S re-run): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own (6 of 6 accepted); the soundness union is reported (1 proof, m = 34, 2^-195.44); y == out; 4 x 4096 = 16384 VUs; prover and verifier are distinct machines, 20 ms apart"
     ]
    },
    "vectors": [
@@ -645,14 +645,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "v2 grant (d3e96304/48045063 path): verifier commit 0864d146  (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the re-run's verifier commit is on the reviewed flock-pure-block/v2 verifier path; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -712,14 +712,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "fp8 layout grant (21:35Z fp8-ada / 23:20Z fp8-hopper): verif (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the FP8 row layouts (fp8-ada and fp8-hopper) at the verifier commit the cell names; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ]
    },
    "vectors": [
@@ -779,14 +779,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "fp8 layout grant (21:35Z fp8-ada / 23:20Z fp8-hopper): verif (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the FP8 row layouts (fp8-ada and fp8-hopper) at the verifier commit the cell names; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ]
    },
    "vectors": [
@@ -846,14 +846,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "bf16-ampere keyed-BLAKE3 under the bf16 layout grant (23:20Z (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: bf16-ampere's keyed-BLAKE3 rows fall under the review of the bf16 row layout; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ]
    },
    "vectors": [
@@ -913,14 +913,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "SHA-256 layout grant (23:32Z/23:40Z): verifier commit c058c3 (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the SHA-256 row layout (sha256/row/v1) at the verifier commit the cell names, so its rows are committed by SHA-256 row digests; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -980,14 +980,14 @@
    },
    "labels": {
     "finding": [
-     "SHA-256 layout grant (23:32Z/23:40Z): verifier commit c058c3 (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed: the SHA-256 row layout (sha256/row/v1) at the verifier commit the cell names, so its rows are committed by SHA-256 row digests; its sessions are accepted",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -1047,14 +1047,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)",
-     "accepted (red-team-flock)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins",
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell (spine input sets): PB1 verifier 3a (red-team-flock)"
+     "reviewed per cell (chunked rows over the spine's input sets): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier's out equals y << 10 (y < 2^22); n * VUs per proof <= 15360; the netlists are the pinned ones"
     ]
    },
    "vectors": [
@@ -1114,14 +1114,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell: PB1 verifier commit+binary named ( (red-team-flock)"
+     "reviewed per cell (chunked rows): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier binary checks that the opened outputs are the committed y; n * VUs per proof <= 32768"
     ]
    },
    "vectors": [
@@ -1181,15 +1181,15 @@
    },
    "labels": {
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell: PB1 verifier commit+binary named ( (red-team-flock)",
-     "CORRECTION: instances.source \"captured\" holds for x and W on (flock-backend)"
+     "reviewed per cell (chunked rows): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier binary checks that the opened outputs are the committed y; n * VUs per proof <= 32768",
+     "provenance: the inputs x and W are captured, while y is the bf16-hopper wgmma model chain's output rather than a capture, as instances.source records"
     ]
    },
    "vectors": [
@@ -1249,16 +1249,16 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell: PB1 verifier commit+binary named ( (red-team-flock)",
-     "CORRECTION: instances.source \"captured\" holds for x and W on (flock-backend)",
-     "CORRECTION: instances.source \"captured\" holds for x and W on (flock-backend)"
+     "reviewed per cell (chunked rows): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier binary checks that the opened outputs are the committed y; n * VUs per proof <= 32768",
+     "provenance: the inputs x and W are captured, while y is the bf16-hopper wgmma model chain's output rather than a capture, as instances.source records",
+     "provenance: the inputs x and W are captured, while y is the bf16-hopper wgmma model chain's output rather than a capture, as instances.source records"
     ]
    },
    "vectors": [
@@ -1318,14 +1318,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)",
-     "accepted (red-team-flock)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins",
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell (spine input sets): PB1 verifier 3a (red-team-flock)"
+     "reviewed per cell (chunked rows over the spine's input sets): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier's out equals y << 10 (y < 2^22); n * VUs per proof <= 15360; the netlists are the pinned ones"
     ]
    },
    "vectors": [
@@ -1385,14 +1385,14 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)",
-     "accepted (red-team-flock)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins",
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "Chunk(n) grant, per-cell (spine input sets): PB1 verifier 3a (red-team-flock)"
+     "reviewed per cell (chunked rows over the spine's input sets): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own; the verifier's out equals y << 10 (y < 2^22); n * VUs per proof <= 15360; the netlists are the pinned ones"
     ]
    },
    "vectors": [
@@ -1452,17 +1452,17 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "L40S line, Chunk(n) grant per-cell (red-team-flock, CPU): PB (red-team-flock)"
+     "reviewed per cell (chunked rows at K = 2048 on L40S): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own (6 of 6 accepted); the soundness union is reported (1 proof, 2^-195.44); the verifier's file has y == out (u16 leaf); n * VUs = 16384 (m = 34); the verifier's instance file is byte-identical to the A100 cell's of the same Sigma"
     ],
     "superseded_by": [
-     "art:73a9e9f33a0e57ea9e80ccfe14fd81727a957ceb6a2a29459b55f33c39b6155f (flock-l40s-101)"
+     "art:73a9e9f33a0e57ea9e80ccfe14fd81727a957ceb6a2a29459b55f33c39b6155f"
     ]
    },
    "vectors": [
@@ -1522,14 +1522,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (red-team-flock)",
-     "accepted (verify-flock-pure)"
+     "accepted: an independent replay of the recorded sessions on its own CPU build of the verifier",
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "L40S line, Chunk(n) grant per-cell (red-team-flock, CPU): PB (red-team-flock)"
+     "reviewed per cell (chunked rows at K = 2048 on L40S): the verifier's commit and binary are named and carry the admission checks; an independent replay on its own CPU build accepted every recorded session and rejected proofs from another session or with swapped repetitions; every session ran the link exchange, required, under the cell's Sigma; the verifier ran on a machine of its own (6 of 6 accepted); the soundness union is reported (1 proof, 2^-195.44); the verifier's file has y == out (u16 leaf); n * VUs = 16384 (m = 34); the verifier's instance file is byte-identical to the A100 cell's of the same Sigma"
     ]
    },
    "vectors": [
@@ -1593,13 +1593,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 07:55Z: verity/flock-ir-frame/v2 @ c53d9148 (red-team-flock-2)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v2 (the frame-v3 keyed-BLAKE3 binding) chains every unit's inputs and outputs to the keyed-BLAKE3 row commitment with no gap, and this cell's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute. Conditions: the verifier stages its own file, and the leaf maps and row key are pinned"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -1664,13 +1664,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 07:55Z: verity/flock-ir-frame/v2 @ c53d9148 (red-team-flock-2)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v2 (the frame-v3 keyed-BLAKE3 binding) chains every unit's inputs and outputs to the keyed-BLAKE3 row commitment with no gap, and this cell's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute. Conditions: the verifier stages its own file, and the leaf maps and row key are pinned"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -1735,13 +1735,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 07:55Z: verity/flock-ir-frame/v2 @ c53d9148 (red-team-flock-2)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v2 (the frame-v3 keyed-BLAKE3 binding) chains every unit's inputs and outputs to the keyed-BLAKE3 row commitment with no gap, and this cell's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute. Conditions: the verifier stages its own file, and the leaf maps and row key are pinned"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -1805,13 +1805,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 10:25Z: NON_ZK_PROOF, the L40S line. rope-h (red-team-flock-2)"
+     "NON_ZK_PROOF: rope-head d64 on captured inputs (L40S), statement verity/flock-ir-frame/v2 at the pinned leaf maps, whose loader refuses every wiring, output-map, block-assignment, row-key and missing-LEAVES tamper; every point's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute; every served session accepted"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -1876,13 +1876,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 10:25Z: NON_ZK_PROOF, the L40S line. silu-m (red-team-flock-2)"
+     "NON_ZK_PROOF: silu-mul i8192, two units a frame, on captured inputs (L40S), statement verity/flock-ir-frame/v2 at the pinned leaf maps, whose loader refuses every wiring, output-map, block-assignment, row-key and missing-LEAVES tamper; every point's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute; every served session accepted"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -1947,14 +1947,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 10:25Z: NON_ZK_PROOF, the L40S line. rmsnor (red-team-flock-2)",
-     "red-team-flock-2 10:25Z: NON_ZK_PROOF, the L40S line. rmsnor (red-team-flock-2)"
+     "NON_ZK_PROOF: rmsnorm-triton n2048 eps 1e-5 on captured inputs (L40S), whose pinned tail relates the cut words, which the loader checks; statement verity/flock-ir-frame/v2 at the pinned leaf maps, whose loader refuses every wiring, output-map, block-assignment, row-key and missing-LEAVES tamper; every point's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute; every served session accepted",
+     "NON_ZK_PROOF: rmsnorm-triton n2048 eps 1e-5 on captured inputs (L40S), whose pinned tail relates the cut words, which the loader checks; statement verity/flock-ir-frame/v2 at the pinned leaf maps, whose loader refuses every wiring, output-map, block-assignment, row-key and missing-LEAVES tamper; every point's verifier-staged file was checked independently: the netlist is the reviewed lowering, the wiring and out_leaf equal the IR's leaf maps, the row digests are keyed BLAKE3 and the roots recompute; every served session accepted"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2018,13 +2018,13 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "finding": [
-     "red-team-flock-2 14:25Z: NON_ZK_PROOF. #73 H100 rope-head d1 (red-team-flock-2)"
+     "NON_ZK_PROOF: rope-head d128 (H100), statement verity/flock-ir-frame/v3; the pinned lowering regenerates, its units and tail match the IR evaluator on adversarial rows, and every leaf-map and frame tamper is refused at load; every point's verifier-staged file is frame-checked and the IR evaluated on every word of the plateau file, with no difference; every served session accepted"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ]
    },
    "vectors": [
@@ -2089,13 +2089,13 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 14:25Z: NON_ZK_PROOF. #73 H100 silu-mul i97 (red-team-flock-2)"
+     "NON_ZK_PROOF: silu-mul i9728, two units a frame (H100), statement verity/flock-ir-frame/v3; the pinned lowering regenerates, its units and tail match the IR evaluator on adversarial rows, and every leaf-map and frame tamper is refused at load; every point's verifier-staged file is frame-checked and the IR evaluated on every word of the plateau file, with no difference; every served session accepted"
     ]
    },
    "vectors": [
@@ -2160,13 +2160,13 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 14:25Z: NON_ZK_PROOF. #73 H100 rmsnorm-trit (red-team-flock-2)"
+     "NON_ZK_PROOF: rmsnorm-triton n128 eps 1e-6 (H100), the power-of-two width case, statement verity/flock-ir-frame/v3; the pinned lowering regenerates, its units and tail match the IR evaluator on adversarial rows, and every leaf-map and frame tamper is refused at load; every point's verifier-staged file is frame-checked and the IR evaluated on every word of the plateau file, with no difference; every served session accepted"
     ]
    },
    "vectors": [
@@ -2230,13 +2230,13 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 14:25Z: NON_ZK_PROOF. #60 L40S rope-head d1 (red-team-flock-2)"
+     "NON_ZK_PROOF: rope-head d128 (L40S), statement verity/flock-ir-frame/v3; the pinned lowering regenerates, its units and tail match the IR evaluator on adversarial rows, and every leaf-map and frame tamper is refused at load; every point's verifier-staged file is frame-checked and the IR evaluated on every word of the plateau file, with no difference; every served session accepted"
     ]
    },
    "vectors": [
@@ -2301,13 +2301,13 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 14:25Z: NON_ZK_PROOF. #60 L40S rmsnorm-fuse (red-team-flock-2)"
+     "NON_ZK_PROOF: rmsnorm-fused-cuda n4096 eps 1e-5 (L40S), statement verity/flock-ir-frame/v3; the pinned lowering regenerates, its units and tail match the IR evaluator on adversarial rows, and every leaf-map and frame tamper is refused at load; every point's verifier-staged file is frame-checked and the IR evaluated on every word of the plateau file, with no difference; every served session accepted"
     ]
    },
    "vectors": [
@@ -2370,13 +2370,13 @@
    },
    "labels": {
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 14:25Z: NON_ZK_PROOF. #60 L40S rmsnorm-trit (red-team-flock-2)"
+     "NON_ZK_PROOF: rmsnorm-triton n4096 eps 1e-5 (L40S), with a tail of 16 warp sums, statement verity/flock-ir-frame/v3; the pinned lowering regenerates, its units and tail match the IR evaluator on adversarial rows, and every leaf-map and frame tamper is refused at load; every point's verifier-staged file is frame-checked and the IR evaluated on every word of the plateau file, with no difference; every served session accepted"
     ]
    },
    "vectors": [
@@ -2440,13 +2440,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2510,13 +2510,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2580,13 +2580,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2650,13 +2650,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2720,13 +2720,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2790,13 +2790,13 @@
    },
    "labels": {
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2860,13 +2860,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -2930,13 +2930,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3001,15 +3001,15 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)",
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge",
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)",
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven",
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3074,13 +3074,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3145,15 +3145,15 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-3)",
-     "NON_ZK_PROOF (red-team-flock-3)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge",
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)",
-     "red-team-flock-3: GRANTED WITH CONDITIONS, verity/flock-ir-f (red-team-flock-3)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven",
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-frame/v3 attention (AttentionHead_v3, D = 64, BN = 128). The verifier-staged statement was checked: the netlist is the reviewed lowering, the wiring the pinned leaf maps, the digests and frame-v3 roots recompute, and the units and tail equal the IR and the captured outputs; prover-side, load, restatement and T/set-confusion negatives are refused. The softmax tail is verified natively on public words, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3218,13 +3218,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 10:10Z: verity/flock-ir-sampling/v1 (PR #65 (red-team-flock-2)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-sampling/v1 is a sound statement of the whole GumbelTopPTokenSelect only with the verifier's native check (check_native) as part of verification, since Rust alone accepts forged keep bits, noise, seed or splits, which check_native refuses. The circuit proves the temperature lane, the mask select, the noisy add and the first-max step, and binds the logits row by frame-v3; the top-p split and the Gumbel noise are checked natively, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3289,13 +3289,13 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock-2)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "red-team-flock-2 10:10Z: verity/flock-ir-sampling/v1 (PR #65 (red-team-flock-2)"
+     "reviewed at NON_ZK_PROOF, with conditions: verity/flock-ir-sampling/v1 is a sound statement of the whole GumbelTopPTokenSelect only with the verifier's native check (check_native) as part of verification, since Rust alone accepts forged keep bits, noise, seed or splits, which check_native refuses. The circuit proves the temperature lane, the mask select, the noisy add and the first-max step, and binds the logits row by frame-v3; the top-p split and the Gumbel noise are checked natively, not proven"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3355,14 +3355,14 @@
    },
    "labels": {
     "proof_class": [
-     "NON_ZK_PROOF (red-team-flock)"
+     "NON_ZK_PROOF: a plain Flock proof (no --zk), sound but not zero-knowledge"
     ],
     "finding": [
-     "GRANTED WITH CONDITIONS (verity/flock-vllm-block/v1 @ ff1c1e (red-team-flock)",
-     "NV1 (red-team-flock-2 0310Z): grant STANDS, condition added: (red-team-flock)"
+     "reviewed, with conditions: verity/flock-vllm-block/v1, outside the benchmark's scope, on the same verifier path as flock-pure-block",
+     "the review stands, with a condition on the verifier: it must check that every opened output equals the committed y. Checked on this cell after the fact: every verifier-side instance file has y[v] == out[v] for every VU, and the verifier recomputed the y root natively, so the opened outputs are the committed y"
     ],
     "verified": [
-     "accepted (verify-flock-pure)"
+     "accepted: a non-producer re-verification replayed the recorded sessions with their recorded coins"
     ]
    },
    "vectors": [
@@ -3691,12 +3691,12 @@
   "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net, the five rec_sparse_* cases a rec-sparse/\u2026 unit that is not the verifier's sparse-phase net, and the six rec_opening_* cases a rec-opening/\u2026 unit that is not the verifier's opening part net; upstream takes the unit as the file gives it."
  },
  "forgeries": {
-  "note": "The red-team forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",
+  "note": "The adversarial forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",
   "runs": [
    {
     "art": "art:8d04b53f",
     "run": "r20260925-112210-2d3d",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "R-BREAK: reps unbound to one root",
     "files": [
      "inputs/rtf_unlinked_reps.rs",
@@ -3718,7 +3718,7 @@
    {
     "art": "art:1bd3368b",
     "run": "r20260925-124333-1a03",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "live attacks R1/R2/R3/R7, n 4096",
     "files": [
      "inputs/rtf_live_attacks_tail.rs",
@@ -3729,7 +3729,7 @@
    {
     "art": "art:12a6b845",
     "run": "r20260925-124555-21d5",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "live attacks, n 4096 and 16384",
     "files": [
      "inputs/rtf_live_attacks_tail.rs",
@@ -3740,7 +3740,7 @@
    {
     "art": "art:20545959",
     "run": "r20260925-155333-c658",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "link attacks L1-L4",
     "files": [
      "inputs/rtf_link_attacks_tail.rs",
@@ -3751,49 +3751,49 @@
    {
     "art": "art:ac1aeeeb",
     "run": "r20260925-210925-a744",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "flock-pure-block/v2 selftest 18/18 at 8 and 64 VUs"
    },
    {
     "art": "art:1f2fe1e9",
     "run": "r20260925-212534-f9f0",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "fp8-ada selftest 16/16, bf16 18/18"
    },
    {
     "art": "art:0f0b6f41",
     "run": "r20260925-230859-6d32",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "fp8-hopper 16/16, bf16-ampere 18/18"
    },
    {
     "art": "art:08295fa2",
     "run": "r20260925-232225-1b40",
-    "by": "red-team-flock",
+    "by": "adversarial review",
     "name": "SHA-256 layouts 13/13 x4"
    },
    {
     "art": "art:cf130873",
     "run": "r20260926-025249-6192",
-    "by": "red-team-flock-2",
+    "by": "adversarial review",
     "name": "NVFP4: 12 negatives refused (rtf2)"
    },
    {
     "art": "art:ac3dac64",
     "run": "r20260926-040359-a5da",
-    "by": "red-team-flock-2",
+    "by": "adversarial review",
     "name": "NV1-NV5: 12 negatives, 7 admission refusals, consistent output forgery"
    },
    {
     "art": "art:25c96f97",
     "run": "r20260926-103512-bb40",
-    "by": "red-team-flock-3",
+    "by": "adversarial review",
     "name": "attention v3: 19 prover-side attacks refused"
    },
    {
     "art": "art:49512aff",
     "run": "r20260926-175514-5b86",
-    "by": "PR #83 lane (producer)",
+    "by": "the circuit statement's producer",
     "name": "circuit-statement selftests RoPE 18 / SiLU 19 cases",
     "files": [
      "out/rope-head/selftest-gpu.txt",
@@ -3991,16 +3991,27 @@
        "name": "lig-query-nonce",
        "rep": 0,
        "expect": {
-        "accepted": true,
-        "why": ""
+        "accepted": false,
+        "why": "grinding_nonce \u2260 0",
+        "upstream_accepted": true
        }
       },
       {
        "name": "lig-claim-nonce",
        "rep": 0,
        "expect": {
-        "accepted": true,
-        "why": ""
+        "accepted": false,
+        "why": "claim_batch_grinding_nonce \u2260 0",
+        "upstream_accepted": true
+       }
+      },
+      {
+       "name": "lig-consistency-nonce",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "consistency_batch_grinding_nonce \u2260 0",
+        "upstream_accepted": true
        }
       },
       {
@@ -4634,6 +4645,50 @@
     "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); the selftest's host_units_match_witness check fails here and on its base (a host-side unit evaluation, not a session), so all_pass is false; upstream's verdicts are its live ones in each case.json",
     "agreement": "local ci.py --live --sets 5 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted",
     "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
+   },
+   {
+    "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, PROTOCOL.md §16.15 rule 6)",
+    "pr83": "61e5c2617",
+    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-2 (r20261025-031112-428a, source 61e5c2617: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, registered with register_served), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
+    "statement": {
+     "circuit": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/circuit.txt",
+     "public": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/pub-32.bin",
+     "partition": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/partition.json",
+     "program": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/program.json",
+     "registered": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/registered.json",
+     "stratified": 16,
+     "coins": "os",
+     "circuit_sha512": "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0",
+     "detail": "RoPE d64, 32 RegisteredRoPE units reading cs_table rows (registered root 6dd69162, row/v1), Q_template_instance v0: a shared-row public file at hidden outputs and hm96-sha512/v1 leaves; registered.json is the verifier's own (register_served on its own program)"
+    },
+    "sessions": [
+     {
+      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/root",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: port cs: table row 0 does not open cs_table's registered root at position 3",
+       "upstream_accepted": true
+      }
+     },
+     {
+      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/none",
+      "expect": {
+       "accepted": false,
+       "why": "setup: registered reads: the statement reads registered values, and the verifier holds no registered roots",
+       "upstream_accepted": true
+      }
+     }
+    ],
+    "lean_statement": "verity/flock-circuit",
+    "agreement": "ci.py --live --sets 6 on vy-nebius-cpu-2 (r20261025-033213-b071, Lean at 1cec4f455): 3/3, 1 accepted",
+    "sessions_note": "honest: the session with the verifier's own reads (accepted); root: its registered.json with the tree's root zeroed; none: registered.json null (no --registered). Upstream's verdicts are the live server's (each case.json, from serve's record), which reads no registered roots"
    }
   ]
  }

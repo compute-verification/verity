@@ -15,7 +15,7 @@ sys.path.insert(0, str(HERE.parent))
 import free_codec as FC  # noqa: E402
 import squaring as S  # noqa: E402
 
-# Security/Proofs/Accounting/Gates.lean's `codecRows` (6b, #2363 @ d6df95f24a): (n, c, cs, K, τ, i, m, encodeWord).
+# Security/Proofs/Accounting/Gates.lean's `codecRows` (6b, at d6df95f24a): (n, c, cs, K, τ, i, m, encodeWord).
 CODEC_ROWS = [
     (8, 5, [17, 200, 99], 248, 3, 5, 219, 234), (8, 5, [92, 7], 253, 18, 54, 195, 147),
     (8, 5, [44, 209], 252, 132, 41, 181, 166), (8, 5, [139, 0], 254, 232, 36, 68, 225),
@@ -86,6 +86,8 @@ def test_ripple_and_lookahead_reproduce_6bs_counts():
     for fn, args, units in ((S.ripple_square, (), 512), (S.lookahead_square, (3,), 342)):
         b, out, carry = _build(fn, *args)
         assert b.lean_units == units == b.fixed_units
+        assert b.products == S.products(b.gates) == S.N_LIMBS ** 2 and b.nonlinear_units == units + S.N_LIMBS ** 2
+        assert b.nonlinear_units == S.nonlinear(b.gates) > S.e_per_squaring(0)
         assert _restricted_and_correct(b, out, a)
         assert _run(b, out, a)[0][carry] == 0
 
@@ -95,7 +97,7 @@ def test_the_counted_constructions_cost_what_the_report_says():
     inputs = [rng.randrange(1 << 1024) for _ in range(4)] + [S.P - 1, 0]
     for fn, units in ((S.merged_square, 297), (S.onepass_square, 168), (S.seam_square, 160)):
         b, out, _ = _build(fn)
-        assert b.lean_units == units == b.fixed_units
+        assert b.lean_units == units == b.fixed_units and b.nonlinear_units == units + S.N_LIMBS ** 2
         assert max(sum(b.gates[j].bits for j in g.args) for g in b.gates if g.op.kind == "budgeted") <= 128
         for a in inputs:
             if fn is S.seam_square and S.seam_fails(a):
@@ -184,9 +186,10 @@ def test_the_seam_fails_on_about_2_to_the_minus_12_of_inputs():
 
 def test_the_costs_against_the_conjecture():
     assert (S.SQUARINGS, S.ROUNDS) == (1021, 3)
-    assert (S.e_per_squaring(40), S.e_per_squaring(20)) == (119, 121)
-    assert S.ROUNDS * S.SQUARINGS * S.e_per_squaring(40) == 364_497
-    assert S.ROUNDS * S.SQUARINGS * S.e_per_squaring(20) == 370_623
+    assert (S.renorm_floor(40), S.renorm_floor(20)) == (119, 121)
+    assert (S.e_per_squaring(40), S.e_per_squaring(20)) == (374, 376)
+    assert S.ROUNDS * S.SQUARINGS * S.e_per_squaring(40) == 1_145_562
+    assert S.ROUNDS * S.SQUARINGS * S.e_per_squaring(20) == 1_151_688
     assert (S.counting_floor(40), S.counting_floor(20)) == (123, 126)
     assert S.ROUNDS * S.SQUARINGS * 160 == 490_080
 

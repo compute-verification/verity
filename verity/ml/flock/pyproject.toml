@@ -32,21 +32,25 @@ inputs = [
     "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
     "Security/Properties/lakefile.toml", "Security/Properties/lake-manifest.json", "Security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
-    "Security/Proofs/Flock/Soundness/Audit", "Security/Models/Flock/Guarantees/Audit.lean",
-    # test_lean_rope.py compares the RoPE data `verity_flock.lean_rows` writes
-    "Security/Proofs/Flock/Soundness/Rope/Gates.lean", "Security/Proofs/Flock/Soundness/Rope/Pinned.lean",
-    "Security/Proofs/Flock/Soundness/Rope/Checkpoints.lean", "Security/Proofs/Flock/Soundness/Rope/Chunks.lean",
+    "Security/Proofs/Flock/Soundness/Audit", "Security/Definitions/Flock/Guarantees/Audit.lean",
     # test_randomness_spec.py hashes the spec fixtures/randomness_lean.json was generated from
     "Security/Proofs/Flock/Soundness/PlanDraw.lean",
-    # tests import B-Ligero (through verity_numerical) and circuit-check's targets, and read the census
-    "archive/direct", "tools/verity/circuit_check", "benchmarks/census",
+    # tests import circuit-check's targets and read the census
+    "tools/verity/circuit_check", "benchmarks/census",
     # the Lean verifier's stratified draw against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
     # its pinned vectors
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
+    "verity/core/service/flock/Flock/Zk.lean",
+    # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
+    # the flock-verify artifact
+    "verity/core/service/flock/Flock/Test/RecCap.lean",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (16 Oct, vy-nebius-cpu-1: 38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
 worker_gb = 16
+# 9,765 s on one worker beside a loaded check (r20261025-023312-fa65), past suites.py's SUITE_TIMEOUT_S
+timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-firewall",

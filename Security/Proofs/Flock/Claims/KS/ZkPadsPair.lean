@@ -156,94 +156,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable)
 open FlockSoundness.Discharge.Composed (outJ repJ)
 open Claims.Bridge.Custody
 
-/-- **An accepting run's view logs its reps' pads openings**: at the view the deployed decoders are right at
-`OpensRows` (`decodesTableR_deploy`), so table `j` reads `Q` queries and each rep's pads openings are its proof file's
-inner-proof openings at the positions its rep stream's last round's coins give; that stream has the run's rep stream's
-coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so the run's log holds their inputs (`zk_padsLogged`). -/
-theorem zkViewPadsLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
-    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} {r : Fin ((V true).k x) → Coin}
-    (hacc : (Claims.run sha512 P (V true) x ω r).out = .acc) {s' spec' sts' link c₁ mids f}
-    (hact : act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
-        ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
-      .decide s' spec' sts' link c₁ mids f)
-    {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
-    (hret : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-      (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (viewOf (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts spec' link c₁ f) a) :
-    (zkTabs h0 L hz hk hlay j).q = Zk.Q ∧ ∀ rr < 2,
-      PadsLogged (Claims.run sha512 P (V true) x ω r).vLog ((a.getD j dfltOutZC).opens.inner rr)
-        (if rr = 0 then (a.getD j dfltOutZC).pend.1 else (a.getD j dfltOutZC).pend.2).qpos := by
-  obtain ⟨hV, pend, hpl, ha⟩ := hret
-  subst a
-  have e := (act_decide hact).symm.trans hset
-  simp only [Option.some.injEq, Prod.mk.injEq] at e
-  obtain ⟨e₁, e₂, e₃⟩ := e
-  subst s' spec' sts'
-  have hrun : Runs sha512 (decision true ins x link c₁ mids f) ()
-      ((Claims.run sha512 P (V true) x ω r).vLog.map Prod.fst) := by
-    obtain ⟨s₂, spec₂, sts₂, link₂, c₂, mids₂, f₂, hact₂, hrun⟩ := acc_decide hacc
-    rw [hact] at hact₂
-    cases hact₂
-    exact hrun
-  have hjJ : j < (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
-    rw [tabsJ_length]
-    exact hj
-  obtain ⟨jj, rfl⟩ : ∃ jj : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length, jj.val = j :=
-    ⟨⟨j, hjJ⟩, rfl⟩
-  rw [getD_ofFnJ]
-  obtain ⟨-, spec₂, sts₂, sess, sch, tPad, s₀, s₁, hj₂, hsA₂, hdec, hsch, hs₀, hs₁, -, -, hq, hp₀, hp₁, -⟩ :=
-    Tables.DecodesTable.ok_of_plays (decodesTableR_deploy hs hin hset h0 L hz hk hlay hd
-      (viewOf _ spec.mPts spec link c₁ f) jj) ⟨hV.1, rfl⟩ (pend jj) (hpl jj 0) (hpl jj 1)
-  have hacc' := run_acc_next sha512 P (V true) x ω r hacc
-  replace hacc' : ((next true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
-      ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map
-        (Claims.coinSeq r))).eval sha512).1 = .acc := hacc'
-  obtain ⟨-, hc⟩ := (next_decide_sha512 hact).1 hacc'
-  obtain ⟨hins, hsu⟩ := setupOf_some (act_decide hact)
-  obtain ⟨hvr, -⟩ := decision_runs hsu hrun
-  have hv' : Zk.verifyWithM (hashesIn ((Claims.run sha512 P (V true) x ω r).vLog.map Prod.fst)) spec
-      (tabsOf sts) f.record f.proofs = .ok () := verdict_within hvr
-  have hzk : ins.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  have hsA := setupAt_of_setup hsu hzk (publicInputs_none_of_checks hc)
-  rw [hd] at hsA
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hsA.symm.trans hsA₂))
-  obtain ⟨hpr, hall⟩ := recordsLiveAtS_wrS ins.read.I d (viewOf _ spec.mPts spec link c₁ f) hV.1
-  obtain ⟨-, hrs⟩ := hall spec sts sess hsA hdec
-  obtain ⟨y₀, hy₀, hr₀⟩ := (hrs jj).2 ⟨0, by omega⟩
-  obtain ⟨y₁, hy₁, hr₁⟩ := (hrs jj).2 ⟨1, by omega⟩
-  obtain rfl : y₀ = s₀ := Option.some.inj (hy₀.symm.trans hs₀)
-  obtain rfl : y₁ = s₁ := Option.some.inj (hy₁.symm.trans hs₁)
-  obtain ⟨-, lv, hlv, -⟩ := checks_ok hc
-  have hD : liveD spec f.record = lv := by simp [liveD, hlv]
-  have hco : ∀ (q : ℕ) (y : StreamRec),
-      y.rounds.toList = ((liveD spec f.record).streams[q]!).toList.map (withSha spec) →
-      ∀ i : ℕ, y.rounds[i]?.map (fun rd : Flock.Round => rd.coins) =
-        (lv.streams.getD q #[])[i]?.map (fun rd : Flock.Round => rd.coins) := by
-    intro q y hy i
-    rw [← Array.getElem?_toList, hy, hD, show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]
-    simp [withSha, Option.map_map, Function.comp_def]
-  have hpr' : (wrS ins.read.I d (viewOf _ spec.mPts spec link c₁ f)).proofs = f.proofs := hpr
-  have hp2 := (HiddenExec.setupTables_pointsAny hsA).1
-  rw [hpr'] at hp₀ hp₁
-  rw [tabsJ_get] at hq
-  refine ⟨hq, fun rr hrr => ?_⟩
-  obtain rfl | rfl : rr = 0 ∨ rr = 1 := by omega
-  · rw [ite_eq_left rfl]
-    exact zk_padsLogged (rr := 0) (y := y₀) hv' hlv hj₂ hsch hp2 (by omega)
-      (by rw [Nat.add_zero]; exact hco _ _ hr₀) (by rw [Nat.add_zero]; exact hp₀)
-  · rw [ite_eq_right (show (1 : ℕ) ≠ 0 by omega)]
-    exact zk_padsLogged (rr := 1) (y := y₁) hv' hlv hj₂ hsch hp2 (by omega) (hco _ _ hr₁) hp₁
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -336,6 +248,37 @@ theorem zkViewPadsLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tr
     exact zk_padsLogged (rr := 1) (y := y₁) hv' hlv hj₂ hsch hp2 (by omega) (hco _ _ hr₁) hp₁
 
 end Gen
+
+/-- **An accepting run's view logs its reps' pads openings**: at the view the deployed decoders are right at
+`OpensRows` (`decodesTableR_deploy`), so table `j` reads `Q` queries and each rep's pads openings are its proof file's
+inner-proof openings at the positions its rep stream's last round's coins give; that stream has the run's rep stream's
+coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so the run's log holds their inputs (`zk_padsLogged`). -/
+theorem zkViewPadsLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
+    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} {r : Fin ((V true).k x) → Coin}
+    (hacc : (Claims.run sha512 P (V true) x ω r).out = .acc) {s' spec' sts' link c₁ mids f}
+    (hact : act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
+        ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
+      .decide s' spec' sts' link c₁ mids f)
+    {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
+    (hret : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (viewOf (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts spec' link c₁ f) a) :
+    (zkTabs h0 L hz hk hlay j).q = Zk.Q ∧ ∀ rr < 2,
+      PadsLogged (Claims.run sha512 P (V true) x ω r).vLog ((a.getD j dfltOutZC).opens.inner rr)
+        (if rr = 0 then (a.getD j dfltOutZC).pend.1 else (a.getD j dfltOutZC).pend.2).qpos :=
+  Gen.zkViewPadsLogged (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (r := r) (hacc := hacc) (s' := s') (spec' := spec') (sts' := sts')
+    (link := link) (c₁ := c₁) (mids := mids) (f := f) (hact := hact) (a := a) (hret := hret)
 
 end Clash
 
@@ -416,40 +359,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ liveSession DecodesTable)
 open FlockSoundness.Discharge.Composed (outJ repJ)
 open Claims.Bridge.Live
 
-/-- **A decoded live outcome of the masked simulator logs an accepting run's pads openings**: where the live verdict
-holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
-(`zkSimRunAt`), and table `j`'s decoded output's pads openings are logged in the run (`zkViewPadsLogged`). -/
-theorem zkAccPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
-    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
-    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
-    (ha : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-      (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
-        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
-        sha512 (zkSim P x spec sts) x (ω, u) r') a) :
-    (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc ∧
-      (zkTabs h0 L hz hk hlay j).q = Zk.Q ∧ ∀ rr < 2,
-        PadsLogged (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).vLog
-          ((a.getD j dfltOutZC).opens.inner rr)
-          (if rr = 0 then (a.getD j dfltOutZC).pend.1 else (a.getD j dfltOutZC).pend.2).qpos := by
-  have hacc : (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc := by
-    by_contra hn
-    exact zkSimAbortAt x s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r' hn ha.1
-  obtain ⟨s', spec', sts', link, c₁, mids, f, hact, -⟩ := acc_decide hacc
-  have hv := zkSimRunAt x s hs hin ins spec sts hset h0 L hz hk hlay Ω P ω u r' hacc s' spec' sts' link c₁ mids f hact
-  rw [hv] at ha
-  exact ⟨hacc, zkViewPadsLogged hs hin hset h0 L hz hk hlay hd hj hacc hact ha⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -489,11 +398,10 @@ theorem zkAccPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
 
 end Gen
 
-/-- **The live pads fork event's pair**: two live outcomes of the masked simulator at one tape decoding to outputs
-that open a position of one cap's pads tree at rep `r` of table `j` to different pairs are two accepting runs of `P`
-at `zkΦ`'s coins (`zkAccPads`) whose openings there both climb to the cap's bytes, so they collide in the two runs'
-logs (`tiedColl_of_padsLogged`). -/
-theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+/-- **A decoded live outcome of the masked simulator logs an accepting run's pads openings**: where the live verdict
+holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides
+(`zkSimRunAt`), and table `j`'s decoded output's pads openings are logged in the run (`zkViewPadsLogged`). -/
+theorem zkAccPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -502,30 +410,22 @@ theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
     (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
-    {u : zkTape x} {r₁ r₂ : Fin (zkN x + 2) → LCoin 65536} {r : Fin 2}
-    (h : LiveEvZ (Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-        (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-        (fun rs j => Exec.capOfRoot rs[j.val]!)
-        (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))))
-      (fun y => PadsForkEvZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j).N (zkTabs h0 L hz hk hlay j).q j r.val y.1 y.2)
+    (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {a : List (OutZC 𝔽 Refine.Dig (List UInt8))}
+    (ha : Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
       (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
         spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
-        sha512 (zkSim P x spec sts) x (ω, u) r₁)
-      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
-        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
-        sha512 (zkSim P x spec sts) x (ω, u) r₂)) :
-    Claims.Flock.pairEv sha512 (V true) P x ω (zkΦ x spec sts (u, r₁)) (zkΦ x spec sts (u, r₂)) := by
-  obtain ⟨a, a', ha, ha', dc, p, hs₁, hs₂, hne⟩ := h
-  dsimp only at hs₁ hs₂ hne
-  obtain ⟨hacc₁, hq, hl₁⟩ := zkAccPads hs hin hset h0 L hz hk hlay hd hj hC u r₁ ha
-  obtain ⟨hacc₂, -, hl₂⟩ := zkAccPads hs hin hset h0 L hz hk hlay hd hj hC u r₂ ha'
-  obtain ⟨k₁, hk₁, hq₁, hv₁, he₁⟩ := opPadsAtZ_some hs₁
-  obtain ⟨k₂, hk₂, hq₂, hv₂, he₂⟩ := opPadsAtZ_some hs₂
-  rw [hq] at hk₁ hk₂
-  refine ⟨hacc₁, hacc₂, tiedColl_of_padsLogged (hl₁ r.val r.isLt) (hl₂ r.val r.isLt) hk₁ hk₂ hq₁ hq₂ hv₁ hv₂
-    fun e => hne ?_⟩
-  rw [he₁, he₂, e]
-
+        sha512 (zkSim P x spec sts) x (ω, u) r') a) :
+    (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc ∧
+      (zkTabs h0 L hz hk hlay j).q = Zk.Q ∧ ∀ rr < 2,
+        PadsLogged (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).vLog
+          ((a.getD j dfltOutZC).opens.inner rr)
+          (if rr = 0 then (a.getD j dfltOutZC).pend.1 else (a.getD j dfltOutZC).pend.2).qpos :=
+  Gen.zkAccPads (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (u := u) (r' := r') (a := a) (ha := ha)
 
 namespace Gen
 
@@ -569,6 +469,36 @@ theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
   rw [he₁, he₂, e]
 
 end Gen
+
+/-- **The live pads fork event's pair**: two live outcomes of the masked simulator at one tape decoding to outputs
+that open a position of one cap's pads tree at rep `r` of table `j` to different pairs are two accepting runs of `P`
+at `zkΦ`'s coins (`zkAccPads`) whose openings there both climb to the cap's bytes, so they collide in the two runs'
+logs (`tiedColl_of_padsLogged`). -/
+theorem zkPairPads {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
+    (hj : j < (tables true x).length) {C : Fin (wordLenJ true x j) → List 𝔽} (hC : ∀ p, wideJ true x j (C p))
+    {u : zkTape x} {r₁ r₂ : Fin (zkN x + 2) → LCoin 65536} {r : Fin 2}
+    (h : LiveEvZ (Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+        (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
+        (fun rs j => Exec.capOfRoot rs[j.val]!)
+        (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))))
+      (fun y => PadsForkEvZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j).N (zkTabs h0 L hz hk hlay j).q j r.val y.1 y.2)
+      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
+        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
+        sha512 (zkSim P x spec sts) x (ω, u) r₁)
+      (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
+        spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
+        sha512 (zkSim P x spec sts) x (ω, u) r₂)) :
+    Claims.Flock.pairEv sha512 (V true) P x ω (zkΦ x spec sts (u, r₁)) (zkΦ x spec sts (u, r₂)) :=
+  Gen.zkPairPads (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (u := u) (r₁ := r₁) (r₂ := r₂) (r := r) (h := h)
 
 open Classical in
 /-- **The simulated fork's alignment at rep `r`'s pads at tape `u`**: against the simulated strategy after `Commit`
@@ -608,7 +538,6 @@ def ZkPadsAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Reada
           (zkSim P x spec sts) x (ω, u))
         (zkSim_root P x spec sts ω _ (zk_mPts_le hs hin hset) u) (finJ (zkTabs h0 L hz hk hlay) hj)
         (tabsJ_get _ _ _))
-
 
 namespace Gen
 
@@ -671,7 +600,6 @@ def ZkPadsAlign (x : Claims.Msg) : Prop :=
     ZkPadsAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r
       (zkRd hset h0 L hz hk hlay j (.inl (.inr (.inl r)))).val u
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -692,54 +620,6 @@ def ZkPadsAlign (x : Claims.Msg) : Prop :=
     ZkPadsAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r
       (zkRd hset h0 L hz hk hlay j (.inl (.inr (.inl r)))).val u
 
-end Gen
-
-open Classical in
-/-- **The fork advantage at rep `r`'s pads from the alignment**: `zkAdvSim` at the pads is at most the simulated fork
-at round `t`, where at each tape the fork at the pads node is at most the fork after `t` coins of `PadsForkEvZ`: that
-fork is at most the live fork of the decoded event (`forkC_simAtJZ_le`, the dead branches opening no pads position,
-`not_opensPadsZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event is the runs' pair event
-(`zkPairPads`). -/
-theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
-    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (hC : ∀ p, wideJ true x j (C p))
-    (r : Fin 2) (t : Fin ((V true).k x))
-    (halign : ∀ u, ZkPadsAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r t.val u) :
-    zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C (.inl (.inr (.inl r))) ≤
-      Claims.Flock.simForkPr sha512 (V true) P x (zkΦ x spec sts) (fun t => Claims.Flock.FnFork.forkN t) ω t.val := by
-  have hk' := zkN_add hset
-  have hj' : j < (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := (finJ _ hj).isLt
-  unfold Claims.Flock.simForkPr
-  rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
-  refine div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ => ?_) (Nat.cast_nonneg _)
-  refine ((halign u).trans (forkC_simAtJZ_le execArith ZkExec.hs512 _
-    (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j (zkRoot P x ω) C) (AccTxJ ins.read.I d j (zkRoot P x ω) C)
-    (opnD sts _) spec.dg (decD _) (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!) (zkN x)
-    (decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j (zkRoot P x ω) C) (zkRoot P x ω) _
-    (zkSim_root P x spec sts ω _ (zk_mPts_le hs hin hset) u) (finJ (zkTabs h0 L hz hk hlay) hj)
-    (tabsJ_get _ _ _)
-    (Ev := fun p => PadsForkEvZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j).N (zkTabs h0 L hz hk hlay j).q j r.val
-      p.1 p.2)
-    (Q := OpensPadsZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j).N (zkTabs h0 L hz hk hlay j).q j r.val)
-    (fun _ h => padsForkEvZ_opens h)
-    (fun caps outs h => not_opensPadsZ_nul ZkExec.hs512 _ (two_le_zkTabsN h0 L hz hk hlay j) _ hj' r.val caps outs
-      h) _)).trans ?_
-  refine le_trans (le_of_eq (forkC_liveStratZ zkN spec.dg
-    (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset)) sha512
-    (zkSim P x spec sts) x (ω, u) _ ⟨t.val, by have := t.isLt; omega⟩)) ?_
-  exact Claims.Ex_mono fun rr => ind_le_indZ fun h => zkPairPads hs hin hset h0 L hz hk hlay hd hj hC h
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 open Classical in
 /-- **The fork advantage at rep `r`'s pads from the alignment**: `zkAdvSim` at the pads is at most the simulated fork
 at round `t`, where at each tape the fork at the pads node is at most the fork after `t` coins of `PadsForkEvZ`: that
@@ -782,6 +662,29 @@ theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tru
   exact Claims.Ex_mono fun rr => ind_le_indZ fun h => zkPairPads hs hin hset h0 L hz hk hlay hd hj hC h
 
 end Gen
+
+open Classical in
+/-- **The fork advantage at rep `r`'s pads from the alignment**: `zkAdvSim` at the pads is at most the simulated fork
+at round `t`, where at each tape the fork at the pads node is at most the fork after `t` coins of `PadsForkEvZ`: that
+fork is at most the live fork of the decoded event (`forkC_simAtJZ_le`, the dead branches opening no pads position,
+`not_opensPadsZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event is the runs' pair event
+(`zkPairPads`). -/
+theorem zkAdvPads_le_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (hC : ∀ p, wideJ true x j (C p))
+    (r : Fin 2) (t : Fin ((V true).k x))
+    (halign : ∀ u, ZkPadsAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r t.val u) :
+    zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C (.inl (.inr (.inl r))) ≤
+      Claims.Flock.simForkPr sha512 (V true) P x (zkΦ x spec sts) (fun t => Claims.Flock.FnFork.forkN t) ω t.val :=
+  Gen.zkAdvPads_le_of (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
+    (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (r := r) (t := t) (halign := halign)
 
 namespace Gen
 

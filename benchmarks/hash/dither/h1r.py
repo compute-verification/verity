@@ -5,6 +5,7 @@ stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph c
     plan = lib.plan([Call(a, b, base, roots, live), ...])   # a [T, K], b [N, K] s8 on the device; roots (16,) int64 words
     lib.launch(plan, salt)                                  # salt (8,) int64 big-endian words on the device; version=1|2|3 (3: a unit a block)
     lib.launch(plan, salt, step_base=sb)                    # sb (1,) int64 on the device, added to every call's base
+    lib.launch_j10r(plan, salt, m)                          # version 1 under J10-R's call-scale noise, Layout(m, N, K)
     plan.receipts(i)                                        # call i's (units, 2 sets) int32 view
 """
 from __future__ import annotations
@@ -102,3 +103,17 @@ class H1R:
                                  plan.out.data_ptr(), int(nowrite), int(version), torch.cuda.current_stream().cuda_stream)
         if rc:
             raise RuntimeError(f"h1r_launch returned {rc}")
+
+    def launch_j10r(self, plan: Plan, salt: torch.Tensor, m: int, nowrite: bool = False,
+                    step_base: torch.Tensor | None = None) -> None:
+        """Version 1 under J10-R (h1r.cu's h1r_launch_j10r): every call's noise its seed_c's stream at call scale,
+        Layout(m, N, K), m the calls' layout rows."""
+        fn = getattr(self.lib, "h1r_launch_j10r", None)
+        if fn is None:
+            raise RuntimeError("this h1r build has no h1r_launch_j10r: rebuild h1r.cu (or h1o.cu) from this tree")
+        fn.argtypes = [*self.lib.h1r_launch.argtypes[:-2], C.c_int, C.c_void_p]
+        rc = fn(plan.table.data_ptr(), len(plan.calls), plan.max_units, plan.ks, salt.data_ptr(),
+                None if step_base is None else step_base.data_ptr(), plan.seeds.data_ptr(), plan.out.data_ptr(),
+                int(nowrite), int(m), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1r_launch_j10r returned {rc}")

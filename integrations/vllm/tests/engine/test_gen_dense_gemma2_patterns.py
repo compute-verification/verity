@@ -13,15 +13,15 @@ import pytest
 
 from verity_vllm.observe.events import StepEnd, ViewDesc
 from verity_vllm.observe.fold.patterns import BiasAdd, TransparentAten
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import (Bf16ScalarChain, MeanDimTriton, NarrowToBf16, gemma2_patterns,
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
+from verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns import (Bf16ScalarChain, MeanDimTriton, NarrowToBf16, gemma2_patterns,
                                                                 with_gemma2_patterns)
 
-gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
+gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
 from tests.observe.test_patterns_synthetic import CUDA, Builder, bf, by_spec, context, decode_step, i64
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.registry.quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
+from verity_vllm.program.quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
 
 M, H, I, V = 2, 8, 4, 16
 ADD = "aten::add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor"
@@ -150,10 +150,10 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
     assert {k: len(c) for k, c in specs.items()} == expected
     for k, cs in specs.items():
         for c in cs:
-            # [R13 X-08] Bf16MulScalarTensor was promoted into the accepted registry (b1); [R15 dense F-dense-05] the rest into
-            # `verity_vllm.program.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
-            assert spec_module(c.spec) == "verity_vllm.program.registry.dense" or (
-                k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity_vllm.program.registry.b1"), (k, spec_module(c.spec))
+            # Bf16MulScalarTensor is in the accepted registry (b1); the rest in
+            # `verity.ml.definitions.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
+            assert spec_module(c.spec) == "verity.ml.definitions.registry.dense" or (
+                k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity.ml.definitions.registry.b1"), (k, spec_module(c.spec))
             assert c.rows == (1 if k.startswith("AddScalarBf16") else M)
     # the widened operands read their bf16 sources (never the f32 copies) ...
     (sq,) = specs[f"SquareBf16_v1{{N={H}}}"]

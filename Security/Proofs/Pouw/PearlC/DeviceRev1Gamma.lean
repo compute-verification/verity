@@ -1,9 +1,10 @@
 import Proofs.Pouw.PearlC.DeviceGamma
-import Models.Pouw.Assumptions.PearlC.TTOutRev1
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
-# rev1: it asserts less than the granted TT_OUT, and γ from it (the TT_OUT restatements lane's file)
+# rev1: it asserts less than the granted TT_OUT, and γ from it
 
 Staged; nothing pinned.
 * **rev1 is weaker:** at any device record whose add and BF16 prices are non-negative, and any cap `0 ≤ ρ ≤ 1`,
@@ -11,8 +12,7 @@ Staged; nothing pinned.
   (`ttOutTilePearlCDevRev1_of_granted`). A unit or tile good under rev1 is good under the granted rows (rev1's debit is
   larger and its cap stricter), and its rev1 credit is at most the granted one. These are implications only: their
   premise, the granted row, is falsified by the first-promotion skip (rating D) at the H100 and sm_120 records
-  (`TTOutRev1.lean`), so they carry no evidence for rev1, whose rating B rests on the assessor's alone (07:40Z,
-  `repair-rows-rev1-and-v2-cap.md`).
+  (`TTOutRev1.lean`), so they carry no evidence for rev1, whose rating B rests on its own review alone.
 * **The H100 record in the granted form:** `creditDevRev1_h100`, `wrefDevRev1_h100`.
 * **γ at any record,** on the one-shape domain where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`: `pearlCGammaDevRev1At`
   and `pearlCSampledDevRev1At`, at `γ = 1 − (399/400)/ω`.
@@ -307,10 +307,22 @@ theorem pearlCSampledH100Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384 : Pouw.Guarantees.PearlC.GammaH100Rev1_16384 := @Pouw.PearlC.pearlCGammaH100Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_16384 : Pouw.Guarantees.PearlC.GammaH100Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaH100Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCH100Rev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192 : Pouw.Guarantees.PearlC.GammaH100Rev1_8192 := @Pouw.PearlC.pearlCGammaH100Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192 : Pouw.Guarantees.PearlC.GammaH100Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaH100Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCH100Rev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384 := @Pouw.PearlC.pearlCSampledH100Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledH100Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCH100Rev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1_8192 := @Pouw.PearlC.pearlCSampledH100Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledH100Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.h100 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCH100Rev1_of_w1 hTT)

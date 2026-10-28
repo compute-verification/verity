@@ -5,7 +5,10 @@ import Flock.Field
 
 `rec_live`'s coin server writes its record of a session (`public.json`) with `json.dumps(…, indent=1)`, its rounds
 first (`rec_live.record_bytes`). `recordW` writes those bytes, and `readRecord` is the record format's own total reader:
-the rounds, in the fixed keys, their fixed order and the fixed indentation, and nothing past them. It reads no general
+the rounds, in the fixed keys, their fixed order and the fixed indentation, and nothing past them. `recordFullW` and
+`readFull` go on past the rounds to the link points: the record's kind and tops' format, the prover's Hello in its
+fixed keys (`helloW`, `readHello`) and the link's level-0 tops and points (`objW`, `readObj`). `Record.msgs` is the
+inner rounds before the last as the record shows them: round 0's from the link, each later one's from its round. It reads no general
 JSON, so what reads the record back (`Proofs.Flock.Claims.Recursion.RecRecord`: `readRecord (recordW xs rest) =
 some xs`) rests on no property of a JSON library. The verifier's other readers of the record (`RecVStar.innerCommits`)
 parse it as JSON.
@@ -220,5 +223,131 @@ def recordW (xs : List Round) (rest : List UInt8) : List UInt8 :=
 /-- **The record's rounds**, read off its bytes in the record's own format. -/
 def readRecord (s : List UInt8) : Option (List Round) :=
   ((lit (123 :: 10 :: (sp 1 ++ key "rounds")) s).bind (readList 1 readRound)).map Prod.fst
+
+/-! ## Objects -/
+
+section Objects
+variable {α : Type}
+
+/-- An object's entry: its key, a colon and a space, and its value. -/
+def entW (w : α → List UInt8) (e : List UInt8 × α) : List UInt8 := strStr e.1 ++ [58, 32] ++ w e.2
+
+/-- An object's entry. -/
+def readEnt (p : P α) : P (List UInt8 × α) := fun s => (readStr s).bind fun (k, s) =>
+  (lit [58, 32] s).bind fun s => (p s).map fun (v, s) => ((k, v), s)
+
+/-- An object's entries after its first, and its close, at indent `d`. -/
+def objTailW (d : Nat) (w : α → List UInt8) : List (List UInt8 × α) → List UInt8
+  | [] => 10 :: (sp d ++ [125])
+  | e :: es => 44 :: 10 :: (sp (d + 1) ++ (entW w e ++ objTailW d w es))
+
+/-- An object at indent `d`, as `json.dumps(…, indent=1)` writes a dict: `{}` when empty. -/
+def objW (d : Nat) (w : α → List UInt8) : List (List UInt8 × α) → List UInt8
+  | [] => [123, 125]
+  | e :: es => 123 :: 10 :: (sp (d + 1) ++ (entW w e ++ objTailW d w es))
+
+/-- An object's entries from its first, and its close, at indent `d`: at most `fuel` of them. -/
+def objElems (d : Nat) (p : P α) : Nat → P (List (List UInt8 × α))
+  | 0, _ => none
+  | fuel + 1, s => (readEnt p s).bind fun (e, s) => match s with
+    | c :: t =>
+      if c = 44 then (lit (10 :: sp (d + 1)) t).bind fun t =>
+        (objElems d p fuel t).map fun (es, t) => (e :: es, t)
+      else (lit (10 :: (sp d ++ [125])) s).map fun t => ([e], t)
+    | [] => none
+
+/-- An object at indent `d`, its values read by `p`, its entries in order. -/
+def readObj (d : Nat) (p : P α) : P (List (List UInt8 × α)) := fun s => (lit [123] s).bind fun s => match s with
+  | c :: t => if c = 125 then some ([], t) else (lit (10 :: sp (d + 1)) s).bind fun s => objElems d p s.length s
+  | [] => none
+
+end Objects
+
+/-! ## The record past its rounds -/
+
+/-- **The prover's Hello as the record holds it**, in its keys' order: its digests, flavor, the link's `m` and
+points, profile, reps, rounds and tables. -/
+structure Hello where
+  digests : List UInt8
+  flavor : List UInt8
+  m : Nat
+  points : Nat
+  profile : List UInt8
+  reps : Nat
+  rounds : List UInt8
+  tables : List (List UInt8)
+  deriving DecidableEq
+
+/-- Hello, at indent `1`. -/
+def helloW (h : Hello) : List UInt8 :=
+  [123, 10] ++ sp 2 ++ key "digests" ++ strStr h.digests ++ fld 2 "flavor" ++ strStr h.flavor ++ fld 2 "link" ++
+    [123, 10] ++ sp 3 ++ key "m" ++ decW h.m ++ fld 3 "points" ++ decW h.points ++ [10] ++ sp 2 ++ [125] ++
+    fld 2 "profile" ++ strStr h.profile ++ fld 2 "reps" ++ decW h.reps ++ fld 2 "rounds" ++ strStr h.rounds ++
+    fld 2 "tables" ++ listW 2 strStr h.tables ++ [10] ++ sp 1 ++ [125]
+
+/-- Hello, at indent `1`. -/
+def readHello : P Hello := fun s => do
+  let s ← lit (123 :: 10 :: (sp 2 ++ key "digests")) s
+  let (digests, s) ← readStr s
+  let s ← lit (fld 2 "flavor") s
+  let (flavor, s) ← readStr s
+  let s ← lit (fld 2 "link") s
+  let s ← lit (123 :: 10 :: (sp 3 ++ key "m")) s
+  let (m, s) ← readNat s
+  let s ← lit (fld 3 "points") s
+  let (points, s) ← readNat s
+  let s ← lit (10 :: (sp 2 ++ [125])) s
+  let s ← lit (fld 2 "profile") s
+  let (profile, s) ← readStr s
+  let s ← lit (fld 2 "reps") s
+  let (reps, s) ← readNat s
+  let s ← lit (fld 2 "rounds") s
+  let (rounds, s) ← readStr s
+  let s ← lit (fld 2 "tables") s
+  let (tables, s) ← readList 2 readStr s
+  let s ← lit (10 :: (sp 1 ++ [125])) s
+  pure ({ digests, flavor, m, points, profile, reps, rounds, tables }, s)
+
+/-- **The coin server's record up to its link points** (`rec_live.CoinServer.record`): its rounds, kind, tops'
+format, the prover's Hello, and the link's level-0 tops (each table's nodes, `b ‖ c` each) and points. -/
+structure Record where
+  rounds : List Round
+  kind : List UInt8
+  tops : List UInt8
+  hello : Hello
+  roots : List (List UInt8 × List (List UInt8))
+  points : List F128
+  deriving DecidableEq
+
+/-- **The coin server's record**, as `rec_live.record_bytes` writes it, up to its link points, then `rest`: the link's
+`y`, the record's streams, counts and end, and its close, which the reader doesn't read. -/
+def recordFullW (r : Record) (rest : List UInt8) : List UInt8 :=
+  recordW r.rounds (fld 1 "kind" ++ strStr r.kind ++ fld 1 "tops" ++ strStr r.tops ++ fld 1 "hello" ++
+    helloW r.hello ++ fld 1 "link" ++ [123, 10] ++ sp 2 ++ key "roots" ++ objW 2 (listW 3 hexStr) r.roots ++
+    fld 2 "points" ++ listW 2 coinStr r.points ++ rest)
+
+/-- **The record up to its link points**, read off its bytes in the record's own format. -/
+def readFull (s : List UInt8) : Option Record := do
+  let s ← lit (123 :: 10 :: (sp 1 ++ key "rounds")) s
+  let (rounds, s) ← readList 1 readRound s
+  let s ← lit (fld 1 "kind") s
+  let (kind, s) ← readStr s
+  let s ← lit (fld 1 "tops") s
+  let (tops, s) ← readStr s
+  let s ← lit (fld 1 "hello") s
+  let (hello, s) ← readHello s
+  let s ← lit (fld 1 "link") s
+  let s ← lit (123 :: 10 :: (sp 2 ++ key "roots")) s
+  let (roots, s) ← readObj 2 (readList 3 readHex) s
+  let s ← lit (fld 2 "points") s
+  let (points, _) ← readList 2 readCoin s
+  pure { rounds, kind, tops, hello, roots, points }
+
+/-- **The inner rounds before the last, as the record shows them**: round 0, the link, each table's level-0 top's
+nodes, joined, and the link points; then each recorded round, its tops' nodes then its `c_k`, joined, and its coins.
+The inner verifier's last round, the openings, is no round of the record. -/
+def Record.msgs (r : Record) : List (List UInt8 × List F128) :=
+  ((r.roots.map fun t => t.2.flatten).flatten, r.points) ::
+    r.rounds.map fun x => ((x.tops.map List.flatten).flatten ++ x.commits.flatten, x.coins)
 
 end Flock.RecRecord

@@ -25,7 +25,7 @@ from verity_vllm.program.compact import expand, idx_values, rle_mapped
 
 PREFIX_FILE = "prefix_cache.json"
 KV_OPERANDS = (1, 2)   # an attention Call's key and value operands: (q, k, v[, scale]), the fold's and the Program's alike
-FOLD_META = frozenset({"request", "position", "hint"})   # the fold rows' fields a link reads: program_compare.load_oracle must keep them
+FOLD_META = frozenset({"request", "position", "hint"})   # the fold rows' fields a link reads: program_loaders.load_oracle must keep them
 _LAYER = re.compile(r"layers\.(\d+)")
 _KVH, _D = re.compile(r"[{,]KVH=(\d+)"), re.compile(r"[{,]D=(\d+)")
 
@@ -69,7 +69,7 @@ def load_layout(P, d: str) -> None:
 
 
 class PrefixInput:
-    """`program_compare.Prog`'s reads of a warm request's `prefix` Input node (`pfx`: node -> (C, KVH*D, layer numbers))."""
+    """`instance_sequence.Prog`'s reads of a warm request's `prefix` Input node (`pfx`: node -> (C, KVH*D, layer numbers))."""
 
     pfx: dict = {}
 

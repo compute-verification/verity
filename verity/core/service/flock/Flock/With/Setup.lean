@@ -502,7 +502,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
   let header ← match Json.parse text with
-    | .ok j => pure j
+    | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
   if (← J.str header "format" pctx) != tags.publicFormat || (← J.str header "statement" pctx) != tags.statement then
@@ -673,6 +673,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
   let regions ← HmRow.regions c pub
   HmRow.checkRegionWords c da db regions
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -688,7 +689,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 namespace HmOut
 
@@ -753,6 +754,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (pi : Ports) (fil
     if (t.counts.extract k np).any (· != pub.n) then throw "header: an output row's table is not one row per instance"
     if (List.range t.refs.size).any (fun x => x % np ≥ k && t.refs[x]! != x / np) then
       throw "shared rows: an instance's output row is not its own"
+  (HmIn.checkReads c pi pub.n pub.tables : V Unit)
   return pub
 
 /-- `HmIn.drawn` through the oracle. -/
@@ -854,6 +856,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -869,7 +872,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- `Stmt.setupTables` through the oracle. -/
 def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
@@ -911,8 +914,8 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     if tags.hiddenOutputs then Stmt.setupHiddenWith hs t circuitFile publicFile coins tables d partition program publicInputs
     else
       let st ← Stmt.setupHWith hs t circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   if count ≤ 1 then
     let st ← setup tags draw
@@ -925,8 +928,8 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let u? ← (draw.mapM Draw.UnitDraw.ofJson : V _)
   if let some u := u? then
     match u.law with
-    | .subset _ => splits u.units.size
-    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+    | .subset _ | .stratified .. => splits u.units.size
+    | _ => throw Draw.TABLES_LAW
   -- without a draw, the population's units (`setupH` checks a draw's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
@@ -948,6 +951,6 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 end Flock

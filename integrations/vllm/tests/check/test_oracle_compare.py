@@ -1,7 +1,7 @@
-"""Live C2 oracle-compare (COORD R15 M-0111 (2)): committed bytes vs the Match record of the same attempt.  Synthetic Match dir
+"""Live C2 oracle-compare: committed bytes vs the Match record of the same attempt.  Synthetic Match dir
 (instances.jsonl + capture/snapshots.json + values + log.jsonl.gz) with two requests whose engine row order differs from the
-declaration order; the collector's 'retained bytes' are a dict.  Positive + the rev-cb attacks C1/C3 are blind to: relabel across
-op_paths (F-cb-02), same-name byte swap (F-cb-03), a stale/late value (F-cb-04), a wrong sampled id, and the partial case (a step the
+declaration order; the collector's 'retained bytes' are a dict.  Positive + the attacks C1/C3 are blind to: relabel across
+op_paths, same-name byte swap, a stale/late value, a wrong sampled id, and the partial case (a step the
 Match did not snapshot -> result None, never PASS)."""
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def make_match(tmp: str, *, snapshot_steps=(0,), sampled=None) -> tuple[str, dic
                            "name": f"t={pos}/{op.rsplit('.', 1)[-1]}", "hint": f"{op}/{op}.weight", "request": u, "position": pos,
                            "operand_views": opv, "output_views": ov}
                     if op == "model.layers.0.self_attn.qkv_proj":
-                        # the fold's ATTENTION convention (real B2 Match record, 2026-09-19): `row` is the sequence's index inside the varlen
+                        # the fold's ATTENTION convention (real B2 Match record): `row` is the sequence's index inside the varlen
                         # launch and not even constant over one request's tokens ({0,1} across a 256-token prefill), `rows` = n sequences;
                         # only `position` (and the view's storage offset) orders the request's block -- sorting by `row` permutes it
                         rec["row"], rec["rows"] = (pos % 2), len(order)
@@ -132,7 +132,7 @@ def make_bmap(vals: dict, *, steps=(0,)) -> tuple[dict, dict]:
 
 def _bnd(n_req: int) -> dict:
     """A binding record that passes binding_check on its own (context ok, coverage ok, population openings skipped): B = n_req."""
-    return {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 def reader(committed: dict):
@@ -166,7 +166,7 @@ def test_a_kv_layers_slots_are_no_match_value(tmp_path):
 
 
 def test_relabel_across_op_paths_fails_named(tmp_path):
-    """F-cb-02: qkv_proj never acquired, post_attention_layernorm/0's bytes emitted under qkv_proj's name."""
+    """qkv_proj never acquired, post_attention_layernorm/0's bytes emitted under qkv_proj's name."""
     d, vals = make_match(str(tmp_path))
     bmap, committed = make_bmap(vals)
     committed[(0, "model.layers.0.self_attn.qkv_proj/0")] = committed[(0, "model.layers.0.post_attention_layernorm/0")]
@@ -177,7 +177,7 @@ def test_relabel_across_op_paths_fails_named(tmp_path):
 
 
 def test_same_name_byte_swap_fails_named(tmp_path):
-    """F-cb-03: /0 <-> /1 bytes exchanged under identical names/shapes."""
+    """/0 <-> /1 bytes exchanged under identical names/shapes."""
     d, vals = make_match(str(tmp_path))
     bmap, committed = make_bmap(vals)
     a, b = committed[(0, "model.layers.0.post_attention_layernorm/0")], committed[(0, "model.layers.0.post_attention_layernorm/1")]
@@ -188,7 +188,7 @@ def test_same_name_byte_swap_fails_named(tmp_path):
 
 
 def test_late_read_one_request_block_fails_named(tmp_path):
-    """F-cb-04: r0's rows of embed_tokens read after they were overwritten (only r0's block differs) -> r0 named, r1 equal."""
+    """R0's rows of embed_tokens read after they were overwritten (only r0's block differs) -> r0 named, r1 equal."""
     d, vals = make_match(str(tmp_path))
     bmap, committed = make_bmap(vals)
     data = bytearray(committed[(0, "model.embed_tokens")])
@@ -249,7 +249,7 @@ def _two_step_case(tmp_path):
 
 
 def test_b2swapeq_relabel_on_the_shared_decode_step_fails_named(tmp_path):
-    """rev-cb F-cb-23 / M-0216 (b2swapeq): r0 <-> r1 labels exchanged ONLY on the decode step where both have one row (step 1, NOT
+    """b2swapeq: r0 <-> r1 labels exchanged ONLY on the decode step where both have one row (step 1, NOT
     snapshotted by the Match): every byte and every count is unchanged, coverage/composition/openings/root-compare all pass -- the
     per-request ids oracle (tokens.json at the StepStart rows, every step) names the swap: r1's slot holds r0's token and vice versa."""
     d, bmap, committed = _two_step_case(tmp_path)
@@ -262,7 +262,7 @@ def test_b2swapeq_relabel_on_the_shared_decode_step_fails_named(tmp_path):
     assert {(m["identity"]["step"], m["identity"]["request_id"]) for m in res["mismatch"]} == {(1, "r0"), (1, "r1")}
     assert {m["family"] for m in res["mismatch"]} == {"input_token_ids", "sampled_token_ids"}
     assert res["attribution"]["complete"] is False
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
               "binding": _bnd(2), "oracle_compare": res,
               "value_correspondence": {"method": "oracle-compare(partial) + root-compare-vs-independent-run", "result": False, "oracle_compare": {"why": res["why"]}}}
@@ -294,21 +294,21 @@ def test_b2_attribution_ambiguous_when_two_requests_share_ids_on_an_unsnapshotte
     assert res["mismatch_n"] == 0 and res["result"] is None
     assert res["attribution"]["ambiguous_steps"] == [1] and res["attribution"]["complete"] is False and res["grade"] == "partial"
     assert "ambiguous at steps [1]" in res["why"]
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
               "binding": _bnd(2), "oracle_compare": res, "value_correspondence": {"method": "oracle-compare(partial)", "result": None}}
     ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established")          # [M-0411 O1] the replay + linkage is the attribution check of record
+    assert not ok and why.startswith("C2 of record not established")          # the replay + linkage is the attribution check of record
 
 
 def test_verdict_b2_requires_a_live_oracle_compare():
-    """F-cb-23: at B>=2 a Commit without the live oracle-compare (no --match-dir) is FAIL named, whatever root-compare says; at B=1 the
-    root-compare with provenance remains acceptable (COORD M-0111)."""
-    from verity_vllm.check.verdict import commit_verdict
+    """At B>=2 a Commit without the live oracle-compare (no --match-dir) is FAIL named, whatever root-compare says; at B=1 the
+    root-compare with provenance remains acceptable."""
+    from verity_vllm.check.commit_pass import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "root-compare-vs-independent-run", "result": True}}
-    # [DECISIONS-2 §4 / rev-cb M-0411 O1] the C2 of record is the sampled replay + boundary linkage at EVERY B; a row record without it is
-    # FAIL named (at B=1 too: a root-compare alone was F-cb-02's unsound PASS), and a complete oracle attribution no longer substitutes
+    # the C2 of record is the sampled replay + boundary linkage at EVERY B; a row record without it is
+    # FAIL named (at B=1 too: a root-compare alone was an unsound PASS), and a complete oracle attribution no longer substitutes
     ok, why = commit_verdict({**base, "binding": _bnd(2)}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established") and "no --program-dir" in why
     ok, why = commit_verdict({**base, "binding": _bnd(1)}, True, min_openings=64)
@@ -321,13 +321,13 @@ def test_verdict_b2_requires_a_live_oracle_compare():
     assert not ok and why.startswith("C2 of record not established")
     # with the C2 of record present the oracle stays a diagnostic: PASS at B2 without any Match record
     c2 = {"sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6},
-          "weights_pin": {"result": True, "compared": 98}}                                   # [MAN-09] the checkpoint pin is part of the record
+          "weights_pin": {"result": True, "compared": 98}}                                   # the checkpoint pin is part of the record
     ok_, why_ = commit_verdict({**base, **c2, "binding": _bnd(2)}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # [rev M-0243] PASS, gap named
+    assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # PASS, gap named
 
 
 def test_verdict_gates_on_oracle_mismatch():
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
               "value_correspondence": {"method": "oracle-compare + offline-suite", "result": False,
                                        "oracle_compare": {"result": False, "why": "C2 oracle mismatch: 2 identities differ from the Match oracle (first: step 0 model.layers.0.self_attn.qkv_proj/0 inv 0 req r1 range [0, 12] -- bytes differ)"}}}
@@ -345,11 +345,11 @@ def test_missing_oracle_files_refused(tmp_path):
 
 
 def _exploded_norm_match(tmp: str, *, permute: bool = False):
-    """dense's Gemma fused norm as the fold records it (M-0270): ONE module hint, the forward exploded into per-op instances per row --
+    """Dense's Gemma fused norm as the fold records it: ONE module hint, the forward exploded into per-op instances per row --
     Square (f32, interior), Narrow #1 (the new residual = member 1), Narrow #2 (the normed row = member 0): the two producers of the
     module's members share the family NarrowF32ToBf16_v1 and differ only by Program/event order.  Each narrowing's first operand view is
     the OUTPUT view of the instance feeding it (residual <- AddWidenedBf16_v1, normed <- MulVecF32_v1), as derive_step records.
-    `permute` [rev-pm M-0402]: the fold emitted the two independent narrowings in the other order (normed first) -- a legal dag-criterion
+    `permute`: the fold emitted the two independent narrowings in the other order (normed first) -- a legal dag-criterion
     fold; Program order (hence the manifest's confirmed ordinal) is unchanged."""
     d, vals = make_match(tmp)
     n = sum(ROWS.values())
@@ -391,7 +391,7 @@ def _exploded_norm_match(tmp: str, *, permute: bool = False):
 
 
 def _biased_linear_match(tmp: str):
-    """[exec M-0528] Qwen2.5's biased qkv_proj as the fold records it: per row ONE Gemm_v1 instance (the batch-invariant matmul, output =
+    """Qwen2.5's biased qkv_proj as the fold records it: per row ONE Gemm_v1 instance (the batch-invariant matmul, output =
     the PRE-bias GEMM alloc; registry Gemm_v1 has no epilogue) and ONE BiasAdd_v1 instance (aten.add(bf16, bf16), output = the tensor
     the module RETURNS), both hinted to the module.  The collector binds member "0" at the module post-hook = the post-bias bytes."""
     d, vals = make_match(tmp)
@@ -430,9 +430,9 @@ def _biased_linear_match(tmp: str):
 
 
 def test_biased_linear_member_is_read_at_the_bias_add_producer_not_the_gemm(tmp_path):
-    """[exec M-0528, dense] the manifest's producer for a biased linear's member "0" must be the BiasAdd row.  Required at the Gemm (the
-    pre-int-5 rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
-    tensor -- exactly exec's Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
+    """The manifest's producer for a biased linear's member "0" must be the BiasAdd row.  Required at the Gemm (the
+    earlier rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
+    tensor -- exactly the Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
     collector bound the GEMM alloc; at the BiasAdd it is the same tensor and the compare is a check (swapped committed bytes still fail)."""
     d, bmap, committed, op, pre = _biased_linear_match(str(tmp_path))
     res_gemm = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers={(op, "0"): {"spec": "Gemm_v1", "ordinal": None, "operand": None}})
@@ -453,14 +453,14 @@ def test_exploded_module_is_read_at_the_manifest_producer_with_ordinal(tmp_path)
     prod = {(op, "0"): {"spec": "NarrowF32ToBf16_v1", "ordinal": 1}, (op, "1"): {"spec": "NarrowF32ToBf16_v1", "ordinal": 0}}
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod)
     assert res["compared"] == 4 and res["equal"] == 4 and res["mismatch_n"] == 0, res
-    # the same members with the residual/normed bytes exchanged under their names (F-cb-03 on a fused norm): named, not re-guessed
+    # the same members with the residual/normed bytes exchanged under their names (on a fused norm): named, not re-guessed
     committed[(0, f"{op}/0")], committed[(0, f"{op}/1")] = committed[(0, f"{op}/1")], committed[(0, f"{op}/0")]
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod)
     assert res["result"] is False and res["mismatch_n"] == 4 and {m["identity"]["output_member"] for m in res["mismatch"]} == {"0", "1"}
 
 
 def test_permuted_fold_order_is_read_right_by_producer_operand_and_wrong_by_ordinal_alone(tmp_path):
-    """[rev-pm M-0402 -> dense M-0458] the two narrowings are independent, so a dag-criterion fold may emit them permuted while the
+    """The two narrowings are independent, so a dag-criterion fold may emit them permuted while the
     Program order (the manifest's confirmed ordinal) is unchanged.  Ordinal alone reads the OTHER narrowing's bytes -> a false C2 FAIL
     (would be a false PASS had the collector made the same swap); the operand selector resolves each member by the instance that FEEDS
     it (storage identity of its first operand), so it is right in either emission order and refuses by name when it cannot decide."""
@@ -475,7 +475,7 @@ def test_permuted_fold_order_is_read_right_by_producer_operand_and_wrong_by_ordi
             assert res_ord["result"] is False and res_ord["mismatch_n"] == 4, res_ord         # the gap: event order != Program order
         else:
             assert res_ord["compared"] == 4 and res_ord["equal"] == 4, res_ord
-        # the operand path stays a check, not a guess: swapped committed bytes (F-cb-03) are named in either emission order ...
+        # the operand path stays a check, not a guess: swapped committed bytes are named in either emission order ...
         committed[(0, f"{op}/0")], committed[(0, f"{op}/1")] = committed[(0, f"{op}/1")], committed[(0, f"{op}/0")]
         res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod_opd)
         assert res["result"] is False and res["mismatch_n"] == 4 and {m["identity"]["output_member"] for m in res["mismatch"]} == {"0", "1"}
@@ -514,7 +514,7 @@ def test_producers_of_reads_spec_and_ordinal_from_manifest_rows():
 
 
 def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
-    """[rev-cb M-0301 R3] a Match record of ANOTHER workload given as --match-dir: refused by name (request ids / prompt lengths / caps),
+    """A Match record of ANOTHER workload given as --match-dir: refused by name (request ids / prompt lengths / caps),
     nothing compared, result False 'foreign oracle' -- never a value mismatch that happens to point the right way."""
     d, vals = make_match(str(tmp_path))
     bmap, committed = make_bmap(vals)
@@ -537,7 +537,7 @@ def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res["result"] is True and res["workload_check"]["ok"] is None
     # the verdict names it
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(2),
               "value_correspondence": {"method": "oracle-compare(partial) + offline-suite", "result": False, "oracle_compare": {"result": False, "why": "foreign oracle: x"}},
               "oracle_compare": {"result": False, "why": "foreign oracle: x", "compared": 0}}
@@ -546,15 +546,15 @@ def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
 
 
 def test_verdict_names_the_failing_component_not_the_oracle_partial_note():
-    """[rev-cb M-0301 R1] b2flip1_s5 + --expect-root: the oracle ran partial (result None, why = its coverage note) and the ROOT compare failed;
+    """b2flip1_s5 + --expect-root: the oracle ran partial (result None, why = its coverage note) and the ROOT compare failed;
     first_fail_reason must quote the root-compare cause, never the oracle's partial note.  [R2] components carry their own result/reference."""
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
     partial_note = "attribution-complete: steps [2, 3, 4, 5] not snapshotted by the Match (MATCH_SNAP_STEPS); ids + sampled ids verified on every step"
     vc = {"method": "oracle-compare(partial) + offline-suite + root-compare-vs-independent-run (--expect-root)", "result": False,
           "why": "root_compare: run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
           "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "compared": 848, "mismatch_n": 0},
           "components": {"root_compare": {"result": False, "why": "run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
-                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod, COORD M-0286)"},
+                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod)"},
                          "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "reference": "live Match oracle of this attempt (--match-dir)"}}}
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(1),
               "value_correspondence": vc, "oracle_compare": {"result": None, "why": partial_note, "compared": 848, "attribution": {"complete": True}}}
@@ -572,7 +572,7 @@ def test_verdict_names_the_failing_component_not_the_oracle_partial_note():
 
 
 def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_record_it_read(tmp_path):
-    """[rev F-r16-24 / M-0586] the oracle is 'this attempt's Match' by FACT, not by presence: provenance.tie carries sha256 of the Match
+    """The oracle is 'this attempt's Match' by FACT, not by presence: provenance.tie carries sha256 of the Match
     record's fold_summary.json / instances.jsonl / RunHeader line so the finalizer ties it to the Match stage of record without reading the
     fold; a missing file is None, never a placeholder; another Match dir (same workload, different fold) has different digests."""
     import gzip
@@ -595,7 +595,19 @@ def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_recor
     assert OC.oracle_tie_facts(str(tmp_path / "nowhere")) == {"fold_summary_sha256": None, "instances_sha256": None, "run_header_sha256": None}
 
 
-# ---- [reqval F-moe-r17-06, the ORACLE side] a shared module's invocation k is compared at ITS Program op ---------------------------------
+def test_an_unreadable_run_header_is_named_in_the_tie_facts_not_passed_off_as_an_absent_log(tmp_path):
+    """A capture/log.jsonl.gz that is there but isn't gzip has no RunHeader digest; the tie facts say it was unreadable and why, so the
+    record doesn't read as a Match stage that wrote no log."""
+    import os
+    d, _vals = make_match(str(tmp_path))
+    open(os.path.join(d, "capture", "log.jsonl.gz"), "wb").write(b'{"$e": "RunHeader"}\n')
+    tie = OC.oracle_tie_facts(d)
+    assert tie["run_header_sha256"] is None
+    assert tie["run_header_unreadable"].startswith("unreadable: capture/log.jsonl.gz (BadGzipFile: ")
+    assert "run_header_unreadable" not in OC.oracle_tie_facts(str(tmp_path / "nowhere"))
+
+
+# ---- the ORACLE side: a shared module's invocation k is compared at ITS Program op -------------------------------------------------------
 ROT = "model.layers.0.self_attn.rotary_emb"
 
 
@@ -658,13 +670,13 @@ def test_f_moe_r17_06_shared_invocations_compare_at_their_program_op(tmp_path):
 
 
 def test_f_moe_r17_06_without_the_alias_table_the_exact_bytes_would_be_a_false_mismatch_so_they_are_not_compared_by_name(tmp_path):
-    """The reader (24df89c50) gives invocation k its OWN bytes; read at the canonical op they would MISMATCH layer 0's oracle value for every
+    """The fixed reader gives invocation k its OWN bytes; read at the canonical op they would MISMATCH layer 0's oracle value for every
     k >= 1 -- a false alarm.  Without the table they are NOT COMPARED, named; invocation 0 compares at its own op."""
     d, vals = _shared_rotary_match(str(tmp_path))
     bmap, rd, aliases = _shared_rotary_bmap(vals)
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd)
     assert res["compared"] == 1 and res["equal"] == 1 and res["mismatch_n"] == 0 and res["complete"] is False
-    assert any("no Program path in the alias table" in k and "F-moe-r17-06" in k for k in res["not_compared"]), res["not_compared"]
+    assert any("no Program path in the alias table" in k and "not compared" in k for k in res["not_compared"]), res["not_compared"]
 
 
 def test_f_moe_r17_06_the_collapse_is_a_named_mismatch_at_the_invocation_not_a_vacuous_equal(tmp_path):
@@ -680,7 +692,7 @@ def test_f_moe_r17_06_the_collapse_is_a_named_mismatch_at_the_invocation_not_a_v
 
 
 def test_revb_n_2_14_1_no_oracle_families_are_said_per_query_family_in_identities_not_entries(tmp_path):
-    """[revb C2 audit 2.14 NIT n-2.14-1] `not_compared = {no oracle family: hidden_stream: N}` lumped two Q(P) families (moe_block_stream +
+    """`not_compared = {no oracle family: hidden_stream: N}` lumped two Q(P) families (moe_block_stream +
     fa2_hidden_m1_stream) under the oracle's class and counted binding ENTRIES.  The record now says it per Q(P) family and in IDENTITIES
     (the manifest's rule) with the entry count beside it; the oracle's own classes (`not_compared_by_family`) are unchanged for the verdict."""
     d, vals = make_match(str(tmp_path))
@@ -717,7 +729,7 @@ def test_revb_n_2_14_1_no_oracle_families_are_said_per_query_family_in_identitie
 
 
 def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unverified_attribution_nor_missing_range(tmp_path):
-    """[pad B9.1 rev.6 (d); revb M-1482 (iv)] the first #3 pod run (1be14d8e5) graded the oracle compare 'partial: request attribution unverified
+    """The first pod run of workload 3 graded the oracle compare 'partial: request attribution unverified
     at 21 (step, request) pairs ... identity without a byte range x7665' -- every one of them a PADDING entry (r0's steps 11..31, lifted dtype,
     no execution to compare against).  A bot-by-enablement entry is counted apart per Q(P) family, its (step, request) is not an attribution
     pair, its step is not 'not snapshotted'; the verdict reads the EXECUTED entries alone -- here complete."""
@@ -742,14 +754,14 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     assert res["padding"] == {"entries_not_compared": 6, "by_query_family": {"fa2_hidden_m1_stream": 2, "input_token_ids": 2, "instance_outputs": 2},
                               "pairs": 2, "steps": [1, 2], "pair_list": [[1, "r0"], [2, "r0"]], "rule": res["padding"]["rule"]}
     assert "bot_word" in res["padding"]["rule"]
-    # [revb n-legb-1, M-1580] with a manifest, a no-oracle family's `identities` is the FULL-cap count; on a padded record the live count is
+    # with a manifest, a no-oracle family's `identities` is the FULL-cap count; on a padded record the live count is
     # stated beside it (manifest minus the padding stated apart), labelled -- leg (b): moe_block_stream 6,144 manifest = 4,224 live + 1,920 inactive
     manifest = {"identities": [{"family": "fa2_hidden_m1_stream"}] * 3 + [{"family": "instance_outputs"}] * 40}
     resq = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), query_families=OC.query_families_of(manifest))
     q = resq["not_compared_by_query_family"]["fa2_hidden_m1_stream"]
     assert q["identities"] == 3 and q["identities_live"] == 1 and q["identities_inactive_stated_apart"] == 2 and q["identities_basis"].startswith("required manifest at full cap")
     assert "identities_live" not in res["not_compared_by_query_family"].get("fa2_hidden_m1_stream", {}) or res["not_compared_by_query_family"]["fa2_hidden_m1_stream"]["identities_live"] is None
-    # [revb S-r17b-70 C3, M-1495] the two documents agree on one number: oracle padding by family + pairs == the inactive stratum by family
+    # the two documents agree on one number: oracle padding by family + pairs == the inactive stratum by family
     from verity_vllm.commit import padding_steps as PS
     pp = {"padding_entries": 6, "by_family": {"fa2_hidden_m1_stream": {"commit_padding_entries": 2}, "input_token_ids": {"commit_padding_entries": 2},
                                               "instance_outputs": {"commit_padding_entries": 2}}}
@@ -768,11 +780,11 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     # no oracle on the record: the map/stratum half still runs, the oracle half says absent
     absent = PS.padding_vs_oracle(pp, None, bmap)
     assert absent["ok"] and absent["oracle"].startswith("absent") and absent["map_padding_entries"] == 6 and absent["map_pairs"] == 2
-    # the same map WITHOUT the activity stamp (a pre-B9.1 map) reads as before: partial, the range and the pairs named
+    # the same map WITHOUT the activity stamp (an older map) reads as before: partial, the range and the pairs named
     for e in bmap["entries"]:
         e.pop("activity", None)
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res0["result"] is None and res0["grade"] == "partial" and res0["not_compared"]["identity without a byte range (dtype/range)"] == 4
     assert "padding" not in res0 and len(res0["attribution"]["unverified"]) == 2
-    old = PS.padding_vs_oracle(pp, res0, bmap)                                   # a record whose oracle predates fix (d): named, not ok
-    assert not old["ok"] and old["oracle"].startswith("predates fix (d)") and old["map_padding_entries"] == 0   # (the stamps were popped above)
+    old = PS.padding_vs_oracle(pp, res0, bmap)                                   # a record whose oracle predates the padding block: named, not ok
+    assert not old["ok"] and old["oracle"].startswith("predates the `padding` block") and old["map_padding_entries"] == 0   # (the stamps were popped above)

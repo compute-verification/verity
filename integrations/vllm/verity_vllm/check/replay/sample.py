@@ -46,7 +46,7 @@ def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] |
 
 
 def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
-    """[rev-cb M-0572, v2] the sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
+    """The sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
     challenge to the root means a challenge issued before the root was fixed (or for another run) selects a different sample, and the
     prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source).
     Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, an auditor-keyed draw passed as `challenge_key`."""
@@ -54,7 +54,7 @@ def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
 
 
 def _catch_probability(strata: dict[str, dict]) -> dict[str, Any]:
-    """[rev-cb M-0572] the HONEST-prover claim of a stratified sample, by stratum kind: the probability that ONE faulted VU is among the
+    """The HONEST-prover claim of a stratified sample, by stratum kind: the probability that ONE faulted VU is among the
     evaluated ones = evaluated / population of its stratum (a fault in every VU of a stratum -- a relabel, a wrong module, a late read of a
     whole tensor -- is caught with probability 1 as soon as the stratum has one evaluation).  Reported per phase (min / median / mean over
     that phase's strata) and overall; the seed's freshness is `sample.seed_source` -- against an ADAPTIVE prover only a post-commitment

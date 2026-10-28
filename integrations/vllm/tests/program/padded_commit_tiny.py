@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""pad -- PADDED-TABLE candidate #1 `pad-stage1-tiny`, END TO END on the CPU (R17-46 (5) / SATURATION-ORDER B.4; SCOPE-NOTE §7;
-PADDED-TABLE criteria build / commit / counts / materialization / inactive_sampling / overhead / scope).
+"""pad -- the padded table's candidate `pad-stage1-tiny`, END TO END on the CPU (criteria build / commit / counts / materialization /
+inactive_sampling / overhead / scope).
 
 The tiny LServe fixture (H 32, NL 2, LP 4, D_MAX 8; the same TINY / prompt / weights as `test_serve3` / `test_lifted_tiny`) is built as
-the FULL padded Program `LServe_v2` under LIFTING-SPEC v0.7 (explicit enablement B7, ordinary class G1 / A11, Continuation_v1 run/emit as
+the FULL padded Program `LServe_v2` (explicit enablement, ordinary class G1, Continuation_v1 run/emit as
 the one stopping mechanism, the declared LAG as a static), executed by the reference evaluator (there is no served run for the fixture --
 the evaluator IS the execution; the Match column is n/a by construction), and then:
 
-  1. the query of record `default(unlifted_width_max = 64)` (R17-43 addendum (1)) is evaluated on it -- the VU population Q(Lift(P));
-  2. R(P, Q) = U_{V in Q(P)} in(V) u out(V) + the prescribed inputs + the designated outputs (SCOPE-NOTE §5), as ROOT GATE INDICES from the
+  1. the query of record `default(unlifted_width_max = 64)` is evaluated on it -- the VU population Q(Lift(P));
+  2. R(P, Q) = U_{V in Q(P)} in(V) u out(V) + the prescribed inputs + the designated outputs, as ROOT GATE INDICES from the
      one boundary module (`boundary.in_gates` / `out_gates`, exact) -- distinct identities (a gate is one identity however many sets read it;
      shared references once; a prescribed weight never repeated);
   3. EVERY required word -- inactive included -- is materialized from the complete assignment in its TRUE lifted width (one machine word per
@@ -52,12 +52,12 @@ from verity.ml.circuits import boundary as BD
 from verity.ml.circuits import query_ast as GS
 from verity.ml.circuits import partition as PT
 from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.evaluate import evaluate_region
-from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.kernels import serve3_reference as ref
+from verity.ml.circuits.evaluation import evaluate_region
+from verity.ml.definitions.registry import b1, lifted as L
+from verity.ml.definitions.numerics import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 
-try:  # the production host core (the one revb accepted on F-r17b-44 / moe M-1023): pos_leaf + fold_levels + fold_path
+try:  # the production host core: pos_leaf + fold_levels + fold_path
     from verity_vllm.commit.merkle import fold_path
     from verity_vllm.commit.scheme import fold_levels, pos_leaf
     CORE = "verity_vllm.commit.scheme (production host core: pos_leaf + fold_levels; verity_vllm.commit.merkle.fold_path for openings)"
@@ -86,8 +86,8 @@ def _tree() -> str:
 def _word_bytes(word: int, width: int) -> bytes:
     """One machine word per (lifted or ordinary) word in the smallest power-of-two container that holds its width: u16 for width <= 16
     (a bf16 word, lifted or not -- what a real bf16 committer writes), u32 for <= 32 (a Value<17> lifted bf16, a 32-bit word), u64 for
-    <= 64 (a Value<33>).  SCOPE-NOTE §4: the tag is never split from the payload.  [F-r17b-56 revb: writing every <= 32-bit word as
-    4 B under-stated the representation cost of the padded row by 25-37 %: the twin's and the ordinary (G1) bf16 words are 2 B.]"""
+    <= 64 (a Value<33>).  The tag is never split from the payload.  Writing every <= 32-bit word as 4 B would under-state the
+    representation cost of the padded workload by 25-37 %: the twin's and the ordinary (G1) bf16 words are 2 B."""
     if width <= 8:
         return int(word).to_bytes(1, "little")
     if width <= 16:
@@ -262,7 +262,7 @@ def classify_sets(b: dict[str, Any], r: dict[str, Any], c: dict[str, Any]) -> di
     for s in r["sets"]:
         if s["kind"] in words:
             words[s["kind"]] += len(s["out"])
-    # [n-pad1-2 revb] the prescribed-input singletons (a VU that IS one prescribed Input gate: a weight / prompt word, ORDINARY under G1,
+    # the prescribed-input singletons (a VU that IS one prescribed Input gate: a weight / prompt word, ORDINARY under G1,
     # never inactive) stated apart, so the inactive share reads over the COMPUTED population
     prescribed = set(r["prescribed"])
     n_presc = sum(1 for s in r["sets"] if s["out"] and all(g in prescribed for g in s["out"]))
@@ -391,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--case", choices=sorted(CASES), default="eos-at-event-1")
     ap.add_argument("--lag", type=int, default=0)
-    ap.add_argument("--draws", type=int, default=64, help="C2 draw count -- the SAME on the padded Program and on its twin (R17-45 (3))")
+    ap.add_argument("--draws", type=int, default=64, help="C2 draw count -- the SAME on the padded Program and on its twin")
     ap.add_argument("--challenge", default="pad-stage1-tiny/verifier-challenge/1")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
@@ -401,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     padded = run_one("padded", a.case, a.lag, a.draws, a.challenge, out)
-    # the EXECUTED prefix (R17-1: the post-EOS lag step executes; served length != executed-prefix length): decode steps whose body words are
+    # the EXECUTED prefix (the post-EOS lag step executes; served length != executed-prefix length): decode steps whose body words are
     # active -- what the active-reference row of record commits (its `build_request_LP<LP>_T<T>` specialization)
     served_steps = max(sum(1 for k, v in padded["per_owner"].items() if k.startswith("s=") and k.endswith("/step") and v["active"] > 0), 1)
     twin_served = run_one("twin", a.case, a.lag, a.draws, a.challenge, out, steps=served_steps)

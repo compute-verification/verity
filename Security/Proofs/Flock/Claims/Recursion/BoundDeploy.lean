@@ -121,9 +121,9 @@ noncomputable def recBoundAt (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 
 /-- **`KSBound` at the deployment**, the guarantee option (d) states: at SHA-512, the compiled record `deployRec` whose
 inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound record (`bdDeployed`) and the deployed
-outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` (ASK-72) it is `KSBoundCover`. Its level
+outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. Its level
 (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s
-weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's
+weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight. Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
 `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
 (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
@@ -193,14 +193,16 @@ theorem plainKSAbort_bd (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
 
 /-- **The readers' rounds before the last are the run's** (a code fact about V*'s circuits and the readers, option (d)'s
 `ReadersOpenPlayed`): at outer witnesses in the outer relation at the V* statements staged at inner and staging messages
-`as` and coins `cs`, whose recorded calls are true evaluations, at each round before `IV`'s last that `IV`'s run of the
-readers' messages plays, the readers' message is the run's (`as[j]`, the coin server's commit strings), or two recorded
-calls collide. `ReadersOpenPlayed` can't hold at `IVStar`'s last round: its message, the openings, is never sent in the
-run, and `IVStar` checks the openings itself (`Bound.opens`). -/
+`as` and coins `cs`, each part's staged as V\* stages it (`StagedPart`), whose recorded calls are true evaluations, at
+each round before `IV`'s last that `IV`'s run of the readers' messages plays, the readers' message is the run's
+(`as[j]`, the coin server's commit strings), or two recorded calls collide. `ReadersOpenPlayed` can't hold at
+`IVStar`'s last round: its message, the openings, is never sent in the run, and `IVStar` checks the openings itself
+(`Bound.opens`). -/
 def ReadersRunPlayed {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ j < (innerRunAt H IV b.rd x ws cs).msgs.length, j + 1 < IV.k (xIOf x) →
           ((innerRunAt H IV b.rd x ws cs).msgs.map Prod.fst).getD j [] = as.getD j []) ∨
@@ -257,7 +259,7 @@ def KSBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →

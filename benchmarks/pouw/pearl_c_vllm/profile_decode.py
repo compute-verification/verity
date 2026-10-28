@@ -30,7 +30,6 @@ import cProfile
 import csv
 import io
 import json
-import os
 import pstats
 import statistics
 import sys
@@ -38,17 +37,21 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",
-            **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa")},
+            **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "form_ep_a", "form_epw_a", "af", "pa")},
             **{x: "hashing" for x in ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "hash_leaf")},
             "commit_a": "hashing"}      # run.Pipeline's FUSED at decode: A's commitment, with E_A's lines
 #: GPU 1's cubin's kernels by category, for nsys's per-kernel sums: short names exactly (``pa`` is not ``paged_attention``),
 #: the rest by prefix; every other kernel is vLLM's or torch's
-EXACT = {"lines": "forming", "eprime": "forming", "words": "forming", "words_u": "forming", "pa": "forming", "pb": "forming"}
+EXACT = {"lines": "forming", "eprime": "forming", "words": "forming", "words_u": "forming", "words_k": "forming", "stats_r": "forming",
+         "pa": "forming", "pb": "forming"}
 PREFIXES = (("gemm_pearlc", "gemm"), ("gemm_ct", "gemm"), ("stats_s5", "forming"), ("form_s5", "forming"), ("gemm_words", "forming"),
             ("s512_", "hashing"), ("hm_", "hashing"), ("pd_", "hashing"))
 
@@ -153,10 +156,10 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     run_cls = PPD.PearlCDeviceRun
     saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
-    saved += [(run_cls, n, vars(run_cls)[n]) for n in ("_shape", "_pipe", "end", "gemm")]
+    saved += [(run_cls, n, vars(run_cls).get(n)) for n in ("_shape", "_pipe", "end", "gemm")]  # None: a mixin's, undone by delattr
     saved += [(PPD._Keys, "__call__", vars(PPD._Keys)["__call__"]), (PPD._Uploads, "put", vars(PPD._Uploads)["put"])]
     steps = PPD._steps
 
@@ -172,7 +175,7 @@ def instrument(prof: Profile):
     run_cls._shape = prof.section("shapes (first use: buffers)", run_cls._shape)
     run_cls._pipe = prof.section("pipelines (first use: build, tensor maps)", run_cls._pipe)
     end = run_cls.end
-    run_cls.end = lambda self: prof.section("pass end (tile tree, roots)", end)(self)
+    run_cls.end = lambda self, *a, **kw: prof.section("pass end (tile tree, roots)", end)(self, *a, **kw)
     gemm = run_cls.gemm
 
     def counted(self, w, x, weight, bias):
@@ -185,7 +188,10 @@ def instrument(prof: Profile):
 
     def undo() -> None:
         for owner, name, f in saved:
-            setattr(owner, name, f)
+            if f is None:
+                delattr(owner, name)
+            else:
+                setattr(owner, name, f)
     return undo
 
 
@@ -200,7 +206,7 @@ def run(args) -> dict:
     llm = e2e.engine(args, "arm")
     model = find_model(llm)
     t0 = time.perf_counter()
-    run_, weights, stack = e2e.install(model, args, os.urandom(32))
+    run_, weights, stack = e2e.install(model, args, e2e.Coins(0))
     install_s = time.perf_counter() - t0
     gate = e2e.gate(run_, weights)
 
@@ -240,7 +246,7 @@ def run(args) -> dict:
     chat_pass("pearlc-cprofile", True, cprof=cprof)
     buf = io.StringIO()
     pstats.Stats(cprof, stream=buf).sort_stats("tottime").print_stats(30)
-    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": os.environ.get("RESEARCH_RUN_ID"), "install_s": install_s,
+    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": settings.RESEARCH_RUN_ID, "install_s": install_s,
             "host": run_.details["host"], "gate_ok": all(g["ok"] for g in gate), "gate": gate,
             "prompts": len(chat), "max_tokens": 48, "pass_wall_s": walls, "passes": prof.report(),
             "cprofile_top_tottime": buf.getvalue().splitlines()[:60]}

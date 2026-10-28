@@ -26,15 +26,15 @@ from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity_vllm.program.boolean import boolean_version
+from verity.ml.definitions.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
-from verity_vllm.program.registry import bf16_gemm_check as C
-from verity_vllm.program.registry import cublas_bf16 as CB
-from verity_vllm.program.registry import cublas_gemv as GV
-from verity_vllm.program.registry import ll_bf16 as LL
-from verity_vllm.program.registry import mla
-from verity_vllm.program.registry import mla_check as MK
-from verity_vllm.query import word as WQ
+from verity.ml.definitions.registry import bf16_gemm_check as C
+from verity.ml.definitions.registry import cublas_bf16 as CB
+from verity.ml.definitions.registry import cublas_gemv as GV
+from verity.ml.definitions.registry import ll_bf16 as LL
+from verity.ml.definitions.registry import mla
+from verity.ml.definitions.registry import mla_check as MK
+from verity.ml.definitions import word as WQ
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -161,7 +161,7 @@ def test_every_definition_is_boolean_and_the_boolean_version_of_its_word() -> No
     assert all(BL.is_boolean(t) for t in STEPS)
 
 
-@pytest.mark.parametrize("target", PINNED, ids=[t.id for t in PINNED])
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id.startswith('LlBf16DotprodDot_v2{K=256,') else t for t in PINNED], ids=[t.id for t in PINNED])
 def test_bits_agree_with_the_word(target) -> None:
     """Each Boolean Definition against its word (the reference evaluator) on eight instances of each kind, word for word."""
     rng = np.random.default_rng(1)
@@ -223,6 +223,7 @@ def test_no_body_on_bits_computes_a_value_twice() -> None:
         assert WQ.Graph(t).recomputed == [], t.id
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("FMA", [1, 0])
 def test_dotprod_agrees_with_the_model(FMA: int) -> None:
     """`LlBf16DotprodGemm_v2` against `dotprod_rows` over two tiles of two warps' lanes, over one tile of one warp, and over one
@@ -467,7 +468,7 @@ def test_the_cublas_and_ll_bf16_conformance_cite_the_one_h200_capture_record() -
     """Both registries' Definitions are established by the same `glm53_bf16_gemm_capture` record the BatchedGemm_v1 evaluator cites,
     and the FMA the words decided is the one the gate's Program binds by default."""
     from verity_vllm.program.frontend.conformance import status_of
-    from verity_vllm.program.kernels.batched_gemm_rows import PROVENANCE
+    from verity.ml.definitions.numerics.batched_gemm_rows import PROVENANCE
 
     cite = (PROVENANCE["run"], PROVENANCE["record"][:16], PROVENANCE["art"]["record"])
     for d in (CB.GemmF32OutWord, CB.CublasSplitKGemmWord, CB.BatchedGemm, LL.LlBf16DotprodGemmWord, LL.LlBf16SplitKGemmWord):

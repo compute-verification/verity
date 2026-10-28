@@ -20,15 +20,14 @@ The arithmetic behind `Definitions.Pouw.FpG1`:
   never wrap (`epilogueW_eq`), so on a device's g1 grids the kernel's int32 epilogue, times `s_a(i)·s_w(j)/4`, is the
   served model's exact product (`model_eq_epilogueW`, `sm120_exact`, `dc_exact`).
 
-g1's windows are the record's. The record's headlines (`Models.Accounting.Guarantees.Headline`) quantify over every
+g1's windows are the record's. The record's headlines (`Definitions.Accounting.Guarantees.Headline`) quantify over every
 value type and every proof layer, and their conclusion reads neither, so they cover every window a g1 prover commits
-by their own quantifier over committed values. `Models.Accounting.Guarantees.FpG1` states them at g1's windows on H1,
+by their own quantifier over committed values. `Definitions.Accounting.Guarantees.FpG1` states them at g1's windows on H1,
 where the premise that the committed leaves are g1's narrows the windows and leaves the bound the record's, and
 `Proofs.Accounting.Headline.FpG1` shows that an honest g1 window meets every premise. What
 these lemmas add is that g1's transcript is the record's: every entry plus its coin is an s8 value inside the record's
 operand ranges, and the int8 GEMM the record's MMA computes is the served model's exact product up to the coin's two
-rank-one terms. The record's premises read at g1's values as they do at any other (RT2-FP-13,
-note:20261019T1100Z-draft-rt2-fp):
+rank-one terms. The record's premises read at g1's values as they do at any other:
 
 * the luck premises (`OperandHMu`, `ReceiptLuckAt`, `WholeLuckAt`) are Props of the receipt game over every level a
   prover commits, and nothing checks g1's grids, so a g1 prover is one of the record's provers;
@@ -39,7 +38,7 @@ note:20261019T1100Z-draft-rt2-fp):
   alphabet, which don't carry to a subset of it.
 
 A3 sums the types' MACs as "the types sharing the pipe's time", and on sm_120 QMMA does share IMMA's tensor pipe: timed
-together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994` (r20261019-133013-1a12), so a run that
+together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994`, so a run that
 splits its words between them is charged in full, for g1 as for the record.
 -/
 

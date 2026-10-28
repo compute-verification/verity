@@ -1,6 +1,7 @@
 """The exact-int8 profile's numerics on bits: builders over `forms` for the f32 / f64 steps of vLLM's int8-exact linear and LUT
-attention (`verity_vllm.program.registry.int8_exact`).  Their Boolean Definitions are `verity_vllm.program.registry.boolean_int8`'s,
-since their word primitives are vLLM's and a Boolean Definition holds its word.
+attention (`verity.ml.definitions.registry.int8_exact`).  Their Boolean Definitions are `verity.ml.definitions.registry.boolean_int8`'s,
+since their word primitives are vLLM's and a Boolean Definition holds its word; `scalar`'s `F32ToS8RniSat_v2` is the first two
+in a row.
 
     f32_rint(C, x)              `F32Rint_v1` (np.rint on f32): ties to even, the sign kept, an sNaN quieted, inf and a qNaN
                                 themselves
@@ -20,11 +21,8 @@ from __future__ import annotations
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, shr, sub
 from verity.ml.circuits.silicon import fp
 
-__all__ = ["F64_DEFAULT_NAN", "f32_mul_wide", "f32_rint", "f32_to_s8_rzi", "f64_mul", "f64_to_u32_rni_sat", "lut_index",
-           "s8_to_f32"]
+__all__ = ["f32_mul_wide", "f32_rint", "f32_to_s8_rzi", "f64_mul", "f64_to_u32_rni_sat", "lut_index", "s8_to_f32"]
 
-#: x86-64's default NaN of an invalid f64 operation (0 * inf)
-F64_DEFAULT_NAN = 0xFFF8000000000000
 #: f32 1.0's exponent field, bits 23..30
 _ONE_EXP = 0x3F800000 >> 23
 

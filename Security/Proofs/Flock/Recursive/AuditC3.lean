@@ -77,7 +77,7 @@ What it takes, against `PublicAudit`:
   VBridge, the forks and the bound at the typed sessions kept at a whole history where those checks pass (`checkedC3`,
   each refusing everything elsewhere, so VBridge is read at the histories `recGame` plays), whose games are the typed
   sessions';
-* V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; #1847's
+* V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; the
   `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
 Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
@@ -386,8 +386,8 @@ each part's file is V*'s holo one (`RecVStar.circuitFile` at `ish.holo`), and th
 plain ones. Every deployed candidate-3 run is at a private inner shape (`--holo`, `88-rec-c3-inner.sh`); at a plain
 shape no honest rep unit passes (`DrawnRounds`).
 
-Check 5's source `coins` is any: `--rec-inner-coins` is inside the guarantee. The verifier never accepts one at candidate
-3 anyway: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the
+Check 5's source `coins` is any, a record of what check 5 reads (`Source.coins`) included, though no reader builds one
+(`RecCoins.refuseCoins` refuses `--rec-inner-coins`). The verifier never accepts one at candidate 3 either: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the
 verifier's setup refuses every source but the inner statement's files (`RecCoins.checkAtC3`), so check 5's source at
 an accepted session is the files of the record it holds the inner transcript against
 (`FlockC3.VStarList.hcoins_of_acceptsC3`). -/
@@ -410,7 +410,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- and the coin server's records of V*'s inner session at each history (`--rec-inner-transcript` and
     -- `--rec-inner-session`)
     (reg : Lean.Json) (wr : List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Lean.Json × String)
-    -- check 5's source at the inner session's record (`--rec-inner-coins` with it, or the inner session's files), the
+    -- check 5's source at the inner session's record (the inner session's files; `--rec-inner-coins` is refused), the
     -- verifier's own
     (coins : String → Option Flock.RecCoins.Source)
     -- R's cap, the salts the prover's workers committed R's level-0 top rows under, which they hold
@@ -592,7 +592,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     -- and the coin server's records of V*'s inner session at each history (`--rec-inner-transcript` and
     -- `--rec-inner-session`)
     (reg : Lean.Json) (wr : List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Lean.Json × String)
-    -- check 5's source at the inner session's record (`--rec-inner-coins` with it, or the inner session's files), the
+    -- check 5's source at the inner session's record (the inner session's files; `--rec-inner-coins` is refused), the
     -- verifier's own
     (coins : String → Option Flock.RecCoins.Source)
     -- R's cap, the salts the prover's workers committed R's level-0 top rows under, which they hold
@@ -756,7 +756,7 @@ coins of their coin kinds in the run's order (`holoCTs`: the link points, then t
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
 `RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
-below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates
+below the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates
 to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
 statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
 (`RecDeploy.ksLin2_deployed_open`) and does not reach the Holo statements (i) is about, and `BitsLin2` at the dense

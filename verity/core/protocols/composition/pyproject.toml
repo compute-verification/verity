@@ -15,11 +15,23 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: `lake` builds the onsite and remote packages beside this one (each product's executable, whose `serve` the
-# harness drives) and, through their path requires, the core interface and these files of C-Flock's verifier (canonical
-# JSON, bytes, SHA-512, and the package's configuration).
-inputs = ["verity/core/protocols/onsite", "verity/core/protocols/remote",
-          "verity/core/protocols/interface",
-          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
-          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean",
-          "verity/core/service/flock/Flock/Hash.lean"]
+# harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
+# Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
+# its window, commitments, and core's identity and randomness), the network certifier's period check (with the
+# certifier program and the LMS verifier), PoUS's run check (with the memory challenger's Lean) and the remote bandwidth
+# session's. The reference runs the components' Python: PoUW's
+# `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`, the integrity profile, the
+# proof system) with its generators, PoUW's check cases, and the network certifier's period difftest (its mirror over
+# the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its generator, each from its own
+# suite's tests; and space's and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
+# the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
+# them what they import of `verity.ml` and `verity.errors`.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
+          "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
+          "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
+          "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
+          "verity/core/protocols/network", "verity/core/protocols/certifier",
+          "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
+          "verity/core/devices/memory_challenger/lean",
+          "verity/core/service/sampled_proofs", "verity/core/service/flock", "verity/core/primitives/lms/lean",
+          "verity/core/primitives/identity", "verity/core/primitives/randomness"]

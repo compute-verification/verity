@@ -1,4 +1,4 @@
-"""[R15 fp8] Eager Match patterns of vLLM's BLOCK-SCALED FP8 linear (Hopper): the two custom ops `Fp8LinearMethod.apply` executes for a
+"""Eager Match patterns of vLLM's BLOCK-SCALED FP8 linear (Hopper): the two custom ops `Fp8LinearMethod.apply` executes for a
 pre-quantised checkpoint (`quantization_config`: fp8 / e4m3 / `weight_block_size [G, G]` / dynamic activations) when the kernel
 selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEMM JIT is not the panel's path):
 
@@ -11,13 +11,13 @@ selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEM
 The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMmFp8BlockSharedScale_v1` by default (each weight
 block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one function, one signature.
 
-Both registered Definitions (`verity_vllm.program.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
-`_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the blockwise CUTLASS kernel's
+Both registered Definitions (`verity.ml.definitions.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
+`_QUANT_CONF` / `_BLOCK_CONF` conformance notes).  The GEMM Definition is the blockwise CUTLASS kernel's
 arithmetic (k32 steps, `s = FMUL(sfa, sfb)`, FFMA promotion per K-tile in ascending order) over the record target's e4m3 step
 (`frontend.targets.scaled_mm_fp8_block_spec`: the v1 forms on hopper, the version 3 forms over `GemmTarget.fp8_block_dot` elsewhere).
 A record whose GEMM target has no blockwise step is refused here fail-closed -- another GPU runs another kernel (Marlin /
 torch._scaled_mm on Ada, DeepGEMM, its own blockwise CUTLASS kernel), which has no registered Definition; nothing is approximated by a
-looser comparison (COORD 6).
+looser comparison.
 
 Everything the kernels take as a knob that changes VALUES is pinned (`group_size == G`, `eps == 1e-10`, `fp8_min/max == -+448`,
 no bias), except `scale_ue8m0`, which selects the quant Definition (`Fp8GroupQuantUe8m0_v1` under power-of-two scales, the
@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import fp8
+from verity.ml.definitions.registry import fp8
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
@@ -106,7 +106,7 @@ class PerTokenGroupFp8Quant:
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
         if bool(ue8m0):
-            from verity_vllm.program.registry import deepgemm  # noqa: PLC0415  (loaded only on the ue8m0 branch)
+            from verity.ml.definitions.registry import deepgemm  # loaded only on the ue8m0 branch
             spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
         else:
             spec = bind(fp8.Fp8GroupQuant, K=K, G=G)
@@ -149,7 +149,7 @@ class CutlassScaledMmFp8Block:
             return unsupported(node, str(e), compute_capability=list(tp.compute_capability))
         # the record must ATTEST the kernel class its FP8 linears carried (`RunHeader.profile.backends.fp8_block_gemm_kernel`, read back
         # from `Fp8LinearMethod.fp8_linear` by the capture engine): `_C.cutlass_scaled_mm` is also reachable from other kernel classes'
-        # fallbacks, and a header without the read-back (a pre-R15 capture) does not say which kernel ran -- refused, never assumed
+        # fallbacks, and a header without the read-back (an older capture) does not say which kernel ran -- refused, never assumed
         kernel = header_fp8_kernel(ctx)
         if kernel != CUTLASS_KERNEL:
             return unsupported(node, "the record does not attest CutlassFp8BlockScaledMMKernel for its FP8 linears (RunHeader.profile."
@@ -193,7 +193,7 @@ class DynamicDeepGemmFp8Linear:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "dynamic_flashinfer_deepgemm_blockscale_gemm":
             return None
-        from verity_vllm.program.registry import deepgemm
+        from verity.ml.definitions.registry import deepgemm
 
         a = bound_args(node)
         x, w, ws = _arg(a, "input", pos=0), _arg(a, "weight", pos=1), _arg(a, "weight_scale", pos=2)

@@ -69,7 +69,7 @@ def signed(c: Proxy, p: int, record: bytes, sign=SIGN, context: bytes | None = N
 
 
 def registration(p: int, ctx: str | None = None, window: dict | None = None) -> Registration:
-    """PoUW's registration of window p as the proof service returns it: a record whose served window's context names p,
+    """PoUW's registration of window p as the proof system returns it: a record whose served window's context names p,
     with its receipt and digest."""
     w = {"kind": "served", "context": PS.context("served-zk/test", p, MANIFEST) if ctx is None else ctx, "public": {}}
     record = {"window": w if window is None else window}
@@ -157,6 +157,53 @@ def test_window_open_root_form():
         with pytest.raises(DomainError, match="session's id"):
             PS.window_open_root(weights, requests, bad)
     assert PS.window_open_root(weights, requests, "s" * 64) != root
+
+
+def test_epoch_open_root_form():
+    """A Pearl-C salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v1" ‖ weights' root ‖ u64be(k)), 97 bytes
+    hashed, pinned on one vector: another weights' root or epoch is another root, no epoch root is a window-open root's
+    tag, a root that isn't 64 bytes is refused, and so is an epoch number that isn't an integer in [0, 2^64)."""
+    weights = bytes(range(64))
+    root = PS.epoch_open_root(weights, 0)
+    assert root.hex() == (
+        "e0dac4297e47d4ac5b82943ee85b7f76269ffc92c0da80a2c89a76813910064c"
+        "97853737d76148923908e6a266f73f75abd3a8b9c512d38a726a3656e7067701")
+    assert PS.EPOCH_OPEN_TAG == b"verity/pouw-epoch-open/v1" and len(PS.EPOCH_OPEN_TAG + weights + bytes(8)) == 97
+    assert PS.epoch_open_root(weights, 258) == hashlib.sha512(PS.EPOCH_OPEN_TAG + weights + bytes(6) + b"\1\2").digest()
+    assert PS.epoch_open_root(weights, (1 << 64) - 1) == hashlib.sha512(PS.EPOCH_OPEN_TAG + weights + b"\xff" * 8).digest()
+    assert len({root, PS.epoch_open_root(weights, 1), PS.epoch_open_root(bytes(64), 0)}) == 3
+    for bad in (weights[:32], weights + b"\0", bytearray(weights), weights.hex(), None):
+        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
+            PS.epoch_open_root(bad, 0)
+    for bad in (-1, 1 << 64, 1.0, True, "0", None):
+        with pytest.raises(DomainError, match="salt epoch's number"):
+            PS.epoch_open_root(weights, bad)
+
+
+def test_anchored_epoch_root_form():
+    """An H1 window's salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v2" ‖ W ‖ X ‖ u64be(k)), 161 bytes
+    hashed, pinned on one vector: another W, X or epoch is another root, none is a Pearl-C epoch's root, and a root
+    that isn't 64 bytes or an epoch number that isn't an integer in [0, 2^64) is refused."""
+    weights, anchors = bytes(range(64)), bytes(range(64, 128))
+    root = PS.anchored_epoch_root(weights, anchors, 0)
+    assert root.hex() == (
+        "9a94dc1e8c5ea75e23145eb1f4f384ce8f7b516f555d746ce45ceba6bfdea693"
+        "09f2889235afecd91aa709280bbbff11148c45ec97b2cad9c11a364c39a619ed")
+    assert PS.ANCHORED_EPOCH_TAG == b"verity/pouw-epoch-open/v2"
+    assert len(PS.ANCHORED_EPOCH_TAG + weights + anchors + bytes(8)) == 161
+    assert PS.anchored_epoch_root(weights, anchors, 258) == hashlib.sha512(
+        PS.ANCHORED_EPOCH_TAG + weights + anchors + bytes(6) + b"\1\2").digest()
+    assert len({root, PS.anchored_epoch_root(weights, anchors, 1), PS.anchored_epoch_root(bytes(64), anchors, 0),
+                PS.anchored_epoch_root(weights, bytes(64), 0), PS.anchored_epoch_root(anchors, weights, 0),
+                PS.epoch_open_root(weights, 0)}) == 6
+    for bad in (weights[:32], weights + b"\0", bytearray(weights), weights.hex(), None):
+        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
+            PS.anchored_epoch_root(bad, anchors, 0)
+        with pytest.raises(DomainError, match="anchors' root is 64 bytes"):
+            PS.anchored_epoch_root(weights, bad, 0)
+    for bad in (-1, 1 << 64, 1.0, True, "0", None):
+        with pytest.raises(DomainError, match="salt epoch's number"):
+            PS.anchored_epoch_root(weights, anchors, bad)
 
 
 def test_a_context_names_its_pouw_window():

@@ -1,0 +1,29 @@
+# The advice's encodings (network accounting for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
+# cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
+# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
+# the replay's block pool (`replay._KV`), and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v2's pool
+# calls against `_KV` over whole traces; `arith_vectors.py`: the certifier's arithmetic
+# encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own scheduler, which the tests read
+# as fixtures (it needs vLLM). Those fixtures (`tests/fixtures/`) and the certifier's vectors these modules write are
+# fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the suites that read them; one a module
+# rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
+# `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# derived.py builds and charges advice v0 with the certifier's I1 (verity.core.protocols.certifier.advice), which reads
+# the package inits on the way; cache_vectors.py runs the certifier's CacheStep_v1 (`cache_step`, through `head_check`
+# and the circuits it imports) and writes the certifier's difftest vectors, which a test reads back; test_arith_vectors
+# holds the certifier's arith_encode vectors to what this directory's coders code now.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/certifier", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments",
+          "verity/ml/crypto",
+          # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports sampled proofs'
+          # produced and registered row helpers
+          "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
+          "verity/core/protocols/sampled_proofs/one_stage/partition.py",
+          "verity/core/protocols/sampled_proofs/one_stage/produced.py",
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]

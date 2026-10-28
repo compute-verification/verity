@@ -1,9 +1,9 @@
-"""[R16 compiled, coord ruling 41 / rev F-r16-23] the compiled check's sampled-replay seed is POST-COMMITMENT AS A FACT.
+"""The compiled check's sampled-replay seed is POST-COMMITMENT AS A FACT.
 
 commit_delta draws the CompiledKernelCheck's random steps from the run root: seed = int(run_root.hex()[:8], 16) (first 4 bytes), and
 records that form on value_correspondence.compiled_check.seed_source (COMPILED_REPLAY_SEED_SOURCE).  The finalizer recomputes the seed from
 the same runs.jsonl's run_root and refuses any other value.  Torch-free: the constant and the call site are read from the source text (the
-module imports torch/vllm), and the rule is exercised on the R16 records of this lane when present.
+module imports torch/vllm), and the rule is exercised on the recorded compiled runs when present.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_the_constant_names_the_form_and_the_call_site_uses_both() -> None:
 
 def test_compiled_kernel_check_records_seed_source() -> None:
     src = CKC.read_text()
-    assert "seed_source: str | None = None" in src
+    assert re.search(r"^\s+seed_source: str \| None,$", src, re.M), "seed_source is a required keyword: every caller names the seed's form"
     assert '"seed": self.seed, "seed_source": self.seed_source' in src
 
 

@@ -18,12 +18,12 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.registry import sparse_mla_split as W
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import sparse_mla as M
+from verity.ml.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
 
@@ -45,7 +45,7 @@ def _lg2_word(x: int) -> int:
 
 @pytest.mark.parametrize("c0", ["C0", "C0_max"])
 def test_lg2_reproduces_the_sm120_measurement(c0: str) -> None:
-    """Every mantissa at [1, 2) and the 2^20-word sweep of run r20261004-060203-ba52, by the digests the table records, at
+    """Every mantissa at [1, 2) and the 2^20-word sweep, by the digests the table records, at
     either end of C0's measured range."""
     mant, sweep_in, sweep_out = _digests()
     h = hashlib.sha256()
@@ -360,6 +360,58 @@ def _combine(lse, o) -> np.ndarray:
     return np.asarray(evaluate(_combine_word(len(lse), o.shape[1]), lse.tolist(), o.reshape(-1).tolist()), dtype=U32)
 
 
+def _part(T, DR, DV, BN, scale, qn, qr, kv) -> np.ndarray:
+    part = bind(W.SparseMlaSplitPart, T=T, DR=DR, DV=DV, BN=BN, SCALE=scale, **FA3)
+    return np.asarray(evaluate(part, qn.tolist(), qr.tolist(), kv.reshape(-1).tolist()), dtype=U32)
+
+
+@pytest.mark.parametrize("T", [8, 16, 40])
+def test_the_part_twin_is_the_word(T: int) -> None:
+    """`part_rows` on a split's keys (one partial block, one whole block, a partial third) is the word part word for word."""
+    DR, DV, BN = 16, 16, 16
+    rng = np.random.default_rng(T + 100)
+    qn, qr, kv = _bf16(rng, (2, DV)), _bf16(rng, (2, DR)), _bf16(rng, (T, DV + DR), 0.5)
+    o, lse, nf = TW.part_rows(qn, qr, kv, T=T, DR_=DR, DV=DV, BN=BN, scale=0.0625)
+    assert not nf.any()
+    for r in range(2):
+        assert np.array_equal(np.append(o[r], lse[r]).astype(U32), _part(T, DR, DV, BN, 0.0625, qn[r], qr[r], kv))
+
+
+def _parts(T, NS, DR, DV, BN, scale, qn, qr, kv) -> tuple[np.ndarray, np.ndarray]:
+    """Each split's `SparseMlaSplitPart_v1` on its own keys: (lse (NSPLIT,), o_partial (NSPLIT, DV))."""
+    got = [_part(min(T, b1 * BN) - b0 * BN, DR, DV, BN, scale, qn, qr, kv[b0 * BN:min(T, b1 * BN)])
+           for b0, b1 in W.split_blocks(T, NS, BN)]
+    return np.array([g[DV] for g in got], U32), np.stack([g[:DV] for g in got])
+
+
+@pytest.mark.parametrize("T,NS", [(17, 2), (37, 3), (64, 4), (65, 3), (100, 7)])
+def test_a_split_head_is_its_parts_and_the_combine(T: int, NS: int) -> None:
+    """The units a row splits into: per split one part on its keys (one block or several, the token's last block partial or
+    full), and the combine over the parts' outputs, are the head word for word."""
+    DR, DV, BN = 16, 16, 16
+    rng = np.random.default_rng(T * 7 + NS)
+    qn, qr, kv = _bf16(rng, (DV,)), _bf16(rng, (DR,)), _bf16(rng, (T, DV + DR), 0.5)
+    lse, o = _parts(T, NS, DR, DV, BN, 0.0625, qn, qr, kv)
+    assert np.array_equal(_combine(lse, o), _run_split(T, NS, DR, DV, BN, 0.0625, qn, qr, kv))
+
+
+def test_a_head_is_its_parts_at_the_served_statics() -> None:
+    """Step 16's T = 272 in five splits of one block each, the last of 16 keys, DR = 64, DV = 512, BN = 64: the five parts
+    and the combine are the head's twin (which `test_the_twin_is_the_head_at_the_served_statics` holds to the word head)."""
+    T, NS, DR, DV, BN = 272, 5, GLM["DR"], GLM["DV"], GLM["BN"]
+    rng = np.random.default_rng(272)
+    qn, qr, kv = _bf16(rng, (DV,)), _bf16(rng, (DR,)), _bf16(rng, (T, DV + DR), 0.5)
+    lse, o = _parts(T, NS, DR, DV, BN, GLM["SCALE"], qn, qr, kv)
+    want, nf = TW.head_split_rows(qn[None], qr[None], kv, T=T, NS=NS, scale=GLM["SCALE"])
+    assert not nf.any() and len(lse) == NS
+    assert np.array_equal(TW.combine_rows(lse[None], o[None])[0].astype(U32), want[0].astype(U32))
+
+
+def test_a_part_has_keys() -> None:
+    with pytest.raises(ValueError, match="T=0 keys"):
+        bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+
+
 def test_one_split_combines_to_its_bf16() -> None:
     rng = np.random.default_rng(9)
     o = rng.standard_normal((1, 16)).astype(np.float32)
@@ -382,15 +434,16 @@ def test_an_empty_split_changes_nothing_and_none_gives_zeros() -> None:
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
 AGREEMENT = [bind(BX.SparseMlaSplitEndV2, DV=16, INV=BOOL["INV"], SCALE=0.0625),
              bind(BX.SparseMlaCombineV2, NSPLIT=3, DV=16, INV=BOOL["INV"]),
+             bind(BX.SparseMlaSplitPartV2, T=17, DR=16, DV=16, BN=16, SCALE=0.0625, **BOOL),
              bind(BX.SparseMlaHeadSplitV2, T=17, NS=2, DR=16, DV=16, BN=16, SCALE=0.0625, **BOOL)]
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
-    """5 s for the end, 20 s for the combine, minutes for the head (two blocks, two ends and a combine traced): what the
-    word-level tests can't see is the Boolean pieces' agreement on special words (zeros, infinities, NaNs, subnormals) through
-    a split's end and the combine."""
+    """5 s for the end, 20 s for the combine, minutes for a part (two blocks and an end traced) and for the head (two blocks,
+    two ends and a combine): what the word-level tests can't see is the Boolean pieces' agreement on special words (zeros,
+    infinities, NaNs, subnormals) through a split's blocks, its end and the combine."""
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
     assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, lifted)

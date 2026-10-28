@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_activation`: the Boolean tanh agrees with its word Definitions (`trace.word_of`) on all
+"""`verity.ml.definitions.registry.boolean_activation`: the Boolean tanh agrees with its word Definitions (`trace.word_of`) on all
 65,536 words, element and row; the table is needed exactly on its band; each Definition carries exactly its builder's live
 ANDs, is pinned by gate count and program digest, and the row partitions under `Q_word_v1{X=16, W=32}` into `Bf16Tanh_v1`'s
 units, one per element."""
@@ -18,8 +18,8 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity_vllm.program.registry import boolean_activation as BA
-from verity_vllm.program.registry import dense as D
+from verity.ml.definitions.registry import boolean_activation as BA
+from verity.ml.definitions.registry import dense as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

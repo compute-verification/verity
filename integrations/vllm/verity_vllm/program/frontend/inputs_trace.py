@@ -1,7 +1,7 @@
 """Record-freeness evidence: an audit hook that logs every file `open` (and `os.listdir`/`glob`) the construction performs,
-so a reviewer can verify no execution record / accepted Program / hand-written emitter was read (R8 REF-lane practice).
+so a reviewer can verify no execution record / accepted Program / hand-written emitter was read.
 
-The predictor (`verity_vllm.predict`) is a forbidden input of the trace: a switched row's Build is the AOT Build
+The predictor (`verity_vllm.program.predict`) is a forbidden input of the trace: a switched row's Build is the AOT Build
 (`predict.aot`), and the trace is what checks it (its comparison, `pipeline.neutrality`'s heavy tier), so a trace that read the
 predictor would check it against itself."""
 
@@ -11,9 +11,15 @@ import json
 import os
 import sys
 import threading
+from importlib.util import find_spec
 
+#: the predictor, found by its module name without running it: a layout move rewrites the name, and a name that no longer
+#: resolves refuses the import of this module rather than leaving a marker that matches nothing
+_PREDICTOR = find_spec("verity_vllm.program.predict")
+if _PREDICTOR is None:
+    raise ImportError("inputs_trace: verity_vllm.program.predict does not resolve; name the predictor's module here")
 _FORBIDDEN_MARKERS = ("program.json", "instances.jsonl", "experimental/aot/build.py", "experimental/aot/",
-                      os.path.join(__package__.split(".")[0], "predict", ""), "/vol/corpus", "census/B0-", "log.jsonl")
+                      _PREDICTOR.name.replace(".", "/") + "/", "/vol/corpus", "census/B0-", "log.jsonl")
 
 
 class InputsTrace:

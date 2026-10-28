@@ -1,25 +1,18 @@
 {
   "rule": "P3 (one evaluator interface, one challenge derivation)",
   "entries": [
-    {"file": "verity_vllm/check/match/record.py", "kind": "if-ladder", "symbol": "read_record", "detail": "tag"},
     {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "rng", "symbol": "cmd_check", "detail": "numpy.random.default_rng", "count": 2},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "StreamLayout.word_index", "detail": "cls"},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "thread_word_offset", "detail": "cls"},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "rng", "symbol": "run", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "rng", "symbol": "throwaway_requests", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/observe/prefix_cache.py", "kind": "rng", "symbol": "prefix_requests", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "rng", "symbol": "bootstrap_ci", "detail": "random.Random"},
-    {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "rng", "symbol": "_bootstrap_ci", "detail": "random.Random"},
-    {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "rng", "symbol": "build_requests", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "rng", "symbol": "draw_lengths", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "rng", "symbol": "gen_random", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "rng", "symbol": "gen_ties", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/pipeline/workload.py", "kind": "rng", "symbol": "rng_for", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "rng", "symbol": "compare", "detail": "random.Random"},
-    {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "admit", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "check_log", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"},
+    {"file": "verity/ml/definitions/numerics/twins.py", "kind": "rng", "symbol": "admit", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "generate", "detail": "random.Random"},
-    {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"}
+    {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"},
+    {"file": "verity_vllm/program/twins_check.py", "kind": "rng", "symbol": "check_log", "detail": "numpy.random.default_rng"},
+    {"file": "verity_vllm/program/twins_check.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"},
+    {"file": "verity_vllm/pipeline/prefix_cache.py", "kind": "rng", "symbol": "prefix_requests", "detail": "numpy.random.default_rng"}
   ]
 }

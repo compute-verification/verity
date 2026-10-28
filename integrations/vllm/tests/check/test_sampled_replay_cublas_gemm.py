@@ -15,9 +15,9 @@ import pytest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
-from verity_vllm.program.kernels import cublas_gemm_rows as C, rows
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
+from verity.ml.definitions.numerics import cublas_gemm_rows as C, rows
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 DOTS = pytest.mark.parametrize("dot", [b1.P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16], ids=["ampere", "hopper"])
@@ -32,7 +32,7 @@ def _words(rng, *shape, scale=1.0) -> np.ndarray:
 def test_the_families_are_registered_with_their_evaluator_and_provenance():
     assert set(C.ROWS) == {d.id for d in BC.ROUTE_DEFINITIONS}
     for f in C.ROWS:
-        assert f in rows.ROWS and rows.EVALUATORS[f].startswith(f"verity_vllm.program.kernels.cublas_gemm_rows.{C.ROWS[f].__name__}")
+        assert f in rows.ROWS and rows.EVALUATORS[f].startswith(f"verity.ml.definitions.numerics.cublas_gemm_rows.{C.ROWS[f].__name__}")
         assert rows.EVALUATOR_PROVENANCE[f] is C.PROVENANCE
 
 

@@ -1,12 +1,12 @@
 import Mathlib
-import Models.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Proofs.Accounting.Stacking
 
-/-! The pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem waits on the red team
-of the statement (until then the lock lists the statement as `unstated`): a carrier of a declared
-circuit's is within its census over its life, its inputs within the run-input bytes the stacking property's caps
-allow its windows (`Provenance.OfCircuit.budget`), a uniform function restricted along an
-injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is steered after the coins to
+/-! The first pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem is in
+`DeclaredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
+within the run-input bytes the stacking property's caps allow its windows (`Provenance.OfCircuit.budget`), a uniform
+function restricted along an injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is
+steered after the coins to
 uniform blocks at `2^a` times their likeliest summary's event, `δ` once, against an event that reads the summary as a
 device told it does (`KeyBinding.pr_steered_le`). -/
 
@@ -14,7 +14,8 @@ namespace Accounting.RateSketch.Provenance
 
 /-- **A carrier of a declared circuit's is within its census over its life**: over at most `life` of the audit's
 windows, its inputs are at most the run-input bits the stacking property's caps allow in any `life` of them
-(`8·R_life`), and its encodes at most `life` times the most budgeted units the circuit's census has in a window. -/
+(`8·R_life`), and its encodes at most `life` times the most nonlinear units (budgeted units and data products) the
+circuit has in a window. -/
 theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.Dag ι}
     {caps : Gates.Caps} {A : Gates.Audit} {I : Finset ℕ} {life : ℕ} (hK : K.OfCircuit cost W A I)
     (hP : Gates.Property caps A W) (hI : I ⊆ Finset.range A.windows) (hcard : I.card ≤ life)
@@ -22,18 +23,20 @@ theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cos
     K.inputs E ≤ 8 * ((Finset.range A.windows).powerset.filter fun I => I.card ≤ life).sup
         (fun I => ∑ v ∈ I, caps.runBytes v) ∧
       K.gates cost E ≤
-        (life * (Finset.range A.windows).sup (fun v => (Gates.census W fun t => A.win t = v).budgeted) : ℕ) := by
+        (life * (Finset.range A.windows).sup (fun v =>
+          (Gates.census W fun t => A.win t = v).budgeted + Gates.productsAt W fun t => A.win t = v) : ℕ) := by
   have hsum : ∀ f : ℕ → ℕ, ∑ v ∈ I, f v ≤ life * (Finset.range A.windows).sup f := fun f =>
     calc ∑ v ∈ I, f v ≤ ∑ _v ∈ I, (Finset.range A.windows).sup f := Finset.sum_le_sum fun v hv => Finset.le_sup (hI hv)
       _ = I.card * (Finset.range A.windows).sup f := by rw [Finset.sum_const, smul_eq_mul]
       _ ≤ life * (Finset.range A.windows).sup f := Nat.mul_le_mul_right _ hcard
   refine ⟨(hK E).1.trans ?_, (hK E).2.trans ?_⟩
   · calc ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ≤ ∑ v ∈ I, 8 * caps.runBytes v :=
-          Finset.sum_le_sum fun v hv => (hP.2.1 v (Finset.mem_range.mp (hI hv))).2.2.2.2.2
+          Finset.sum_le_sum fun v hv => (hP.2.1 v (Finset.mem_range.mp (hI hv))).2.2.2.2.2.1
       _ = 8 * ∑ v ∈ I, caps.runBytes v := (Finset.mul_sum _ _ _).symm
       _ ≤ _ := Nat.mul_le_mul_left 8 (Finset.le_sup (f := fun I => ∑ v ∈ I, caps.runBytes v)
           (Finset.mem_filter.mpr ⟨Finset.mem_powerset.mpr hI, hcard⟩))
-  · exact_mod_cast hsum fun v => (Gates.census W fun t => A.win t = v).budgeted
+  · exact_mod_cast hsum fun v =>
+      (Gates.census W fun t => A.win t = v).budgeted + Gates.productsAt W fun t => A.win t = v
 
 end Accounting.RateSketch.Provenance
 

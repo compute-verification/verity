@@ -147,7 +147,7 @@ class RequestComponent:
 
 
 _CANON: dict[str, tuple[Any, dict]] = {}  # specialization id -> (the canonical decoded object, its v0 encoding); the DEFAULT canon
-# [R15 global, rev-pm M-0123 F(1)] the canon is the set of definitions ONE compose shares; a process composing several workloads (the
+# the canon is the set of definitions ONE compose shares; a process composing several workloads (the
 # reviewer's fixture runner, a test module) must not compare a later compose against an earlier one's definitions -> callers pass their
 # own `canon` dict per compose (global_program.build does); the module-level dict serves callers that pass none (single-compose processes).
 
@@ -170,11 +170,11 @@ def _canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
         if isinstance(fn, PrimitiveDefinition):
             continue
         if fn is dp.root:
-            # [R16 global, B64 1024/128 Build FAIL 07:09Z] the request Program's ROOT is never shared: its body becomes the component's
+            # the request Program's ROOT is never shared: its body becomes the component's
             # (`WorkloadRequest{program_digest, program_fn}`, identity = the whole descriptor's digest) and nothing calls it. Its id is
             # derive's `Root[Derived[vLLMRequest[...]]{SRC=...}]` whose SRC static names class/mode/profile/INPUT SHAPES/config -- not T --
             # so two requests of one manifest with the same prompt length and different caps (LP11: T24/T36) carry ONE root id over two
-            # bodies, and comparing roots under that id refused a valid workload (E_IDENTITY) while their digests differ. Callees stay
+            # bodies, and comparing roots under that id would refuse a valid workload (E_IDENTITY) although their digests differ. Callees stay
             # under the fail-closed rule below; the root's identity is the component digest.
             continue
         enc = _encode_definition(fn)
@@ -336,7 +336,7 @@ class WorkloadRequest:
 
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
-# `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape -- tp M-0314 (B)); a stochastic
+# `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` and a TP rank
 # Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`)
 _REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "schedule")
@@ -395,7 +395,7 @@ def _workload_body(B, S, *args):
     return coll_concat(ret, outs)
 
 
-# [R17-1 / DP-pad-02 (b)] `lag` = LAG, the rows the declared scheduler computes for a request AFTER its EOS sample (vLLM async scheduling:
+# `lag` = LAG, the rows the declared scheduler computes for a request AFTER its EOS sample (vLLM async scheduling:
 # 1; synchronous: 0) -- a REQUIRED specialization parameter of the workload Program, coupled to the serving profile's resolved
 # async-scheduling configuration (TargetProfile.lag()).  It does not change the wiring (the lag step is one of the request component's
 # bounded cap steps; its VUs are required like every executed step's) but it changes what the Program DESIGNATES: under LAG = 1 the
@@ -411,7 +411,7 @@ WORKLOAD = CompositeDefinition("Workload", 1, ("requests", "shared", "lag"), _wo
 
 
 def served_lengths_rule(lag: int) -> dict:
-    """[R17-1] The two lengths the Program keeps distinct for every request, stated once (GM-01 G6 and the finalizer carry the same
+    """The two lengths the Program keeps distinct for every request, stated once (GM-01 G6 and the finalizer carry the same
     names): `served_output_len` = a_r, the tokens designated as output (the events up to and including the FIRST declared EOS, or all
     `cap` events on a length stop); `executed_prefix_len` = the steps that ran = a_r + LAG after an EOS stop before the cap (the LAG
     step(s) are active internal computation: their VUs are required, their sampled tokens are not output), a_r on a length stop (the
@@ -428,6 +428,21 @@ def served_lengths_rule(lag: int) -> dict:
             "rule": "R17-1 / DP-pad-02 (b); one definition for Build (this Program), GM-01 G6 and the finalizer"}
 
 
+def eos_lag_rows_declared(engine: dict | None) -> int | None:
+    """The post-EOS rows a declared engine block computes: `async_scheduling` True -> 1, False -> 0, undeclared or non-boolean ->
+    None.  GP-01 always declares it (`workload_lag`), so None here means a Program from before the lag was declared: GM-01 G6 then
+    fails by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop
+    `lag.exercised false`."""
+    if not isinstance(engine, dict):
+        return None
+    v = engine.get("async_scheduling")
+    if isinstance(v, bool):
+        return 1 if v else 0
+    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
+        return 1 if v.strip().lower() == "true" else 0
+    return None
+
+
 class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
                  ordering: str = "manifest", *, lag: int, theta_registered: bool = False) -> None:
@@ -436,7 +451,7 @@ class WorkloadProgram:
         weights are bound as the components bind them, so every workload digest built before it stands."""
         if not requests:
             raise ValueError("a workload needs at least one request")
-        # [R17-1] LAG is REQUIRED (a keyword with no default: omitting it is a TypeError, never a silent 0 or 1) and in {0, 1}
+        # LAG is REQUIRED (a keyword with no default: omitting it is a TypeError, never a silent 0 or 1) and in {0, 1}
         if isinstance(lag, bool) or not isinstance(lag, int) or lag not in LAG_VALUES:
             raise ValueError(f"lag must be one of {LAG_VALUES} (the declared scheduler's post-EOS rows, TargetProfile.lag()); got {lag!r}")
         ids = [r.request_id for r in requests]
@@ -455,7 +470,7 @@ class WorkloadProgram:
             raise ValueError(f"the shared group {shared!r} differs across requests (count/name/type): not one model / one weight set; refused")
         uniform = len(set(idx)) == 1
         if not uniform:
-            # [tp M-0314 (B)] the shared group may sit at different positions per component ONLY when what precedes/follows it is
+            # the shared group may sit at different positions per component ONLY when what precedes/follows it is
             # request-local by construction (prompt, seed, splits, schedule, peers_*: a TP rank Program's received collective values, K per shape); any other
             # group at a shifting position is still refused -- it would mean the components disagree on what the model's inputs are
             foreign = sorted({g for r in requests for g in r.component.groups if g != shared and not _is_request_local(g)})
@@ -482,8 +497,8 @@ class WorkloadProgram:
         self.ordering = ordering
         self.lag = int(lag)
         # the static keeps the historical ONE-tuple form when uniform (every existing workload digest unchanged) and becomes one
-        # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` [R17-1] is the third static:
-        # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag)
+        # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` is the third static:
+        # every workload digest differs per declared value (and from the digest of every Program that declared no lag)
         self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
         self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered,
                                theta=self.theta)
@@ -562,7 +577,7 @@ class WorkloadProgram:
                          "programmed_steps": {"prefill": r.arrive_step, "decode": [r.arrive_step + 1, r.arrive_step + T] if T > 0 else None,
                                               "count": T + 1},
                          "output_interface": {"kind": "bounded", "tokens_max": r.cap, "event": "(request_id, s) -> programmed engine step arrive_step + s"},
-                         # [R17-1] the two lengths, bounded from the declaration alone: served <= cap; executed <= cap (the lag step fits)
+                         # the two lengths, bounded from the declaration alone: served <= cap; executed <= cap (the lag step fits)
                          "lengths": {"served_output_len_max": r.cap, "executed_prefix_len_max": r.cap,
                                      "eos_stop_executed_prefix_max": min(r.cap, max(r.cap - 1, 0) + self.lag), "lag": self.lag, "capacity_events": r.cap},
                          "input_interface": {"prompt_tokens": r.prompt_len, "available_at": r.arrive_step},
@@ -597,7 +612,7 @@ class WorkloadProgram:
                                          "multiset per (request, s) whose canonical addresses are structural (component node index = the "
                                          "address-map convention), never an order of events",
                 "component_steps_equal_cap": steps_ok,
-                # [R15 global, rev-pm M-0099 / DECISION M-0021] chronology = the engine-step counter on every event (a) + dependency order (b);
+                # chronology = the engine-step counter on every event (a) + dependency order (b);
                 # within one engine step (c) nothing is sequenced -- the address map's (arrive_step, manifest index) key is an ADDRESS, not
                 # a declared order of the requests' computations, and the checker must not read either the record's or the Program's
                 # within-step layout as an event sequence.
@@ -617,14 +632,14 @@ class WorkloadProgram:
                 "future_dependent_events": {"eos_stop": "prescribed: the Program computes all cap steps of every request; an execution that "
                                                         "stops a request early at EOS leaves the tail programmed-but-unexecuted; the builder does "
                                                         "not rebuild from served lengths (rules §2.6)",
-                                            # [R17-1] the declared scheduler's post-EOS rows are part of the executed prefix, not of the served output
+                                            # the declared scheduler's post-EOS rows are part of the executed prefix, not of the served output
                                             "post_eos_lag": f"LAG = {self.lag} declared: after an EOS stop before the cap exactly {self.lag} more programmed "
                                                             f"step(s) of the request RUN (active internal computation, fed the EOS; sampled token not served); "
                                                             f"inactivity starts at a_r + {self.lag}"},
                 "lag": self.lag, "lengths": served_lengths_rule(self.lag)}
 
     def population(self) -> dict:
-        """G-population, Program side (COORD 17:36Z §3): the global gate population = the shared/request prescribed inputs + the
+        """G-population, Program side: the global gate population = the shared/request prescribed inputs + the
         request subcircuits' populations, and nothing else; the component intervals partition the non-input gates exactly, every
         gate has one global address, and the only genuinely global computation is the (gate-free) output tuple wiring."""
         body = self.program.root.body
@@ -642,7 +657,7 @@ class WorkloadProgram:
     def artifact(self) -> dict:
         params, ret = self.fn.signature()
         return {"schema": SCHEMA, "workload_digest": self.digest, "workload_fn": _spec_id(self.fn), "gates": self.program.gates, "population": self.population(),
-                # [R17-1] the declared LAG static (also inside workload_fn / the digest) and the lengths rule it fixes
+                # the declared LAG static (also inside workload_fn / the digest) and the lengths rule it fixes
                 "lag": self.lag, "lengths": served_lengths_rule(self.lag),
                 "input_gates": self.program.input_gates, "n_root_nodes": len(self.program.root.body.nodes), "manifest_digest": self.manifest_digest,
                 "shared": {"group": self.shared_group, "component_params": list(self.shared),
@@ -657,7 +672,7 @@ class WorkloadProgram:
                               "component": r.component.to_json(), **({"prefix": r.prefix} if r.prefix else {})} for r in self.requests],
                 "representation": "hierarchical: Program(Workload_v1{requests, shared}); one call node per request Program component; the "
                                   "request subcircuits are Definitions (not flattened); no scheduler; builder inputs = manifest + request descriptors",
-                "padding_scope": "active-reference only (unchanged from R13): inactive padded interiors are outside this Program's claims; "
+                "padding_scope": "active-reference only: inactive padded interiors are outside this Program's claims; "
                                  "cross-request cache reuse is only the declared prefix-cache hits (`requests[].prefix`)",
                 "x09_inside": "each component is the X-09 request-wrapper Program (its digest is a static of the component); X-09 per-request "
                               "equality is evidence inside the global check, not a substitute for it",

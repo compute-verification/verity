@@ -2,7 +2,7 @@
 # functions, one `Properties.<Protocol>` module per component, whose docstring says what it states. It may require
 # `security` (Definitions, Models) and the code it states properties of, never `security_proofs`. Its modules sit beside
 # the trusted text's (`srcDir = ".."`) under a root of their own, `Properties`: `Properties.<Protocol>` states,
-# `Properties.Proofs.<Protocol>` proves. A property whose proof needs `security_proofs` is stated here and proved there.
+# `Proofs.Properties.<Protocol>` proves. A property whose proof needs `security_proofs` is stated here and proved there.
 # This comment lists no component, so two branches that each add one change only `[[require]]` and `roots`, which
 # `tools/verity/lean/merge.py --lakefile` merges.
 name = "security_properties"
@@ -65,21 +65,26 @@ path = "../../verity/core/protocols/remote_bandwidth/lean"
 name = "core_requirement"
 path = "../../verity/core/primitives/requirement"
 
+[[require]]
+name = "core_composition"
+path = "../../verity/core/protocols/composition"
+
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Proofs.Pouw",
-  "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Pouw.Strata",
-  "Properties.Proofs.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads", "Properties.Proofs.Nci",
-  "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
-  "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Properties.Proofs.Pous.TimedAudit",
-  "Properties.Proofs.Pous.MemoryChallenger", "Properties.Proofs.Pous.Run", "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier",
-  "Properties.CertifierNetwork", "Properties.Proofs.CertifierNetwork", "Properties.CertifierNetwork.Runs",
-  "Properties.Proofs.CertifierNetwork.Runs", "Properties.Identity", "Properties.Proofs.Identity",
-  "Properties.NciDesc", "Properties.Proofs.Nci.DescAgree", "Properties.Proofs.Nci.Walk",
-  "Properties.Proofs.Nci.Resolve", "Properties.Proofs.Nci.Width", "Properties.Proofs.Nci.Novel",
-  "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
-  "Properties.SampledProofs.Halt", "Properties.Proofs.SampledProofs.Halt",
-  "Properties.Evaluate", "Properties.Proofs.Evaluate",
-  "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
-  "Properties.Proofs.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
-  "Properties.Proofs.RemoteAudit", "Properties.Accounting.Served", "Properties.Proofs.Accounting.Served"]
+roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
+  "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
+  "Properties.Pouw.Credit",
+  "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
+  "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd",
+  "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
+  "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.NetworkCertifier",
+  "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
+  "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
+  "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod",
+  "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
+  "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
+  "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
+  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
+  "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords"]

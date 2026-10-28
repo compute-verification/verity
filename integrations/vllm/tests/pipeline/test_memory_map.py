@@ -3,7 +3,8 @@
 request's slots at pages out of first-need order, and the engine's caches in vLLM 0.28's packed page layout.  The map written is
 `commit.memory_map.record`'s over the rows' committed words at those pages, the engine holds its blocks, the Program's census and
 KV rows are cached beside its descriptor and read back without it, and a run without committed slots, without the engine's caches
-or with a descriptor of another Program is refused beside the map, never raised.  GLM-5.3 at TP2 in small: each rank's replay
+or with a descriptor of another Program is refused beside the map, never raised.  A warm request's rows are cut by its Build's
+``prefix_cache.json``, and its cached page is its producer's, written once.  GLM-5.3 at TP2 in small: each rank's replay
 writes the map of its MLA latent rows from its own Build dir, committed words and caches, at its own path and registration."""
 from __future__ import annotations
 
@@ -12,13 +13,14 @@ import json
 import re
 import types
 import zlib
+from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 
-from tests.commit.test_memory_map import dsa_request
-from tests.predict.test_predict import TINY, _phi
+from tests.commit.test_memory_map import PREFIX, PRODUCERS, WARM_ARRIVE, WARM_TABLES, _slots, dsa_request, warm_program
+from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
@@ -28,7 +30,7 @@ from verity_vllm.commit import memory_map as MM
 from verity_vllm.pipeline import memory_map as PMM
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYERS = [f"model.layers.{i}.self_attn.attn" for i in range(2)]
@@ -230,6 +232,73 @@ def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):
     assert not (tmp_path / "memory_map.jsonl").exists()
 
 
+class _Slots:
+    """Each request's `<layer>/slot_mapping` at each engine step, ``slots[rid][step]``."""
+
+    def __init__(self, slots: dict[str, dict[int, list[int]]]):
+        self.slots = slots
+
+    def entries(self, rid, step, op_path, member):
+        n = len(self.slots[rid].get(step, ()))
+        return ([{"identity": {"element_range": [0, n]}}] if n else []), op_path, 0, []
+
+    def words(self, rid, step, op_path, member, elo, ehi):
+        return np.array(self.slots[rid][step][elo:ehi], dtype=np.int64).view(np.uint64), "int64"
+
+
+def _operand(pi, store, weights, rid, arrive, group):
+    """A row's committed words, a function of the request and the row's slices."""
+    return np.concatenate([(np.arange(hi - lo, dtype=np.uint64) * 2654435761 + zlib.crc32(repr((rid, s)).encode())) & 0xFFFF
+                           for s in group for lo, hi in [s[2:]]]).astype(np.uint16)
+
+
+def test_a_warm_requests_map_takes_its_cached_page_from_its_producer(tmp_path, monkeypatch):
+    """A cold request and a warm one whose first page is the cold one's (`tests.commit.test_memory_map`'s session): the warm
+    Build's KV rows are cut by its ``prefix_cache.json`` and refused without it, and the Commit's map takes the warm request's
+    cached page from its producer as the replay names it (`c2_replay.cached_prefixes`), writing that page once, as
+    `commit.memory_map.record` does, with the engine holding every block it wrote."""
+    progs = {"r0": build_program(_phi(WIDE), "request", LP=8, T=1).program, "r1": warm_program(8, 4, 4)}
+    loaded = {r: {"dir": str(tmp_path / r), "instances": {"digest": r[1] * 128}} for r in progs}
+    for lp in loaded.values():
+        Path(lp["dir"]).mkdir()
+    d1, dig1 = Path(loaded["r1"]["dir"]), loaded["r1"]["instances"]["digest"]
+    assert PMM.cache(d1, progs["r1"], dig1)["kv_rows"] is False
+    with pytest.raises(ValueError, match="kc reads an input of the Program"):
+        PMM.of_build(d1, dig1)
+    (d1 / "prefix_cache.json").write_text(json.dumps(PREFIX))
+    assert all(PMM.cache(lp["dir"], progs[r], lp["instances"]["digest"])["kv_rows"] for r, lp in loaded.items())
+    session = {"r0": MM.rows(progs["r0"]), "r1": MM.rows(progs["r1"], prefix=PREFIX)}
+    assert PMM.of_build(d1, dig1) == session["r1"]
+
+    def payload(rid, row):
+        return _operand(None, None, None, rid, 0, row.group).reshape(2, 4, 128).transpose(1, 0, 2).tobytes()
+
+    monkeypatch.setattr(PMM, "_operand", _operand)
+    kv, slot = {r: MM.packed(rs) for r, rs in session.items()}, _slots(session, WARM_TABLES, WARM_ARRIVE)
+    store = _Slots({r: {s: slot(r, s) for s in range(WARM_ARRIVE[r], WARM_ARRIVE[r] + rs.steps)} for r, rs in session.items()})
+    phys = [torch.zeros((6, 4, 4, 256), dtype=torch.bfloat16) for _ in LAYERS]
+    for r, rs in kv.items():
+        for layer, (rows,) in enumerate(rs.layers):
+            for q in range(rs.cached, rs.positions):
+                phys[layer].view(torch.int16)[WARM_TABLES[r][q // 4], q % 4] = torch.from_numpy(
+                    np.frombuffer(payload(r, rows[q]), np.int16).reshape(4, 256).copy())
+    out = tmp_path / "memory_map.jsonl"
+    req = {"path": str(out), "registration": "ab" * 64}
+    kw = {"loaded": loaded, "store": store, "arrivals": WARM_ARRIVE, "caches": {n: p.permute(0, 2, 1, 3) for n, p in zip(LAYERS, phys)},
+          "indices": {("index", id(lp["instances"])): r for r, lp in loaded.items()}}
+    with pytest.raises(ValueError, match="request r1's Program reads 4 cached rows, and 0 producing requests are named"):
+        PMM.write(out, req, **kw)
+    doc = PMM.write(out, req, cached_prefixes={"r1": {"cached": 4, "producers": ["r0"]}}, **kw)
+    assert out.read_text() == dumps(*MM.record(kv, WARM_ARRIVE, payload, bytes.fromhex("ab" * 64), MM.Layout(block_size=4, pages=6),
+                                               WARM_TABLES, None, PRODUCERS))
+    assert doc["requests"]["r1"] == {"arrive": 1, "steps": 5, "positions": 12, "layers": 2, "row_bytes": 1024, "pages": [1, 4, 5],
+                                     "program_digest": dig1, "cached": 4, "producers": ["r0"]}
+    assert "cached" not in doc["requests"]["r0"] and doc["requests"]["r0"]["pages"] == [1, 2, 3]
+    # a packed page is 2 blocks a layer: pages 1 (r0's, which r1 reads as its prefix), 2 and 4 whole, and the half of r1's page 5
+    # holding positions 8 and 9, which its last two steps read; r0's page 3 fills no block
+    assert (doc["written"], doc["engine"]) == (14, {"compared": 14, "equal": 14})
+
+
 #: GLM-5.3's MLA at TP2 in small: the DSA stand-in's KV layers, its latent rows (64 bytes) in pages of 64 slots, one block a page
 DSA_LAYERS = [f"model.layers.{i}.self_attn.attn" for i in range(2)]
 DSA_PAGES = [3, 5]
@@ -246,7 +315,8 @@ def _latent_caches(rows: MM.Rows, words) -> dict[str, torch.Tensor]:
     return out
 
 
-def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, monkeypatch):  # noqa: F811
+@pytest.mark.slow
+def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, monkeypatch):
     # GLM-5.3 at TP2 in small: each rank's Build dir holds its request Program (the DSA stand-in: an indexer layer and an IndexShare
     # layer, a prefill of 64 rows, then two decode steps); MLA's latent cache is whole on each rank, the scheduler's pages the same
     # on both, and each rank's committed words its own.  Rank 0's Build has KV rows cached under kv-rows/v1, which refused them

@@ -154,10 +154,17 @@ theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (St
     ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_check_any h
 
+/-- An untyped `HmRow.parse` with nets `pre` first (a templated file's unit net, `HmOut.parseTmpl`) ends with
+`HmRow.check`. -/
+theorem hm_parse_checkPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    ∃ ls, HmRow.check c tags ls = .ok () :=
+  hm_parse_check_none h
+
 /-- `HmRow.parse` with its defaults, as `setupH` calls it, ends with `HmRow.check`. -/
 theorem hm_parse_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () :=
-  hm_parse_check_none h
+  hm_parse_checkPre h
 
 /-- `HmRow.check` doesn't read a circuit's class. -/
 theorem check_cls (c : Circuit) (tags : Tags) (ls : Lean.Json) (x : Option _) :

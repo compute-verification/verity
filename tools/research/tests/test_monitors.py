@@ -1,6 +1,6 @@
 """The monitors (`research/monitors.py`): the runner opens each incident once and clears it once, through the alert dir and an
 optional webhook; each check reads its source the way the node writes it; node 2 is read in one session per pass, behind a
-guard that fails closed; the relay posts every new event once; and the files deploy.toml installs on node 1 run every
+guard that fails closed; the relay posts every new event once; and the files deploy.toml installs on node 2 run every
 node-side check."""
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def test_an_incident_clears_only_once_gone_for_its_clear_s(tmp_path):
 
 def test_a_timers_unit_that_fails_every_run_is_one_incident(tmp_path):
     """vy-custody.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
-    [m] = [m for m in M.MONITORS if m.id == "units-n1"]
+    [m] = [m for m in M.MONITORS if m.id == "units-n2"]
     out = passes(M.new_state(), m, [["system:vy-custody.service"], []] * 6, tmp_path, every=300)
     assert [e["event"] for evs in out for e in evs] == ["open"]
 
@@ -174,7 +174,7 @@ def test_the_alert_dir_leaves_out_an_open_or_clear_its_key_already_ends_on_and_a
 
 def test_a_pass_run_again_from_the_state_before_it_writes_nothing_twice_and_the_relay_posts_it_once(tmp_path):
     alerts, keys = tmp_path / "alerts", ["old"]
-    e = mon(lambda ctx: [M.Finding(k, f"*{k}*") for k in keys], id="held-idle", events=True)
+    e = mon(lambda ctx: [M.Finding(k, f"*{k}*") for k in keys], id="ev", events=True)
     st = M.new_state()
     M.step(st, [e], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(alerts), by="test")
     before = json.dumps(st)
@@ -183,13 +183,13 @@ def test_a_pass_run_again_from_the_state_before_it_writes_nothing_twice_and_the_
         st = json.loads(before)
         M.step(st, [mon(found("a")), e], lambda memo, now=now: M.Ctx(now=now, memo=memo), now, M.AlertDir(alerts), by="test")
     lines = (alerts / "monitors.jsonl").read_text().splitlines()
-    assert [(x["event"], x["key"]) for x in map(json.loads, lines)] == [("open", "m|a"), ("event", "held-idle|19:00Z|node 1|circuits")]
+    assert [(x["event"], x["key"]) for x in map(json.loads, lines)] == [("open", "m|a"), ("event", "ev|19:00Z|node 1|circuits")]
     assert len(list((alerts / "outbox").iterdir())) == 2
     posted, src, rstate = [], FakeSource("node1"), {}
     M.relay_pass(rstate, [src], lambda ev, th: posted.append(ev["key"]) or {"ts": "1"}, T0)
     src.all = lines
     M.relay_pass(rstate, [src], lambda ev, th: posted.append(ev["key"]) or {"ts": "1"}, T0 + 200)
-    assert posted == ["m|a", "held-idle|19:00Z|node 1|circuits"]
+    assert posted == ["m|a", "ev|19:00Z|node 1|circuits"]
 
 
 def test_the_state_is_saved_after_each_monitor_so_a_pass_killed_midway_keeps_what_it_wrote(tmp_path):
@@ -245,27 +245,28 @@ def test_run_refuses_while_another_runner_holds_the_lock(tmp_path, monkeypatch, 
     monkeypatch.delenv(M.WEBHOOK_ENV, raising=False)
     state = tmp_path / "state.json"
     fd = M.lock(state)
-    assert M.main(["run", "--by", "test", "--state", str(state), "--alerts", str(tmp_path / "a"), "--only", "held-idle"]) == 3
+    assert M.main(["run", "--by", "test", "--state", str(state), "--alerts", str(tmp_path / "a"), "--only", "units-n2"]) == 3
     assert "another runner holds" in capsys.readouterr().err
     os.close(fd)
 
 
-def test_run_exits_1_while_its_alert_dir_takes_no_writes_and_node_1s_heartbeat_pages_on_it(tmp_path, monkeypatch, capsys):
+def test_run_exits_1_while_its_alert_dir_takes_no_writes_and_node_2s_heartbeat_pages_on_it(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(M.WEBHOOK_ENV, raising=False)
-    monkeypatch.setattr(M, "HELD_IDLE", str(tmp_path / "none.jsonl"))       # held-idle-stale finds `stale`
-    monkeypatch.setattr(M, "HELD_IDLE_PANEL", str(tmp_path / "none.json"))
+    local = mon(found("stale"), id="local")
+    monkeypatch.setattr(M, "MONITORS", [local])
+    monkeypatch.setattr(M, "BY_ID", {"local": local})
     (tmp_path / "alerts").write_text("not a directory")
 
     def run(state, alerts):
-        return M.main(["run", "--by", "test", "--state", str(state), "--alerts", str(alerts), "--only", "held-idle-stale"])
+        return M.main(["run", "--by", "test", "--state", str(state), "--alerts", str(alerts), "--only", "local"])
 
     assert run(tmp_path / "state.json", tmp_path / "alerts") == 1 and "takes no writes" in capsys.readouterr().err
     saved = json.loads((tmp_path / "state.json").read_text())
     out = f"{saved['last_pass']}\n{json.dumps(saved['sink_error'])}\n"
-    (f,) = M.node_heartbeat(M.Ctx(now=saved["last_pass"] + 60, run=Run((has("n1"), (0, out, "")))))
+    (f,) = M.node_heartbeat(M.Ctx(now=saved["last_pass"] + 60, run=Run((has("n2"), (0, out, "")))))
     assert f.key == "sink" and "can't write their alert dir" in f.text and saved["sink_error"] in f.text
     assert run(tmp_path / "fresh.json", tmp_path / "a") == 0
-    assert list(json.loads((tmp_path / "fresh.json").read_text())["open"]) == ["held-idle-stale|stale"]
+    assert list(json.loads((tmp_path / "fresh.json").read_text())["open"]) == ["local|stale"]
 
 
 def test_a_runner_that_crashes_fails_its_unit():
@@ -277,7 +278,7 @@ def test_a_runner_that_crashes_fails_its_unit():
 def test_a_traceback_exits_1(tmp_path):
     (tmp_path / "state.json").write_text("{not json")
     r = subprocess.run([sys.executable, "-m", "research.monitors", "run", "--by", "test", "--state", str(tmp_path / "state.json"),
-                        "--alerts", str(tmp_path / "a"), "--only", "held-idle-stale"], capture_output=True, text=True,
+                        "--alerts", str(tmp_path / "a"), "--only", "units-n2"], capture_output=True, text=True,
                        env={**os.environ, "PYTHONPATH": str(SRC)})
     assert r.returncode == 1 and "Traceback" in r.stderr
 
@@ -454,7 +455,7 @@ GB = 10**9
 
 
 def reading(*, root_free_gb=150.0, ws_pct=70.0, iused=7_000_000, t=T0, errors=()):
-    return {"schema": "resource-probe/v1", "node": "n1", "t": t, "errors": list(errors),
+    return {"schema": "resource-probe/v1", "node": "n2", "t": t, "errors": list(errors),
             "disk": {"root": {"path": "/", "free_b": root_free_gb * GB, "pct": 40.0, "ipct": 5.0, "iused": 1_000_000, "t": t},
                      "workspace": {"path": "/workspace", "free_b": 1000 * GB, "pct": ws_pct, "ipct": 35.0, "inodes": 20_000_000,
                                    "iused": iused, "t": t}},
@@ -468,25 +469,25 @@ def test_the_watermarks_key_breaches_as_the_stewards_tick_did_and_hard_ones_page
     backlog = "11 finished runs older than 1 h lack custody (oldest {})"
     assert {M.norm(backlog.format("r20261002-044616-9ba7, r20261002-052646-06e1")),
             M.norm(backlog.format("r20261002-052646-06e1, r20261002-054607-7b26"))} == {"# finished runs older than # h lack custody"}
-    run = Run((has("--reading"), (0, json.dumps(reading(root_free_gb=40, errors=["idle_gpus: URLError: down"])), "")))
+    run = session(probe=json.dumps(reading(root_free_gb=40, ws_pct=50.0, errors=["idle_gpus: URLError: down"])))
     ctx = M.Ctx(now=T0, run=run)
-    got = {f.key: f for f in M.watermarks("n1")(ctx)}
+    got = {f.key: f for f in M.watermarks("n2")(ctx)}
     assert set(got) == {"HARD root free # GB < # GB: no new check starts", "GPU<3> holds # GiB at #% for # min", "error:idle_gpus"}
     assert got["HARD root free # GB < # GB: no new check starts"].severity == "page"
     assert got["error:idle_gpus"].for_s == 1200 and got["GPU<3> holds # GiB at #% for # min"].severity is None
-    assert [b["t"] for b in ctx.memo["rate_base"]] == [T0] and run.calls[0][0][:5] == M.NICE
+    assert [b["t"] for b in ctx.memo["rate_base"]] == [T0]
 
 
 def test_the_inode_rate_compares_with_the_base_readings_the_memo_keeps():
     memo: dict = {}
     for t, iused in ((T0, 7_000_000), (T0 + 1000, 7_200_000)):
-        run = Run((has("--reading"), (0, json.dumps(reading(iused=iused, t=t)), "")))
-        keys = [f.key for f in M.watermarks("n1")(M.Ctx(now=t, memo=memo, run=run))]
+        run = session(probe=json.dumps(reading(iused=iused, t=t)), now=t)
+        keys = [f.key for f in M.watermarks("n2")(M.Ctx(now=t, memo=memo, run=run))]
     assert any("inodes/h" in k for k in keys) and [b["t"] for b in memo["rate_base"]] == [T0, T0 + 1000]
     assert M.norm("/workspace gaining 1 inodes/h > 2 (growing a/b +3, c +4 in 60 min)") == "/workspace gaining # inodes/h > #"
 
 
-def test_node_2s_probe_runs_in_its_session_and_its_reading_is_judged_on_node_1():
+def test_node_2s_probe_runs_in_its_session_and_its_reading_is_judged_by_the_runner():
     run = session(probe=json.dumps(reading(root_free_gb=40)))
     keys = [f.key for f in M.watermarks("n2")(M.Ctx(now=T0, run=run))]
     (argv, driver), = run.calls
@@ -501,106 +502,7 @@ def test_the_probes_reading_flag_prints_a_reading_and_writes_nothing(tmp_path, m
     assert doc["schema"] == "resource-probe/v1" and "breaches" not in doc and not any(tmp_path.iterdir())
 
 
-# ---- node 1's stalls, the held-idle panel --------------------------------------------------------------------------------------
-
-def test_stalls_are_n1_alerts_incidents_each_to_its_owner():
-    snap = {"now": T0, "blocked": {"/run/gpu-lease-circuits": "pid 41 ran on GPU 3"}, "pane": [f"{iso(T0 - 30)} tick {{}}"], "log": None}
-    run = Run((lambda argv, stdin: argv[-1] == "-" and "capture-pane" in stdin, (0, json.dumps(snap), "")))
-    (f,) = M.stalls_n1(M.Ctx(now=T0, run=run))
-    assert f.key == "blocked:/run/gpu-lease-circuits" and f.owners == ("circuits",) and "GPU 3" in f.text and "Cleared" in f.cleared
-
-
-def held_row(hour, lane="circuits", pct=80.0, target=50.0, change=-2.0, **kw):
-    return {"hour": hour, "node": "node 1", "lane": lane, "held_gpu_h": 4.0, "held_idle_gpu_h": 3.2, "held_idle_pct": pct,
-            "target_pct": target, "change_pts": change, **kw}
-
-
-def write_rows(root: Path, rows) -> None:
-    p = root / M.HELD_IDLE.lstrip("/")
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text("".join(json.dumps(r) + "\n" for r in rows))
-
-
-def test_held_idle_alerts_a_lane_above_target_that_isnt_falling_to_that_lane(tmp_path):
-    write_rows(tmp_path, [held_row("2026-10-03T18:00Z"), held_row("2026-10-03T18:00Z", lane="circuits-tp8"),
-                          held_row("2026-10-03T19:00Z", change=-6.0), held_row("2026-10-03T19:00Z", lane="proofs", pct=40.0),
-                          held_row("2026-10-03T19:00Z", lane="console", target=None)])
-    got = M.held_idle(M.Ctx(now=T0, root=tmp_path))
-    assert [(f.key, f.owners) for f in got] == [("2026-10-03T18:00Z|node 1|circuits", ("circuits",)),
-                                                ("2026-10-03T18:00Z|node 1|circuits-tp8", ("infra",))]
-    assert "80.0% of 4.0 held GPU-hours" in got[0].text and "-2.0 points" in got[0].text
-    write_rows(tmp_path, [held_row("2026-10-02T19:00Z"), held_row("2026-10-02T20:00Z", lane="proofs")])
-    assert [f.key for f in M.held_idle(M.Ctx(now=T0, root=tmp_path))] == ["2026-10-02T20:00Z|node 1|proofs"]
-
-
-def test_held_idle_is_stale_70_minutes_after_the_newest_hour_ends(tmp_path):
-    write_rows(tmp_path, [held_row("2026-10-03T19:00Z")])
-    assert M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-03T21:10:00Z"), root=tmp_path)) == []
-    (f,) = M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-03T21:11:00Z"), root=tmp_path))
-    assert f.key == "stale" and "71 minutes" in f.text and "19:00Z" in f.text
-    assert M.held_idle_stale(M.Ctx(now=T0, root=tmp_path / "none"))[0].key == "stale"
-
-
-def test_an_idle_node_whose_panel_still_publishes_is_not_stale(tmp_path):
-    """17 Oct 09:13Z: node 1 held no GPU from 08:00Z, so no hour reached the jsonl while verity-console published every 5 min."""
-    write_rows(tmp_path, [held_row("2026-10-03T19:00Z")])
-    panel = tmp_path / M.HELD_IDLE_PANEL.lstrip("/")
-    panel.parent.mkdir(parents=True, exist_ok=True)
-    panel.write_text(json.dumps({"id": "held-idle-hourly", "updated_at": "2026-10-03T23:55:00Z"}))
-    assert M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-04T00:00:00Z"), root=tmp_path)) == []
-    (f,) = M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-04T01:06:00Z"), root=tmp_path))
-    assert f.key == "stale" and "71 minutes" in f.text
-
-
 # ---- a GPU idle while a waiter waits --------------------------------------------------------------------------------------------
-
-def lease_state(root: Path, d="/run/gpu-lease", *, t=T0, gpus=(), waiting=(), blocked=None, name="node1"):
-    p = root / d.lstrip("/") / "n1-lease.json"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"t": iso(t), "node": "vy-nebius-1", "mode": "local", "pool": len(gpus), "pool_name": name,
-                             "blocked": blocked, "pending_holders": [], "waiting": list(waiting), "gpus": list(gpus),
-                             "events": []}))
-
-
-def gpu(i, holder=None, lease=None, fence=()):
-    return {"index": i, "uuid": f"GPU-{i}", "holder": holder, "fence_pids": list(fence), **({"lease": lease} if lease else {})}
-
-
-def waiter(since, n=1, **kw):
-    return {"file": f"wait.{int(since)}.1", "pid": "1", "n": n, "who": "adhoc:ubuntu", "run": "r1", "since": iso(since), **kw}
-
-
-def pool_doc(root: Path, gpus, t=T0):
-    p = root / M.POOL_DOC.lstrip("/")
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"generated_at": iso(t), "nodes": {"n1": {"gpus": gpus}}}))
-
-
-def test_a_lease_waiter_with_a_free_pool_gpu_or_an_unheld_one_is_held_back(tmp_path):
-    lease = {"who": "x", "since": iso(T0 - 600)}
-    lease_state(tmp_path, gpus=[gpu(0, fence=[9]), gpu(1, "gpu-pool-1", lease), gpu(2, "gpu-pool-2", lease)],
-                waiting=[waiter(T0 - 30), waiter(T0 - 200, on="5")])
-    ctx = M.Ctx(now=T0, root=tmp_path)
-    assert M.idle_while_waiting_n1(ctx) == []                                   # nothing idle; the newest waiter too new anyway
-    pool_doc(tmp_path, [{"index": 0, "busy_5m": 0.0, "holder": None, "class": "free"},
-                        {"index": 1, "busy_5m": 0.9, "holder": "lease:x", "class": "verity"}])
-    assert M.idle_while_waiting_n1(ctx) == []                                   # GPU 0 idle, but the waiter is pinned to 5
-    lease_state(tmp_path, gpus=[gpu(0, fence=[9]), gpu(1, "gpu-pool-1", lease), gpu(2, "gpu-pool-2")],
-                waiting=[waiter(T0 - 30), waiter(T0 - 200, n=2)])
-    (f,) = M.idle_while_waiting_n1(ctx)
-    assert f.key == "node1" and f.for_s == 300 and "GPUs 0, 2 idle" in f.text and "Free in the pool: [2]" in f.text
-    assert "held by nobody: [0]" in f.text and "waited 3 min" in f.text
-
-
-def test_idle_while_waiting_skips_a_blocked_pool_and_the_kueue_hold_and_flags_a_stale_controller(tmp_path):
-    lease_state(tmp_path, gpus=[gpu(2, "gpu-pool-2")], waiting=[waiter(T0 - 200)], blocked="pid 4 on GPU 2")
-    assert M.idle_while_waiting_n1(M.Ctx(now=T0, root=tmp_path)) == []
-    with pytest.raises(M.Skip):
-        M.idle_while_waiting_n1(M.Ctx(now=M.epoch("2026-10-03T12:45:00Z"), root=tmp_path))
-    lease_state(tmp_path, "/run/gpu-lease-circuits", t=T0 - 600, name="circuits")
-    (f,) = M.idle_while_waiting_n1(M.Ctx(now=T0, root=tmp_path))
-    assert f.key == "circuits:stale" and "10 minutes" in f.text
-
 
 def test_a_node_2_waiter_with_enough_free_gpus_is_held_back_unless_its_gpu_is_unknown():
     w = f"pid=7 n=2 run=- who=circuits-tp8 since={iso(T0 - 400)}"
@@ -659,14 +561,10 @@ def test_fast_preemptions_are_leases_preempted_within_60_s_of_their_grant_in_the
     assert [(x["gpu"], x["pid"], x["after_s"]) for x in got] == [(6, "41390", 8), (2, "5", 40)]
 
 
-def test_fast_preempt_reads_each_node_1_pool_and_node_2_behind_its_guard(tmp_path):
-    p = tmp_path / "run/gpu-lease-circuits/preempted.log"
-    p.parent.mkdir(parents=True)
-    p.write_text(preempted(T0 - 60, T0 - 70) + "\n")
-    (f,) = M.fast_preempt_n1(M.Ctx(now=T0, root=tmp_path))
-    assert f.key == "/run/gpu-lease-circuits" and "1 lease preempted within 60 s of its grant" in f.text and "10 s after" in f.text
+def test_fast_preempt_reads_node_2_behind_its_guard():
     run = session(preempted="partial line\n" + preempted(T0 - 60, T0 - 70) + "\n")
-    assert M.fast_preempt_n2(M.Ctx(now=T0, run=run))[0].key == "/run/gpu-lease"
+    (f,) = M.fast_preempt_n2(M.Ctx(now=T0, run=run))
+    assert f.key == "/run/gpu-lease" and "1 lease preempted within 60 s of its grant" in f.text and "10 s after" in f.text
 
 
 # ---- failed units -----------------------------------------------------------------------------------------------------------------
@@ -681,25 +579,19 @@ def test_failed_units_leave_out_the_expected_ones_and_tell_user_units_apart():
     assert all(reason for reason in M.EXPECTED_FAILED.values())
 
 
-def test_units_on_node_1_tolerate_a_user_manager_that_isnt_there_and_node_2_reads_both_behind_the_guard():
-    run = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (1, "", "Failed to connect to bus: No medium found")),
-              (lambda a, _: a[0] == "systemctl", (0, FAILED, "")))
-    assert [f.key for f in M.units("n1")(M.Ctx(now=T0, run=run))] == ["system:systemd-ask-password-console.path"]
+def test_units_on_node_2_read_both_managers_behind_the_guard():
     run = session(units=FAILED.splitlines()[0] + "\n---\n")
     assert M.units("n2")(M.Ctx(now=T0, run=run)) == [] and M.UNITS in run.calls[0][1]
 
 
 def test_failed_login_session_scopes_are_one_incident_spanning_them():
     scopes = "".join(f"session-{n}.scope loaded failed failed Session {n} of User research\n" for n in (8334, 8212, 8299))
-    run = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (0, "", "")),
-              (lambda a, _: a[0] == "systemctl", (0, FAILED + scopes, "")))
-    other, s = M.units("n1")(M.Ctx(now=T0, run=run))
+    other, s = M.units("n2")(M.Ctx(now=T0, run=session(units=FAILED + scopes + "---\n")))
     assert other.key == "system:systemd-ask-password-console.path"
     assert s.key == "system:session-*.scope"
     assert "3 login session scopes have failed* (`session-8212.scope` to `session-8334.scope`)" in s.text
-    one = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (0, "", "")),
-              (lambda a, _: a[0] == "systemctl", (0, scopes.splitlines()[0] + "\n", "")))
-    assert "1 login session scope has failed* (`session-8334.scope`)" in M.units("n1")(M.Ctx(now=T0, run=one))[0].text
+    one = session(units=scopes.splitlines()[0] + "\n---\n")
+    assert "1 login session scope has failed* (`session-8334.scope`)" in M.units("n2")(M.Ctx(now=T0, run=one))[0].text
 
 
 # ---- relay-side ----------------------------------------------------------------------------------------------------------------
@@ -730,7 +622,7 @@ def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tm
     m = mon(lambda ctx: [])
     (ev,) = M.step(state, [m], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(tmp_path), by="test")
     assert (ev["event"], ev["key"], ev["since"]) == ("clear", "unpreserved|unreadable", "2026-10-19T22:00:00Z")
-    assert "is retired" in ev["text"] and "disk-n1" in ev["text"] and state["open"] == {}
+    assert "is retired" in ev["text"] and "disk-n2" in ev["text"] and state["open"] == {}
     assert "unpreserved" not in state["monitors"], "a retired monitor's error isn't reported as failing"
     assert M.step(state, [m], lambda memo: M.Ctx(now=T0 + 60, memo=memo), T0 + 60, M.AlertDir(tmp_path), by="test") == []
 
@@ -773,9 +665,9 @@ def test_public_missing_heads_each_manifest(monkeypatch):
     assert M.public_missing([a, b], "https://example.invalid/store") == [b]
 
 
-def test_node_1s_heartbeat_is_stale_after_10_minutes_without_a_pass():
+def test_node_2s_heartbeat_is_stale_after_10_minutes_without_a_pass():
     def ctx(last):
-        return M.Ctx(now=T0, run=Run((has("n1"), (0, f"{last}\n", ""))))
+        return M.Ctx(now=T0, run=Run((has("n2"), (0, f"{last}\n", ""))))
     assert M.node_heartbeat(ctx(T0 - 500)) == []
     assert "haven't run for 25 minutes" in M.node_heartbeat(ctx(T0 - 1500))[0].text
     (f,) = M.node_heartbeat(ctx("missing"))
@@ -823,7 +715,7 @@ def test_the_relay_posts_what_is_still_open_first_then_each_new_event_once_with_
 def test_a_seeded_relay_records_what_is_open_as_posted_and_then_posts_only_new_events(tmp_path, monkeypatch):
     """`relay --seed`: the relay taking over from another posts nothing on its first pass (19 Oct: a fresh relay on the control pod
     would have posted 65 open incidents and rung five lanes again)."""
-    lines = {"node1": [ev("open", "m|a"), ev("open", "m|b")], "relay": [ev("open", "asks|1")]}
+    lines = {"node": [ev("open", "m|a"), ev("open", "m|b")], "relay": [ev("open", "asks|1")]}
 
     class Src(FakeSource):
         def __init__(self, name, path, host=None):
@@ -839,10 +731,10 @@ def test_a_seeded_relay_records_what_is_open_as_posted_and_then_posts_only_new_e
     assert M.main(["relay", "--by", "t", "--posts", str(posts), "--state", str(tmp_path / "s.json"),
                    "--alerts", str(tmp_path / "alerts"), "--seed"]) == 0
     rstate = json.loads(posts.read_text())
-    assert rstate["sources"]["node1"]["lines"] == 2 and rstate["sources"]["relay"]["lines"] == 1
+    assert rstate["sources"]["node"]["lines"] == 2 and rstate["sources"]["relay"]["lines"] == 1
     sent = []
-    lines["node1"].append(ev("open", "m|c"))
-    assert M.relay_pass(rstate, [Src("node1", "/x"), Src("relay", "/x")], lambda e, t: sent.append(e["key"]) or {"ts": "1"}, T0) == 1
+    lines["node"].append(ev("open", "m|c"))
+    assert M.relay_pass(rstate, [Src("node", "/x"), Src("relay", "/x")], lambda e, t: sent.append(e["key"]) or {"ts": "1"}, T0) == 1
     assert sent == ["m|c"]
 
 
@@ -1121,6 +1013,25 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
     assert rows["bbbb"].get("step") is None and rows["bbbb"]["class"] == "CANCELLED_DEADMAN" and rows["bbbb"]["rc"] == 143
 
 
+def test_the_reader_takes_no_stopped_step_for_the_failed_one(tmp_path):
+    """r20261026-141511-8d3f: drive cancelled the post-landing run for a failed suite, and lean-agreement, stopped with an empty
+    log, was posted as the step that failed, its first failing line `none`. A stopped step found nothing: the run is a cancel."""
+    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143,
+              steps=[{"step": "lean-build", "status": "passed"},
+                     {"step": "lean-agreement", "status": "stopped", "rc": -15, "log": "lean-agreement.log"},
+                     {"step": "pytest", "status": "stopped", "rc": -2, "log": "pytest.log"}],
+              logs={"lean-agreement.log": ""}, failure={"class": "CANCELLED_MANUAL", "why": "drive: suite x failed"})
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=1,
+              steps=[{"step": "pytest", "status": "stopped", "rc": -2}, {"step": "lean-build", "status": "failed", "rc": 1}])
+    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+    rows = {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True,
+                                                                text=True, check=True).stdout)["rows"]}
+    assert rows["aaaa"].get("step") is None and rows["aaaa"]["class"] == "CANCELLED_MANUAL"
+    assert rows["bbbb"]["step"] == "lean-build"
+    assert M.failed_check(M.Ctx(now=T0, memo={}), REG, "vy-nebius-cpu-1", rows["aaaa"]) is None
+
+
 def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_step_failed(tmp_path):
     """`research run` writes failure.json a few seconds after status.json; read in between, a hand cancel was posted as
     "unclassified: no reason recorded" (dc04, 12 Oct). One whose classification never comes is still listed, later."""
@@ -1170,6 +1081,7 @@ def test_a_trains_prs_are_its_merges_from_the_head_and_a_merge_of_main_between_t
 
 def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_merge_thread_once_per_run(monkeypatch):
     monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1")))
     train = ["Merge #1466 (ea2f79691)", "Merge #1460 (759ec3fb2)", "Merge #1561 (c5bb5d4ed)", "Merge 0058fab8ec7f (0058fab8)"]
     rows = {"n1": [{"run": "r1", "state": "running", "step": "pytest", "step_ended": "2026-10-03T20:20:00Z", "line": "FAILED `t`",
                     "subjects": train, "sha": "705ca7269313", "by": "someone"},
@@ -1215,10 +1127,10 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
         M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer))
 
 
-# ---- what node 1 runs ---------------------------------------------------------------------------------------------------------
+# ---- what node 2 runs ---------------------------------------------------------------------------------------------------------
 
-def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_path):
-    """Catches a node-side check importing a module deploy.toml doesn't install: on node 1 that is a pass that fails every
+def test_the_files_deploy_toml_installs_on_node_2_run_every_node_side_check(tmp_path):
+    """Catches a node-side check importing a module deploy.toml doesn't install: on node 2 that is a pass that fails every
     minute, which only the relay's heartbeat would notice."""
     manifest = tomllib.loads((SRC / "research/pods/nebius/deploy.toml").read_text())
     lib = "/usr/local/lib/vy-monitoring/"
@@ -1228,7 +1140,7 @@ def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_
         dest = tmp_path / path[len(lib):]
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes((REPO / src).read_bytes())
-    code = ("import research.monitors as M; from research.pods.nebius import n1_alerts; M._probe(); "
+    code = ("import research.monitors as M; M._probe(); "
             "print(','.join(m.id for m in M.MONITORS if m.where == 'node'))")
     r = subprocess.run([sys.executable, "-S", "-c", code], capture_output=True, text=True, cwd=tmp_path,
                        env={"PYTHONPATH": str(tmp_path), "PATH": os.environ.get("PATH", "")})
@@ -1236,7 +1148,7 @@ def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_
     assert set(r.stdout.strip().split(",")) == {m.id for m in M.MONITORS if m.where == "node"}
     unit = (REPO / files[lib + "research/monitors.py"]).parent / "pods/nebius/monitoring/vy-monitors.service"
     text = unit.read_text()
-    assert f"Environment=PYTHONPATH={lib.rstrip('/')}" in text and "-m research.monitors run --by vy-monitors@vy-nebius-1 --where node" in text
+    assert f"Environment=PYTHONPATH={lib.rstrip('/')}" in text and "-m research.monitors run --by vy-monitors@vy-nebius-2 --where node" in text
     for name in ("vy-monitors.service", "vy-monitors.timer"):
         assert any(e["path"] == f"/etc/systemd/system/{name}" for e in manifest["file"])
 
@@ -1379,7 +1291,7 @@ def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_o
     monkeypatch.setitem(M.EXPECTED_OFF, ("vy-nebius-1", "systemd:vy-b.timer"), "stopped by design")
     assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "user-systemd:u.service"]
     assert M.expected_units("vy-nebius-cpu-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
-    real = set(M.expected_units("vy-nebius-1", M.MANIFEST.read_text()))
+    real = set(M.expected_units("vy-nebius-2", M.MANIFEST.read_text()))
     assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
     assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
 
@@ -1448,7 +1360,7 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
     for path in ("/etc/systemd/system/vy-watchdog.service", "/etc/systemd/system/vy-watchdog.timer",
                  "/usr/local/lib/vy-monitoring/research/monitors.py", "/usr/local/lib/vy-monitoring/research/__init__.py",
                  "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"):
-        assert {"vy-nebius-1", "vy-nebius-cpu-1"} <= set(rows[path]["nodes"]), path
+        assert {"vy-nebius-2", "vy-nebius-cpu-1"} <= set(rows[path]["nodes"]), path
     text = (SRC / "research/pods/nebius/monitoring/vy-watchdog.service").read_text()
     assert "-m research.monitors run --where machine $VY_WATCHDOG_ARGS" in text
     assert "EnvironmentFile=/etc/vy/watchdog.env" in text and "SupplementaryGroups=systemd-journal" in text
@@ -1457,8 +1369,35 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
                                                                     "units-expected", "lost-checks"}
 
 
+@pytest.mark.parametrize("status,cancelled", [("ahead", False), ("identical", False), ("diverged", True)])
+def test_an_after_landing_run_of_main_runs_on_though_a_ticket_waits_for_its_slot(monkeypatch, status, cancelled):
+    """27 Oct: main's after-landing runs (54713f81's, 0600bab8's) were cancelled for a Lean check's slot before their pytest step
+    reported, so main stayed unverified.  A run whose tip is on `main` runs to its end; one of `next`'s commits is still
+    cancelled."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    row = {"run": "r1", "state": "running", "step": "lean-suites", "step_ended": "2026-10-03T20:20:00Z", "line": "FAILED x",
+           "subjects": ["Merge #1466 (ea2f79691)"], "sha": "705ca7269313", "by": LANDER_ID}
+    calls = []
+
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
+        if argv[:2] == ["gh", "-R"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"state": "OPEN", "headRefName": "cursor/x-558b"}), "")
+        if argv[:2] == ["gh", "api"]:
+            assert argv[2] == f"repos/{M.REPO_SLUG}/compare/705ca7269313...main"
+            return subprocess.CompletedProcess(argv, 0, status + "\n", "")
+        return subprocess.CompletedProcess(argv, 0, "research cancel: r1: SIGTERM", "")
+
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
+    assert any("cancel" in c for c in calls) == cancelled and ("Cancelled" in f.text) == cancelled
+
+
 def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_on_its_machine_and_the_post_says_so(monkeypatch):
     monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1")))
     row = {"run": "r1", "state": "running", "step": "lean-audit", "step_ended": "2026-10-03T20:20:00Z", "line": "error: x",
            "subjects": ["Merge #1466 (ea2f79691)"], "sha": "705ca7269313", "by": LANDER_ID}
     waiting, calls = [], []
@@ -1491,3 +1430,44 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     row["suite"], calls[:] = True, []                     # a suites.py run's failed suite rings, and the lander decides
     (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
+
+
+def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path, monkeypatch):
+    """top, 26 Oct: main went a day and a half with no passing post-landing check and nobody outside ci heard. The relay reads
+    drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
+    oldest landing after it: main's first-parent commits (drive's merges), not GitHub's compare, which lists each PR's own
+    commits, dated when their branch made them (ci, 26 Oct)."""
+    state = tmp_path / M.DRIVE_STATE
+    state.parent.mkdir(parents=True)
+    verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
+    state.write_text(json.dumps({"drive": {"postland": {"verified": verified}}}))
+    monkeypatch.setenv("RESEARCH_DEPLOY_REPO", str(tmp_path / "repo"))
+    since = T0 - 3 * 3600 - 60                                              # drive's first landing past it, 3 h 1 min ago
+
+    def git(*landings):
+        log = "".join(f"{i:040x} {int(t)}\n" for i, t in enumerate(landings))
+        return Run((has("fetch"), (0, "", "")), (lambda a, _i: f"{verified}..FETCH_HEAD" in a and "--first-parent" in a,
+                                                  (0, log, "")))
+
+    run = git(T0 - 60, T0 - 1800, since)                                    # git log lists the newest first
+    log = tmp_path / M.DRIVE_LOG
+    log.parent.mkdir(parents=True)
+    log.write_text(f"{M.iso(T0 - 31 * 60)} tick rc=0 1\n{M.iso(T0 - 31 * 60)} other line\n")      # drive's last tick: 31 min ago
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
+    assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "3 landing(s)" in f.text
+    assert ["git", "-C", str(tmp_path / "repo"), "fetch", "-q", "origin", "main"] in [c for c, _ in run.calls]
+    assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=git())) == [], "main is its last verified commit"
+    with open(log, "a") as fh:
+        fh.write(f"{M.iso(T0 - 120)} tick rc=1 1\n")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "drive ticks: its own _behind alarm rings"
+    log.unlink()
+
+    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
+    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path, run=git(T0 - 60, since)), now,
+               M.AlertDir(alerts), by="test", force=True)
+    lines = (alerts / "monitors.jsonl").read_text().splitlines()
+    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
+        ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]

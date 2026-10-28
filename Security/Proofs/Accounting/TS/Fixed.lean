@@ -1,8 +1,8 @@
 import Proofs.Accounting.TS.Drawn
-import Models.Accounting.Guarantees.TS.Fixed
+import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-!
-# `UnitFixed` from a fixed word, and the additive lemma (ASK-40's option A)
+# `UnitFixed` from a fixed word, and the additive lemma
 
 `Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords` and
 `Accounting.SecurityProofs.TS.AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed`.

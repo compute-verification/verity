@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.HMu
+import Definitions.Accounting.Guarantees.HMu
 
 /-!
 # Lemma B′ for a persistent pattern, one word a unit

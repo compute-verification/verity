@@ -25,6 +25,8 @@ import Flock.RecOpen
 import Flock.RecResiduals
 import Flock.RecSparse
 import Flock.RecOpening
+import Flock.SplitNL
+import Flock.Norm
 
 namespace Flock
 
@@ -61,6 +63,27 @@ def classOf (bytes : ByteArray) (head : String) (mj : Json) : V ByteArray := do
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
   return Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+
+/-- `classOf` with its hash in a task (`classOf_eq_task`), for `parseFastFrom`. Not inlined, for `parseFastFrom`'s
+reason. -/
+@[noinline] def classOfTask (bytes : ByteArray) (head : String) (mj : Json) : V (Task ByteArray) := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no section after META"
+  let m := match mj with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
+    | j => j
+  let c ← canon m
+  return Task.spawn fun _ => Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ c.toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+
+theorem classOf_eq_task (bytes : ByteArray) (head : String) (mj : Json) :
+    classOf bytes head mj = Task.get <$> classOfTask bytes head mj := by
+  unfold classOf classOfTask
+  split
+  · split
+    · dsimp only; cases canon _ <;> rfl
+    · rfl
+  · rfl
+
 def SALT_BYTES : Nat := 192
 def BC_BYTES : Nat := 128
 
@@ -729,6 +752,189 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   RecOpening.check c
   return c
 
+/-- `parseFast` with the file's digest from the task `sha`, read only for the circuit it returns, and its lines and
+rows from the tasks `ts` (`SplitNL.splitTasks`). Not inlined: the compiler sinks a `Task.spawn` bound in a body down to
+the branch that reads it, which here is the last. -/
+@[noinline] def parseFastLines (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
+    (ts : List (Task (Array String × Array Net.Row))) : V Circuit := do
+  let lines0 := SplitNL.linesOf ts
+  let rows := SplitNL.rowsOf ts
+  let lines := if lines0.back? == some "" then lines0.pop else lines0
+  let head := (lines.getD 0 "").trimAsciiEnd.toString
+  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
+  let name := (head.drop (tags.fileFormat.length + 1)).toString
+  let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
+  if !metaLine.startsWith "META " then throw "circuit: no META line"
+  let mj ← match Json.parse (metaLine.drop 5).toString with
+    | .ok j => pure j
+    | .error e => throw s!"META: {e}"
+  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
+    throw s!"META: not {tags.statement}"
+  let classSha ← if tags.bindings then do
+      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
+        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
+      let part := (mj.getObjVal? "partition").toOption.getD Json.null
+      let rule := (part.getObjValAs? String "rule").toOption.getD ""
+      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
+        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
+      classOfTask bytes head mj
+    else pure (Task.pure ByteArray.empty)
+  let mut nets : Array (String × Net) := match tmpl with
+    | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
+    | none => pre
+  let mut at_ := 2
+  while at_ < lines.size do
+    let h := tokens lines[at_]!
+    if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
+    let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
+    if at_ + 1 + n > lines.size then throw s!"circuit: {h[1]!} is truncated"
+    let net ← match Net.parseWith rows (at_ + 1) (lines.extract (at_ + 1) (at_ + 1 + n)) with
+      | .ok v => pure v
+      | .error e => throw s!"{h[1]!}: {e}"
+    nets := nets.push (h[1]!, net)
+    at_ := at_ + 1 + n
+  for k in Circuit.FORBIDDEN do
+    if J.has mj k then throw s!"META: {k} (a verifier-evaluated part of the computation); the verifier only checks proofs"
+  if tmpl.isSome then
+    for k in TEMPLATE_DERIVED do
+      if J.has mj k then throw s!"META: {k}: a typed template's block wiring is derived from its types, never stated"
+  let lks ← match mj.getObjVal? "lookups" with
+    | .ok (Json.obj kvs) => pure (kvs.toArray.qsort (fun a b => a.1 < b.1))
+    | .ok Json.null => pure #[]
+    | .ok _ => throw "META: lookups is not an object"
+    | .error _ => pure #[]
+  for (lname, spec) in lks do
+    let some pinned := MUFU_TABLES.find? (·.name == lname) | throw "META: a lookup of a table the statement does not pin"
+    let size := pinned.words
+    if (← J.str spec "sha256" ctx) != pinned.sha256 || (← J.str spec "table" ctx) != lname || (← J.nat spec "out_bits" ctx) != 31 then
+      throw s!"META: lookup {lname} is not the pinned table"
+    let n ← J.nat spec "in_bits" ctx
+    let lo ← J.nat spec "lo_bits" ctx
+    if n != Nat.log2 size || 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {lname}'s index is not its table's"
+    let some (_, words) := tables.find? (·.1 == lname) | throw s!"the circuit has a lookup of {lname}: its table is not given"
+    if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {lname}: not the pinned table"
+    nets := nets.push (s!"lookup:{lname}", ← Lookup.build s!"lookup:{lname}" words n lo 31)
+  let ports ← rowPorts mj tags.typed
+  if (← J.str mj "row_key_sha512" ctx) != hexOf (Sha512.hash Hm96.Default512.key) then
+    throw "META: the rows' hm96 key is not hm96-sha512/v1's default key"
+  let g ← J.nat mj "vus_per_block" ctx
+  -- a typed template's unit is its instance's root, one per VU
+  let upv ← if tmpl.isSome then pure 1 else J.nat mj "units_per_vu" ctx
+  let some unitNet := nets.findIdx? (·.1 == if tmpl.isSome then "root" else "unit") | throw "circuit: no unit circuit"
+  let netOf := fun (nm : String) => match nets.findIdx? (·.1 == nm) with
+    | some i => (pure i : V Nat)
+    | none => throw s!"META: unknown circuit {nm}"
+  let ranges ← (← J.arr mj "ranges" ctx).mapM fun r => do
+    let kind ← match ← J.str r "type" ctx with
+      | "mask" => pure Kind.mask
+      | "unit" => pure (Kind.net (← netOf (← J.str r "net" ctx)))
+      | _ => throw "a range of an unknown type"
+    let packed := match r.getObjVal? "packed" with
+      | .ok (Json.bool b) => b
+      | _ => false
+    pure ({ kind, slotLog := ← J.nat r "slot_log" ctx, pos0 := ← J.nat r "pos0" ctx, count := ← J.nat r "count" ctx,
+            role := .none, packed } : Range)
+  let leavesIn ← if tmpl.isSome then pure #[#[]] else intLists mj "leaves_in"
+  let leavesOut ← if tmpl.isSome then pure #[#[]] else (← intLists mj "leaves_out").mapM fun u => u.mapM fun x =>
+    if x < 0 then (throw "META: a negative output leaf" : V Nat) else pure x.toNat
+  let dummy ← J.get mj "dummy" ctx
+  let dummyDigests ← (← J.arr dummy "bc" ctx).mapM fun d => do
+    let b ← unhex (← J.asStr d "dummy bc")
+    if b.size != BC_BYTES then throw "b || c length"
+    pure b
+  let dummyOutputs ← (← J.arr dummy "outputs" ctx).mapM fun x => do
+    let v ← J.asNat x "dummy output"
+    if v ≥ 65536 then throw "META: a dummy output is not a u16"
+    pure v
+  let outPorts ← (← J.arr mj "out_ports" ctx).mapM fun p => do
+    let a ← J.asArr p "out port"
+    if a.size != 2 then throw "META: an out port is not [name, words]"
+    pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
+  let outRowPorts ← match mj.getObjVal? "out_row_ports" with
+    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .ok v => do
+      let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
+      let r ← (← J.asArr v "out_row_ports").mapM fun x => do
+        let k ← J.asNat x "out_row_ports"
+        if k < 1 || k > outPorts.size then throw bad
+        pure k
+      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      pure r
+  let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
+  match mj.getObjVal? "per_vu" with
+  | .ok (Json.obj kvs) =>
+    for (k, v) in kvs.toArray do
+      perVu := perVu.set! (← netOf k) (← J.asNat v "per_vu")
+  | _ => pure ()
+  let shaNet ← netOf SHA_NET
+  let hmNet ← netOf HM_NET
+  let outNet ← if tmpl.isSome then pure unitNet else netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
+  let onp ← match mj.getObjVal? "out_net_ports" with
+    | .ok (.arr a) => outNetEntries a
+    | _ => pure (#[], none)
+  let leafCuts ← match mj.getObjVal? "leaf_cuts" with
+    | .ok (.arr a) => a.mapM fun w => do
+      let x ← J.asArr w "a leaf cut"
+      if x.size != 4 then throw "META: a leaf cut is not [circuit, unit, port, leaf]"
+      if (x[0]!.getStr?).toOption != some "unit" then throw "META: a leaf cut into anything but a unit"
+      pure (← J.asNat x[1]! "a leaf cut", ← J.asNat x[2]! "a leaf cut", ← J.asNat x[3]! "a leaf cut")
+    | _ => pure #[]
+  let wires ← match mj.getObjVal? "wires" with
+    | .ok w => (← J.asArr w "wires").mapM fun x => do
+      let a ← J.asArr x "wire"
+      if a.size != 6 then throw "META: a wire is not six fields"
+      pure (⟨(← netOf (← J.asStr a[0]! "wire"), ← J.asNat a[1]! "wire", ← J.asNat a[2]! "wire"),
+              (← netOf (← J.asStr a[3]! "wire"), ← J.asNat a[4]! "wire", ← J.asNat a[5]! "wire")⟩ : Wire)
+    | .error _ => pure #[]
+  -- the rows' wires come first, exactly as the ports imply; a typed template's are just those
+  let derived := rowWires ports shaNet hmNet
+  let wires := if tmpl.isSome then derived else wires
+  let rowNet := fun (n : Nat) => n == shaNet || n == hmNet
+  if wires.size < derived.size || (List.range derived.size).any (fun i => wires[i]!.dst != derived[i]!.dst || wires[i]!.src != derived[i]!.src)
+      || (wires.extract derived.size wires.size).any (fun w => rowNet w.dst.1 || rowNet w.src.1) then
+    throw "META: the rows' wires are not the chains and hm96 inputs the ports imply"
+  let leafScheme ← J.get mj "leaf_scheme" ctx
+  let leafId ← J.str leafScheme "id" ctx
+  if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
+  let c : Circuit := { name, sha := sha.get, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
+                       leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
+                       shaNet, hmNet, classSha := classSha.get, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
+                       typed := ← tmpl.mapM fun t => pure (blockOf t) }
+  check c tags leafScheme
+  HmNets.check c
+  RecOpen.check c
+  RecResiduals.check c
+  RecSparse.check c
+  RecOpening.check c
+  return c
+
+/-- `parseFastLines` over the file's lines split in tasks between `'\n'` cuts. -/
+@[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
+    V Circuit := do
+  let text ← match String.fromUTF8? bytes with
+    | some s => pure s
+    | none => throw "circuit: not UTF-8"
+  parseFastLines sha tags bytes tables tmpl pre (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
+
+/-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
+(`Net.parseWith`) and the file hashed in a task beside them,
+`parse_eq_fast`: the firewall's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
+`flock-verify` compiles `parse` too, and runs no task. -/
+def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
+  parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre
+
+set_option maxRecDepth 20000 in
+-- `rfl` compares the two whole bodies of `parse`, as `With.parseWith_std` does
+set_option maxHeartbeats 1000000 in
+theorem parse_eq_fast : @parse = @parseFast := by
+  funext tags bytes tables tmpl pre
+  unfold parse parseFast parseFastFrom parseFastLines
+  simp -zeta only [Net.parseWith_eq, classOf_eq_task, bind_map_left, SplitNL.linesOf_splitTasks]
+  try rfl
+
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
 A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
 unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
@@ -1112,7 +1318,7 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
   let header ← match Json.parse text with
-    | .ok j => pure j
+    | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
   if (← J.str header "format" pctx) != tags.publicFormat || (← J.str header "statement" pctx) != tags.statement then
@@ -1365,6 +1571,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let regions ← HmRow.regions c pub
   HmRow.checkRegionWords c da db regions
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -1380,7 +1587,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-!
 PROTOCOL.md §16.13: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
@@ -1440,18 +1647,52 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   checkRows c
   return c
 
+/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the firewall's setup (`Firewall.Hello.Setup.setup`). -/
+def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+  let c ← if !tags.typed then HmRow.parseFast tags bytes tables else do
+    let (k, r) ← Typed.read tags bytes tables
+    match r with
+    | .inr t =>
+      let c ← HmRow.parseFast tags bytes tables (tmpl := some { t with ins := t.ins ++ t.outs.map fun (w, b) => ((w + 63) / 64 * 64, b) })
+      pure { c with typed := some (blockOf t), cls := some k }
+    | .inl unit => pure { (← HmRow.parseFast tags bytes tables (pre := #[("unit", unit)])) with cls := some k }
+  checkRows c
+  return c
+
+theorem parse_eq_fast : @parse = @parseFast := by
+  funext tags bytes tables
+  unfold parse parseFast
+  simp -zeta only [HmRow.parse_eq_fast]
+  try rfl
+
+/-- META, read off the file's second line alone, between its first two newlines, as `HmRow.parse` reads that line: neither
+the rest of the file's UTF-8 nor its lines are read. -/
+def metaOf (bytes : ByteArray) : V Json := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let n2 := (findByte bytes 10 (n1 + 1)).getD bytes.size
+  let some line := String.fromUTF8? (bytes.extract (n1 + 1) n2) | throw "circuit: not UTF-8"
+  let line := line.trimAsciiEnd.toString
+  if !line.startsWith "META " then throw "circuit: no META line"
+  match Json.parse (line.drop 5).toString with
+  | .ok j => pure j
+  | .error e => throw s!"META: {e}"
+
 /-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
 its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
 net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
-`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). A file that carries a unit's rows itself is refused (`Typed.split`). -/
+`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
+line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
+itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
-  let (_, _, mj) ← Typed.split tags bytes
+  let mj ← metaOf bytes
   let ctx := "templated statement META"
   let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
   let tu ← TmplUnit.read (← Tmpl.parse lines) mode
   let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)])
+  if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
+    throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
   checkRows c
   return { c with tmpl := some tu }
 
@@ -1638,6 +1879,7 @@ def parse (c : Circuit) : V Ports := do
   let mj := c.metaJ
   let .ok pj := mj.getObjVal? "public_inputs" | do
     if J.has mj "leaves_public" then throw "META: leaves_public without public_inputs"
+    if J.has mj "shared_reads" then throw "META: shared_reads without public_inputs (a shared read's position is a public input)"
     return {}
   let ps ← J.asArr pj "META public_inputs"
   if ps.isEmpty then throw "META: public_inputs names no port"
@@ -1713,8 +1955,43 @@ def regions (c : Circuit) (pi : Ports) (pub : Public) : V (Array Region) := do
             | none => 0
           acc.push (v % 256).toUInt8 |>.push (v / 256).toUInt8) acc) ByteArray.empty
 
+/-- META `shared_reads` (each `{port, group, position}`, nothing else): input row `port` is one table row per group of
+`group` instances, instance `i` reading row `⌊i/group⌋`, and public input `position` is `i mod group` (seed `instance`,
+derivation `mod:G`), so each window `(⌊i/G⌋, i mod G)` of a shared row is one instance's: one writer a window. Held on the
+population's public file: a shared-row file, its instances whole groups, the port's table one row per group, every
+instance's ref its group. `parse` refuses the key without public inputs. -/
+def checkReads (c : Circuit) (pi : Ports) (n : Nat) (tables : Option Tables) : V Unit := do
+  if pi.ports.isEmpty then return
+  let .ok rj := c.metaJ.getObjVal? "shared_reads" | return
+  let rs ← J.asArr rj "META shared_reads"
+  if rs.isEmpty then throw "META: shared_reads names no port"
+  let some t := tables | throw "shared reads: the public file is not a shared-row file (header shared_rows)"
+  let np := c.ports.size
+  let mut seen : Array String := #[]
+  for r in rs do
+    let .obj kvs := r | throw "META: a shared read is not an object"
+    let keys := (kvs.toArray.map (·.1)).qsort (· < ·)
+    let s := fun k => (r.getObjValAs? String k).toOption.getD ""
+    let g := (r.getObjValAs? Nat "group").toOption.getD 0
+    if keys != #["group", "port", "position"] || s "port" == "" || s "position" == "" || g == 0 then
+      throw "META: a shared read names no port, position, or group (a positive count of instances)"
+    let (port, pos) := (s "port", s "position")
+    if seen.contains port then throw s!"shared read {port}: named twice"
+    seen := seen.push port
+    let some p := (List.range (HmOut.nIn c)).find? (fun p => (c.ports.getD p default).name == port)
+      | throw s!"shared read {port}: not an input row"
+    let some k := (List.range pi.ports.size).find? (fun k => (pi.ports.getD k default).1 == pos)
+      | throw s!"shared read {port}: its position {pos} is not a public input"
+    let pj := (pi.json.getArrVal? k).toOption.getD Json.null
+    if (pj.getObjValAs? String "seed").toOption != some "instance" || (pj.getObjValAs? String "derivation").toOption != some s!"mod:{g}" then
+      throw s!"shared read {port}: its position {pos} is not the instance index mod {g} (seed instance, derivation mod:{g})"
+    if n % g != 0 then throw s!"shared read {port}: {n} instances are not whole groups of {g}"
+    if t.counts.getD p 0 != n / g then throw s!"shared read {port}: its table is not one row per group of {g} ({n / g} rows)"
+    if let some i := (List.range n).find? (fun i => t.refs.getD (i * np + p) 0 != i / g) then
+      throw s!"shared read {port}: instance {i} reads table row {t.refs.getD (i * np + p) 0}, not its group's {i / g}"
+
 /-- The verifier's public file: `HmOut.loadPublic`'s, then every instance's public words (`Public.outputs`), its header's
-`public_inputs` META's (and none without). -/
+`public_inputs` META's (and none without), and its shared reads' refs their groups (`checkReads`). -/
 def loadPublic (tags : Tags) (c : Circuit) (pi : Ports) (file : ByteArray) : V Public := do
   let pub ← HmRow.loadPublic tags { c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] } file
   match pub.header.getObjVal? "public_inputs", pi.ports.isEmpty with
@@ -1726,6 +2003,7 @@ def loadPublic (tags : Tags) (c : Circuit) (pi : Ports) (file : ByteArray) : V P
     if (t.counts.extract k np).any (· != pub.n) then throw "header: an output row's table is not one row per instance"
     if (List.range t.refs.size).any (fun x => x % np ≥ k && t.refs[x]! != x / np) then
       throw "shared rows: an instance's output row is not its own"
+  checkReads c pi pub.n pub.tables
   return pub
 
 def drawn (c : Circuit) (pi : Ports) (pub : Public) (draw : Json) : V Public :=
@@ -1931,6 +2209,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -1946,12 +2225,14 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
-`setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
+`setupH` makes, it makes on each table. Several tables take one draw of fixed count (`Draw.tablesWhy`): a subset draw, or a
+stratified draw, whose law is held to the verifier's own derivation once, for the session, before it is split. Every part
+comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
 draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, `closure` its
 own closure map, which a work draw's closure is held to, and `publicInputs` its own recomputation of the public input
@@ -1995,8 +2276,8 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   if count ≤ 1 then
     let st ← setup tags draw
@@ -2009,8 +2290,8 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
-    | .subset _ => splits u.units.size
-    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+    | .subset _ | .stratified .. => splits u.units.size
+    | _ => throw Draw.TABLES_LAW
   -- without a draw, the population's units (`setupH` checks a draw's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
@@ -2032,7 +2313,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 /-- `Stmt.setupHidden` on its circuit as `HmOut.parse` returns it (`parsed`), which the caller parses once
 (`Stmt.setupHidden_eq`). -/
@@ -2080,6 +2361,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
   checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  checkRegionBytes nbl regions
   let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
   let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
   let v2Run := (List.range c.outRowPorts.size).any fun j =>
@@ -2095,7 +2377,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- `Stmt.setupTables` on its circuit as `HmOut.parse` returns it under `tags` (`parsed`), which the caller parses once: a
 one-table session sets up on it, several tables each parse their own (`Stmt.setupTables_eq`). -/
@@ -2138,15 +2420,15 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
     if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   let setupOne := fun (d : Option Json) => do
     if tags.hiddenOutputs then Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
     else
       let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
-      if J.has st.c.metaJ "public_inputs" then
-        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
+        throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   if count ≤ 1 then
     let st ← setupOne draw
@@ -2159,8 +2441,8 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
-    | .subset _ => splits u.units.size
-    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+    | .subset _ | .stratified .. => splits u.units.size
+    | _ => throw Draw.TABLES_LAW
   -- without a draw, the population's units (`setupH` checks a draw's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)
@@ -2182,7 +2464,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option maxRecDepth 20000 in
 theorem Stmt.setupHidden_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)

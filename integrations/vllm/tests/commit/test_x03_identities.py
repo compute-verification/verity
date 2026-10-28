@@ -1,4 +1,4 @@
-"""X-03 on IDENTITIES (R13): the fail-closed Commit verdict compares the committed tensor identities of every step against an expected
+"""The fail-closed Commit verdict on IDENTITIES: it compares the committed tensor identities of every step against an expected
 manifest derived from the install-time module set (+ FA2 hidden source, sampler), and the per-step multiset of module-tensor names against
 the run's own call structure.  Counts alone let 'missing one value, duplicated another' pass; identities do not.  Offline (no CUDA)."""
 from __future__ import annotations
@@ -10,9 +10,10 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.acquire.sources.call_boundary_source import CallBoundarySource  # noqa: E402
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
 from verity_vllm.commit.committer.plan_cache import PlanMetas  # noqa: E402
+from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY  # noqa: E402
 
 
 class Attention:  # class names are what `_mro_names` sees
@@ -107,6 +108,20 @@ def test_fa2_row_dropped_or_doubled_fails():
     assert r["ok"] is False and r["violations"][0]["fa2_layers_bad"] == {1: 0, 0: 2}
 
 
+def test_the_top_p_split_count_is_not_held_to_step_0s_multiplicity():
+    """Traffic that mixes greedy and top-p rows binds the split count only on the steps whose batch ran vLLM's split top-p kernels;
+    a module dropped on such a step still fails."""
+    com = _com()
+    com._layouts[0] = _layout(_good_step())
+    com._layouts[1] = _layout(_good_step() + [SPLITS_IDENTITY])
+    com._layouts[2] = _layout(_good_step())
+    r = com.identity_check()
+    assert r["ok"] is True, r["violations"]
+    com._layouts[3] = _layout([n for n in _good_step() if n != "model.layers.1.mlp.down_proj"] + [SPLITS_IDENTITY])
+    r = com.identity_check()
+    assert r["violations_n"] == 1 and r["violations"][0]["missing_modules"] == ["model.layers.1.mlp.down_proj"]
+
+
 def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
     com = _com()
     good = _good_step()
@@ -197,7 +212,7 @@ def _cb_com(steps: int = 3) -> tuple[NativeHostCommitter, _CallBoundaries]:
 
 
 def test_call_boundary_names_are_checked_against_the_steps_targets_not_step_0():
-    """Gemma-2-2B k06 (r20260930-184803-4e5e): '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
+    """Gemma-2-2B: '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
     Each step commits its own body's names; rule (4) compared them with step 0's.  They are checked against the source's targets."""
     com, cb = _cb_com()
     for s in range(3):

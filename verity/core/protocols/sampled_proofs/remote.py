@@ -1,13 +1,15 @@
-"""The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
+"""The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
-The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine the prover doesn't control, and the
-prover's process reaches it over the stream (`benchmarks/live_challenger/run.sh` places it as `benchmarks/remote_session`
-places its verifier: `ssh -R PORT` to the prover's machine, whose own 127.0.0.1:PORT the prover connects to).  On its
-host, before the stream opens, `open_session` signs the challenger's record and writes it, the key and the head of the
-release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the session id the auditor
-launched it under; `serve` refuses a session whose record isn't written there, so no coin opens before it.  When the
-session ends, however it ends, the challenger signs its release log and writes the close record, `challenger.json`
-(`close_session`; `challenger`'s "The session's close").
+The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
+prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
+vy-challenger-1, that port is one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
+the coins' path; the premises `CoinsConfidential` and `OneClock` are this package's README's); in development
+(`benchmarks/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
+its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
+and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
+session id the auditor launched it under; `serve` refuses a session whose record isn't written there, so no coin opens
+before it.  When the session ends, however it ends, the challenger signs its release log and writes the close record,
+`challenger.json` (`close_session`; `challenger`'s "The session's close").
 
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty
@@ -31,10 +33,13 @@ nothing.
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
 their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
-commitment after `after` (`live_reason`), and refuses every coin after.
+commitment after `after` (`live_reason`), and refuses every coin after.  A client whose session the gate has just opened
+connects with `connect_when_listening`: until the session's tunnel listens, the connection is refused before any hello,
+so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
-bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
+bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head the auditor
+host's operator published
 (`ledger_lines`, `challenger.ledger_head`): the commitment the challenger signed and the roots its signed release log
 shows it received (`challenger.session_named`), its record, close and refused hellos the files the ledger's end sealed,
 against which a family's openings are `order_reason`'s.  An
@@ -303,7 +308,8 @@ class RemoteChallenger:
 
     @classmethod
     def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
-        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one."""
+        """The challenger at ``HOST:PORT``, its session's `secret` in the hello when it has one (`connect_when_listening`
+        waits for a session's tunnel to listen)."""
         host, sep, port = address.rpartition(":")
         if not sep or not host or not port.isdigit():
             raise ValueError(f"a challenger's address is HOST:PORT, not {address!r}")
@@ -384,6 +390,30 @@ class RemoteChallenger:
             self.close()
 
 
+#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
+#: has signed its commitment, before the peer's certifier coin link carries its 127.0.0.1:PORT (live_challenger/auditor.py's
+#: coins' path)
+TUNNEL_WAIT_S = 120
+
+
+def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] | None = None,
+                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
+                           sleep: Callable[[float], None] = time.sleep) -> Any:
+    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
+    coin, so it is tried again every half second for up to `wait_s`, then refused (`CoinError`); any other failure raises
+    at once.  `connect` is `RemoteChallenger.connect` by default, read at the call."""
+    connect = connect or RemoteChallenger.connect
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return connect(address, secret)
+        except ConnectionRefusedError as e:
+            if clock() >= deadline:
+                raise CoinError(f"nothing listened at {address} within {wait_s} s of the session's open (its tunnel never "
+                                "came up); no hello was sent and no coin opened") from e
+            sleep(0.5)
+
+
 def _read(path: Path, what: str) -> str | None:
     try:
         return path.read_text(encoding="utf-8")
@@ -431,7 +461,7 @@ def session_files(directory: str | os.PathLike) -> dict[str, Any]:
 
 
 def ledger_lines(path: str | os.PathLike) -> list[str]:
-    """One published head of the auditor's ledger at `path` (infra's ``windows.jsonl``), its lines without their
+    """One published head of the auditor's ledger at `path` (its operator's ``windows.jsonl``), its lines without their
     newlines; a missing or unreadable head raises `CoinError`."""
     text = _read(Path(path), "auditor's ledger")
     if text is None:
@@ -439,14 +469,30 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
     return [line for line in text.split("\n") if line]
 
 
+def main_lines(path: str | os.PathLike) -> list[str]:
+    """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
+    newlines; a missing or unreadable file raises `CoinError`.  The auditor host's operator writes the file at each
+    re-pin from
+    ``git rev-list --first-parent origin/main`` (vy-auditor-1 reads it from /opt/vy-verifier/main-first-parent.txt), so
+    the line is main's first-parent commits.  A deployment that wants `pouw.credit`'s freshness floor measured against the
+    checked train heads instead (the commits whose own ``check`` passed and landed them, less a reverted train's) writes
+    ``research queue checked-heads --out`` to the same file (`merge.main_line`)."""
+    text = _read(Path(path), "copy of main's history")
+    if text is None:
+        raise CoinError(f"{Ch.NO_MAIN} (none at {path})")
+    return [line for line in text.split("\n") if line]
+
+
 def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
-    auditor's ledger as infra published it, every head at `heads` checked and the longest taken (`challenger.ledger_head`);
+    auditor's ledger as the auditor host's operator published it, every head at `heads` checked and the longest taken
+    (`challenger.ledger_head`);
     the one session it opens for the window, under the challenger key the window's deployment pins, `key`
     (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
     session's directory the coin commitment the challenger signed and the roots its signed release log shows it received
-    (`challenger.session_named`).  Each fails closed, raising `CoinError`."""
+    (`challenger.session_named`).  Each fails closed, raising `CoinError`.  It checks no pin: a path that credits the
+    session also reads it through `challenger.pinned_session`."""
     d = Path(directory)
     ledger = Ch.ledger_head([ledger_lines(p) for p in heads], key, verify)
     audited = Ch.audited_session(ledger, window, key, verify)
@@ -462,4 +508,4 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
            "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "open_session", "released_roots", "serve", "session_files", "trusted_session"]
+           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]

@@ -1,7 +1,5 @@
-"""verity_vllm/program/kernels/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), the
-Replayer's `--evaluator` switch on the synthetic toy (gates / twins / auto agree word for word), the `--check`
-evidence file, and — behind `CAPTURE_BIG=1` like `test_replay_m1.py` — tier b step 0 of M1 (the whole 32-row
-SmolLM2 prefill, 9666 instances) with `--evaluator twins`: 0 divergences, `partial == False`, < 1.5 GB."""
+"""verity/ml/definitions/numerics/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), and
+the `--check` evidence file."""
 from __future__ import annotations
 
 import json
@@ -12,11 +10,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import replay
-from verity_vllm.program.kernels import kernel_registry as KR
-from verity_vllm.program.kernels import twins as TW
+from verity.ml.definitions.numerics import kernel_registry as KR
+from verity.ml.definitions.numerics import twins as TW
 from verity_vllm.pipeline import cli
-from tests.check.test_replay_synthetic import consistent_toy, snapshots  # noqa: F401 - fixtures
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
 
@@ -107,103 +103,6 @@ def test_attention_twin_declines_non_finite_operands():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the Replayer's evaluator switch (synthetic toy: 12 specializations of 8 families; its D=8 attention has no twin —
-# the FA2 model needs D % 16 == 0 — so those 3 instances take the gates in every mode, which the reports must say)
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _twinned(r) -> set[int]:
-    """Nodes of the toy whose specialization has a twin."""
-    from verity_vllm.check.fold_compare import _attach_specs
-    _attach_specs(r)
-    return {m["node"] for m in r.instances if KR.covers(m["_spec"], TW.KERNEL) is None}
-
-
-def test_tier_b_evaluators_agree_and_are_reported(consistent_toy, snapshots):  # noqa: F811
-    r, weights, _, toks = consistent_toy
-    twinned = _twinned(r)
-    assert twinned and len(twinned) == len(r.instances) - 3, len(twinned)
-    for step, tok in zip((0, 1), toks):
-        metas = [m for m in r.instances if m["step"] == step]
-        n_tw = sum(1 for m in metas if m["node"] in twinned)
-        for mode in ("gates", "twins", "auto"):
-            b = replay.tier_b(r, snapshots, weights, step=step, evaluator=mode)
-            assert b["status"] == "pass" and b["n_diverged"] == 0 and b["partial"] is False, b
-            assert b["tokens"] == {"computed": [tok], "sampled": [tok], "equal": True} and b["evaluator"] == mode
-            ev = b["evaluators"]
-            assert ev["mode"] == mode and ev["declined"] == 0
-            if mode == "gates":
-                assert ev == {"twins": 0, "gates": b["n_evaluated"], "declined": 0, "mode": "gates", "self_check": {}}
-                assert all(e["evaluator"] == "gates" and e["twin_id"] is None for e in b["instances"])
-            else:
-                assert ev["twins"] == n_tw and ev["gates"] == b["n_evaluated"] - n_tw
-                assert set(ev["self_check"]) == {m["spec"] for m in metas if m["node"] in twinned}
-                assert all(sc["status"] == "pass" and sc["n_random"] >= 3 and sc["mismatches"] == [] for sc in ev["self_check"].values())
-                for e in b["instances"]:
-                    if e["node"] in twinned:
-                        assert e["evaluator"] == "twins" and e["twin_id"] == ev["self_check"][e["spec"]]["twin_id"], e
-                    else:
-                        assert e["evaluator"] == "gates" and e["twin_id"] is None and e["spec"].startswith("Attention_v3"), e
-            # the report keeps every field h2's gates read
-            for key in ("status", "partial", "n_diverged", "tokens", "n_from_earlier_steps", "n_earlier_step_operands"):
-                assert key in b
-
-
-def test_twins_and_gates_compute_identical_words(consistent_toy, snapshots):  # noqa: F811
-    r, weights, _, _ = consistent_toy
-    twinned = _twinned(r)
-    reps = {mode: replay.Replayer(r, snapshots, weights, chain=True, snapshots=True, evaluator=mode) for mode in ("gates", "twins")}
-    for m in r.instances:                                                 # both steps, node order, no release: whole table
-        k = m["node"]
-        entries = {mode: rep.replay_node(k, compare=True) for mode, rep in reps.items()}
-        assert entries["gates"]["evaluator"] == "gates", entries
-        assert entries["twins"]["evaluator"] == ("twins" if k in twinned else "gates"), entries
-        assert np.array_equal(reps["gates"].computed[k], reps["twins"].computed[k]), m["name"]
-        assert entries["gates"]["n_args"] == entries["twins"]["n_args"] and entries["gates"]["status"] == entries["twins"]["status"] == "pass"
-    assert reps["twins"].evaluator_counts == {"twins": len(twinned), "gates": len(r.instances) - len(twinned)}
-    assert reps["gates"].evaluator_counts == {"gates": len(r.instances)}
-
-
-def test_tier_c_with_twins_reproduces_the_tokens(consistent_toy):  # noqa: F811
-    r, weights, _, toks = consistent_toy
-    twinned = _twinned(r)
-    c = replay.tier_c(r, weights, evaluator="twins")
-    assert c["status"] == "pass" and c["n_skipped"] == 0 and c["n_evaluated"] == len(r.instances), c
-    assert c["evaluators"]["twins"] == len(twinned) and c["evaluators"]["gates"] == len(r.instances) - len(twinned)
-    assert list(c["tokens"].values())[0]["computed"] == toks
-    assert sum(s["evaluators"]["twins"] for s in c["per_step"]) == len(twinned)
-
-
-def test_failed_self_check_falls_back_in_auto_and_errors_in_twins(consistent_toy, snapshots, monkeypatch):  # noqa: F811
-    r, weights, _, _ = consistent_toy
-    real = TW.admit
-
-    def rigged(spec, n=3, seed=0):
-        rep = real(spec, n=n, seed=seed)
-        if spec.base_id == "SiluMul_v1":
-            rep = {**rep, "status": "fail", "mismatches": [{"spec": spec.id, "kind": "rigged", "n_diff": 1}]}
-        return rep
-
-    monkeypatch.setattr(TW, "admit", rigged)
-    b = replay.tier_b(r, snapshots, weights, step=0, evaluator="auto")
-    assert b["status"] == "pass" and b["n_diverged"] == 0
-    silu = [e for e in b["instances"] if e["spec"].startswith("SiluMul")]
-    attn = [e for e in b["instances"] if e["spec"].startswith("Attention")]      # no twin for D=8: gates in every mode
-    assert silu and all(e["evaluator"] == "gates" and e["twin_id"] is None for e in silu)
-    assert b["evaluators"]["gates"] == len(silu) + len(attn) and b["evaluators"]["twins"] == b["n_evaluated"] - len(silu) - len(attn)
-    assert b["evaluators"]["self_check"]["SiluMul_v1{I=16}"]["status"] == "fail"
-    b = replay.tier_b(r, snapshots, weights, step=0, evaluator="twins")
-    assert b["status"] == "fail" and b["n_errors"] == len(silu), (b["status"], b.get("status_reason"), b["errors"][:2])
-    assert all("failed its self-check" in e["reason"] for e in b["errors"])
-
-
-def test_replayer_rejects_unknown_evaluator(consistent_toy):  # noqa: F811
-    r, weights, _, _ = consistent_toy
-    with pytest.raises(ValueError):
-        replay.Replayer(r, None, weights, evaluator="fast")
-
-
-# ---------------------------------------------------------------------------------------------------------
 # the evidence file
 # ---------------------------------------------------------------------------------------------------------
 
@@ -218,34 +117,3 @@ def test_check_writes_the_evidence_schema(tmp_path):
         assert fam["status"] == "pass" and fam["n_random"] >= 3 and fam["mismatches"] == [] and fam["words"] > 0
         assert {"base_id", "n_random", "n_edge", "n_declined", "statics", "status", "seconds"} <= set(fam)
     assert set(rep["libraries"]) == {"tc_model", "fa2_model", "rms_triton_model"}
-
-
-# ---------------------------------------------------------------------------------------------------------
-# M1 (CAPTURE_BIG=1): the whole prefill through the twins
-# ---------------------------------------------------------------------------------------------------------
-
-
-def test_m1_tier_b_step0_full_prefill_with_twins(tmp_path):
-    """The CLI in a subprocess (its own RSS high-water mark: the budget is per command, DESIGN §11): the whole prefill
-    replayed through the twins against the step-0 snapshots — 2026-09-16 laptop: 1.0-1.4 GB."""
-    import subprocess
-    import sys
-    from tests.check import test_replay_m1 as m1t
-    why = m1t._available()
-    if why is not None:
-        pytest.skip(why)
-    out = tmp_path / "replay_b0_twins.json"
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "replay", "--log", str(m1t.LOG), "--snapshots", str(m1t.SNAPS), "--profile", m1t.PROFILE,
-           "--tier", "b", "--step", "0", "--evaluator", "twins", "--out", str(out)]
-    proc = subprocess.run(cmd, cwd=str(m1t.REPO), capture_output=True, text=True)
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    b = json.loads(out.read_text())
-    print(f"\n{replay.summary_line(b)}")
-    assert b["status"] == "pass" and b["evaluator"] == "twins", (b["status"], b.get("status_reason"), b["divergences"][:2], b["errors"][:2])
-    assert b["n_instances"] == b["n_evaluated"] == b["n_compared"] == 9666 and b["n_diverged"] == 0 and b["n_skipped"] == 0
-    assert b["partial"] is False and b["tokens"]["equal"] is True
-    assert b["evaluators"]["twins"] == 9666 and b["evaluators"]["gates"] == 0 and b["evaluators"]["declined"] == 0
-    assert all(sc["status"] == "pass" for sc in b["evaluators"]["self_check"].values())
-    assert {e["spec"] for e in b["instances"]} == set(b["evaluators"]["self_check"])
-    assert all(e["evaluator"] == "twins" and e["twin_id"] for e in b["instances"])
-    assert b["max_rss_gb"] < m1t.RSS_LIMIT_GB, f"laptop budget: {b['max_rss_gb']:.2f} GB"

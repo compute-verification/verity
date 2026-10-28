@@ -8,15 +8,19 @@
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`), hashing format -h3
    (SHA-512 throughout); the GEMMs, with gemm_pearlc_s (y alone), are re-run on all, 1 and 3 CTAs and compared again
-   (`<buffer>@<step>/<tile>/grid<n>`), and the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if all of its
-   buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if any check
-   fails.
+   (`<buffer>@<step>/<tile>/grid<n>`), and the chain's 64 x 64 kernels (decode's) too, with decode's split kernels (words_k,
+   stats_r), its chain on 128-deep stages, and the ones they replace (`Pipeline.replaced`).  A variant is timed only if all
+   of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if
+   any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
    (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing), the call end to end with and without
    its hashes (commit and hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct
    equals gemm_pearlc's; a second gemm_pearlc gives the same U; gemm_pearlc_s's y equals gemm_pearlc's; form_s5_scalar and
-   form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes).
+   form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes; at decode, words_k, stats_r and the
+   chain on 128-deep stages write the words of the kernels they replace, timed beside them as af_warps, stats_a_warps
+   and gemm_pearlc_bk64, and the chain on the real rows writes their C~, U and y as it does over all m rows, timed beside it
+   as gemm_pearlc_full; at decode every comparison is of the real rows, the only ones a consumer reads).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
    within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
@@ -26,7 +30,9 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_SPLIT=0 for decode on words and stats_s5,
+                                 PEARLC_LIVE=0 for decode's 64 x 64 GEMMs over all m rows,
+                                 PEARLC_DEEP=0 for decode's chain on 64-deep stages)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -39,6 +45,7 @@ import hashlib
 import json
 import os
 import statistics
+import struct
 import sys
 import time
 
@@ -47,7 +54,29 @@ NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75, 76, 97, 1
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
+#: a caller with more real rows than this (a prefill's) pads them to BM rather than BM_D, so the chain runs on the mainloop:
+#: a served prefill step's chains took 18.9 ms at 640 rows there against 31.7 ms at 656 rows on 64 x 64 tiles
+#: (r20261024-171936-c297); at fewer rows the mainloop's 128 x 128 tiles leave SMs idle
+MAINLOOP_ROWS = 512
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
+WK_WARPS, WK_CL = 16, 4      # words_k's block (warps) and cluster (blocks) per m16 x n8 tile (pearl_c_sm120.cu)
+SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
+#: decode's split kernels (words_k, stats_r); PEARLC_SPLIT=0 runs the kernels they replace (words, stats_s5), the same words
+SPLIT = os.environ.get("PEARLC_SPLIT", "1") != "0"
+#: the 64 x 64 GEMMs on the real rows alone (i4 = m_real: a warp of filler rows skips its products, stores and A's loads);
+#: PEARLC_LIVE=0 runs them over all m rows, the same real rows
+LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
+#: decode's chain (gemm_pearlc_d) on 128-deep stages with L2's 256-byte fetch; PEARLC_DEEP=0 runs the 64-deep one it
+#: replaces (gemm_pearlc4_d), the same words
+DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
+#: B~'s prefetch into L2 ahead of a decode call's chain (`Pipeline.prefetch_b`): prefetch_l2's form (PEARLC_PREFETCH_FORM: 0 a
+#: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread, the default: served b8's whole step at an ITL p50
+#: of 20.61 ms against 21.42 in form 0 and 21.85 without it, r20261024-193651-3ef1), its blocks, and B~'s leading bytes it
+#: takes (PEARLC_PREFETCH_MB, 0 all of them)
+PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "2"))
+PREFETCH_CTAS = int(os.environ.get("PEARLC_PREFETCH_CTAS", "64"))
+PREFETCH_MB = int(os.environ.get("PEARLC_PREFETCH_MB", "0"))
+PREFETCH_FORMS = (0, 1, 2)
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -77,6 +106,10 @@ NVML = {
 
 class Args(C.Structure):
     _fields_ = [("p", C.c_uint64 * 16), ("i", C.c_int32 * 16)]
+
+
+#: Args' bytes, p's slots unsigned and i's signed, as Args' fields
+ARGS, NO_ARGS = struct.Struct("<16Q16i"), (0,) * 16
 
 
 def bind(lib, sigs):
@@ -140,6 +173,14 @@ class Dev:
         self.fns: dict[str, vp] = {}
         self.live: set[int] = set()
         self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
+        # launch()'s: one Args and its params array, rewritten at every launch (cuLaunchKernel copies the parameters before
+        # it returns, and launches come from one thread, as `stream` already assumes), and cuLaunchKernel without argtypes,
+        # its pointers passed as c_void_p (the streams' cached in `streams`) and its sizes as C ints
+        self.args = Args()
+        self.params = (vp * 1)(C.addressof(self.args))
+        self.cu_launch = self.cu["cuLaunchKernel"]
+        self.cu_launch.restype = i32
+        self.streams: dict[int | None, vp] = {}
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -169,9 +210,12 @@ class Dev:
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
         if r:
-            s = C.c_char_p()
-            self.cu.cuGetErrorString(r, C.byref(s))
-            raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
+            self.fail(f, r)
+
+    def fail(self, f: str, r: int):
+        s = C.c_char_p()
+        self.cu.cuGetErrorString(r, C.byref(s))
+        raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
 
     def get(self, f: str, *a) -> int:
         v = i32()
@@ -214,15 +258,20 @@ class Dev:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
-        a = Args()
-        for j, v in enumerate(p):
-            a.p[j] = v
-        for j, v in enumerate(i):
-            a.i[j] = v
-        g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
-        params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, self.stream if stream is None else stream,
-                params, None)
+        try:
+            ARGS.pack_into(self.args, 0, *p, *NO_ARGS[len(p):], *i, *NO_ARGS[len(i):])
+        except struct.error:             # an int past its slot's range: its low bits, as ctypes' slots store it
+            ARGS.pack_into(self.args, 0, *(v & 0xFFFFFFFFFFFFFFFF for v in p), *NO_ARGS[len(p):],
+                           *((v & 0xFFFFFFFF ^ 0x80000000) - 0x80000000 for v in i), *NO_ARGS[len(i):])
+        g0, g1, g2 = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
+        raw = self.stream if stream is None else stream
+        s = raw if isinstance(raw, vp) else self.streams.get(raw)   # a harness's own CUstream object (pouw_decode's lanes)
+        if s is None:
+            s = self.streams[raw] = vp(raw)
+        f = self.fns.get(name) or self.fn(name)
+        r = self.cu_launch(f, g0, g1, g2, block, 1, 1, smem, s, self.params, None)
+        if r:
+            self.fail("cuLaunchKernel", r)
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
@@ -291,7 +340,8 @@ PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851,
 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
-    """The pd variant a decode shape takes: 979 (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
+    """The pd variant a decode shape's tiles take (its pd_commit is that without PD_GROUP, `Pipeline.pd_commit`): 979
+    (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
     or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128 (runs
     r20261018-225110-fbef and r20261018-230602-5632); None outside pd_commit's rows and k."""
     if m_real > PD_MAX_ROWS or k > PD_MAX_K:
@@ -300,24 +350,25 @@ def pd_variant(m_real: int, n: int, k: int) -> int | None:
 
 
 def pd_setup(dev) -> None:
-    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), and each
-    served pd_commit's dynamic shared memory (`pd_smem`), with PD_WHOLE all a CTA may take beside its static, so no side
-    lane's CTA shares its SMs."""
+    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), and the
+    dynamic shared memory of each served pd_commit and pd_tree (`pd_smem`, `pd_tree_smem`), with PD_WHOLE all a CTA may
+    take beside its static, so no side lane's CTA shares its SMs."""
     if getattr(dev, "pd_smem", None):
         return
     if not getattr(dev, "rs_heads", False):
         dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
         dev.rs_heads = True
     dev.launch("pd_heads", 1, 32)
-    optin, smem = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {}
-    for v in PD_SERVED:
-        fn = dev.fn(f"pd_commit_{v}")
-        smem[v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
-        if smem[v] < PD_PAIR_SMEM:
-            raise RuntimeError(f"pd_commit_{v} gets {smem[v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
-        dev.ck("cuFuncSetAttribute", fn, MAX_DYN, smem[v])
+    optin, smem = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {"pd_commit": {}, "pd_tree": {}}
+    for v in sorted({x & ~PD_GROUP for x in PD_SERVED}):
+        for f in smem:
+            fn = dev.fn(f"{f}_{v}")
+            smem[f][v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
+            if smem[f][v] < PD_PAIR_SMEM:
+                raise RuntimeError(f"{f}_{v} gets {smem[f][v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
+            dev.ck("cuFuncSetAttribute", fn, MAX_DYN, smem[f][v])
     dev.sync()
-    dev.pd_smem = smem
+    dev.pd_smem, dev.pd_tree_smem = smem["pd_commit"], smem["pd_tree"]
 
 
 def nonce_args(nonce: int) -> tuple[int, int]:
@@ -356,7 +407,11 @@ class Pipeline:
     baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  A caller that gives pd's
     counter (`pd_count`, 16 zero bytes it never writes) gets hash_decode.cuh's launches at decode (`pd`, `pd_variant`'s
     variant): `commit_a`, pd_commit, does every step of `FUSED` (the commit phase, A's pads and E_A's lines) in one launch,
-    and `hash_leaf` is pd_tiles; the bytes are the same.  The chain runs on 128 x 128
+    and `hash_leaf` is pd_tiles; the bytes are the same.  With `split_a` the commitment is two launches of the same bytes:
+    `rows_a`, pd_commit in mode 1 (A's pads, each real row's digest, leaf, seed, line key and E_A line), then
+    `tree_seed_a`, pd_tree (A's tree, seed_A, line_a and the padding rows' E_A lines under it), which only the padding
+    rows' products read after it; outside pd, the same two steps over the unsplit kernels (`FUSED_GENERIC`, A's level 0
+    in `tree_seed_a`).  The chain runs on 128 x 128
     tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA tiles, but
     A'F_B at 64 x 64 on the `words` kernel's warp tiles.  The 128 x 128 GEMMs run on the mainloop, their operands by the
     tensor maps in `tma` (ML_MAPS).  gemm_pearlc stores C~, U and y.
@@ -380,15 +435,28 @@ class Pipeline:
 
     GEMM_SMEM: dict[str, int] = {}
     #: the steps one launch does under pd: `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
-    #: lines
-    FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea")}
+    #: lines; with `split_a`, `rows_a` (pd_commit's mode 1) and `tree_seed_a` (pd_tree) for the same steps (the padding rows'
+    #: E_A lines only with `fillers`)
+    FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
+             "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
+    #: `split_a` outside pd (the pipeline's own `FUSED` there), the same kernels as the unsplit steps: ``rows_a`` A's pads,
+    #: row digests, each real row's seed and line key and the real rows' E_A lines (`lines` reading no line_a), then
+    #: ``tree_seed_a`` A's hm96 level 0 over the row digests, its levels, seed_A and line_a (with `fillers`, every row's E_A
+    #: line again, the real rows' the same bytes)
+    FUSED_GENERIC = {"rows_a": ("pad_a", "rowdig_a", "seeds_a", "lines_ea"), "tree_seed_a": ("hash_rows_a", "tree_a", "seed_a")}
+    #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
+    #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
+    beside = 0
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
-                 sha: str | None = None):
+                 sha: str | None = None, split_a: bool = False, fillers: bool = True):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's, committed and hashed, the rest filler that only the products see."""
+        matmul's, committed and hashed, the rest filler that only the products see (and the 64 x 64 GEMMs skip, LIVE).
+        With `split_a`, `fillers` False leaves the filler rows' E_A lines as the buffer holds them: ``tree_seed_a`` (pd_tree,
+        or outside pd `FUSED_GENERIC`'s) then writes A's tree, seed_A and line_a alone, nothing the forming reads."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
+        self.split_a, self.fillers = split_a, fillers
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
             raise ValueError(f"sha is 'fast' or 'ref', not {self.sha!r}")
@@ -413,6 +481,8 @@ class Pipeline:
         self.pd = pd_variant(self.m_real, n, k) if self.sha == "fast" and "pd_count" in self.b else None
         if self.pd is not None:
             pd_setup(dev)
+        elif split_a:
+            self.FUSED = {**Pipeline.FUSED, **Pipeline.FUSED_GENERIC}
         if self.sha == "fast" and any(x in self.b for x in SEGDIG) and not getattr(dev, "rs_heads", False):
             dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
             dev.sync()
@@ -481,11 +551,12 @@ class Pipeline:
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x: their row digests (s512_rows, a CTA a row), the HM96 leaves over them, then
         its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
-        d, b = self.dev, self.b
+        b = self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
-        block = self.keys["unit"] + 96 if tag == "a" else 0
+        # read at launch: a ring's sets each hold their call's keys, and the lanes point `keys` at the set's before each call
+        block = lambda: self.keys["unit"] + 96 if tag == "a" else 0  # noqa: E731
         return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
-                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
+                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block(), nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
@@ -510,13 +581,25 @@ class Pipeline:
                  i=(mr, n))
         d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
 
-    def pd_commit(self) -> None:
+    def pd_commit(self, mode: int = 0) -> None:
         """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
-        i < m_real's under its own line key, the rest under line_a), its counter left zero."""
-        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd, self.k // 256
+        i < m_real's under its own line key, the rest under line_a), its counter left zero.  Mode 1 (`rows_a`) stops after
+        A's level 0 and the rows' lines, and `pd_tree` does the rest.  Every shape's on one kernel, the variant without
+        PD_GROUP (a bit pd_commit doesn't read): the decode step's other commit kernel had its code fetched cold once a
+        layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv, r20261024-104625-7b57)."""
+        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd & ~PD_GROUP, self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
-                    kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], 0), i=(self.m_real, self.k, 0, self.m))
+                    kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], 0), i=(self.m_real, self.k, mode, self.m))
+
+    def pd_tree(self) -> None:
+        """`split_a`'s `tree_seed_a`: pd_tree, one CTA, A's levels above level 0, seed_A, line_a, and with `fillers` the
+        padding rows' E_A lines under it (rows m_real..m - 1, where there are any); `pd_commit`'s variant."""
+        d, b, kk, v = self.dev, self.b, self.keys, self.pd & ~PD_GROUP
+        ea = b["ea_codes"] if self.m_real < self.m and self.fillers else 0
+        d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
+                 p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], ea, 0),
+                 i=(self.m_real, 0, 0, self.m))
 
     def pd_tiles(self) -> None:
         """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP a CTA of PD_G tiles of a row block."""
@@ -557,7 +640,11 @@ class Pipeline:
                 self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
-             dg=0, key=0):
+             dg=0, key=0, live: int | None = None):
+        """`live`: the rows from 0 the product is wanted for (i4; 0 all M), by default m_real at 64 x 64 tiles (LIVE)."""
+        tm, bn = tile = gemm_tile(name)
+        if live is None:
+            live = self.m_real if LIVE and tile == (BM_D, BM_D) and self.m_real < M else 0
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -565,33 +652,92 @@ class Pipeline:
             self.GEMM_SMEM[name] = int.from_bytes(self.dev.read(probe, 4), "little")
             self.dev.free(probe)
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.GEMM_SMEM[name])
-        tm, bn = gemm_tile(name)
         tiles = (M // tm) * (N // bn)
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, 0, key]
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         block = NT
-        if is_ml(name):
+        if tile == (BM, BM):
             ptrs[10], block = self.b["tma"] + ML_SET * ML_MAPS[(a, b)], ML_NT
-        self.dev.launch(name, min(tiles, grid or self.dev.sms), block, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
+        self.dev.launch(name, min(tiles, grid or self.dev.sms - self.beside), block, self.GEMM_SMEM[name], p=ptrs,
+                        i=(M, N, self.k, RASTER, live))
+
+    def peel(self) -> dict[str, int]:
+        b = self.b
+        return {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}
 
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored), and at 128 x 128 tiles
         `gemm_pearlc_s` (y alone: the call without hashing)."""
-        b, m, n, sx = self.b, self.m, self.n, self.suffix
+        m, n, sx = self.m, self.n, self.suffix
         tile = "_d" if self.bm == BM_D else ""
-        peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}  # noqa: E731
-        out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"), **peel())}
+        stages = "" if DEEP or not tile else "4"
+        out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{stages}{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"),
+                                                   **self.peel())}
         if self.bm == BM:
-            out["gemm_pearlc_s"] = lambda: self.gemm("gemm_pearlc_s" + sx, "at", "bt", m, n, out=(None, None, "y"), **peel())
+            out["gemm_pearlc_s"] = lambda: self.gemm("gemm_pearlc_s" + sx, "at", "bt", m, n, out=(None, None, "y"), **self.peel())
+        else:
+            out.update(self.replaced())
         return out
 
+    def replaced(self) -> dict[str, object]:
+        """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
+        all of K) where `af` runs words_k, `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r, and
+        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), `gemm_pearlc_bk64`,
+        the chain on 64-deep stages (gemm_pearlc4_d) where `gemm_pearlc` runs the 128-deep ones (DEEP), and
+        `gemm_pearlc_prefetched`, the chain after B~'s prefetch in each form (`prefetch_b`), which writes nothing."""
+        d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
+        if self.g and SPLIT:
+            out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
+        if self.stats_kernel(m) == "stats_r":
+            out["stats_a_warps"] = lambda: self.stats("a", m, "xa", "stats_s5")
+        chain = f"gemm_pearlc{'' if DEEP else '4'}_d{self.suffix}"
+        if LIVE and self.m_real < m:
+            out["gemm_pearlc_full"] = lambda: self.gemm(chain, "at", "bt", m, self.n, out=("c", "u", "y"), live=m, **self.peel())
+        if DEEP:
+            out["gemm_pearlc_bk64"] = lambda: self.gemm("gemm_pearlc4_d" + self.suffix, "at", "bt", m, self.n,
+                                                       out=("c", "u", "y"), **self.peel())
+
+        def prefetched():
+            for f in PREFETCH_FORMS:
+                self.prefetch_b(f)
+            self.gemm(chain, "at", "bt", m, self.n, out=("c", "u", "y"), **self.peel())
+        out["gemm_pearlc_prefetched"] = prefetched
+        return out
+
+    def prefetch_b(self, form: int | None = None, limit: int | None = None) -> None:
+        """B~'s leading `limit` bytes (default PREFETCH_MB's, all n·k at 0) into L2 ahead of the chain, which reads them all:
+        prefetch_l2 in `form` (default PREFETCH_FORM) on PREFETCH_CTAS blocks.  It writes nothing."""
+        size = self.n * self.k
+        limit = PREFETCH_MB << 20 if limit is None else limit
+        size = min(size, limit) if limit else size
+        self.dev.launch("prefetch_l2", PREFETCH_CTAS, 256, p=(self.b["bt"],),
+                        i=(size - size % 128, PREFETCH_FORM if form is None else form))
+
+    def real(self, x: str) -> int:
+        """The bytes of buffer x's real rows (its first m_real of m), the only ones a consumer reads."""
+        return self.size[x] * self.m_real // self.m
+
+    def stats_kernel(self, rows: int) -> str:
+        return "stats_r" if SPLIT and rows <= SR_ROWS and self.k <= SR_MAX_K else "stats_s5"
+
+    def stats(self, tag: str, rows: int, x: str, kernel: str | None = None) -> None:
+        """A side's row statistics (`stats_<tag>`) over its FP32 rows x: stats_s5, a warp a row, or for few rows stats_r, a
+        block a row; the same words."""
+        b, kernel = self.b, kernel or self.stats_kernel(rows)
+        self.dev.launch(kernel, rows if kernel == "stats_r" else cdiv(rows, 8), 256,
+                        p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, self.k))
+
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
-        """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
-        tile, a block per m16 row."""
+        """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` (decode's few rows) on
+        words_k, a cluster of WK_CL blocks of WK_WARPS warps a m16 x n8 tile, K split among them (unpromoted, on `words_u`,
+        a warp a tile)."""
         if M % BM == 0 and not warps:
             self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
+        elif self.g and SPLIT:
+            self.dev.launch("words_k", M // 16 * 4 * WK_CL, 32 * WK_WARPS, p=(self.b[a], self.b[b], self.b[out]),
+                            i=(M, 32, self.k))
         else:
             self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
@@ -607,8 +753,7 @@ class Pipeline:
 
         def form_side(tag, rows, x, e_codes, f_codes, out):
             ep = f"ep{tag}_codes"
-            return [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                      b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
+            return [(f"stats_{tag}", lambda: self.stats(tag, rows, x)),
                      (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
                                                         i=(rows,))),
                      (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
@@ -625,17 +770,25 @@ class Pipeline:
         ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
                                            i=(0, 0, m, NORM_256, mr)))
         pd = self.pd is not None
-        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
+        forming = [ea] * (not pd and not self.split_a) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_cu"])]
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
-        unit = self.tree_setup("a", mr, "dom_a") * (not pd) + self.tree_setup("t", tiles, "dom_t")
-        commit = [("commit_a", self.pd_commit)] if pd else self.row_tree("a", "xa", mr, "dom_a") + [
-            ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]), i=(1, 0, 0))),
-            ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128, p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]),
-                                         i=(mr, 0, 1)))]
+        unit = self.tree_setup("a", mr, "dom_a") * (not pd and not self.split_a) + self.tree_setup("t", tiles, "dom_t")
+        split = [("rows_a", lambda: self.pd_commit(1)), ("tree_seed_a", self.pd_tree)]
+        rows, level0, levels = self.row_tree("a", "xa", mr, "dom_a")
+        seed_a = ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]),
+                                             i=(1, 0, 0)))
+        seeds_a = ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128,
+                                               p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]), i=(mr, 0, 1)))
+        own = ("lines_ea", lambda: d.launch("lines", cdiv(mr, 128), 128, p=(0, b["ea_codes"], 0, 0, b["lkeys_a"]),
+                                            i=(0, 0, mr, NORM_256, mr)))
+        generic = [("rows_a", lambda: [f() for _, f in self.tree_setup("a", mr, "dom_a") + [rows, seeds_a, own]]),
+                   ("tree_seed_a", lambda: [f() for _, f in [level0, levels, seed_a] + [ea] * (self.fillers and mr < m)])]
+        commit = ((split if self.split_a else [("commit_a", self.pd_commit)]) if pd else generic if self.split_a
+                  else [rows, level0, levels, seed_a, seeds_a])
         hashing = [("hash_leaf", self.pd_tiles if pd else self.tile_leaves),
                    ("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t")),
                    ("tree_t", lambda: self.levels("t", tiles))]
@@ -662,11 +815,34 @@ class Pipeline:
         self.dev.sync()
 
     def diff(self, x: str, y: str) -> int:
-        words = self.size[x] // 4
+        return self.diff_at(self.b[x], self.b[y], self.size[x])
+
+    def diff_at(self, x: int, y: int, n: int) -> int:
+        """Words differing between n bytes at device addresses x and y."""
+        words = n // 4
         self.dev.ck("cuMemsetD8_v2", u64(self.b["diff"]), 0, 8)
-        self.dev.launch("diff_words", cdiv(words, 256), 256, p=(self.b[x], self.b[y], self.b["diff"]), i=(words,))
+        self.dev.launch("diff_words", cdiv(words, 256), 256, p=(x, y, self.b["diff"]), i=(words,))
         self.dev.sync()
         return int.from_bytes(self.dev.read(self.b["diff"], 8), "little")
+
+    def splits(self) -> dict[str, int]:
+        """Each split kernel against the one it replaces (SPLITS), on this pipeline's inputs: the replaced step's outputs
+        copied into c2, the split step run, the words differing per output in its real rows (`real`)."""
+        steps, alt, out = {nm: f for nm, _, f in self.steps()}, self.extra(), {}
+        for step, ref, outs in SPLITS:
+            if ref not in alt:
+                continue
+            alt[ref]()
+            at = 0
+            for o in outs:
+                self.dev.copy(self.b["c2"] + at, self.b[o], self.size[o])
+                at += self.size[o]
+            steps[step]()
+            at = 0
+            for o in outs:
+                out[f"{o}_{step}_vs_{ref}_words_differing"] = self.diff_at(self.b[o], self.b["c2"] + at, self.real(o))
+                at += self.size[o]
+        return out
 
 
 # ---- the check ----------------------------------------------------------------------------------------------------
@@ -677,8 +853,14 @@ FORM_ALTS = ("form_s5_scalar", "form_s5_r144")
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
                ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)))
 ALIASES = {"c2": "c"}
-#: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
-SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
+STATS_A = ("alpha_a", "beta_a", "ia_a", "aux_a")
+#: the 64 x 64 pipeline's: the chain, A'F_B on words_k, and the kernels the split ones replace (`Pipeline.replaced`)
+SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stats_a_warps", STATS_A),
+                                  ("gemm_pearlc_bk64", ("c", "u", "y")), ("gemm_pearlc_prefetched", ("c", "u", "y")))
+#: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word (the
+#: chain's one output at a time: c2, where the replaced step's land, holds one m x n FP32 product)
+SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A),
+          *(("gemm_pearlc", alt, (o,)) for alt in ("gemm_pearlc_full", "gemm_pearlc_bk64") for o in ("c", "u", "y")))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -697,33 +879,54 @@ POISON = 0xA5
 
 def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     """hash_decode.cuh's served launches on `pipe`'s buffers (its C~ and U computed), each variant of PD_SERVED (`commit_a`,
-    then `hash_leaf`) after every output in PD_OUTPUTS is poisoned, against the fixture's bytes; the counter left zero.  The
-    no-write control, the poison with no launch, must fail every output."""
+    then `hash_leaf`; also `split_a`'s `rows_a` and `tree_seed_a` in its place, ``/split``) after every output in
+    PD_OUTPUTS is poisoned, against the fixture's bytes; the counter left zero.  The no-write control, the poison with no
+    launch, must fail every output."""
     count, res = dev.alloc(16), {}
-    pd = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],
-                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D, weight=pipe.weight)
-    if pd.pd is None:
+    make = lambda split: Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],  # noqa: E731
+                                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D, weight=pipe.weight,
+                                  split_a=split)
+    whole = make(False)
+    if whole.pd is None:
         dev.free(count)
         return {"pd@domain": {"ok": False, "why": f"{(pipe.m_real, pipe.n, pipe.k)} is outside pd's domain"}}
-    steps = {nm: fn for nm, _, fn in pd.steps()}
-    for v in (None, *PD_SERVED):
+    split = make(True)
+    forms = [(None, None, "", ())] + [(whole, v, "", ("commit_a", "hash_leaf")) for v in PD_SERVED] + [
+        (split, v, "/split", ("rows_a", "tree_seed_a", "hash_leaf")) for v in PD_SERVED]
+    for p_, v, tag, names in forms:
         for x in PD_OUTPUTS:
             dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
-        if v is not None:
-            pd.pd = v
-            steps["commit_a"]()
-            steps["hash_leaf"]()
+        if p_ is not None:
+            p_.pd = v
+            steps = {nm: fn for nm, _, fn in p_.steps()}
+            for nm in names:
+                steps[nm]()
         dev.sync()
         for x in PD_OUTPUTS:
             r = compare(dev, pipe, x, want(x))
-            if v is None:
+            if p_ is None:
                 res[f"{x}@pd/no-write"] = {"ok": not r["ok"], "bytes": r["bytes"]}
             else:
-                res[f"{x}@pd_{v}"] = r
-        if v is not None:
-            res[f"pd_count@pd_{v}"] = {"ok": dev.read(count, 16) == bytes(16), "bytes": 16}
+                res[f"{x}@pd_{v}{tag}"] = r
+        if p_ is not None:
+            res[f"pd_count@pd_{v}{tag}"] = {"ok": dev.read(count, 16) == bytes(16), "bytes": 16}
     dev.free(count)
     return res
+
+
+def check_split(dev: Dev, pipe: Pipeline, want) -> dict:
+    """`split_a` outside pd (`Pipeline.FUSED_GENERIC`) on `pipe`'s buffers: ``rows_a`` then ``tree_seed_a`` after every
+    output of A's commitment (PD_OUTPUTS but the leaves) is poisoned, against the fixture's bytes (``@split``)."""
+    split = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b,
+                     m_real=pipe.m_real, bm=BM_D, weight=pipe.weight, split_a=True)
+    outs = [x for x in PD_OUTPUTS if x != "leaves"]
+    for x in outs:
+        dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
+    steps = {nm: fn for nm, _, fn in split.steps()}
+    for nm in ("rows_a", "tree_seed_a"):
+        steps[nm]()
+    dev.sync()
+    return {f"{x}@split": compare(dev, pipe, x, want(x)) for x in outs}
 
 
 def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
@@ -747,6 +950,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
         res.update(check_pd(dev, pipe, want))
+        res.update(check_split(dev, pipe, want))
         for tag in ("a", "b"):
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)
@@ -904,16 +1108,17 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
                     "call_e2e_ms": round(e2e, 4), "call_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4),
                     "pearlc_tflops": round(2 * m * n * k / chain / 1e9, 1)})
         extra["gemm_pearlc_cu"]()
-        out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff("c2", "c")}
+        out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff_at(pipe.b["c2"], pipe.b["c"], pipe.real("c"))}
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         extra["gemm_pearlc_cu"]()
-        out["consistency"]["u_rerun_words_differing"] = pipe.diff("c2", "u")
+        out["consistency"]["u_rerun_words_differing"] = pipe.diff_at(pipe.b["c2"], pipe.b["u"], pipe.real("u"))
         dev.copy(pipe.b["y2"], pipe.b["y"], pipe.size["y"])
         if y_only:
             y_only()
             out["consistency"]["y_s_vs_pearlc_words_differing"] = pipe.diff("y", "y2")
         out["consistency"].update({f"{tag}t_form_s5_vs_{kernel.removeprefix('form_s5_')}_words_differing": pipe.form_alt(tag, kernel)
                                    for tag in ("a", "b") for kernel in FORM_ALTS})
+        out["consistency"].update(pipe.splits())
         out["form_rate"] = rate = form_rates(dev, nv, pipe, reps)
         out["consistency"].update({f"bt_{nm}_codes_differing": rate[nm]["codes_differing"]
                                    for nm in ("form_rate", "form_rate_scalar", "form_rate_r144") if nm in rate})

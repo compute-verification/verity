@@ -5,15 +5,17 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: the reference is `verity.ml.circuits.requirement` (with its census path), and two of its Programs are rows
-# of the vLLM registry (`b1`, over `prims`); the memory-map test holds the Commit's builder (`verity_vllm.commit`) on
-# request Programs `verity_vllm.predict.build` builds, whose imports reach most of `verity_vllm` and, through it and the
-# builder, the remote bandwidth protocol's record (`Replay`, `codec`), PoUW's circuits, the commitments and the hashes;
-# `lake` builds this package against the difftest harness's Lean and these files of C-Flock's verifier (`Flock.Canon`
-# and what it imports, and the package's configuration), both required by path.
+# of the Definitions (`verity.ml.definitions.registry`: `b1`, over `prims`); the memory-map test holds the Commit's
+# builder (`verity_vllm.commit`) on request Programs `verity_vllm.program.predict.build` builds, whose imports reach most of
+# `verity_vllm` and, through it and the builder, the remote bandwidth protocol's record (`Replay`, `codec`), PoUW's
+# circuits, the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
+# files of C-Flock's verifier (`Flock.Canon` and what it imports, and the package's configuration), both required by
+# path.
 inputs = ["verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/__init__.py",
-          "verity/errors.py", "verity/ml/__init__.py", "verity/core/difftest", "integrations/vllm/verity_vllm",
+          "verity/errors.py", "verity/ml/__init__.py", "verity/core/difftest", "verity/ml/definitions",
+          "integrations/vllm/verity_vllm",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
-          "verity/core/protocols/pouw", "verity/core/protocols/remote_bandwidth",
+          "verity/core/claims/__init__.py", "verity/core/protocols/pouw", "verity/core/protocols/remote_bandwidth",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",

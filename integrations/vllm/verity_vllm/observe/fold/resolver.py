@@ -66,7 +66,7 @@ class GatherMany:
 
 @dataclass(frozen=True)
 class Const:
-    """[R15 stoch] Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
+    """Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
     read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `bits` a tuple of n values: an
@@ -91,7 +91,7 @@ class Pieces:
 
 @dataclass(frozen=True)
 class Param:
-    """[R15 stoch] Row i consumes the whole of a declared runtime PARAMETER of the Program (`kind`: `"seed"` -> the request's seed
+    """Row i consumes the whole of a declared runtime PARAMETER of the Program (`kind`: `"seed"` -> the request's seed
     parameter `Array<1,Value<64>>`); `keys[i]` is row i's request id.  No device view: the fold wires the parameter's leaves, exactly as
     the derived Program takes `seed` as an input (never a Const -- a wrong seed is a wrong INPUT, caught by the value check, not a
     different Program)."""
@@ -102,12 +102,12 @@ class Param:
 
 @dataclass(frozen=True)
 class Collective:
-    """[R17 D90, COORD R17-4] Row i consumes the `parts` of a two-rank collective in RANK order: this rank's OWN partial row `own[i]`
+    """Row i consumes the `parts` of a two-rank collective in RANK order: this rank's OWN partial row `own[i]`
     (an ordinary memory read of the rank's collective INPUT storage -- its in-log producer is the rank's `Gemm`/`EmbeddingShard` output;
     an unwritten row is Unresolved, never a root) and the PEER rank's partial row = a leaf range of the fold's `peers_<request>` root
     PARAMETER (root class `collective_received`: the other rank's committed partial, bound by the rank Program's `tp_links.json`).
     The fold numbers the collective (step, k) itself -- k = issue ordinal within the step -- and takes rank/world from
-    `RunHeader.notes.tp2`; the pattern only names the kind and the issuing module (`site`, the locator of the cross-rank leg).
+    `RunHeader.notes.tp2`; the pattern only names the kind and the issuing module (`site`, the locator of the cross-rank check).
     The RECEIVED value is therefore never a free prescribed input: it is the Compute's OUTPUT, `AllReduce2_v1{N}` /
     `AllGather2_v1{N}(parts)`, written to the result storage the rank's next kernel reads."""
 
@@ -175,7 +175,7 @@ def operand_rows(op: Operand) -> int | None:
         return len(op.rows)
     if isinstance(op, PerRow):
         return op.view.shape[0] if op.view.shape else 1
-    if isinstance(op, Collective):          # [R17 D90] one row per own-partial row
+    if isinstance(op, Collective):          # one row per own-partial row
         return 1 if op.flat or not op.own.shape else op.own.shape[0]
     if isinstance(op, (Gather, GatherMany)):
         return len(op.indices)
@@ -190,7 +190,7 @@ def operand_view(op: Operand, i: int) -> ViewDesc | None:
         return op.view
     if isinstance(op, PerRow):
         return row_view(op.view, i)
-    if isinstance(op, Collective):          # [R17 D90] the device view is the OWN partial row; the peer part has none (a parameter)
+    if isinstance(op, Collective):          # the device view is the OWN partial row; the peer part has none (a parameter)
         return op.own if op.flat else row_view(op.own, i)
     if isinstance(op, Gather):
         return row_view(op.view, op.indices[i])
@@ -222,7 +222,7 @@ class Compute:
     kernels: tuple[str, ...] = ()              # device kernel name substrings this compute accounts for (census)
     attribution: tuple[tuple[str, int], ...] = ()   # optional per-row (request_id, position)
     pattern: str = ""
-    # [R15 fp8] optional per-operand parameter (Root) name -- the weight name of EACH weight operand when a Compute reads more than one
+    # optional per-operand parameter (Root) name -- the weight name of EACH weight operand when a Compute reads more than one
     # (the block-scaled FP8 GEMM reads `weight` and `weight_scale_inv`); the fold records it as `operand_roots` in instances.jsonl and
     # cb_a.compare names each weight range by it (the hint can only name one).  Empty = unchanged single-weight behaviour.
     roots: tuple[str | None, ...] = ()
@@ -317,7 +317,7 @@ class StepContext:
 
 
 def external_buffers(note: Note, device: Callable[[int], str]) -> dict[str, ViewDesc]:
-    """The views the capture's external-buffers Note (`engine.capture`) records with an offset and strides, the KV caches as
+    """The views the capture's external-buffers Note (`observe.capture`) records with an offset and strides, the KV caches as
     `kv_cache[<module>]`, on the device of their allocation."""
     return {name: ViewDesc(int(b["alloc"]), int(b["offset"]), tuple(b["shape"]), tuple(b["strides"]), b["dtype"], device(int(b["alloc"])))
             for name, b in ((note.data or {}).get("buffers") or {}).items() if "offset" in b and "strides" in b}
@@ -446,7 +446,7 @@ class ResolutionReport:
 
 def spec_module(spec: Any) -> str:
     """The module that defines a specialization's body (`defn.body` of a composite, `evaluate` of a primitive): the
-    registry a spec comes from — `verity_vllm.program.registry.quarantine.*` marks provisional numerical semantics (gate G4)."""
+    registry a spec comes from — `verity_vllm.program.quarantine.*` marks provisional numerical semantics (gate G4)."""
     defn = getattr(spec, "defn", spec)
     for attr in ("body", "evaluate"):
         fn = getattr(defn, attr, None)

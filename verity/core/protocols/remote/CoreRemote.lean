@@ -1,49 +1,39 @@
 /-
 Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardware of its own at the site. Its
-components are integrity by sampled proofs' one-stage audit and work by proof of useful work; each is a stub
-(`Core.Composition.Stub`) until its port lands. `Core.Composition.product` composes them: both accept or remote doesn't,
-and either one's rejection rejects remote whatever the other answers.
+components are integrity by sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`) and work by proof of
+useful work (`PouwCheck.protocol`). `Core.Composition.product` composes them: both accept or remote doesn't, and either
+one's rejection rejects remote whatever the other answers.
 -/
 import CoreComposition.Cases
-import CoreComposition.Stubs
+import PouwCheck.Protocol
+import SampledProofs.OneStage
 
 namespace Core.Remote
 
 open Composition
 
 /-- Remote's components, in the order of their ids. -/
-def components : List Protocol := [Stub.pouw, Stub.sampledProofs]
+def components : List Protocol := [PouwCheck.protocol, SampledProofs.OneStage.protocol]
 
 def protocol : Protocol := product "verity/remote/v0" components
 
-open Cases in
-private def answer (xs : List Stubbed) (ps : List Stubbed := xs) : Answer := Cases.answer protocol xs ps
+/-- A case its component's own `answer` refuses: empty parameters, commitment and evidence. -/
+private def refused (P : Protocol) : Case :=
+  { id := P.id, params := "{}", commitment := ByteArray.empty, evidence := ByteArray.empty }
 
-private def canonical (a : Answer) : String :=
-  match a.canonical with
-  | .ok s => s
-  | .error e => s!"error: {e}"
+private def answer (xs : List Case) : Answer := Cases.answerCases protocol xs ⟨(List.replicate 64 0).toArray⟩
 
-private def work : String := Stub.pouw.id
-private def integrity : String := Stub.sampledProofs.id
+private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard ordered components
-#guard components.map (·.id) == ["verity/stub/pouw/v0", "verity/stub/sampled-proofs/v0"]
-#guard canonical (answer [Cases.accepts work, Cases.accepts integrity]) ==
-  "{\"commitment\":\"" ++ Flock.hexOf (Cases.commitmentOf protocol [Cases.accepts work, Cases.accepts integrity]) ++
-  "\",\"profile\":{" ++ ",".intercalate ([work, integrity].map fun i =>
-    "\"" ++ i ++ "\":{\"covered\":[],\"delta\":\"1/1000000\",\"drawn\":{\"unit\":2},\"levels\":[{\"draw\":{\"subset\":2}," ++
-    "\"name\":\"unit\",\"query\":null,\"size\":2}],\"linked\":true,\"prescribed\":[],\"programs\":[\"" ++
-    Flock.hexOf (Cases.accepts i).root ++ "\"]}") ++
-  "},\"protocol\":\"verity/remote/v0\",\"public\":{\"" ++ work ++ "\":{\"passed\":2},\"" ++ integrity ++
-  "\":{\"passed\":2}},\"reason\":null,\"verdict\":\"accept\"}"
--- work rejected while integrity is undecided: remote rejects
-#guard canonical (answer [Cases.rejects work, Cases.undecided integrity]) ==
-  "{\"commitment\":\"" ++ Flock.hexOf (Cases.commitmentOf protocol [Cases.rejects work, Cases.undecided integrity]) ++
-  "\",\"profile\":null,\"protocol\":\"verity/remote/v0\",\"public\":null," ++
-  "\"reason\":\"verity/stub/pouw/v0 reject: 1 of 2 drawn units failed\",\"verdict\":\"reject\"}"
-#guard (answer [Cases.accepts work, Cases.undecided integrity]).verdict == .undecided
-#guard (answer [Cases.accepts work, Cases.rejects integrity]).verdict == .reject
-#guard (answer [Cases.accepts work]).reason == some "params: verity/stub/sampled-proofs/v0 is missing"
+#guard components.map (·.id) == ["verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"]
+
+-- both refuse their cases: remote rejects on both, and makes nothing public
+private def bothRefused : Answer := answer [refused PouwCheck.protocol, refused SampledProofs.OneStage.protocol]
+#guard bothRefused.verdict == .reject
+#guard bothRefused.published.isNone && bothRefused.profile.isNone
+#guard bothRefused.reason.map (·.startsWith "verity/pouw/v1 reject: params: ") == some true
+#guard bothRefused.reason.map (contains · "; verity/sampled-proofs/one-stage/v1 reject: params: ") == some true
+#guard (answer [refused PouwCheck.protocol]).reason == some "params: verity/sampled-proofs/one-stage/v1 is missing"
 
 end Core.Remote

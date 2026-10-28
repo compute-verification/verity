@@ -1,0 +1,5 @@
+# Real vLLM V1 scheduler traces under varied traffic (README.md). Not a package: the corpus runs in a node's pinned vLLM venv,
+# and the suite tests the scheduler hook on a stand-in Scheduler, the traffic plan and the summary, stdlib only.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

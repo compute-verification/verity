@@ -1,14 +1,13 @@
 # Flock interactive soundness in Lean: what is proved
 
 For the expert reviewer and for Table 1. This file is the list of what is proved. `ASSUMPTIONS.md`, beside it, states
-what the theorems assume: every named assumption and hypothesis, in full, with the detail behind each in `assumptions/`.
+what the theorems assume: every named assumption and hypothesis, in full, with the detail behind each in `assumption-notes/`.
 The audit layer's theorems are in `Audit/README.md`. `DESIGN.md` holds the derivations: the hash-width
 analysis, the compiled proof, the knowledge extractor, the spec deviations, the zero-knowledge plan, the a16z staging,
 and the post-quantum and root-reuse analyses.
 
-Lane `flock-soundness`, level 4a of the formal-verification plan: the interactive mode only. The Lean development is
-this directory (`FlockSoundness/`). The verifier it is about is specified in `../../../../verity/ml/flock/verifier/PROTOCOL.md` (PR #85). The work is
-staged along a16z's zkVM security stages (DESIGN.md §7).
+The interactive mode only. The Lean development is this directory (namespace `FlockSoundness`). The verifier it is about
+is specified in `../../../../verity/ml/flock/verifier/PROTOCOL.md`. The work is staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
 
@@ -21,8 +20,7 @@ at most `tableError(fast100 m, shape)`:
 > the verifier accepts both reps, while no codeword within the level-0 proximity radius of the committed table packs a
 > witness that satisfies the statement.
 
-- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2. It was
-  `1/50` (0.2729) until Sep 27; the protocol and queries are unchanged.
+- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
   is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^27 witness bits per block, 1,024 public regions and 64 link-point
@@ -34,8 +32,8 @@ at most `tableError(fast100 m, shape)`:
   `Arith.Correct` from `execArith_correct`, so they have no named assumption.
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (`value_batch_le`, `Audit/README.md`).
-- **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Model/LigeritoPad.lean`). M1 (#123,
-  `verity/ml/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
+- **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Definitions/Flock/LigeritoPad.lean`). M1
+  (`verity/ml/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
@@ -80,7 +78,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines a faulty unit through extracted values, so it pays the table's knowledge error and a
+unit used. The audit bound defines a faulty proof block through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
@@ -152,9 +150,10 @@ link term per audit.
   the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
   `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
-  `δ_reg = qR²/2^513` (`Reads.prob_off_le`).
+  `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, drawn units' reads are
+  checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
 
-### 1.4 Status
+### 1.4 The pieces, by stage
 
 | Piece | a16z stage | Lean | Status |
 |---|---|---|---|
@@ -162,7 +161,7 @@ link term per audit.
 | A live coin hits a fixed nonzero polynomial's zero with probability at most degree/|F| (Schwartz–Zippel) | (framework) | `Game/Poly.lean` | proved |
 | Two reps on independent coins, any interleaving: the error squares | 1a | `Game/Interleave.lean`, `value_interleave_le` | proved |
 | The bound as a function of the parameters, and its value for every `m` | 1a | `Accounting/*` | proved |
-| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*` | written (definitions) |
+| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*`, `Definitions/Flock/` | written (definitions) |
 | Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
 | One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
@@ -178,16 +177,14 @@ link term per audit.
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
-| The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
+| The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`; the definitions in `Definitions/Flock/Compiled.lean` and `Definitions/Flock/Game/Lock.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
-| The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
 | Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
-| Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and sampling design, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
-| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumption-notes/template-rows.md`) |
+| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: the IR comparison tests on samples, and the typed layout's proof (`Types.Dag.layout_sound`, `TmplValue.defComputes_of_layout`) once a template's rows are a checked layout's (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `python tools/verity/lean/check.py Security/Proofs` to check every declaration (`lean-audit.json`).
@@ -207,7 +204,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - Its padding columns (`A = B = 0` in the input region) are forced zero and read by no row, so they are not columns
       of `Rows`.
     - Its computed rows lie between the input region and the constant, its last column.
-  - The parser checks the input rows, the constant and, since PR #147, the row order (`Net.checkOrder`): every computed
+  - The parser checks the input rows, the constant and the row order (`Net.checkOrder`): every computed
     row reads only earlier columns or the constant, and never a padding column. So `Rows.topo` for a parsed net is
     proved, not assumed (`ExecRows.lean`):
     - `parse_rowOrder`: `Net.parse` accepted means the check passed on the very rows stored as `A` and `B`;
@@ -240,7 +237,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
 - **The placement, from the executable's accept step** (`placement_of_setupH`, `ExecSetup.lean`). When `Stmt.setupH`
   accepts, VU `g`'s stacked unit slots are placed at `ur.slot (g·upv + u)`, the shared constant at the pin, in the model
-  statement of the matrices the verifier folds (flock-verifier's `placedA`/`placedB`, PR #156; `Layout.model`).
+  statement of the matrices the verifier folds (flock-verifier's `placedA`/`placedB`; `Layout.model`).
   `unitPlace_of_setupH` is the `UnitPlace` that `loweringSoundB_of_place` takes, given the unit's instance in the audit
   circuit (`IsRowsUnit`, the circuit side) and `Layout.Aliased`: its inputs on one gate carry one value, from the flat
   statement's copies (open).
@@ -253,14 +250,14 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - `HmRow.pin` gives the pin's range;
     - `HmRow.delta`'s first loop writes exactly the slot constants' pairs, and every later pair is an input bit of a
       net slot (`delta_split`, `deltaIn_inBit`).
-  - It needs two executable checks (PR #147): `Net.parse` refuses a net whose input rows reach its constant, and
+  - It needs two executable checks: `Net.parse` refuses a net whose input rows reach its constant, and
     `HmRow.pin` refuses a pin range with no slot. Otherwise an input port can cover a slot's constant column and Δ's
     copies rewrite that row, or the pin's row is empty or lands inside another range.
-- **What a correct unit computes** is its certificate's, not a hypothesis (L1 was dropped, Daniel, Sep 30): the
+- **What a correct unit computes** is its certificate's, not a hypothesis: the
   end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
   `GateRows.rows G L` and `G` computes `D`, a unit that is not faulty computes `D` (`IsRowsUnit.computes_of_cert`,
-  `Certificate.lean`). RoPE's rows are proved to be its gate circuit's (`Rope.rope_sound`,
-  `assumption-notes/template-rows.md`).
+  `Certificate.lean`). A template's rows are tested against its primitives on samples; a checked layout's rows are proved
+  to compute its type (`Types.Dag.layout_sound`, `assumption-notes/template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
   - `Rows.compose` reads a unit's rows in logical order from a `Compose.Logical`: the columns in order, the input bits
     first, and each column's row as the block holds it, or a copy of `one` (the unit's constant, which Δ binds to the
@@ -277,7 +274,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
     composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
     `Stmt.setupH` accepted, for composed rows that are the unit net's (`Compose.NetRows`).
-  - **A typed template's Δ** (`ExecTyped.lean`, #277): `delta_typed` gives Δ_A and Δ_B as the flat entries
+  - **A typed template's Δ** (`ExecTyped.lean`): `delta_typed` gives Δ_A and Δ_B as the flat entries
     (`delta_split`'s forms), then per VU the input bits' copies of their message bits, the parts' bound rows and the root
     rows' cross entries (`Typed.tail`). `CopyRow` and `ZeroRow` state a block row that reads exactly one column, or none;
     a satisfying witness carries the column's value there (`CopyRow.block_eq`), or 0 (`ZeroRow.block_eq`).
@@ -285,18 +282,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     (`setupH_spec_typed`), `parseTyped`'s template and flat-class paths (`parseTyped_spec`), the template's parse
     (`parse_facts_tmpl`: its nets the root and placed layouts' circuits first, its block `blockOf t`, the rows' own wires,
     no leaf map or cut) and check (`check_facts_typed`).
-  - **A template unit's parts** (`Types/Parts.lean`). `deriveChecked` also checks the unit's parts as its template
-    statement reads them (`partsChecked`), and these are the row facts a template's block rows rest on:
-    - each part's region is past the unit's own rows, and the parts are apart (`part_region`, `parts_apart`);
-    - its rows are its callee's shifted, except the constant and bound inputs, which are Δ's (`part_rows`);
-    - Δ is exactly the unit's and the parts' constants and the parts' bound inputs, one entry per row (`delta_nodup`,
-      `delta_entry`, `delta_const`);
-    - each callee's input rows are self rows (`callee_rows`), and the own rows read only own and part columns
-      (`own_reads`);
-    - the unit's constant row is `[const]·[const]` (`unit_const_row`), and its order lists only own and part columns
-      (`order_cols`);
-    - the unit's reads cover a part's rows exactly as its callee's reads, shifted (`part_reads`), and a covered callee row
-      is a product row `a · []`, its read's low minterms callee rows (`callee_prod`). Both are about part rows only.
+  - **A template unit's parts** (`Types/Parts.lean`): `deriveChecked` also checks the unit's parts as its template
+    statement reads them (`partsChecked`), giving the row facts a template's block rows rest on (`part_region`,
+    `part_rows`, `delta_entry`, `part_reads`, `callee_prod` and the rest: the list is
+    note:proofs/20261025T0738Z-report-flock-readme-parts).
   - **A template's block rows, placed** (`ExecTemplatePlace.lean`, T3). Given two facts structures,
     `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
     `TemplateLayout.placement` gives a table class's `placed g`.
@@ -310,13 +299,13 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       column's position is its bound-input and cross entries (`tail_count`).
   - **From the accept step** (`ExecTemplateSetup.lean`). `setupH_templateLayout` derives `TemplateLayout` from what
     `Stmt.setupH` accepted for a template (`Typed.read`'s class and block). It uses the template's parse and check,
-    `templateOf_spec`, and #398's `blockOf_spec`, `slotOf_lt` and `slotOf_lt_of_lt`. `setupH_blockFacts` is then
+    `templateOf_spec`, and `blockOf_spec`, `slotOf_lt` and `slotOf_lt_of_lt`. `setupH_blockFacts` is then
     `BlockFacts` at every VU of the accepted statement.
-    - The rows' circuits come after the root and the placed layouts' circuits, by `checkTyped` (#405,
-      `CheckFactsT.rows_after`). The unit's shape comes from `deriveChecked` (`unitShape_of_class`, with #404's
+    - The rows' circuits come after the root and the placed layouts' circuits, by `checkTyped`
+      (`CheckFactsT.rows_after`). The unit's shape comes from `deriveChecked` (`unitShape_of_class`, with
       `unit_const_row` and `order_cols`).
     - A part may place a generated read: its net carries its own read and held table (`placedNet_gen`, `partNet_of`),
-      and the held tables' words are their bytes read as `u32` (`read_held`). #411's `part_reads` and `callee_prod`
+      and the held tables' words are their bytes read as `u32` (`read_held`). `part_reads` and `callee_prod`
       complete the unit's shape.
     - Supporting lemmas: the class's unit is one of its layouts (`unit_lt`), and Δ's other flat rows are input bits of
       the rows' circuits' slots (`deltaIn_rows`).
@@ -332,11 +321,11 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     untyped file has its `CIRCUIT unit` section, and `Layout` reads it as any net `Net.ofRows` built. The unit's composed
     rows are its net's (`netRows_flat`, `Compose.NetRows`), so `setupH_flatPlacement` is a table class's `placed` at
     each unit slot. That reads `PastInputs`, the order's columns after the unit's inputs past its net's input rows,
-    which `Typed.read` checks (`Typed.flatNet`, #434).
+    which `Typed.read` checks (`Typed.flatNet`).
   - **A typed flat class's copies and zero rows** (`ExecFlatCopies.lean`). Δ is the slot constants' pairs, the rows'
     constant bits, then each unit copy's leaf, cut and wire pairs (`delta_flat`). `HmRow.check` wires each of the unit's
     input ports once (`CheckFacts.wired`, `wire_leaf`, `cut_leaf`), and `Typed.read` checks that the unit's inputs are
-    its net's input port bits in order (`Typed.flatNet`, #434), so those bits are distinct columns. So at each input the
+    its net's input port bits in order (`Typed.flatNet`), so those bits are distinct columns. So at each input the
     block rows read the one column Δ copies there (`Layout.placed_port`), and each unit slot's row past its useful rows
     is zero (`Layout.placed_zero`). `setupH_flatTableClass` is then the flat class's `TableClass`: its placement, its
     copies (`setupH_flatCopy`) and its forced-zero rows.
@@ -344,10 +333,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 
 ### 1.6 Proved from the libraries, not assumed
 
-**A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved** (Sep 27). BCHKS25 (ePrint
+**A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved.** BCHKS25 (ePrint
 2025/2055) Theorem 4.6 as printed, which ArkLib admits, is `mcaError_le_bchks25` (`JohnsonMCA.lean`) on `Fin n`
 domains. The proof uses Dao–Kominers–Thaler (DKT26, ePrint 2026/2056), proved in ArkLib at our pin
-(`ReedSolomon.mcaError_affineLine_johnson_le`, #907). With `ρ = (k − 1)/n` and `η = 1 − √ρ − δ`, its count is below
+(`ReedSolomon.mcaError_affineLine_johnson_le`). With `ρ = (k − 1)/n` and `η = 1 − √ρ − δ`, its count is below
 `(8/3)·n·t'³/ρ`, where `t' = max(⌈√ρ/(2η)⌉, 3) + ½ ≤ m + ½` for BCHKS25's `m = max(⌈√ρ/η⌉, 3)`, so below BCHKS25's
 numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3,
 `prCoin_mca_le`). The accounting keeps `a`, so no number changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a
@@ -377,11 +366,10 @@ term below 2^-170.
   - The *compiled layer* replaces each table by its SHA-512 Merkle cap plus authentication paths, opened at the end of
     the proof. The coin server keeps each round's bytes before drawing that round's coins, and the replay compares
     bytes, so no hash binds the rounds (§1.2).
-  - **The compiled layer is the adopted variant, not yet the spec.** PROTOCOL.md (PR #85) specifies SHA-256 trees
-    (§14) and round digests (§6), following upstream. Daniel adopted SHA-512 trees and kept round bytes on
-    2026-09-26 (DESIGN.md §1). The spec, upstream's Rust verifier used for cross-validation, and the provers must
-    follow.
-- **Sessions: batched and serialized** (Daniel, 2026-09-27; DESIGN.md §11.1). There is exactly one verifier.
+  - **The compiled layer is the adopted variant, not yet the recorded sessions'.** PROTOCOL.md specifies SHA-256 trees
+    (§14) and round digests (§6) for the sessions it records, following upstream, and SHA-512 trees as its target. The
+    compiled layer has SHA-512 trees and kept round bytes (DESIGN.md §1).
+- **Sessions: batched and serialized** (DESIGN.md §11.1). There is exactly one verifier.
   - **Batching.** A session carries every table from a time window, proved in parallel by many GPUs or datacenters.
     Sessions are serialized, and no other interactive protocol with the verifier runs alongside one.
   - **Before the first coin:** every table's statement and level-0 root, and the verifier's single coin commitment. That
@@ -418,7 +406,7 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 - **Lemma A**, the pre-final view on two witnesses carrying the public region data (the dummy is one) has one
   distribution: `table_prefinal_indep` where the prover refuses nothing, and at every coin vector on what is sent before
   it refuses (a failing rank check, dependent `ρ^r`, `β = 0`), in the code's order, `session_prefinal_indep_cut`
-  (`ZK/Cut.lean`, `ZK/Refusal.lean`).
+  (`Definitions/Flock/ZK/Cut.lean`, `ZK/Refusal.lean`).
 - **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
   prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
   `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).
@@ -464,7 +452,7 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 **Expected assumptions** (to be confirmed against M1's spec):
 
 - **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production the
-  leaf salts are the operating system's bytes, 192 a leaf (`getrandom`; Daniel, 9 Oct, decision 4(a)), which A3 makes
+  leaf salts are the operating system's bytes, 192 a leaf (`getrandom`), which A3 makes
   uniform (`Discharge/ZkView/OsSalts.lean`), and the masks and padding are ChaCha20 output under a seed from the
   operating system. Treating that output as uniform is the one caveat to the lemma's statistical zero knowledge, and
   the operating system's randomness is A3.
@@ -487,8 +475,8 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 The weights are committed once and every later proof opens that root. The analysis is DESIGN.md §10.
 
 - **Soundness over N tables**, by union bound: `N·2^-205 + N·t·2^{17.3−256}`, plus `t²/2^513` once for the root. So
-  2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision, with
-  Daniel:** state security per table, or as a lifetime budget.
+  2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision:** state security
+  per table, or as a lifetime budget.
 - **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
   - In a sampled audit only the first faulty sampled unit matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
@@ -506,16 +494,3 @@ The weights are committed once and every later proof opens that root. The analys
   a session, not from concurrency.
 - **Statement leakage** accumulates over sessions. **Policy needed:** which predicates are public, and how many.
 - **Linkability** is intended, and it needs knowledge soundness (§1.3).
-
-## 5. What remains (by a16z stage)
-
-1. **Knowledge soundness, the rest** (§1.3). The table theorems, the link theorem and `registered_weights` are proved.
-   Remaining: the canonical `hm96` values, and discharging what the rows' value binding (`Binding/`) takes:
-   `HmRowComputes` (phase 2i) and the layout's facts.
-2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
-   model accepts.
-3. **Stages 1e and 3, zero knowledge and the reference prover** (§3): Lemmas A, B and C are proved for the model, and
-   Goldreich–Kahan simulation over a model of one session's views; that model's instance from a Lean reference prover
-   tied to `flock-circuit --zk` remains.
-4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
-   one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".

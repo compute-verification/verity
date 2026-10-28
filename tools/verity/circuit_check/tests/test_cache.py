@@ -390,15 +390,15 @@ def test_a_package_an_exact_editable_install_serves_is_held_like_one_on_the_path
     assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
 
 
-#: the harness with one more `sys.path` entry, holding a package no check imports: a new workspace member, as #2001 added
+#: the harness with one more `sys.path` entry, holding a package no check imports: a new workspace member
 EXTRA_PATH = HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.append(str(root / 'extra'))")
 #: the harness with every installed distribution at another version
 BUMPED = HARNESS.replace("from circuit_check import cache", "import importlib.metadata as _md\n_md.version = lambda d: '0.0.0-bumped'\nfrom circuit_check import cache")
 
 
 def test_a_new_path_entry_or_package_no_check_imports_reuses_every_target(tmp_path):
-    """14 Oct: one new workspace member (`tools/config`, #2001) put a distribution and a `sys.path` entry into the environment,
-    and every one of ~4,600 targets ran again, since the key held both whole. A target now holds only what it loaded."""
+    """A new workspace member puts a distribution and a `sys.path` entry into the environment, and a key that held both whole
+    would run every target again. A target holds only what it loaded."""
     root = _tree(tmp_path)
     (root / "extra" / "unrelated_pkg").mkdir(parents=True)
     (root / "extra" / "unrelated_pkg" / "__init__.py").write_text("X = 1\n")
@@ -652,6 +652,50 @@ def test_a_module_an_earlier_target_imported_is_held_by_every_check_that_imports
     assert _run(root)["hits"] == []
 
 
+#: body reads under nested recordings: which of SynTop and the SynSub its body calls each recording noted
+BODY_READS = """
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root))
+from circuit_check import cache as CC
+from verity.ml.circuits.defs import bind
+
+CC.trace(root)
+from syn import top
+
+top_, sub = (sp := bind(top.SynTop)), sp.body.nodes[0].fn
+names = lambda fr: sorted(n for n, d in (("top", top_), ("sub", sub)) if id(d) in fr.defs)
+got = {}
+with CC.recording() as a:
+    for _ in range(3):
+        top_.body
+    with CC.recording(merge=False) as b:
+        sub.body
+        sub.body
+    got["b"], got["a then"] = names(b), names(a)
+    sub.body
+    got["a"] = names(a)
+with CC.recording() as c:
+    top_.body
+    with CC.recording() as d:
+        top_.body
+    got["c"], got["d"] = names(c), names(d)
+print(json.dumps(got))
+"""
+
+
+def test_a_body_read_is_noted_in_every_recording_that_reads_it(tmp_path):
+    """A check's layout walks read a specialization's body millions of times, so the tracer notes a read once in the recording
+    it happens in rather than on every read; a read in any other recording (a nested one, its encloser once it ends, a later
+    one) is noted there again, however often the body was read before."""
+    root = _tree(tmp_path)
+    r = subprocess.run([sys.executable, "-c", BODY_READS, str(root)], capture_output=True, text=True, cwd=REPO, check=True)
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == {"b": ["sub"], "a then": ["top"], "a": ["sub", "top"],
+                                                             "c": ["top"], "d": ["top"]}
+
+
 def _bindings(root: Path, *extra: str, families: tuple[str, ...] = ()) -> None:
     """Run the catalog's bindings ``extra`` beside the core and model ones, and keep ``families`` too."""
     _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model)]',
@@ -872,7 +916,7 @@ print(CC.untraced())
     assert later.stdout.strip() == "[]"                # the old bytecode is still there, but its header no longer matches
 
 
-#: a kernel module imported, as `verity_vllm.program.kernels` imports its rows, by a registry module the catalog enumerates
+#: a kernel module imported, as `verity.ml.definitions.numerics` imports its rows, by a registry module the catalog enumerates
 KERNEL_FILES = {
     "syn/rows.py": """
 import numpy as np
@@ -934,7 +978,7 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
     src = srcs[CC.TARGETS]
     assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
-    b1 = SC.path_of("verity_vllm.program.registry.b1", "py")
+    b1 = SC.path_of("verity.ml.definitions.registry.b1", "py")
     edited = CC._units_of(srcs[b1].replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
                                            '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
@@ -976,7 +1020,7 @@ ON_DEMAND = [("definitions", "GatherBf16x1024u10_v1"), ("definitions", "GatherBf
 keys = sorted({*((kind, key) for kind, pins in CK.load_pins().items() for key in pins), *ON_DEMAND})
 owners = lambda: {f"{kind} {key}": SC.pin_owner(kind, key) for kind, key in keys}
 before = owners()
-from verity_vllm.program.registry import boolean_gather, prims, sampling
+from verity.ml.definitions.registry import boolean_gather, prims, sampling
 _ = bind(boolean_gather.gather_bf16(1100)).body
 boolean_gather.gather_bf16(64), prims.gather_bf16(1), sampling.bit_at(32)
 print(json.dumps({"before": before, "after": owners(), "built": [key for _, key in ON_DEMAND if key in REGISTRY.defs]}))
@@ -992,8 +1036,8 @@ def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
     got = json.loads(r.stdout)
     assert len(got["built"]) == 4, got["built"]
     assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
-    assert got["before"]["pieces GatherBf16x1_v1"] == "verity_vllm.program.registry.prims"
-    assert got["before"]["pieces BitAtx32_v1"] == "verity_vllm.program.registry.sampling"
+    assert got["before"]["pieces GatherBf16x1_v1"] == "verity.ml.definitions.registry.prims"
+    assert got["before"]["pieces BitAtx32_v1"] == "verity.ml.definitions.registry.sampling"
     assert got["before"]["definitions GatherBf16x1024u10_v1"] is None
 
 
@@ -1044,7 +1088,7 @@ def test_each_enumerator_only_imports_what_it_lists():
 
 
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
-    """ee02's circuit-check reused all 3,887 targets and still took 837 s, most of it building the catalog to find them: the
+    """A circuit-check that reuses every target would still spend most of its time building the catalog to find them: the
     task list is reused whole when every target is as recorded.  An edit no target read (a registry module none resolves, a new
     binding entry) still rebuilds the list, which it may change, and every target is reused as before."""
     root = _tree(tmp_path)
@@ -1064,14 +1108,79 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     assert _run(root)["stats"]["task_list"]
 
 
+def _named(target: str) -> str:
+    """The harness with ``target`` named on the command line (`cli._tasks`' last branch, resolved by `targets.definition`), not
+    found by ``--all``."""
+    return (HARNESS.replace("TG.load_registries = lambda: None",
+                            "TG.load_registries = lambda: None\n"
+                            "from verity.ml.circuits.defs import REGISTRY\n"
+                            "TG.definition = lambda spec: REGISTRY[spec].bind()")
+            .replace("cli.run([], CK.Options(), everything=True,", f"cli.run([{target!r}], CK.Options(),"))
+
+
+def test_a_target_named_on_the_command_line_is_keyed_by_its_descriptor_and_holds_its_modules(tmp_path):
+    """A Definition named on the command line is not built inside its check, where its key would hold no descriptor and its
+    entry only what that check's recording noted, so it would be reused after a module it reaches changed.  Built with the
+    task list, it is a root as a sidecar's target is: its key holds its descriptor, its
+    entry the modules it reaches, and an edit to one of them checks it again."""
+    root = _tree(tmp_path)
+    assert _run(root, _named("SynTop_v1"))["hits"] == []
+    assert _run(root, _named("SynTop_v1"))["hits"] == ["SynTop_v1"]
+    e = _entry(root, "SynTop_v1")
+    assert "descriptor" in e["key"]["request"] and {"syn.top", "syn.sub", "syn.prims"} <= set(e["reads"]["modules"])
+    _edit(root, "syn/top.py", "operands(a, b)", "operands(a, a)")
+    out = _run(root, _named("SynTop_v1"))
+    assert out["hits"] == [] and out["stats"]["stored"] == 1
+    assert _values(root, "SynTop_v1") == [[6], [3 + 0x0105]]
+
+
+def test_a_target_named_on_the_command_line_reruns_when_its_descriptor_changes_with_no_module_it_holds(tmp_path):
+    """SynKn's body reads `syn.knob.N`, which another binding sets from `syn.ksize`: no module SynKn holds changes when
+    `syn.ksize` does, and named on the command line it reruns because its key holds its descriptor."""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_set_roots",), setknob)', '(("_knobbed_roots",), knobbed)', families=("SynKn_v1",))
+    assert _run(root, _named("SynKn_v1"))["hits"] == []
+    assert "syn.ksize" not in _entry(root, "SynKn_v1")["reads"]["modules"]
+    _edit(root, "syn/ksize.py", "K = 1", "K = 2")
+    out = _run(root, _named("SynKn_v1"))
+    assert out["hits"] == [] and out["stats"]["stored"] == 1
+    assert _values(root, "SynKn_v1") == [[3 + 2 * 0x0105], [3 + 3 * 0x0105]]
+
+
+def _shimmed(harness: str) -> str:
+    """``harness`` with the synthetic package imported through a link outside the tree (``shim/syn -> tree/syn``) first on the
+    import path, as a remote run puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
+    return harness.replace("sys.path.insert(0, str(root))",
+                           "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root.parent / 'shim'))")
+
+
+@pytest.mark.parametrize("named", [False, True], ids=["all", "named"])
+def test_a_module_imported_through_a_link_into_the_tree_is_held(tmp_path, named):
+    """In a remote run every module of `verity` has its file in the shim, outside the root, so a file through a link into
+    the tree is the tree's (`cache._LINKS`): else no entry would hold one, and an edit to a primitive's evaluator, which
+    changes no descriptor, would be reused."""
+    root, shim = _tree(tmp_path / "tree"), tmp_path / "shim"
+    shim.mkdir()
+    (shim / "syn").symlink_to(root / "syn", target_is_directory=True)
+    harness = _shimmed(_named("SynTop_v1") if named else HARNESS)
+    targets = ["SynTop_v1"] if named else ["SynOther_v1", "SynTop_v1"]
+    assert _run(root, harness)["hits"] == []
+    assert _run(root, harness)["hits"] == targets
+    assert {"syn.top", "syn.sub", "syn.prims"} <= set(_entry(root, "SynTop_v1")["reads"]["modules"])
+    _edit(root, "syn/prims.py", "(a + b) & 0xFFFF", "(a + b + 1) & 0xFFFF")
+    out = _run(root, harness)
+    assert out["hits"] == [] and out["stats"]["stored"] == len(targets)
+    assert _values(root, "SynTop_v1") == [[3 + 0x0105], [3 + 0x0105 + 1]]
+
+
 #: the harness with each target checked in a process of its own, forked from a zygote that is itself forked from the harness's
 #: process once the task list is built (`cli.Zygote` ``fork``, as `circuit-check` runs), so it holds this process's catalog
 FORKED = HARNESS.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
 
 
 def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_does(tmp_path):
-    """b103 (6c4f254) built the catalog twice, in circuit-check's process for the keys and again in the forkserver zygote its
-    434 rerun targets fork from: about 40 of its 125 minutes.  Forked from the process that built it, the zygote builds nothing:
+    """A forkserver zygote would build the catalog a second time, after circuit-check's process built it for the keys.  Forked
+    from the process that built it, the zygote builds nothing:
     its children check the harness's own task list, which a forkserver zygote would build again from the real catalog.  A
     target's process records what checking it first in this process records (less the probes this process's lookups made of
     the cache's git-ignored directories, which are always absent); its entry is reused, and an edit reruns only what it reaches."""
@@ -1101,9 +1210,10 @@ CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, 
 @pytest.mark.slow
 def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
-    computes: an edit to it reuses every target and the task list (17 Oct: `PousSha512Head_v1`'s 161.8 GiB peak was left out
-    of it because adding it made `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
-    which decide only the summary), while an edit to the checker's code still reruns them all."""
+    computes: an edit to it reuses every target and the task list (so adding a peak never makes
+    `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
+    which decide only the summary) or to the checker's docstrings and comments (`cache.version`), while an edit to the
+    checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1119,5 +1229,30 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
         p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
+    checks = checker / "checks.py"
+    checks.write_text(checks.read_text().replace('"""The checks,', '"""Reworded: the checks,', 1) + "\n# a comment\n")
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    checks.write_text(checks.read_text() + "\n_ANOTHER_VERSION_OF_THE_CHECKER = 1\n")
     assert _run(root, CHECKER)["hits"] == []
+
+
+def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
+    """`cache.version`: an edit to a docstring, a comment or the layout of the checker's modules keeps its version, so it
+    reruns no target, while an edit to their code, or to a file of it that is no module, changes it."""
+    from circuit_check import cache as CC
+
+    monkeypatch.setattr(CC, "_HERE", tmp_path)
+    mod, data = tmp_path / "checks.py", tmp_path / "data.json"
+    src = '"""The checks."""\n\n\ndef f(x):\n    """Twice ``x``."""\n    return 2 * x  # doubled\n'
+    mod.write_text(src)
+    data.write_text("{}")
+    here = CC.version()
+    mod.write_text('"""The checks, reworded."""\n# a new comment\n\ndef f(x):\n    """``x`` doubled."""\n\n    return 2 * x\n')
+    assert CC.version() == here
+    mod.write_text(src.replace("2 * x", "3 * x"))
+    assert CC.version() != here
+    mod.write_text(src)
+    assert CC.version() == here
+    data.write_text('{"a": 1}')
+    assert CC.version() != here

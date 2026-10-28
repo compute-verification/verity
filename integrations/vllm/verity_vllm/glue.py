@@ -4,10 +4,12 @@ staged checkpoint to its published record, the two numbers the generality goal d
 A model is its checkpoint's HF repo id, as `manifests/checkpoints.json` (`repo`), the row files (`model`) and the capture maps
 (`pins.checkpoint.repo`) pin it.  Code is tied to a model by one marker, a module-level `__models__` naming the repo ids the module
 exists for (after the docstring and `from __future__`, PEP 8's place for module dunders), read from the source's syntax tree and never
-imported; P8 and the by-name lint skip it (it names, it decides nothing).  A module's circuit-check sidecar (`<module>.circuit-check.py`)
-goes with it.  Everything else joins on a field that already exists:
+imported; P8 and the by-name lint skip it (it names, it decides nothing).  A Definition that belongs in Verity, whose vocabulary has no
+models, carries no marker: its row in `manifests/definitions.json` (`DEFINITIONS`) ties it instead.  A module's circuit-check
+sidecar (`<module>.circuit-check.py`) goes with it.  Everything else joins on a field that already exists:
 
-  * files         the marked modules under `verity_vllm/` and `tests/`, with their non-blank lines, by area (`program.registry`, ...);
+  * files         the marked modules under `verity_vllm/` and `tests/` and the Definitions `DEFINITIONS` ties, with their non-blank
+                  lines, by area (`program.frontend`, ...);
   * rules         the lowering rules (`RuleInfo`) the marked modules define;
   * allowlists    the entries of `tests/by_name_allowlist.json` and the lint allowlists (`tests/lint/allowlists/`) whose `file` is
                   marked for the model, or whose own `models` names it;
@@ -36,18 +38,23 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import records as RC
+from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.config import CHECKPOINTS, ROOT, WORKLOADS, UsageError, option
+from verity_vllm.config import CHECKPOINTS, MANIFESTS, ROOT, UsageError, option, workload_files
 from verity_vllm.engine.profiles import dense_generic, family_facts as FF
 from verity_vllm.pipeline import config_record as CR
 
 MARKER = "__models__"
 SCAN = (Path(__file__).parent, ROOT / "tests")
 SIDECAR = ".circuit-check.py"
+#: The models each Definition that belongs in Verity exists for, by its path: from `VERITY_HOME` under `verity/`, else from `ROOT`.
+DEFINITIONS = MANIFESTS / "definitions.json"
+#: the directory `verity` sits in (the repository root, in a checkout)
+VERITY_HOME = Path(str(resources.files("verity"))).resolve().parent
 ALLOWLISTS = (ROOT / "tests" / "by_name_allowlist.json", ROOT / "tests" / "lint" / "allowlists")
 
 Sql = Callable[[str], list[dict[str, Any]]]
@@ -70,7 +77,8 @@ def marked(path: Path, root: Path = ROOT) -> tuple[str, ...]:
 
 
 def markers() -> dict[str, tuple[str, ...]]:
-    """Every marked module under `SCAN`, by path relative to `ROOT`, with its sidecar."""
+    """Every marked module under `SCAN`, by path relative to `ROOT`, and every Definition `DEFINITIONS` ties, by its row's path,
+    each with its sidecar.  A `DEFINITIONS` row whose module is gone refuses."""
     out: dict[str, tuple[str, ...]] = {}
     for top in SCAN:
         for p in sorted(top.rglob("*.py")):
@@ -82,7 +90,19 @@ def markers() -> dict[str, tuple[str, ...]]:
                 car = p.with_name(p.stem + SIDECAR)
                 if car.exists():
                     out[car.relative_to(ROOT).as_posix()] = models
+    for rel, models in json.loads(DEFINITIONS.read_text())["models"].items():
+        p = source(rel)
+        if not (rel.endswith(".py") and p.is_file()):
+            raise ValueError(f"{DEFINITIONS.name} names {rel}, which is not a module: delete or move its row")
+        out[rel] = tuple(models)
+        if p.with_name(p.stem + SIDECAR).exists():
+            out[rel.removesuffix(".py") + SIDECAR] = tuple(models)
     return out
+
+
+def source(rel: str) -> Path:
+    """The file a `markers()` path names."""
+    return VERITY_HOME / rel if rel.split("/", 1)[0] == "verity" else ROOT / rel
 
 
 def checkpoints() -> list[dict[str, Any]]:
@@ -137,6 +157,8 @@ def hf_config(repo: str, role: str | None, revision: str | None, sha256: str | N
 
 def _area(rel: str) -> str:
     parts = rel.split("/")
+    if parts[0] == "verity":
+        return ".".join(parts[2:-1][:2])
     return "tests" if parts[0] == "tests" else ".".join(parts[1:-1][:2]) or parts[0]
 
 
@@ -171,8 +193,8 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
 
 
 def _profile(role: str | None, world: int, files: set[str], config: tuple[dict[str, Any] | None, str]) -> dict[str, Any]:
-    from verity_vllm.engine import profiles
-    from verity_vllm.engine.profiles import generic
+    from verity_vllm.observe.fold import profiles
+    from verity_vllm.observe.fold.profiles import generic
     cfg, source = config
     if cfg is None:
         return {"refused": f"no config.json: {source}"}
@@ -230,14 +252,14 @@ def inventory(repo: str, marks: dict[str, tuple[str, ...]], sql: Sql | None = st
     role = ckpt.get("role")
     config = hf_config(repo, role, pin.get("revision"), pin.get("config_sha256"), fetch)
     model_type = (FF.family_of(config[0]) if config[0] else None) or next((m["model_type"] for m in maps), None)
-    rows = {p.stem: json.loads(p.read_text()) for p in sorted(WORKLOADS.glob("*.json"))}
+    rows = {p.stem: json.loads(p.read_text()) for p in workload_files()}
     rows = {r: w for r, w in rows.items() if w.get("model") == repo}
     world = max((int(w["engine"]["args"].get("tensor_parallel_size", 1)) for w in rows.values()), default=1)
     files = {rel: ms for rel, ms in marks.items() if repo in ms}
     return {
         "model": repo, "role": role, "model_type": model_type, "rows": sorted(rows),
-        "files": [{"path": rel, "area": _area(rel), "lines": _lines(ROOT / rel), "models": list(ms)} for rel, ms in sorted(files.items())],
-        "rules": [{"path": rel, "rule": r} for rel in sorted(files) for r in _rules(ROOT / rel)],
+        "files": [{"path": rel, "area": _area(rel), "lines": _lines(source(rel)), "models": list(ms)} for rel, ms in sorted(files.items())],
+        "rules": [{"path": rel, "rule": r} for rel in sorted(files) for r in _rules(source(rel))],
         "allowlists": _allowlists(set(files), repo),
         "family": _family(model_type, repo),
         "profile": _profile(role, world, set(files), config),

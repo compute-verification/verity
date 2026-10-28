@@ -28,9 +28,12 @@ import os
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "clear"))
+settings = of(__file__)
 
 SCHEME = "pearl-c-sm120-v1-h3"
 WEIGHTS = {0: (256, 1024), 1: (128, 2048)}
@@ -43,7 +46,7 @@ def capture(args) -> int:
     from verity.core.protocols.pouw.audit import weights_root
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261006)
@@ -64,7 +67,7 @@ def capture(args) -> int:
                                   salt_key=salt_key)
         d = out / name
         try:
-            run.begin(retain=str(d), run=os.environ.get("RESEARCH_RUN_ID", "h3-screen"))
+            run.begin(retain=str(d), run=settings.RESEARCH_RUN_ID or "h3-screen")
             run.omit = frozenset(omit)
             for index, ((w, m), x) in enumerate(zip(CALLS, xs)):
                 y = run.gemm(w, x, weights[w], None)
@@ -88,7 +91,7 @@ def capture(args) -> int:
 
 
 def _scheme(man: dict):
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     return PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
 
 
@@ -138,7 +141,7 @@ def _tiles(d: Path, jobs: int) -> dict:
     from clear_audit import Transcript, Verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
     import clear_work as CW
-    from verity_vllm.protocol_options import pouw_pearl_c_manifest as PM
+    from verity_vllm.protocols.pouw.pearl_c import manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
     s = _scheme(man)
@@ -169,7 +172,7 @@ def check(args) -> int:
         r = {"tiles": _tiles(d, args.jobs)}
         if not graphs and not omit:
             r["calls"] = _calls(d)
-        v = VR.verify(d / "manifest.json", VR.DRAWS, args.jobs, os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+        v = VR.verify(d / "manifest.json", VR.DRAWS, args.jobs, settings.RESEARCH_SOURCE_SHA or "unknown")
         r["verify_run"] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         res[name] = r
         print(f"{name}: {r['tiles']['tiles']} tiles, {r['tiles']['failed']} failed check_tile; "

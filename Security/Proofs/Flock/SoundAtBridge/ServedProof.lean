@@ -23,9 +23,8 @@ namespace RowsSession
 variable (s : RowsSession)
 
 /-- **A drawn unit's served reads are owned** at an accepted outcome, when its registrant's reads are its served roots'
-rows (`ServedRegistered`) and the circuit names each port once. -/
-theorem ownReadsHJ_of_served (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
-    {S : Finset (Fin s.n)} {R : s.Reg}
+rows (`ServedRegistered`); acceptance names each port of the circuit once (`names_of_acceptsZKR`). -/
+theorem ownReadsHJ_of_served {S : Finset (Fin s.n)} {R : s.Reg}
     {o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))}
     (hacc : LiveAcceptsZKR s.I s.own (R, S, s.wr S R o)) {u : Fin s.n} (hu : u ∈ S) (hS : s.ServedRegistered u) :
     OwnReadsHJ s.I s.own s.c s.pub (s.wr S R o) (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt := by
@@ -37,6 +36,7 @@ theorem ownReadsHJ_of_served (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].n
   have hname : (s.ownPort q).name = s.c.ports[q].name := hname'
   have hd : recordDraw (s.wr S R o).record = some (s.dj S) :=
     (s.hCust.1 S R o (acceptsZK_of_R (t := s.wr S R o) hacc)).1
+  have hN := names_of_acceptsZKR s.I s.ht s.hc s.hTags (tr := s.wr S R o) hacc hd
   obtain ⟨D, dp, idx, hD, hdp, hidx⟩ :=
     drawn_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o) hacc hd u.val
   have hmD : u.val ∈ D.proved :=
@@ -53,7 +53,7 @@ end RowsSession
 
 /-- **C-Flock's rows link at served roots** (`Flock.Guarantees.ServedRowsLinked`). -/
 theorem servedRowsLinked : Flock.Guarantees.ServedRowsLinked := by
-  intro s hN S R o u hacc hu hS hrows g hg hr
-  exact s.xv_eq_of_rowsAt (s.ownReadsHJ_of_served hN hacc hu hS) hrows hg hr
+  intro s S R o u hacc hu hS hrows g hg hr
+  exact s.xv_eq_of_rowsAt (s.ownReadsHJ_of_served hacc hu hS) hrows hg hr
 
 end Flock.SoundAtBridge

@@ -1,4 +1,4 @@
-"""PoUW's live window, the proof service's challenger's first client (`window.live_challenger`, `rounds_reason`,
+"""PoUW's live window, the proof system's challenger's first client (`window.live_challenger`, `rounds_reason`,
 `round_key`, `mode`): the epoch's coins are committed before it and each round's coin opens once, after the verifier
 recorded that round's root; the verifier refuses a round coin opened twice, one opened before its round's root was
 recorded and a foreign epoch's; each round's noise key is its own coin's and root's; the check item's ``coins`` names
@@ -82,6 +82,20 @@ def test_only_a_live_epochs_coins_carry_a_window():
         "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
 
 
+def test_a_pearl_c_salt_session_is_its_salt_coin_alone():
+    """`salt_epoch_reason` (Lean `Properties.Pouw.LiveSalt.SaltEpoch`): `LIVE_SCHEME` over `SALT_FAMILIES` alone. H1's
+    layout, which a Pearl-C pass would leave incomplete, two salt coins, and another scheme are refused."""
+    salt = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, Wd.SALT_FAMILIES, entropy("s")).commitment
+    assert salt.families == ((Wd.SALT, 1),) and Wd.salt_epoch_reason(salt) is None
+    assert Wd.live_epoch_reason(salt) is not None
+    h1 = Wd.live_challenger(7, 1, entropy("h")).commitment
+    assert Wd.salt_epoch_reason(h1) == "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
+    two = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, ((Wd.SALT, 2),), entropy("t")).commitment
+    assert "not a Pearl-C salt session's" in Wd.salt_epoch_reason(two)
+    other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.SALT_FAMILIES, entropy("v")).commitment
+    assert Wd.salt_epoch_reason(other) == f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
+
+
 def test_the_round_key_is_its_own_coin_and_root():
     ch, roots, ops = window()
     keys = [Wd.round_key(ch.commitment, o.coin, r, roots[r]).value for r, o in enumerate(ops)]
@@ -118,15 +132,24 @@ def test_core_checks_rounds_reads_the_challengers_own_session():
 
 def _params(check: dict) -> dict:
     template, tile = next(iter(CC.TILES.items()))
+    live = {CC.LIVE_PARAM: {k: None for k in CC.LIVE}} if check.get(Wd.COINS) == "live" else {}
     return {"check": {"entries": 4, "scheme": CC.SCHEME, "template": template, "tile_work": tile.tile_work, **check},
             "context": "served-zk/run-1/ab", "delta": "1/100", "eps": "1/10", "grid_bits": 2,
-            "length": {"max_tokens": [4], "stop": Wd.STOP_FIXED}, "query": tile.query, "range": [1, 64]}
+            "length": {"max_tokens": [4], "stop": Wd.STOP_FIXED}, "query": tile.query, "range": [1, 64], **live}
 
 
 def test_the_check_item_names_the_windows_coin_mode():
+    """The check item names the window's coin mode, and a live window's parameters, and only a live window's, hold the
+    inputs its salt session is read through (`core_check.LIVE`)."""
     assert (Wd.mode({}), Wd.mode({"coins": "live"}), Wd.mode({"coins": "seeded"})) == ("seeded", "live", "seeded")
     for coins in ({}, {"coins": "live"}, {"coins": "seeded"}):
         assert CC.params(_params(coins))["check"] == _params(coins)["check"]
+        assert (CC.params(_params(coins))["live"] is None) == (coins != {"coins": "live"})
+    for p in ({k: v for k, v in _params({"coins": "live"}).items() if k != CC.LIVE_PARAM},
+              {**_params({"coins": "seeded"}), CC.LIVE_PARAM: {k: None for k in CC.LIVE}},
+              {**_params({"coins": "live"}), CC.LIVE_PARAM: {"key": None}}):
+        with pytest.raises(CC.Refused, match="^live is exactly when check.coins is live"):
+            CC.params(p)
     with pytest.raises(CC.Refused, match="^check.coins is not live or seeded$"):
         CC.params(_params({"coins": "fiat-shamir"}))
     with pytest.raises(CC.Refused, match="^check's keys are not entries, scheme, template, tile_work, and optionally coins$"):

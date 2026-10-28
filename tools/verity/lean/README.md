@@ -2,9 +2,9 @@
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages whose inputs
 changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
-packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
-records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
-toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
+packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
+records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
+toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
@@ -38,6 +38,12 @@ python tools/verity/lean/upstream.py PKG [--lean]        what the pinned depende
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
+against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
+FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
+`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
+a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
+
 ## What it checks
 
 Every declaration of the package's audited modules (not a list of theorems), from the environment Lean builds:
@@ -64,7 +70,12 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
   imports change (run `--update`) or at a bump; checking it takes seconds;
-- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes. A rule with `"sealed": true` is
+  a layer of its own: its modules answer only to the rules at or under it, and another rule reaches it only by listing
+  a prefix at or under it, never through a shorter one that holds it (an area's `Guarantees` under the area's
+  vocabulary);
+- the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
+  definitions or properties tree imports one;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -178,6 +189,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "dependency_unchecked": {"Dep.Loader": "why the package imports a dependency module that names a kernel bypass"},
  "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
  "reads_exempt": {"Pkg.Exe": "why a guarantee may read these definitions though they are not spec"},
+ "trees": {"definitions": ["Pkg.Model"], "properties": ["Pkg.Properties"], "proofs": ["Pkg.Proofs"],
+           "except": {"Pkg.Proofs.Old": "why a statement may read it until its definitions move"}},
  "guarantees": {"Pkg.main_theorem": {"owner": "@lane"}}
 }
 ~~~
@@ -193,8 +206,19 @@ installs it first, so a machine without elan works), must pass clean and fail on
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
-  closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
-  a changed assumption fails under its own name; an entry no guarantee reads fails. A list of modules is the old form:
+  closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
+  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner;
+  its failure prints the entry `--update` would write, and what the premise unfolds to. A premise that is an alias of
+  listed assumptions is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of `∀` and
+  `→` and reducible unfolding, only listed assumptions or such aliases (`Facts.lean`'s `unfolds`; what it takes, an
+  antecedent or a binder's type, may mention only listed ones). Its parts are held to the lock in its place, and a closed
+  one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
+  predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
+  In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
+  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`: its `reads`
+  record's, else, wherever its module lies, that of it and every definition it reads in `meaning` and this repository's
+  modules (`Facts.lean`'s `assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
+  and Daniel's DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
@@ -234,7 +258,13 @@ installs it first, so a machine without elan works), must pass clean and fail on
   acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
   P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
   returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
-  own `Nonempty` among them. A guarantee under `frozen` (with why it doesn't fit yet) is
+  own `Nonempty` among them. A statement that fits written in another order fits as written: outside a probability
+  statement, its binders are also read reordered, its acceptances and premises with every binder they mention first and
+  the rest after, so a hypothesis on a binder no acceptance reads is the conclusion's (`∀ x w, Q x w → accepts x → P w`
+  is `∀ x, accepts x → ∀ w, Q x w → P w`), when it mentions a binder its conclusion reads and no kept binder mentions its
+  proof; an input with a `Prop` field never moves. A hypothesis equating one field of two inputs its acceptance reads
+  (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
+  (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
@@ -254,7 +284,17 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
   nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
   package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
-  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`.
+  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
+  the proofs tree (the trees check judges those).
+- **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
+  each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
+  and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
+  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
+  (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
+  statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
+  off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
+  ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
+  excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
 - **Heartbeat overrides are listed, never refused** (Daniel, 2026-10-09). Each `set_option maxHeartbeats N` (and
@@ -282,7 +322,7 @@ are is decided by code, not by text: every failure carries one (`check.py`'s `Fa
 `orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
 (`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
 `RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
-When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
+When the change lands on `main` (`research merge --push`, or drive's landing), Daniel gets a DM with each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
@@ -382,14 +422,17 @@ the digest is recomputed. Guarantees arrive byte for byte from their branches, a
 names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
 restatement both apply.
 
-It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
-a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
-since the record doesn't say which guarantees read it. A refusal is a conflict in git, with the entries named. Resolve it the
-old way: take either side and run `check.py --update` on the merged tree.
+What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
+`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
+them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
+conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
+The fast path (`lean_changed.py --records`) takes such a candidate as it is: after a merge of `main` that takes every Lean
+input of a package it changes whole from main's side and its lock from `merge.py`, on top of a commit whose records passed, it runs
+nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node (`kept`).
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 

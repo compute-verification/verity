@@ -1,4 +1,4 @@
-"""Direct Triton launches, observed at `triton.runtime.jit.JITFunction.run` (pinned Triton 3.7.1; D63).
+"""Direct Triton launches, observed at `triton.runtime.jit.JITFunction.run` (pinned Triton 3.7.1).
 
 Triton 3.7.1's `run(self, *args, grid, warmup, **kwargs)` binds the call with a per-device *binder*
 (`kernel_cache, kernel_key_cache, target, backend, binder = self.device_caches[device]`;
@@ -59,7 +59,7 @@ def src_sha(jit_fn: Any) -> str:
     if s is None:
         try:
             src = jit_fn.src
-        except Exception:  # noqa: BLE001
+        except AttributeError:
             src = ""
         s = hashlib.sha256(src.encode("utf-8")).hexdigest()
         _SRC_SHA[k] = s
@@ -72,7 +72,7 @@ def constexpr_names(jit_fn: Any) -> frozenset[str]:
     if names is None:
         try:
             names = frozenset(p.name for p in jit_fn.params if p.is_constexpr)
-        except Exception:  # noqa: BLE001
+        except (AttributeError, TypeError):
             names = frozenset()
         _CONSTEXPR_NAMES[k] = names
     return names

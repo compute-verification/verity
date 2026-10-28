@@ -3,6 +3,7 @@ it must leave alone."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -158,6 +159,114 @@ def test_a_relative_path_through_a_moved_directory_is_normalized_though_neither_
     subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
                    capture_output=True)
     assert (r / "pkg/lake-manifest.json").read_text() == manifest.replace("../old/lms/lean/../../../keep/flock", "../keep/flock")
+
+
+def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
+    """`from pkg import old as O`, where `pkg.old` becomes `pkg.new`: the statement's module stays `pkg`, only the imported
+    name changes, and an unchanged module is no reason to leave the statement as it was (the vLLM move left 30 such
+    `from verity_vllm import protocol_options as PO` lines, and one in a script's string, naming a package that no longer
+    exists)."""
+    r = tmp_path / "repo"
+    files = {"pkg/__init__.py": "", "pkg/old/__init__.py": "X = 1\n", "pkg/keep.py": "Y = 2\n",
+             "use.py": "from pkg import old as O\nfrom pkg import keep, old\nfrom pkg import keep as K\n",
+             "run.py": 'SCRIPT = """\nfrom pkg import old as O\nfrom pkg import keep\n"""\n',
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text('[roots]\nold = { pkg = "pkg" }\nnew = { pkg = "pkg" }\n\n[paths]\n"pkg/old/" = "pkg/new/"'
+                                       '\n\n[modules]\n"pkg.old" = "pkg.new"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "use.py").read_text() == "from pkg import new as O\nfrom pkg import keep, new as old\nfrom pkg import keep as K\n"
+    assert (r / "run.py").read_text() == 'SCRIPT = """\nfrom pkg import new as O\nfrom pkg import keep\n"""\n', "and in a string"
+
+
+def test_a_module_whose_row_keeps_it_stays_importable_from_its_package_when_the_package_moves(tmp_path):
+    """A package's `__init__.py` and part of its modules move, and a row with old == new keeps another where it is (the fold
+    half of `engine/profiles/` moving to `observe/fold/profiles/` with the model facts staying): `from pkg.prof import facts`
+    still names `pkg.prof`, and only the names that moved follow the package."""
+    r = tmp_path / "repo"
+    files = {"pkg/__init__.py": "", "pkg/obs/__init__.py": "", "pkg/prof/__init__.py": "from . import facts, fold\n\n\ndef f():\n    return 0\n",
+             "pkg/prof/fold.py": "", "pkg/prof/facts.py": "",
+             "use.py": "from pkg.prof import facts, fold\nfrom pkg.prof import facts as F\nfrom pkg.prof import f\nimport pkg.prof.facts\n",
+             "run.py": 'SCRIPT = "from pkg.prof import facts, fold"\n',
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = { pkg = "pkg" }\nnew = { pkg = "pkg" }\n\n[paths]\n"pkg/prof/__init__.py" = "pkg/obs/prof/__init__.py"\n'
+        '"pkg/prof/fold.py" = "pkg/obs/prof/fold.py"\n"pkg/prof/facts.py" = "pkg/prof/facts.py"\n\n[modules]\n'
+        '"pkg.prof" = "pkg.obs.prof"\n"pkg.prof.facts" = "pkg.prof.facts"\n"pkg.prof.fold" = "pkg.obs.prof.fold"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "use.py").read_text() == ("from pkg.prof import facts\nfrom pkg.obs.prof import fold\nfrom pkg.prof import facts as F\n"
+                                          "from pkg.obs.prof import f\nimport pkg.prof.facts\n")
+    assert (r / "pkg/obs/prof/__init__.py").read_text().startswith("from pkg.prof import facts\nfrom pkg.obs.prof import fold\n")
+    assert (r / "pkg/prof/facts.py").exists() and (r / "pkg/prof/__init__.py").exists()
+    assert (r / "run.py").read_text() == 'SCRIPT = "from pkg.prof import facts; from pkg.obs.prof import fold"\n', "and in a string"
+
+
+def test_a_distributions_tests_path_follows_the_move_and_moves_json_records_only_rows_the_tree_has(tmp_path):
+    """In a moved file below a distribution, `tests/old/t.py` is that distribution's (the vLLM tp2 fixtures' README names
+    `tests/collectives/...` from `integrations/vllm/`), and the root's `tests/` stays. A map row for a file an open branch
+    adds is no row of this tree's move: `moves.json` would name a path the tree lacks."""
+    r = tmp_path / "repo"
+    files = {"dist/pyproject.toml": "[project]\nname = 'dist'\n", "dist/tests/__init__.py": "",
+             "dist/tests/old/__init__.py": "", "dist/tests/old/t.py": "",
+             "dist/tests/old/fixtures/README.md": "Inputs of `tests/old/t.py`, beside `tests/test_root.py`.\n",
+             "tests/test_root.py": "", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = {}\nnew = {}\n\n[paths]\n"dist/tests/old/" = "dist/tests/new/"\n"dist/tests/later.py" = '
+        '"dist/tests/new/later.py"\n\n[modules]\n"dist.tests.later" = "dist.tests.new.later"\n"dist.tests.old" = "dist.tests.new"\n'
+        '\n[rewrite]\n'
+        'include = ["**/fixtures/README.md"]\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "dist/tests/new/fixtures/README.md").read_text() == \
+        "Inputs of `tests/new/t.py`, beside `tests/test_root.py`.\n"
+    moves = json.loads((r / "tools/research/src/research/store/moves.json").read_text())["moves"]
+    assert moves == [{"paths": {"dist/tests/old/": "dist/tests/new/"}}]
+
+
+def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_it_moved(tmp_path):
+    """The streamed wipe's `demo.sh` goes from three directories down to two (`examples/wipe/`): its climb to the root through
+    `$0`, `${BASH_SOURCE[0]}` or a variable it sets to its own path is recounted, as is a path past the root to a file that
+    moved; a script that stays keeps its climb, and a `dirname` of anything else (`$NVCC`) is no anchor."""
+    r = tmp_path / "repo"
+    demo = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
+            'ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../../.."\n'
+            'bash "$(dirname "$0")/../stay/run.sh"\nCUDA=$(cd "$(dirname "$NVCC")/.." && pwd)\n')
+    stay = 'cd "$(dirname "$0")/../../.."\nbash "$(dirname "$0")/../wipe/demo.sh"\n'
+    files = {"bench/pous/wipe/demo.sh": demo, "bench/pous/stay/run.sh": stay,
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text('[roots]\nold = { pkg = "pkg" }\nnew = { pkg = "pkg" }\n\n[paths]\n'
+                                       '"bench/pous/wipe/demo.sh" = "examples/wipe/demo.sh"\n\n[modules]\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "examples/wipe/demo.sh").read_text() == (
+        demo.replace('"$SELF")/../../..', '"$SELF")/../..').replace('"${BASH_SOURCE[0]}")/../../..', '"${BASH_SOURCE[0]}")/../..')
+        .replace('"$0")/../stay/run.sh', '"$0")/../../bench/pous/stay/run.sh'))
+    assert (r / "bench/pous/stay/run.sh").read_text() == stay.replace('"$0")/../wipe/demo.sh', '"$0")/../../../examples/wipe/demo.sh')
 
 
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():

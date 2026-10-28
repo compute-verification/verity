@@ -1,19 +1,19 @@
-"""The registration record (README "The registration record"): what serving is committed to, fixed before the verifier draws.
+"""The registration record (README "The registration record"): what a window is committed to, fixed before the verifier draws.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
-     "population": <units the query derives>, "law": {"law": "subset", "k": K} | {"law": "stratified" | "work", "k": K, "strata": [...]},
+     "population": <proof blocks the query derives>, "law": {"law": "subset", "k": K} | {"law": "stratified" | "work", "k": K, "strata": [...]},
      "scheme": "<leaf and tree scheme>",
      "roots": [{"port": ..., "root": ..., "leaves": ..., "domain": ...}, ...],
      "leaf_layer": "<SHA-512 of the verifier's public file>" | null,
      "anchors": [], "window": {"kind": "served" | "stand-in", ...provenance}, "previous": null | "<digest>"}
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
-* **Rule.** Everything a drawn unit's statement can depend on is fixed by the record, or by objects the verifier already
+* **Rule.** Everything a drawn proof block's statement can depend on is fixed by the record, or by objects the verifier already
   holds, before the draw. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then draws.
 * **The checks** (`check`): the record has exactly these keys, and
-  - R1: the format and protocol are these, the law is the verifier's own expanded over its program and query
+  - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
     (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
     object must be over the verifier's program);
@@ -28,10 +28,10 @@
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
   to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
   the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
-* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what serving
-  committed (`served`) or a fresh commitment to values captured from serving (`stand-in`, whose link to the served root
-  is provenance, not proof).
-* **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the
+* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what the integration
+  committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
+  root is provenance, not proof).
+* **Window domains** (`window_domain`, `verity.ml.commitments.window`'s): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
@@ -75,9 +75,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
@@ -88,7 +86,6 @@ FORMAT = "verity/registration/v1"
 FORMAT_V2 = "verity/registration/v2"
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
-SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
@@ -98,12 +95,6 @@ _HEX = re.compile(r"[0-9a-f]+")
 
 def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
-
-
-def served_domain(program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
-    binding = identity_digest_sha512(SERVED_DOMAIN, {"program": program, "partition": partition, "port": port, "schema": schema,
-                                                     "leaves": int(leaves), "run": run})
-    return CommitmentDomain(binding, -1, RangeIndexedDomain(0, int(leaves)), hash="sha512").domain_id.hex()
 
 
 def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
@@ -158,7 +149,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None) -> Verdict:
-    """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
+    """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
@@ -169,8 +160,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
-    program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
-    law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
+    program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
+    sampling design expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered
     under the domain it takes now to that record's root (`held_roots`): a value is committed once a domain; a supplied
@@ -490,6 +481,6 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "held_roots",
-           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "served_domain",
-           "unwindowed"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest", "held_roots",
+           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "unwindowed",
+           "window_domain"]

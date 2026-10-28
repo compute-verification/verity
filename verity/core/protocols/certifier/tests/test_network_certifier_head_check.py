@@ -8,8 +8,9 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier import head_check as HC
-from verity.core.protocols.certifier.certificate import CertifiedRecord, parameters_digest
+from verity.core.protocols.certifier.certificate import RECORD_TAG, CertifiedRecord, certificate_digest, parameters_digest
 from verity.core.protocols.certifier.grid import Reason, Status
 
 from test_network_certifier_service import PARAMS, Run, honest_occupancy
@@ -23,7 +24,7 @@ def _checks(lw, opening):
 def cases(tmp_path_factory):
     """Head checks of the service's link-windows under the honest profile, by name: (instance, the part that refuses it
     or None). The honest heads of both ends in each window, and heads each wrong in one input; an edited head is
-    committed under its own root, so only the edit can refuse it."""
+    committed under its own root and its certificate's signed digest is its own, so only the edit can refuse it."""
     run = Run(tmp_path_factory.mktemp("heads"), occupancy=honest_occupancy())
     lw, honest = run.lw, [run.honest(w) for w in range(3)]
     out = {f"{end} {w}": (i, None) for w, o in enumerate(honest) for end, i in zip(("egress", "ingress"), _checks(lw, o))}
@@ -31,7 +32,9 @@ def cases(tmp_path_factory):
 
     def edited(d, **fields):
         recs = list(honest[0].records)
-        recs[d] = CertifiedRecord(replace(recs[d].head, **fields), recs[d].certificate)
+        r = recs[d]
+        head = replace(r.head, **fields)
+        recs[d] = CertifiedRecord(head, r.salt, replace(r.certificate, digest=certificate_digest(r.salt, head.digest())))
         return _checks(lw, replace(honest[0], records=tuple(recs)))[d]
 
     swapped = replace(honest[0], records=honest[0].records[::-1])
@@ -47,6 +50,10 @@ def cases(tmp_path_factory):
         "another root": (replace(e0, record=_checks(lw, honest[1])[0].record), "opening"),
         "another salt": (replace(e0, salt=i0.salt), "opening"),
         "another path": (replace(e0, path=e0.path[::-1]), "opening"),
+        "another signed digest": (replace(e0, signed=i0.signed), "signed"),
+        "another certifier salt": (replace(e0, salt_c=i0.salt_c), "signed"),
+        "a certificate that signs the unsalted record digest": (replace(e0, signed=tagged_sha512(RECORD_TAG, e0.head)),
+                                                                "signed"),
         "an unset deadline bit": (edited(0, deadline=False), None),
         "another frames root": (edited(1, root=bytes(64)), None),
     }
@@ -101,11 +108,14 @@ def test_a_head_of_another_length_is_no_instance_of_the_unit(cases):
 def test_the_head_check_is_its_reference(cases, bare):
     """The whole Definition on every case, with and without a profile, against its reference, and its ANDs by part at the
     deployed T = 600. What the parts' tests can't reach is the opening's wiring: the head's bytes into its row digest,
-    its salt into hm96's leaf, and the leaf's position (direction, 1) in N2's tree. Building and compiling the commitment
-    gadgets' Boolean bodies takes about 75 s, once."""
+    its salt into hm96's leaf, and the leaf's position (direction, 1) in N2's tree; and the signed digest's: the head's
+    bytes into its record digest, and that digest and the certifier's salt into the digest the certificate signs.
+    Building and compiling the commitment gadgets' Boolean bodies takes about 75 s, once."""
     insts = [i for i, _ in cases.values()]
     assert HC.evaluate(*insts) == [int(HC.reference(i)) for i in insts]
     assert HC.evaluate(*bare) == [1] * len(bare)
     size = HC.size(HC.unit(9, 600, True))
-    assert (size["fields"], size["counts"], size["other"]) == (807, 19_199, 2)
+    assert (size["fields"], size["counts"], size["other"]) == (807, 19_199, 3)
     assert size["opening"] == HC.ands(bind(HC.NetworkHidingRead, N_BITS=8 * HC.Shape(9, 600).HL, D=2)) > 32 * 600
+    assert size["signed"] == (HC.ands(bind(HC.NetworkRecordDigest, HL=HC.Shape(9, 600).HL))
+                              + HC.ands(bind(HC.NetworkSignedDigest))) == 1_333_292

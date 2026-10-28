@@ -15,7 +15,11 @@ across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
-`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
+`NciCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
+value, read or not, then twelve on whole members of a batch returning leaves of two arguments they share, each another
+node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references that name leaves of other widths than
+their types give them, which both sides refuse as `program`, and their well-typed neighbours), then
+`difftest_vectors.pinned()`'s two (θ every
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
@@ -225,12 +229,121 @@ def walks() -> list[dict]:
     return out
 
 
+def empty(kind: str) -> str:
+    """A declaration whose root holds a scan of no iterations: its carry a value no gate reads (`unread`), one passed
+    to a Call whose callee reads none of it (`passed`), or one a primitive reads (`read`); or its carry empty (`bare`).
+    `Flock.Program.resolve` can't resolve the carry, and `NciCheck.Desc` refuses the first three (`resolvable`) and
+    gives a verdict on the fourth."""
+    w = 8
+    op = vectors.prim((w, w), w)
+    carry = Tuple() if kind == "bare" else Value(w)
+    Step = bind(CompositeDefinition(f"NciEmptyStep{kind.capitalize()}", 1, (),
+                                    lambda S: ((("c", carry),), Tuple(carry, Tuple())),
+                                    lambda B, S, c: tuple_of(c, tuple_of()), register=False))
+    Skip = bind(CompositeDefinition("NciEmptySkip", 1, (), lambda S: ((("c", Value(w)), ("x", Value(w))), Value(w)),
+                                    lambda B, S, c, x: B.call(op, x, x), register=False))
+
+    def body(B, S, x):
+        s = B.scan(Step, tuple_of() if kind == "bare" else x, n=0)
+        if kind == "passed":
+            return B.call(Skip, s[0], x)
+        return B.call(op, s[0], x) if kind == "read" else B.call(op, x, x)
+    fn = bind(CompositeDefinition(f"NciEmpty{kind.capitalize()}", 1, (), lambda S: ((("x", Value(w)),), Value(w)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+EMPTIES = ("unread", "passed", "read", "bare")
+
+
+def empties() -> list[dict]:
+    """Instances on `empty`'s declarations, θ their registered inputs (none) and the Call in IU 0: three refused
+    (`program`) and one given a verdict."""
+    out = []
+    for kind in EMPTIES:
+        text = empty(kind)
+        inp, reg, spans = reference.root_nodes(text)
+        out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
+                    "owner": ["input" if inp[k] else 0 for k in range(len(inp))], "gamma": spans[-1][1],
+                    "alpha": [16, 1]})
+    return out
+
+
+def shared_decl(reader: str, order: tuple[str, ...]) -> str:
+    """A declaration whose root batches a composite over two members, each returning its shared parameters `a` and `b`
+    (in `order`), the outputs of two Calls `A` and `B` on registered inputs, and a gate (a primitive, `reader =
+    "primitive"`; a composite's, `"composite"`; or a primitive reading a composite that makes the batch, `"wrapped"`)
+    reading every member's return: one copy of pieces of both Calls."""
+    w, n, L = 8, 2, len(order)
+    op = vectors.prim((w, w), w)
+    total = vectors.summing(L * n, w, w)
+    tag = f"{reader}{''.join(order)}"
+    ret = Tuple(*[Value(w)] * L)
+    F = bind(CompositeDefinition(f"NciShared{tag}", 1, (), lambda S: ((("a", Value(w)), ("b", Value(w)),
+                                                                       ("x", Value(w))), ret),
+                                 lambda B, S, a, b, x: tuple_of(*[{"a": a, "b": b}[o] for o in order]), register=False))
+    G = bind(CompositeDefinition(f"NciSharedBatch{tag}", 1, (), lambda S: ((("a", Value(w)), ("b", Value(w)),
+                                                                            ("x", Array(n, Value(w)))), Array(n, ret)),
+                                 lambda B, S, a, b, x: B.batch(F, a, b, x, axes=(None, None, 0)), register=False))
+    R = bind(CompositeDefinition(f"NciSharedRead{tag}", 1, (), lambda S: ((("v", Array(L * n, Value(w))),), Value(w)),
+                                 lambda B, S, v: B.call(total, v), register=False))
+
+    def body(B, S, y, z, x):
+        a, b = B.call(op, y, y), B.call(op, z, z)
+        k = B.call(G, a, b, x) if reader == "wrapped" else B.batch(F, a, b, x, axes=(None, None, 0))
+        r = k.refs
+        v = Coll(Array(L * n, Value(w)), Affine(r.space, r.idx, r.base, L * n))
+        return B.call(R, v) if reader == "composite" else B.call(total, v)
+    fn = bind(CompositeDefinition(f"NciSharedDecl{tag}", 1, (), lambda S: ((("y", Value(w)), ("z", Value(w)),
+                                                                            ("x", Array(n, Value(w)))), Value(w)),
+                                  body, register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=("y", "z")))).decode()
+
+
+def shared() -> list[dict]:
+    """Instances on `shared_decl`'s declarations, θ the registered inputs and α 1: the reading gate in `A`'s IU and `B`
+    in another, and the other way round. A read is one node's gates, so `B`'s gates are novel to the first IU however
+    the copy's pieces are ordered, and `A`'s not to the second."""
+    out = []
+    for reader in ("primitive", "composite", "wrapped"):
+        for order in (("a", "b"), ("b", "b", "a")):
+            text = shared_decl(reader, order)
+            inp, reg, spans = reference.root_nodes(text)
+            calls = [k for k in range(len(inp)) if not inp[k] and spans[k][1] > spans[k][0]]
+            for other in calls[:2]:
+                owner = ["input" if inp[k] or spans[k][1] == spans[k][0] else 0 for k in range(len(inp))]
+                owner[other] = 1
+                out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
+                            "owner": owner, "gamma": spans[-1][1], "alpha": [1, 1]})
+    return out
+
+
+@functools.cache
+def mistyped() -> list[dict]:
+    """`mistyped_vectors.cases()`: references naming leaves of other widths than their types give them, which the codec
+    refuses (`E_REINTERPRET`), and their well-typed neighbours."""
+    return _load("mistyped_vectors").cases(instance)
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, `walks()`, `empties()`,
+    `shared()` and `mistyped()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
     first_walk = first_decoy + len(decoys())
+    first_empty = first_walk + len(walks())
+    first_shared = first_empty + len(empties())
+    first_mistyped = first_shared + len(shared())
+    if seed >= first_mistyped:
+        return {"instance": mistyped()[seed - first_mistyped], "shape": "mistyped", "theta_kind": None,
+                "division": None, "malformed": None}
+    if seed >= first_shared:
+        return {"instance": shared()[seed - first_shared], "shape": "shared", "theta_kind": None, "division": None,
+                "malformed": None}
+    if seed >= first_empty:
+        return {"instance": empties()[seed - first_empty], "shape": "empty", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed >= first_walk:
         return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
                 "malformed": None}
@@ -326,8 +439,9 @@ NAMES = ("instances", "expanded", "python")
 
 def total() -> int:
     """How many instances the audit's data has: the random ones, every fixture's, the decoys,
-    `difftest_vectors.pinned()`'s and the walks."""
-    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
+    `difftest_vectors.pinned()`'s, the walks, the empties, the shared members' and the mistyped ones."""
+    return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
+            + len(empties()) + len(shared()) + len(mistyped()))
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

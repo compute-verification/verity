@@ -15,14 +15,6 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.program import prefix_plan as PP
 
 
-def _tail(path: str, n: int = 300) -> str:
-    try:
-        lines = open(path, errors="replace").read().splitlines()
-    except OSError:
-        return ""
-    return (lines[-1] if lines else "")[:n]
-
-
 def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = None) -> int | None:
     """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
     guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1.  `digest`: the workload digest,
@@ -59,7 +51,7 @@ def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = N
         return None
     if rc == 0:
         row.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-        row.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={row.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
+        row.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={row.B}{', workload digest ' + wd[:16] if wd else ''}): {R.tail(log)}")
         return 0
     if os.path.exists(f"{row.d}/manifest.json"):
         os.remove(f"{row.d}/manifest.json")
@@ -69,7 +61,7 @@ def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = N
         row.tl(f"{stage}.required_manifest", "end", ("rc", 3), ("fail_class", "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"))
         return 3
     row.tl(f"{stage}.required_manifest", "end", ("rc", 1))
-    row.log(f"required-value manifest NOT built (rc={rc}; see manifest.log): {_tail(log)}")
+    row.log(f"required-value manifest NOT built (rc={rc}; see manifest.log): {R.tail(log)}")
     return 1
 
 

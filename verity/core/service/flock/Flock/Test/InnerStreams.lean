@@ -126,7 +126,7 @@ def err (x : Except String Unit) : Option String := match x with | .error e => s
 -- row k; a reads file with a claim port at another row is refused
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := ByteArray.empty, leaves := 2, words := none, wordBits := 16, domain := ByteArray.empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def sparseMsgsOwn (rd : List Nat) : Array Registered.Port :=
   ((sparseMsgs (.sparse sp18 38)).map fun q => port q.1 q.2.1 rd).toArray
 def sparseOwn (claim : List Nat) : Array Registered.Port :=

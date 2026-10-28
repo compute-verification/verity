@@ -1,7 +1,7 @@
-import Models.Accounting.Guarantees.Bridges
+import Definitions.Accounting.Guarantees.Bridges
 import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Localization
-import Models.Pouw.Assumptions.Deadline
+import Definitions.Pouw.Assumptions.Deadline
 import Proofs.Pouw.Deadline
 
 /-!
@@ -199,7 +199,7 @@ theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] 
     (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
   fun P U act σ s => P.queries U act σ s
 
-/-- **The cost window** (v2.4, B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
+/-- **The cost window** (B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
 latencies into `V` are at least `ℓ`, a gate off `V` that no gate of `ρ'` looks like (it depends on what tells the two
 apart) and that `V` reads before `t_d` lies in `[tₛ + ℓ, t_d − ℓ)`. -/
 theorem cost_window {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run L} {V : Finset L} {tₛ t_d ℓ : ℕ}

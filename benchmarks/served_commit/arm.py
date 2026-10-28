@@ -1,23 +1,28 @@
-"""Commit under served vLLM as `verity-bench` experimental arms (``--arm-module served_commit.arm:SERVED_COMMIT``, with
-``benchmarks`` on ``PYTHONPATH`` as `benchmarks/harness/env.sh` puts it).
+"""The base of the `verity-bench` experimental arms that Commit under served vLLM, `prof_arm`'s
+(``--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS``, with ``benchmarks`` on ``PYTHONPATH`` as
+`benchmarks/harness/env.sh` puts it).
 
-The arm's engine is the preset's, as vLLM serves it (``serving_defaults``: torch.compile, its CUDA-graph mode and
+An arm's engine is the preset's, as vLLM serves it (``serving_defaults``: torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance), with every value of every engine step committed:
 `served_compiled_source.ServedCompiledSource` acquires them (Inductor wrapper hooks; under a CUDA graph, slot copies
 captured into the graph and drained at the logits), and the native collector (`NativeCollectCommitter`, windowed
 staging) hashes them into one root per step. Its control is ``stock`` token for token: committing must not change what
 is served.
 
+An arm commits under its ``commit_scheme``, and ``install`` refuses the default, ``vllm-v1`` (SHA-256), by name, so an
+arm that runs names ``rows-sha512``; `benchmarks/g2/curve.py` reads a recorded run's scheme from its arm's name. The Commit is
+what `prof_arm`'s rows arms and the harness's ``commit`` arms (`verity_bench.vllm.commit_arm`) measure.
+
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
-``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and
-the run's checks happen after the window, before the next run or when the harness reads ``extras`` or ``gate``: the
+``end_run`` finalizes the run's commitment (inside the timed period, so a run's time includes the hashing backlog), and
+the run's checks happen after that period, before the next run or when the harness reads ``extras`` or ``gate``: the
 collector's errors and, with the values retained, `linkage` (each request's committed input id at a step is the token
 committed as its sample at the step before). The source's hooks are made through ``target.hooks``; the committer's
 patches of the model runner are its own, installed by ``begin_run`` and removed by ``end_run``.
 
-Two arms differ in what the Commit keeps for openings: ``served-commit`` copies the values to host memory (what an
-opening reads, and what `linkage` checks); ``served-commit-noretain`` keeps only the authentication state, so its values
-open by replay and its runs are checked by the collector's errors alone.
+An arm's ``retain`` is what the Commit keeps for openings: ``host`` copies the values to host memory (what an opening
+reads, and what `linkage` checks); ``none`` keeps only the authentication state, so its values open by replay and its runs
+are checked by the collector's errors alone.
 
 Staging is the collector's default: a ring of 256 MiB device windows, bounded (a step whose plan is new copies at most
 ``VERITY_LEARN_HOST_BUDGET_MB`` to host to re-hash), and tree levels only when values are kept. The harness's gate and warm-up
@@ -33,6 +38,7 @@ from types import SimpleNamespace
 from typing import Any
 
 WARMUPS = ("gate", "warmup")
+V1 = "vllm-v1"
 
 
 def committer_engine(llm: Any) -> SimpleNamespace:
@@ -41,12 +47,12 @@ def committer_engine(llm: Any) -> SimpleNamespace:
     The committer reads four things of it: the ``vllm.LLM``, its in-process model runner, the served model, and the
     checkpoint's repo and revision (into its geometry digest), which are the pin's, or for a local checkpoint vLLM's model
     path with no revision."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
 
     pin = getattr(llm, "pin", None)
     mc = llm.vllm.llm_engine.vllm_config.model_config
     cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
-    return SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model, cp=cp)
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class ServedCommitArm:
@@ -54,7 +60,7 @@ class ServedCommitArm:
     precision = "bfloat16"
     control = "stock"
     resident = True
-    commit_scheme = "vllm-v1"
+    commit_scheme = V1
     batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:
@@ -67,6 +73,9 @@ class ServedCommitArm:
         self.runs: list[dict[str, Any]] = []
 
     def install(self, target: Any) -> ServedCommitArm:
+        if self.commit_scheme == V1:
+            raise RuntimeError(f"{self.id} arm commits {V1!r} (SHA-256), not 'rows-sha512': vllm-v1 is kept only to read recorded "
+                               "runs, so measure the Commit with prof_arm's served-commit-rows* arms")
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
         self.source = ServedCompiledSource(into=target.hooks, batch_copies=self.batch_copies)
@@ -152,7 +161,3 @@ class ServedCommitArm:
     def close(self) -> None:
         if self.committer is not None:
             self.committer.close()
-
-
-SERVED_COMMIT = ServedCommitArm("served-commit", retain="host")
-SERVED_COMMIT_NORETAIN = ServedCommitArm("served-commit-noretain", retain="none")

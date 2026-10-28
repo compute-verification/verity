@@ -1,4 +1,4 @@
-"""[R16 stoch, rev F-r16-20(a)] The stochastic selector is REPLAYED in form (A): `GumbelTopPTokenSelect_v1{V}` has a registered
+"""The stochastic selector is REPLAYED in form (A): `GumbelTopPTokenSelect_v1{V}` has a registered
 evaluator in `sampled_replay` -- the registry's own composite (TemperatureScale -> TopPMask_v1 with the committed `splits` S as its
 operand -> GumbelSelectF32 from the committed seed + the Const64 pos) on the committed bf16 logits row -- so a stochastic Commit's
 sampled ids are recomputed from committed inputs, not excluded as 'no registered evaluator'.  CPU only, small V.
@@ -20,7 +20,7 @@ import pytest
 from verity_vllm.check.replay import evaluate as EV, index as IX, population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.program.kernels import rows as RK
+from verity.ml.definitions.numerics import rows as RK
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 
@@ -104,7 +104,7 @@ def _select_rows(pi):
 def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registry_difftest_walk():
     assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.program.registry import sampling_topp_difftest as DT
+    from verity.ml.definitions.registry import sampling_topp_difftest as DT
     rng = np.random.default_rng(11)
     lg = _logits(rng, 0)
     for S in (1, 2, 4, 8):

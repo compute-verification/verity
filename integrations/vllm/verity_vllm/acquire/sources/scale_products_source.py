@@ -6,7 +6,7 @@ same step stream and run root as the module's other values.  Attached whenever t
 The sites are the manifest's `scale_products` identities.  A forward pre-hook marks the site module that runs; inside it, during a
 committed step, the wrapper of `torch.ops._C.cutlass_scaled_mm` reads the launch's `a_scales` (the [M, K/G] group scales
 `per_token_group_fp8_quant` wrote, x_s) and `b_scales` (the transposed view of the module's [N/G, K/G] `weight_scale_inv`, w_s), computes
-`F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the IR (`kernels.fp8_twins.scale_products`), acquires the words on the launch's
+`F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the circuit (`kernels.fp8_twins.scale_products`), acquires the words on the launch's
 device, then runs the installed kernel unchanged.  No kernel changes.  A launch whose scale shapes are not the manifest's block geometry
 is a collector error.
 """
@@ -18,7 +18,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from verity_vllm.engine import hooks
-from verity_vllm.program.kernels import fp8_twins
+from verity.ml.definitions.numerics import fp8_twins
 from verity_vllm.query import scale_products as SP
 
 

@@ -100,11 +100,12 @@ def removed(plan: Plan, gone: set) -> tuple:
 
 
 @st.composite
-def shaped(draw) -> dict:
-    """An honest session of a drawn shape over the default world's six blocks: at most four pages appended, a page no
-    plan held yet released either way or named withdrawn."""
-    windows = draw(st.integers(1, 2))
-    r = M.Run(windows=windows, samples=draw(st.integers(1, 40)))
+def shaped(draw, shared: bool = False) -> dict:
+    """An honest session of a drawn shape over the default world's six chunks: at most four pages appended, a page no
+    plan held yet released either way or named withdrawn. `shared`: two to four windows, drawn two to four a coin."""
+    windows = draw(st.integers(2, 4) if shared else st.integers(1, 2))
+    per_coin = draw(st.integers(2, 4)) if shared else 1
+    r = M.Run(windows=windows, samples=draw(st.integers(1, 40)), groups_per_coin=per_coin)
     N = r.store.registration.blocks
     live, held, budget = set(range(N)), set(), 4
     r.start()
@@ -136,13 +137,20 @@ def shaped(draw) -> dict:
 
 BASES = ("honest", "honest-appends", "honest-by-root", "honest-rekey", "honest-subset", "honest-block-sha512",
          "drop-appended", "stale-append-coin", "lifetime", "refusals", "release-adjacent", "plan-change-removes-missing",
-         "honest-withdraw", "honest-deferred-rekey", "withdraw-planned", "honest-paced")
+         "honest-withdraw", "honest-deferred-rekey", "withdraw-planned", "honest-paced", "honest-shared-4",
+         "honest-shared-paced-uneven", "honest-paced-one-flight", "after-boundary")
 
 
 def test_drawn_honest_sessions_agree(server) -> None:
     stats = D.run(D.Port(M.EXE, "session", M.session, shaped(), package=M.PACKAGE, of_record=M.OF_RECORD,
                          need_rejects=False), examples=25, server=server)
     assert stats.outputs == 25, stats
+
+
+def test_drawn_honest_sessions_drawn_several_windows_a_coin_agree(server) -> None:
+    stats = D.run(D.Port(M.EXE, "session", M.session, shaped(shared=True), package=M.PACKAGE, of_record=M.OF_RECORD,
+                         need_rejects=False), examples=15, server=server)
+    assert stats.outputs == 15, stats
 
 
 def test_drawn_edits_of_recorded_sessions_agree(server) -> None:

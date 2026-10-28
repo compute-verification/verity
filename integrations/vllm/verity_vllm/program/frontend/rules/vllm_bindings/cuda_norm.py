@@ -10,7 +10,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.registry import cuda_rmsnorm as C
+from verity.ml.definitions.registry import cuda_rmsnorm as C
 
 
 BF16 = torch.bfloat16
@@ -47,7 +47,7 @@ class CudaRmsNormRule(InPlaceRule):
             "x is bf16 [.., N], weight is bf16 [N], and eps is a static float",
             "BLOCK is cuda_rmsnorm.launch_block(number of token rows, N, fused=False)",
         ),
-        evidence_domain="structural; numerics: RMSNormCudaVector8_v1 (capture pending in draft #1970)",
+        evidence_domain="structural; numerics: RMSNormCudaVector8_v1 (capture pending)",
     )
 
     def targets(self):
@@ -97,7 +97,7 @@ class CudaFusedAddRmsNormRule(InPlaceRule):
             "weight is bf16 [N], eps is a static float, and both mutated operands are rebound",
             "BLOCK is cuda_rmsnorm.launch_block(number of token rows, N, fused=True)",
         ),
-        evidence_domain="structural; numerics: RMSNormFusedCudaVector8_v1 (capture pending in draft #1970)",
+        evidence_domain="structural; numerics: RMSNormFusedCudaVector8_v1 (capture pending)",
     )
 
     def targets(self):

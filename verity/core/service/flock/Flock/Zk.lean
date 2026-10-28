@@ -405,8 +405,8 @@ def tags (t : Tags) (maskLog count : Nat) : Tags :=
   { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1) t.osMasks) }
 
 /-- M2's committed coin schedule for a session's tables (upstream's `coin_spec_of`): the session's stream, then every table's
-two reps, 256 rounds of at most 512 coins each. -/
+two reps, 512 rounds of at most 512 coins each. -/
 def coinSpec (tables : Array String) : CoinTree.Spec :=
-  ⟨#["session"] ++ tables.flatMap (fun t => #[s!"{t}/rep0", s!"{t}/rep1"]), 8, 512⟩
+  ⟨#["session"] ++ tables.flatMap (fun t => #[s!"{t}/rep0", s!"{t}/rep1"]), 9, 512⟩
 
 end Flock.Zk

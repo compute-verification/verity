@@ -29,6 +29,9 @@ trace their own reads (`child/`), and in a child this process forks it writes ea
 It traces, too, what a per-test key narrowed to the files the tests use holds (`suites.py`, `Traced`): each repository file its
 process opens or loads and each repository directory it lists (`traced`), and, per test module, each program started that no
 tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them; its children write theirs to the reads file.
+
+Two kinds of skip fail instead: one for an unreachable evidence store under a recorded check (`STORE_UNREACHABLE`), and a
+`pytest.importorskip` whose missing module is this checkout's (`importorskip`), which means it moved.
 """
 from __future__ import annotations
 
@@ -131,10 +134,14 @@ def _audit(event: str, args: tuple) -> None:
             _reads.setdefault(_current, set()).add(rel)
 
 
+def _site() -> tuple[str, ...]:
+    return tuple({os.path.join(os.path.realpath(sysconfig.get_paths()[k]), "") for k in ("purelib", "platlib")})
+
+
 def _used() -> dict[str, list[str]]:
     """The installed distributions this process imported, or tried to import, modules of; and the top-level imports that
     failed with no installed distribution providing them."""
-    site = tuple({os.path.join(os.path.realpath(sysconfig.get_paths()[k]), "") for k in ("purelib", "platlib")})
+    site = _site()
     top = {n.partition(".")[0] for n, m in list(sys.modules.items())
            if isinstance(getattr(m, "__file__", None), str) and os.path.realpath(m.__file__).startswith(site)}
     owners = importlib.metadata.packages_distributions()
@@ -243,8 +250,8 @@ def pytest_runtest_protocol(item, nextitem):
 
 
 def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]:
-    """The order (indices into ``nodeids``) that starts each of the ``heavy`` tests (longest first) at the head of its own
-    worker's first share under xdist's `worksteal` with ``workers`` workers, the other tests in collection order. `worksteal`
+    """The order (indices into ``nodeids``) that starts the first ``workers`` of the ``heavy`` tests (longest first) found in
+    ``nodeids`` each at the head of its own worker's first share under xdist's `worksteal`, the other tests in collection order. `worksteal`
     splits the collection into contiguous shares, one per worker, and steals from a share's tail, so a long test deep in a share
     starts late and ends the run late."""
     starts, at = [], 0
@@ -277,6 +284,44 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         with open(heavy) as f:
             order = heavy_first([i.nodeid for i in items], json.load(f), workers)
         items[:] = [items[i] for i in order]
+
+
+def _ours(name: str) -> bool:
+    """Whether module ``name``'s top-level package is this checkout's: it resolves inside `VERITY_SUITE_ROOT` and outside
+    site-packages, which a workspace's venv may put inside the tree."""
+    try:
+        spec = importlib.util.find_spec(name.partition(".")[0])
+    except (ImportError, ValueError):
+        return False
+    if spec is None:
+        return False
+    where = [*(spec.submodule_search_locations or ()), *([spec.origin] if spec.has_location else [])]
+    root, site = os.path.join(_root, ""), _site()
+    return any((p := os.path.realpath(w)).startswith(root) and not p.startswith(site) for w in where)
+
+
+_pytest_importorskip = pytest.importorskip
+
+
+def importorskip(modname: str, minversion: str | None = None, reason: str | None = None, *, exc_type=None):
+    """`pytest.importorskip`, failing where the module that is missing is this checkout's (`_ours`). A skip is for what an install
+    may lack (torch, vllm, a GPU library); a module of ours that isn't there has moved or gone, and pytest skips on exactly the
+    `ModuleNotFoundError` a move raises, so the tests of a moved module would pass as skips. A module of ours that needs a missing
+    third-party package still skips."""
+    try:
+        importlib.import_module(modname)
+    except ModuleNotFoundError as e:
+        if e.name and _ours(e.name):
+            pytest.fail(f"pytest.importorskip({modname!r}): {e.name} is not importable, and {e.name.partition('.')[0]} is this "
+                        "checkout's, so it moved or is gone. Import it from where it is now, plainly: importorskip is for a "
+                        "third-party package an install may lack", pytrace=False)
+    except Exception:
+        pass
+    return _pytest_importorskip(modname, minversion, reason, exc_type=exc_type)
+
+
+if _ACTIVE:
+    pytest.importorskip = importorskip
 
 
 @pytest.hookimpl(hookwrapper=True)

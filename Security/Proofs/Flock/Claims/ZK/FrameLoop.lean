@@ -2,24 +2,26 @@ import Proofs.Flock.Claims.ZK.SessionLean
 import Proofs.Flock.Claims.ZK.FrameOwn
 
 /-!
-# The release at the session loop's own frames (Stage B)
+# The release at the session loop's own frames
 
 `LeanRelease.ProgReads` and `LeanRelease.ProgChecks` take the transport's frame state (`prog`) as given: the state Rust's
 requests leave the compiled frame in. The session loop drives each rep's frame itself, on one schedule of requests
 (`Flock.Firewall.Drive.reqs`), so its state is a Lean function. This file defines it from the decoded coins alone, at
-placeholder draws, and the release whose transport state it is (`note:20261022T0001Z-report-zkfin-stageb`):
+placeholder draws, and the release whose transport state it is:
 
 * `Loop.placeholder`: a rep stream's frame at zero draws, its table at a zero level 0 of the statement's shape, and zero
   salts for levels ≥ 1, none of them the tape's.
 * `Loop.schedSoFar`, `Loop.ownRounds`: the rep's scheduled rounds so far (the algebraic phase's, then the opening's fed
   the coins in) and the inner proof's own rounds (`ownRound`).
 * `Loop.repState`, `Loop.progOf`: `Frame.run` over the drive's requests (`Drive.reqs`, the deployed schedule) with the
-  scheduled rounds themselves in the device's place, up to the round's rep's last released round, at the coins the
-  history opened.
+  scheduled rounds themselves in the device's place, up to the last released round, of the rep that released it, at
+  the coins the history opened.
+* `Loop.freshOf`: a rep's state at its first round, after rep 0's algebraic-phase coins at rep 1 (`Frame.step`'s
+  `prior`, as `Frames.roundPlace` hands them), or the loop's refusal there.
 * `Loop.schedOf`: the round in a scheduled round's place, the loop's own on the rep's table and salts (`Frames.placeOf`).
 * `LeanRelease.ofLoop`: `LeanRelease.loop` with that state and those rounds, each round's rep its rep stream
   (`Loop.repOf`) started as the loop starts it (`Drive.start`), each round's coin count its request's (`Loop.loopNr`).
-* `ofLoop_progReads`: so `ProgReads` holds by definition, at `Loop.progOf`, with no salt. What `ProgReads` took as given is
+* `ofLoop_progReads`: so `ProgReads` holds by definition, at `Loop.progOf` and `Loop.freshOf`, with no salt. What `ProgReads` took as given is
   now `ProgChecks` at `ofLoop`: that the deployed frame's state is this one's but for `stopped`, the frame reading a
   round's shape alone (`roundFree_alike`, `passes_frames`, `innerOwn_ownRound`).
 -/
@@ -101,23 +103,56 @@ def wordsAt (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : Array F128 :=
   | some c => c.vals (min (loopNr x q) _root_.Flock.Firewall.Frames.COIN_MAX)
   | none => #[]
 
-/-- **The loop's frame state after the decoded coins `cs`** at `x`: the state of the rep of the round after them, rep
-stream `k` with `i` of its rounds released (`CoinLayer.locate`, as `CoinLayer.slot` places them), at placeholder draws
-(`repState`), its rounds' coins and rep 0's the openings', the `Commit`'s the first. `{}` before the first rep round, or
-where `x` sets up no session. -/
+/-- **The loop's frame state after the decoded coins `cs`** at `x`: the state of the rep that released the last of the
+rounds they answer, rep round `p` the `p + 2` coins answer (`CoinLayer.locate` places it at rep stream `k`'s round `i`,
+as `CoinLayer.slot` places them), after its `i + 1` rounds, owing the last's coins, at placeholder draws (`repState`),
+its rounds' coins and rep 0's the openings', the `Commit`'s the first. `{}` before the first rep round, or where `x`
+sets up no session. -/
 noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
   match FlockDeploy.setupOf true x, cs.length with
-  | some (_, spec, sts), q + 1 =>
+  | some (_, spec, sts), p + 2 =>
     let rs := roundsOf spec sts
-    let ki := ZKMal.CoinLayer.locate rs 0 q
-    let start := q - ki.2
+    let ki := ZKMal.CoinLayer.locate rs 0 p
+    let start := p - ki.2
     let n0 := rs.getD (ki.1 - 1) 0
     let crAt := fun (s n : ℕ) => (Array.range n).map fun j => wordsAt x cs (s + j + 1)
     match placeholder spec sts ki.1 (wordsAt x cs 0) with
     | .ok (c, t, dom, xs, hi) =>
-      repState c t (ki.1 % 2) dom xs hi (crAt (start - n0) n0) (crAt start ki.2) (fun j => loopNr x (start + j + 1)) ki.2
+      repState c t (ki.1 % 2) dom xs hi (crAt (start - n0) n0) (crAt start (ki.2 + 1))
+        (fun j => loopNr x (start + j + 1)) (ki.2 + 1)
     | .error _ => {}
   | _, _ => {}
+
+/-- **The loop's frame state at a rep's first round** after the decoded coins `cs` at `x`, rep round `q` the `q + 1`
+coins precede being the first of its rep stream `k`: rep 0's is the frame's start, and rep 1's its start after rep 0's
+algebraic-phase coins, as `Frames.roundPlace` hands them (`Frame.step`'s `prior`, at the placeholder's configuration,
+whose layout alone it reads), or why the loop refuses the round there: no placeholder or algebraic phase (which
+`Frames.withAlg` computes at every rep's first round), rep 0's algebraic phase not ended, or the frame's refusal of the
+coins. The frame's start where `cs` is empty (the `Commit`, whose coins no frame takes); refused where `x` sets up no
+session. -/
+noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String Masker :=
+  match FlockDeploy.setupOf true x, cs.length with
+  | some (_, spec, sts), q + 1 =>
+    let rs := roundsOf spec sts
+    let k := (ZKMal.CoinLayer.locate rs 0 q).1
+    let n0 := rs.getD (k - 1) 0
+    match placeholder spec sts k (wordsAt x cs 0) with
+    | .error e => throw e
+    | .ok (c, t, dom, _, _) =>
+      match _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom with
+      | .error e => throw e
+      | .ok alg =>
+        if k % 2 = 0 then pure {}
+        else if n0 < alg.size then throw "rep 1's first round before rep 0's algebraic phase ended"
+        else
+          let cr0 := (Array.range n0).map fun j => wordsAt x cs (q - n0 + j + 1)
+          let prior := (cr0.extract 0 alg.size).foldl (· ++ ·) #[]
+          match _root_.Flock.Firewall.Frame.step c {}
+              (.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)) with
+          | (.ok, st') => pure st'.m
+          | _ => throw "rep 0's algebraic-phase coins"
+  | some _, 0 => pure {}
+  | none, _ => throw "the loop's frames: no session"
 
 /-- **The scheduled round in the device's place after the decoded coins `cs`** at `x`, on the rep's own table and salts
 for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
@@ -157,7 +192,7 @@ end Loop
 
 namespace LeanRelease
 
-/-- `L₀` with the loop's own frames: its transport's state is `Loop.progOf` of the decoded coins, each round's rep is
+/-- `L₀` with the loop's own frames: its transport's states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, each round's rep is
 its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
 (`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
 proof's rounds, `L₀`'s. At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
@@ -176,6 +211,7 @@ noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
     lay := fun x k => ((Loop.startOf x k).toOption.map (·.1)).getD default
     slot := fun x k => (Loop.startOf x k).toOption.map (·.2)
     prog := fun x h => Loop.progOf x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2)
+    fresh := fun x h => Loop.freshOf x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2)
     scheduled := fun x w ρ h vals =>
       match h with
       | [] => []
@@ -196,8 +232,8 @@ noncomputable def ofLoop (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand) :=
   loop Loop.loopNr T (withFrames T L₀ real)
 
-/-- **The loop's frame state reads the history only through the decoded coins**, at `Loop.progOf`: by definition, on
-every history past `Hello`, and with no salt. -/
+/-- **The loop's frame state reads the history only through the decoded coins**, at `Loop.progOf` and
+`Loop.freshOf`: by definition, on every history past `Hello`, and with no salt. -/
 theorem ofLoop_progReads (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -205,8 +241,8 @@ theorem ofLoop_progReads (T : ZKMal.CoinLayer.TableData)
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
     (x : Msg) :
-    ProgReads (ZKMal.CoinLayer.session Loop.loopNr T) (ofLoop T L₀ real) Loop.progOf x :=
-  fun _ _ _ _ _ _ => rfl
+    ProgReads (ZKMal.CoinLayer.session Loop.loopNr T) (ofLoop T L₀ real) Loop.progOf Loop.freshOf x :=
+  fun _ _ _ _ _ _ => ⟨rfl, rfl⟩
 
 end LeanRelease
 

@@ -153,8 +153,11 @@ def requirement(i) -> dict:
 Window = tuple[frozenset[int], frozenset[int], int, int, int, int]
 
 
+NO_PLACEMENT = R.Placement({}, {})
+
+
 def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits: int, steps: int,
-           placement: R.Placement = R.Placement({}, {}), price=None, windows: list[Window] = ()) -> dict:
+           placement: R.Placement = NO_PLACEMENT, price=None, windows: list[Window] = ()) -> dict:
     """The instance `requirement` takes: `ex`'s values `0 … n - 1` (a value it has no width for is 0 bits, one with no
     device on device 0, one with no price priced 0, and those `layout` doesn't place share a block past every one the
     layout and the store name, so that no block they name is incomplete for them), the first encoded reads up to the
@@ -236,7 +239,7 @@ def paged(req: R.Requirement, B: int) -> tuple[R.Layout, R.Store]:
     """A KV pool's honest layout and store, one sequence's: the registered values as `pack` places them, then every
     other value that is ever live in order of birth, filling blocks of `B` bits in turn, so that a block later steps
     fill credits nothing until it is complete; each block written in the record of its last value's step, the one that
-    completes it, and freed in that of its values' last read."""
+    completes it, and freed in that of its values' last structural reader."""
     layout, store = R.pack(req, B)
     block = {v: j for v, j in layout.block.items() if v in req.registered}
     offset = {v: layout.offset[v] for v in block}
@@ -609,10 +612,13 @@ def toy_decoder() -> tuple[Program, R.Schedule, dict[int, int]]:
             outs.append(tok)
         return array_of(outs)
 
-    sig = lambda _S: ((("tok0", I32), ("emb", Array(TOY_D, Array(TOY_V, F32))), ("wk", Array(TOY_D, F32))),
-                      Array(TOY_S, I32))
+    def sig(_S):
+        return ((("tok0", I32), ("emb", Array(TOY_D, Array(TOY_V, F32))), ("wk", Array(TOY_D, F32))),
+                Array(TOY_S, I32))
     program = Program(CompositeDefinition("TestDecoder", 1, (), sig, body, register=False), registered=("emb", "wk"))
-    f = lambda x: fp32.bits_of(np.float32(x))
+
+    def f(x):
+        return fp32.bits_of(np.float32(x))
     inputs = {0: 1, **{1 + i: f(0.5 + i) for i in range(TOY_D * TOY_V)}, 9: f(1.5), 10: f(-0.25)}
     return program, R.Schedule.by_calls(program, starts), inputs
 
@@ -652,7 +658,8 @@ def test_the_toy_decoders_dishonest_stores_and_plans(server):
     payload = list(s["payload"])
     payload[6] = format(int(payload[6], 16) ^ 1, "x")
     forged = {**value, "store": {**s, "payload": payload}}
-    verdict = lambda v, k: [st[k] for st in _lean(v, server)["steps"]]
+    def verdict(v, k):
+        return [st[k] for st in _lean(v, server)["steps"]]
     assert verdict(extra, "store_matches") == [True, True, True]
     assert verdict(early, "store_matches") == [True, True, False]
     assert verdict(more, "plan_matches") == [True, True, True]
@@ -675,7 +682,7 @@ def _bf16_inputs(program: Program, seed: int, tokens: dict[int, int] | None = No
 def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.Serve` at TINY: a prompt of three tokens, prefilled at step 0 (the root's first 22 Calls: three embeddings, two
     layers and the final norm and pick), then two decode steps of 8 Calls each, the weights registered."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     program = Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2), registered=("weights",))
     return program, R.Schedule.by_calls(program, [0, 22, 30]), _bf16_inputs(program, 0, {0: 5, 1: 17, 2: 42})
@@ -683,7 +690,7 @@ def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
 
 def rmsnorm() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.RMSNormFusedCudaV1` at N = 64 with its weight registered, its 138 Calls in three steps."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     program = Program(bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5), registered=("w",))
     return program, R.Schedule.by_calls(program, [0, 46, 92]), _bf16_inputs(program, 1)

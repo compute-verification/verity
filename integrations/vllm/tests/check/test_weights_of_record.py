@@ -1,4 +1,4 @@
-"""MAN-09 (rev-cb M-0610 / coord M-0614 (1)): the weights of record are derived from the PINNED CHECKPOINT BYTES, never from the live
+"""The weights of record are derived from the PINNED CHECKPOINT BYTES, never from the live
 engine; a served model that differs from the checkpoint in ONE element fails the Commit by name."""
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def test_record_is_derived_from_the_pinned_shards_and_names_every_field(checkpoi
     assert rec["complete"] is True and rec["unresolved"] == []
     assert rec["checkpoint"]["all_shards_pinned"] is True
     assert rec["checkpoint"]["shards"]["model.safetensors"]["pinned"] is True
-    assert rec["n_fields"] == len(fields) and rec["n_pinned"] == len(fields)               # [MAN-09c] the kv scale is pinned as the engine constant
+    assert rec["n_fields"] == len(fields) and rec["n_pinned"] == len(fields)               # the kv scale is pinned as the engine constant
     assert rec["unpinned"] == [] and rec["engine_assumptions"] == {"kv_cache_dtype": "auto"}
     by = {f["field"]: f for f in rec["fields"]}
     assert by["model.model.layers.0.self_attn.attn._k_scale"]["rule"].startswith("engine constant: kv-cache scale == f32 1.0")
@@ -173,7 +173,7 @@ def test_honest_served_model_passes_and_one_flipped_element_fails_by_name(checkp
     ok = WR.check(rec, live_digests(served))
     assert ok["result"] is True and ok["mismatched"] == [] and ok["missing"] == [], ok
     assert ok["compared"] == len(fields)                    # every pinned field compared (tied lm_head via embed_tokens; kv scale as 1.0)
-    # rev-cb flipweight: ONE element of a served weight differs from the checkpoint (before register_weights)
+    # flipweight: ONE element of a served weight differs from the checkpoint (before register_weights)
     bad = dict(served)
     w = bad["model.layers.0.mlp.down_proj.weight"].copy()
     w[3, 5] ^= 0x0040
@@ -187,7 +187,7 @@ def test_honest_served_model_passes_and_one_flipped_element_fails_by_name(checkp
     del short["model.layers.1.mlp.experts.w2_weight"]
     res2 = WR.check(rec, live_digests(short))
     assert res2["result"] is False and res2["missing"] == ["model.model.layers.1.mlp.experts.w2_weight"]
-    # [MAN-09c] a served kv scale that is not the engine constant 1.0 (a quantized cache's scale, or a tampered one) fails by name
+    # a served kv scale that is not the engine constant 1.0 (a quantized cache's scale, or a tampered one) fails by name
     sc = dict(served)
     sc["model.layers.0.self_attn.attn._k_scale"] = np.float32(0.5).reshape(()).view(np.uint32)
     res3 = WR.check(rec, live_digests(sc))
@@ -202,7 +202,7 @@ def test_honest_served_model_passes_and_one_flipped_element_fails_by_name(checkp
 
 
 def test_rotary_table_is_pinned_by_the_frozen_analytic_bound(checkpoint, tmp_path):
-    """[MAN-09c, rev-cb W3] the served cos_sin_cache is compared against analytic.check_cos_sin (root_policy gate I9): the table vLLM
+    """The served cos_sin_cache is compared against analytic.check_cos_sin (root_policy gate I9): the table vLLM
     builds from config.json passes; a table from another theta / a corrupted row fails by name; a declared shape that is not
     [MAX_POS, ROT] of config.json is unresolved (fail closed); a rope_scaling type without a table stays unpinned by name."""
     from verity_vllm.program import model as analytic
@@ -274,7 +274,7 @@ def test_unpinned_shard_and_unresolved_field_are_named(checkpoint, tmp_path):
     prog, fields = _program()
     rec = WR.weights_of_record(prog, ck, prefix=PREFIX)
     assert rec["checkpoint"]["all_shards_pinned"] is False and rec["of_record"] is False and rec["complete"] is True
-    # [rev-cb M-0655 W1a] the served model equals the on-disk shards, but the shards are NOT the pinned ones: FAIL named (shard, sha, pin)
+    # the served model equals the on-disk shards, but the shards are NOT the pinned ones: FAIL named (shard, sha, pin)
     res = WR.check(rec, live_digests(_served(t, fields)))
     assert res["result"] is False and res["shards_ok"] is False
     assert "not the pinned ones (W1)" in res["why"] and "model.safetensors sha256" in res["why"] and "!= manifests/checkpoints.json pin 0000000000000000" in res["why"]
@@ -296,11 +296,11 @@ def test_unpinned_shard_and_unresolved_field_are_named(checkpoint, tmp_path):
 
 
 def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_checkpoint_ships_them(checkpoint, tmp_path):
-    """[R16 fp8 F-fp8-PIN1] A quantized checkpoint's attention layers carry vLLM's `attn.q_scale/k_scale/v_scale/prob_scale` loader
+    """A quantized checkpoint's attention layers carry vLLM's `attn.q_scale/k_scale/v_scale/prob_scale` loader
     placeholders (Fp8KVCacheMethod.create_weights: KVCacheScaleParameter = f32 -1.0; never written and read by no kernel with the kv
-    cache unquantized) beside the `_k_scale` engine constants.  Qwen3-4B-FP8 B1 on cp-h100 (07:57Z): 144 such fields -> 'no checkpoint
+    cache unquantized) beside the `_k_scale` engine constants.  Qwen3-4B-FP8 B1 on cp-h100: 144 such fields -> 'no checkpoint
     tensor and no composition rule' -> weights of record incomplete -> Commit FAIL by name, although every one of the 434 checkpoint-
-    backed fields (e4m3 weights, f32 weight_scale_inv, norms, embeddings) compared equal.  MAN-09c rule: pinned EXACTLY as the sentinel
+    backed fields (e4m3 weights, f32 weight_scale_inv, norms, embeddings) compared equal.  The rule: pinned EXACTLY as the sentinel
     under kv_cache_dtype auto; a served value other than -1.0 FAILS by name; a checkpoint that DOES ship a kv scale of that name is
     pinned 1:1 from the checkpoint (the `not ck.has(live)` guard); another kv_cache_dtype leaves them unpinned by name."""
     d, man, t = checkpoint
@@ -387,9 +387,9 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
 
 
 def test_f_r19_int_11_a_loader_placeholder_the_engine_deleted_after_loading_is_named_not_missing(checkpoint, tmp_path):
-    """[R19 F-r19-int-11] vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends with `del layer.k_scale / v_scale /
+    """vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends with `del layer.k_scale / v_scale /
     q_scale / prob_scale` (kv_cache.py:106-109, 209-212): the loader placeholders the record pins as the -1.0 sentinel do not exist on
-    the served model.  #74 Qwen3-4B-FP8 B8 on vyv-h100 (12:10Z): 579/579 compared equal, 144 placeholders 'not found among the served
+    the served model.  #74 Qwen3-4B-FP8 B8 on vyv-h100: 579/579 compared equal, 144 placeholders 'not found among the served
     parameters', 3/3 pairs FAIL with every other check green.  A deleted parameter cannot reach a served value: an absent placeholder is
     reported in `placeholders_deleted` by name and the pin passes -- iff the record assumes kv_cache_dtype auto AND the `_x_scale` the
     kernels read was compared.  A placeholder that IS served is still compared exactly; any other absent field is still `missing`."""
@@ -460,7 +460,7 @@ def _quantized_prog_and_ck(t, tmp_path, extra_tensors: dict, sub: str, *, placeh
 
 
 def test_f_r16_21_a_kv_scale_the_checkpoint_ships_under_a_remapped_name_is_pinned_from_its_source_never_a_placeholder(checkpoint, tmp_path):
-    """[rev M-0489 (2) / M-0516: the F-r16-21 residual, the remap-aware compose] kv_cache_scheme checkpoints ship kv scales as `<layer>.k_scale` / `<layer>.v_scale`
+    """The remap-aware compose: kv_cache_scheme checkpoints ship kv scales as `<layer>.k_scale` / `<layer>.v_scale`
     (or modelopt `<layer>.k_proj.output_scale`, legacy `<layer>.kv_scale`) and vLLM's maybe_remap_kv_scale_name renames them to
     `<layer>.attn.k_scale` at load -- a name-exact `ck.has(served)` guard cannot see them and would class a checkpoint-loaded,
     load-bearing scale as an engine constant.  Now the placeholder rule is reached only when NO remap source exists: a source is pinned
@@ -487,10 +487,10 @@ def test_f_r16_21_a_kv_scale_the_checkpoint_ships_under_a_remapped_name_is_pinne
     bad["model.layers.0.self_attn.attn.k_scale"] = np.array(-1.0, dtype=np.float32).view(np.uint32)      # the sentinel where the checkpoint ships a scale
     res = WR.check(rec, live_digests(bad))
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == ["model.layers.0.self_attn.attn.k_scale"]
-    # the same rule under a quantized kv cache: the shipped scales are pinned from their source (the remap-aware compose rev M-0516 names
-    # as the remedy for the half-cell), the sourceless placeholders unpinned BY NAME (fp8 621a31fe8; never assumed)
+    # the same rule under a quantized kv cache: the shipped scales are pinned from their source (the remap-aware compose), the
+    # sourceless placeholders unpinned BY NAME (never assumed)
     recq = WR.weights_of_record(prog, ck, prefix=PREFIX, kv_cache_dtype="fp8_e4m3")
-    assert recq["complete"] is True and set(recq["unpinned"]) == {L + "q_scale", L + "prob_scale", L + "_k_scale"}   # _k_scale: MAN-09c's own non-auto rule
+    assert recq["complete"] is True and set(recq["unpinned"]) == {L + "q_scale", L + "prob_scale", L + "_k_scale"}   # _k_scale: the engine constants' own non-auto rule
     byq = {f["field"]: f for f in recq["fields"]}
     assert byq[L + "k_scale"]["pinned"] is True and byq[L + "v_scale"]["pinned"] is True and "kv_cache_dtype=fp8_e4m3" in byq[L + "q_scale"]["why"]
     # (2) modelopt: k_proj.output_scale; legacy fused kv_scale feeds BOTH k and v
@@ -537,7 +537,7 @@ def test_f_r16_21_a_kv_scale_the_checkpoint_ships_under_a_remapped_name_is_pinne
 
 
 def test_w2_record_is_bound_to_the_program_and_checkpoint_of_record(checkpoint):
-    """[rev-cb M-0655 W2] a record built for another Program (or with edited digests) or another checkpoint entry is refused by name;
+    """A record built for another Program (or with edited digests) or another checkpoint entry is refused by name;
     Program digests are compared whole: a prefix of the digest of record, on either side, is refused by name."""
     d, man, t = checkpoint
     prog, fields = _program()
@@ -599,7 +599,7 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
 
 
 def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(checkpoint):
-    """dense (MAN-09 preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
+    """dense (the weights-pin preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
     buffer torch.tensor(hidden_size ** 0.5) -- has no checkpoint tensor and was the ONE unresolved field (complete False -> every Gemma
     Commit would FAIL 'weights of record' closed).  Rule: composed from config.json's hidden_size by the frozen analytic rule
     (root_policy ANALYTIC_TABLES['normalizer'] / analytic.normalizer_word: sqrt(H) rounded once to bf16), pinned and compared."""
@@ -642,33 +642,33 @@ def test_f32_to_bf16_cast_is_round_to_nearest_even():
 def test_verdict_requires_the_pin_on_a_row_record_and_fails_by_name():
     """commit_verdict: a served weight that differs from the checkpoint of record is a named FAIL at every B; on a row-procedure record
     (binding block) an absent / not-evaluated pin is 'weights unpinned' (fail closed); legacy records without a binding block are untouched."""
-    from verity_vllm.check.verdict import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
+    from verity_vllm.check.commit_pass import commit_verdict
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
     ok_wp = {"result": True, "compared": 98, "mismatched": [], "missing": []}
     ok_, why_ = commit_verdict({**base, "binding": bnd, "weights_pin": ok_wp}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS"), why_                        # [rev M-0243] at B>=2 without form (B) the PASS names the attribution gap
+    assert ok_ is True and why_.startswith("PASS"), why_                        # at B>=2 without form (B) the PASS names the attribution gap
     bad = {"result": False, "compared": 98, "mismatched": [{"served_name": "model.layers.5.mlp.down_proj.weight"}],
            "why": "1 served weight(s) differ from the checkpoint of record: model.layers.5.mlp.down_proj.weight"}
     for b in ({"binding": bnd}, {}):                      # named at every B, with or without the binding block
         ok, why = commit_verdict({**base, **b, "weights_pin": bad}, True, min_openings=64)
         assert not ok and why.startswith("weights of record:") and "model.layers.5.mlp.down_proj.weight" in why
     ok, why = commit_verdict({**base, "binding": bnd}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned (MAN-09)") and "not run" in why
+    assert not ok and why.startswith("weights unpinned: ") and "not run" in why
     ok, why = commit_verdict({**base, "binding": bnd, "weights_pin": {"result": None, "why": "weights of record not derived: FileNotFoundError(...)"}}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned (MAN-09)") and "not derived" in why
+    assert not ok and why.startswith("weights unpinned: ") and "not derived" in why
     # a legacy record (no binding block) without a pin keeps the legacy rule
     assert commit_verdict(base, True, min_openings=64) == (True, "PASS")
 
 
 def test_verdict_reads_a_components_only_replay_by_its_method_rel_m0621():
-    """[rel M-0621] compiled S3 writes its form-(A) replay under value_correspondence.components and leaves the top level empty: the O1 gate
+    """Compiled S3 writes its form-(A) replay under value_correspondence.components and leaves the top level empty: the O1 gate
     reads the components where the top level is absent -- only a component that says it is a sampled exact replay counts; another method
     (an oracle compare, a root compare) never stands in for the replay of record."""
-    from verity_vllm.check.verdict import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
+    from verity_vllm.check.commit_pass import commit_verdict
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "weights_pin": {"result": True, "compared": 10}}
     comps_ok = {"sampled_replay": {"result": True, "grade": "complete", "method": "sampled-exact-replay(kernel launches)"},
@@ -713,7 +713,7 @@ def _write_program(d, prog, digest, LP, T, extra_field=None):
 
 
 def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equality_rev_cb_m0733(checkpoint, tmp_path):
-    """[rev-cb M-0733 / hopper M-0723] --programs-root stamps the WHOLE of-record set (every component Program's digest + the workload
+    """--programs-root stamps the WHOLE of-record set (every component Program's digest + the workload
     digest + the manifest's), after checking each component's weights struct equals the record's; check() accepts iff the run's
     of-record set equals the stamp -- a record of another row (a missing or extra component), an unsound stamp (a component of another
     struct), or an un-stamped record built for a non-component all FAIL by name; the un-stamped single-digest rule still holds."""
@@ -781,7 +781,7 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
 
 
 def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path, monkeypatch):
-    """[COORD R16 M-0038 (2)] a record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
+    """A record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
     dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence).  argv is the command's own flags, as the
     process `verity-vllm weights-of-record ...` sees them."""
     from verity_vllm.pipeline import row_records as R
@@ -809,8 +809,8 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
 
 
 def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_git_tree(tmp_path):
-    """[COORD M-0038 (2)] derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
-    EXPORT.json with the shipped commit): the int-1 wave-1 records carried code null (exec r16_0413).  Now: EXPORT.json's commit first
+    """derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
+    EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists."""
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")
@@ -830,3 +830,26 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
         assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
     finally:
         os.unlink(exp)
+
+
+def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):
+    """When code_version raises, derived.code_source says so: next to the git HEAD that replaced it, or, when git fails too, as the
+    reason code is null, rather than a null that reads like a tree with neither EXPORT.json nor .git."""
+    import subprocess
+    import types
+    import verity_vllm.pipeline.experiment as EX
+
+    def broken(_root):
+        raise ValueError("EXPORT.json is not JSON")
+    monkeypatch.setattr(EX, "code_version", broken)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: types.SimpleNamespace(stdout="c" * 40 + "\n"))
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] == "c" * 40 and dv["code_source"] == "git (code_version raised ValueError: EXPORT.json is not JSON)"
+
+    def no_git(*_a, **_k):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(subprocess, "run", no_git)
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] is None
+    assert dv["code_source"] == ("unreadable: code_version raised ValueError: EXPORT.json is not JSON; "
+                                 "git rev-parse raised FileNotFoundError: git")

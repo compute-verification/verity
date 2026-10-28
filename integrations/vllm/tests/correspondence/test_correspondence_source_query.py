@@ -8,7 +8,7 @@ import json
 import pytest
 from verity_vllm.query.units import ValueRef, boundary
 from verity_vllm.correspondence import runtime as RC
-from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, parse_call_name
+from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, call_place, parse_call_name, recorded_names
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.compose import merge_ranks
@@ -76,6 +76,52 @@ def test_call_name_of_the_record():
     assert call_name_of(parsed) == CallName(f"{W}.c", "all_reduce2_7", "", "3", "all_reduce"), "a collective's kind is its tag, not a return slot"
 
 
+def test_recorded_names_are_call_name_of_each_record():
+    """A document's names and tensorless Calls read off its fields are those of its records, built and named, case for case."""
+    coll = {"kind": "all_reduce", "occurrence": 0, "operand_ranks": [0, 1], "own_operand": 0, "peer_operand": 1, "peer_input": "peers_0"}
+    view = {"shape": [4], "dtype": "bf16"}
+    occs = [{"node": "linear", "module": f"{W}.a", "op": "aten.mm", "outputs": [view], "inputs": [{"node": "x", "source": "input", "name": "x", "view": view}]},
+            {"node": "all_reduce2_7", "module": f"{W}.c", "op": "verity_tp.all_reduce", "collective": coll},
+            {"module": f"{W}.d", "collective": None},
+            {"node": "rope"},
+            {},
+            {"node": "linear_4", "module": f"{W}.qkv", "op": "aten.mm", "outputs": [{"shape": [3, 8], "dtype": "bf16"}],
+             "inputs": [{"node": "res", "source": "call", "name": None, "view": {"shape": [3, 8], "dtype": "bf16"}}]}]
+
+    def ret(lo=0, hi=4, **k):
+        return [{"port": 0, "leaves": [lo, hi], **k}]
+    calls = [{"occ": 0, "member": "0", "row": 7, "returns": ret(output=0), "args": [{"input": 0, "leaves": [0, 4]}]},
+             {"occ": 0, "hint": f"{W}.b/rope/query[3]", "returns": ret()},
+             {"occ": None, "hint": "argmax_2[0]"},
+             {"occ": 1, "member": "all_reduce", "row": 3, "returns": ret(output=0)},
+             {"occ": 1, "member": "other", "row": None, "returns": ret(written_arg=0)},
+             {"occ": 1, "hint": f"{W}.c/all_reduce[3]/all_reduce", "returns": ret(output=None) + ret(output=None, written_arg=None)},
+             {"occ": 2, "member": None, "row": 0, "returns": []},
+             {"occ": 3, "member": "q", "returns": ret(output=0), "args": [{"input": None, "spans": [{"input": 0, "leaves": [0, 2]}]}]},
+             {"occ": 4, "row": 2, "hint": ""},
+             {"member": "m", "returns": ret(output=None) + ret(output=1)},
+             {"occ": 5, "row": 2, "returns": ret(21, 24, output=0)},
+             {"occ": 5, "hint": f"{W}.qkv/linear_4[t=7]", "returns": ret(8, 16, output=0)},
+             {"occ": 5, "returns": ret(6, 10, output=0)},
+             {"occ": 5, "returns": ret(16, 24, written_arg=0) + ret(16, 24, output=0)},
+             {"occ": 5, "returns": ret(0, 8, written_arg=0) + ret(8, 16, output=0)}]
+    doc = {"schema": RC.SCHEMA, "body": "program_fn", "inputs": ["x"], "weights": None, "rank": {"world": 2, "rank": 0},
+           "occurrences": occs, "calls": calls}
+    names, tensorless, rows, columns = recorded_names(doc)
+    recs = list(RC.RuntimeCorrespondence.records(doc))
+    assert names == {r.call: call_name_of(r) for r in recs} and list(names) == list(range(len(calls)))
+    assert tensorless == [r.call for r in recs if r.returns and all(x.output is None and x.written_arg is None for x in r.returns)] == [1, 5]
+    assert rows == {10: 2, 11: 1, 13: 2}, ("the row every return lies in, an output's or a written argument's, whatever the name says "
+                                           "(`t=7` is a position); none across rows, unplaced, or two returns in two rows")
+    assert columns == {10: (5, 8)}, "only a return inside one row that covers part of it has columns: not a whole row, not across rows"
+    placed = {r.call: call_place([(x.leaves, x.view.shape if x.view is not None else None) for x in r.returns if x.leaves is not None])
+              for r in recs if r.call not in tensorless}
+    assert {k: p[0] for k, p in placed.items() if p[0] is not None} == rows and {k: p[1] for k, p in placed.items() if p[1]} == columns
+    assert names[3] == CallName(f"{W}.c", "all_reduce2_7", "", "3", "all_reduce") and names[4] == CallName(f"{W}.c", "all_reduce2_7", "other", None, "")
+    with pytest.raises(ValueError, match="not a runtime-correspondence/v1 document"):
+        recorded_names(dict(doc, schema="runtime-correspondence/v0"))
+
+
 ATTN = f"{W}.layers.0.self_attn"
 QKV_W, O_W = f"{ATTN}.qkv_proj.weight", f"{ATTN}.o_proj.weight"
 
@@ -126,7 +172,7 @@ def _tp_record(P: ProgramView, rank: int) -> dict:
 
 
 def test_a_rank_programs_collective_sites_are_the_same_identities_under_the_record_and_the_fallback():
-    """Row #70 (OLMoE TP2, a Build with the record): the record owns the q / k gathers by `self_attn` and spells a collective's kind as
+    """The OLMoE TP2 workload (a Build with the record): the record owns the q / k gathers by `self_attn` and spells a collective's kind as
     its member; the manifest must not see either -- both gathers at (self_attn, 0 / 1) with their shards, o_proj's all-reduce its `out`,
     identity for identity the fallback's."""
     P = tp_attention_program()
@@ -178,8 +224,9 @@ def test_of_reads_the_build_dir_and_picks(tmp_path):
     a, b, c = Correspondence.of(P, str(new)), Correspondence.of(P, str(old)), Correspondence.of(P, None)
     assert a.source == "correspondence" and a.digest == RC.correspondence_digest(doc) and a.problem is None
     assert b.source == "v1_annotations" and c.source == "v1_annotations"
-    t = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))       # `of` reads the document's records one at a time: the same reader
-    assert a.names == t.names and a.provenance() == t.provenance() and [a.site_path(k) for k in a.names] == [t.site_path(k) for k in t.names]
+    t = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))       # `of` reads the document's names off its fields: the table's
+    assert a.names == t.names and a.tensorless == t.tensorless and (a.rows, a.columns) == (t.rows, t.columns) and a.provenance() == t.provenance()
+    assert [a.site_path(k) for k in a.names] == [t.site_path(k) for k in t.names]
     assert [b.site_path(k) for k in b.names] == [k_.module for k_ in b.names.values()] and b.provenance()["schema"] is None
     (new / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": "0" * 64}}))
     d = Correspondence.of(P, str(new))

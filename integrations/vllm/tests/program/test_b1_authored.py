@@ -14,7 +14,7 @@ from verity.ml.circuits.codec import descriptor_size  # noqa: E402
 from tests.program import b1_authored as A  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
@@ -42,10 +42,11 @@ CORRESPOND = [  # the zero-row / initial-state broadcasts: TA1 writes `Concat`/`
     ("Attention{T=5,KVH=2}", A.Attention, b1.Attention, {"T": 5, "NH": 4, "KVH": 2, "D": 16}),
     ("Serve{TINY,LP=3,STEPS=2}", A.Serve, b1.Serve, {"C": TINY, "LP": 3, "STEPS": 2}),
 ]
+SLOW_EQUAL = ("RMSNormTriton{N=1088}", "RMSNormFusedCuda{N=1536}")
 
 
-@pytest.mark.parametrize("label,front,ta1,statics", EQUAL, ids=[e[0] for e in EQUAL])
-@pytest.mark.slow
+@pytest.mark.parametrize("label,front,ta1,statics",
+                         [pytest.param(*e, marks=pytest.mark.slow) if e[0] in SLOW_EQUAL else e for e in EQUAL], ids=[e[0] for e in EQUAL])
 def test_authored_digest_equals_ta1(label, front, ta1, statics):
     rep = export_report(front, static=statics, dead_gates="ignore")
     P_t = Program(bind(ta1, **statics))
@@ -60,10 +61,10 @@ def test_authored_corresponds_to_ta1_across_broadcast_encodings(label, front, ta
     P_t = Program(bind(ta1, **statics))
     r = correspond(rep.program, P_t)
     assert r.corresponds, (label, [m.to_json() for m in r.mismatches][:3], [u.to_json() for u in r.unverified][:3])
-    # DC B.1 made TA1's builder emit the frontend's zero-stride Strided for broadcasts (descriptor-codec.md §6): the two
-    # AttentionHead cases and Attention{KVH=2} are now byte-identical; Attention{KVH=1} (the GQA head-sharing view, one
-    # kv head read by every q head) and the TINY Serve still correspond through same-references runs (lead, 2026-09-08,
-    # measured on the RC pod). Either way the correspondence, gate count and definition set are the claim.
+    # The builder emits the frontend's zero-stride Strided for broadcasts (descriptor-codec.md §6): the two
+    # AttentionHead cases and Attention{KVH=2} are byte-identical; Attention{KVH=1} (the GQA head-sharing view, one
+    # kv head read by every q head) and the TINY Serve still correspond through same-references runs.
+    # Either way the correspondence, gate count and definition set are the claim.
     assert r.root_out == "identical"
     if label in ("Attention{T=5,KVH=1}", "Serve{TINY,LP=3,STEPS=2}"):
         assert not r.digest_equal and r.same_references >= 1

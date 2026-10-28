@@ -208,7 +208,7 @@
   {
    "at": "2026-10-18T19:31:07Z",
    "by": "vllm-int8-70b",
-   "note": "new entry only (role LLAMA31_70B, the BF16 base of the int8 70B TP4 row, VLLM-29); frozen entries unchanged",
+   "note": "new entry only (role LLAMA31_70B, the BF16 base of the int8 70B TP4 row); frozen entries unchanged",
    "repos": [
     "unsloth/Meta-Llama-3.1-70B"
    ]
@@ -6123,7 +6123,7 @@
    },
    "gated": false,
    "local_path": "/workspace/fs/glm53/aca966e4e02791568aa6a4ced368624b3d897f42",
-   "note": "Z.ai's block-FP8 GLM-5.3 (GlmMoeDsaForCausalLM), on vy-glm53-fs (755.7 GB); every file hashed there (SHA256SUMS beside it, LFS sha256s equal to the hub's); sizes are the hub tree's",
+   "note": "Z.ai's block-FP8 GLM-5.3 (GlmMoeDsaForCausalLM), on vy-glm53-fs (755.7 GB); every file hashed there (SHA256SUMS beside it, LFS sha256s equal to the hub's); sizes are the hub tree's; copies also read from: vy-nebius-cpu-1's /workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/<revision> (from the hub, 23 Oct, every shard checked against this pin by GLM53_INT8's make) and vy-nebius-cpu-3's same path",
    "repo": "zai-org/GLM-5.3",
    "resolved_at": "2026-10-12T21:42:00Z",
    "resolved_by": "glm53-h8",
@@ -6894,7 +6894,7 @@
    },
    "gated": false,
    "local_path": "/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-70B/snapshots/1b7306651142d0cc65d993076a250a6a82cf046c",
-   "note": "VLLM-29 (int8 70B TP4): ungated BF16, already in vy-nebius-1's HF cache (benchmarks/ppl/models.py pins the same revision); every local file sha256'd from its bytes by run r20261018-193107-11a2 (the hub tree's lfs_sha256 agree for all 30 shards)",
+   "note": "the BF16 base of the int8 70B TP4 row: ungated, already in vy-nebius-1's HF cache (benchmarks/ppl/models.py pins the same revision); every local file sha256'd from its bytes by run r20261018-193107-11a2 (the hub tree's lfs_sha256 agree for all 30 shards)",
    "repo": "unsloth/Meta-Llama-3.1-70B",
    "resolved_at": "2026-10-18T19:31:07Z",
    "resolved_by": "vllm-int8-70b",

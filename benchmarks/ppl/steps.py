@@ -1,7 +1,7 @@
-"""The built-in steps. Linears (from tonight's `linears_layerwise.py` / `exact_grid.py`): `smooth` (SmoothQuant, its
-foldable variant under `kv_shared`), `rotate` (one orthogonal Q per k on x and W), `int8` (activations one scale per
-token, rounded or dithered; weights one scale per output row or per group of inputs, capped at `weight_top`, rounded or
-by GPTQ). Attention (from `attention.py`): `rotate` (one random Hadamard R of the head dimension on Q, K, V and R^T on
+"""The built-in steps. Linears: `smooth` (SmoothQuant, its foldable variant under `kv_shared`), `rotate` (one
+orthogonal Q per k on x and W), `int8` (activations one scale per token, rounded or dithered; weights one scale per
+output row or per group of inputs, capped at `weight_top`, rounded or by GPTQ). Attention: `rotate` (one random
+Hadamard R of the head dimension on Q, K, V and R^T on
 the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token) or K per (layer, KV
 head), P per query row or per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered; the
 float softmax or fattn.cu's integer LUT softmax, `lut_softmax`) and `peel` (a low-rank noise
@@ -100,6 +100,17 @@ class Rotation:
 def quant_rows(m: torch.Tensor, top: int) -> tuple[torch.Tensor, torch.Tensor]:
     s = m.abs().amax(dim=1).clamp(min=1e-30) / top
     return torch.round(m / s[:, None]).clamp(-top, top), s
+
+
+#: verity-int8-channel127/v3's scale floor, RN32(1e-30), read in float64
+EXACT_FLOOR = float(torch.tensor(1e-30, dtype=torch.float32))
+
+
+def exact_rows(w: torch.Tensor, top: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """verity-int8-channel127/v3's row rule on the exact weight w (float64): s = RN32(max(amax, RN32(1e-30)) / top) and
+    q = clamp(rint(w / s), -top, top), the quotients in float64."""
+    s = (w.abs().amax(dim=1).clamp(min=EXACT_FLOOR) / top).float()
+    return torch.round(w / s.double()[:, None]).clamp(-top, top).to(torch.int8), s
 
 
 def dither_shift(dither_bits: int) -> int:
@@ -220,6 +231,8 @@ def _check_int8_linear(p):
         raise ValueError("int8: gptq runs on one scale per row")
     if p["weight"] == "dither" and (p["gptq"] or p["group"] or p["weight_top"] < 2):
         raise ValueError("int8: a dithered weight has one scale per row, no gptq and weight_top >= 2")
+    if p["exact"] and (p["weight"] != "round" or p["gptq"] or p["group"]):
+        raise ValueError("int8.exact is v3's rounded row rule: weight = round, one scale per row, no gptq")
     per = p["density"] * WORD_K
     if not 0 < p["density"] <= 1 or abs(per - round(per)) > 1e-9:
         raise ValueError(f"int8.density is in (0, 1], a multiple of 1/{WORD_K}")
@@ -244,7 +257,7 @@ def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
 @linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
              check=_check_int8_linear, source="D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE")
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
-                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1):
+                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1, exact: bool = False):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
@@ -253,8 +266,13 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
     dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest rounded on the
     same scale; a weight-side coin (the `peel` step's U) sits on every position. `dither_bits` = b widens every
     dithered operand's coin to R uniform on {0, ..., 2^b - 1}, served as floor(x / s) - (2^(b - 1) - 1) + R with
-    s = absmax / (top - 2^(b - 1)) (`act_quant`): the same mean given x as the bit's, within (-top, top]."""
+    s = absmax / (top - 2^(b - 1)) (`act_quant`): the same mean given x as the bit's, within (-top, top]. `exact`:
+    the weights by verity-int8-channel127/v3's rule (`exact_rows`) on the checkpoint's exact weight in float64 (the
+    model's `weight64`: an FP8 linear's E4M3 codes times their scales, a bf16 one widened), so the first step."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
+    if exact and (mm.prefix[:-1] or "weight64" not in mm.extra):
+        raise ValueError(f"{mm.where}: int8.exact reads the checkpoint's own weight in float64: no step before it, on "
+                         "a model that supplies it (weight64)")
     if mm.run.hessian is not None:
         if gptq:
             mm.run.hessian(hkey, mm.x)
@@ -263,6 +281,10 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
     m = dither_shift(dither_bits)
 
     def weights():
+        if exact:
+            w = mm.extra["weight64"]()
+            q, s = zip(*by_rows(lambda r: exact_rows(r, weight_top), w))
+            return torch.cat(q), torch.cat(s)
         w = mm.weight()
         if weight == "dither":
             t = weight_top - 1 - m
@@ -733,9 +755,9 @@ def to_grid(v: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None,
 
 
 def dither3(v: torch.Tensor, grid: str, b: torch.Tensor, b2: torch.Tensor) -> torch.Tensor:
-    """FP-NATIVE's design A activations (note:20261019T0525Z-draft-fp-native): the nearest level n moved by d (b + b2 - 1),
-    two fair bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16,
-    17); at the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384: RT-FP-7)."""
+    """The three-level dither of activations on a float grid: the nearest level n moved by d (b + b2 - 1), two fair
+    bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16, 17); at
+    the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384)."""
     table = torch.tensor(LEVELS[grid], dtype=v.dtype, device=v.device)
     lo, hi = bracket(v, grid)
     n = torch.where(v - lo <= hi - v, lo, hi)
@@ -939,6 +961,8 @@ E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 #: block length along k of each block-scaled format: MX (E8M0 scales) and NVFP4 (UE4M3 scales)
 BLOCKS = {"mx": 32, "nv": 16, "nvi": 16, "nv9": 16, "nvi10": 16, "nvi9": 16, "nvi5": 16}
 FP_SCALES = ("tensor", "channel", "mx", "nv")
+#: the `fp` step's own scale: groups of G128 along k, each max(amax, G128_EPS) / the format's max (`fake_quant`)
+G128, G128_EPS = 128, 1e-10
 #: a weight's rows are quantized (and emulated) this many at a time, so lm_head's temporaries stay small
 ROW_CHUNK = 8192
 
@@ -959,7 +983,8 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch
     """x on the format, dequantized, scaled along `dim` (the contraction): `tensor` one scale amax / max, `channel` one
     per slice along `dim` (per token, per output row), `mx` per block of 32 a power of two (OCP's E8M0 X), `nv` per
     block of 16 a UE4M3 scale times one FP32 scale per tensor (NVIDIA's: s = amax / (448 * 6), s_b = e4m3(amax_b / 6 /
-    s)). `amax`: the whole tensor's, when x is a slice of it."""
+    s)), `g128` per group of 128 an FP32 scale max(amax_g, 1e-10) / max (vLLM's `per_token_group_quant_fp8`, a
+    block-FP8 checkpoint's activations). `amax`: the whole tensor's, when x is a slice of it."""
     top, emax = FORMATS[fmt]
     x = x.float()
     amax = x.abs().amax() if amax is None else amax
@@ -968,6 +993,10 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch
         s = a.clamp(min=1e-30) / top
         return to_format(x / s, fmt) * s
     xt = x.movedim(dim, -1)
+    if scale == "g128":
+        b = xt.reshape(*xt.shape[:-1], -1, G128)
+        s = b.abs().amax(-1, keepdim=True).clamp(min=G128_EPS) / top
+        return (to_format(b / s, fmt) * s).reshape(xt.shape).movedim(-1, dim)
     b = xt.reshape(*xt.shape[:-1], -1, BLOCKS[scale])
     a = b.abs().amax(-1, keepdim=True)
     if scale == "mx":
@@ -982,23 +1011,31 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch
 def _check_fp(p):
     if p["fmt"] not in FORMATS:
         raise ValueError(f"fp.fmt is one of {sorted(FORMATS)}")
-    if p["scale"] not in FP_SCALES:
-        raise ValueError(f"fp.scale is one of {FP_SCALES}")
+    if p["scale"] not in FP_SCALES + ("g128",):
+        raise ValueError(f"fp.scale is one of {FP_SCALES + ('g128',)}")
     if p["scale"] == "nv" and p["fmt"] != "e2m1":
         raise ValueError("fp: nv blocks hold E2M1")
 
 
 @linear_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
-def fp_linear(mm, nxt, *, fmt: str, scale: str):
+def fp_linear(mm, nxt, *, fmt: str, scale: str, keep_weight: bool = False):
     """A format's own plain quantization, no PoUW: activations and weights rounded to the nearest value of `fmt`
-    (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv), the
-    product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator)."""
+    (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv; g128), the
+    product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator). `keep_weight`: the
+    weights are the checkpoint's own, already on the format with their scales (a block-FP8 checkpoint), and only the
+    activations are rounded."""
+    if scale == "g128" and mm.x.shape[-1] % G128:
+        raise ValueError(f"{mm.where}: k = {mm.x.shape[-1]} is not a multiple of {G128}")
+    x = fake_quant(mm.x, fmt, scale)
+    if keep_weight:
+        return nxt(mm.replace(x=x))
+
     def weights():
         w = mm.weight()
         amax = w.abs().amax()
         return torch.cat(by_rows(lambda r: fake_quant(r, fmt, scale, amax=amax), w))
 
-    return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale), w=mm.cached("fp", weights)))
+    return nxt(mm.replace(x=x, w=mm.cached("fp", weights)))
 
 
 @attention_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
@@ -1111,7 +1148,7 @@ def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: t
 
 
 #: a native operand's modes: GRID_MODES, `g1`, the nearest level moved by a fair coin of 1 in its row's unit, centred,
-#: and (activations only) `dither3`, design A's two coins (`dither3`)
+#: and (activations only) `dither3`, the three-level dither's two coins
 NATIVE_MODES = GRID_MODES + ("g1", "dither3")
 
 
@@ -1162,9 +1199,8 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     integers m q + b (in int8 for e4m3i120 and nvi10; in H1's weights, +-110, with H1's U on +-16 in s8, for e4m3i104
     and nvi9; in co32c's 7-bit weights, Dither-C's, for e4m3i60 and nvi5), less its rank-one terms. `clip = n`: every
     per-row scale (each token's, each weight row's) searched over n clip ratios (`native_parts`); the honest prover's
-    choice of levels, which no check reads. `act = dither3`: FP-NATIVE's design A,
-    each activation its nearest level moved by its gap times b + b' - 1 (`dither3`), beside dithered weights: the
-    dithered product is the one served."""
+    choice of levels, which no check reads. `act = dither3`: each activation its nearest level moved by its gap times
+    b + b' - 1 (`dither3`), beside dithered weights: the dithered product is the one served."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:

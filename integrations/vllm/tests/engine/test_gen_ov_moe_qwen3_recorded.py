@@ -1,4 +1,4 @@
-"""[R19 qwen3] The Qwen3-MoE fold scope on RECORDED events, backing test_gen_ov_moe_qwen3.py's synthetic scopes.
+"""The Qwen3-MoE fold scope on RECORDED events, backing test_gen_ov_moe_qwen3.py's synthetic scopes.
 
 `fixtures/qwen3_30b_a3b_tp2_moe_l24.rank0.jsonl.gz` is one decoder layer's `vllm.moe_forward` scope cut by `tests/engine/moe_scope_cut.py`
 from rank 0 of the Qwen3-30B-A3B BF16 TP2 B1 i256 o32 capture (RTX PRO 6000, vLLM d9105ea80, batch-invariant eager; its `moe_scope_cut`
@@ -29,7 +29,7 @@ from verity_vllm.observe.fold.resolver import Compute, Group, Transparent
 from verity_vllm.observe.log import LogWriter, read_log
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
-Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 C = Q3.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 

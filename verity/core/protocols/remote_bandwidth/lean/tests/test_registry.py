@@ -71,13 +71,15 @@ def event_op(draw, n: str) -> dict:
 
 
 def session_op(draw, index: int | None) -> dict:
-    """A session over the registration drawn `index`-th in the case, or over one given in full that no registry drew."""
+    """A session over the registration drawn `index`-th in the case, or over one given in full that no registry drew;
+    now and then its two windows drawn on one openings coin (`groups_per_coin` 2)."""
     windows = draw(st.integers(1, 2))
     pace = {"k": draw(st.integers(1, 2)), "window_ns": 5} if windows == 2 and rare(draw, 4) else None
+    g = 2 if windows == 2 and rare(draw, 3) else 1
     v = {"op": "session", "registration": index,
          "params": {"deadline_ns": 100, "deferred": False, "lifetime": 4, "min_passes": 1, "pace": pace,
-                    "samples": 4, "window_ns": 1, "windows": windows},
-         "coins": [expand(b"coin %d" % u, 32) for u in range(2 * windows)], "append_coins": [],
+                    "samples": 4, "window_ns": 1, "windows": windows} | ({"groups_per_coin": g} if g != 1 else {}),
+         "coins": [expand(b"coin %d" % u, 32) for u in range(windows + -(-windows // g))], "append_coins": [],
          "not_before_ns": draw(st.integers(0, 2)), "index": draw(st.sampled_from([None, None, 0, 1, -1]))}
     if index is None or rare(draw, 10):
         v["registration"] = M.registration_json(audit.Registration(
@@ -189,7 +191,9 @@ def recorded(name: str, cut: int | None = None) -> dict:
 
 
 @pytest.mark.parametrize("name", ["honest", "honest-appends", "honest-block-sha512", "few", "late", "receipt-path-leaf",
-                                  "codec-block", "refusals"])
+                                  "codec-block", "refusals", "honest-paced-one-flight", "after-boundary-one-flight",
+                                  "honest-shared-4", "skipper-shared-4", "few-shared",
+                                  "honest-shared-paced-one-flight"])
 def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name) -> None:
     case, _ = M.recorded(name)
     reg = M.registration_of(case["registration"])
@@ -204,7 +208,7 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
 
 def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:
     """A registration that would bind PoUW's tile outputs: for a node with one live, refused and counted, as any second
-    registration is; for one with none, refused by both registries outright (the Lean covers receipts of blocks
+    registration is; for one with none, refused by both registries outright (the Lean covers receipts of chunks
     alone), drawing nothing."""
     v = recorded("honest")
     bound = v["ops"][0] | {"bind": True}

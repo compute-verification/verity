@@ -1,7 +1,8 @@
 {
  "roots": ["PouwCheck", "PouwCheck.DifftestMain"],
  "exempt": {
-  "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck"
+  "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck",
+  "PouwCheck.LeafOwnMain": "the pouw-leaf-own-window executable's entry point, one line; its command is PouwCheck.LeafOwn.leafOwnCmd, audited under PouwCheck"
  },
  "layers": {
   "PouwCheck.Json": {
@@ -10,6 +11,11 @@
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Tile": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Chunks": {
    "imports": [],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
@@ -33,7 +39,8 @@
     "PouwWindow.Draw",
     "PouwWindow.Public",
     "PouwWindow.Length",
-    "PouwCheck.Inputs"
+    "PouwCheck.Inputs",
+    "PouwCheck.WindowSalt"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
@@ -54,17 +61,27 @@
     "PouwCommit.Draws",
     "PouwWindow.Rounds",
     "PouwCheck.Inputs",
-    "SampledProofs.ChallengerRecord"
+    "SampledProofs.ChallengerRecord",
+    "SampledProofs.ChallengerSession"
    ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.WindowSalt": {
+   "imports": ["PouwCheck.Pass"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Credit": {
    "imports": [
     "Std.Data.HashMap",
+    "Flock.Keccak",
     "Flock.Program",
+    "Flock.RegKnown",
     "PouwCommit.Frame",
+    "PouwCheck.Chunks",
     "PouwCheck.Json",
+    "PouwCheck.Opening",
     "PouwCheck.Pass",
     "PouwCheck.Rounds",
     "PouwWindow.Draw",
@@ -73,6 +90,11 @@
     "SampledProofs.PyJson",
     "SampledProofs.Registered"
    ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.LeafOwn": {
+   "imports": ["PouwCheck.Credit", "PouwWindow.RegFile"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

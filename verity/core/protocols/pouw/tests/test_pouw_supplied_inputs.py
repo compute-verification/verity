@@ -1,11 +1,10 @@
-"""CMP-38 and SERVE-H1's W-a, W-c and W-d: the H1 tile's seed inputs are the verifier's. A compiled Program's `pouw.roots`,
+"""The H1 tile's seed inputs are the verifier's. A compiled Program's `pouw.roots`,
 `pouw.salt` and `pouw.positions` are registered values the one-stage verifier fills itself (`registered.supplied_root`):
 each seed group's roots from the roots the record names for its operands (A's committed tap, B's registered weights,
 which the verifier pins to the root recorded before the salt), the salt from its coin bound to its stream, the prover
 and the record's window, and each unit's position after every unit of the log's earlier records. A registration that names any other commitment of
-them is refused (`R7-supplied`), so the red team's witnesses (`benchmarks/rate_redteam/pouw_roots_unbound.py`, roots fixed
-at zero and A = -b under them; `h1_position_replay.py`, one computed unit at one position under one salt credited twice)
-no longer have a tile to serve."""
+them is refused (`R7-supplied`), so the two attacks (roots fixed at zero and A = -b under them; one computed unit at one
+position under one salt credited twice) no longer have a tile to serve."""
 from __future__ import annotations
 
 import hashlib
@@ -64,7 +63,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     assert c.boolean and len(c.units) == 1 and len(c.groups) == 1
     prog, q = c.program, c.query()
     part, n, digest = P.partition(prog, q), P.units(prog, q), P.program_digest(prog)
-    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, WINDOW["run"])}
+    ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, WINDOW["run"])}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     x_root = hashlib.sha512(b"x").digest()
     served = [{"port": p, "root": x_root.hex() if p == "x" else "cd" * 64, **ports[p]} for p in ports]

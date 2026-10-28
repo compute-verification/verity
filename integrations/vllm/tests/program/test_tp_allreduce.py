@@ -22,10 +22,10 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_tp_allreduce as BA
-from verity_vllm.program.registry import tp_allreduce as TA
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_tp_allreduce as BA
+from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 H = 6144
 #: signed zeros, the smallest and largest subnormals, the smallest normals, +-1, the finite maxima, infinities, NaNs
@@ -293,6 +293,7 @@ def test_the_nccl_tree_coordinate_on_every_special_quadruple() -> None:
         _agree(bind(BA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=chain), _rows(np.random.default_rng(50 + chain[0]), 3000, 4))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("shot", [1, 2])
 def test_mnnvl_coordinate_on_rows(shot: int) -> None:
     _agree(bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=shot), _rows(np.random.default_rng(80 + shot), 5000, 8))
@@ -303,6 +304,7 @@ def test_custom_coordinate_on_rows(start: int) -> None:
     _agree(bind(BA.AllReduceCustomCoordinate, WORLD=8, START=start), _rows(np.random.default_rng(90 + start), 5000, 8))
 
 
+@pytest.mark.slow
 def test_rows_on_bits() -> None:
     rng = np.random.default_rng(5)
     _agree(bind(BA.AllReduceMnnvl, WORLD=8, N=8, SHOT=2), rng.integers(0, 1 << 16, (300, 8, 8)).astype(np.uint16))
@@ -327,7 +329,8 @@ TARGETS = [bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=1), bind(BA.AllReduce
            bind(BA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=TP4)]
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == "AllReduceCustom_v2{WORLD=8,SIZE=64,STAGE=2}" else t for t in TARGETS],
+                         ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)
@@ -339,6 +342,7 @@ def test_pinned_counts_and_digests(target) -> None:
     assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [bind(BA.AllReduceMnnvl, WORLD=8, N=3, SHOT=1), bind(BA.AllReduceCustom, WORLD=4, SIZE=32, STAGE=2),
                                     bind(BA.AllReduceNcclTree, WORLD=4, SIZE=3, CHAIN=(2, 0, 3, 1))], ids=lambda t: t.id)
 def test_rows_pass_the_word_querys_cut_check(target) -> None:

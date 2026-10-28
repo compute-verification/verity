@@ -58,7 +58,7 @@ def ChecksPubRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
 a port of its name, value and reads (the other fields `default`'s, which no reader of `own` reads). -/
 def ownAt (ss : Array VStar.Stmt) (j : ℕ) : Array Flock.Registered.Port :=
   (((ss[j]?).map fun s => RecVStar.ownPorts s ++ RecVStar.sparseMsgs s).getD []).toArray.map fun q =>
-    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, reads := q.2.2 }
+    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, readsRel := q.2.2 }
 
 /-- **Each accepted session's reads hold `own`'s**: each port of `own j` is one of the session's by name, value and
 reads. The session's list may hold others, which no reader of `own` reads. -/

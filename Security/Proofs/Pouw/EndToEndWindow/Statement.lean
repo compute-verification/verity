@@ -1,6 +1,6 @@
 import Definitions.Pouw.Game.Params
-import Models.Pouw.Assumptions.Game
-import Models.Pouw.Assumptions.NCP.Assumptions
+import Definitions.Pouw.Assumptions.Game
+import Definitions.Pouw.Assumptions.NCP.Assumptions
 import Proofs.Flock.Soundness.Audit.Extraction
 import Proofs.Flock.Soundness.Audit.RegDraw
 import Proofs.Flock.Soundness.Audit.Window
@@ -24,7 +24,7 @@ and decision 107's units, for the window's share `ε` (`0 < ε ≤ 1`, the `ε` 
   sessions' queries, and a session that opens the registered roots to anything but `Ccom` is the link term inside
   `WindowBound`'s `β`. `q` counts the sessions' calls too (`ProverModel.sessCalls`), so that `β`'s state terms, which
   a session state holding a collision of `H` makes about 1, can be bounded on average over the oracle by the counted
-  queries on the random-oracle card, as `ε_id` is. That bound holds only where the sessions are one oracle program's
+  queries on the random-oracle claim, as `ε_id` is. That bound holds only where the sessions are one oracle program's
   run at `H`, counted by that program's calls. `sessCalls` is a model field, not yet tied to an oracle program (see
   `ProverModel`), so no card reads a number for `E[β]` from it until that tie is stated.
 * **The acceptance is the service's at the draw coin's cutoff** (`WindowWork.AcceptsBy`): the sessions accept and the
@@ -60,9 +60,8 @@ lands.
 **The window's law** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
 (`subset:K′`, `Law.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, drawn after the receipt,
 each drawn unit proved alone (no closures). `WindowWork.WindowBoundOfService` discharges `WindowBound` there, its first
-term the subset law's own escape, which is 0 where `K′ = N`. On main, PoUW's PROTOCOL.md (Lifecycle, step 5) still
-describes `Sampled(t)`, `t` independent work-weighted draws with replacement; compute accounting's #2601 describes the
-code's draw.
+term the subset law's own escape, which is 0 where `K′ = N`. PoUW's PROTOCOL.md (Lifecycle, step 5) describes
+`Sampled(t)`, `t` independent work-weighted draws with replacement, not the code's draw.
 
 Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
 gap (6)'s copy of the game (`Pouw.Window`), with the window's knowledge and link terms composed from its calls'. The
@@ -127,7 +126,7 @@ noncomputable def meteredModel (P : Protocol Q R S) (γ : ℝ) : CostModel Q R S
     (P.Wref U.layout u : ℝ)
   calls p H U act st s := (p U act st s).calls H
 
-/-- The metered model's programs reach the oracle only through counted queries (red-team B6's form). -/
+/-- The metered model's programs reach the oracle only through counted queries (the form of `CostModel.Queries`). -/
 theorem meteredModel_queries (P : Protocol Q R S) (γ : ℝ) : (meteredModel P γ).Queries :=
   fun p U act st s => ⟨p U act st s, fun _ => ⟨rfl, rfl⟩⟩
 
@@ -164,7 +163,7 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
-release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-nebius-host`'s): the registration's
+release (`LiveRecord.log`; that the challenger keeps that order is `trusted-host`'s): the registration's
 receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
 oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
@@ -173,8 +172,8 @@ queries, but `Bounded` counts them: a session state that holds a collision of `H
 fixes the cost; a prover only picks a program.
 A session's strategy is a strategy of the session at `H`, whose type depends on `H`, so no oracle program's output is
 one. `sessCalls` is free: the model picks a separate session play at each oracle and its count, and nothing ties the
-count to the play's queries. So a bound on the sessions' state terms at counted queries (the random-oracle card's,
-through #2593's `Pouw.Window.CollCounted`) holds only for a model whose sessions are one oracle program's run at `H`,
+count to the play's queries. So a bound on the sessions' state terms at counted queries (the random-oracle claim's,
+through `Pouw.Window.CollCounted`) holds only for a model whose sessions are one oracle program's run at `H`,
 counted by that program's calls:
 * at a true count it is false: a model whose session play at each `H` holds a hardcoded collision of `H` counts 0
   session calls, and its `β` is about 1 at every `H`;
@@ -201,7 +200,7 @@ section Prover
 variable {n : ℕ} {Reg : Type} {Lr : Reg → Law n}
   {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
 
-/-- **The registration is an oracle program's output, and `calls` counts its queries** (red-team B6's form,
+/-- **The registration is an oracle program's output, and `calls` counts its queries** (the form of
 `CostModel.Queries`, for the registration): on fixed inputs, a play's registration is the result of an adaptive oracle
 program, and the model's `calls` is exactly that program's queries. The sessions' strategies, whose type depends on `H`,
 are counted by the model's `sessCalls` (`Prover.Bounded`), not tied to an oracle program here. -/
@@ -250,7 +249,7 @@ def AcceptsBy {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workl
 end Prover
 
 /-- **Straight-line extraction of the registration's transcript** (a named premise, open; the random-oracle model,
-claim id `random-oracle`, card 9cd57182), for a prover model `PM`, PoUW's cost model `CM`, a domain `D`, the transcript
+claim id `random-oracle`), for a prover model `PM`, PoUW's cost model `CM`, a domain `D`, the transcript
 `Ccom H s R` that the registration `R`'s commitments bind at the oracle and the salt (the analysis's committed transcript,
 read at the registration alone), the extractor's cost `T_ext` and calls `q_ext`, and an error `ε_id(q, N)`. For every
 in-domain workload and every prover `B` within `(T, q)` there is an adversary `A` of PoUW's game within
@@ -279,8 +278,8 @@ It is stated for models whose registration is an oracle program's output with it
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
 shrink the provers it quantifies over. It is the shape of relative security's
 premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStaged`,
-`Extraction`), and it is carded on the random-oracle card with gap (7)'s grinding
-(`Accounting.Assumptions.Compose.SeedGrind`), so that Daniel rules on the random oracle once. -/
+`Extraction`), and it is filed under the random-oracle claim with the seeded windows' premise
+(`Accounting.Assumptions.Compose.SeedExtractedAt`), so that the random oracle is ruled on once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : Layout → Prop)
@@ -379,7 +378,7 @@ $$\beta(H, s) = \mathrm{miss}_{K'}(b) + \varepsilon_{ks}(H, s, R, \tau) + \delta
 the first term is the subset law's own escape of `b` units (`Law.miss`), `C(N − b, K′)/C(N, K′)` for `b ≤ N` by
 `FlockSoundness.Audit.Law.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
 main's served levels it is at most `2^-40.6` at `(ε, δ) = (0.1%, 2^-40)` and `2^-128.5` at `(1%, 2^-128)`,
-note:compute-accounting/20261018T2336Z-finding-pw8-rered, probe 2):
+the recheck's probe 2):
 * where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`), every unit is drawn and the first term is `0`
   (`b ≥ 1`);
 * where `K′ < N`, it is at most the binomial `(1 − ε·W/(N·w_max))^{K′}`, which `k_prime` makes at most its `δ`, since

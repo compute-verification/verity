@@ -77,11 +77,20 @@ def keys? : Json → Option (Array String)
   | .obj kvs => some ((kvs.toArray.map (·.1)).qsort (· < ·))
   | _ => none
 
+/-- `j` as a string, `none` where it is none. A field is compared with a string through it, never with `Json`'s `==`,
+which is `partial`, so that what the check compares is what `Properties.Nci.Baseline` can state. -/
+def strOf? : Json → Option String
+  | .str s => some s
+  | _ => none
+
+/-- Field `k` of `j` as a string: `strOf?` of `getD j k`. -/
+def strAt (j : Json) (k : String) : Option String := strOf? (getD j k)
+
 /-- The last entry of `j`'s array `f` whose `k` is the string `v`: the entry for `v` of a list keyed by `k`, as Python's
 `{e[k]: e for e in …}` reads it. -/
 def lastWith (j : Json) (f k v : String) : Option Json :=
   match getD j f with
-  | .arr es => es.reverse.find? fun e => getD e k == Json.str v
+  | .arr es => es.reverse.find? fun e => strAt e k == some v
   | _ => none
 
 /-! ## The log -/
@@ -92,7 +101,7 @@ def FORMAT_V2 : String := "verity/registration/v2"
 /-- A registration record's digest, `SHA-512(format || 0 || canon(record))` with its own format (v1 or v2) as the tag
 (`registration.digest`, `SampledProofs.Registration.digest`), as lowercase hex. -/
 def digest (rec : Json) : Except String String := do
-  let tag := if getD rec "format" == Json.str FORMAT_V2 then FORMAT_V2 else FORMAT
+  let tag := if strAt rec "format" == some FORMAT_V2 then FORMAT_V2 else FORMAT
   return Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ (← Flock.canon rec).toUTF8))
 
 /-! ## The parameters, lowered onto the input nodes (§5.1, as `SampledProofs.Registered.lower`) -/
@@ -172,6 +181,22 @@ structure Trusted where
   run : Nat
   params : Array (String × Ty)
 
+/-- Whether a record's `previous` is `d`, the digest of the record before it, or `null` where there is none. -/
+def prevIs (prev : Json) : Option String → Bool
+  | some d => strOf? prev == some d
+  | none => match prev with
+    | .null => true
+    | _ => false
+
+/-- A parameter of `params`, `[name, type]`. -/
+def paramOf (p : Json) : Except String (String × Ty) := do
+  let .arr a := p | throw "trusted"
+  if a.size != 2 then throw "trusted"
+  let .str k := a[0]! | throw "trusted"
+  match Ty.ofJson a[1]! with
+  | .ok ty => pure (k, ty)
+  | .error _ => throw "trusted"
+
 /-- The trusted input, refused (`trusted`) where it is not as the docstring states. -/
 def trustedOf (tr : Json) : Except String Trusted := do
   if keys? tr != some TRUSTED_KEYS then throw "trusted"
@@ -179,20 +204,13 @@ def trustedOf (tr : Json) : Except String Trusted := do
   let mut digests : Array String := #[]
   for rec in log do
     if !(rec matches .obj _) then throw "trusted"
-    let want := match digests.back? with
-      | some d => Json.str d
-      | none => Json.null
-    if getD rec "previous" != want then throw "trusted"
+    if !prevIs (getD rec "previous") digests.back? then throw "trusted"
     let .ok d := digest rec | throw "trusted"
     digests := digests.push d
   let .str run := getD tr "run" | throw "trusted"
   let some r := digests.findIdx? (· == run) | throw "trusted"
   let .arr ps := getD tr "params" | throw "trusted"
-  let params ← ps.mapM fun p => match p with
-    | .arr #[.str k, t] => match Ty.ofJson t with
-      | .ok ty => pure (k, ty)
-      | .error _ => throw "trusted"
-    | _ => throw "trusted"
+  let params ← ps.mapM paramOf
   if (params.map (·.1)).toList.eraseDups.length != params.size then throw "trusted"
   return { log, digests, run := r, params }
 
@@ -209,13 +227,10 @@ def REGISTERED_KEYS : Array String := #["kind", "registration", "root", "value"]
 
 /-- An entry of `provenance`: of the `registered` form, every field a string. An entry of any other kind is none. -/
 def provOf (p : Json) : Option Prov := do
-  let str (k : String) : Option String := match getD p k with
-    | .str s => some s
-    | _ => none
-  match ← str "kind" with
+  match ← strAt p "kind" with
   | "registered" =>
     guard (keys? p == some REGISTERED_KEYS)
-    pure { registration := ← str "registration", value := ← str "value", root := ← str "root" }
+    pure { registration := ← strAt p "registration", value := ← strAt p "value", root := ← strAt p "root" }
   | _ => none
 
 /-- `provenance`: one entry per θ entry (`theta-provenance` otherwise). -/
@@ -242,12 +257,12 @@ def entryStep (T : Trusted) (program : String) (own : Array (Option Nat)) (count
   let some d := T.digests.findIdx? (· == p.registration) | throw "theta-record-unknown"
   if d != 0 then throw "theta-not-at-deployment-start"
   let some e := lastWith T.log[0]! "registered" "value" p.value | throw "theta-root"
-  if getD e "root" != Json.str p.root then throw "theta-root"
+  if strAt e "root" != some p.root then throw "theta-root"
   let run := T.log[T.run]!
-  if getD run "program" != Json.str program then throw "theta-unbound"
+  if strAt run "program" != some program then throw "theta-unbound"
   let some (some i) := own[k]? | throw "theta-unbound"
   let some mine := lastWith run "registered" "value" T.params[i]!.1 | throw "theta-unbound"
-  if getD mine "root" != Json.str p.root then throw "theta-unbound"
+  if strAt mine "root" != some p.root then throw "theta-unbound"
   let bits := 16 * ((width + 15) / 16)
   let fits := match dims e with
     | some (r, w, b) => r * w == counts[i]! && b == bits
@@ -300,20 +315,20 @@ def fixOf : String → Option String
   | "theta-width" => some "the cited value's rows, words and word bits must give the theta node's parameter"
   | _ => none
 
-/-- A refusal as JSON: `{"error": code}`, with its `message` (`fixOf`, else `NciCheck.fixOf`). -/
-def refusal (code : String) : Json :=
+/-- A refusal of `j` as JSON: `{"error": code}`, with its `message` (`fixOf`, else as `NciCheck.Desc.refusal` writes it). -/
+def refusal (j : Json) (code : String) : Json :=
   match fixOf code with
   | some m => Json.mkObj [("error", Json.str code), ("message", Json.str m)]
-  | none => NciCheck.refusal code
+  | none => Desc.refusal j code
 
 def check (j tr : Json) : Json :=
   match evaluate j tr with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 def checkUnrolled (j tr : Json) : Json :=
   match evaluateUnrolled j tr with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 end NciCheck.Baseline

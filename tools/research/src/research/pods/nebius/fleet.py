@@ -4,7 +4,8 @@
     fleet.py sample              one pass: each RUNNING VM's state from the API, and over ssh its GPUs' utilization, its load
                                  and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl
     fleet.py report [--hours 24] [--now ISO]   per VM over the window: $ (rate x hours seen RUNNING), GPU busy %, CPU load, peak
-                                 memory, idle hours (no GPU at >= 5% and load under a tenth of its cores)
+                                 memory, idle hours (no GPU at >= 5%, load under a tenth of its cores and memory in use
+                                 under 15%)
     fleet.py instances           every VM in the tenant's projects as JSON (the control pod's cloud watch reads it)
     fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
     fleet.py report --lanes      what the daily post rings each owning lane with: its own machines' idle hours and idle $
@@ -14,13 +15,13 @@
                                  doorbell with only its own machines
 
 Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all, and the card's daily limit and the tenant's
-quotas stopped launches with no warning (Daniel, 18 Oct 03:53Z). A VM's rate and address come from the machines registry (`research
+quotas stopped launches with no warning. A VM's rate and address come from the machines registry (`research
 pods register`, <notes>/machines.d); one not registered is recorded from the API with rate None. A VM that can't be read is
 recorded as RUNNING and unread, never idle. Runs on infra's VM, which holds the Slack credential (the control pod holds none).
 Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them.
 
-The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop (Daniel, 19 Oct
-18:11Z, lane contract v2.19 §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
+The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop
+(the lane contract, §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
 unset or unregistered) with its own idle hours. A sample also copies each VM's /etc/research/deadline into its registry entry's
 `deadline` when it changed (one notes sync per pass), which the control pod's wake (wake.py) reads while the VM is stopped.
 """
@@ -45,6 +46,8 @@ SSH_KEY = os.environ.get("FLEET_SSH_KEY", str(Path.home() / ".ssh" / "research_k
 JUMP = os.environ.get("FLEET_JUMP", "research@81.85.2.165")        # a private address (10.*) is reached through it
 INTERVAL_S, QUOTA_EVERY_S, REPORT_HOUR_UTC = 300, 1800, 15
 BUSY_PCT, IDLE_LOAD_SHARE, QUOTA_ALERT = 5, 0.1, 0.8
+# a memory-bound job (circuits' GLM folds on vy-glm53-cpu-2, 25 Oct: 2-4 busy cores of 192, 150-700 GB of 755 GB) is not idle
+IDLE_MEM_SHARE = 0.15
 STATUS_THREAD = "1791351683.780959"
 OWNER_DEFAULT = "infra"          # registry.OWNER_DEFAULT (this file runs standalone)
 PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr '\\n' ,); "
@@ -177,7 +180,8 @@ def report(rows: list[dict], hours: float) -> list[dict]:
         read = [r for r in rs if r.get("read")]
         gpu = [u for r in read for u in r.get("gpu_util") or []]
         idle = [r for r in read if all(u < BUSY_PCT for u in r.get("gpu_util") or [])
-                and r.get("load", 0) < IDLE_LOAD_SHARE * max(r.get("cores") or 1, 1)]
+                and r.get("load", 0) < IDLE_LOAD_SHARE * max(r.get("cores") or 1, 1)
+                and r.get("mem_used_gib", 0) < IDLE_MEM_SHARE * max(r.get("mem_total_gib") or 1, 1)]
         rate = rs[-1].get("rate_usd_per_hour")
         out.append({"name": name, "preset": rs[-1].get("preset"), "hours": round(seen_h, 1),
                     "usd": round(rate * seen_h, 2) if rate is not None else None, "rate_usd_per_hour": rate,
@@ -193,7 +197,7 @@ def render(rep: list[dict], hours: float, end: float) -> str:
     total = sum(r["usd"] or 0 for r in rep)
     idle_usd = sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
     lines = [f"Compute, the {hours:g} h to {utc(end)}: ${total:,.0f} across {len(rep)} VMs; ${idle_usd:,.0f} of it on idle hours "
-             f"(no GPU at {BUSY_PCT}%+, load under {IDLE_LOAD_SHARE:.0%} of cores)."]
+             f"(no GPU at {BUSY_PCT}%+, load under {IDLE_LOAD_SHARE:.0%} of cores, memory in use under {IDLE_MEM_SHARE:.0%})."]
     for r in rep:
         gpu = f"{r['gpus']} GPU, {r['gpu_busy_pct']}% busy" if r["gpus"] else "no GPU"
         usd = f"${r['usd']:,.0f}" if r["usd"] is not None else "$? (no rate registered)"

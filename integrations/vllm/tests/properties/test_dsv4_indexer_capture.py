@@ -19,8 +19,8 @@ import torch
 from tests.properties import dsv4_indexer_capture_gpu as D4
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.kernels import dsv4_indexer_twin as T
-from verity_vllm.program.registry import dsa
+from verity.ml.definitions.numerics import dsv4_indexer_twin as T
+from verity.ml.definitions.registry import dsa
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 I, X = D4.I, D4.X

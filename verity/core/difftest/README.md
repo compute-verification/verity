@@ -22,6 +22,8 @@ is checked against; after, the Python is held to the Lean.
   comparison and shrinking as `Port`. `verity_difftest.protocol` is the interface's framing in Python (`answer`, `unhex`,
   `canonical_json`, `nat`), so a reference writes only its protocol's decoders and check. A run fails as vacuous unless
   some case is accepted and, unless waived, some is not.
+- `verity_difftest.settings` declares every environment variable core's difftests read (`SETTINGS`, read through `get`):
+  opt-ins to the long or recorded runs, never a value a comparison depends on.
 
 ## Using it from a port
 
@@ -29,7 +31,7 @@ is checked against; after, the Python is held to the Lean.
 # PORT/lean/lakefile.toml: [[require]] name = "verity_difftest", path = "<relative path to this lean/>"
 # PORT/lean/DifftestMain.lean:  def main : IO Unit := Difftest.serve (Difftest.table [("encode", Port.encode)])
 # PORT/lean/lakefile.toml: [[lean_exe]] name = "port-difftest", root = "DifftestMain"
-# PORT/pyproject.toml: a suite in AFTER_LEAN (tools/verity/check/check.py); inputs list what lake reads outside PORT
+# PORT/pyproject.toml: a suite in AFTER_LEAN (tools/verity/check/suites.py); inputs list what lake reads outside PORT
 import shutil, pytest, verity_difftest as D
 from hypothesis import strategies as st
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

@@ -46,12 +46,12 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
-from verity_vllm.program.registry import sparse_mla_split
-from verity_vllm.program.registry import bf16_gemm_check as BC
-from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
-from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
+from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
+from verity.ml.definitions.registry import sparse_mla_split
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
@@ -549,6 +549,7 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
 
 
+@pytest.mark.slow
 def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_logits_and_reads_its_rows(served):
     """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads the 3 settings of a Waksman network over its 3
     rows from the `run` input's one field, routes the row indices through them (`DsaWaksmanOrder_v1{N=3,TOPK=2}`) and checks that
@@ -621,6 +622,7 @@ def test_large_mla_absorb_is_bound_before_its_composite_transpose(served):
     assert rep.provenance["weight_roles"]["weight"]["role"] == "mla.absorb"
 
 
+@pytest.mark.slow
 def test_large_mla_absorb_is_not_fused_when_the_bmm_intermediate_escapes(served):
     """The escaping bmm output is a value of its own, so the chain is not one absorb: the bmm binds alone and the transpose, past the
     Explicit limit, reads its rows whole."""

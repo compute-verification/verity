@@ -13,10 +13,10 @@ import pytest
 import torch
 
 from tests.properties import glm53_block_fp8_capture_gpu as X
-from verity_vllm.program.kernels import deepgemm_twins as DGT
-from verity_vllm.program.kernels import fp8_moe_rows as MR
-from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
-from verity_vllm.program.kernels.rows import moe_sum
+from verity.ml.definitions.numerics import deepgemm_twins as DGT
+from verity.ml.definitions.numerics import fp8_moe_rows as MR
+from verity.ml.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity.ml.definitions.numerics.rows import moe_sum
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 K, N, GQ = 256, 200, X.GROUP
@@ -292,7 +292,7 @@ def _kernel(d, M: int, Kd: int, Nd: int, warps: int | None, text: str) -> None:
 
 def test_the_ptx_scan_takes_each_kernels_family_from_its_tile(tmp_path) -> None:
     """A swapped 16x64 tile (its dot 64 x 16) runs wgmma; the stock 8x32 tile and the swapped 8x64 one (dot N = 8) run MMAv2 on
-    widened e4m3 (the PTX Triton 3.7.1 wrote for them, run r20261012-215811-1ef7); each against the family its tile is given."""
+    widened e4m3 (the PTX Triton 3.7.1 wrote for them); each against the family its tile is given."""
     _kernel(tmp_path / "a", 64, 128, 16, 4, WGMMA_PTX * 2)
     _kernel(tmp_path / "b", 8, 128, 32, 4, MMAV2_PTX)
     _kernel(tmp_path / "c", 64, 128, 8, 4, MMAV2_PTX)

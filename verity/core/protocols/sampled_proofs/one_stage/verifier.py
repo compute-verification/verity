@@ -1,4 +1,4 @@
-"""The one-stage audit's verifier of record: its Lean port (`sampled-proofs-verifier`, the Lake package
+"""The one-stage audit's verifier: its Lean port (`sampled-proofs-verifier`, the Lake package
 `verity/core/service/sampled_proofs`, built with `lake` on first use) and this package's Python, the reference, run side by
 side on every check.
 
@@ -9,7 +9,7 @@ alone, or an audit record that does not accept, has no profiles and fails its `v
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
 * `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
-* `matches_public`, `check_draw`, `check_proved`, and the proof service's public-items rule (`check_public`) and hold on
+* `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
   draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
@@ -169,7 +169,7 @@ COINS_MAX = 1 << 24
 
 
 def coins(n: int) -> bytes:
-    """`n` bytes of the operating system's randomness, read by the Lean verifier of record (`IO.getRandomBytes`, A3's
+    """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
     `uniform/io-getrandombytes`): the challenger's coins (`service.Stream`'s default), which the Python never reads from
     the operating system itself. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes:
     no coins, so no draw and no salt."""
@@ -181,6 +181,11 @@ def coins(n: int) -> bytes:
     if not (isinstance(body, str) and len(body) == 2 * n and all(c in "0123456789abcdef" for c in body)):
         raise LeanError(f"{EXE} answered other than {n} coin bytes in hex")
     return bytes.fromhex(body)
+
+
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`challenger.coin_claim`)
+CLAIM = "uniform/io-getrandombytes"
+coins.claim = CLAIM  # type: ignore[attr-defined]
 
 
 def _canon(x: Any) -> str | None:
@@ -254,7 +259,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier of record."""
+    """`registration.check` (R1-R7) by the verifier."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
@@ -269,7 +274,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
                    population: int) -> Verdict:
-    """`registration.matches_public` by the verifier of record."""
+    """`registration.matches_public` by the verifier."""
     py = R.matches_public(rec, scheme, roots, domains, population)
     got = lean("matches_public", {"record": dict(rec), "scheme": scheme, "roots": dict(roots), "domains": dict(domains),
                                   "population": population})
@@ -278,7 +283,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 def check_public(python: Verdict, record: Any, scheme: str, query: Mapping[str, Any], values: Iterable[tuple[str, bool]],
                  declared: Iterable[str]) -> Verdict:
-    """The proof service's public-items rule by the verifier of record. Its Python is the service's (`service.check_public`,
+    """The proof system's public-items rule by the verifier. Its Python is the service's (`service.check_public`,
     which imports this module), so `python` is that verdict, on `record` with `scheme`, the check's `query`, the values as
     `(name, registered)` and the Spec's declared items."""
     got = lean("check_public", {"record": record, "scheme": scheme, "query": dict(query),
@@ -287,15 +292,15 @@ def check_public(python: Verdict, record: Any, scheme: str, query: Mapping[str, 
 
 
 def check_verdicts(python: Verdict, verdicts: Mapping[str, Any], sessions: Sequence[str], outputs: Sequence[str]) -> Verdict:
-    """The proof service's hold on an outcome's verdicts (`service.check_verdicts`, whose verdict is `python`) by the
-    verifier of record, on the verdicts, the delivered sessions and the check's public outputs."""
+    """The proof system's hold on an outcome's verdicts (`service.check_verdicts`, whose verdict is `python`) by the
+    verifier, on the verdicts, the delivered sessions and the check's public outputs."""
     got = lean("check_verdicts", {"verdicts": verdicts, "sessions": list(sessions), "outputs": list(outputs)})
     return _decide(got, python, whole=True)
 
 
 def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[str], selection: Sequence[str], slots: int,
           session: Sequence[str]) -> Verdict:
-    """The run's Hello on its record (`hello.check_run`) by the verifier of record: R7 with the prover's nonce, the run's
+    """The run's Hello on its record (`hello.check_run`) by the verifier: R7 with the prover's nonce, the run's
     streams (the selection streams, then each of `slots` session slots' `session` streams), the record's `coin_tree` and
     its key unused by the runs in `seen`."""
     py = H.check_run(own, received, coin_tree, list(seen), list(selection), slots, list(session))
@@ -307,7 +312,7 @@ def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[
 def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
            work_table: Mapping[str, Any] | None = None,
            closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
-    """The challenger's draw by the verifier of record: the Lean's `Select.select` on `read`, the bytes of the challenger's
+    """The challenger's draw by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
     coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
     `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
     agree when the Lean draws the same object and reads exactly `read`; the draw of record is then `RECORD_VERDICT`'s. Where
@@ -336,13 +341,17 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-        held: Sequence[str] | None = None) -> Verdict:
+        held: Sequence[str] | None = None, coin_source: str, coins: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the draw read and the closure map, and `audit_record`'s arguments
-    with the sessions' roots whole. Where the two differ, or the Lean refuses a step, the verdict fails with `DISAGREE`
-    alone."""
+    with the sessions' roots whole. `coin_source` is where the draw's coins came from (`"verifier"` or `"challenger"`,
+    the stream's `coin_source`, required): from the challenger, the Lean also checks `coins`, their evidence
+    (`coins.coins_reason`'s), that the bytes the draw read are the coins the session the ledger opens for `window_root`
+    released after the registration's digest, and refuses the select step where they aren't or `coins` is missing
+    (code `coins`); from the verifier, `coins` must be None. Where the two differ,
+    or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                                          registered, supplied, pinned, binding, schemas, window_root, held),
@@ -353,7 +362,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                        "outputs": list(outputs), "statement": dict(statement), "delta": exact,
                        "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
                        "served": None if served is None else list(served),
-                       "session_roots": None if session_roots is None else dict(session_roots)})
+                       "session_roots": None if session_roots is None else dict(session_roots),
+                       "coin_source": coin_source, "coins": None if coins is None else dict(coins)})
     if isinstance(got.get("audit"), str):
         try:
             got = {**got, "audit": json.loads(got["audit"])}
@@ -370,14 +380,14 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
 
 
 def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any]) -> Verdict:
-    """`draw.check_draw` by the verifier of record."""
+    """`draw.check_draw` by the verifier."""
     py = D.check_draw(draw, registration, law)
     got = lean("check_draw", {"draw": draw, "population": registration.get("population"), "law": dict(law)})
     return _decide(got, py, whole=True)
 
 
 def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances: int) -> Verdict:
-    """`draw.check_proved` by the verifier of record."""
+    """`draw.check_proved` by the verifier."""
     py = D.check_proved(draw, proved_units, instances)
     got = lean("check_proved", {"draw": dict(draw), "proved_units": list(proved_units), "instances": instances})
     return _decide(got, py, whole=True)
@@ -385,7 +395,7 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
 
 def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
            after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
-    """A proof service stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
+    """A proof system stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
     state `after` it (`service._step`'s), compared without Python's `detail`, which the decision of record keeps: the
     decision and the state of record, and the verdict, `disagree` where the two differ."""
     return _ruled("stream", {"params": dict(params), "state": dict(state), "op": dict(op)}, decision, after)
@@ -393,7 +403,7 @@ def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str,
 
 def fleet(state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
-    """A proof service fleet's rules on `op` (the Lean's `Fleet.run` on `state`) against Python's `decision` and the state
+    """A proof system fleet's rules on `op` (the Lean's `Fleet.run` on `state`) against Python's `decision` and the state
     `after` it (`service._fleet_step`'s), as `stream` compares a stream's."""
     return _ruled("fleet", {"state": dict(state), "op": dict(op)}, decision, after)
 
@@ -425,7 +435,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """`audit.audit_record` by the verifier of record, with `session_registered` the verdicts' own for the registration's
+    """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
     values (`audit.session_registered(verdicts, registration)`): the record of record, with `verifiers` (`{"of_record",
     "lean", "python", "agree"}`, each side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}

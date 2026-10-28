@@ -41,8 +41,10 @@ def local(node: str, argv: list[str], stdin: bytes | None) -> subprocess.Complet
 
 
 @pytest.fixture
-def world(tmp_path):
+def world(tmp_path, monkeypatch):
     origin, repo, node = tmp_path / "origin.git", tmp_path / "repo", tmp_path / "node"
+    (tmp_path / "certs").mkdir()
+    monkeypatch.setattr(deploy, "CERTS", str(tmp_path / "certs"))       # this machine's own trust store is no fixture
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
     _git(repo, "remote", "add", "origin", str(origin))
@@ -358,6 +360,19 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert "no node 'zz'" in err and err.count("research deploy: --node is now --on") == 1
 
 
+def test_a_trust_store_that_holds_a_distrusted_root_is_drift_until_the_upgrade_removes_it(world, capsys):
+    n, certs = world["nodes"]["n"], Path(deploy.CERTS)
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    (certs / "ISRG_Root_X1.pem").write_text("kept\n")
+    (certs / "emSign_ECC_Root_CA_-_G3.pem").write_text("distrusted\n")
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["distrusted"] == ["emSign_ECC_Root_CA_-_G3.pem"] and not deploy.clean(rep)
+    assert "root     " in deploy.render("n", "origin/main", rep) and "--only-upgrade ca-certificates" in deploy.render("n", "origin/main", rep)
+    (certs / "emSign_ECC_Root_CA_-_G3.pem").unlink()
+    assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
+
+
 def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
     def down(stderr: bytes):
         return lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", stderr)
@@ -410,6 +425,20 @@ def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch
     out = subprocess.run([sys.executable, "-c", "from verity_ops import deploy; print(deploy.REPO, deploy.SRC)"], env=env,
                          capture_output=True, text=True, check=True).stdout.split()
     assert out == [str(clone), str(deploy.SRC)]
+
+
+def test_a_staged_node_is_passed_by_unless_named_and_installs_as_any_other(world, capsys):
+    node, repo, manifest = world["node"], world["repo"], world["manifest"]
+    manifest.write_text(manifest.read_text().replace('[nodes.n]\n', '[nodes.n]\nstaged = "created when the quota lands"\n', 1))
+    seen = []
+    run = lambda name, argv, stdin: seen.append(name) or local(name, argv, stdin)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 0
+    out = capsys.readouterr()
+    assert json.loads(out.out) == {} and not seen and "n is staged (created when the quota lands)" in out.err
+    assert deploy.main(["drift", "--on", "n", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 1
+    assert json.loads(capsys.readouterr().out)["n"]["entries"] and seen
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], run=local, manifest=manifest, repo=repo) == 0
+    assert "would install" in capsys.readouterr().out and not (node / "bin" / "a.py").exists()
 
 
 def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):

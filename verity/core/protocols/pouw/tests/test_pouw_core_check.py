@@ -28,6 +28,14 @@ from verity.ml.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[5]
 PKG = ROOT / "verity/core/protocols/pouw/lean/check"
+_spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
+rounds_cases = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rounds_cases)
+sys.modules["pouw_rounds_cases"] = rounds_cases
+_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
+passes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(passes)
+sys.modules["pouw_pass_cases"] = passes
 _spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
@@ -35,12 +43,6 @@ sys.modules["pouw_check_cases"] = vectors
 _spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
 openings = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(openings)
-_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
-passes = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(passes)
-_spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
-rounds_cases = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(rounds_cases)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -136,6 +138,20 @@ EXPECT = {
     "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
     "utf8-record": "commitment: not UTF-8", "honest": None,
+    **{n: f"params: {CC.LIVE_PARAMS}" for n in ("live-missing", "live-null", "live-keys", "live-seeded")},
+    "live-other-key": "salt: the challenger's session is not trusted: ",
+    "live-incomplete": f"salt: {CC.INCOMPLETE}", "live-unreserved": f"salt: {CC.NO_RESERVE}",
+    "live-layout": "salt: the coin commitment's coins are not a Pearl-C salt session's",
+    "salt-missing": f"salt: {CC.NO_WINDOW_SALT}", "salt-type": "evidence: public.salt: not an object",
+    "salt-seeded": f"salt: {CC.SEEDED_SALT}", "salt-keys": f"salt: {CC.WINDOW_SALT_FORM}",
+    "salt-no-w": f"salt: {CC.WINDOW_NO_W}", "salt-two-w": f"salt: {CC.WINDOW_NO_W}",
+    "salt-no-x": f"salt: {CC.WINDOW_NO_X}", "salt-values-form": f"salt: {CC.WINDOW_NO_X}",
+    "salt-x-after": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-epoch": f"salt: {CC.WINDOW_EPOCH}",
+    "salt-other-epoch": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-coins-form": "salt: the salt's coins are malformed: ", "salt-coins": f"salt: {CC.WINDOW_NOT_SIGNED}",
+    "salt-opening": "salt: the salt's coin does not open against", "salt-value": f"salt: {CC.WINDOW_SALT}",
+    "salt-session": f"salt: {CC.WINDOW_SESSION}", "salt-secret": f"salt: {CC.WINDOW_SESSION}",
 }
 
 
@@ -349,15 +365,46 @@ def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
         assert bits == SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True), pos
 
 
+def test_a_j10r_public_row_is_then_its_call_and_blocks():
+    """A J10-R unit's public row (`core_check.public_row` with ``j10r``) is the leaves `PouwH1Tile_v5`'s public parameters
+    take, in order: today's row, then its ``call`` and its two ``blocks``, each a position's leaves
+    (`seeds.position_leaves`, `seeds.POS_BITS`)."""
+    import hashlib
+    import numpy as np
+    from verity.core.protocols.pouw.circuit import seeds as SD
+    salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
+    for pos, call, blocks in ((5, 0, (0, 64)), (1 << 39, 7, (3, (1 << 33) + 1)), ((1 << 64) - 1, 1 << 63, (1, 2))):
+        row = CC.public_row(salt, pos, roots, (call, blocks))
+        bits = np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little").tolist()
+        assert len(bits) == CC.PUBLIC_ROW_J10R_BITS == CC.PUBLIC_ROW_BITS + 3 * len(SD.position_leaves(0, True))
+        assert bits == (SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True)
+                        + SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True)
+                        + SD.position_leaves(blocks[1], True)), pos
+        assert row[:CC.PUBLIC_ROW_BITS // 8] == CC.public_row(salt, pos, roots)
+        assert len(CC.public_words(salt, pos, roots, (call, blocks))) == CC.PUBLIC_ROW_J10R_BITS // 16 == 112
+
+
+def test_the_verifiers_j10r_blocks_are_the_tiles():
+    """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
+    blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):
+        assert CC.n_digits(k) == H.SG.n_digits(k // 32), k
+        for m, (r, c) in ((4, (4, 8)), (8, (4, 8)), (32, (32, 32)), (64, (32, 32))):
+            for i in range(m // r):
+                for j in range(3):
+                    assert CC.j10r_blocks(m, k, (r, c), i, j) == H.j10r_blocks(m, k, (r, c), i, j), (m, k, r, c, i, j)
+
+
 def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
     from verity.core.protocols.pouw.circuit import leaves as L
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
-    assert CC.SERVED_DOMAIN == R.SERVED_DOMAIN
+    assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
     case = openings.honest(random.Random(1))
-    assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
+    assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.window_domain(
         case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
         case["params"]["check"]["entries"], case["params"]["context"])
 
@@ -408,7 +455,8 @@ def test_canonical_json_is_leans():
 #: the refusal each pass mutation aims at: (code, the reason's start), or the honest pass's ``how`` (a reading both sides
 #: share)
 PASS_EXPECT = {
-    "honest": {"coin", "recorded beacon", "certifier"}, "spaced-hex": {"coin", "recorded beacon", "certifier"},
+    "honest": {"coin", "recorded beacon", "certifier", "live coin"},
+    "spaced-hex": {"coin", "recorded beacon", "certifier", "live coin"},
     "no-pass": ("coin", "the window names no pass"), "not-utf8": ("manifest", "the pass's manifest is not a JSON object"),
     "not-json": ("manifest", "the pass's manifest is not a JSON object"),
     "not-object": ("manifest", "the pass's manifest is not a JSON object"),
@@ -451,6 +499,16 @@ PASS_EXPECT = {
     "stream-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
     "prover-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
     "salted-apart": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "live-unheld": ("coin", CC.LIVE_UNHELD), "live-form": ("coin", CC.LIVE_FORM),
+    "live-in-process": ("coin", "the pass's salt coin opens against the epoch's published coin commitment"),
+    "live-own-challenger": ("coin", CC.LIVE_NOT_SIGNED), "live-forged": ("coin", "the salt's coin "),
+    "live-session": ("coin", CC.LIVE_SESSION),
+    "live-other-root": ("coin", "the challenger's session is not trusted: the auditor's ledger opens no challenger "
+                                "session for this window"),
+    "live-h1": ("coin", "the coin commitment's coins are not a Pearl-C salt session's"),
+    "live-incomplete": ("coin", CC.INCOMPLETE), "live-pass-index": ("manifest", CC.PASS_FORM),
+    "live-other-epoch": ("coin", "the challenger's session is not trusted: the auditor's ledger opens no challenger "
+                         "session for this window"),
 }
 
 DRAW_EXPECT = {
@@ -499,9 +557,10 @@ def test_every_pass_mutation_hits_its_refusal():
 
 def test_each_honest_pass_is_had_as_it_was_salted():
     """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
-    recorded replay's beacon, or the network certifier's reveal over the weights, stream and prover it recorded before
-    it."""
-    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier"}
+    recorded replay's beacon, the network certifier's reveal over the weights, stream and prover it recorded before
+    it, or a live Pearl-C pass's session of the auditor's challenger, opened on its salt epoch's root."""
+    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier",
+            "live": "live coin"}
     for kind, how in want.items():
         for seed in range(6):
             case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
@@ -574,6 +633,17 @@ def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
     assert CC.draw(*passes.draw_args(honest)) is None
 
 
+#: the refusal each mutation of the session's pin aims at, `rounds`' and `salt`'s alike
+PIN_EXPECT = {
+    "unpinned": ("coin", f"ran commit {rounds_cases.UNLOGGED}, which the host's pins log doesn't record as a commit of "
+                         "main's history"),
+    "branch-pin": ("coin", f"ran commit {rounds_cases.BRANCH}, which the host's pins log records but which is not on "
+                           "main's first-parent line in the verifier's copy"),
+    "unsealed-pins": ("coin", "seals no pins log (pins: {lines, sha512})"),
+    "no-pins": ("coin", f"not trusted: {Ch.NO_PINS}"), "no-main": ("coin", f"not trusted: {Ch.NO_MAIN}"),
+    "main-form": ("coin", f"not trusted: the verifier's copy of main's history is malformed: {Ch.MAIN_FORM}"),
+}
+
 #: the refusal each rounds mutation aims at: its code and a part of its reason
 ROUNDS_EXPECT = {
     "honest": None, "key-form": ("coin", "the verifier's challenger key is malformed: "),
@@ -590,7 +660,8 @@ ROUNDS_EXPECT = {
     "v1-ledger": ("coin", "under verity/challenger-auditor/v1, which names no prover and seals no refused hellos"),
     "end-form": ("coin", "not trusted: the auditor's ledger's end of session s-1 is malformed: "),
     "record-leaf": ("coin", "not trusted: the challenger's record is signed at leaf 8 over commitment "),
-    "hellos": ("coin", "not trusted: the challenger's refused hellos are "),
+    "hellos": ("coin", "not trusted: the challenger's refused hellos are not the 0 the auditor's ledger sealed"),
+    "hellos-form": ("coin", "not trusted: the challenger's refused hellos are a list of their lines"),
     "reused-leaf": ("coin", ", not after the last entry's "),
     "other-session": ("coin", "not trusted: the challenger's session is s-2, not s-1, the one the auditor's ledger opens"),
     "other-key": ("coin", ", not the window's pinned key "),
@@ -610,6 +681,7 @@ ROUNDS_EXPECT = {
     "tampered": ("coin", ": coin does not open against"), "malformed": ("coin", ": coin opening is malformed"),
     "too-many": ("coin", "roots recorded, more than the epoch's"),
     "label": ("coin", "pouw/round coin 0: coin is the epoch's pouw/salt coin 0, not its pouw/round coin 0"),
+    **PIN_EXPECT,
 }
 
 
@@ -618,7 +690,8 @@ def test_every_rounds_mutation_hits_its_refusal():
     auditor's signed ledger opens and ends for the window, and refuses each mutation (an in-process challenger's coins,
     an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
     second session for the window's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
-    it didn't seal, roots the challenger didn't receive, a coin opened twice,
+    it didn't seal, a session the host's pins log doesn't pin or pins off main's first-parent line, an open sealing no
+    pins log, no pins log or copy of main, roots the challenger didn't receive, a coin opened twice,
     one opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it
     aims at."""
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
@@ -646,7 +719,7 @@ SALT_EXPECT = {
     "after": ("coin", "the salt's coin was not opened after what the verifier recorded"),
     "label": ("coin", "coin 0, not its pouw/salt coin 0"), "foreign": ("coin", "the salt's coin does not open against"),
     "foreign-epoch": ("coin", "the salt's coin is epoch "), "tampered": ("coin", "the salt's coin does not open against"),
-    "malformed": ("coin", "the salt's coin opening is malformed"),
+    "malformed": ("coin", "the salt's coin opening is malformed"), **PIN_EXPECT,
 }
 
 
@@ -654,7 +727,8 @@ def test_every_salt_mutation_hits_its_refusal():
     """`core_check.salt` accepts an honest live window's salt coin, read through the challenger's signed session the
     auditor's signed ledger reserves, opens and ends for the window, and refuses each mutation with the refusal it aims
     at: the session's (no ledger, a forged one, an in-process challenger's coins, a log the ledger didn't seal, another
-    session's files), a session opened without a reserve, the open root under another session's id than the reserve's
+    session's files, a session not pinned to a logged commit on main's first-parent line), a session opened without a
+    reserve, the open root under another session's id than the reserve's
     or of another window's weights or requests (so one session salts one window), H1's salt before the open root (the
     session opened on the weights' root, the same in every window), a log showing another root, and a coin that isn't
     the epoch's salt coin opened after it."""
@@ -664,6 +738,124 @@ def test_every_salt_mutation_hits_its_refusal():
             got = CC.salt(*rounds_cases.salt_args(rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
                 (name, seed, got)
+
+
+#: the refusal each live salt mutation aims at: (code, a part of the reason)
+LIVE_SALT_EXPECT = {
+    "honest": None, "not-object": ("manifest", "the pass's manifest is not a JSON object"),
+    "schema": ("coin", f"not {CC.MANIFEST_SCHEMA}"), "no-schema": ("manifest", "the pass's manifest names no schema"),
+    "matmuls-form": ("manifest", "the pass's matmuls are not"),
+    "weights-set": ("coin", "every weight of the workload is committed, and only those"),
+    "call-range": ("manifest", CC.CALL_RANGE), "pass-index": ("manifest", CC.PASS_FORM),
+    "key-form": ("coin", "the verifier's challenger key is malformed: "),
+    "no-ledger": ("coin", "not trusted: no auditor's ledger"),
+    "forged-ledger": ("coin", "not trusted: the auditor's ledger is refused: entry 0: its signature doesn't verify"),
+    "in-process": ("coin", "not trusted: the challenger record's signature does not verify"),
+    "unsealed": ("coin", "not trusted: the challenger's release log is not the one the auditor's ledger sealed"),
+    "other-session": ("coin", ", the one the auditor's ledger opens for this window"),
+    "other-root": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "on-weights": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "other-epoch": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "named-epoch": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "h1-layout": ("salt", "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"),
+    "not-salt-only": ("salt", "the coin commitment's "), "no-reserve": ("salt", CC.NO_RESERVE),
+    "reserve-layout": ("salt", CC.RESERVE_LAYOUT), "incomplete": ("salt", CC.INCOMPLETE),
+    "received": ("salt", CC.LIVE_NOT_RECEIVED), "coins-form": ("coin", "the pass's coins are malformed: "),
+    "not-signed": ("coin", CC.LIVE_NOT_SIGNED), "opening-form": ("coin", "the salt's a live coin opening is"),
+    "after": ("coin", "the salt's coin was not opened after what the verifier recorded"),
+    "index": ("coin", ", not its pouw/salt coin 0"), "label": ("coin", ", not its pouw/salt coin 0"),
+    "foreign": ("coin", "the salt's coin does not open against"), "foreign-epoch": ("coin", "the salt's coin is epoch "),
+    "tampered": ("coin", "the salt's coin does not open against"),
+    "malformed": ("coin", "the salt's coin opening is malformed"), "resalted": ("coin", CC.LIVE_SALT),
+    "session": ("coin", CC.LIVE_SESSION), **PIN_EXPECT,
+}
+
+
+def test_every_live_salt_mutation_hits_its_refusal():
+    """`core_check.live_salt` (LIVESALT2) accepts a live Pearl-C pass whose salt coin came from a salt-only session the
+    auditor's signed ledger reserved, opened on the pass's salt epoch's root R = `epoch_open_root(W, pass_index)` and
+    ended complete, read through the session's own files, and refuses each mutation with the refusal it aims at: the
+    manifest's form and workload, a call index of 2^32 or more, a `pass_index` that isn't an integer in [0, 2^64), the
+    session's (as `salt`'s, a session opened on another root among them: W itself, another epoch's root, or the root of
+    an epoch other than the one the manifest names), a layout other than the salt coin alone (#3868's
+    H1 layout, its salt alone released, among them), a session opened without a reserve or reserved for another layout,
+    an end that isn't complete with the salt coin alone released, a log showing another root or none, coins other than
+    the session's, a coin that isn't its salt coin opened after R, another salt, and a session the manifest misnames
+    (its root W among them)."""
+    assert set(LIVE_SALT_EXPECT) == set(passes.LIVE_SALT_NAMES) | {"honest"}
+    for name, want in LIVE_SALT_EXPECT.items():
+        for seed in range(6):
+            salt, got = CC.live_salt(*passes.live_salt_args(passes.live_salt_instance(random.Random(f"{name}/{seed}"),
+                                                                                      name)))
+            assert (got is None and len(salt) == 32) if want is None else (
+                salt is None and got is not None and got[0] == want[0] and want[1] in got[1]), (name, seed, got)
+    d = passes.live_salt_instance(random.Random("a float pass_index"))
+    for bad in (0.0, 1.0, 1.5, float(d["manifest"]["pass_index"])):
+        m = {**d["manifest"], "pass_index": bad}
+        assert CC.live_salt(*passes.live_salt_args({**d, "manifest": m})) == (None, ("manifest", CC.PASS_FORM)), bad
+
+
+def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, str] | None]:
+    return CC.pass_epoch(*passes.pass_args(passes.pass_instance(random.Random(seed), name, kind="live")))
+
+
+def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_session():
+    """An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
+    session the auditor's ledger reserved, opened on its salt epoch's root and ended complete, having released that coin
+    alone, and the verifier's seeded coins play no part. Refused: a verifier that holds no ledger, the session opened on
+    another root (a random one, or H1's window-open root), #3868's session (H1's layout, ended incomplete), an end that
+    isn't complete, a forged opening, and an in-process coin (seeded coins the prover ran) presented in place of the
+    session's."""
+    for seed in range(4):
+        assert _live_pass(f"live/{seed}") == ("live coin", None)
+        h = passes.honest_pass(random.Random(f"live end/{seed}"), "live")
+        sid = h["man"]["session"]["session"]
+        named = {e["kind"]: e["body"] for e in map(json.loads, h["case"]["live"]["ledger"]) if e["session"] == sid}
+        assert named["reserve"]["families"] == [["pouw/salt", 1]] and named["end"]["complete"] is True
+        assert named["end"]["released"] == {"pouw/salt": 1}
+        assert _live_pass(f"unheld/{seed}", "live-unheld") == (None, ("coin", CC.LIVE_UNHELD))
+        assert _live_pass(f"other/{seed}", "live-other-root")[1][1].endswith(
+            "the auditor's ledger opens no challenger session for this window")
+        assert _live_pass(f"h1/{seed}", "live-h1")[1][1].startswith(
+            "the coin commitment's coins are not a Pearl-C salt session's")
+        assert _live_pass(f"incomplete/{seed}", "live-incomplete") == (None, ("coin", CC.INCOMPLETE))
+        assert _live_pass(f"forged/{seed}", "live-forged")[1][1].startswith("the salt's coin ")
+        assert _live_pass(f"in-process/{seed}", "live-in-process")[1][1].startswith(
+            "the pass's salt coin opens against the epoch's published coin commitment")
+
+
+def test_one_epoch_reads_one_session_and_one_salt():
+    """`OnePair` on the Python side: two passes of one salt epoch k over one weights' root W, the second's call indices
+    continuing the first's, read the one session the ledger opened on `epoch_open_root(W, k)`, so they get one salt (a
+    second open on that root is the ledger's own refusal, `rounds`' ``second-session``). Whether they share a call index
+    is the Pearl-C period's to refuse, not `live_salt`'s."""
+    for seed in range(4):
+        d = passes.live_salt_instance(random.Random(f"one epoch, one session/{seed}"))
+        salt, refused = CC.live_salt(*passes.live_salt_args(d))
+        assert refused is None and d["manifest"]["pass_index"] < 1 << 64
+        assert all(u["index"] < CC.CALL_BOUND for u in d["manifest"]["matmuls"])
+        other = json.loads(json.dumps(d["manifest"]))
+        n, top = len(other["matmuls"]), max(u["index"] for u in other["matmuls"])
+        other.update(run="r-the-next-pass", matmuls=[{**u, "index": i} for i, u in
+                                                     enumerate(other["matmuls"], start=min(top + 1, CC.CALL_BOUND - n))])
+        assert CC.live_salt(*passes.live_salt_args({**d, "manifest": other})) == (salt, None)
+
+
+def test_two_epochs_over_one_weights_root_read_two_sessions_and_two_salts():
+    """`OneRoot` and `EpochRootBinding` on the Python side: epochs 0 and 1 over one weights' root W are opened on two
+    roots, so they read two sessions with two salts, and neither epoch's pass is accepted against the other's session."""
+    rng = random.Random("two epochs")
+    man = passes._live_manifest(rng)
+    h0 = passes.honest_live(rng, json.loads(json.dumps(man)), k=0)
+    h1 = passes.honest_live(rng, json.loads(json.dumps(man)), k=1)
+    assert h0["w"] == h1["w"] and h0["r"] != h1["r"] and h0["s"].sid != h1["s"].sid
+    s0, r0 = CC.live_salt(*passes.live_salt_args({**h0["live"], "manifest": h0["man"]}))
+    s1, r1 = CC.live_salt(*passes.live_salt_args({**h1["live"], "manifest": h1["man"]}))
+    assert (r0, r1) == (None, None) and s0 != s1
+    for live, m in ((h0["live"], h1["man"]), (h1["live"], h0["man"])):
+        _, refused = CC.live_salt(*passes.live_salt_args({**live, "manifest": m}))
+        assert refused == ("coin", "the challenger's session is not trusted: the auditor's ledger opens no challenger "
+                                   "session for this window"), refused
 
 
 def test_one_session_salts_one_window():

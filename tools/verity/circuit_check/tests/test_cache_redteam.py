@@ -1,4 +1,4 @@
-"""Red-team probes of `circuit_check.cache` v2 (PR #1126): edits that change a target's verdict while its key stays the same.
+"""Adversarial probes of `circuit_check.cache`: edits that change a target's verdict while its key stays the same.
 
 Each test states the property a sound cache keeps (an edit that changes the verdict reruns the target), on the synthetic tree
 of `test_cache`: a cold run, the edit, a run under a fresh cache (the verdict as it is now), and a run under the first cache.
@@ -23,7 +23,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": F.warnings, "realizations": corr["realizations"]}
 """
 
-#: a kernel module of the kind `verity_vllm.program.kernels.rows` is: imported with the registries (`load_registries`), before
+#: a kernel module of the kind `verity.ml.definitions.numerics.rows` is: imported with the registries (`load_registries`), before
 #: any check, registering kernels for Definitions defined elsewhere
 KERN = """
 import numpy as np

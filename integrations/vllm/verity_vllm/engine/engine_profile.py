@@ -18,32 +18,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.engine import env
+from verity_vllm.engine import env, handle
 
 DECLARED_ENV = env.ENGINE
-
-CASES = {
-    "B0": {"repo": "HuggingFaceTB/SmolLM2-135M"},
-    # [E1 NIGHT 2026-09-12, G3; PROPOSED] the second-model cases: SMOL360 = SmolLM2-360M (B0's architecture, larger), QWEN05 = Qwen2.5-0.5B (B1's
-    # architecture at head dim 64); registry configs verity_vllm.program.registry.b1.{SMOL360,QWEN05}_CONFIG.
-    "SMOL360": {"repo": "HuggingFaceTB/SmolLM2-360M"},
-    "QWEN05": {"repo": "Qwen/Qwen2.5-0.5B"},
-    "B1": {"repo": "Qwen/Qwen2.5-1.5B"},
-    # B2 = the same dense baseline as B0, on Ampere (contract: "does the same adapter work on
-    # another GPU?"); same checkpoint, same workload, the GPU is recorded in the profile manifest.
-    "B2": {"repo": "HuggingFaceTB/SmolLM2-135M"},
-    "B5": {"repo": "microsoft/phi-2"},
-    # B7 = the contract's 7B dense checkpoint (§1: `Qwen/Qwen2.5-7B` optional subrow), used by W4d for
-    # the compiled-vs-eager production A/B on Hopper (§15.5 / §16.7); same B1 workload (same tokenizer).
-    "B7": {"repo": "Qwen/Qwen2.5-7B"},
-    # M1/M2 = the exploratory MoE lane (W9, wave 3): Qwen1.5-MoE-A2.7B-Chat (Qwen2MoeForCausalLM,
-    # 60 routed experts top-4 + shared expert, 24 layers), frozen in manifests/checkpoints.json.
-    "M1": {"repo": "Qwen/Qwen1.5-MoE-A2.7B-Chat"},
-    "M2": {"repo": "Qwen/Qwen1.5-MoE-A2.7B-Chat"},
-    # M0 = the persisted MoE bundle (§16.8, <= 100 MB): one short request (the first 16 prompt
-    # tokens of M1's request 0, 8 generated tokens), same checkpoint and profile as M1.
-    "M0": {"repo": "Qwen/Qwen1.5-MoE-A2.7B-Chat"},
-}
 
 MAX_MODEL_LEN = 4096
 GPU_MEMORY_UTILIZATION = 0.80
@@ -78,6 +55,7 @@ def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     from verity_vllm.config import checkpoint_entries
+    from verity_vllm.engine.profiles.cases import CASES
 
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
@@ -112,8 +90,11 @@ REPLAY_EXECS = ("eager", "compiled-nograph")
 
 TP_WORKER_EXTENSION = "verity_vllm.tp.poc_tp_worker.VerityTPWorkerExtension"
 
+#: vLLM's engine seed (`LLM(seed=...)`) for every profile; the manifest records it in `engine_kwargs`.
+ENGINE_SEED = 0
 
-def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int = 0, enforce_eager: bool = False, custom_ops: str | None = None,
+
+def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager: bool = False, custom_ops: str | None = None,
                   replay_exec: str = "eager", max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
     """LLM(...) kwargs. Production: stock defaults (``enforce_eager`` is a declared flag for the
@@ -122,9 +103,9 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int = 0, enforce_ea
     profile row; ``max_num_batched_tokens`` is a declared scheduler flag, used by the varied-batch
     cases (M2) to change batch composition; replay must use the production's value so the recorded
     schedule is reproducible). Replay: + trace replay; ``replay_exec`` = ``eager`` (dispatch-mode
-    interception, ``enforce_eager=True``) or ``compiled-nograph`` (§16.1: the production compilation
+    interception, ``enforce_eager=True``) or ``compiled-nograph`` (the production compilation
     with CUDA graphs off in replay only, ``compilation_config.cudagraph_mode = NONE``).
-    ``tensor_parallel_size`` > 1 (lane TP, coverage wave axis 2; a profile port's
+    ``tensor_parallel_size`` > 1 (a profile port's
     ``parallelism.tensor_parallel_size``) is a declared production flag: the model is sharded over that
     many GPUs (vLLM's multiprocess executor; the engine core stays in-process). The key is absent at 1 so
     earlier profile ids are unchanged. In replay with TP > 1 the model lives in worker processes, so the
@@ -144,7 +125,7 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int = 0, enforce_ea
         if replay:
             kw["worker_extension_cls"] = TP_WORKER_EXTENSION
     if quantization:
-        # [QZ, additive] lane QZ (coverage wave axis "quantization", port b1-fp8): `--quantization fp8` is a declared
+        # `--quantization fp8` (the b1-fp8 port) is a declared
         # production flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
         # Replay reads it from the manifest's `quantization` field (replay.py) so the same online-quantised weights
         # and the same FP8 kernels run under the capture.
@@ -171,36 +152,15 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int = 0, enforce_ea
         # request's never computes those positions itself (its KV reads there are the other request's
         # values, its boundary has no step for them). Stock production keeps caching; the B0/B1 rows
         # bind every position of a request to that request's own steps. Cross-request KV identity
-        # is the R3 (prefix cache) row's rule.
+        # is a prefix-cache workload's rule.
         kw["enable_prefix_caching"] = False
     return kw
-
-
-def get_model_runner(llm: Any) -> Any:
-    """Navigate LLM -> in-process engine core -> worker -> model runner (uniproc executor)."""
-    eng = llm.llm_engine
-    core = getattr(eng, "engine_core", None)
-    inner = getattr(core, "engine_core", None) or core
-    executor = getattr(inner, "model_executor", None)
-    worker = getattr(executor, "driver_worker", None)
-    for attr in ("worker", "model_runner"):
-        if hasattr(worker, attr):
-            worker = getattr(worker, attr)
-            if attr == "model_runner":
-                return worker
-    raise RuntimeError("could not find the in-process model runner (is VLLM_ENABLE_V1_MULTIPROCESSING=0?)")
-
-
-def get_scheduler(llm: Any) -> Any:
-    core = llm.llm_engine.engine_core
-    inner = getattr(core, "engine_core", None) or core
-    return inner.scheduler
 
 
 def _run(cmd: list[str]) -> str:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout.strip()
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError, ValueError):
         return ""
 
 
@@ -219,7 +179,7 @@ def gpu_info() -> dict[str, Any]:
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
         "multi_processor_count": int(props.multi_processor_count),
-        # [R13 ampere] the tuned-GEMM arch family vLLM selects its batch-invariant GEMM table by, from vLLM's OWN function on this
+        # the tuned-GEMM arch family vLLM selects its batch-invariant GEMM table by, from vLLM's OWN function on this
         # device's capability (None = no table = default tiling, e.g. Ampere): the fold's GEMM target selection
         # (verity_vllm.program.frontend.gemm_targets) checks the record against it.
         "tuned_gemm_arch_family": _tuned_gemm_arch_family(props.major, props.minor),
@@ -349,7 +309,7 @@ def _backends_of_runner(runner: Any) -> dict[str, Any]:
 
 def _backends_probe(worker: Any) -> dict[str, Any]:
     """Runs inside a TP worker process (``LLM.collective_rpc`` with a callable): read-only class names of
-    the layers that ran, plus the collective implementation the TP group chose (lane TP)."""
+    the layers that ran, plus the collective implementation the TP group chose."""
     out = _backends_of_runner(worker.model_runner)
     try:
         from vllm.distributed import parallel_state as ps
@@ -386,7 +346,7 @@ def backends_info(llm: Any) -> dict[str, Any]:
             out["ranks"] = len(per_rank)
             out.pop("tp_rank", None)
             return out
-        out = _backends_of_runner(get_model_runner(llm))
+        out = _backends_of_runner(handle.model_runner(llm))
     except Exception as e:  # noqa: BLE001
         out["error"] = repr(e)
     return out
@@ -412,12 +372,11 @@ def build_manifest(
     quantization: str | None = None,
 ) -> dict[str, Any]:
     sw = software_info(wheel_sha256, vllm_commit)
-    kw = {k: v for k, v in engine_kwargs(cp, replay=False, enforce_eager=enforce_eager, custom_ops=custom_ops,
+    kw = {k: v for k, v in engine_kwargs(cp, replay=False, seed=ENGINE_SEED, enforce_eager=enforce_eager, custom_ops=custom_ops,
                                          max_num_batched_tokens=max_num_batched_tokens,
                                          tensor_parallel_size=tensor_parallel_size,
                                          quantization=quantization).items() if k not in ("model", "tokenizer")}
-    # state rows (W10, R2/R3/R4): declared scheduler / cache overrides are part of the profile
-    # (they change the profile id) and are replayed under the same values (state_rows.py)
+    # declared engine overrides are part of the profile (they change the profile id) and are replayed under the same values
     if engine_overrides:
         kw.update(engine_overrides)
     doc = {
@@ -434,7 +393,7 @@ def build_manifest(
         "dists": sw["dists"],
         "gpu": gpu_info(),
         "dtype": "bfloat16",
-        # [QZ, additive] the declared quantization scheme (None = the bf16 profiles; "fp8" = lane QZ's b1-fp8 port,
+        # the declared quantization scheme (None = the bf16 profiles; "fp8" = the b1-fp8 port,
         # vLLM online per-tensor weight quantisation + dynamic per-token activation quantisation); the harness's C0
         # check compares this field with the port's `quantization`
         "quantization": (str(quantization) if quantization else None),
@@ -455,9 +414,6 @@ def build_manifest(
     return doc
 
 
-def canonical_json_bytes(doc: Any) -> bytes:
-    return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-
-
 def profile_id_of(manifest: dict[str, Any]) -> str:
-    return hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()[:12]
+    from verity.ml.circuits.codec import canonical_json
+    return hashlib.sha256(canonical_json(manifest)).hexdigest()[:12]

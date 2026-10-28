@@ -1,6 +1,6 @@
 """Per-token timing traces of real vLLM serving, for the network certifier's calibration (`network-certifier-calibrate`).
 
-One job (`run.sh`, under `research run --queue` on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
+One job (`run.sh`, queued on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records
 on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a certifier
 in front of the server would: every streamed token is one egress frame, ready when its chunk arrives, and a request is
@@ -21,7 +21,7 @@ engine without the committer. Both stamp the tokens each engine step adds when t
 stall). Their monitor runs in a child process, so that the engine's own pauses stay in the trace. Before the replay,
 with the schedule and every other input built, the recorder freezes its heap (`gc.freeze()`, `gc` in `meta.json`), so
 that full collections don't walk the whole run's requests, which a served engine never holds at once. Offline traces
-recorded without `gc` were taken on a higher GC floor (a 42 ms full collection before t0 in `art:ef0c3e05`) and compare
+recorded without `gc` were taken on a higher GC floor (a full collection before t0) and compare
 against a different floor than later ones. A step or a finalization that takes `STALL_S` is hung: every thread's stack
 goes to stderr and the job exits, rather than holding its GPU to the lease's end.
 
@@ -41,9 +41,8 @@ the chunk rather than counting it done.
 **`convert`** rebuilds `trace.json` from those files, and drops what isn't honest timing of an idle GPU:
 - a heartbeat or event-loop stall longer than `--freeze-ms` (SIGSTOP, a paused scope, a saturated host) drops the
   windows it overlaps and the next one, where the backlog it left drains; a stall longer than `--freeze-rest-ms` drops
-  every window from its first to the chunk's end. On node 1's chunks (`art:bd8f7261`) Llama-8B's next window after a
-  stall had TTFT p99 6.5 s, and the first window kept after one had TTFT p50/p99 93.7/798 ms against quiet windows'
-  92.7/797; the stalls followed by a kept window were 1.2-3.3 s long, so nothing shows a longer one drains as fast.
+  every window from its first to the chunk's end, since nothing shows a longer stall's backlog drains as fast as a short
+  one's.
   `--freeze-scope chunk` is the old rule, for sensitivity: any such stall voids the whole chunk;
 - a window is dropped when another process computed on our GPU, when the rest of the NUMA node kept more than
   `--max-others-busy` of its CPUs busy or co-tenants more than `--max-cotenant-busy` of the job's own (its cpuset's
@@ -124,7 +123,9 @@ def parse_mix(text: str) -> list[tuple[str, float]]:
 
 
 def load_workload(name: str) -> list[dict]:
-    reqs = json.loads((WORKLOADS / MIXES[name]).read_text())["requests"]
+    from verity_vllm.pipeline.workload_file import workload_file
+
+    reqs = json.loads(workload_file(WORKLOADS / MIXES[name]).read_text())["requests"]
     return [{"index": r["index"], "offset_s": r["arrival_offset_s"], "prompt": r["prompt_token_ids"],
              "max_tokens": r["max_tokens"]} for r in reqs]
 
@@ -199,7 +200,7 @@ class Collections:
 
 def request_body(model: str, q: dict) -> bytes:
     return json.dumps({"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0,
-                       "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
+                       "top_p": 1.0, "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
 
 
 def request_record(q: dict, body: bytes) -> dict:
@@ -265,12 +266,12 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
 
 def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequence[tuple[str, list[dict], float]]):
     """vLLM's engine in this process as the Commit stage builds it (`verity_vllm.engine.build`: batch-invariant, eager,
-    no prefix cache), and with `commit` the served committer (`native_collect`), which hashes every Call output of
-    every step into the step's Merkle root on the GPU (CMT-2's chunk tree), keeping the tree levels but not the values.
-    At about 1.4 MB of Call outputs per token, hashing on host threads (`native_host`) can't keep up with the mixes, and
-    its unsized step blocks deadlock on a prefill that overflows them. The device staging is sized from the mix's
-    envelope as the Commit stage arms it (`size_arena`: two decode-sized blocks and one prefill-sized one, each step
-    taking the one its shape needs), and refused here, before any request, when it doesn't fit beside the engine."""
+    no prefix cache), and with `commit` the served committer (`native_collect_v2b` under rows-sha512, the Commit's scheme),
+    which commits every Call output of every step as hm96-sha512 rows in the step's frame-v3-sha512 tree on the GPU,
+    keeping neither the values nor the tree levels, with a 64-byte root per window. At about 1.4 MB of Call outputs per
+    token, hashing on host threads (`native_host`) can't keep up with the mixes. The staging is sized from the mix's
+    envelope as the Commit stage arms it (`size_arena`) over the windowed worker's device ring (`enable_windows`), and
+    refused here, before any request, when it doesn't fit beside the engine."""
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
@@ -283,7 +284,8 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
         return eng, None
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None, commit_scheme="vllm-v1")
+    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None, wrap=True, gather=True,
+                                 native_hooks=True, auto_blocks=True, native_worker=True)
     com._gpu_ext_load()  # the GPU tree's extension is built on first use: on a cold node, 86 s that would spill past t0
     t = clock()
     com.register_weights()
@@ -291,10 +293,11 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
     arena = com.size_arena({"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt"]) for r in rows),
                             "max_new": max(r["max_tokens"] for r in rows),
                             "max_num_batched_tokens": args.max_num_batched_tokens, "max_model_len": args.max_model_len})
-    meta["committer"] = {"name": com.name, "retain_values": False,
+    windows = com.enable_windows(arena)
+    meta["committer"] = {"name": com.name, "commit_scheme": com.commit_scheme, "retain_values": False,
                          "run_s": WINDOW_BUCKETS * BUCKET_MS / 1000, "register_weights_s": round(clock() - t, 1),
                          "arena": {k: arena.get(k) for k in ("decode_block_bytes", "prefill_block_bytes", "blocks_preallocated",
-                                                             "step_bound_bytes", "per_token_bytes")}}
+                                                             "step_bound_bytes", "per_token_bytes")}, "windows": windows}
     return eng, com
 
 

@@ -54,6 +54,8 @@ structure Rep where
   table : Nat
   rep : Nat
   cfg : Frame.Cfg
+  /-- the draws the frame took at the rep's start, which the finish holds the rep's requests to (`ownOf`) -/
+  draws : Frame.Draws := default
   st : Frame.State := {}
   alg : Array (ByteArray × Nat) := #[]
   coins : Array (Array F128) := #[]
@@ -73,12 +75,20 @@ structure Session where
   sts : Array Stmt
   link : Option (Array F128) := none
 
-/-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1 by its table's level-0
-root, the loop's finish's (`Finish.serve`'s `keep`). -/
+/-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1 and its proof file by its
+table's level-0 root, the loop's finish's (`Finish.serve`'s `keep` and `file`). -/
 structure Registry where
   sessions : Array Session := #[]
   reps : Array Rep := #[]
   salts : Array (ByteArray × Nat × Array ByteArray) := #[]
+  files : Array (ByteArray × Nat × ByteArray) := #[]
+
+/-- Rep `r`'s proof file `b` on the table of level-0 root `root`, as the loop's finish computed it; a rep's file is kept
+once, and asking again is refused. -/
+def Registry.file (R : Registry) (root : ByteArray) (r : Nat) (b : ByteArray) : Except String Registry :=
+  if R.files.any fun (x, q, _) => x == root && q == r then
+    .error s!"rep {r}'s proof file of its table was computed already"
+  else .ok { R with files := R.files.push (root, r, b) }
 
 /-- Session `sid`, set up on `spec` and `sts` at its `Hello`. -/
 def Registry.begin (R : Registry) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) : Registry :=
@@ -121,7 +131,7 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Regi
     let c := Frame.Cfg.ofDraws lay d (some mask)
     if let .error e := c.check then return (← err s!"the rep's start: {e}")
     let added ← reg.modifyGet fun R =>
-      if (R.find sid i r).isSome then (false, R) else (true, { R with reps := R.reps.push { sid, table := i, rep := r, cfg := c } })
+      if (R.find sid i r).isSome then (false, R) else (true, { R with reps := R.reps.push { sid, table := i, rep := r, cfg := c, draws := d } })
     unless added do return (← err s!"table {i} rep {r}'s frame started already")
     let b := d.toBytes c.root
     say s!"ok {b.size}"
@@ -282,6 +292,21 @@ def finish (reg : IO.Ref Registry) (sid tables : Nat) : IO (Except String Unit) 
       | _ => return .error s!"table {i} rep {r}: no answer to finish"
   return .ok ()
 
+/-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`, which
+the loop's finish holds the rep's requests to (`Finish.Own`): the draws its frame took at its start, the algebraic phase's
+values the frame took at their pads (`Frame.absorbed`'s order, the rest `0`), the extra claims at the session's link points
+(`Drive.extras`, as `placeOf` opens with them), and the coins the stream answered each of the rep's rounds so far. -/
+def ownOf (R : Registry) (L0 : Level0.Registry) (i r : Nat) (root : ByteArray) : Except String Finish.Own := do
+  let some sl := L0.slots.find? (·.l0.root == root) | throw s!"table {i}: a level 0 the session loop did not draw"
+  let some (sid, name) := sl.bound | throw s!"table {i}: a level 0 no session's Commit carries"
+  let some s := R.sessions.find? (·.sid == sid) | throw s!"table {i}: session {sid}, which the loop is not serving"
+  unless s.spec.tables[i]? == some name do throw s!"table {i}: the level 0 of the session's table {name}"
+  let some st := s.sts[i]? | throw s!"table {i} of the session's {s.sts.size}"
+  let some c := s.link | throw "a rep's request before the session's Commit coins"
+  let some (_, p) := R.find sid i r | throw s!"a request of table {i} rep {r}, whose frame the loop has not started"
+  let vals := (p.cfg.order.zip p.vals).foldl (fun v (k, x) => v.set! k x) (Array.replicate (p.cfg.lay.zp 64) 0)
+  return { draws := p.draws, vals, xs := Drive.extras st (Drive.linkPoints st c), coins := p.coins }
+
 /-- **What the loop tells the prover of table `i`'s rep `r`** in the live session named `name`, for the request line
 `line` on `ch`, past the session's `Commit`: `place NAME I R` is answered by its next round's place (`placeOf`), `alg N`
 or `open N` for the algebraic phase's or the opening's scheduled round, squeezing `N` coins, else `own`; `vals NAME I R`
@@ -319,10 +344,12 @@ def ask (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry)
       | _ => say "own"
   | _ => err s!"a request `{line.trim}`"
 
-/-- Session `sid` ended: its frames, their openings and the salts of its tables' level 0 (`roots`) are gone. -/
+/-- Session `sid` ended: its frames, their openings and the salts and proof files of its tables' level 0 (`roots`) are
+gone. -/
 def close (reg : IO.Ref Registry) (sid : Nat) (roots : Array ByteArray) : IO Unit :=
   reg.modify fun R =>
     { sessions := R.sessions.filter (·.sid != sid), reps := R.reps.filter (·.sid != sid),
-      salts := R.salts.filter fun (root, _, _) => !roots.contains root }
+      salts := R.salts.filter fun (root, _, _) => !roots.contains root,
+      files := R.files.filter fun (root, _, _) => !roots.contains root }
 
 end Flock.Firewall.Frames

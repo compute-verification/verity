@@ -51,11 +51,12 @@ from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refu
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import Registration, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
-from verity_vllm.program.replay import replayer
+from verity_vllm.program.prune import kept_records
+from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
-DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: G-RH-16 (rotary table without terminal cast), G-RH-17 (0-d buffer operand in Elementwise) (lane DERIVE-4); d2: HF 5.x plumbing closures G-RH-1/-2/-4/-6/-8/-9/-10 (lane DERIVE-2); d3: G-RH-14 (embedding padding_idx), G-RH-7 (bf16 inv_freq rotary table) (lane DERIVE-3)
+DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
 
 aten = torch.ops.aten
 
@@ -136,7 +137,7 @@ def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, 
 
 
 def module_registrations(module) -> tuple[set[str], dict[str, str]]:
-    """[R15 moe GATE-PATH] (every registered path of every submodule, duplicate path -> first registration).  `named_modules()` (the
+    """[GATE-PATH] (every registered path of every submodule, duplicate path -> first registration).  `named_modules()` (the
     implementation's vocabulary, what a hook-based collector names its tensors by) yields each module ONCE under its first path;
     `remove_duplicate=False` yields the other registrations of the same object (vLLM's MoERunner re-registers the block's router as
     its own `gate`; `get_rope` shares one RotaryEmbedding across layers).  Not a torch module: nothing known."""
@@ -210,7 +211,7 @@ class Ctx:
         self.current: Any = None  # fx node being translated
         #: set while `relabel.rank_report` re-emits a node: `call` hands it each call instead of appending to `B` (the template's slot)
         self.emit_into: Callable[..., Coll] | None = None
-        # [R15 moe GATE-PATH] every path a module of the source is registered under -> its first registration (`stack_path`)
+        # every path a module of the source is registered under -> its first registration (`stack_path`)
         self._module_paths, self._canonical_path = module_registrations(module)
         #: unrooted stack entries that resolved under NO registered path (kept bare) -> bare path -> occurrences; recorded in the
         #: derive provenance (`unresolved_module_paths`) so the merged-name failure mode is visible at derive, not first at Commit coverage
@@ -287,14 +288,14 @@ class Ctx:
 
     def stack_path(self, node) -> str:
         """The producing module's path in the source module's OWN vocabulary (`named_modules()`), from the node's `nn_module_stack`.
-        [R15 moe GATE-PATH] the export names a module by the attribute path the trace took; a module reached through a holder that is
+        [GATE-PATH] the export names a module by the attribute path the trace took; a module reached through a holder that is
         not its registering parent comes out UNROOTED (vLLM 0.28's MoERunner keeps the router as `self.gate` and calls it inside its own
         forward: the router Gemm's stack ends in a bare `gate`, one name for 48 layers) or under a DUPLICATE registration
         (`...mlp.experts.gate` where `named_modules()` yields `...mlp.gate`).  Rooted entries are kept verbatim (a shared RoPE instance
         stays under each layer's path, as the manifest's alias rule expects); an unrooted entry is resolved relative to its parent's
         registered path or, extending the previous unrooted entry, to that entry's holder (GLM-5.3's `_shared_experts._layer.act_fn`,
         from `...mlp.experts`), a duplicate registration replaced by the first (`...mlp.shared_experts.act_fn`, the collector's name).
-        M-0595: a ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
+        A ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
         entry under NO registered path keeps its bare name and is COUNTED in `unresolved_module_paths` (provenance)."""
         stack = node.meta.get("nn_module_stack") or {}
         if not stack:
@@ -361,7 +362,7 @@ class Ctx:
         return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
     def table(self, name: str, node=None) -> Coll:
-        """The registered table `name` (`verity_vllm.program.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
+        """The registered table `name` (`verity.ml.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
         return self._registered(node, f"table {name!r}", lambda r: r.table(name))
 
     def _registered(self, node, what: str, read) -> Coll:
@@ -495,13 +496,15 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False, session: list | None = None) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None, dead_free: bool = False) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
-    `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it)."""
+    `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it).
+    `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
+    Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -523,9 +526,9 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
-        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry)
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
         if session is not None:
-            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family))
+            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
         return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
@@ -539,12 +542,12 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool) -> DeriveReport:
+                   check_registry: bool, dead_free: bool = False) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
     prov["weight_roles"] = ctx.weight_roles
-    prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
+    prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual
     prov["applications"] = ctx.applications
     prov["mutation_effects"] = ctx.mutation_effects
     prov["returned_inputs"] = ctx.returned_inputs
@@ -560,8 +563,10 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
     from verity_vllm.correspondence.runtime import correspondence_digest
     corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
+    body, corr_doc["calls"], hints = kept_records(flat_sd.body, corr_doc["calls"], ctx.node_hints, registered=dead_free)
+    flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     corr_digest = correspondence_digest(corr_doc)
-    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
+    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
                            registered=ctx.registration.names if ctx.registered_values else (),
                            theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
     check_identity(flat_program, check_registry=check_registry)

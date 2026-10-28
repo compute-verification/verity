@@ -1,4 +1,4 @@
-"""Pearl-C's work law (`pearl_c_work`; statement review item 5, red team F1, F2, F5–F8): splits bounded by 1% of k, credit
+"""Pearl-C's work law (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
 excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's draw coin
 after the commitment, and the audit."""
@@ -19,6 +19,7 @@ import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
+from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
@@ -235,6 +236,43 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
                                                for v in rejected.audit.verdicts)
 
 
+@pytest.mark.slow
+def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
+    """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
+    Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
+    check may see it (L3's `TileCheck.Accepts` asks `weightOK` of every column): the padded tile's rows are voluntary,
+    which leaves it no credited cell, so no draw lands on it and it opens no exclusion tile.  Here 500 rows padded to
+    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
+    under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their
+    exclusion tile is the padded one."""
+    s = C.PearlC(k_min=32, tile=(16, 8), forming="v1")
+    rows_a = CV.rows_f32("work-pad", "A", 16, K)
+    real = [r for r in CV.rows_f32("work-pad", "B", 504, K) if CW.row_passes(C.parse_f32_row(r, K))][:500]
+    rows_b, padded = W.pad_weight(real, s.tile[1])
+    assert rows_b[:500] == real and rows_b[500:] == [C.f32_row([0] * K)] * 4 and padded == tuple(range(496, 504))
+    assert W.pad_weight(rows_b, 8) == (rows_b, ())
+    with pytest.raises(DomainError):
+        s.check(Matmul(3, Shape(16, K, 500), 9))
+    with pytest.raises(ValueError):
+        W.pad_weight([real[0], real[1][:8]], 8)
+    work = Workload((Matmul(3, Shape(16, K, 504), 9),))
+    prover = Prover(s, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {3: rows_a})
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, padded_b={9: padded})
+    assert records == [W.UnitRecord(work.matmuls[0], 16, K, (), (), (), padded)]
+    assert [t.cols for _, t, w in CW.tickets(s, records) if w == 0] == [padded]
+    key = CW.draw_key(b"coin", b"root", b"records", epoch.salt)
+    assert all(t.cols != padded for _, t in CW.draw(s, records, key, 4096)) and CW.exclusion_tiles(s, records) == []
+    out = CW.audit(s, epoch, prover, tr, SPLITS, records, E.challenger(), 16)
+    assert out.audit.accepted
+    assert out.credit == (1 - s.cap) * CW.cell_credit(s, records[0]) * 16 * 496
+    assert out.credit < (1 - s.cap) * s.credit_of(Shape(16, K, 500))
+    only_voluntary = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, voluntary_b={9: padded})
+    assert only_voluntary[0].excluded_b == tuple(range(500, 504))
+    assert [t.cols for _, t in CW.exclusion_tiles(s, only_voluntary)] == [padded]
+
+
 def test_r1_is_a_no_op_on_pearl_c():
     """R1, the salted per-row credit rule `check_opened` and `declare` now consult, is Pearl-C4's (its F1′ bound).
     Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring
@@ -380,6 +418,65 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     given = CW.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
     again = CW.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
     assert again.audit.accepted and again.credit == (1 - h3.cap) * CW.cell_credit(h3, given[0]) * (m - 1) * n
+
+
+def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
+    """One m x n tile at depth ``k``, A row i carrying ``spikes[i]`` (`spiked_rows`), on spiked B: (record, tile, rows_a,
+    rows_b, ops) under the scheme's own `encode`."""
+    m = len(spikes)
+    rows_a = [spiked_rows(k, 1, 100 + i, s)[0] for i, s in enumerate(spikes)]
+    rows_b = spiked_rows(k, n, 900, 300.0)
+    work = Workload((Matmul(0, Shape(m, k, n), 1),))
+    prover = Prover(scheme, {1: rows_b}, salt_key=bytes(32))
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {0: rows_a})
+    tile = scheme.tiles(work.matmuls[0].shape)[0]
+    ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
+    return (W.UnitRecord(work.matmuls[0], m, k), tile, rows_a, rows_b,
+            scheme.encode(ctx, scheme.noise(ctx), rows_a, rows_b, tile))
+
+
+def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
+    """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
+    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.30ρ is
+    accepted (the ρ row cap refused it), a row at 10.4ρ is refused by the 4ρ row cap, and 16 rows each under 4ρ that
+    put the tile over ρ are refused by the tile cap."""
+    m = 16
+    h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
+    assert h3.census_ks == (256,) and h3.row_cap_at(256) == 4 * h3.cap == Fraction(1, 100)
+    assert CW.row_cap(h3) and CW.row_cap_multiple(h3, 256) == 4
+    rec, tile, a, b, ops = _census_tile(h3, [50.0] + [None] * (m - 1), 256)
+    debit, cap = CW._debit_cap(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
+    row = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
+    assert debit < cap / 2 and row[1] < row[0] < 4 * row[1]
+    assert CW.check_opened(h3, rec, tile, a, b, ops) is None
+    rec, tile, a, b, ops = _census_tile(h3, [100.0] + [None] * (m - 1), 256)
+    reason = CW.check_opened(h3, rec, tile, a, b, ops)
+    assert reason.startswith("A row 0's replayed debit") and "(the row cap: 4ρ·its credited cells' credit)" in reason
+    spikes = [50.0, 50.0, 50.0, 50.0, 30.0, 20.0, 20.0, 30.0, 30.0, None, 10.0, 20.0, 30.0, 20.0, None, 30.0]
+    rec, tile, a, b, ops = _census_tile(h3, spikes, 256)
+    rows = [CW._debit_cap(h3, rec, tile, ops, [i], [0, 1, 2, 3]) for i in range(m)]
+    debit, cap = CW._debit_cap(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
+    assert all(d <= 4 * c for d, c in rows) and debit > 2 * cap
+    assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed debit")
+
+
+def test_census_row_cap_leaves_k_from_k_min_unchanged():
+    """At every k >= k_min the row cap stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
+    without census ks, and at k = 1,024 a row over ρ is refused with the (C2) message, while at k = 256 the same row
+    shape, under 4ρ, passes."""
+    m = 16
+    h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
+    for k in (1024, 2048, 8192, 1 << 16):
+        assert h3.row_cap_at(k) == h3.cap and CW.row_cap_multiple(h3, k) == 1
+    for s in (S, C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), get("pearl-c-sm120-v1-h3")):
+        assert s.census_ks == () and all(CW.row_cap_multiple(s, k) == 1 for k in (128, 256, 1024))
+    rec, tile, a, b, ops = _census_tile(h3, [30.0] + [None] * (m - 1), 1024)
+    d, c = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
+    assert c < d < 4 * c
+    assert CW.check_opened(h3, rec, tile, a, b, ops) == (
+        f"A row 0's replayed debit {float(d):.0f} exceeds its cap {float(c):.0f} (the row cap: ρ·its credited cells' "
+        "credit)")
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():

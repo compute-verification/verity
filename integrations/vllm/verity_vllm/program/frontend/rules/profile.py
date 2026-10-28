@@ -164,7 +164,7 @@ def _bias_shape(shp: tuple[int, ...] | None) -> int | None:
 
 
 class BroadcastBiasAddRule(OpRule):
-    """[R13 X-04] `aten.add.Tensor(x[.., N], b[N])` — a rank-1 bias broadcast over the trailing axis of a bf16 value collection — ->
+    """[X-04] `aten.add.Tensor(x[.., N], b[N])` — a rank-1 bias broadcast over the trailing axis of a bf16 value collection — ->
     the registered `BiasAdd_v1{N}` (`bias_add` kind: one f32 add + RNE per element, `P.Bf16Add`) per row of `x`.
 
     This is the general operation, not a layer recogniser: it is what vLLM's batch-invariant linear emits after the persistent
@@ -234,7 +234,7 @@ def _without_batch_invariance(op: str, states: str) -> str | None:
     """A refusal when the active target is not batch-invariant, where ``op`` is the kernel vLLM dispatches without batch invariance
     (cuBLAS's GEMM, `layernorm_kernels.cu`'s `rms_norm_kernel` at a token-count-dependent block), not the batch-invariant one the
     rule's kind states."""
-    from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports this module
     if active_target_profile().batch_invariant:
         return None
     return f"numerics_unregistered: {op} on a target without batch invariance is the kernel vLLM dispatches there, not {states}"
@@ -276,7 +276,7 @@ class RmsNormRule(InPlaceRule):
         xc, wc = ctx.coll(x), ctx.coll(w)
         rows, lead = rows_of(xc)
         N = rows[0].type.n
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports this module
         fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps, TARGET=active_target_profile(), M=len(rows))
         outs = [ctx.call(fn, r, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
@@ -316,7 +316,7 @@ class FusedAddRmsNormRule(InPlaceRule):
         rr, _ = rows_of(ctx.coll(res))
         wc = ctx.coll(w)
         N = xr[0].type.n
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # vllm_bindings imports this module
         try:
             fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps, TARGET=active_target_profile(), M=len(xr))
         except UnregisteredTarget as e:

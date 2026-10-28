@@ -1,0 +1,11 @@
+# The recursion profile (README.md): `job.sh`, which runs 85-rec-reprice.sh's steps on a node, and `rec_profile.py`, which
+# reads the records they leave. Not a package: `run.py` is the runner `verity bench recursion` calls, stdlib only, and the
+# suite reads records it writes itself.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# settings.py declares the job's variables in verity-bench's shape, importing the harness's `Registry` (stdlib only).
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py"]

@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_decode_metadata_capture_gpu as X
-from verity_vllm.program.kernels import dsv4_decode_metadata_twin as T
+from verity.ml.definitions.numerics import dsv4_decode_metadata_twin as T
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 SMALL = {"swa": "swa-4096", "c128a": "c128-4096"}
@@ -417,6 +417,7 @@ def test_the_jobs_take_every_word_and_find_a_flipped_one(observed, case: str, tm
     assert r["mismatch"] == 1 and r["first_mismatch"]["word"] == width[f"{case}-edge"] and r["first_mismatch"]["token"] == lo + 2
 
 
+@pytest.mark.slow
 def test_the_references_agree_with_the_twin(observed) -> None:
     """The references `Dsv4SwaIndices_v1` and `Dsv4C128aGlobalTopk_v1` on every edge token, on the served steps' first, last
     and padding tokens (the HCA row at 8192 on its first and last), and on the HCA `one` and `full` steps' last token agree with

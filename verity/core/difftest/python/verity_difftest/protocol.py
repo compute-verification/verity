@@ -37,10 +37,10 @@ def canonical_json(b: bytes) -> Any:
     try:
         j = json.loads(s, parse_constant=lambda c: float(c))
         same = canonical(j) == s
-    except (ValueError, TypeError, RecursionError):
-        same = False
+    except (ValueError, TypeError, RecursionError) as e:
+        raise Reject(f"not JSON, or not canonical JSON ({type(e).__name__}: {e})") from None
     if not same:
-        raise Reject("not JSON, or not canonical JSON (compact, keys sorted, integers only)")
+        raise Reject("not canonical JSON (compact, keys sorted, integers only)")
     return j
 
 

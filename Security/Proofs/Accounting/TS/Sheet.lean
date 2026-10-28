@@ -1,9 +1,9 @@
-import Models.Accounting.Guarantees.Sheet
+import Definitions.Accounting.Guarantees.Sheet
 
 /-!
 # The data-sheet axioms' bridges
 
-(I1) and (I3) from A1–A7 (note:20261017T1818Z-draft-axioms §5):
+(I1) and (I3) from A1–A7:
 
 * `facetCeilings_of_sheet`: each facet of the data-sheet machine is one axiom's ceiling. Issue is A2, the tensor pipe
   A3, a pipe `p` A4 scaled by `4/width_p` (its load is `≤ 0` when `width_p ≤ 0`), shared memory A5 over 32; A2 with

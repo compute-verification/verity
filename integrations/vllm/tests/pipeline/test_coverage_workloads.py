@@ -243,7 +243,7 @@ def test_arrival_loop_counts_forwards_not_iterations_under_the_output_lag():
 
 
 def test_arrivals_after_idle_gaps_keep_their_declared_forward_under_the_output_lag():
-    """GLM-5.3 TP8 B8 stochastic's schedule: two idle gaps, each closed by a drain iteration that runs no forward.  An iteration
+    """GLM-5.3 TP8 B8 stochastic's first declaration: two idle gaps, each closed by a drain iteration that runs no forward.  An iteration
     clock admitted r3..r7 two forwards early (r3 at 11 beside r2's decode, against its declared 13); the forward clock keeps them,
     and every realized arrival is `realized_arrive_steps` of the declaration (what the Build's launch batches read)."""
     va = _load_adapter()
@@ -260,6 +260,27 @@ def test_arrivals_after_idle_gaps_keep_their_declared_forward_under_the_output_l
         assert timing["output_lag_source"] == source and timing["engine_steps"] == engine.forwards == 50
         assert [rec[f"r{i}"]["first_step"] for i in range(8)] == [rec[f"r{i}"]["arrive_step_realized"] for i in range(8)] == want, source
         assert engine.batches[13] == ["r2", "r3"] and engine.batches[9] == ["r2"], source
+
+
+def test_declaring_the_realized_arrivals_serves_the_same_forwards():
+    """The row file declares B8 stochastic's realized arrivals (r1 at 2, r2 at 9): every forward runs the batch the gapped
+    declaration ran, and each request now arrives where it is declared, the steps the TP Commit places the manifest at."""
+    va = _load_adapter()
+    caps = [2, 7, 23, 3, 11, 29, 32, 13]
+    gapped, declared = [0, 9, 13, 13, 15, 16, 18, 18], [0, 2, 9, 13, 15, 16, 18, 18]
+    wl = json.loads((REPO / "workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager.json").read_text())
+    assert [r["arrive_step"] for r in wl["requests"]] == declared and [r["max_tokens"] for r in wl["requests"]] == caps
+    R = lambda i, n, a: types.SimpleNamespace(request_id=f"r{i}", prompt_token_ids=[1] * 9, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
+    for make, source in ((_LaggedStubEngine, "measured"), (lambda: _ChunkedStubEngine(budget=4096, scheduler=False), "measured"),
+                         (lambda: _ChunkedStubEngine(budget=4096), "scheduler")):
+        served = {}
+        for name, arrive in (("gapped", gapped), ("declared", declared)):
+            engine = make()
+            _, timing = va.run_requests_arrivals(types.SimpleNamespace(llm_engine=engine), [R(i, n, a) for i, (n, a) in enumerate(zip(caps, arrive))],
+                                                 lambda r: types.SimpleNamespace(max_tokens=r.max_tokens))
+            served[name] = (engine.batches, [timing["requests"][f"r{i}"]["arrive_step_realized"] for i in range(8)], timing["engine_steps"])
+        assert served["declared"] == served["gapped"], source
+        assert served["declared"][1] == declared and served["declared"][2] == 50, source
 
 
 def test_realized_arrive_steps_brings_only_the_first_of_a_step_forward():
@@ -329,8 +350,7 @@ class _ChunkedStubEngine(_LaggedStubEngine):
 
 
 def test_arrival_loop_counts_partial_prefill_forwards_under_chunked_prefill():
-    """The chunked owner's finding (lead's request, 2026-09-17): a 155-token prompt at budget 64 = 3 chunks, the first two return
-    nothing; the old inference measured lag 3 and counted 15 forwards for 17.  Both sources now give 17 / lag 1."""
+    """A 155-token prompt at budget 64 is 3 chunks, the first two returning nothing: both sources count 17 forwards and lag 1."""
     va = _load_adapter()
     R = lambda rid, plen, n, a: types.SimpleNamespace(request_id=rid, prompt_token_ids=[1] * plen, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
     for scheduler, source in ((True, "scheduler"), (False, "clamped")):

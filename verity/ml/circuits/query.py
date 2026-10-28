@@ -4,7 +4,7 @@ Results are ordered collections of `FunctionCall`s (path queries) or `Region`s (
 call-preorder, zero-based. `groups(F, k)` is evaluated once per scope selected by the left side and
 concatenated; a block whose calls are not adjacent is rejected (`GapError`), never absorbed or re-cut.
 
-`parse(text)` (2026-09-17) turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
+`parse(text)` turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
 `members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
 `root()`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,

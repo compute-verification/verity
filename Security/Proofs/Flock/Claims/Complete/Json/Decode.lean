@@ -126,9 +126,9 @@ theorem decode_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray
     fld_plain hcfgs (getObjVal?_mkObj (by simp) (by simp)) (.bool true)
   have hmode : Record.str j "link_mode" = .ok "exchange" := str_same hs (gR (by simp [recordList]))
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
-  unfold Record.decodeWith
+  unfold Record.decodeWith Record.decodeJWith
   simp only [hp, hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
-    beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
+    beq_self_eq_true, check_true]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))

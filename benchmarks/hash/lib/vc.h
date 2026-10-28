@@ -17,7 +17,7 @@ extern "C" {
 
 enum { VC_ROW_NONE = 0, VC_ROW_V2 = 1, VC_ROW_SEG = 2, VC_ROW_TILE = 3 };
 // GIVEN: a 192-byte salt per position from the caller. PRF: y_r = SHA-512(Ks || u64be(pos) || u64be(r)), r < 3 (commit_gpu).
-// CHACHA64: ChaCha20 blocks 3 pos .. 3 pos + 2, 64-bit counter and 64-bit nonce (audit.hm96_salt). CHACHA_RFC: RFC 8439's
+// CHACHA64: ChaCha20 chunks 3 pos .. 3 pos + 2, 64-bit counter and 64-bit nonce (audit.hm96_salt). CHACHA_RFC: RFC 8439's
 // 32-bit counter and 12-byte nonce (verity_vllm's serving_rows.salts), the stream at 192 pos.
 enum { VC_SALT_GIVEN = 0, VC_SALT_PRF = 1, VC_SALT_CHACHA64 = 2, VC_SALT_CHACHA_RFC = 3 };
 // vc_commit_rows_launch's forms: AUTO picks by device and size (up to 40,000 rows SPEC on sm_90, FOLD elsewhere; above, SPEC
@@ -39,7 +39,7 @@ typedef struct {
   uint64_t row_bits;            // VC_ROW_V2 / VC_ROW_SEG: the row's length in bits
   const uint8_t* row_prefix;    // 128: P(row_bits) (row/v2; or sha512/row/v1's block), Q(row_bits) (row-seg), Q of a full
                                 // 64-row tile (tiles)
-  const uint8_t* row_prefix_b;  // 128: tiles only, Q of the last row block's tile (NULL when rows % 64 == 0)
+  const uint8_t* row_prefix_b;  // 128: tiles only, Q of the last row tile's tile (NULL when rows % 64 == 0)
   uint32_t tile_rows, tile_cols;// VC_ROW_TILE: the C~ and U matrices' shape (rows even, cols a multiple of 64)
   int salt_source;              // VC_SALT_*
   const uint8_t* salt_key;      // PRF: 64 bytes; CHACHA*: 32
@@ -63,6 +63,13 @@ int vc_init(void);
 int vc_sha512_launch(const uint8_t* msgs, uint64_t stride, uint64_t len, uint64_t n, uint8_t* out, cudaStream_t st);
 // n compressions: out[i] = compress(states[i], blocks[i]); a state is 64 bytes (eight big-endian words), a block 128.
 int vc_compress_launch(const uint8_t* states, const uint8_t* blocks, uint64_t n, uint8_t* out, cudaStream_t st);
+// An H1 table's chunk leaves (SPLITK; the caller's chunks = verity.core.protocols.pouw.weights.chunks(k)): n_rows rows of
+// k int8 codes at codes + codes_stride i, each with its f32 scale at scales + 4 i, as n_rows chunks leaves, leaf
+// chunks i + c at out + out_stride (chunks i + c): row i's codes [c k / chunks, (c + 1) k / chunks), its scale's 4 bytes,
+// zeros to out_stride. Those are row/v2 rows of 8 (k / chunks + 4) bits for vc_commit_rows_launch at out_stride. k / chunks
+// a multiple of 16, codes and out 16-byte aligned, out_stride a multiple of 16 of at least k / chunks + 4.
+int vc_chunk_rows_launch(const uint8_t* codes, uint64_t codes_stride, const uint8_t* scales, uint64_t n_rows, uint32_t k,
+                         uint32_t chunks, uint8_t* out, uint64_t out_stride, cudaStream_t st);
 
 // --- row digests and tile leaves -------------------------------------------------------------------------------------
 // Row digests under the plan's scheme (sha512/row/v2 or sha512/row-seg/v1) of n rows at rows + stride i into out + 64 i.
@@ -115,7 +122,7 @@ uint64_t vc_tree_arity_bytes(uint64_t n_leaves, int arity);
 uint64_t vc_tree_arity_width(uint64_t n_leaves, int arity);
 int vc_tree_arity_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, int arity, cudaStream_t st);
 
-// One call: n rows' hm96 leaves (x = SHA-512(the plan's prefix block || row): sha512/row/v2, or row/v1's block; salts from the
+// One call: n rows' hm96 leaves (x = SHA-512(the plan's prefix chunk || row): sha512/row/v2, or row/v1's block; salts from the
 // plan's source, or `salts`), pads, and the tree into levels; every leaf's b || c to bc + 128 i when bc is not NULL.
 // scratch: vc_commit_scratch_bytes(n). n = 0 writes only the empty root to levels (merkle's empty commitment, whose tree has no
 // levels and whose root is the domain's empty root), in every form.

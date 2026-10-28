@@ -1,6 +1,6 @@
 """Deterministic fold (pure): raw observation log + profile -> unexpanded Verity Program `Captured_v1{PROFILE, WORKLOAD}`.
 
-Implemented by lane L4.  Contract:
+Contract:
 
     result = fold(events, profile)          # events: Iterable[Event] (e.g. `log.read_log(path)`)
     result.program                          # verity.ml.circuits.program.Program over an unregistered CompositeDefinition
@@ -12,7 +12,7 @@ Implemented by lane L4.  Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity_vllm.program.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.ml.definitions.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -29,7 +29,7 @@ Per step (see `tree.step_events`, `resolver.resolve_step`):
                       then write each output row's refs into memory
          Transparent  effect move: read src rows now, write dst rows;  alias/noop: nothing;  alloc: nothing (the
                       allocation was registered by its StorageAlloc; its contents are undefined until written)
-         Group        parts in order (D70): each part is its own read-emit-write step; `resolver.parts_of` for both spellings
+         Group        parts in order: each part is its own read-emit-write step; `resolver.parts_of` for both spellings
          Unsupported  development: record + continue (its outputs stay unwritten, later reads become Unresolved);
                       accepted: raise
     3. SampleEnd: the TokenSelect instances' outputs are the step's sampled tokens (check ids against the log).  A sample
@@ -39,7 +39,7 @@ Per step (see `tree.step_events`, `resolver.resolve_step`):
        `StepStart.seq_lens[r] >= prompt_len_r + (served samples of r so far)`; a sample taken at a partial-prefill step
        (chunked prefill) or at a partial chunk of a post-preemption recompute is computed — its TokenSelect instance
        stays in the Program — but the engine drops it: it is not returned, not in `result.sampled`, never the target of
-       a StepLink.  Such samples are listed in `result.discarded`.  [R9 ref 2026-09-18] Every SERVED sample is also
+       a StepLink.  Such samples are listed in `result.discarded`.  Every SERVED sample is also
        recorded by the position it produces (`logits_rows[j].position + 1`), which is how a re-fed generated token
        (preemption → recompute) finds its producing TokenSelect output when the observer emitted no StepLink for it.
 
@@ -48,10 +48,10 @@ bound to PROFILE=header.profile_id and WORKLOAD=sha256 of the canonical workload
 pattern (`program.replay.replayer`), so `Program(spec)` works unchanged and `Node.name` hints do not enter the digest.
 
 KV: attention operands are `GatherMany(kv_cache_view, slots per request position)` read through the memory
-model (`MemoryModel.read_rows`) — O(T) parts per instance, no separate KV identity (D64).
+model (`MemoryModel.read_rows`) — O(T) parts per instance, no separate KV identity.
 
-Implementation notes (L4)
--------------------------
+Implementation notes
+--------------------
 * Token refs.  At StepStart the fold writes, for every token row `i` of the step, the row's token reference into
   `row_view(input_ids_view, i)` through the memory model: prefill rows (no StepLink) get the prompt parameter leaf
   `("p", r, position)`; decode rows get the TokenSelect output refs recorded at `SampleEnd` of `StepLink.src_step`
@@ -60,9 +60,7 @@ Implementation notes (L4)
   recent sample) gets the output refs of the SERVED sample that produced its position (`sample_pos[(req, position)]`,
   checked against the input token); such rows are listed in `result.refed`.  When no served sample produced the
   position the fold FAILS LOUDLY (`FoldError`, class `TokenWiring` in development mode) — and the row's `input_ids` slot
-  is left holding whatever the memory model last wrote there, which the error record names (`stale_refs`).  [R9 ref
-  2026-09-18: before this fix the fallback silently kept the stale slot content — C-builder's `qwen8` finding,
-  `out/gen/r8/aot-builder/corpus/last4/divergences.md`.]  The Embedding pattern's
+  is left holding whatever the memory model last wrote there, which the error record names (`stale_refs`).  The Embedding pattern's
   `PerRow(input_ids)` operand is then an ordinary memory read.  Width: token buffers are integer views whose element
   may be wider than the Verity token value (vLLM int64 buffers carry 32-bit ids); the fold's width check therefore
   admits a 32-bit `I32` leaf against an `int64` *integer* view (`_TOKEN_WIDTHS`) for token operands/outputs; every
@@ -70,7 +68,7 @@ Implementation notes (L4)
 * Per-row emission.  A `Compute(rows=M)` reads every row's operands first (Shared operands once), emits `M`
   instances (`B.call(spec, *colls, name=...)`), then writes every row's outputs (`out[k]` of a Tuple return goes to
   `outputs[k]`).  Reads-before-writes is what makes in-place kernels (fused add+norm, RoPE) correct.
-* Group.  Parts execute in order, each with the ordinary discipline (D70); a later part may read an earlier part's write.
+* Group.  Parts execute in order, each with the ordinary discipline; a later part may read an earlier part's write.
 * Instance names: `t=<pos>/layers.<L>/<tail>` where `pos` comes from `Compute.attribution`, else the step's token
   rows (`rows == num_tokens`) or logits rows (`rows == len(logits_rows)`), `L` from the hint (`layers.<L>`), `tail` =
   the hint's last module component or the specialization's base id.  Names are outside the digest.
@@ -95,8 +93,8 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program.registry import b1
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.replay import replayer
 from verity.ml.circuits.types import Array, Record, Type, Value
 from verity.ml.circuits.types import Tuple as TupleT
 
@@ -185,20 +183,19 @@ class FoldResult:
     #: engine (`StepStart.seq_lens[r] < prompt_len_r + served so far`): computed (TokenSelect instance in the Program), never
     #: served, never fed back
     discarded: dict = field(default_factory=dict)
-    #: [R9 ref 2026-09-18] token rows past the prompt WITHOUT a StepLink that were wired to the served sample producing their
+    #: token rows past the prompt WITHOUT a StepLink that were wired to the served sample producing their
     #: position (post-preemption recompute): `{step, row, request, position, src_step, token}` — the audit evidence that the
     #: recompute wiring path was exercised (empty on a run without preemption)
     refed: list[dict] = field(default_factory=list)
     weights_type: Any = None
     params: tuple = ()
     requests: list = field(default_factory=list)         # the RunHeader's requests (request_id, prompt_token_ids, ...)
-    #: the memory-access journal (D82: exhaustive provenance).  Every read and write the fold made, in order, as plain
+    #: the memory-access journal (exhaustive provenance).  Every read and write the fold made, in order, as plain
     #: dicts: {"seq", "event", "step", "kind": "alloc"|"free"|"root"|"read"|"write", "view": ViewDesc|None, "alloc": int,
     #: "rows": [row indices]|None (GatherMany), "refs": [(space, idx, lo, hi), ...] (reads: what the memory model
-    #: answered; writes: what was stored), "what": str}.  An independent checker (`verity_vllm/check/operand_provenance.py`) replays
-    #: the allocs/writes with its own last-writer map and must reproduce every read's refs.
+    #: answered; writes: what was stored), "what": str}.
     accesses: list[dict] = field(default_factory=list)
-    #: [R17 D90] tensor-parallel rank log: {"rank", "world"} (None on a TP1 log); one record per collective the fold executed
+    #: tensor-parallel rank log: {"rank", "world"} (None on a TP1 log); one record per collective the fold executed
     #: ({step, k, kind, site, rows, N, rank, world, event, own_view, fields:[{request, param, field, ordinal, rows, offset}]}); and the
     #: `peers_<i>` parameter layout (`_Fold._peers_layout`) -- what program.json states about the collective_received roots
     tp: dict | None = None
@@ -209,7 +206,7 @@ class FoldResult:
     #: a `registered_values` profile's supplied inputs (`_Fold.supplied`): the registered `values` and each request's `run_<i>`,
     #: every field's name, width, bits and leaf offset; empty otherwise
     supplied: dict = field(default_factory=dict)
-    #: [COORD R17-28 F3, mprof] the Program's descriptor (`verity.ml.circuits.codec.encode_program`) as built for the digest: `persist_program`
+    #: the Program's descriptor (`verity.ml.circuits.codec.encode_program`) as built for the digest: `persist_program`
     #: writes THIS instead of encoding the same Program a second time (36 s + a second digest at B8 1024/128; the descriptor is the
     #: digest's input, so program.json's `program` and `digest` come from one encoding by construction)
     descriptor: Any = None
@@ -220,7 +217,7 @@ class FoldResult:
 
     @property
     def reference_eligible(self) -> bool:
-        """[R9 ref 2026-09-18, rule R1] a fold with ANY recorded error / Unsupported resolution is NOT eligible as an
+        """A fold with ANY recorded error / Unsupported resolution is NOT eligible as an
         accepted reference Program (`gates.fold_integrity` applies the same rule to the persisted `fold_summary.json`)."""
         return not self.errors and int(getattr(self.report, "unsupported", 0) or 0) == 0
 
@@ -313,9 +310,9 @@ class _Fold:
         self.weights_type = None
         self.weights_coll: Coll | None = None
         self.prompt_colls: list[Coll] = []
-        self.seed_param: dict[int, int] = {}      # [R15 stoch] request index -> seed parameter index
+        self.seed_param: dict[int, int] = {}      # request index -> seed parameter index
         self.seed_colls: dict[int, Coll] = {}
-        # [R17 D90] a TP rank log: `tp` = {"rank", "world"} from RunHeader.notes.tp2 (None on a TP1 log: nothing below is allocated);
+        # a TP rank log: `tp` = {"rank", "world"} from RunHeader.notes.tp2 (None on a TP1 log: nothing below is allocated);
         # `peers_param[i]` = the `peers_<i>` parameter index of request i; `peers_fields[i]` = its fields in issue order (finalised into a
         # Record at `_finish`); `peers_leaves[i]` = leaves allocated so far; `collectives` = one record per collective the fold executed
         self.tp: dict[str, int] | None = None
@@ -398,7 +395,7 @@ class _Fold:
             raise FoldError("RunHeader.workload has no requests")
         self.requests = reqs
         self.req_index = {r["request_id"]: i for i, r in enumerate(reqs)}
-        # [ov-sampling] n > 1: the runner's rows carry vLLM's child ids (`{index}_{request_id}`, header `workload.children`, a
+        # n > 1: the runner's rows carry vLLM's child ids (`{index}_{request_id}`, header `workload.children`, a
         # fact of the fork recorded by the adapter).  A child's prompt IS its parent's prompt parameter (one root, not n copies);
         # the served sequences (Program outputs) are per child.  A child naming an unknown parent is a header error.
         children = list((h.workload or {}).get("children") or [])
@@ -413,7 +410,7 @@ class _Fold:
         for i, r in enumerate(reqs):
             lp = len(r["prompt_token_ids"])
             params.append(("prompt" if len(reqs) == 1 else f"prompt_{i}", Array(lp, I32)))
-        # [R15 stoch] a stochastic run (header sampling not greedy): every seeded request's seed is a declared runtime INPUT of the
+        # a stochastic run (header sampling not greedy): every seeded request's seed is a declared runtime INPUT of the
         # Program -- one `seed` / `seed_<i>` parameter (Array<1, Value<64>>, i = the request's index, like the prompts) between the
         # prompts and the weights; the sampler instance reads it through a `Param("seed", ...)` operand (resolver).  Layout:
         # prompts..., seeds..., weights (weights stay the LAST input node: cb_a.compare / batch_decomp rely on that).
@@ -424,7 +421,7 @@ class _Fold:
                 if r.get("seed") is not None:
                     self.seed_param[i] = len(params)
                     params.append(("seed" if len(reqs) == 1 else f"seed_{i}", Array(1, Value(64))))
-        # [R17 D90, COORD R17-4] a TENSOR-PARALLEL rank log (RunHeader.notes.tp2 = {rank, world_size} written by the rank observer,
+        # a TENSOR-PARALLEL rank log (RunHeader.notes.tp2 = {rank, world_size} written by the rank observer,
         # tp2_worker.tp2_install): every request gets ONE `peers` / `peers_<i>` root parameter (root class `collective_received`) between
         # the seeds and the weights -- a Record whose fields, in issue order, are the OTHER rank's partials of the collectives whose rows the
         # request owns (`s<step>_k<k>`: Array<M_r, Array<N, Bf16>>), filled in as the fold executes the collectives and finalised at
@@ -437,7 +434,7 @@ class _Fold:
             if tp.get("rank") is None:
                 raise FoldError("RunHeader.notes.tp2 has world_size > 1 but no rank")
             self.tp = {"rank": int(tp["rank"]), "world": int(tp["world_size"])}
-            # [lane vllm-tp-n] any world >= 2: world 2 binds AllReduce2_v1 / AllGather2_v1 (the recorded identities), world > 2 the
+            # any world >= 2: world 2 binds AllReduce2_v1 / AllGather2_v1 (the recorded identities), world > 2 the
             # world-parametric AllReduce_v2{WORLD,N} / AllGather_v1{WORLD,N} (b1_tp2.all_reduce / all_gather); a rank outside the world is refused
             if self.tp["world"] < 2 or not 0 <= self.tp["rank"] < self.tp["world"]:
                 raise FoldError(f"tensor-parallel world {self.tp['world']} rank {self.tp['rank']}: rank must be in [0, world) with world >= 2; refused")
@@ -473,7 +470,7 @@ class _Fold:
 
     def _journal(self, kind: str, view: ViewDesc | None, refs: Refs | None, *, alloc: int | None = None, rows: list | None = None,
                  what: str = "", event: int | None = None) -> None:
-        """Append one memory access to `accesses` (D82), its refs the `Refs` read (expanded by a reader, `memory.access_runs`; VLLM-14)."""
+        """Append one memory access to `accesses`, its refs the `Refs` read (expanded by a reader, `memory.access_runs`)."""
         self.accesses.append({"seq": len(self.accesses), "event": event if event is not None else self.cur_event, "step": self.cur_step,
                               "kind": kind, "view": view, "alloc": alloc if alloc is not None else (view.alloc if view is not None else None),
                               "rows": rows, "refs": refs, "what": what})
@@ -529,7 +526,7 @@ class _Fold:
         se = step_events(step_slice)
         start = se.start
         self.cur_step, self.cur_start = start.step, start
-        self.cur_coll_k = 0            # [R17 D90] collective issue ordinal restarts every step
+        self.cur_coll_k = 0            # collective issue ordinal restarts every step
         node_lo = len(self.B.nodes)
         computes_before, unsupported_before, errors_before = self.report.computes, self.report.unsupported, len(self.errors)
         by_spec_before = dict(self.report.by_spec)
@@ -547,7 +544,7 @@ class _Fold:
             self.notes.append(f"step {start.step} target: {x01['launches']} persistent-GEMM launches pinned to NUM_SMS={x01['pinned']} "
                               f"from {x01['source']} (profile default {x01['profile_default']}; {x01['basis']})")
         gt = ctx.scratch.get(GEMM_TARGET_SCRATCH_KEY)
-        if gt:                                     # [R13 ampere] the registered GEMM target whose launch geometry the GEMM launches were pinned to
+        if gt:                                     # the registered GEMM target whose launch geometry the GEMM launches were pinned to
             self.notes.append(f"step {start.step} gemm target: {gt['launches']} persistent-GEMM launches pinned to the launch geometry of registered "
                               f"target {gt['target']!r} (cc {'.'.join(map(str, gt['compute_capability']))}, dot {gt['dot']}, tuned table "
                               f"{gt['tuned_table_sha256']}; header family {gt['header_tuned_gemm_arch_family']!r}; refusal {gt['refusal']!r})")
@@ -622,7 +619,7 @@ class _Fold:
             except FoldError as e:
                 if self.strict:
                     raise
-                # [R9 ref 2026-09-18] fail loudly, never silently: the row's `input_ids` slot is NOT rewritten, so record what
+                # fail loudly, never silently: the row's `input_ids` slot is NOT rewritten, so record what
                 # it currently holds (the previous step's ref — exactly the stale content the qwen8 divergence embedded)
                 detail: dict[str, Any] = {"row": i, "request": req, "position": pos}
                 if start.input_ids_view is not None:
@@ -662,7 +659,7 @@ class _Fold:
         r = self.req_index[req]
         prompt = self.requests[r]["prompt_token_ids"]
         if pos >= len(prompt):
-            # [R9 ref 2026-09-18] a generated token re-fed by the recompute after a preemption: the adapter emits a StepLink
+            # a generated token re-fed by the recompute after a preemption: the adapter emits a StepLink
             # only for the request's most recent sample, so the row is wired by the position it occupies — to the SERVED
             # sample that produced that position (registered at its SampleEnd) — and checked against the input token.
             src = self.sample_pos.get((req, pos))
@@ -692,7 +689,7 @@ class _Fold:
         try:
             if not isinstance(r, (Group, Compute, Transparent)):
                 raise FoldError(f"unknown resolution {type(r).__name__}")
-            # D70: a grouped resolution (`resolver.Group` or a primary with `before`/`also` members) is executed part by
+            # a grouped resolution (`resolver.Group` or a primary with `before`/`also` members) is executed part by
             # part IN ORDER, each part its own memory step (reads, instances, writes), so a scope's transparent glue
             # can feed the compute that follows it.  `parts_of` is the one accessor for both spellings.
             for m in parts_of(r):
@@ -707,14 +704,14 @@ class _Fold:
             self._problem(type(e).__name__, str(e), {"event": root.id, "op": root.op, "pattern": getattr(r, "pattern", "")})
 
     def _parts(self, parts: list, root: TreeNode) -> None:
-        """One memory step: the parts' reads, then their instances, then their writes (called with one part per D70)."""
+        """One memory step: the parts' reads, then their instances, then their writes (called with one part at a time)."""
         reads: list[tuple[str, Any, Any]] = []
         for p in parts:
             if isinstance(p, Compute):
                 try:
                     reads.append(("c", p, self._compute_reads(p)))
                 except BaseException:
-                    self._coll_prep.pop(id(p), None)      # [F-r19-tp2-5] a failed read leaves no prep behind for an id() reuse
+                    self._coll_prep.pop(id(p), None)      # a failed read leaves no prep behind for an id() reuse
                     raise
             elif isinstance(p, Transparent):
                 if p.effect == "move":
@@ -745,13 +742,12 @@ class _Fold:
             if n is not None and n < c.rows:
                 raise FoldError(f"{spec_label(c.spec)}: operand {k} {type(op).__name__} covers {n} rows, the compute has {c.rows}")
         shared: dict[int, Coll] = {}
-        # [R17 D90] a collective operand is numbered (step, k) and its peers fields allocated ONCE per Compute, before any row is read
+        # a collective operand is numbered (step, k) and its peers fields allocated ONCE per Compute, before any row is read
         coll_prep = {k: self._collective_prepare(c, op, params[k][1], params[k][0]) for k, op in enumerate(c.operands) if isinstance(op, Collective)}
         if coll_prep:
-            # [R19 tp2 F-r19-tp2-5] keyed by id(c) AND holding c: a prep whose Compute's reads then raised (Unresolved own row -> a
-            # non-strict `problem`) was never popped, and a LATER Compute allocated at the same address (a 2-row decode Compute with no
-            # collective operand) read the stale 1-row row_map -> KeyError in _compute_emit (row #75 fold, both ranks).  The emit side now
-            # checks the identity and the failing part drops its prep (see _parts).
+            # keyed by id(c) AND holding c: a prep whose Compute's reads raise (Unresolved own row -> a non-strict `problem`) is
+            # never popped, and a LATER Compute allocated at the same address (a 2-row decode Compute with no collective operand) would
+            # read its stale 1-row row_map.  The emit side checks the identity and the failing part drops its prep (see _parts).
             self._coll_prep[id(c)] = (c, next(iter(coll_prep.values())))
         rows: list[list[Coll]] = []
         pieces: dict[ViewDesc, Refs] = {}   # a view several rows' pieces read is read once: every read of a Compute precedes its writes
@@ -765,7 +761,7 @@ class _Fold:
                 elif isinstance(op, Collective):
                     colls.append(self._collective_parts(coll_prep[k], op, i, ptype, c, pname))
                 elif isinstance(op, Const):
-                    # [R15 stoch] a Program constant: ONE `Const<W>[bits]` instance per Compute (emitted here, i.e. before the instance
+                    # a Program constant: ONE `Const<W>[bits]` instance per Compute (emitted here, i.e. before the instance
                     # that reads it, in operand order), shared by its rows -- the derived Program's `ctx.kind("const")` of the same value
                     if k not in shared:
                         shared[k] = self._const(op, ptype, c, pname)
@@ -808,7 +804,7 @@ class _Fold:
         return Coll(ptype, refs)
 
     def _const(self, op: Const, ptype: Type, c: Compute, pname: str) -> Coll:
-        """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`); a `shared` constant once per
+        """Emit the constant's primitive instance and return its output (typed `Value<W>`); a `shared` constant once per
         value in the resolution."""
         if isinstance(op.bits, tuple):
             if ptype != Array(len(op.bits), Value(int(op.width))):
@@ -838,7 +834,7 @@ class _Fold:
         return out
 
     def _param(self, op: Param, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
-        """[R15 stoch] Row i's declared runtime parameter (the request's `seed`): the parameter's leaves, no memory read."""
+        """Row i's declared runtime parameter (the request's `seed`): the parameter's leaves, no memory read."""
         if op.kind != "seed":
             raise FoldError(f"{spec_label(c.spec)}.{pname}: unknown Param kind {op.kind!r}")
         rid = op.keys[i]
@@ -869,7 +865,7 @@ class _Fold:
         read = {"step": self.cur_step, "event": min(c.consumed) if c.consumed else self.cur_event, "spec": spec_label(c.spec), "hint": c.hint}
         return Coll(ptype, self.witness_inputs.leaves(op, i, ptype, f"{spec_label(c.spec)}.{pname}[row {i}]", self.req_index, read, FoldError))
 
-    # [R17 D90] collectives ------------------------------------------------------------------------------
+    # collectives ------------------------------------------------------------------------------
 
     def _collective_prepare(self, c: Compute, op: Collective, ptype: Type, pname: str) -> dict:
         """Number the collective (step, k), check its geometry against the parameter type `Array<world, Array<N, Bf16>>`, attribute its rows
@@ -905,7 +901,7 @@ class _Fold:
             if ri is None:
                 raise FoldError(f"{what}: collective row {i} attributed to request {rp[0]!r}, not in the run header")
             by_req.setdefault(ri, []).append(i)
-        # [lane vllm-tp-n] one field per (request, PEER rank) in rank order: `s<step>_k<k>` at world 2 (the recorded field names), else
+        # one field per (request, PEER rank) in rank order: `s<step>_k<k>` at world 2 (the recorded field names), else
         # `s<step>_k<k>_r<peer>`; the request's field ordinal is k*(world-1)+j = the rank Program's `peers_<ordinal>` input (cb_a.compare)
         peer_ranks = self.tp_peer_ranks
         row_map: dict[int, tuple[int, int, dict[int, int], int, str]] = {}   # row -> (peers param index, {peer rank: field offset}, row within the request, field name)
@@ -958,7 +954,7 @@ class _Fold:
         self._journal("read", v, own, what=f"collective {op.kind} (step {prep['step']}, k {prep['k']}) own row {i}")
         N, maps = prep["N"], [prep["row_map"][t] for t in (range(prep["M"]) if op.flat else (i,))]
         peer = lambda r: compact_refs([Affine("p", pidx, base_of[r] + j * N, N) for pidx, base_of, j, _ in maps])  # noqa: E731
-        parts = [own if r == prep["rank"] else peer(r) for r in range(prep["world"])]   # [lane vllm-tp-n] RANK order over the world
+        parts = [own if r == prep["rank"] else peer(r) for r in range(prep["world"])]   # RANK order over the world
         refs = concat(parts)
         if refs.count != ptype.leaves:
             raise FoldError(f"{spec_label(c.spec)}.{pname}[row {i}]: {refs.count} refs for {ptype!r} ({ptype.leaves} leaves)")
@@ -966,11 +962,11 @@ class _Fold:
         return Coll(ptype, refs)
 
     def _compute_emit(self, c: Compute, rows: list[list[Coll]], root: TreeNode) -> list[tuple[Coll, dict]]:
-        # SHARED-CODE (lane ov-moe): an instance is attributed to the first event its Compute claims, else the root.
+        # an instance is attributed to the first event its Compute claims, else the root.
         # A primary claims the whole subtree (min = the root) and `also`/`before` members claim nothing, so every
-        # pre-existing pattern still stamps `root.id`; a D70 Group part that claims its own nested op (a scope such
+        # pre-existing pattern still stamps `root.id`; a Group part that claims its own nested op (a scope such
         # as `vllm.moe_forward` whose intermediates are only snapshotted under the nested kernels' event ids) is
-        # stamped with that op, so `SnapshotStore.find(view, at=event)` in compare/replay/vu_query reaches its snapshot.
+        # stamped with that op, so `SnapshotStore.find(view, at=event)` (`fold_compare.Values`) reaches its snapshot.
         event = min(c.consumed) if c.consumed else root.id
         outs: list[tuple[Coll, dict]] = []
         for i, colls in enumerate(rows):
@@ -980,16 +976,16 @@ class _Fold:
             k = len(self.B.nodes) - 1
             meta = {"step": self.cur_step, "event": event, "resolution": self.cur_resolution, "node": k,
                     "spec": spec_label(c.spec), "row": i, "rows": c.rows, "name": name, "hint": c.hint,
-                    # [R13 X-09 M-BATCH-DECOMP] the row's request (and position) when the Compute identifies its rows -- the same rule as
+                    # the row's request (and position) when the Compute identifies its rows -- the same rule as
                     # `_name`'s `t=<pos>`; None when the row count identifies nothing (the comparator then attributes by data flow)
                     "request": req_pos[0] if req_pos else None, "position": req_pos[1] if req_pos else None,
                     "pattern": c.pattern, "operand_views": [operand_view(op, i) for op in c.operands],
                     "output_views": []}
             if getattr(c, "roots", ()):
-                meta["operand_roots"] = list(c.roots)     # [R15 fp8] per-operand weight names (multi-weight Computes)
+                meta["operand_roots"] = list(c.roots)     # per-operand weight names (multi-weight Computes)
             held = self._coll_prep.get(id(c))
             prep = held[1] if held is not None and held[0] is c else None
-            if prep is not None:                          # [R17 D90] the row's collective identity + the peers field it reads
+            if prep is not None:                          # the row's collective identity + the peers field it reads
                 pidx, base, j, fname = prep["row_map"][i]
                 meta["collective"] = {"kind": prep["kind"], "step": prep["step"], "k": prep["k"], "site": prep["site"], "rank": prep["rank"],
                                       "world": prep["world"], "N": prep["N"], "peer_param": pidx, "peer_field": fname, "row_in_request": j}
@@ -1134,7 +1130,10 @@ class _Fold:
         if len(sample.sampled_token_ids) != len(start.logits_rows):
             raise FoldError(f"step {start.step}: {len(sample.sampled_token_ids)} sampled ids for {len(start.logits_rows)} logits rows")
         for j, (req, pos) in enumerate(start.logits_rows):
-            tok = int(sample.sampled_token_ids[j])
+            try:
+                tok = SE.circuit_token_id(sample.sampled_token_ids[j])
+            except ValueError as e:
+                raise FoldError(f"step {start.step}: sampled row {j} of {req!r}: {e}") from None
             refs: Refs | None = None
             failure: Exception | None = None
             if sample.sampled_view is not None:
@@ -1172,7 +1171,7 @@ class _Fold:
                 self.sampled_by_request.setdefault(req, []).append((start.step, tok))
                 if refs is not None:
                     self.per_request.setdefault(req, []).append((start.step, refs))
-                # [R9 ref 2026-09-18] the served sample IS the token at position pos + 1: register it so a re-fed row at that
+                # the served sample IS the token at position pos + 1: register it so a re-fed row at that
                 # position (recompute without StepLink) finds its producer.  Two served samples for one position cannot happen
                 # under vLLM's rule; if the log says otherwise the fold must not guess.
                 nxt = int(pos) + 1
@@ -1238,7 +1237,7 @@ class _Fold:
                 self.notes.append(f"request {rid!r}: {n} served steps, max_tokens {expect}")
         out = outs[0] if len(outs) == 1 else tuple_of(*outs)
         self.B.ret_type = out.type
-        # [R17 D90] finalise every `peers_<i>` parameter: the Record of the request's collective fields in issue order (the refs the
+        # finalise every `peers_<i>` parameter: the Record of the request's collective fields in issue order (the refs the
         # collective instances hold, ("p", pidx, offset, N), were allocated against exactly these offsets).  A request whose rows met no
         # collective would lower to NO Input node (0 leaves) and shift the weights node: refused by name rather than encoded.
         if self.tp is not None:
@@ -1282,7 +1281,7 @@ class _Fold:
             program = Program(spec, registered=("values",) if self.supplied_inputs else ())
             self.timings["program_s"] = round(time.time() - t0, 3)
             t0 = time.time()
-            descriptor = encode_program(program)          # [R17-28 F3] encoded once: the digest's input AND program.json's `program`
+            descriptor = encode_program(program)          # encoded once: the digest's input AND program.json's `program`
             digest = program_digest(descriptor)
             self.timings["digest_s"] = round(time.time() - t0, 3)
         self.report.steps = len(self.steps)
@@ -1304,8 +1303,8 @@ class _Fold:
                           descriptor=descriptor, supplied=self.supplied_inputs.layout(self.params, self.requests, program))
 
     def _peers_layout(self) -> list[dict]:
-        """[R17 D90] The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
-        site, rows, N, leaf offset) in issue order -- what `program.json` carries so a checker (cb_a.compare, the cross-rank leg, root
+        """The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
+        site, rows, N, leaf offset) in issue order -- what `program.json` carries so a checker (cb_a.compare, the cross-rank check, root
         policy) can locate every peer leaf range without the profile's patterns."""
         out = []
         for ri, pidx in self.peers_param.items():

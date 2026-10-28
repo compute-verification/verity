@@ -1,0 +1,104 @@
+{
+ "definitions": {
+  "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
+   "and": 1673,
+   "type": "d5cabda45e3a85b0c6733c2a0553203e956fff19ef8de6b1d453c8c9e4d6862d9250507e50e55b73391054fcf7c9b53e99efcf5f78fe69659a5316c0e23a666b"
+  },
+  "RMSNormFusedVectorLaneCuda_v1{J=2}": {
+   "and": 33700,
+   "type": "2e75db9e33dbe491f6530c512f360e5740443b76485a28c7d331f3dee3107c5d5eb2e0fa491d0287b302fbc109d47c4ad50587680100062798740a41297e0600"
+  },
+  "RMSNormInvTriton_v1": {
+   "and": 34,
+   "type": "39ae3a6ff6b65313086d9f4408a81ed91387c8beaf2fdd5e14ad520659ae832f62be7b82a652d9fbf6d71b364ec63b0502e8a609e3aca1f8c2042ee291830b33"
+  },
+  "RMSNormLaneCuda_v1{J=1}": {
+   "and": 1345,
+   "type": "6fd39487632c2d27760d39bc384c733881416a312807b895e42c92c28a9d71f0a1e70d0444a2109f28fa129ce9610031481ebf8366b3eb24a6f1c81f4e02dd97"
+  },
+  "RMSNormLaneCuda_v1{J=2}": {
+   "and": 4108,
+   "type": "26c87f96d3206e2223b850f00a49b97b6219871600adf002f8c393a18a4939f8c6b9b6b6e83bd021699f0aa8583003f591cf5500bc20a40a6a09a0f5d28c306a"
+  },
+  "RMSNormLanesCuda_v1{N=16,BLOCK=1024}": {
+   "and": 21520,
+   "type": "6ea549fadcdd2998a35a25db3005a29105fad4295610fd5eccd0a5f6996464eea3fe4606bd0ff32685e6b2fe26bbb26a92a4b0fdfd6b94250011c3fb6ef81c07"
+  },
+  "RMSNormMeanEpsTriton_v1{N=16,EPS=1e-05}": {
+   "and": 1982,
+   "type": "efadfd00e344415351b65c2d27e6ab7688f1eab77b4b997abe8b018cf7702212473caf39958e742195809021c18a64e6a8d051cd50de1c36969ebc840979b2dd"
+  },
+  "RMSNormOutCuda_v1": {
+   "and": 2370,
+   "type": "0c40602890d88bc480a0ce80ee16107ae8b9340c37fcaebe628f1de49ed7c4a8d3ec16fb2392d82d11214627b55b086f4560ca73541f9ad13eb0084dd769fa7b"
+  },
+  "RMSNormOutRowCuda_v1{N=16}": {
+   "and": 37920,
+   "type": "0e8fbd600a2a90d138321d442bc1887603a3b8bc3c18ac9db6b255e63ae28baca69890d7f4a8b09dadeb802bddd8af32b7e1206bd1c1584b9ca413b29f73a071"
+  },
+  "RMSNormOutRowTriton_v1{N=16}": {
+   "and": 38176,
+   "type": "ed4d45cbe9e08ceb2a00d7d207b6adbb90984ca3872cb996cb10db6c08891e3ca3ec7a95256ce40009646eed2b45c95218e328098797d661cd78a4efca53be12"
+  },
+  "RMSNormOutTriton_v1": {
+   "and": 2386,
+   "type": "3bc2084371f4f5856a54c090856f076b2ccd1a0ba45cf9407894f94e6c72253704ac9bd257dcb8b9803a9d2ba96843238e4a7e3306c355f0534280f064b2b2d0"
+  },
+  "RMSNormScaleCuda_v1": {
+   "and": 50,
+   "type": "a626838d6be27ae1427866af4976fffc798b56ec434aa083928981147b69ec5ff9553893ed15485fc4ed9a9f8401fb5b24d71fc00e31cf4bd2bcd63ae8868652"
+  },
+  "RMSNormSquareFma_v1": {
+   "and": 2046,
+   "type": "74914e070d6752d5e110ceb4442c6013cb744b3d97760c659e12c163587c552fc564cf2cee71dbfabcab127dfe504949283605119d31adf9c1ce10e7f333dea2"
+  },
+  "RMSNormSquare_v1": {
+   "and": 628,
+   "type": "8bcf1dec2262ad705338622d269691a2619e0259c90d024fa7bcf9245443f5e0b1f32f9f9e4eaca3b3c08b67f0e800fe22d08ec380e91001e181184c6218112b"
+  },
+  "RMSNormThreadTriton_v1": {
+   "and": 14950,
+   "type": "392aa91664788bdc9a3987ff1426b084a09b906df0fc7976143f58be766dc19f574493a9d3b1ed4e7639e9eb5743653d52761ebfae2ce5d477b56dfa85855e18"
+  },
+  "RMSNormThreadsTriton_v1{N=16}": {
+   "and": 29900,
+   "type": "bf3ff1cf9764d43e633547aabb50357cfddd083f131ebbcc980e377d6fcc80be83553b596460a273367ee6eb44b4cfc75536ce8f9d3d96dbfdc803cd3e909fb0"
+  },
+  "RMSNormVarEpsCuda_v2{N=16,EPS=1e-05}": {
+   "and": 1673,
+   "type": "d5cabda45e3a85b0c6733c2a0553203e956fff19ef8de6b1d453c8c9e4d6862d9250507e50e55b73391054fcf7c9b53e99efcf5f78fe69659a5316c0e23a666b"
+  },
+  "RMSNormVarEpsTriton_v2{N=16,EPS=1e-05}": {
+   "and": 1982,
+   "type": "efadfd00e344415351b65c2d27e6ab7688f1eab77b4b997abe8b018cf7702212473caf39958e742195809021c18a64e6a8d051cd50de1c36969ebc840979b2dd"
+  },
+  "RMSNormVectorLaneCuda_v1{J=2}": {
+   "and": 31318,
+   "type": "29911a59aee796fbd2095d5ef9733ba1384852a1adfd89fe8385a37a881eee64fd8d68eb59e75b9b677cddfb64d516d627c3b6d2c0588320485409a5cc660e01"
+  },
+  "RMSNormVectorLanesCuda_v1{N=24,BLOCK=2,FUSED=False}": {
+   "and": 46268,
+   "type": "ea035eba9c3b7a88f7ad3067d5e15cf66f78467c38cdbd1a8ff88577cbf91a57d8d4b3124ebe6093ff5b263867558d3a65951e82ae68eddb15a330d9e716a135"
+  },
+  "RMSNormVectorLanesCuda_v1{N=24,BLOCK=2,FUSED=True}": {
+   "and": 50144,
+   "type": "3cb31ef436ed2d7cad092769d5412019bf85bb745090e642749c4df9ca5bbaa7db6bd8d3b7f989c6bb8c8a6bb7734b4e99d465e744766d4dcfc0b4f9a62d3350"
+  },
+  "RMSNormWarpCuda_v1{L=16}": {
+   "and": 12180,
+   "type": "857b838e6c6adc61b60fa120361abf7a9884719084f0fbc6fdf9ced394cc82b93fff72a30fc251900b9a47781d81bfc01cc89564c4a2ae9221bf94b89490b00a"
+  },
+  "RMSNormWarpTriton_v1{L=2}": {
+   "and": 812,
+   "type": "6719bab92d111c7fd6c9a761b2367ed672b3ef54786aae51a0c57b2793da0d21a1f451cb786773b1c21db4fada511a45e5a541a7e0f85ab25cb5fbc217fe2830"
+  },
+  "RMSNormWarpsCuda_v1{T=16}": {
+   "and": 12180,
+   "type": "857b838e6c6adc61b60fa120361abf7a9884719084f0fbc6fdf9ced394cc82b93fff72a30fc251900b9a47781d81bfc01cc89564c4a2ae9221bf94b89490b00a"
+  },
+  "RMSNormWarpsTriton_v1{N=16}": {
+   "and": 812,
+   "type": "6719bab92d111c7fd6c9a761b2367ed672b3ef54786aae51a0c57b2793da0d21a1f451cb786773b1c21db4fada511a45e5a541a7e0f85ab25cb5fbc217fe2830"
+  }
+ }
+}

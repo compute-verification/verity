@@ -115,6 +115,10 @@ theorem checkPubRows_rows {st : Flock.Stmt} {own : Array Registered.Port} {cs : 
   obtain ⟨_, -, h⟩ := Registered.except_bind_ok h
   split at h
   · obtain ⟨_, -, h⟩ := Registered.except_bind_ok h
+    obtain ⟨_, -, h⟩ := Registered.except_bind_ok h
+    split at h
+    · obtain ⟨_, h1, -⟩ := Registered.except_bind_ok h
+      exact absurd h1 (Registered.throw_ne_ok _ _)
     split at h
     · rename_i t ht
       obtain ⟨_, hloop, -⟩ := Registered.except_bind_ok h

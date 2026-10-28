@@ -1,0 +1,125 @@
+{
+ "schema": "verity-stacked-share/frontier-models/v1",
+ "node": {
+  "name": "8x B200 (HGX B200)",
+  "gpus": 8,
+  "hbm_bytes": 180000000000,
+  "hbm_bytes_per_s": 7700000000000,
+  "int8_ops_per_s": 4500000000000000,
+  "eta_memory": 0.75,
+  "eta_compute": 0.5,
+  "usable": 0.9,
+  "reserve_bytes": 4000000000,
+  "source": "NVIDIA HGX B200 datasheet (180 GB HBM3e, 7.7 TB/s, 4.5 POPS dense INT8 a GPU); eta_memory, eta_compute, usable and reserve_bytes are this model's assumptions"
+ },
+ "workload": {"context": 8192, "prompt": 4096, "sweep": [2048, 8192, 32768, 131072],
+              "source": "this census's reference: a pool full of requests decoding at context S, prefills of prompt P from position 0; sweep: the contexts `frontier.sweep` takes the pool to, with prefills of min(P, S), leaving out a model past its max_context (its config's max_position_embeddings)"},
+ "anchor": {
+  "model": "Llama-3.1-8B",
+  "source": "units-8b.json of the int8 census (benchmarks/stacked_share/job.sh): property/v1 on the exact-int8 request Program, LP=256, T=31",
+  "token": {"gathers": 4113, "roundings": 10930965, "compare_select": 2556032},
+  "sample": {"roundings": 33090047, "compare_select": 384765},
+  "lm_head_bf16_units_per_output": 257,
+  "attention": {"G": 8, "H": 32,
+                "coefficients": {"compare_select": {"r0": 12256, "b_q": 64, "b_kv": 5120, "w0": 1024, "w_start": 0},
+                                 "gathers": {"r0": 0, "b_q": 256, "b_kv": 0, "w0": 0, "w_start": 0},
+                                 "roundings": {"r0": 41280, "b_q": 96, "b_kv": 7168, "w0": 2048, "w_start": -64}}}
+ },
+ "models": {
+  "Llama-3.1-8B": {
+   "hf": "meta-llama/Llama-3.1-8B", "revision": "the census Program's (verity-int8/Llama-3.1-8B-INT8@723d342a)",
+   "source": "the int8 census's Program shapes (art:dc25549e); the HF config is gated",
+   "arch": "gqa", "H": 4096, "layers": 32, "heads": 32, "kv_heads": 8, "head_dim": 128, "rope_dim": 128,
+   "mlp": {"dense": 14336}, "vocab": 128256, "eps": 1e-05, "max_context": 131072, "tp": 1, "weights": "int8"
+  },
+  "Llama-3.1-70B": {
+   "hf": "meta-llama/Llama-3.1-70B", "revision": "the census's 70B spec (llama31-70b-tp8.json)",
+   "source": "benchmarks/stacked_share/llama31-70b-tp8.json's statics; the HF config is gated",
+   "arch": "gqa", "H": 8192, "layers": 80, "heads": 64, "kv_heads": 8, "head_dim": 128, "rope_dim": 128,
+   "mlp": {"dense": 28672}, "vocab": 128256, "eps": 1e-05, "max_context": 131072, "tp": 1, "weights": "int8"
+  },
+  "Qwen3-0.6B": {
+   "hf": "Qwen/Qwen3-0.6B", "revision": "c1899de2", "source": "HF config.json",
+   "arch": "gqa", "H": 1024, "layers": 28, "heads": 16, "kv_heads": 8, "head_dim": 128, "rope_dim": 128, "qk_norm": "head",
+   "mlp": {"dense": 3072}, "vocab": 151936, "tied": true, "eps": 1e-06, "max_context": 40960, "tp": 1, "weights": "bf16"
+  },
+  "Qwen3-8B": {
+   "hf": "Qwen/Qwen3-8B", "revision": "b968826d", "source": "HF config.json",
+   "arch": "gqa", "H": 4096, "layers": 36, "heads": 32, "kv_heads": 8, "head_dim": 128, "rope_dim": 128, "qk_norm": "head",
+   "mlp": {"dense": 12288}, "vocab": 151936, "eps": 1e-06, "max_context": 40960, "tp": 1, "weights": "bf16"
+  },
+  "DeepSeek-V3/R1/V3.1": {
+   "hf": "deepseek-ai/DeepSeek-V3 (R1, V3.1: the same shapes)",
+   "revision": "V3 e815299b, R1 56d4cbbb, V3.1 c0781d03",
+   "source": "HF config.json (DeepseekV3ForCausalLM); the MTP layer (num_nextn_predict_layers 1) is left out",
+   "arch": "mla", "H": 7168, "layers": 61, "heads": 128, "q_lora": 1536, "kv_lora": 512, "nope": 128, "rope": 64, "v_head": 128,
+   "mlp": {"dense": 18432, "first_dense": 3, "experts": 256, "topk": 8, "expert_I": 2048, "shared": 1, "shared_I": 2048,
+           "router": "sigmoid", "scale": 2.5, "n_group": 8, "topk_group": 4},
+   "vocab": 129280, "eps": 1e-06, "max_context": 163840, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
+  },
+  "DeepSeek-V3.2-Exp": {
+   "hf": "deepseek-ai/DeepSeek-V3.2-Exp", "revision": "194c67e1",
+   "source": "HF config.json (DeepseekV32ForCausalLM): V3's shapes and a DSA indexer in every layer (no index_topk_freq); the MTP layer is left out",
+   "arch": "mla", "H": 7168, "layers": 61, "heads": 128, "q_lora": 1536, "kv_lora": 512, "nope": 128, "rope": 64, "v_head": 128,
+   "dsa": {"heads": 64, "dim": 128, "topk": 2048},
+   "mlp": {"dense": 18432, "first_dense": 3, "experts": 256, "topk": 8, "expert_I": 2048, "shared": 1, "shared_I": 2048,
+           "router": "sigmoid", "scale": 2.5, "n_group": 8, "topk_group": 4},
+   "vocab": 129280, "eps": 1e-06, "max_context": 163840, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
+  },
+  "Kimi-K2": {
+   "hf": "moonshotai/Kimi-K2-Instruct", "revision": "fd1984e2", "source": "HF config.json (DeepseekV3ForCausalLM)",
+   "arch": "mla", "H": 7168, "layers": 61, "heads": 64, "q_lora": 1536, "kv_lora": 512, "nope": 128, "rope": 64, "v_head": 128,
+   "mlp": {"dense": 18432, "first_dense": 1, "experts": 384, "topk": 8, "expert_I": 2048, "shared": 1, "shared_I": 2048,
+           "router": "sigmoid", "scale": 2.827, "n_group": 1, "topk_group": 1},
+   "vocab": 163840, "eps": 1e-06, "max_context": 131072, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
+  },
+  "Qwen3-235B-A22B": {
+   "hf": "Qwen/Qwen3-235B-A22B", "revision": "8efa6172", "source": "HF config.json",
+   "arch": "gqa", "H": 4096, "layers": 94, "heads": 64, "kv_heads": 4, "head_dim": 128, "rope_dim": 128, "qk_norm": "head",
+   "mlp": {"experts": 128, "topk": 8, "expert_I": 1536, "router": "softmax"},
+   "vocab": 151936, "eps": 1e-06, "max_context": 40960, "tp": 8, "weights": "bf16"
+  },
+  "Qwen3-Next-80B-A3B": {
+   "hf": "Qwen/Qwen3-Next-80B-A3B-Instruct", "revision": "9c7f2fbe", "source": "HF config.json",
+   "arch": "hybrid-deltanet", "H": 2048, "layers": 48, "full_every": 4,
+   "heads": 16, "kv_heads": 2, "head_dim": 256, "rope_dim": 64, "qk_norm": "head", "gate": true,
+   "linear": {"key_heads": 16, "value_heads": 32, "dk": 128, "dv": 128, "conv": 4, "chunk": 64,
+              "chunk_source": "fla chunk_gated_delta_rule's chunk size (vLLM's Qwen3-Next prefill)"},
+   "mlp": {"experts": 512, "topk": 10, "expert_I": 512, "shared": 1, "shared_I": 512, "shared_gate": true, "router": "softmax"},
+   "vocab": 151936, "eps": 1e-06, "max_context": 262144, "tp": 8, "weights": "bf16"
+  },
+  "GLM-4.5/4.6": {
+   "hf": "zai-org/GLM-4.5 (4.6: the same shapes)", "revision": "4.5 cbb2c7cf, 4.6 be721948",
+   "source": "HF config.json (Glm4MoeForCausalLM); the router is the sigmoid noaux_tc one (transformers Glm4MoeTopkRouter); the MTP layer is left out",
+   "arch": "gqa", "H": 5120, "layers": 92, "heads": 96, "kv_heads": 8, "head_dim": 128, "rope_dim": 64, "qk_norm": "head", "bias": true,
+   "mlp": {"dense": 12288, "first_dense": 3, "experts": 160, "topk": 8, "expert_I": 1536, "shared": 1, "shared_I": 1536,
+           "router": "sigmoid", "scale": 2.5, "n_group": 1, "topk_group": 1},
+   "vocab": 151552, "eps": 1e-05, "max_context": 131072, "tp": 8, "weights": "bf16"
+  },
+  "GLM-5.3": {
+   "hf": "zai-org/GLM-5.3", "revision": "aca966e4",
+   "source": "the checkpoint's config.json as integrations/vllm pins it (verity_vllm/engine/profiles/hf_configs/GLM53.config.json, GlmMoeDsaForCausalLM = DeepseekV32ForCausalLM): an indexer where max(l - 3 + 1, 0) % 4 == 0 (index_skip_topk_offset 3, index_topk_freq 4), the rest reusing its top-k; the MTP layer is left out",
+   "arch": "mla", "H": 6144, "layers": 78, "heads": 64, "q_lora": 2048, "kv_lora": 512, "nope": 192, "rope": 64, "v_head": 256,
+   "dsa": {"heads": 32, "dim": 128, "topk": 2048, "topk_freq": 4, "skip_offset": 3},
+   "mlp": {"dense": 12288, "first_dense": 3, "experts": 256, "topk": 8, "expert_I": 2048, "shared": 1, "shared_I": 2048,
+           "router": "sigmoid", "scale": 2.5, "n_group": 1, "topk_group": 1},
+   "vocab": 154880, "eps": 1e-05, "max_context": 1048576, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
+  },
+  "MiniMax-M1": {
+   "hf": "MiniMaxAI/MiniMax-M1-80k", "revision": "8d1494b1", "source": "HF config.json (attn_type_list: 1 at every 8th layer)",
+   "arch": "hybrid-lightning", "H": 6144, "layers": 80, "full_every": 8,
+   "heads": 64, "kv_heads": 8, "head_dim": 128, "rope_dim": 64, "postnorm": true,
+   "linear": {"heads": 64, "dk": 128, "dv": 128, "chunk": 256,
+              "chunk_source": "vLLM lightning_attention's block size (MiniMax-Text-01 / M1 prefill)"},
+   "mlp": {"experts": 32, "topk": 2, "expert_I": 9216, "router": "softmax"},
+   "vocab": 200064, "eps": 1e-05, "max_context": 10240000, "tp": 8, "weights": "bf16"
+  },
+  "MiniMax-M2": {
+   "hf": "MiniMaxAI/MiniMax-M2", "revision": "757303d4",
+   "source": "HF config.json (attn_type_list all 1: full attention in every layer); the MTP modules are left out",
+   "arch": "gqa", "H": 3072, "layers": 62, "heads": 48, "kv_heads": 8, "head_dim": 128, "rope_dim": 64, "qk_norm": "layer",
+   "mlp": {"experts": 256, "topk": 8, "expert_I": 1536, "router": "sigmoid", "scale": 1.0, "n_group": 1, "topk_group": 1},
+   "vocab": 200064, "eps": 1e-06, "max_context": 196608, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
+  }
+ }
+}

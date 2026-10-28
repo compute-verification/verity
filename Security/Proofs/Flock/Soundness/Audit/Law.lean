@@ -1,13 +1,12 @@
+import Definitions.Flock.Audit.Law
 import Proofs.Flock.Soundness.Game.Prob
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Data.Nat.Choose.Basic
-import Mathlib.Data.Fintype.Fin
 
 /-!
 # Draw laws
 
-A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws. What a
-law gives a consumer is its escape function: the probability that a draw misses a set `B` of units.
+A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws, core's `Verity.Law`
+(`Definitions.Core.Draw`) over `Fin n`. What a law gives a consumer is its escape function: the probability that a draw
+misses a set `B` of units.
 
 * `escape L B`: the draw is disjoint from `B`;
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
@@ -26,30 +25,11 @@ namespace FlockSoundness.Audit
 open Game
 open scoped ENNReal
 
-/-- A draw law over `n` units: the verifier's uniform coins, and the unit set each draws. -/
-structure Law (n : ℕ) where
-  Ω : Type
-  [fintype : Fintype Ω]
-  [nonempty : Nonempty Ω]
-  draw : Ω → Finset (Fin n)
-
-attribute [instance] Law.fintype Law.nonempty
-
 namespace Law
 
+open Verity.Law (escape miss incl)
+
 variable {n : ℕ}
-
-/-- The probability that a draw misses every unit of `B`. -/
-noncomputable def escape (L : Law n) (B : Finset (Fin n)) : ℝ≥0∞ :=
-  prCoin fun ω => Disjoint (L.draw ω) B
-
-/-- The count curve's sampling term: the largest escape over sets of at least `K` units. -/
-noncomputable def miss (L : Law n) (K : ℕ) : ℝ≥0∞ :=
-  ⨆ (B : Finset (Fin n)) (_ : K ≤ B.card), L.escape B
-
-/-- The inclusion probability of a unit. -/
-noncomputable def incl (L : Law n) (u : Fin n) : ℝ≥0∞ :=
-  prCoin fun ω => u ∈ L.draw ω
 
 theorem prCoin_not {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
     prCoin (fun c => ¬ p c) = 1 - prCoin p := by
@@ -109,15 +89,6 @@ theorem miss_eq_zero_of_draw_univ (L : Law n) (hL : ∀ ω, L.draw ω = Finset.u
   exact Finset.disjoint_left.1 h (Finset.mem_univ u) hu
 
 /-! ## The uniform `k`-subset -/
-
-/-- The uniform `k`-subset of `n` units. -/
-def subset (n k : ℕ) (hk : k ≤ n) : Law n where
-  Ω := {S : Finset (Fin n) // S.card = k}
-  nonempty := by
-    obtain ⟨S, -, hS⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
-      (by simpa using hk)
-    exact ⟨⟨S, hS⟩⟩
-  draw := Subtype.val
 
 theorem card_disjoint_subsets (k : ℕ) (B : Finset (Fin n)) :
     (Finset.univ.filter fun S : {S : Finset (Fin n) // S.card = k} => Disjoint S.1 B).card =
@@ -224,15 +195,6 @@ theorem demo_count_590 : (subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ�
 
 /-! ## Bernoulli draws -/
 
-/-- Each unit drawn independently with probability `num / den`. -/
-abbrev bernoulli (n num den : ℕ) [NeZero den] : Law n where
-  Ω := Fin n → Fin den
-  draw ω := Finset.univ.filter fun u => (ω u).val < num
-
-/-- One Bernoulli coordinate's average of `a` when drawn and `1` when not. -/
-noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=
-  ((num : ℝ≥0∞) * a + ((den - num : ℕ) : ℝ≥0∞)) / den
-
 theorem avg_bern {num den : ℕ} [NeZero den] (h : num ≤ den) (a : ℝ≥0∞) :
     avg (fun x : Fin den => if x.val < num then a else 1) = bernFactor num den a := by
   classical
@@ -336,9 +298,6 @@ theorem avg_escape_subsets (M : Law n) {K : ℕ} (hK : K ≤ n) :
   · simp only [subset, h, h.symm, ite_true]
   · have h' : ¬ Disjoint B.1 (M.draw ω) := fun h' => h h'.symm
     simp only [subset, h, h', ite_false]
-
-/-- The drop of `s ↦ C(n - s, K)` at `s`. -/
-def drop (n K s : ℕ) : ℕ := (n - s).choose K - (n - (s + 1)).choose K
 
 theorem choose_eq_add_drop (n K s : ℕ) :
     (n - s).choose K = (n - (s + 1)).choose K + drop n K s := by

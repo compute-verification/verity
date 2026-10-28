@@ -3,7 +3,7 @@ import Properties.Pous
 import Properties.Pous.TimedAudit
 import Properties.Pous.MemoryChallenger
 import Properties.Identity
-import Models.Pous.Assumptions.P2
+import Definitions.Pous.Assumptions.P2
 import Definitions.Pous.P2.Cost
 
 /-!
@@ -23,8 +23,8 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own data holds a SHA-512
   collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
-  every `C*` setup accepts is one `RunCheckAccepts` speaks of. `RunCheckAccepts` is proved; `RunCertifies` follows from
-  it and the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
+  every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
+  and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
 * `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
   model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
   per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
@@ -36,8 +36,7 @@ separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-nebius-host`
-   (pending network-accounting's widening, Daniel decision 2)) and the coins drawn online, after its state is fixed. It
+   host never restores an earlier copy: `trusted-host`) and the coins drawn online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
@@ -56,9 +55,9 @@ it hands the server the session commitment, and `P2RingAuditSecure`, the conject
 Two gaps stood between these statements and the deployed verifier:
 
 * **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-nebius-host` covers as network-accounting widens it
-  (pending network-accounting's widening, Daniel decision 2). The check's half: a session's `binding` is required and is
-  the setup's root (`Run.check` refuses any other), so a session names the setup it audits, and its id is the one the
+  presumption, which `trusted-host` covers once it is widened to the challenger's host. The check's half: a session's
+  `binding` is required and is the setup's root (`Run.check` refuses any other), so a session names the setup it audits,
+  and its id is the one the
   auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
   runs at most one session under an id (`memory_challenger.SessionLog`, a file of its own, recorded before the session's
   first challenge), so an audit has at most one session the check accepts; that refusal is the device's code and log,
@@ -204,8 +203,8 @@ so the session's `binding` is the root of the `C*` setup checked), the session a
 under the designated id and is signed under a key in `trusted`, and that key's holder ran a session with the accepted
 commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own
 data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dishonest commitment (`C*` decoding to a
-`W'` other than the `W` the server was handed) is `CommitBreak`'s. It rests on the setup check's `AcceptsDecodes` and
-`PublishesRoot`, which are open. -/
+`W'` other than the `W` the server was handed) is `CommitBreak`'s. It follows from `RunCheckAccepts` and the setup
+check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
@@ -314,8 +313,8 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
 derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
-challenger's `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
-(pending network-accounting's widening, Daniel decision 2). G-2 (the composed check) is fixed in code. What the deployed
+challenger's `SessionLog` under its host presumption, which `trusted-host` covers once it is widened to the challenger's
+host. G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
@@ -338,8 +337,8 @@ first), so even a root in fewer rounds leaves the attack about twice as far as `
 
 The timing. `pous-ring-speed` at this `D` says no allowed hardware finishes 16,447 sequential multiplication rounds
 within `Δ + RTT ≤ 854 µs`. `ROOT_CALL_NS` (PROTOCOL.md, P2's SeqRoot) is half the fastest modelled root, the timing red
-team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×
-(run `r20260929-060834-0ec4`): about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs, 1.995 × 854 µs. The
+team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×:
+about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs, 1.995 × 854 µs. The
 PROTOCOL's 2.0001× counts the root's 20 extra multiplications, which a round of the ring model performs beside its
 squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the margin is 1.64× and 1.25×.
 

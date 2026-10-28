@@ -1,5 +1,6 @@
 """`harness/ieee_pin.py`, the SASS gate's numeric pin: a pinned build's run passes only when every check ran all its inputs,
-none differs from its reference, the float checks saw subnormal inputs and outputs, and it ran on the leased GPU; a control
+none differs from its reference, the float checks saw subnormal inputs and outputs, and it ran on the leased GPU (an sm_90
+card runs the checks of kernels' units.cu besides); a control
 passes only when it differs somewhere. Where a CUDA toolkit is present, `ieee_pin.cu` built with it must pin exactly that
 toolkit's entry in `sass_pins.json`, with every pinned build passing the gate and every control failing it."""
 
@@ -21,9 +22,10 @@ import sass_gate as SG  # noqa: E402
 UUID = "GPU-00112233-4455-6677-8899-aabbccddeeff"
 
 
-def good_run() -> dict:
-    lines = [{"device": "NVIDIA RTX PRO 6000 Blackwell", "uuid": UUID, "sm": 120, "sms": 188}]
-    for name, n in IP.CASES.items():
+def good_run(sm: int = 120) -> dict:
+    lines = [{"device": "NVIDIA RTX PRO 6000 Blackwell" if sm == 120 else "NVIDIA H200", "uuid": UUID, "sm": sm,
+              "sms": 188 if sm == 120 else 132}]
+    for name, n in {**IP.CASES, **(IP.UNITS_CASES if sm == 90 else {})}.items():
         skipped = 0 if name in IP.FLOAT else 3
         lines.append({"check": name, "cases": n - skipped, "skipped": skipped,
                       "subnormal_in": 7 if name in IP.FLOAT else 0,
@@ -65,10 +67,39 @@ def test_a_control_must_differ_somewhere():
 def test_every_shipped_toolkit_names_a_run_of_these_builds():
     """A repin that changes a body drops its toolkit's run (`sass_gate.update_pins`), and a toolkit without one exempts
     nothing; a change to the pinned builds needs a new run too."""
-    want = [" ".join(["nvcc", *IP.NVCC_ARGS, *flags]) for flags in IP.PINNED]
     for name, tk in SG.load_pins()["toolkits"].items():
+        want = [" ".join(["nvcc", *IP.nvcc_args(IP.arch_of(name)), *flags]) for flags in IP.PINNED]
         assert tk["numeric"] and re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", tk["numeric"]["run"]), name
         assert tk["numeric"]["builds"] == want, name
+
+
+def test_a_toolkit_names_its_target_and_a_run_has_one():
+    assert (IP.arch_of("13.0.1"), IP.arch_of("13.0.1-sm_90a")) == ("sm_120a", "sm_90a") and IP.nvcc_args("sm_120a") == IP.NVCC_ARGS
+    assert "arch=compute_90a,code=sm_90a" in IP.nvcc_args("sm_90a")
+    with pytest.raises(IP.PinFailed, match="no target sm_100a"):
+        IP.arch_of("13.0.1-sm_100a")
+    pins = {"toolkits": {"13.0.1": {}, "13.0.1-sm_90a": {}}}
+    with pytest.raises(IP.PinFailed, match="more than one target"):
+        IP.homes(["13.0.1=/a", "13.0.1-sm_90a=/b"], pins)
+    assert IP.homes(["13.0.1-sm_90a=/b"], pins) == {"13.0.1-sm_90a": "/b"}
+    assert IP.judge_run(good_run(90), control=False, sm=90) == []
+    assert any("not sm_90" in p for p in IP.judge_run(good_run(), control=False, sm=90))
+
+
+def test_only_an_sm90_card_runs_the_units_checks():
+    """units.cu's bodies are sm_90a's, so an H200's run must hold all five checks to them, subnormals included, and an
+    RTX PRO 6000's run has none of them."""
+    h200 = good_run(90)
+    assert IP.UNITS_CASES and set(IP.UNITS_CASES) <= IP.FLOAT and not set(IP.UNITS_CASES) & set(IP.CASES)
+    for name in IP.UNITS_CASES:
+        dropped = {**h200, "lines": [ln for ln in h200["lines"] if ln.get("check") != name]}
+        assert f"no {name} check" in IP.judge_run(dropped, control=False, sm=90)
+        assert any(p.startswith(f"{name}: 1 differ") for p in IP.judge_run(with_check(h200, name, bad=1), control=False, sm=90))
+    assert any("subnormal outputs" in p for p in IP.judge_run(with_check(h200, "units_soft_one", subnormal_out=0),
+                                                              control=False, sm=90))
+    assert IP.judge_run(with_check(h200, "units_sqrt", subnormal_out=0), control=False, sm=90) == []
+    sm120 = {**good_run(), "lines": good_run()["lines"] + [ln for ln in h200["lines"] if ln.get("check") == "units_rms_rs"]}
+    assert any("unknown checks ['units_rms_rs']" in p for p in IP.judge_run(sm120, control=False))
 
 
 @pytest.mark.slow

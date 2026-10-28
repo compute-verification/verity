@@ -19,9 +19,12 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 `verify` fails closed (§16.15): every session of a statement whose form the soundness proof does not cover is refused
 with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`), once every check
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
-rows, the typed statements, public input ports, several tables without `--zk` and more than 2^16 with it
-(`ProvedScope.zkTableCap`), shared-row public files (except under
-`--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
+rows, the typed statements, public input ports, several tables without `--zk` (unless `--plain-tables`: a statement with
+public outputs, or hidden outputs and `hm96-sha512/v1` leaves, at up to 64 tables, at a subset draw, with the verifier's
+own `--program` the one META's `program_sha512` names, `ProvedScope.checkP` and `ProvedScope.lawWhy` at `plainTables`,
+which `flock_verify_sound`'s `SoundExecJ` and `SoundExecHJ` cover) and more than 2^16 with it (`ProvedScope.zkTableCap`),
+shared-row public files (except at hidden outputs and `hm96-sha512/v1` leaves with the verifier's own `--registered F`,
+which `FailClosed.SoundZHJR` covers under `--zk` and `FailClosed.SoundExecHR` without it), and circuits
 outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
 a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
 general instance form: a unit reading any number of input groups and tail stages returning the outputs (a repeated last
@@ -31,11 +34,20 @@ Those statements still parse, set up and verify (`statement` prints their digest
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
 sampling design no soundness claim draws by is refused at setup, with
 `refused: <why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with
-or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). So is a session without a draw, with
+or without a closure, and a subset draw without `--zk` at a statement with public outputs (`lean_refuses_drawn`). So is a session without a draw, with
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
 its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)
-without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md).
+without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md). Last of all, a session verified without the verifier's
+own `--program` is refused (`refused: a session without the verifier's program (--program): …`,
+`Flock.ProvedScope.programHeld`), with or without `--zk`: a verifier that cannot read the Program cannot know what it
+verifies, and the agreement check compares a session refused for that alone as accepted (`agree.py`'s `NO_PROGRAM`).
+
+A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
+(`rec_part`) and the SHA-512 of the shared rows file it checked (`rec_rows_sha512`). `flock-verify rec-compose
+--rec-inner F --rec-rows F LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there
+is one log per V* statement and every part is accepted at the one rows file the prover staged (`acc0`, the tops, the
+`rec-c<k>` rows). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
 
 ## Build and run
 

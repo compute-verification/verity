@@ -18,8 +18,8 @@ import pytest
 
 from tests.properties import dsv4_compressor_capture_gpu as X
 from tests.properties import dsv4_flashmla_capture_gpu as FX
-from verity_vllm.program.kernels import dsv4_compressor_twin as T
-from verity_vllm.program.kernels import flashmla_twin as FT
+from verity.ml.definitions.numerics import dsv4_compressor_twin as T
+from verity.ml.definitions.numerics import flashmla_twin as FT
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 LAYERS = list(X.LAYERS)
@@ -378,7 +378,7 @@ ENV_KEYS = ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "CUTE_DSL_KEEP
 
 
 def test_the_environment_keeps_the_cute_dsl_ptx_and_cubin_in_scratch(tmp_path, monkeypatch) -> None:
-    """The H200 run r20261013-205619-e245 matched every word and still went NO-GO in `ptx`: no CUTE_DSL_KEEP, so cutlass 4.6.2
+    """An H200 run matched every word and still went NO-GO in `ptx`: no CUTE_DSL_KEEP, so cutlass 4.6.2
     kept no PTX or cubin and every compiled kernel's `__ptx__` and `__cubin__` were None.  `environment` keeps both (KEEP's
     comma-separated tokens), with the dump and cache directories made in scratch."""
     for k in ENV_KEYS:

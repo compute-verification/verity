@@ -372,7 +372,7 @@ def test_a_reused_weights_root_was_hashed_in_the_rows_own_mode(monkeypatch):
     keeps it; `commit.main` hands the committer the row's ``--weights-hash`` before it registers, and a later row reuses only a root
     registered in that mode, so a reused root's ``hash`` is the row's ``--weights-hash`` (its versions.json)."""
     src = (TREE / "verity_vllm" / "pipeline" / "commit.py").read_text()
-    assert src.index('os.environ["VERITY_WEIGHTS_HASH"] = args.weights_hash') < src.index("GR.register_weights(_HOT, com, args.weights_hash)")
+    assert src.index('settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)') < src.index("GR.register_weights(_HOT, com, args.weights_hash)")
     torch, m = _model()
     Com.calls = 0
     env0 = {"VERITY_WEIGHTS_HASH": "device", "CUDA_VISIBLE_DEVICES": "3"}

@@ -1,4 +1,4 @@
-"""Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof service's one challenger
+"""Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof system's one challenger
 (`coins.Coins`, `sampled_proofs.challenger`):
 
 - `Local`: a `LiveChallenger` in the verifier's process, drawing from `secrets.token_bytes`.
@@ -8,20 +8,25 @@
   release log when the client closes the session. Not the auditor host: the verifier's machine is the audit's (never
   the prover's), but no ledger opens the session for its window, so the read is `challenger.session_of`'s, under the
   key the run wrote.
-- `Gate`: the auditor host's challenger (vy-challenger-1), through its gate (`benchmarks/live_challenger/auditor.py`)
+- `Gate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
-  host serves it from its pinned tree and reaches this machine's 127.0.0.1 through `ssh -R` at the open's port; the
+  host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's
+  certifier coin link (the auditor's coins' path); the
   hello carries the open's secret, and a challenger whose coin commitment isn't the open's is refused before its first
   coin. The read is the ledger's (`audit.Session.trusted_reason`): the one session it opens for R inside the period,
-  ended and closed, its files the ones the end sealed, under the key whose public key's SHA-512 the run pins.
+  ended and closed, its files the ones the end sealed, under the key whose public key's SHA-512 the run pins, and run
+  from main's code (`challenger.pinned_session`): the host's pins log, fetched from the gate (`pins`) at the session's
+  end beside the ledger, is the one its open sealed and records its pin, and that commit is on the auditor's own
+  first-parent list of main (`--challenger-main FILE`). With no list, no gate verifier runs.
 
 `finish` reads back what the challenger signed and holds the session's coins to it (`audit.Session.released_reason`):
 the same commitment, each coin opened after the root the session recorded and in order, σ_0 after the session's window
 root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
-that ran to its end is complete and one cut short is not."""
+that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
+(`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to."""
 from __future__ import annotations
 
 import hashlib
@@ -46,8 +51,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SERVE = ROOT / "benchmarks" / "live_challenger" / "serve.py"
 KINDS = ("local", "serve", "gate")
 GATE_PORTS = range(7811, 7900)
-"""The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by the host's
-`ssh -R`: the verifier's own port is none of them."""
+"""The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by its certifier
+coin link to the host: the verifier's own port is none of them."""
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -70,8 +75,8 @@ class Local:
 
     kind = "local"
 
-    def open(self, registration: bytes, k: int, windows: int, appends: int) -> Ch.LiveChallenger:
-        return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends), secrets.token_bytes)
+    def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1) -> Ch.LiveChallenger:
+        return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends, per_coin), secrets.token_bytes)
 
     def finish(self, s: audit.Session) -> dict:
         c = s.coins
@@ -90,13 +95,15 @@ class Serve:
         self.run = secrets.token_hex(4)
         self._live: dict[int, tuple[subprocess.Popen, Path, str, remote.RemoteChallenger]] = {}
 
-    def open(self, registration: bytes, k: int, windows: int, appends: int) -> remote.RemoteChallenger:
+    def open(self, registration: bytes, k: int, windows: int, appends: int,
+             per_coin: int = 1) -> remote.RemoteChallenger:
         sid = session_id(registration, k, self.run)
         out = self.out / sid
+        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
         with open(self.out / f"{sid}.log", "w") as log:
             proc = subprocess.Popen(
                 [self.python, str(SERVE), "--out", str(out), "--port", "0", "--scheme", coins.SCHEME,
-                 "--families", json.dumps([list(f) for f in coins.families(windows, appends)]), "--session", sid,
+                 "--families", families, "--session", sid,
                  "--epoch", str(k), "--key", str(self.key), "--host", socket.gethostname(),
                  *(["--params", self.params] if self.params else [])],
                 stdout=subprocess.PIPE, stderr=log, text=True, cwd=ROOT)
@@ -141,8 +148,8 @@ Call = Callable[[list[str]], tuple[int, bytes]]
 
 def ssh_gate(ssh: Sequence[str]) -> Call:
     """Gate requests over ssh: `ssh` is ssh's options and destination (the lane's gate key with `-i`, and the host's
-    line of /etc/vy/peers); the host's authorized_keys forces the key's command, `vy-challenger-gate LANE`, which reads
-    the request's words from ssh's original command."""
+    line of /etc/vy/peers); the host's authorized_keys forces the key's command, the challenger's gate with LANE, which
+    reads the request's words from ssh's original command."""
     def call(words: list[str]) -> tuple[int, bytes]:
         p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", *ssh, shlex.join(words)],
                            capture_output=True, stdin=subprocess.DEVNULL)
@@ -151,19 +158,20 @@ def ssh_gate(ssh: Sequence[str]) -> Call:
 
 
 class Gate:
-    """Session coins from the auditor host's challenger, one gate session a session, its fetched directory and the
-    ledger under `out`. `pin` is the SHA-512 of the challenger's public key, `period` the audit's period on the ledger
-    (the lane opens it, `period-open`, before the first session), `minutes` each reserve's (the most a session serves).
-    `address` is where the open's session listens on this machine, `pause` runs between two looks for what the host
-    hasn't done yet (a tunnel, an end entry), at most `polls` times."""
+    """Session coins from the auditor host's challenger, one gate session a session, its fetched directory, the ledger
+    and the host's pins log under `out`. `pin` is the SHA-512 of the challenger's public key, `period` the audit's
+    period on the ledger (the lane opens it, `period-open`, before the first session), `main` the auditor's own
+    first-parent list of main (`remote.main_lines`; None: every session is refused), `minutes` each reserve's (the
+    most a session serves). `address` is where the open's session listens on this machine, `pause` runs between two
+    looks for what the host hasn't done yet (a tunnel, an end entry), at most `polls` times."""
 
     kind = "gate"
 
-    def __init__(self, out: Path, call: Call, peer: str, pin: str, period: str, *, minutes: int = 120,
-                 address: Callable[[dict], str] = lambda answer: f"127.0.0.1:{answer['port']}",
+    def __init__(self, out: Path, call: Call, peer: str, pin: str, period: str, main: list[str] | None, *,
+                 minutes: int = 120, address: Callable[[dict], str] = lambda answer: f"127.0.0.1:{answer['port']}",
                  pause: Callable[[], None] = lambda: time.sleep(1), polls: int = 600) -> None:
         self.out, self.call, self.peer, self.pin, self.period, self.minutes = out, call, peer, pin, period, minutes
-        self.address, self.pause, self.polls = address, pause, polls
+        self.main, self.address, self.pause, self.polls = main, address, pause, polls
         self._key: Ch.ChallengerKey | None = None
         self._live: dict[int, tuple[dict, remote.RemoteChallenger]] = {}
 
@@ -185,9 +193,10 @@ class Gate:
             self._key = key
         return self._key
 
-    def open(self, registration: bytes, k: int, windows: int, appends: int) -> remote.RemoteChallenger:
+    def open(self, registration: bytes, k: int, windows: int, appends: int,
+             per_coin: int = 1) -> remote.RemoteChallenger:
         self.key()
-        families = json.dumps([list(f) for f in coins.families(windows, appends)])
+        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
         r = json.loads(self._ask(["reserve", "--peer", self.peer, "--scheme", coins.SCHEME, "--families", families,
                                   "--epoch", str(k), "--minutes", str(self.minutes)]))
         if r.get("period") != self.period:
@@ -220,8 +229,8 @@ class Gate:
             closed = None
         except Ch.CoinError as e:
             closed = str(e)
-        doc = {"challenger": self.kind, "session": sid, "open": answer, "period": self.period, "closed": closed,
-               "commitment": s.coins.commitment.root.hex(), "key_sha512": self.pin}
+        doc = {"challenger": self.kind, "session": sid, "peer": self.peer, "open": answer, "period": self.period,
+               "closed": closed, "commitment": s.coins.commitment.root.hex(), "key_sha512": self.pin}
         try:
             end = None
             for _ in range(self.polls):
@@ -236,16 +245,22 @@ class Gate:
                 tar.extractall(self.out, filter="data")
             ledger = self.out / f"{sid}.ledger.jsonl"
             ledger.write_bytes(self._ask(["ledger"]))
+            pins = self.out / f"{sid}.pins.jsonl"
+            pins.write_bytes(self._ask(["pins"]))
+            lines = remote.ledger_lines(pins)
         except (Ch.CoinError, OSError, ValueError, KeyError, tarfile.TarError) as e:
             return {**doc, "reason": f"the auditor's session is not readable: {e}"}
         return {**doc, "end": {f: end["body"].get(f) for f in ("rc", "closed", "released", "complete", "ended")},
-                "reason": s.trusted_reason(self.out / sid / "out", [ledger], self.key(), lms_verify, self.period)}
+                "reason": s.trusted_reason(self.out / sid / "out", [ledger], self.key(), lines, self.main, lms_verify,
+                                           self.period)}
 
 
 def of(kind: str, out: Path, key: Path | None, params: str | None, *, ssh: str | None = None, peer: str | None = None,
-       pin: str | None = None, period: str | None = None, minutes: int = 120) -> Local | Serve | Gate:
+       pin: str | None = None, period: str | None = None, main: Path | None = None,
+       minutes: int = 120) -> Local | Serve | Gate:
     """`--challenger KIND`'s source; `serve` needs its key directory, `gate` the host's ssh, this machine's peer name
-    there and the challenger key's pin."""
+    there, the challenger key's pin, the audit's period and the auditor's first-parent list of main, read here so a
+    missing or unreadable one refuses the run before its first session."""
     if kind == "local":
         return Local()
     if kind == "serve":
@@ -255,10 +270,12 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, ssh: str |
         out.mkdir(parents=True, exist_ok=True)
         return Serve(out, key, params)
     if kind == "gate":
-        if ssh is None or peer is None or pin is None or period is None:
+        if ssh is None or peer is None or pin is None or period is None or main is None:
             raise ValueError("--challenger gate needs --challenger-ssh WORDS (ssh's -i KEY and the host), "
                              "--challenger-peer NAME (this machine in the host's /etc/vy/peers), --challenger-pin "
-                             "SHA512 (the challenger's public key) and --challenger-period P (the lane's open period)")
+                             "SHA512 (the challenger's public key), --challenger-period P (the lane's open period) and "
+                             "--challenger-main FILE (the auditor's own `git rev-list --first-parent origin/main`)")
+        first_parent = remote.main_lines(main)
         out.mkdir(parents=True, exist_ok=True)
-        return Gate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, minutes=minutes)
+        return Gate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, minutes=minutes)
     raise ValueError(f"--challenger is one of {KINDS}")

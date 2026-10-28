@@ -226,7 +226,7 @@ theorem decodeWith_specZ (hs : Hashes V) {spec : SessionSpec} {ct : CoinTree.Spe
     {cj : Json} (hc : Record.fld j "coin_tree" = .ok cj) {key : String}
     (hk : CoinTree.checkRecord ct nonce cj = .ok key) :
     Record.decodeWith hs spec text = Record.decodeWith hs (specZ spec hz) text := by
-  unfold Record.decodeWith
+  unfold Record.decodeWith Record.decodeJWith
   simp only [hp, hct, specZ, pure_bind, liftM, monadLift_self, hown, hh, hc, hn, hk, Except.toOption, ok_bind,
     beq_self_eq_true, check_true]
   rfl

@@ -1,5 +1,6 @@
-import Models.Pouw.Assumptions.PearlC.HiddenTile
+import Definitions.Pouw.Assumptions.PearlC.HiddenTile
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Core.Game.Prob
 
 /-!
@@ -11,8 +12,8 @@ import Proofs.Core.Game.Prob
 * **Every prover in the class** (`gammaHidden_of_sampled_all`): `GγSampled` and the open obligation
   `TileProofSoundAll` give `GγHidden`, at `t·ηzk(q)` more error, for any hidden audit and every opening.
 * **The headline, conditional** (`pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`): v1 under rev1 per tile at 1/1,000,
-  8192³, 0.36949% under the hidden audit, for a free hidden audit and `ηzk`; nothing about C-Flock until its instance
-  lands.
+  8192³, 0.36949% under the hidden audit at W1, for a free hidden audit and `ηzk`; nothing about C-Flock until its
+  instance lands.
 -/
 
 namespace Pouw.PearlC
@@ -107,23 +108,28 @@ theorem gammaHidden_of_sampled_all [Fintype Q] [DecidableEq Q] [Fintype R] [Fint
     gammaHidden_of_sampled CM P TR D HA γ η h U hU T hT q hq A hA w κ hκ hw t εs hεs op σ (ηzk q)
       (hzk U hU (A.transcript U) op w t q σ hσ)
 
-variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S)
+variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under the hidden audit, conditional**, FP32 at 8.376, the
-honest cast at 8.72: `γ = 1648180439/446072750000` (0.36949%), for any hidden audit sound per tile up to `ηzk(q)`.
+honest cast at 8.72: `γ = 1648180439/446072750000` (0.36949%), for any hidden audit sound per tile up to `ηzk(q)`, at
+the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`, from `TTOutTilePearlCDevRev1W1` there.
 
 Conditional: `HA` and `ηzk` are free, and the open obligation `TileProofSoundAll` holds at a degenerate hidden audit
 (`Bounded := fun _ _ _ _ _ => False`, an empty class) for any `ηzk ≥ 0`, so this says nothing about C-Flock until
 C-Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
-theorem pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 (HA : HiddenAudit Q R S) (ηzk : ℕ → ℝ)
-    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000))
+theorem pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S)
+    (HA : HiddenAudit Q R S) (ηzk : ℕ → ℝ)
+    (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop)
+      sem (1 / 1000))
     (hzk : TileProofSoundAll (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000)
       (218 / 25 - 8953 / 1000)) (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000)
       (218 / 25 - 8953 / 1000)) (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) HA ηzk) :
-    GγHidden CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+    GγHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)
+      (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) HA
       ((1648180439 / 446072750000 : ℚ) : ℝ) εPearlC ηzk :=
-  gammaHidden_of_sampled_all CM _ _ _ HA _ _ ηzk (pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192 CM sem hTT) hzk
+  gammaHidden_of_sampled_all _ _ _ _ HA _ _ ηzk
+    (pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192 _ sem (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)) hzk
 
 end Pouw.PearlC

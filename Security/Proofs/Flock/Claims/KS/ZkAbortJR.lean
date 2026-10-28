@@ -168,70 +168,10 @@ theorem tableBoundJAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col
   obtain ⟨m₀, hm₀⟩ := href x
   obtain ⟨e, ⟨hon, hon₁⟩, hfit, hb⟩ :=
     htab x (Ω × ((Fin (D.V.k x) → Coin) → Coin × A)) (refuser P x (D.V.k x) decC keep m₀)
-  have hrun := refuser_run H P D.V x decC hpc hlast hfree keep m₀ hm₀
-  let eD : EscapesD H (D.V.k x) (abortRun H P D.V x keep) :=
-    { I := e.I
-      c := e.c
-      j := e.j
-      ev := fun i ω d d' => TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-        (abortRun H P D.V x keep ω (forkDraw (e.j i) d d')).vLog)
-      L := e.L
-      β := e.β
-      ev₁ := fun _ ω d => TiedColl H (abortRun H P D.V x keep ω d).vLog
-      c_nonneg := e.c_nonneg
-      β_nonneg := e.β_nonneg
-      tied := fun _ _ _ _ h => h
-      tied₁ := fun _ _ _ h => h }
-  refine ⟨eD, hfit, fun ω j hj C hC hg => ?_⟩
-  have hEx := Ex_mono fun g : (Fin (D.V.k x) → Coin) → Coin × A => hb (ω, g) j hj C hC hg
-  rw [Ex_add, Ex_add, Ex_const] at hEx
-  have hL : (Ex fun g : (Fin (D.V.k x) → Coin) → Coin × A =>
-      accPr H D.V (refuser P x (D.V.k x) decC keep m₀) x (ω, g)) = accPrD (abortRun H P D.V x keep ω) := by
-    unfold accPr accPrD
-    rw [← Pr_refDraw (hVk x)]
-    exact congrArg Ex (funext fun g => Pr_congr fun r => (hrun ω g r).1)
-  have hO : (Ex fun g : (Fin (D.V.k x) → Coin) → Coin × A =>
-      Pr fun r : Fin (D.V.k x) → Coin => (run H (refuser P x (D.V.k x) decC keep m₀) D.V x (ω, g) r).out = .acc ∧
-        ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H (refuser P x (D.V.k x) decC keep m₀) D.V x (ω, g)
-          r).seen j) p.val = some u ∧ u ≠ C p) =
-      Pr fun d : (Fin (D.V.k x) → Coin) × A => (abortRun H P D.V x keep ω d).out = .acc ∧
-        ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (abortRun H P D.V x keep ω d).seen j) p.val = some u ∧
-          u ≠ C p := by
-    rw [← Pr_refDraw (hVk x)]
-    refine congrArg Ex (funext fun g => Pr_congr fun r => ?_)
-    constructor
-    · rintro ⟨ha, rest⟩
-      rw [(hrun ω g r).2 ha] at rest
-      exact ⟨(hrun ω g r).1.1 ha, rest⟩
-    · rintro ⟨ha, rest⟩
-      have ha' := (hrun ω g r).1.2 ha
-      rw [← (hrun ω g r).2 ha'] at rest
-      exact ⟨ha', rest⟩
-  have hT : (Ex fun g : (Fin (D.V.k x) → Coin) → Coin × A => e.term (ω, g)) ≤ eD.term ω := by
-    unfold Escapes.term EscapesD.term
-    rw [Ex_add, Ex_sum, Ex_sum]
-    refine add_le_add (Finset.sum_le_sum fun i _ => ?_) (Finset.sum_le_sum fun l _ => ?_)
-    · refine (Ex_sqrt_le _ fun g => mul_nonneg (e.c_nonneg i) (Pr_nonneg _)).trans ?_
-      rw [Ex_mul_left]
-      refine Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left ?_ (e.c_nonneg i))
-      refine (Ex_mono fun g => Pr_mono fun s hs => ?_).trans
-        (Pr_fork_refDraw_le (e.j i) (fun d d' => TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-          (abortRun H P D.V x keep ω d').vLog)) fun d d' h => TiedColl.of_dup h _)
-      obtain ⟨h1, h2 | h2⟩ := hon i (ω, g) s.1 s.2 hs
-      · have ht := e.tied i (ω, g) s.1 s.2 hs
-        rw [(hrun ω g _).2 h1, (hrun ω g _).2 h2] at ht
-        exact ht
-      · rw [(hrun ω g _).2 h1] at h2
-        exact h2.append_right _
-    · rw [Ex_mul_left]
-      refine mul_le_mul_of_nonneg_left ?_ (e.β_nonneg l)
-      refine (Ex_mono fun g => Pr_mono fun r hr => ?_).trans
-        (le_of_eq (Pr_refDraw (hVk x) fun d => TiedColl H (abortRun H P D.V x keep ω d).vLog))
-      have ht := e.tied₁ l (ω, g) r hr
-      rw [(hrun ω g r).2 (hon₁ l (ω, g) r hr)] at ht
-      exact ht
-  rw [hL, hO] at hEx
-  linarith
+  refine ⟨Escapes.toAbortD e, hfit, fun ω j hj C hC hg => ?_⟩
+  exact accPrD_le_of_refuser H P D.V x decC (hVk x) hpc hlast hfree keep m₀ hm₀ e hon hon₁ (D.εtable x)
+    (fun s => ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols s j) p.val = some u ∧ u ≠ C p) ω
+    (fun g => hb (ω, g) j hj C hC hg)
 
 /-- **Flock's one-wait bound at the abort law, from every table's bound there counted per round**: when the words
 together are no longer than `N₀` and the statement parses wherever some run accepts, `oneWaitAbort_of_tableBoundR` at

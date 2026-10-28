@@ -292,7 +292,8 @@ def install(scratch: Path) -> None:
             low, out_words = unit_lowering(*a, **k)
         finally:
             _in_unit.pop()
-        _unit_lays[id(low.layout)] = low.layout
+        if not hasattr(low, "template"):
+            _unit_lays[id(low.layout)] = low.layout
         return low, out_words
 
     def lower_(C, *a, **k):
@@ -349,6 +350,8 @@ def install(scratch: Path) -> None:
     CS.unit_lowering, IL.lower, IL.layout, FC._expanded, FC.compose = unit_lowering_, lower_, layout_, expanded_, compose_
     Path.write_text = write_text_
     IL.digest, FC.digest, FC.class_digest = sha256, digest, class_digest
+    # a structural unit (`class_statement.TmplLowering`) has no netlist: its unit_sha256 stays the library's, over its template
+    CS.TmplLowering.sha256_of = IL.Lowering.sha256_of
     IL.Lowering.sha256, IL.Lowering.sha256_of = property(_lowering_sha256), _lowering_sha256_of
     IL.evaluate_layout = evaluate_layout
 

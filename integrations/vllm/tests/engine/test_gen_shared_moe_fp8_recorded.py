@@ -1,7 +1,7 @@
 """The block-FP8 shared-expert MoE scope on RECORDED events: GLM-5.3 FP8 at TP8 on 8x H200, vLLM's default kernels.
 
 `fixtures/glm53_tp8_moe_l3.rank0.jsonl.gz` is layer 3 (the first MoE layer) of rank 0's observer log of the Match capture
-`sweep-auto/20261015T085245Z` on vy-glm53-h8 (B1 i256 o32 greedy, vLLM d9105ea80, eager, `VLLM_BATCH_INVARIANT=0`,
+`sweep-auto/20261015T085245Z` on the 8x H200 node (B1 i256 o32 greedy, vLLM d9105ea80, eager, `VLLM_BATCH_INVARIANT=0`,
 `VLLM_DISABLE_SHARED_EXPERTS_STREAM=1`, Build tree b2bf72032; the source log is art:1964424e2964937273c9fb727864e025f02b3326fa6a63c13ef8630afc69f931),
 cut by `tests/engine/moe_scope_cut.py` (its `moe_scope_cut` Note names the source log and its sha256): the RunHeader, the layer's
 weight Roots, and for the prefill step (256 rows) and the first decode step (1 row) the `vllm.moe_forward_shared` scope and the add
@@ -31,17 +31,17 @@ from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.engine.profiles import generic
-from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import K_FUSED, TRITON_EXPERTS
-from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
+from verity_vllm.observe.fold.profiles import generic
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_FUSED, TRITON_EXPERTS
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.observe.events import Note, Root, RunHeader
 from verity_vllm.observe.fold.patterns import triton_name
 from verity_vllm.observe.fold.resolve_log import collect_roots, make_context
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, Transparent, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import read_log, split_steps
-from verity_vllm.program.registry import moe as MOE
+from verity.ml.definitions.registry import moe as MOE
 
 FIXTURE = Path(__file__).parent / "fixtures" / "glm53_tp8_moe_l3.rank0.jsonl.gz"
 CONFIG = Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json"
@@ -59,7 +59,7 @@ STEPS = {0: (256, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=3,DOT=HopperBF
 WEIGHTS = {"gate": f"{PRE}.gate.weight", "bias": f"{PRE}.gate.e_score_correction_bias",
            "gate_up": f"{PRE}.shared_experts.gate_up_proj.weight", "down": f"{PRE}.shared_experts.down_proj.weight",
            "w13": f"{PRE}.experts.routed_experts.w13_weight", "w2": f"{PRE}.experts.routed_experts.w2_weight"}
-Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 
 
 @functools.lru_cache(maxsize=None)

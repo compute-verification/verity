@@ -1,6 +1,5 @@
-"""`flock-rows`, C-Flock's Lean rows, against a unit's size: TBL1's flat MoE classes (no calls, no table reads; 41k to 2M
-ANDs, note:proofs/20261019T0329Z-report-tbl1-moe-select) and the derive vectors' fan-out unit at M placed calls and M placed
-reads (`test_derive.fanout_case`).
+"""`flock-rows`, C-Flock's Lean rows, against a unit's size: the flat MoE classes (no calls, no table reads; 41k to 2M
+ANDs) and the derive vectors' fan-out unit at M placed calls and M placed reads (`test_derive.fanout_case`).
 
     python benchmarks/verifier_cost/flock_rows.py --out DIR --bin LABEL=PATH [--bin LABEL=PATH ...] [--target NAME ...]
         [--fanout M,..] [--modes rows,unit,delta,logical,check] [--cap SECONDS]
@@ -41,7 +40,7 @@ def _qwen3(name: str, **kw):
     from verity.ml.circuits.ops import prims as P
 
     if name.startswith("registry"):
-        from verity_vllm.program.registry import moe as VM
+        from verity.ml.definitions.registry import moe as VM
 
         d = VM.MoeExpertCoordinateWV2 if name.endswith("-w") else VM.MoeExpertCoordinateV2
     else:
@@ -54,7 +53,7 @@ def _qwen3(name: str, **kw):
 def _glm(form: str, **kw):
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.registry import fp8_moe_experts as X
 
     return bind(getattr(X, form), E=256, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32, **kw)
 
@@ -66,12 +65,12 @@ def _select(e: int):
 
 
 def _gather(v: int):
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.registry import fp8_moe_experts as X
 
     return X.gather_e4m3(v)
 
 
-#: TBL1's targets: Qwen3-30B-A3B (E = 128, w13's K 2048, w2's K 768) and GLM-5.3 at TP8 rank 0 (E = 256, the rank's w2 K
+#: the MoE targets: Qwen3-30B-A3B (E = 128, w13's K 2048, w2's K 768) and GLM-5.3 at TP8 rank 0 (E = 256, the rank's w2 K
 #: 256), their small-K classes, and the selects. Each lowers to one flat class but `glm-fp8-gemm` (two).
 TARGETS = {
     "select-x3": lambda: _select(3),

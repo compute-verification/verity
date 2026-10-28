@@ -1,4 +1,4 @@
-"""L3: synthetic raw-observation events for one decode step of one SmolLM2 layer (plus the sample phase), resolved
+"""Synthetic raw-observation events for one decode step of one SmolLM2 layer (plus the sample phase), resolved
 against the pinned profile.  The op names / schemas / argument orders are those of vLLM `d9105ea80` as far as they are
 known from the design and the previous adapter; `test_resolve_m1.py` checks the same patterns against the real M1 log."""
 
@@ -10,7 +10,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
                                    TritonLaunch, ViewDesc)
 from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
 from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
 from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)
@@ -517,8 +517,8 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import numpy as np
 
     from verity_vllm.observe.fold.resolver import Supplied
-    from verity_vllm.program.registry import b1
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import b1
+    from verity.ml.definitions.registry import prims as P
 
     events, start = decode_step()
     se = step_events(events)
@@ -531,7 +531,7 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     f1, _f2 = specs["RMSNormFusedCuda_v4{N=576}"]
     assert f1.operands == (PerRow(bf(305, (1, H))), PerRow(bf(301, (1, H))), Shared(bf(A_LN2, (H,))), eps)
     (a,) = specs["Attention_v10{T=33,NH=9,KVH=3,D=64,BN=128}"]
-    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1.scale_log2_bits(D)) and len(a.operands) == 4
     assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3"))]
 
 
@@ -541,14 +541,14 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     import dataclasses
 
     from verity_vllm.observe.fold.resolver import Supplied
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     events, start = decode_step(num_sms=188)
     se = step_events(events)
     base = _context_on_host(start, se.sample, 188, (12, 0))
     specs = by_spec(resolve_step(se, dataclasses.replace(base, profile=dataclasses.replace(base.profile, registered_values=True))))
     (a,) = [r for k, v in specs.items() if k.startswith("Attention_v11{T=33,NH=9,KVH=3,D=64,") for r in v]
-    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1.scale_log2_bits(D)) and len(a.operands) == 4
     assert "RMSNormTriton_v3{N=576}" in specs and "RMSNormFusedCuda_v4{N=576}" in specs
     assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3", "Attention_v5"))]
 

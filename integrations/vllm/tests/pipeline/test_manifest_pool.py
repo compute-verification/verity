@@ -71,6 +71,19 @@ def test_build_components_takes_the_lock_only_without_a_budget_of_its_own(host, 
     assert (locks, heads) == ([1], [90 * GiB, 70 * GiB])
 
 
+@pytest.mark.parametrize("jobs", [1, 2])
+def test_each_component_built_adds_a_progress_line_to_the_log(host, monkeypatch, jobs):
+    """A TP manifest with no limit (`row --manifest-timeout 0`) shows its progress by these lines: one as each component is built,
+    in turn or in the forked pool."""
+    from verity_vllm.pipeline import global_program
+    monkeypatch.setattr(M, "build", lambda d, **kw: {"d": d})
+    monkeypatch.setattr(global_program, "component_spec_histogram", lambda d: {"Gemm_v1{K=4,N=4}": 1})
+    host(str(96 * GiB), head=90 * GiB)
+    tasks, lines = [(f"c{i}", {}) for i in range(3)], []
+    assert M.build_components(tasks, jobs=jobs, log=lines.append) == [{"d": d} for d, _kw in tasks]
+    assert [ln.split(" built in ")[0] for ln in lines if " built in " in ln] == [f"  components: {k}/3" for k in (1, 2, 3)], lines
+
+
 def test_the_word_rules_prefetch_budgets_its_share_of_that_headroom(host, monkeypatch):
     """`word.prefetch` gets `HEADROOM_SHARE` of the headroom `build_components` would budget, taking the lock where it would; an
     unreadable headroom is no budget, and a Build without a histogram prefetches nothing and takes no lock."""

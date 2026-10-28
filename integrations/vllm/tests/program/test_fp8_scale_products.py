@@ -1,4 +1,4 @@
-"""`kernels.fp8_twins.scale_products`: the scale products a host committer commits for `ScaledMmFp8BlockSharedScale_v1` are the IR's
+"""`kernels.fp8_twins.scale_products`: the scale products a host committer commits for `ScaledMmFp8BlockSharedScale_v1` are the circuit's
 `F32Mul_v1(x_s[kb], w_s[nb][kb])` word for word -- the reference `evaluate` on every ordered pair of edge words where a host multiply can
 differ from it (two NaNs of different payloads and signs, in both orders; NaN against finite, zero and infinity; signed zeros,
 subnormals, +-max, +-inf; products that overflow, or underflow to a subnormal or to zero) -- and, fed to
@@ -12,9 +12,9 @@ import pytest
 
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.kernels import fp8_twins
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import fp8
+from verity.ml.definitions.numerics import fp8_twins
+from verity.ml.definitions.registry import prims as P
 
 NAN = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FA00000, 0xFFBFFFFF]
 INF = [0x7F800000, 0xFF800000]

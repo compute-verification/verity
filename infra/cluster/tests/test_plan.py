@@ -37,9 +37,24 @@ def test_no_gpu_cpu_or_memory_is_given_twice():
 
 def test_owner_reclaims_its_node_from_a_guest():
     c = cluster(node("n1", "p"), shares=(Share("g", "n1"),))
-    guest = alloc(job("g-1", "g", gpus=8, priority="work"), tuple(range(8)), "0-1")
+    guest = alloc(job("g-1", "g", gpus=8, priority="work", max_s=3600), tuple(range(8)), "0-1", started=T0 - 2400)
     acts = plan(c, "n1", [guest], [job("o-1", "p", gpus=1, priority="fill")], T0)
     assert acts[0] == Evict(guest.id, "o-1") and isinstance(acts[1], Start)
+
+
+def test_a_preemptible_allocation_is_evicted_only_after_its_grace():
+    """INF-194: on node 2, 24 Oct, the agent evicted benchmark points 1.5-35 min into 40-50 min leases, so none finished. Grace
+    is the allocation's own max_s, at most GRACE_MAX_S (40 min); a quiet job still clears the node at once."""
+    from cluster.plan import GRACE_MAX_S
+    c = cluster(node("n1", "p"), shares=(Share("g", "n1"),))
+    guest = alloc(job("g-1", "g", gpus=8, priority="work", max_s=3000), tuple(range(8)), "0-1")
+    owner = job("o-1", "p", gpus=1, priority="fill")
+    assert kinds(plan(c, "n1", [guest], [owner], T0 + GRACE_MAX_S - 1)) == ["Wait"]
+    assert plan(c, "n1", [guest], [owner], T0 + GRACE_MAX_S)[0] == Evict(guest.id, "o-1")
+    short = alloc(job("g-2", "g", gpus=8, priority="work", max_s=600), tuple(range(8)), "0-1")
+    assert kinds(plan(c, "n1", [short], [owner], T0 + 599)) == ["Wait"], "a 10 min job runs to its end"
+    timed = job("o-2", "p", gpus=1, priority="timed", quiet=True)
+    assert Evict(guest.id, "o-2") in plan(c, "n1", [guest], [timed], T0 + 60)
 
 
 def test_a_guest_never_displaces_the_owner():
@@ -95,7 +110,7 @@ def test_quiet_job_waits_for_a_session_it_may_not_stop_and_the_node_backfills_me
 
 
 def test_a_one_gpu_window_clears_the_node_of_fill_but_starts_beside_a_session_it_may_not_stop():
-    """Rule 3's partial window, as `gpu-lease --timed` runs today (infra's and PoUW's rulings until the 7 Oct clamp)."""
+    """Rule 3's partial window, as `gpu-lease --timed` runs it until the clamp."""
     session = alloc(job("s-1", gpus=1, kind="session", priority="session", preempt="never", max_s=900), (0,), "0-1")
     fill = alloc(job("f-1", gpus=1, priority="fill", max_s=3000), (1,), "2-3")
     acts = plan(one(), "n1", [session, fill], [job("w-1", gpus=1, priority="timed", quiet=True, max_s=600)], T0)
@@ -191,7 +206,8 @@ def test_a_workstream_reclaims_its_own_gpus_from_a_borrower_whatever_the_borrowe
     from cluster.model import Workstream
     c = cluster(node("n1", "p", gpus=4), workstreams=(Workstream("benches", "n1", 1, borrow_gpus=0),
                                                        Workstream("deploy", "n1", 3, borrow_gpus=1)))
-    borrowed = alloc(job("d-1", gpus=4, priority="work", workstream="deploy", max_s=3000), (0, 1, 2, 3), "0-1")
+    borrowed = alloc(job("d-1", gpus=4, priority="work", workstream="deploy", max_s=3000), (0, 1, 2, 3), "0-1",
+                     started=T0 - 2400)
     bench = job("b-1", gpus=1, priority="fill", workstream="benches")
     acts = plan(c, "n1", [borrowed], [bench], T0)
     assert acts[0] == Evict(borrowed.id, "b-1") and by_job(acts, Start)["b-1"].alloc.gpus == (0,)
@@ -238,9 +254,9 @@ def test_a_cpu_unmanaged_lease_gets_gpus_and_memory_but_no_cpus():
 
 
 def test_a_gpu_pool_bounds_which_gpus_a_job_gets_and_what_it_evicts():
-    fill = [alloc(job(f"f-{i}", gpus=1, priority="fill", max_s=3000), (i,), str(i)) for i in range(8)]
+    fill = [alloc(job(f"f-{i}", gpus=1, priority="fill", max_s=3000), (i,), str(i), started=T0 - 2400) for i in range(8)]
     j = job("w-1", gpus=1, priority="work", gpu_pool=(6, 7), max_s=600)
     acts = plan(one(), "n1", fill, [j], T0)
     [s] = [a for a in acts if isinstance(a, Start)]
-    assert s.alloc.gpus in ((6,), (7,)) and [a.alloc for a in acts if isinstance(a, Evict)] == [f"f-{s.alloc.gpus[0]}@{T0}"]
+    assert s.alloc.gpus in ((6,), (7,)) and [a.alloc for a in acts if isinstance(a, Evict)] == [f"f-{s.alloc.gpus[0]}@{T0 - 2400}"]
     assert "gpu_pool offers 2 GPUs" in plan(one(), "n1", [], [job("w-2", gpus=3, gpu_pool=(6, 7))], T0)[0].reason

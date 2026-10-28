@@ -1,4 +1,4 @@
-"""[R15 tp TP-06, manbind M-0350 C3 / moe M-0352 (b)] the TP partial source binds, at a fused-MoE site, BOTH the rank-local partial
+"""The TP partial source binds, at a fused-MoE site, BOTH the rank-local partial
 (`<module>/part_rank<r>`, the all-reduce INPUT) and the RECEIVED all-reduced block output (`<module>/out`) -- and only there: a linear's
 received output is the native collector's module hook, so binding it here too would be a second binder of one name.  Torch-free (fake
 tensors / modules / committer); the acquisition order and names are what the manifest's `mlp.experts` rows require."""
@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
+from verity_vllm.acquire.sources import partial_source as tps
 
 
 class _Dev:
@@ -103,7 +103,7 @@ def test_moe_site_binds_partial_then_received_output_and_linear_site_binds_the_p
     assert w(x) is y                                                             # the computation is unchanged
     assert [m for m, _ in c.acquired] == ["model.layers.0.mlp.experts/part_rank1", "model.layers.0.mlp.experts/out"]
     assert c.acquired[0][1] is x and c.acquired[1][1] is y                       # input BEFORE, received output AFTER the collective
-    # [rev-cb M-0424 T6-4] the received /out is a legal collection point: flushed right after staging (before the next layer's fused norm
+    # the received /out is a legal collection point: flushed right after staging (before the next layer's fused norm
     # overwrites y in place), so the committed bytes are the AllReduce2 output, not <L+1>.input_layernorm/0
     assert c._nc.flushed == [["model.layers.0.mlp.experts/part_rank1", "model.layers.0.mlp.experts/out"]] and c._nc.staged_since_flush == []
     assert src.stats["received_flushes"] == 1
@@ -134,7 +134,7 @@ def test_omitted_moe_site_drops_both_members_and_arena_bound_counts_the_received
 
 
 def test_nested_moe_runner_is_one_site_at_the_program_path_and_nested_linear_keeps_its_own_site():
-    """rev-cb M-0359 T6-1 / moe M-0386: a fused-MoE wrapper that holds a runner submodule (SharedFusedMoE -> .runner) is ONE site at the
+    """A fused-MoE wrapper that holds a runner submodule (SharedFusedMoE -> .runner) is ONE site at the
     OUTERMOST hooked MoE module = the Program's module path (`mlp.experts`), never two partials for one all-reduce.  A RowParallelLinear
     nested inside a hooked module keeps its own site and the outer module's later collective is still attributed to the outer (stack)."""
     c = _Committer()

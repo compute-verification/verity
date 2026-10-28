@@ -1,11 +1,11 @@
 """Verification plans and obligations over IR programs (IR §1, §D, §E).
 
-Moved from ``verity.verification.plan``, now ``verity_sp1.proofs`` (decision 41).  A plan selects and samples gates of a
-Program for checking; it is verification policy, not computation (README "Protocols").  Each gate class has a rate: the
+A plan selects and samples gates of a Program for checking; it is verification policy, not computation (README
+"Protocols").  Each gate class has a rate: the
 probability a gate of the class is checked, each gate drawn independently.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the
-fault model.  It belongs to a proof unit under the selected plan and is sampled like any other gate.  WB's
+fault model.  It belongs to a proof block under the selected plan and is sampled like any other gate.  WB's
 "model binding" (every committed weight leaf rebuilt from the registered checkpoint) is *a plan whose weight `Input`
 gates have p = 1*; a plan may instead sample them.  There are no trusted sources.
 
@@ -42,8 +42,8 @@ class UnconditionalObligation:
 
     The prover supplies a proof that every gate the class selects satisfies its relation on the committed
     boundary values, and the verifier checks that proof on every audit, before any sampling -- exactly as it
-    checks the public inputs.  A transcript violating a covered gate is rejected with probability 1 up to
-    the proof system's soundness error, so covered fault classes have survival 0 in the acceptance law.
+    checks the public inputs.  A trace violating a covered gate is rejected with probability 1 up to
+    the proof system's soundness error, so covered fault classes have acceptance probability 0.
     This is NOT p = 1: a class's rate is a draw, and the obligation holds outside it.  `statement` names the relation
     the proof establishes (e.g. the authenticated boundary relation of an inactive region)."""
 
@@ -151,7 +151,7 @@ class AuthenticationLocation:
 
 @dataclass
 class Obligation:
-    """One sampled proof unit: a gate selection of the canonical circuit (here always a `FunctionCall` or
+    """One sampled proof block: a gate selection of the canonical circuit (here always a `FunctionCall` or
     `Region`), its boundary values with their authentication locations, and the plan that selected it."""
 
     selection: GateSelection

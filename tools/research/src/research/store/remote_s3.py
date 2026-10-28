@@ -98,11 +98,15 @@ MAX_PARTS = 10_000              # the service's limit on parts per upload: `choo
 PART_JOBS = 8                   # parts in flight at once (each is `part_size` bytes in memory) ...
 PART_MEM_BUDGET = 1 << 30       # ... but never more than this many bytes of parts in flight
 PARTS_SIDECAR_SCHEMA = "research/parts/v1"
-REQUEST_DEADLINE_S = 180.0       # a request's hard wall-clock deadline to its headers; a GET body then gets max(this, bytes / MIN_BODY_RATE)
-MIN_BODY_RATE = 64 * 1024        # bytes/s a GET body may not fall below on average before its deadline cuts it off
+REQUEST_DEADLINE_S = 180.0       # a request's hard wall-clock deadline to its headers; a GET body up to GET_STALL_MIN_BYTES then gets
+                                 # max(this, bytes / MIN_BODY_RATE), a larger one a STALL_WINDOW_S progress window
+MIN_BODY_RATE = 64 * 1024        # bytes/s a GET body up to GET_STALL_MIN_BYTES may not fall below on average before its deadline cuts it off
 MIN_UPLOAD_RATE = 8 * 1024       # the same for a request body (a PUT from the laptop's 25-220 KB/s uplink must still finish)
 STALL_WINDOW_S = 120.0           # a part PUT is cut off when a window this long passes with under STALL_MIN_BYTES of its body sent,
 STALL_MIN_BYTES = 1 << 20        # or (body sent) with no response: its whole-body deadline above is hours for a 256 MiB part
+GET_STALL_MIN_BYTES = 32 << 20   # a GET body is cut off (and the GET retried) when a STALL_WINDOW_S window brings under this much (~280
+                                 # KB/s): a stalled stream that still trickles kept a 16 GiB part going at 13-170 KB/s for an hour while a
+                                 # fresh connection on the same node got 45-70 MB/s (INF-214); its whole-body deadline was 73 h
 HEAD_DEADLINE_S = 30.0           # a HEAD carries no body: a much shorter deadline, and HEAD_RETRIES tries after the first
 HEAD_RETRIES = 1
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
@@ -399,6 +403,11 @@ class _Watchdog:
                 sock.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
+
+    def window(self, seconds: float, progress: Callable[[], int], min_bytes: int) -> None:
+        """From now on, a window of `seconds` that sees under `min_bytes` more of `progress` fires the deadline."""
+        self.progress, self.min_bytes, self.seconds, self._seen = progress, min_bytes, seconds, progress()
+        self.extend(seconds)
 
     def extend(self, seconds: float) -> None:
         self.cancel()
@@ -714,8 +723,8 @@ class S3Remote:
                        expires_s, self.session_token)
 
     def delete(self, key: str) -> bool:
-        """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol -- the store never deletes a
-        replica; the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix do."""
+        """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol: only the store's GC (README §7.4),
+        the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix delete."""
         try:
             with self._request("DELETE", key):
                 pass
@@ -850,14 +859,19 @@ class S3Remote:
             try:
                 with self._request("GET", key) as r, open(tmp, "wb") as f:
                     want = r.headers.get("Content-Length")
-                    if r.watchdog is not None:
+                    got, cut = [0], REQUEST_DEADLINE_S
+                    if r.watchdog is not None and int(want or 0) > GET_STALL_MIN_BYTES:
+                        cut = STALL_WINDOW_S
+                        r.watchdog.window(cut, lambda: got[0], GET_STALL_MIN_BYTES)
+                    elif r.watchdog is not None:
                         r.watchdog.extend(max(REQUEST_DEADLINE_S, int(want or 0) / MIN_BODY_RATE))
                     n = 0
                     for chunk in iter(lambda: r.read(1 << 20), b""):
                         f.write(chunk)
                         n += len(chunk)
+                        got[0] = n
                     if r.watchdog is not None and r.watchdog.fired:
-                        self._deadline_hit("GET", key, attempt + 1, RETRIES + 1, REQUEST_DEADLINE_S)
+                        self._deadline_hit("GET", key, attempt + 1, RETRIES + 1, cut)
                         raise TimeoutError(f"GET {key}: body not complete within its deadline ({n} bytes)")
                     if want is not None and n != int(want):
                         raise http.client.IncompleteRead(b"", int(want) - n)

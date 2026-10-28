@@ -64,6 +64,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from .class_statement import ClassDefinition
 
 __all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
@@ -83,7 +84,7 @@ V_VALUE = "rec-v"
 # unit's name does not say, and the verifier (`Flock.RecResiduals.HOLO_KEY`) builds the one net it selects, absent meaning plain
 HOLO_KEY = "holo"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
-# (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
+# (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 512 (`coin_spec_of`)
 MAX_REGIONS = 64
 # a part's sha512x3 slots per instance, at most (`slots`): 160 slots of 2^18 bits (2^25.32) beside its hm96 slots' 2^24 (at
 # most MAX_REGIONS) leave room for a 2^22 unit in a 2^26 block (for a 2^23 unit, as at 12 claims, 159 do), below
@@ -302,10 +303,13 @@ def _recombine() -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(sorted(-1 - x for x in o.s)) for o in out)
 
 
-def _leaves(a: list, b: list) -> list[tuple]:
-    rec = _Pairs()
-    G.karatsuba(rec, a, b)
-    return rec.pairs
+def _leaf_operands(a: list) -> list:
+    """One side's operands of `gf2k.karatsuba`'s ANDs, in its order: its leaf pairs are this on a zipped with this on b."""
+    n = len(a)
+    if n == 1:
+        return [a[0]]
+    h = n // 2
+    return _leaf_operands(a[:h]) + _leaf_operands(a[h:]) + _leaf_operands([x ^ y for x, y in zip(a[:h], a[h:])])
 
 
 def _port_words(S: dict) -> tuple[int, ...]:
@@ -354,7 +358,7 @@ def residual_forms(C, S: dict, W: list, V: list) -> list:
 
     def op(k):
         if k not in ops:
-            ops[k] = xor(term(t) for t in S["ops"][k])
+            ops[k] = _leaf_operands(xor(term(t) for t in S["ops"][k]))
         return ops[k]
 
     rec = _recombine()
@@ -364,7 +368,7 @@ def residual_forms(C, S: dict, W: list, V: list) -> list:
         if r["mul"]:
             sums, consts = [set() for _ in range(LEAVES)], [0] * LEAVES
             for a, b in r["mul"]:
-                for i, (x, y) in enumerate(_leaves(op(a), op(b))):
+                for i, (x, y) in enumerate(zip(op(a), op(b))):
                     z = C.AND(x, y)
                     sums[i].symmetric_difference_update(z.s)
                     consts[i] ^= z.c
@@ -434,22 +438,32 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
 
 def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace:
     """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n``, ``S`` and
-    ``holo`` decide. ``holo``: S is a part of a holo shape's spec, which META says (`HOLO_KEY`)."""
+    ``holo`` decide. ``holo``: S is a part of a holo shape's spec, which META says (`HOLO_KEY`). With `rec_circuits`' cache
+    the text is built once per (S, name, n, holo), and ``low`` is None when it was read back."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    from . import rec_circuits as RC
 
     t0 = time.perf_counter()
     defn = definition(S)
     program = P.population_program(defn, n)
     part = P.partition(program, P.template_instance_query(defn))
     prog = P.program_sha512(program)
-    low = lowering(S, name)
     sub = subcircuit(S, name)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog, extra_meta={HOLO_KEY: True} if holo else None)
+    key = {"name": name, "n": n, "holo": holo, "definition": sub.program_digests(None)[defn.id]}
+    if kept := RC.load("rec-residuals", key):
+        low, (text, info) = None, kept
+    else:
+        low = lowering(S, name)
+        text = FC.compose(low, sub, partition=P.digest(part), program=prog, extra_meta={HOLO_KEY: True} if holo else None)
+        info = {"unit_rows": low.layout.useful, "digests": [FC.digest(text), FC.class_digest(text)]}
+        RC.store("rec-residuals", key, text, info)
     names = [nm for nm, _ in S["ports"]]
     ref = lambda rows, vw: residual_words(S, [rows[nm] for nm in names], elements(vw, S["gf"]["nv"]))
     return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,
                            names=names, v_words=v_words(S), out_words=OUT_WORDS, v_value=V_VALUE, zero_value=ZERO_VALUE,
-                           ref=ref, build_s=round(time.perf_counter() - t0, 1))
+                           ref=ref, unit_rows=info["unit_rows"], digests=tuple(info["digests"]), circuit_kept=low is None,
+                           build_s=round(time.perf_counter() - t0, 1))
 
 
 def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evaluate: bool = True, own: dict | None = None) -> dict:
@@ -492,7 +506,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     entries["v"] = {**vreg.entry(), "word_bits": 16, "reads": list(range(n))}
     ref = [st.ref({nm: tables[nm][i].tolist() for nm in names}, vt[i].tolist()) for i in range(n)]
     agrees = None
-    if evaluate:
+    if evaluate and low is not None:
         got, _cut, ok = low.evaluate(np.concatenate([tables[nm] for nm in names] + [vt], axis=1).astype(np.uint64))
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i] for i in range(n)]
     zero = RG.Registered.commit(st.prog, st.zero_value, [[0] * st.out_words for _ in range(n)],
@@ -504,14 +518,17 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(st.program)))
     (d / "partition.json").write_text(json.dumps(st.part))
+    RB.check({"format": RG.READS, "ports": entries}, st.defn.id, n)
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
+    ds = getattr(st, "digests", None) or (FC.digest(text), FC.class_digest(text))
     FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables=tables, refs={nm: list(range(n)) for nm in tables},
-             salts=salts, registered=registered)
-    meta = json.loads(text.split("\n", 2)[1][5:])
-    return {"holds": [not any(x) for x in ref], "ref": ref, "unit_agrees": agrees, "unit_rows": low.layout.useful,
-            "unit_log": meta["unit_log"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"],
-            "circuit_sha512": FC.digest(text), "circuit_bytes": len(text), "program_sha512": st.prog,
+             salts=salts, registered=registered, digests=ds)
+    meta = FC.meta_of(text)
+    return {"holds": [not any(x) for x in ref], "ref": ref, "unit_agrees": agrees,
+            "unit_rows": low.layout.useful if low is not None else st.unit_rows, "unit_log": meta["unit_log"],
+            "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"], "circuit_sha512": ds[0],
+            "circuit_bytes": len(text), "circuit_kept": getattr(st, "circuit_kept", False), "program_sha512": st.prog,
             "partition_digest": P.digest(st.part), "zero_root": zero.root.hex(), "build_s": st.build_s}
 
 

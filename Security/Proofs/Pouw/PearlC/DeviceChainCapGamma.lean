@@ -1,9 +1,10 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
-import Models.Pouw.Assumptions.PearlC.DeviceChainCap
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
-# The cap on the chain's share: what it admits, that it asserts less, and γ (the TT_OUT restatements lane's file)
+# The cap on the chain's share: what it admits, that it asserts less, and γ
 
 Staged; nothing pinned.
 * **What it admits:** `chainCap_flagged_le`. A debit within `ρ·chainCreditDev` has at most `ρ·m·k·n/32` flagged
@@ -255,4 +256,7 @@ theorem pearlCSampledUnpromotedChainCap1000_16384 {Q R S : Type} [Fintype Q] [De
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192 := @Pouw.PearlC.pearlCGammaUnpromotedChainCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192 :=
+  fun sha fetch salt d sem hG hp hTT =>
+    @Pouw.PearlC.pearlCGammaUnpromotedChainCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainCap_of_w1 hTT)

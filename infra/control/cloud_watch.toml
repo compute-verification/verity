@@ -50,6 +50,13 @@ pattern = '^(\S+Z) pass rc=0 '
 period_s = 360                       # 5 min of sleep and a ~1 min pass
 
 [[loop]]
+name = "Store GC"
+started_by = "/data/infra/store_gc.sh"
+file = "/data/infra/store-gc.log"
+pattern = '^(\S+Z) pass rc=0 '
+period_s = 25200                     # 6 h of sleep and a pass of up to ~1 h (README §7.4's deletes in batches)
+
+[[loop]]
 name = "Fixture export"
 started_by = "/data/infra/fixtures_export.sh"
 file = "/data/infra/fixtures-export.log"
@@ -112,7 +119,7 @@ endpoint_env = ["LEAN_CACHE_R2_ENDPOINT", "R2_ENDPOINT"]
 key_env = "AWS_ACCESS_KEY_ID"
 secret_env = "AWS_SECRET_ACCESS_KEY"
 stale_after_h = 36                   # vy-lean-cache-daily publishes at 06:15Z each day
-writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-1 (lean)."
+writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-cpu-4 (lean)."
 
 [neon]
 url_env = "STORE_INDEXER_DATABASE_URL"
@@ -127,8 +134,10 @@ budgets = ["/workspace/steward/research-notes/budgets.toml", "~/.research/notes/
 guard_state = "/root/.research/pods/guard-budgets.json"
 steward_log = "/data/steward/watch.log"   # its `ACCOUNT $B at $R/h` lines: RunPod's own rate for every pod and volume
 line_alert_share = 0.8               # a RunPod line at 80% of its cap (the guard itself terminates at 100%)
-runpod_runway_alert_h = 168          # the balance reaches the guard's balance_floor within 7 days: a top-up is Daniel's, and an
-                                     # empty balance stops this pod and can take its /data volume
+runpod_topup_below_usd = 100         # RunPod tops the account up by itself once the balance falls under this (to ~$300; the
+                                     # steward log's ACCOUNT lines show each one), so a balance under it means the top-up failed:
+                                     # at the guard's balance_floor every pod in scope is terminated, and an empty balance stops
+                                     # this pod and can take its /data volume
 r2_alert_usd_per_month = 100         # no budget line covers R2; this is an alert line only
 
 # The keys that would close a gap no check here can cover, each said once in the digest while it is missing.

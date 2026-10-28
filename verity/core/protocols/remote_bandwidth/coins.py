@@ -1,16 +1,17 @@
-"""The remote audit's coins on the proof service's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), and each opened once, after the root the verifier recorded.
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
-families   challenge W, openings W, append A: window t's challenge σ_t, its openings coin, and append i's coin c_a;
-           no append family when the session takes no appends (A = 0)
+families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the draw over windows
+           cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append i's coin c_a; no append
+           family when the session takes no appends (A = 0)
 coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
 R          SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window, {root} in
            the auditor's ledger, which opens one challenger session a root, ever
-after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had received when it left; window t's openings coin
-           after window t's last root; append i's coin after append i's root
+after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had received when it left; draw c's openings coin
+           after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
 ~~~
 
 The prover has the commitment before the first coin and checks every coin it is sent against it (`coin_reason`), so no
@@ -23,10 +24,11 @@ opens after that root, once.
 `Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
 takes from the challenger afterwards, the commitment it signed and the roots its signed release log shows it received
-(`remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session, inside the
-period holding it), `released_reason` holds to the session's own record: the same commitment, the same roots in the same
-order, σ_0 after R, and each window's openings coin after that window's last root, so a coin opened before its window's
-root, or a session whose coins are another challenger session's, is refused.
+(`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
+inside the period holding it, read only through `challenger.pinned_session`, so the session ran a tree the host's pins
+log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
+the same roots in the same order, σ_0 after R, and each draw's openings coin after its last window's last root, so a
+coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
 """
 
 from __future__ import annotations
@@ -39,8 +41,8 @@ from typing import Any
 
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
-                                                             LiveOpening, LiveRecord, Verify, audited_session,
-                                                             ledger_head, live_reason, order_reason, record_many)
+                                                             LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
+                                                             order_reason, pinned_session, record_many)
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -51,11 +53,20 @@ APPENDS = 1024
 WINDOW_DOMAIN = b"verity/remote-bandwidth/window/v1\0"
 
 
-def families(windows: int, appends: int = APPENDS) -> tuple[tuple[str, int], ...]:
-    """The session's coin layout: W challenges, W openings coins and `appends` append coins, with no append family
-    when `appends` is 0.  A session reserves exactly the coins it will use, so a challenger that released every coin
-    it committed to (the gate's `complete`) served a session that ran to its end."""
-    return ((CHALLENGE, windows), (OPENINGS, windows)) + (((APPEND, appends),) if appends != 0 else ())
+def openings_coins(windows: int, per_coin: int = 1) -> int:
+    """⌈W/g⌉: the openings coins of `windows` windows drawn `per_coin` (g) consecutive windows a coin."""
+    if type(per_coin) is not int or per_coin < 1:
+        raise ValueError("groups_per_coin is a positive integer")
+    return -(-windows // per_coin)
+
+
+def families(windows: int, appends: int = APPENDS, per_coin: int = 1) -> tuple[tuple[str, int], ...]:
+    """The session's coin layout: W challenges, ⌈W/g⌉ openings coins (`openings_coins`, W at g = `per_coin` = 1) and
+    `appends` append coins, with no append family when `appends` is 0.  A session reserves exactly the coins it will
+    use, so a challenger that released every coin it committed to (the gate's `complete`) served a session that ran to
+    its end."""
+    return (((CHALLENGE, windows), (OPENINGS, openings_coins(windows, per_coin)))
+            + (((APPEND, appends),) if appends != 0 else ()))
 
 
 def window_root(registration: bytes, session: int) -> bytes:
@@ -77,18 +88,20 @@ def coin(opening: LiveOpening) -> bytes:
     return opening.coin[:COIN_BYTES]
 
 
-def layout_reason(commitment: Any, session: int, windows: int) -> str | None:
-    """Why `commitment` is not session `session`'s coin commitment for `windows` windows; None when it is."""
+def layout_reason(commitment: Any, session: int, windows: int, per_coin: int = 1) -> str | None:
+    """Why `commitment` is not session `session`'s coin commitment for `windows` windows drawn `per_coin` a coin; None
+    when it is."""
     if type(commitment) is not LiveCommitment:
         return "a session's coin commitment is a live coin commitment"
     if commitment.scheme != SCHEME or commitment.epoch != session:
         return (f"the coins are {commitment.scheme} epoch {commitment.epoch}'s, not {SCHEME} epoch {session}'s: "
                 "session k's coins are their own epoch")
     labels = tuple(label for label, _ in commitment.families)
+    openings = openings_coins(windows, per_coin)
     if (labels not in (LABELS, LABELS[:2]) or commitment.family(CHALLENGE) != windows
-            or commitment.family(OPENINGS) != windows):
+            or commitment.family(OPENINGS) != openings):
         return (f"the coins' layout is {[list(f) for f in commitment.families]}, not challenge {windows}, openings "
-                f"{windows} and, if any, append A")
+                f"{openings} and, if any, append A")
     return None
 
 
@@ -104,17 +117,18 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
 
 
 class Coins:
-    """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows, through
-    `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`), committed before the session.  Each family's coins
-    open in order, each once, after the root recorded for it (`LiveRecord`, on `clock`); two the session asks for one
-    behind the other may go in one round trip (`ahead`)."""
+    """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows drawn
+    `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
+    committed before the session.  Each family's coins open in order, each once, after the root recorded for it
+    (`LiveRecord`, on `clock`); two the session asks for one behind the other may go in one round trip (`ahead`)."""
 
-    def __init__(self, challenger: Any, registration: bytes, session: int, windows: int, *,
+    def __init__(self, challenger: Any, registration: bytes, session: int, windows: int, *, per_coin: int = 1,
                  clock: Callable[[], float] = time.monotonic) -> None:
-        why = layout_reason(challenger.commitment, session, windows)
+        why = layout_reason(challenger.commitment, session, windows, per_coin)
         if why is not None:
             raise CoinError(why)
         self.challenger, self.registration, self.session, self.windows = challenger, registration, session, windows
+        self.per_coin = per_coin
         self.window = window_root(registration, session)
         self._records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
         self._ahead: tuple[str, int, bytes] | None = None
@@ -163,9 +177,10 @@ class Coins:
         """σ_t, released now, after `after`: R for σ_0, else the last root received."""
         return self._open(CHALLENGE, t, after)
 
-    def openings(self, t: int, after: bytes) -> LiveOpening:
-        """Window t's openings coin, released now, after window t's last root `after`."""
-        return self._open(OPENINGS, t, after)
+    def openings(self, c: int, after: bytes) -> LiveOpening:
+        """Draw c's openings coin (window c's at one window a coin), released now, after the last root `after` of its
+        last window."""
+        return self._open(OPENINGS, c, after)
 
     def append(self, root: bytes) -> LiveOpening:
         """The next append's coin, released now, after the append's root."""
@@ -190,22 +205,23 @@ class Coins:
 
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
-          appends: int = APPENDS, clock: Callable[[], float] = time.monotonic) -> Coins:
+          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> Coins:
     """Session `session`'s coins from a challenger in the verifier's process, drawing from `entropy`."""
-    return Coins(LiveChallenger(SCHEME, session, families(windows, appends), entropy), registration, session, windows,
-                 clock=clock)
+    return Coins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration, session,
+                 windows, per_coin=per_coin, clock=clock)
 
 
 def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
-                    signed: LiveCommitment, received: Mapping[str, Sequence[bytes]]) -> str | None:
+                    signed: LiveCommitment, received: Mapping[str, Sequence[bytes]], in_flight: int = 2) -> str | None:
     """Why the session's coins, `coins`, are not the challenger's as it signed them; None when they are.  `windows` is
     each released window's roots and `appends` each append's root, in the order the session received them; `signed` is
     the commitment the challenger signed and `received` the roots its signed release log shows it received, by family
     (`remote.trusted_session`, or `challenger.session_of` with no ledger).  Refused: another commitment; a family whose
     coins weren't opened in order, once, each after the root recorded for it, or whose recorded roots aren't the ones
-    the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's;
-    a window's openings coin opened after anything but that window's last root (so before it); an append's coin after
-    anything but its own root."""
+    the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's,
+    and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of windows
+    0 … t − 1 (R if they have none), so before a root of window t − 1; a draw's openings coin opened after anything
+    but its last window's last root (so before it); an append's coin after anything but its own root."""
     c = coins.commitment
     if signed != c:
         return "the challenger signed another coin commitment than the one the session's coins open against"
@@ -219,12 +235,17 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     challenges = coins.afters(CHALLENGE)
     if challenges and challenges[0] != coins.window:
         return "σ_0 was not opened after the session's window root R"
-    earlier = {coins.window}
+    earlier, last = {coins.window}, coins.window
     for t, after in enumerate(challenges[1:], 1):
-        earlier.update(windows[t - 1] if t - 1 < len(windows) else ())
+        before = windows[t - 1] if t - 1 < len(windows) else ()
+        earlier.update(before)
+        last = before[-1] if before else last
         if after not in earlier:
             return f"σ_{t} was opened after a root that is neither R nor an earlier window's"
-    for t, after in enumerate(coins.afters(OPENINGS)):
+        if in_flight == 1 and after != last:
+            return f"σ_{t} was opened before window {t - 1}'s last root, at one window in flight"
+    for c, after in enumerate(coins.afters(OPENINGS)):
+        t = min((c + 1) * coins.per_coin, coins.windows) - 1
         if t >= len(windows) or not windows[t] or after != windows[t][-1]:
             return f"window {t}'s openings coin was opened before its window's root"
     if coins.afters(APPEND) != tuple(appends):
@@ -232,24 +253,26 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
-def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, verify: Verify,
-            period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
-    """What the challenger signed for the session's window, read on the auditor's side (`remote.trusted_session`): the
-    one challenger session the auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the
-    session's own (`window`), its files in `directory`, under the pinned `key`; its commitment and the roots its signed
-    release log shows it received.  With `period`, the audit's period on the ledger, the window must be one of that
-    period's (`challenger.audited_session`), so the session is bound to its (period, registration).  Raises
-    `CoinError` naming why."""
+def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
+            verify: Verify, period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+    """What the challenger signed for the session's window, read on the auditor's side: the one challenger session the
+    auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the session's own (`window`),
+    under the pinned `key`, run from main's code (`challenger.pinned_session`: the host's pins log `pins`, its lines,
+    records the open's pin, and `main`, the verifier's own ``git rev-list --first-parent origin/main``, holds it); then
+    its files in `directory` (`remote.trusted_session`), its commitment and the roots its signed release log shows it
+    received.  With `period`, the audit's period on the ledger, the window must be one of that period's, so the session
+    is bound to its (period, registration).  The pin first, then the period, then the files; raises `CoinError` naming
+    why, so a session with no pins log or no copy of main, an open that sealed no log, a pin the log doesn't record or
+    one off main's first-parent line is refused."""
     w = window(coins.registration, coins.session)
-    got = remote.trusted_session(directory, heads, w, key, verify)
-    if period is not None:
-        held = audited_session(ledger_head([remote.ledger_lines(p) for p in heads], key, verify), w, key, verify).period
-        if held != period:
-            raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
-                            f"period {period}")
-    return got
+    ledger = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+    held = pinned_session(ledger, w, key, pins, main, verify).period
+    if period is not None and held != period:
+        raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
+                        f"period {period}")
+    return remote.trusted_session(directory, heads, w, key, verify)
 
 
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "SCHEME", "WINDOW_DOMAIN",
-           "coin", "coin_reason", "families", "layout_reason", "local", "released_reason", "trusted", "window",
-           "window_root"]
+           "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins", "released_reason", "trusted",
+           "window", "window_root"]

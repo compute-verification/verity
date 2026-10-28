@@ -36,7 +36,7 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   statement without a draw (`innerOk`), so at a statement the reader parses the inner statement holds one
   (`innerDrawn_checked`, in `DeployChecked`).
 * **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
-  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and since #2411
+  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and
   `ProvedScope.check` passes them at hidden outputs without `--zk` (`InnerLeaf.check_of_innerOf`). The reader requires
   that check (`innerOk`), so what `Decomp` asks at the checked reader is `DeployChecked`'s.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
@@ -140,6 +140,28 @@ def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape 
       ∃ ps, untr x (b.tr x ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))) = some ps ∧
         ps.map Prod.fst = ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).map Prod.fst ∧
         ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
+
+/-- **The reader reads the coin server's transcript back before the last round** (a named premise): `ReadsBack` at
+the inner rounds before the last. The coin server records no last round, the openings, so a reader of its record reads
+that round back nowhere; the bound layout reads no commit string there (`VStarB.StagedB`). -/
+def ReadsBackB (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
+    (untr : TrReader) : Prop :=
+  ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
+    (r : Fin ((V IV b.st).k x) → Coin), (run H P (V IV b.st) x ω r).out = .acc →
+      ∃ ps, untr x (b.tr x ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))) = some ps ∧
+        (∀ i, i + 1 < IV.k (xIOf x) →
+          (ps.map Prod.fst).getD i [] = ((run H P (V IV b.st) x ω r).msgs.map Prod.fst).getD i []) ∧
+        ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
+
+/-- `ReadsBack` reads back before the last round. -/
+theorem readsBackB_of_readsBack {H : Msg → Msg} {IV : Claims.Verifier Coin} {b : Brings}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} (h : ReadsBack H IV b shape untr) :
+    ReadsBackB H IV b shape untr := by
+  intro x st hst hf Ω P ω r hacc
+  obtain ⟨ps, hps, hfst, hdrawn⟩ := h x st hst hf Ω P ω r hacc
+  refine ⟨ps, hps, fun i hi => ?_, hdrawn⟩
+  rw [hfst, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
+    List.getElem?_take_of_lt (by omega)]
 
 /-- **The rounds a V\* statement's transcript shows**: its transcript, read by `untr`. -/
 def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Array Flock.F128)) :=
@@ -415,6 +437,7 @@ theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : Lis
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, hc, -⟩ := FlockSoundness.Refine.ebind_ok hc
   cases hd : s.read.draw with
   | none => simp [hd, Flock.ProvedScope.drawLaw] at hc
   | some d => exact ⟨d, rfl⟩
@@ -881,7 +904,7 @@ theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recur
 
 /-! ## What the reader reads of the inner statement
 
-The inner statement as `readX` reads it, and Flock's statement check on it, which since #2411 passes plain leaves at
+The inner statement as `readX` reads it, and Flock's statement check on it, which passes plain leaves at
 hidden outputs without `--zk`, the one form the inner setup's circuit file can take (`InnerLeaf.check_of_innerOf`). -/
 
 /-- What `readX` read of the inner statement: its decoding, its circuit file set up at the inner tags
@@ -890,7 +913,8 @@ theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
     FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims ∧
       innerOk r.w.inner = .ok () := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, hri, sh, -, pa, -, dims, hdims, vs, -, h⟩ := h
   split_ifs at h with hl

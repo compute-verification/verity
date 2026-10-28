@@ -1,9 +1,7 @@
-"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its tile count is padded to,
-the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile),
-with the window statement's reference (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`,
-PoUW; the joint note's L2, L3 and L4).
+"""PoUW's audit window as the proof system sees it: what the window makes public, the grid its tile count is padded to,
+the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile).
 
-**Public items** (`PUBLIC`), the draft's list and the rows' fixed length (19 Oct).  The service refuses a registration
+**Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
 that makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
@@ -19,8 +17,7 @@ that makes anything else public; the window's own root and W's root are salted r
 2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window with N_real real tiles registers one level ℓ, the
 largest point g_ℓ <= N_real: it is credited g_ℓ tiles' work and pads its tiles to N = g_(ℓ+1) > N_real with filler tiles,
 at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler a window
-always has: the private partition's unit-count bucket n_b (`note:circuits/20261006T0615Z-draft-private-partitions`,
-G6) on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
+always has: the private partition's unit-count bucket n_b on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
 declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
 under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
 
@@ -28,8 +25,7 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
-**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work (Daniel, 19 Oct,
-ASK-39).  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
 `length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
 (`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
@@ -48,7 +44,7 @@ is its tiles, the filler covers the rest, every call's -h3 root is the pass's, t
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
 holds those to the entries.  It is not proved yet: no Program states it.
 
-**The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
+**The layout for gates** is specified in PoUW's PROTOCOL.md,
 "The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
@@ -56,14 +52,16 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 
 **Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
-derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
 from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
 window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
 round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a
-window's round coins (Lean: `PouwWindow.Rounds`).
+window's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
+(`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its epoch's root
+(`salt.epoch_open_root`), so it ends complete once that coin is released.
 """
 from __future__ import annotations
 
@@ -104,7 +102,7 @@ PUBLIC = (
 )
 #: the items a registration carries; the verdict and the draw come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule (19 Oct) carries: no `length`, so not of record
+#: what a registration made before the fixed-length rule carries: no `length`, so not of record
 LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
@@ -789,6 +787,21 @@ def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
     return None
 
 
+#: a Pearl-C pass's live layout: its salt coin alone, so a session reserved with it is complete exactly when it released
+#: that coin
+SALT_FAMILIES = ((SALT, 1),)
+
+
+def salt_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+    """Why `commitment` is not a Pearl-C salt session's coin commitment (`LIVE_SCHEME`, `SALT_FAMILIES`); None when it
+    is."""
+    if commitment.scheme != LIVE_SCHEME:
+        return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
+    if commitment.families != SALT_FAMILIES:
+        return "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
+    return None
+
+
 def rounds_reason(commitment: Ch.LiveCommitment, roots: Sequence[bytes], openings: Sequence[Ch.LiveOpening]) -> str | None:
     """Why `openings` are not a live window's round coins over the round roots the verifier recorded, `roots` in order:
     round r's coin opened once, after round r's root, and every recorded round's coin opened; None when they are."""
@@ -802,9 +815,10 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
 
 __all__ = ["COINS", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED",
            "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
-           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "STOP_FIXED", "T_BITS", "Work", "bucket", "entry_bc",
-           "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem",
+           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES", "STOP_FIXED", "T_BITS", "Work", "bucket",
+           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem",
            "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families",
            "mode", "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
-           "round_key", "rounds_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index",
-           "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
+           "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain",
+           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles",
+           "window_problem"]

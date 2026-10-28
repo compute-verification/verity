@@ -8,7 +8,8 @@ import Proofs.Flock.Recursive.PadsAt
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.Holo
+import Definitions.Flock.Recursive.Holo
+import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.Recursive.StageRead
@@ -18,6 +19,7 @@ import Proofs.Flock.Recursive.OsSalts
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Audit
+import Proofs.Flock.Recursive.SoundExec
 import Proofs.Flock.Recursive.Universal
 import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
@@ -31,6 +33,7 @@ import Proofs.Flock.Recursive.Sessions
 import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.OuterSessionZK
 import Proofs.Flock.Recursive.FirewallRun
 import Proofs.Flock.Recursive.FirewallFollows
 import Proofs.Flock.Recursive.PublicAudit
@@ -61,6 +64,13 @@ import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.Recursive.HPortTie
+import Proofs.Flock.Recursive.KSStatement
+import Proofs.Flock.Recursive.KSNontrivial
+import Proofs.Flock.Recursive.KS
+import Proofs.Flock.Recursive.KSV
+import Proofs.Flock.Recursive.KSDeployed
+import Proofs.Flock.Recursive.KSProved
+import Proofs.Flock.Claims.Recursion.DeployedCounts
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -75,7 +85,8 @@ as the prover supplies them, typed where they type and refusing elsewhere, with 
 V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), V*'s outer sessions with the honest prover's self-check
 in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) and their zero knowledge, (ii)'s
 `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the firewall's code
-and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), `FirewallSends`'
+and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
+statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`), `FirewallSends`'
 template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
 honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof

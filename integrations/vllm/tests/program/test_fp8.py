@@ -1,6 +1,6 @@
-"""CPU tests of the FP8 registry (`verity_vllm/program/registry/fp8.py`, lane QZ) on saved H100 operands.
+"""CPU tests of the FP8 registry (`verity/ml/definitions/registry/fp8.py`) on saved H100 operands.
 
-Data (`tests/program/data/`, pod `qz-h100`, 2026-09-08):
+Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
   K=1536/N=1536, K=8960/N=1536): the sampled weight rows, the activation rows + scales, the kernel's bf16 outputs
   (`gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm`);
@@ -8,7 +8,7 @@ Data (`tests/program/data/`, pod `qz-h100`, 2026-09-08):
   positions 0, 63, 130; layer 0 qkv_proj): the bf16 norm output `x`, the captured `x_q` and `s_x` (fp8_quant ports 0/1),
   the captured output row, plus eight committed e4m3 weight rows, the committed f32 weight scale and the bf16 bias.
 
-The tests evaluate the registered functions gate by gate (`verity.ml.circuits.evaluate`) and compare words.  Python >= 3.12
+The tests evaluate the registered functions gate by gate (`verity.ml.circuits.evaluation`) and compare words.  Python >= 3.12
 (`veritor.core.silicon_total_fp8`).
 """
 
@@ -23,12 +23,12 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity_vllm.correspondence.capture_identities import _coll_range  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
-from verity_vllm.program.registry import fp8 as F  # noqa: E402
-from verity_vllm.program.kernels import fp8_twins  # noqa: E402
-from verity_vllm.program.registry import prims as P  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity_vllm.correspondence.capture_identities import _coll_range
+from verity.ml.circuits.evaluation import evaluate_region
+from verity.ml.definitions.registry import fp8 as F
+from verity.ml.definitions.numerics import fp8_twins
+from verity.ml.definitions.registry import prims as P
 
 DATA = Path(__file__).parent / "data"
 
@@ -51,7 +51,7 @@ def _evaluate(program: Program, arrays: list[np.ndarray]) -> list[list[int]]:
 
 
 def _evaluate_returns(program: Program, arrays: list[np.ndarray]) -> list[int]:
-    """[R15 fp8] Like `_evaluate`, but returns the program function's OWN return words (its body's `ret` refs resolved to root gates),
+    """Like `_evaluate`, but returns the program function's OWN return words (its body's `ret` refs resolved to root gates),
     whatever the root-call order of its children."""
     from verity.ml.circuits.layout import resolve
     circ = program.circuit
@@ -159,8 +159,8 @@ def test_hopper_e4m3_step_is_not_ieee() -> None:
 
 
 # ------------------------------------------------------------------------------------------------------------
-# [R15 fp8] the BLOCK-SCALED linear (Qwen3-4B-Instruct-2507-FP8 on Hopper): `_C.per_token_group_fp8_quant` + blockwise
-# `_C.cutlass_scaled_mm`, on complete operand sets recorded on the H100 (out/gen/sweep/evidence/fp8/mini_probe.py, 2026-09-19):
+# the BLOCK-SCALED linear (Qwen3-4B-Instruct-2507-FP8 on Hopper): `_C.per_token_group_fp8_quant` + blockwise
+# `_C.cutlass_scaled_mm`, on complete operand sets recorded on the H100:
 # "p" = (M=1, K=256, N=256) -> the swap_ab Pingpong variant, "c" = (M=4, K=384, N=256) -> the Cooperative variant.
 # ------------------------------------------------------------------------------------------------------------
 
@@ -203,7 +203,7 @@ def test_scaled_mm_fp8_block_wrong_scale_fails() -> None:
 
 
 def test_fp8_block_promotion_is_ffma_ascending() -> None:
-    """The adversarial operands of out/gen/sweep/evidence/fp8/adversarial_cases.py: the H100 words agree with FFMA(temp, FMUL(sfa, sfb), acc)
+    """The adversarial operands of the H100 FP8 capture's adversarial cases: the H100 words agree with FFMA(temp, FMUL(sfa, sfb), acc)
     in ascending k and disagree with mul+add / descending k (cases_run.json: 160/160, 160/160, 240/240) — here the Definition itself is
     checked to separate the hypotheses on one such case (tile 0 puts acc on a bf16 midpoint, tile 1 adds ~half an f32 ulp)."""
     one, onehalf = 0x38, 0x3C

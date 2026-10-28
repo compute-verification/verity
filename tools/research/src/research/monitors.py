@@ -1,5 +1,5 @@
 """Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
-One registry (MONITORS) and one runner. Node 1's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
+One registry (MONITORS) and one runner. Node 2's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
 monitors and writes each incident once when it opens and once when it clears; the relay on the control pod
 (infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store or Slack) and posts both sets to
 #agent-alerts. Every Nebius machine runs the `machine`
@@ -11,7 +11,7 @@ yesterday's count of full checks lost to infrastructure. The machines watch each
     research monitors list [--where node|relay] [--json]
     research monitors check [ID ...] [--where node|relay] [--json]     evaluate now and write nothing
     research monitors run --by WHO [--where node|relay] [--state PATH] [--alerts DIR] [--only ID ...] [--json]
-    research monitors relay --by WHO [--node1 HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run] [--seed]
+    research monitors relay --by WHO [--on HOST] [--node-alerts DIR] [--every 60] [--once] [--dry-run] [--seed]
 
 **A monitor** has an id, an owner handle, a severity (`warn`, or `page` when work stops), where it runs, how often, a check that
 returns findings, and the action its owner takes. A finding's `key` is stable while the incident lasts: the runner opens an
@@ -29,18 +29,18 @@ it saved) isn't written again. With `$VY_MONITORS_SLACK_WEBHOOK` set (an incomin
 logged), the runner also posts each event there, retrying on later passes until Slack takes it, and the relay leaves those
 events alone.
 
-**Node 2** is read from node 1 over ssh (`$VY_N2`, default `vy-n2`: the vy-cluster key), in one login per pass, and the guard
+**Node 2** is read over ssh to itself (`$VY_N2`, default `vy-n2`: the vy-cluster key), in one login per pass, and the guard
 runs first in it: unless node 2's fill status says `timed False, window waiting False` and is at most FILL_GO_S old on node 2's
 clock (not from the future), it prints the status and nothing else runs, and each node-2 check is a Skip. Past the guard, one
 python, bounded by `timeout` and niced there, reads every part the pass's due checks need, checking the status again before each.
 While a window booked in node 2's fill/windows runs (as the last session read it), a pass doesn't log in at all. Refused for
 UNWATCHED_S past the end of any booked window, fill-status-n2 opens `unwatched`: a timed window that long is the incident.
 
-`relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 1's alert dir (over ssh) and the
+`relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 2's alert dir (over ssh) and the
 local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread (a post of its
 own when that thread is gone). An owner other than infra also gets a pointer in #agent-coordination, where its doorbell rings
 (#agent-alerts rings only infra). A finding with a `thread` (failed-checks': the merge thread) is instead a reply there,
-ringing its owners. Grafana's notes in node 1's outbox are posted too. On its first pass over an alert dir it
+ringing its owners. Grafana's notes in the node's outbox are posted too. On its first pass over an alert dir it
 posts only the incidents still open. A post that fails stops only its own source, until the next pass; one Slack refuses for
 good, or that has failed for RELAY_GIVE_UP_S, is dropped with a log line.
 
@@ -194,7 +194,7 @@ class Ctx:
     run: Callable[..., subprocess.CompletedProcess] = subprocess.run
     root: Path = Path("/")
     n2_host: str = "vy-n2"
-    node1: str = "n1"
+    node: str = "n2"                    # the host of the node monitors' service, for the relay
     node_state: str = STATE
     machine: str = ""                   # where a `machine` monitor runs (its runner's --machine)
     peers: tuple[str, ...] = ()         # the ssh hosts it watches (--peer)
@@ -408,15 +408,11 @@ def norm(line: str) -> str:
 
 
 def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
-    name = {"n1": "Node 1", "n2": "Node 2"}[node]
+    name = {"n2": "Node 2"}[node]
 
     def check(ctx: Ctx) -> list[Finding]:
         rp = _probe()
-        if node == "n1":
-            out = ctx.sh([*NICE, sys.executable, rp.__file__, "--node", "n1", "--reading"], timeout=150)
-        else:
-            out = ctx.n2_part("probe")
-        r = json.loads(out)
+        r = json.loads(ctx.n2_part("probe"))
         lim = {**rp.COMMON, **rp.LIMITS[node]}
         base = ctx.memo.get("rate_base")
         lines = rp.evaluate(r, base, lim)
@@ -431,95 +427,8 @@ def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
     return check
 
 
-# ---- node 1's lease pools and dispatcher (pods/nebius/n1_alerts.py) -------------------------------------------------------------
-
-def stalls_n1(ctx: Ctx) -> list[Finding]:
-    """Node 1's lease pool blocked, or its dispatcher failing its last 3 ticks or not ticking for 10 minutes (n1_alerts.py's
-    incidents, each to its owner)."""
-    from .pods.nebius import n1_alerts
-
-    snap = json.loads(ctx.sh([sys.executable, "-"], input=n1_alerts.REMOTE, timeout=60))
-    return [Finding(k, text, owners=tuple(who), cleared=cleared) for k, (who, text, cleared) in n1_alerts.incidents(snap).items()]
-
-
-# ---- the held-idle panel (node 1's held-idle-hourly.jsonl, which verity-console.service writes) ---------------------------------
-
-HELD_IDLE = "/workspace/usage/held-idle-hourly.jsonl"
-HELD_IDLE_PANEL = "/workspace/research/console/outbox/held-idle-hourly.json"   # verity_console.py's last published copy
-HELD_IDLE_RECENT_S = 86400      # well inside EVENTS_KEEP_S, so an hour the state has forgotten is never posted again
-
-
-def _hour_end(r: dict) -> float | None:
-    if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:00Z", str(r.get("hour"))):
-        return None
-    return calendar.timegm(time.strptime(r["hour"], "%Y-%m-%dT%H:00Z")) + 3600
-
-
-def _held_rows(ctx: Ctx) -> list[dict]:
-    try:
-        lines = tail(ctx.path(HELD_IDLE))[-400:]
-    except FileNotFoundError:
-        return []
-    rows = []
-    for ln in lines:
-        try:
-            r = json.loads(ln)
-        except ValueError:
-            continue
-        if isinstance(r, dict) and r.get("hour"):
-            rows.append(r)
-    return rows
-
-
-def held_idle(ctx: Ctx) -> list[Finding]:
-    """A lane above its held-idle target whose share fell by less than 5 points from the hour before: once per hour completed
-    in the last day, node and lane, to that lane."""
-    out = []
-    for r in _held_rows(ctx):
-        t, pct, ch, end = r.get("target_pct"), r.get("held_idle_pct"), r.get("change_pts"), _hour_end(r)
-        if end is None or ctx.now - end > HELD_IDLE_RECENT_S:
-            continue
-        if t is None or pct is None or pct <= t or (ch is not None and ch <= -5):
-            continue
-        lane = r.get("lane") or "?"
-        moved = "no reading for the hour before" if ch is None else f"{'+' if ch > 0 else ''}{ch} points from the hour before"
-        p = r.get("phases_gpu_h")
-        phases = (f"\nWhere the held time went, in GPU-hours: {p.get('leases')} Commit leases spent {p.get('engine.build')} in "
-                  f"engine.build, {p.get('prep.warmup_instrumented')} in prep.warmup_instrumented, "
-                  f"{p.get('validate.weights_of_record_digests')} in validate.weights_of_record_digests, {p.get('work')} in work "
-                  f"and {p.get('other')} elsewhere in the lease. {p.get('outside_leases')} was held outside any Commit lease."
-                  ) if isinstance(p, dict) else ""
-        out.append(Finding(f"{r['hour']}|{r.get('node')}|{lane}",
-                           f"*Held-idle alert, {r.get('node')}, {lane}, the {r['hour'][11:16]}Z hour:* {pct}% of "
-                           f"{r.get('held_gpu_h')} held GPU-hours were idle, against a target of {t}%. That's {moved}; above "
-                           f"the target, the rule is a drop of at least 5 points an hour.{phases}",
-                           owners=(lane,) if lane in HANDLES else ("infra",)))
-    return out
-
-
-def held_idle_stale(ctx: Ctx) -> list[Finding]:
-    """Neither a completed hour in node 1's held-idle-hourly.jsonl nor a published held-idle panel for 70 minutes: the panel
-    has stopped. An hour in which no GPU was held adds no line to the jsonl, so an idle node is told from a stopped panel by
-    the panel's own `updated_at` (17 Oct 09:13Z: node 1 held no GPU from 08:00Z and this fired while the panel ran)."""
-    ends = [e for e in map(_hour_end, _held_rows(ctx)) if e is not None]
-    try:
-        published = epoch(json.loads(ctx.path(HELD_IDLE_PANEL).read_text())["updated_at"])
-    except (OSError, ValueError, KeyError, TypeError):
-        published = 0.0
-    late = ctx.now - max(*ends, published, 3600)
-    if late <= 70 * 60:
-        return []
-    last = f"the newest completed hour in it is {iso(max(ends) - 3600)[11:16]}Z" if ends else "it has no hour at all"
-    return [Finding("stale", f"*Held-idle panel: no reading for {late / 60:.0f} minutes*: {last} (node 1's `{HELD_IDLE}`).",
-                    cleared="*Cleared:* the held-idle panel has a new hour.")]
-
-
 # ---- a GPU idle while a waiter waits ----------------------------------------------------------------------------------------------
 
-POOLS = {"/run/gpu-lease": "proofs", "/run/gpu-lease-circuits": "circuits"}     # n1_alerts.POOLS
-POOL_DOC = "/workspace/usage/infra-pool-n1.json"
-LEASE_FRESH_S = 120
-KUEUE_HOLD = ((12, 10), (13, 30))                                               # dispatch.PACK_HOLD
 MIN_WAIT_S = 60
 
 
@@ -533,51 +442,6 @@ def held_back(waiters: list[dict], usable: Callable[[dict], int], now: float) ->
         if waited >= MIN_WAIT_S and int(w.get("n") or 1) <= usable(w):
             return w, waited
     return None
-
-
-def idle_while_waiting_n1(ctx: Ctx) -> list[Finding]:
-    """A lease waiter on node 1 waits while GPUs it could take sit idle: free in its pool (a holder, no lease), or held by
-    nobody (class `free` in infra-pool-n1.json, so the pool could grow onto them). Opens after 5 minutes of that; not in the
-    daily Kueue hold (12:10-13:30Z), nor for a blocked pool (stalls-n1 has that)."""
-    g = time.gmtime(ctx.now)
-    if KUEUE_HOLD[0] <= (g.tm_hour, g.tm_min) < KUEUE_HOLD[1]:
-        raise Skip("node 1's daily Kueue hold")
-    unheld: list[int] = []
-    try:
-        doc = json.loads(ctx.path(POOL_DOC).read_text())
-        if ctx.now - epoch(doc["generated_at"]) <= 900:
-            unheld = sorted(x["index"] for x in doc["nodes"]["n1"]["gpus"] if x.get("class") == "free" and not x.get("holder"))
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
-    out = []
-    for d in POOLS:
-        p = ctx.path(d) / "n1-lease.json"
-        if not p.exists():
-            continue
-        s = json.loads(p.read_text())
-        name = s.get("pool_name") or d
-        age = ctx.now - epoch(s["t"])
-        if age > LEASE_FRESH_S:
-            out.append(Finding(f"{name}:stale", f"*Node 1's lease pool `{name}` (`{d}`) hasn't ticked for {age / 60:.0f} minutes*: "
-                               f"`{d}/n1-lease.json` is from {s['t']}, so its waiters get no new GPU.", for_s=300))
-            continue
-        if s.get("blocked"):
-            continue
-        pool_free = sorted(x["index"] for x in s.get("gpus") or [] if x.get("holder") and not x.get("lease") and not x.get("fence_pids"))
-        idle = sorted({*pool_free, *unheld})
-
-        def usable(w: dict) -> int:
-            return len(idle) if not w.get("on") else len(gpu_list(w["on"]) & set(idle))
-
-        hit = held_back(s.get("waiting") or [], usable, ctx.now)
-        if hit:
-            w, waited = hit
-            out.append(Finding(name, f"*Node 1: GPU{'s' if len(idle) > 1 else ''} {', '.join(map(str, idle))} idle while "
-                               f"{len(s.get('waiting') or [])} lease waiter(s) wait in pool `{name}`*: the oldest it could serve, "
-                               f"{w.get('who')} ({w.get('run') or 'no run'}, {w.get('n')} GPU), has waited {waited / 60:.0f} min. "
-                               f"Free in the pool: {pool_free or 'none'}; held by nobody: {unheld or 'none'}; pool of "
-                               f"{s.get('pool')}, mode {s.get('mode')}.", for_s=300))
-    return out
 
 
 N2_WAITERS = r'''
@@ -682,17 +546,6 @@ def _fast_finding(key: str, where: str, fast: list[dict]) -> Finding:
                    f"{x['by_pid']} ({x['by']}) at {x['t']}.")
 
 
-def fast_preempt_n1(ctx: Ctx) -> list[Finding]:
-    """A lease on node 1 preempted within 60 s of its grant, in the last 30 minutes (each pool's preempted.log): a waiter that
-    preempts the leases its own queue was just granted restarts that queue forever."""
-    out = []
-    for d in POOLS:
-        p = ctx.path(d) / "preempted.log"
-        if p.exists() and (fast := fast_preemptions(tail(p, 1 << 16), ctx.now)):
-            out.append(_fast_finding(d, f"Node 1 (`{d}`)", fast))
-    return out
-
-
 def fast_preempt_n2(ctx: Ctx) -> list[Finding]:
     """A lease on node 2 preempted within 60 s of its grant, in the last 30 minutes (/run/gpu-lease/preempted.log)."""
     fast = fast_preemptions(ctx.n2_part("preempted").splitlines()[1:], ctx.now)
@@ -726,20 +579,10 @@ def failed_units(text: str) -> list[tuple[str, str]]:
 
 
 def units(node: str) -> Callable[[Ctx], list[Finding]]:
-    name = {"n1": "Node 1", "n2": "Node 2"}[node]
+    name = {"n2": "Node 2"}[node]
 
     def check(ctx: Ctx) -> list[Finding]:
-        if node == "n2":
-            text = ctx.n2_part("units")
-        else:
-            text = ctx.sh(["systemctl", "--failed", "--no-legend", "--plain"])
-            env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
-            r = ctx.run(["systemctl", "--user", "--failed", "--no-legend", "--plain"], capture_output=True, text=True,
-                        timeout=ctx.bound(30), env=env)
-            if r.returncode and "connect to bus" not in (r.stderr or ""):
-                raise RuntimeError(f"systemctl --user exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
-            text += "---\n" + (r.stdout if r.returncode == 0 else "")
-        failed = failed_units(text)
+        failed = failed_units(ctx.n2_part("units"))
         sessions = sorted((u for scope, u in failed if scope == "system" and SESSION_RE.match(u)),
                           key=lambda u: int(SESSION_RE.match(u)[1]))
         out = [Finding(f"{scope}:{u}", f"*{name}: {'the user unit' if scope == 'user' else 'unit'} `{u}` has failed*")
@@ -769,22 +612,27 @@ def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
     return {n: every[n]() for n in sorted(names)}
 
 
-# ---- relay-side: GitHub, the evidence store, Slack, and node 1 itself -------------------------------------------------------------
+# ---- relay-side: GitHub, the evidence store, Slack, and node 2 itself -------------------------------------------------------------
 
 def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
     which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
     read that fails, or every node unreachable, is the monitor's error."""
-    from .pods.nebius.preflight_probe import findings
-
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
-    for line in findings(reps):
-        n, kind, path = line.split(" ", 2)
-        groups.setdefault((n, kind), []).append(path)
+    for n, rep in sorted(reps.items()):
+        if "error" in rep:
+            continue
+        for e in rep["entries"]:
+            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
+                groups.setdefault((n, e["state"]), []).append(e["path"])
+            if e.get("restart"):
+                groups.setdefault((n, "restart"), []).append(e["path"])
+        for p in rep["strays"]:
+            groups.setdefault((n, "stray"), []).append(p)
     return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                     + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
 
@@ -814,9 +662,9 @@ def asks(ctx: Ctx) -> list[Finding]:
 
 
 def node_heartbeat(ctx: Ctx) -> list[Finding]:
-    """Node 1's monitor service hasn't finished a pass for 10 minutes (its state's `last_pass`), so no node-side monitor runs; or
+    """Node 2's monitor service hasn't finished a pass for 10 minutes (its state's `last_pass`), so no node-side monitor runs; or
     it can't write its alert dir (the state's `sink_error`), so nothing it finds reaches the relay."""
-    out = ctx.sh([*SSH, ctx.node1, f"python3 -c \"import json, os; p = '{ctx.node_state}'; "
+    out = ctx.sh([*SSH, ctx.node, f"python3 -c \"import json, os; p = '{ctx.node_state}'; "
                   "s = json.load(open(p)) if os.path.exists(p) else None; print('missing' if s is None else s.get('last_pass', 0)); "
                   "print(json.dumps((s or {}).get('sink_error')))\""]).splitlines()
     last, sink = (out[0].strip() if out else ""), (json.loads(out[1]) if len(out) > 1 else None)
@@ -824,11 +672,11 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     age = None if last == "missing" else ctx.now - float(last or 0)
     if age is None or age > 600:
         when = "have never finished a pass" if age is None else f"haven't run for {age / 60:.0f} minutes"
-        found.append(Finding("stale", f"*Node 1's monitors {when}* (`{ctx.node_state}`), so nothing watches node 1's or node 2's "
-                             "invariants.", cleared="*Cleared:* node 1's monitors run again."))
+        found.append(Finding("stale", f"*Node 2's monitors {when}* (`{ctx.node_state}`), so nothing watches node 2's "
+                             "invariants.", cleared="*Cleared:* node 2's monitors run again."))
     if sink:
-        found.append(Finding("sink", f"*Node 1's monitors can't write their alert dir*, so nothing they find reaches Slack: {sink}",
-                             cleared="*Cleared:* node 1's monitors write their alert dir again."))
+        found.append(Finding("sink", f"*Node 2's monitors can't write their alert dir*, so nothing they find reaches Slack: {sink}",
+                             cleared="*Cleared:* node 2's monitors write their alert dir again."))
     return found
 
 
@@ -863,6 +711,57 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     + ", ".join(f"`{a[:16]}…`" for a in gone[:5]) + (f" and {len(gone) - 5} more" if len(gone) > 5 else "")
                     + ". A node or pod without the store's key can't fetch them.",
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
+
+
+#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` a post-landing run passed
+DRIVE_STATE = "root/.research/queue/verity.state.json"
+DRIVE_LOG = "data/drive/drive.log"
+UNVERIFIED_S = 3 * 3600
+DRIVE_TICK_STALE_S = 30 * 60
+TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
+
+
+def drive_ticking(ctx: Ctx) -> bool:
+    """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
+    `_behind` alarm speaks for a main left unverified (ci and top, 26 Oct)."""
+    try:
+        with open(ctx.root / DRIVE_LOG, "rb") as f:
+            f.seek(max(0, f.seek(0, 2) - (1 << 20)))
+            ticks = TICK_RE.findall(f.read())
+    except OSError:
+        return False
+    return bool(ticks) and ctx.now - datetime.strptime(ticks[-1].decode(), "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc).timestamp() < DRIVE_TICK_STALE_S
+
+
+def unverified_main(ctx: Ctx) -> list[Finding]:
+    """`main` has carried commits no post-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
+    a day and a half with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
+    main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
+    committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
+    GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
+    hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until a post-landing run verifies
+    main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    if drive_ticking(ctx):
+        return []
+    state = json.loads((ctx.root / DRIVE_STATE).read_text())
+    verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
+    if not verified:
+        raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
+    repo = os.environ.get("RESEARCH_DEPLOY_REPO") or "/data/watchers/repo"
+    ctx.sh(["git", "-C", repo, "fetch", "-q", "origin", "main"], timeout=120)
+    landed = [ln.split() for ln in ctx.sh(["git", "-C", repo, "log", "--first-parent", "--format=%H %ct",
+                                           f"{verified}..FETCH_HEAD"], timeout=60).splitlines() if ln.strip()]
+    if not landed:
+        return []
+    since = float(landed[-1][1])
+    if (behind := ctx.now - since) < UNVERIFIED_S:
+        return []
+    hours = int(behind // 3600)
+    return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
+                    f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
+                    owners=("ci", "top"))]
 
 
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
@@ -983,7 +882,7 @@ def answering(ctx: Ctx) -> list[Finding]:
 
 
 WORKSPACE = "/workspace"
-DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line on node 1: no new check starts past it
+DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
 FIT_S = 3 * 3600            # the readings the line is fitted to
@@ -1047,11 +946,7 @@ def disk_forecast(ctx: Ctx) -> list[Finding]:
 MANIFEST = Path(__file__).resolve().parent / "pods/nebius/deploy.toml"     # installed beside this file on every machine
 UNIT_SUFFIX_RE = re.compile(r"\.(service|timer|socket|path|target|mount)$")
 ENABLED = ("enabled", "enabled-runtime", "static", "indirect", "generated", "alias")
-EXPECTED_OFF: dict[tuple[str, str], str] = {     # (machine, `systemd:UNIT`): why a unit deploy.toml runs is off there by design
-    ("vy-nebius-1", "systemd:vy-n2-offload.service"): "node 2 runs checks, not its fill queue, since its restart on 8 Oct, so "
-                                                      "nothing on node 2 would take an offloaded build",
-    ("vy-nebius-1", "systemd:vy-n2-commit-offload.service"): "as vy-n2-offload: no fill runner on node 2 to take a Commit",
-}
+EXPECTED_OFF: dict[tuple[str, str], str] = {}     # (machine, `systemd:UNIT`): why a unit deploy.toml runs is off there by design
 
 
 def expected_units(machine: str, manifest: str) -> list[str]:
@@ -1147,7 +1042,7 @@ LANDER = "ci"
 REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
 # nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)
-CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
+CHECK_MACHINES = (("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
 SLOT_WRAPPER = "check/slot.py"
 CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
 NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
@@ -1246,7 +1141,8 @@ for n in names:
         continue
     st = load(os.path.join(d, "status.json"))
     last = (st.get("transitions") or [{}])[-1]
-    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped")), None)
+    # a stopped step found nothing: another step failed, or the run was cancelled (check.py's `stopped`)
+    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped", "stopped")), None)
     suite = failed_suite(os.path.join(d, "stdout.log")) if bad is None else None
     if suite:
         bad = {"step": "suite " + suite[0], "ended_utc": last.get("ended_utc") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
@@ -1379,12 +1275,28 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
                    thread=MERGE_THREAD)
 
 
+def on_main(ctx: Ctx, sha: str | None) -> bool:
+    """Whether ``sha`` is a commit of `main` (GitHub's compare of it with main is `ahead` or `identical`): the tip an
+    after-landing run checks, which runs to its end to name every red step and suite (TOP-90 row 75), so `cancel_failed` never
+    stops it.  27 Oct: main 54713f81's and 0600bab8's runs were cancelled for a Lean check's slot before their pytest step
+    reported, twice leaving main unverified.  False when GitHub can't say."""
+    if not sha:
+        return False
+    try:
+        got = ctx.sh(["gh", "api", f"repos/{REPO_SLUG}/compare/{sha}...main", "--jq", ".status"], timeout=30)
+    except Exception:  # noqa: BLE001  (cancelling stays the default)
+        return False
+    return got.strip() in ("ahead", "identical")
+
+
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
     """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
     failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
     run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
     (top, 9 Oct: 25ea's verity-ops failure was cpu-1's, and its circuit_check worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
+        return None
+    if on_main(ctx, row.get("sha")):
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
@@ -1446,22 +1358,16 @@ UNITS_ACTION = ("`systemctl status UNIT` and `journalctl -u UNIT -n 50` on the n
 
 #: monitor id -> why it no longer runs; a pass clears what it still had open
 RETIRED = {
-    "unpreserved": "the node watermarks (disk-n1, disk-n2: resource_probe.py's custody backlog) read the nodes' own finished runs "
+    "unpreserved": "the node watermarks (disk-n2: resource_probe.py's custody backlog) read the nodes' own finished runs "
                    "without custody, which a relay seeing only the remote can't",
+    **{m: "node 1 stopped for good at 15:00Z on 23 Oct (INF-57)"
+       for m in ("disk-n1", "stalls-n1", "idle-while-waiting-n1", "fast-preempt-n1", "units-n1")},
+    **{m: "node 1 stopped for good at 15:00Z on 23 Oct (INF-57), and with it the console that wrote the held-idle panel"
+       for m in ("held-idle", "held-idle-stale")},
 }
 
 MONITORS: list[Monitor] = [
-    Monitor("disk-n1", "infra", "warn", "node", watermarks("n1"), RETENTION, every_s=600, clear_s=1800),
     Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
-    Monitor("stalls-n1", "infra", "page", "node", stalls_n1,
-            "A blocked pool: stop the process its `blocked` file names (or have its owner stop it), then remove the file. A "
-            "dispatcher that fails or doesn't tick: read loop.log and `systemctl status vy-node1-dispatch`, fix the cause, "
-            "`sudo systemctl restart vy-node1-dispatch`.", unread_s=600),
-    Monitor("idle-while-waiting-n1", "infra", "warn", "node", idle_while_waiting_n1,
-            "Why isn't the waiter granted? `cat /run/gpu-lease*/n1-lease.json` (mode, pool, waiting), the pool's cap "
-            "(VY_POOL_MAX) and its queue's quota (n1_lease.py's grow rule), and the cluster agent's grants when the brain is on. "
-            "A GPU nobody holds while lease waiters wait means the pool can't grow onto it: raise the cap or quota, or move the "
-            "waiters."),
     Monitor("idle-while-waiting-n2", "infra", "warn", "node", idle_while_waiting_n2,
             "Read node 2's fill status and the wait files in /run/gpu-lease; while the cluster agent holds agent.lock, it "
             "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design.", n2="waiters"),
@@ -1469,15 +1375,8 @@ MONITORS: list[Monitor] = [
             "Stale: restart node 2's fill runner (research's `systemctl --user restart pouw-infra-fill`) after reading why it "
             "stopped; until its status is fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` "
             "(`/run/gpu-lease` on node 2) and the window it belongs to; ask its owner to end it, or release it once it is dead."),
-    Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
     Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
-    Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S),
     Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
-    Monitor("held-idle", "infra", "warn", "node", held_idle,
-            "Your held GPUs sat idle above your target: release GPUs between phases, or lease for less. The `held-idle-hourly` "
-            "panel on the live console says where the time went.", every_s=300, events=True),
-    Monitor("held-idle-stale", "infra", "warn", "node", held_idle_stale,
-            "Check `verity-console.service` and its timer on node 1 (`journalctl -u verity-console -n 50`).", every_s=300),
     Monitor("memory-pressure", "infra", "page", "machine", memory_pressure,
             "Find what is growing (`systemd-cgtop -m` on the machine; the alert names the biggest runs) and tell its sender; a "
             "run past its scope's cap is OOM-killed whole, so pressure that holds means the caps or the slice's headroom are too "
@@ -1512,14 +1411,18 @@ MONITORS: list[Monitor] = [
             "and says so in the thread. A run that ended before any step failed (killed, out of memory or disk) rings infra too.",
             every_s=60, events=True, unread_s=1800),
     Monitor("node-heartbeat", "infra", "page", "relay", node_heartbeat,
-            "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "
-            "an alert dir that takes no writes, its disk and owner (`df` and `ls -ld` on node 1).",
+            "`ssh n2 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n2 journalctl -u vy-monitors -n 50`; for "
+            "an alert dir that takes no writes, its disk and owner (`df` and `ls -ld` on node 2).",
             every_s=120, unread_s=600),
     Monitor("fixtures-public", "infra", "warn", "relay", fixtures_public,
             "Read the control pod's /data/infra/fixtures-export.log (infra/control/fixtures_export.sh, every 5 min): a fixture "
             "`not local and not on any source` was registered without `research data push`, so ask whoever registered it to push "
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
+    Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
+            "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
+            "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
+            every_s=600, events=True, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 
@@ -1805,7 +1708,7 @@ def front_matter(text: str) -> dict[str, str]:
 
 
 class Source:
-    """An alert dir the relay reads: node 1's over ssh, or a local one. `lines(after)` -> (total, the lines after `after`);
+    """An alert dir the relay reads: node 2's over ssh, or a local one. `lines(after)` -> (total, the lines after `after`);
     `notes()` -> the outbox's names; `head(name)` -> a note's start."""
 
     def __init__(self, name: str, path: str, host: str | None = None, run: Callable[..., subprocess.CompletedProcess] = subprocess.run):
@@ -1914,7 +1817,7 @@ def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict |
             fm = front_matter(text)
             if "monitor" not in fm and not one(src, {
                     "event": "note", "monitor": "grafana", "key": n, "owners": [fm.get("lane", "infra")], "severity": "warn",
-                    "text": text.split("\n---\n", 1)[-1].strip()[:2500], "action": f"read `{n}` in node 1's alert outbox",
+                    "text": text.split("\n---\n", 1)[-1].strip()[:2500], "action": f"read `{n}` in node 2's alert outbox",
                     "by": fm.get("origin", "grafana")}):
                 break
             seen.add(n)
@@ -1998,7 +1901,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
 def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node1=getattr(ns, "node1", "n1"),
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -2089,7 +1992,7 @@ def cmd_relay(ns: argparse.Namespace) -> int:
         print(f"monitors: refused: another relay holds {posts}.lock", file=sys.stderr)
         return 3
     post = (lambda ev, thread: {}) if ns.seed else slack_post(ns.dry_run)
-    sources = [Source("node1", ns.node_alerts, host=ns.node1), Source("relay", ns.alerts)]
+    sources = [Source("node", ns.node_alerts, host=ns.node), Source("relay", ns.alerts)]
     for spec in ns.machine_alerts or []:
         name, _, where = spec.partition("=")
         host, _, path = where.partition(":")
@@ -2125,27 +2028,27 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("check", help="evaluate now and write nothing: exit 1 on a finding or a failed check")
     p.add_argument("ids", nargs="*", metavar="ID")
     p.add_argument("--where", choices=("node", "relay", "machine"))
-    p.add_argument("--node1", default="n1", help="node 1's ssh host, for relay-side checks")
+    p.add_argument("--on", dest="node", default="n2", help="the node monitors' ssh host, for relay-side checks")
     p.add_argument("--node-state", default=STATE)
     p.add_argument("--machine", help="this machine's name, for `machine` monitors (default: its hostname)")
     p.add_argument("--peer", action="append", metavar="HOST", help="an ssh host `answering` watches (repeatable)")
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("run", help="one pass: open and clear incidents into the alert dir (node 1's service)")
-    p.add_argument("--by", required=True, help="who runs it, recorded in every event (vy-monitors@vy-nebius-1)")
+    p = sub.add_parser("run", help="one pass: open and clear incidents into the alert dir (node 2's service)")
+    p.add_argument("--by", required=True, help="who runs it, recorded in every event (vy-monitors@vy-nebius-2)")
     p.add_argument("--where", choices=("node", "relay", "machine"), default="node")
     p.add_argument("--state", default=STATE)
     p.add_argument("--alerts", default=ALERTS)
     p.add_argument("--only", nargs="+", metavar="ID")
-    p.add_argument("--node1", default="n1")
+    p.add_argument("--on", dest="node", default="n2")
     p.add_argument("--node-state", default=STATE)
     p.add_argument("--machine", help="this machine's name, for `machine` monitors (default: its hostname)")
     p.add_argument("--peer", action="append", metavar="HOST", help="an ssh host `answering` watches (repeatable)")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("relay", help="where Slack works: run the relay-side monitors, post every new event to #agent-alerts")
     p.add_argument("--by", required=True, help="who runs it, recorded in the relay-side events")
-    p.add_argument("--node1", default="n1", help="node 1's ssh host")
-    p.add_argument("--node-alerts", default=ALERTS, help="node 1's alert dir")
-    p.add_argument("--node-state", default=STATE, help="node 1's monitor state (its heartbeat)")
+    p.add_argument("--on", dest="node", default="n2", help="the node monitors' ssh host")
+    p.add_argument("--node-alerts", default=ALERTS, help="the node monitors' alert dir")
+    p.add_argument("--node-state", default=STATE, help="the node monitors' state (their heartbeat)")
     p.add_argument("--machine-alerts", action="append", metavar="NAME=HOST:DIR",
                    help="a machine watchdog's alert dir to post too (repeatable)")
     p.add_argument("--alerts", default=str(LOCAL / "alerts"), help="the relay-side monitors' alert dir")

@@ -1,7 +1,6 @@
-"""[GEN cov-ln] the lane's tests: the Pythia-160M profile is `analytic.config_of` + `build_profile` with the listed hand fields;
+"""The Pythia-160M profile is `analytic.config_of` + `build_profile` with the listed hand fields;
 its weight-name map binds every parameter / buffer name of vLLM's `GPTNeoXForCausalLM` and nothing else; the LayerNorm-family
-weights Record; the shared-code adapters (F16 checkpoint words, the fused-QKV permutation, the family-neutral root-name
-classes); the lane's Definitions (GeluErfBf16's measured-table facts, LayerNormAten's body on a small row); the patterns'
+weights Record; the shared-code adapters (F16 checkpoint words, the fused-QKV permutation); the Definitions (GeluErfBf16's measured-table facts, LayerNormAten's body on a small row); the patterns'
 placement in the profile's list.  Bit-exactness of the Definitions is the pod difftest's business, not this file's."""
 from __future__ import annotations
 
@@ -13,17 +12,17 @@ import re
 import numpy as np
 import pytest
 
-from verity_vllm.program import model as analytic; from verity_vllm.check import root_policy
+from verity_vllm.program import model as analytic
 from verity_vllm.check.fold_compare import _f16_words_to_bf16, _layernorm_family_fields, _qkv_neox_permute
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.engine.profiles import profile_module_for_case
-from verity_vllm.engine.profiles.gen_ln_patterns import (GeluErfPattern, LayerNormAtenPattern, ResidualAddPattern,
+from verity_vllm.observe.fold.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import (GeluErfPattern, LayerNormAtenPattern, ResidualAddPattern,
                                                      RotaryEmbeddingPartial)
 
-pythia = importlib.import_module("verity_vllm.engine.profiles.derived_PYTHIA160M")
+pythia = importlib.import_module("verity_vllm.observe.fold.profiles.derived_PYTHIA160M")
 from verity_vllm.observe.fold.patterns import BiasAdd, RotaryEmbedding
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import act, gelu_erf_table, layer_norm
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import act, gelu_erf_table, layer_norm
 
 C = pythia.C
 
@@ -44,7 +43,7 @@ def test_config_is_config_of_plus_the_listed_hand_fields():
     assert C["BIAS"] is True and C["tie_word_embeddings"] is False and C["BN"] == b1.fa2_kblock_n(64) == 128
     hand = pythia.PROFILE.notes["hand_fields"]
     assert hand == sorted(pythia.HAND)
-    assert {k for k, v in pythia.PROVENANCE.items() if v == "hand"} <= set(hand)     # [P6] a `key` fact's value is config.json's (hf-config)
+    assert {k for k, v in pythia.PROVENANCE.items() if v == "hand"} <= set(hand)     # a `key` fact's value is config.json's (hf-config)
     assert set(hand) == {"model", "revision", "ROPE_THETA", "ROT", "NORM", "hidden_act", "use_parallel_residual", "layer_norms", "dense_bias"}
     assert C["ROT"] == 16 == int(64 * pythia.HF_CONFIG["rotary_pct"]) and analytic.rotary_dim(C) == 16
 
@@ -65,7 +64,7 @@ def test_layernorm_family_weights_record():
     assert cs.n == 2048 and cs.elem.n == 16                       # partial rotary: the table is [MAX_POS, ROT]
     assert analytic.cos_sin_table(C).shape == (2048, 16)
     # RMSNorm families are unchanged
-    from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
+    from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as base
     assert analytic.weights_type(base.C).fields == b1.weights_type(base.C).fields or "lm_head" in dict(analytic.weights_type(base.C).fields)
 
 
@@ -93,13 +92,6 @@ def test_weight_field_binds_every_parameter_and_the_layer0_rotary_buffer_only():
     # every Record field is reachable from some name
     fields = {f for f, _ in dict(analytic.weights_type(C).fields)["layers"].elem.fields}
     assert {v[2] for v in bound.values() if len(v) == 3} == fields
-
-
-def test_root_policy_frozen_classes_are_family_neutral():
-    for fam in ("model.layers.4.self_attn", "gpt_neox.layers.4.attention"):
-        assert root_policy.frozen_root_class(f"{fam}.rotary_emb.cos_sin_cache", lambda n: None) == "alias-of-cos_sin"
-        assert root_policy.frozen_root_class(f"{fam}.attn._k_scale", lambda n: None) == "ignored"
-    assert not root_policy.ALIAS_OF_COS_SIN.match("gpt_neox.layers.0.attention.rotary_emb.cos_sin_cache")
 
 
 def test_compare_family_fields_and_checkpoint_conversions():

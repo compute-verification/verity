@@ -8,7 +8,8 @@ session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`.
 as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
 check has passed at setup. The honest level passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
-the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`), and where V* registered its
+the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the coin server's
+format (`RecSetup.checkReads`), and where V* registered its
 `rec-coef` one bit off, at that opening, though its registration is consistent. Set up as another statement than V*'s `verity/flock-circuit`, or with a lookup table held,
 the honest level is refused. Every verify names the session's statement (`--rec-part J`, its index in `rec-statements`'
 list) and passes the verifier's own bindings (`--rec-bindings F`, `rec_bindings` of its partition object and program).
@@ -16,8 +17,8 @@ Staging the level takes about a minute and each verify sets up its 158 MB circui
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
 coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v` and
 zero `out`, their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
-rows (`--rec-rows`), and their rows of the chain; and check 5 on `rec-coins`' record of the inner session in place of its
-statement (`--rec-inner-coins`).
+rows (`--rec-rows`), and their rows of the chain. `--rec-inner-coins`, a record of what check 5 reads in place of the
+inner statement, is refused (`RecCoins.refuseCoins`).
 A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape.
 RecCap, staged over the honest inner session, passes setup at the shared rows registering level 0's cap and is refused
 without them, at another registration, at a transcript whose `root_B` differs at a node, and without its reads.
@@ -39,6 +40,7 @@ from pathlib import Path
 import keyed
 import pytest
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_live as RL
 from verity_flock import rec_outer as O
 from verity_flock import rec_vstage as S
 
@@ -99,13 +101,18 @@ def forged(built, once) -> Path:
 
 @pytest.fixture(scope="module")
 def shape(built, tmp_path_factory) -> Path:
-    """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement."""
+    """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement,
+    and beside it the coin server's record of the honest inner session in its own format (``transcript.json``,
+    `rec_live.record_bytes`: the fixture's record predates it, and the verifier reads that format at the inner shape,
+    `RecSetup.checkReads`)."""
     u = SET / "u" / "stage"
     p = keyed.run([str(BIN), "rec-inner", "--circuit", str(u / "circuit.txt"), "--public", str(u / "pub-64.bin"),
                    "--partition", str(u / "partition.json")], check=True)
     f = tmp_path_factory.mktemp("rec-inner") / "inner.json"
     f.write_text(p.stdout)
     _form(f.parent)
+    honest = json.loads((SET / "inner-honest" / "public.json").read_text())
+    (f.parent / "transcript.json").write_text(RL.record_bytes(honest))
     return f
 
 
@@ -156,40 +163,24 @@ def _files(level: Path, public: Path, registered: Path, shape: Path, rows: Path 
 
 def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
          session: Path = SET / "outer-L3" / "session", rows: Path | None = None,
-         statement: str = "verity/flock-circuit", coins: Path | None = None,
-         transcript: bool = True) -> subprocess.CompletedProcess:
+         statement: str = "verity/flock-circuit", transcript: bool = True) -> subprocess.CompletedProcess:
     """`verify` of a staged statement; with an inner session, the coin server's record of the honest one
     (`--rec-inner-transcript`, whose link points and tops every V* statement is held to) unless `extra` names another or
     `transcript` is false."""
     u = SET / "u" / "stage"
     files = ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
              "--rec-inner-partition", str(u / "partition.json"), *_form(shape.parent)]
-    held = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
-    rec = [] if inner is None else [*(files if coins is None else ["--rec-inner-coins", str(coins)]),
-                                    "--rec-inner-session", str(SET / inner / "session"),
+    held = ["--rec-inner-transcript", str(shape.parent / "transcript.json")]
+    rec = [] if inner is None else [*files, "--rec-inner-session", str(SET / inner / "session"),
                                     *(held if transcript and "--rec-inner-transcript" not in extra else [])]
     return keyed.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
                       "--session", str(session)])
 
 
-@pytest.fixture(scope="module")
-def coins(built, once) -> Path:
-    """`rec-coins`' record of what check 5 reads of the honest inner session, set up once from the inner statement."""
-    u = SET / "u" / "stage"
-
-    def make(d):
-        p = keyed.run([str(BIN), "rec-coins", "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
-                       str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
-                       str(SET / "inner-honest" / "session")], check=True)
-        (d / "coins.json").write_text(p.stdout)
-
-    return once("rec-coins-coins", make) / "coins.json"
-
-
 def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
             session: Path = SET / "outer-L3" / "session", rows: Path | None = None,
-            statement: str = "verity/flock-circuit", coins: Path | None = None, transcript: bool = True) -> dict:
-    p = _run(level, public, registered, shape, inner, *extra, session=session, rows=rows, statement=statement, coins=coins,
+            statement: str = "verity/flock-circuit", transcript: bool = True) -> dict:
+    p = _run(level, public, registered, shape, inner, *extra, session=session, rows=rows, statement=statement,
              transcript=transcript)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
@@ -205,9 +196,13 @@ def _acc_rows(dst: Path, level: Path) -> Path:
 
 
 def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
-                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    """Its VERDICT names its part (`rec_part`) and the SHA-512 of the shared rows file it read (`rec_rows_sha512`), which
+    `rec-compose` holds every part to."""
+    rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
+    assert v["rec_rows_sha512"] == hashlib.sha512(rows.read_bytes()).hexdigest(), v
+    assert str(v["rec_part"]) == _own(forged, shape)[1], v
 
 
 def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path):
@@ -237,7 +232,7 @@ def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forg
     c = bytearray.fromhex(r["tops"][0][0])
     c[0] ^= 1
     r["tops"][0][0] = c.hex()
-    (tmp_path / "transcript.json").write_text(json.dumps(t))
+    (tmp_path / "transcript.json").write_text(RL.record_bytes(t))
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
                 "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(UNIT)}: port out's table row \d+ is not node 0 of rep {rep}'s level "
@@ -249,12 +244,27 @@ def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, 
     against an inner transcript whose first link coin is one bit off from the record's is refused before setup."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     t["link"]["points"][0] = f"{int(t['link']['points'][0], 16) ^ 1:032x}"
-    (tmp_path / "transcript.json").write_text(json.dumps(t))
+    (tmp_path / "transcript.json").write_text(RL.record_bytes(t))
     p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
              "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
     assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the inner session's record's link points are not "
                                                    "the ones the coin server drew (link.points): check 5 would take the extra "
                                                    "claims at points the prover chose")
+
+
+def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(forged, shape, tmp_path):
+    """`RecSetup.checkReads` among `verify`'s inputs (`RecSetup.commits`): the honest level against the honest inner
+    transcript's values written as compact JSON is refused before setup, since the recursion's transcript model reads
+    the record in the coin server's own format."""
+    t = json.loads((SET / "inner-honest" / "public.json").read_text())
+    f = tmp_path / "transcript.json"
+    f.write_text(json.dumps(t))
+    p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
+             "--rec-inner-transcript", str(f), rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the coin server's record does not read in "
+                                                   "its own format (RecRecord.readFull: rec_live.record_bytes, its "
+                                                   "rounds first, then its kind, tops, Hello in its keys' order and "
+                                                   "the link's roots and points, at json.dumps' indent=1)")
 
 
 def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
@@ -404,7 +414,7 @@ def test_a_v_registered_one_element_off_is_refused_at_its_part(comb, algebra, sh
     changed = [p for p in parts if (p / "registered.json").read_bytes() != (algebra / p.name / "registered.json").read_bytes()]
     assert len(changed) == 1 and len(parts) > 1, changed
     (p,) = changed
-    t = SET / "inner-honest" / "public.json"
+    t = shape.parent / "transcript.json"
     why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
                   session=undrawn, rows=rows)["why"]
     assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
@@ -431,7 +441,7 @@ def test_a_parts_out_registered_under_another_zero_salt_is_refused_at_its_zero_r
     out = lambda d: json.loads((d / "registered.json").read_text())["ports"]["out"]["root"]
     assert out(p) != out(algebra / p.name)
     why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
-                  str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)["why"]
+                  str(shape.parent / "transcript.json"), session=undrawn, rows=rows)["why"]
     assert why == (f"setup: rec-coins: {_unit(p)}: rep 0's zero outputs: the statement's out row is not the verifier's "
                    "rec-residuals-zero row 0"), why
 
@@ -469,7 +479,7 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
     root = t["link"]["roots"]["circuit"]
     assert len(root) == 128
     root[5] = f"{int(root[5][:2], 16) ^ 1:02x}" + root[5][2:]
-    (tmp_path / "transcript.json").write_text(json.dumps(t))
+    (tmp_path / "transcript.json").write_text(RL.record_bytes(t))
     run = lambda shared, *x: _verify(cap, cap / "pub.bin", cap / "registered.json", shape, "inner-honest", *x,  # noqa: E731
                                      session=undrawn, rows=shared)["why"]
     with cf.ThreadPoolExecutor(max_workers=4) as ex:
@@ -521,7 +531,7 @@ def test_r_openings_zero_row_is_the_one_check_5_computes_and_another_salt_is_not
 def _transcript(dst: Path, change) -> Path:
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     change(next(r for r in sorted(t["rounds"], key=lambda r: r["k"]) if r["stream"].endswith("/rep0") and r.get("commits")))
-    dst.write_text(json.dumps(t))
+    dst.write_text(RL.record_bytes(t))
     return dst
 
 
@@ -535,7 +545,7 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
     (port,) = [k for k, x in reads(a).items() if x == "rec-c0"]
     with (a / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
-    t = SET / "inner-honest" / "public.json"
+    t = shape.parent / "transcript.json"
 
     def flip(r):
         c = bytearray.fromhex(r["commits"][0])
@@ -586,10 +596,10 @@ def _unregistered(src: Path, dst: Path, port: str) -> Path:
     return dst
 
 
-def _part(ex, d: Path, shape: Path, undrawn: Path, shared: Path | None = None, coins: Path | None = None) -> cf.Future:
+def _part(ex, d: Path, shape: Path, undrawn: Path, shared: Path | None = None) -> cf.Future:
     """`ex` running a verify of algebra part `d` at the inner transcript, under `undrawn`'s session, at shared rows `shared`."""
     return ex.submit(_verify, d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
-                     str(SET / "inner-honest" / "public.json"), session=undrawn, rows=shared, coins=coins)
+                     str(shape.parent / "transcript.json"), session=undrawn, rows=shared)
 
 
 def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn, rows, tmp_path):
@@ -644,7 +654,7 @@ def test_the_registered_reads_hold_no_message_round_port_the_statement_lacks(alg
     (d / "registered.json").write_text(json.dumps(r))
     show = lambda rd: "[" + ", ".join("null" if x is None else str(x) for x in rd) + "]"
     v = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
-                str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)
+                str(shape.parent / "transcript.json"), session=undrawn, rows=rows)
     assert v["why"] == (f"setup: {_unit(d)}: the registered reads' port {port} under {value} reading {show([*honest, None])} "
                         f"is not the statement's: the statement's is {port} under {value} reading {show(honest)}"), v["why"]
 
@@ -805,36 +815,23 @@ def test_a_v_star_file_of_bit_rows_is_refused_under_the_inner_shape(bit_rows, sh
     assert (v["accepted"], v["why"]) == (False, f"setup: {why}"), v
 
 
-def test_check_5_gives_the_part_holding_vs_comb_one_verdict_with_the_record_or_without(algebra, shape, undrawn, rows, coins):
-    """Check 5's setup once per inner session at a part: the part holding v's comb gets the same verdict on `rec-coins`' record
-    as on the inner statement's files. Each verify sets the part up over its whole population (minutes), so the two run at
-    once; no level reads v."""
-    p = sorted(algebra.iterdir())[-1]
-    with cf.ThreadPoolExecutor(max_workers=2) as ex:
-        both = [f.result() for f in [_part(ex, p, shape, undrawn, rows, c) for c in (None, coins)]]
-    assert both[0] == both[1] and both[0]["why"] == S2_R7, both
-
-
-def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged, shape, coins, tmp_path):
-    """Check 5's setup once per inner session (`rec-coins`, `--rec-inner-coins`): the honest level passes setup on the record,
-    and the coef registered one bit off is refused with the message the inner statement's files give. The record is refused
-    against another inner session's record, and in place of nothing: beside the inner statement's files."""
-    acc = _acc_rows(tmp_path / "rows.json", SET / "L3")
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=acc, coins=coins)
-    assert (v["accepted"], v["why"]) == (False, S2_R7), v
-    v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest",
-                rows=_acc_rows(tmp_path / "forged-rows.json", forged), coins=coins)
-    assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
-                        "verifier's rec-coef row 0"), v["why"]
-    other = tmp_path / "other"
-    shutil.copytree(SET / "inner-honest" / "session", other / "session")
-    (other / "session" / "session.json").write_text((other / "session" / "session.json").read_text() + "\n")
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, other, rows=acc, coins=coins)
-    assert v["why"] == "setup: rec inner coins: made from another inner session record than --rec-inner-session's", v["why"]
+def test_rec_inner_coins_is_refused(built, tmp_path):
+    """`--rec-inner-coins` is refused before any file is read (`RecCoins.refuseCoins`), by `statement` and by `verify`, in
+    place of the inner statement's files or beside them: check 5 reads the inner statement's own files, and a record of
+    what it reads binds only the inner session's record, not the coins that session drew."""
     u = SET / "u" / "stage"
-    p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", "--rec-inner-circuit",
-             str(u / "circuit.txt"), rows=acc, coins=coins)
-    assert p.returncode == 2 and "--rec-inner-coins stands in for" in p.stderr, p.stderr
+    (tmp_path / "empty").write_bytes(b"")
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    session = ["--rec-inner-session", str(tmp_path / "s")]
+    files = ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
+             "--rec-inner-partition", str(u / "partition.json")]
+    for cmd in ("statement", "verify"):
+        for rec in (["--rec-inner-coins", str(tmp_path / "absent.json")], [*files, "--rec-inner-coins"]):
+            p = subprocess.run([str(BIN), cmd, "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),
+                                *rec, *session, *(["--session", str(tmp_path / "s")] if cmd == "verify" else [])],
+                               capture_output=True, text=True)
+            assert p.returncode == 2 and p.stderr.startswith("--rec-inner-coins is refused: "), (cmd, rec, p.stderr)
 
 
 #: the inner statement's unit range (META's `ranges`, the unit net's: 2 slots of 2^12 rows at 516) at k_log 22, so 16 inner
@@ -843,7 +840,7 @@ C3_SPARSE = (1, 12, 1, 0)
 
 
 def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None = None, files: bool = True,
-        coins: bool = False, verify: bool = False, claims: int = 8, form: list[str] | None = None) -> str:
+        verify: bool = False, claims: int = 8, form: list[str] | None = None) -> str:
     """`statement` (or `verify` on a session) at the inner statement's inner shape with the RecSparse shape ``sparse``, on an
     empty outer circuit, which candidate 3's inner checks precede: its refusal at setup. ``form`` stands in for the inner
     statement's setup flags (`_form`)."""
@@ -853,13 +850,9 @@ def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None 
     inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": claims, "regions": 3,
                                  **({"sparse": list(sparse)} if sparse else {})}))
     session = ["--rec-inner-session", str(SET / "inner-honest" / "session")]
-    if coins:
-        (tmp_path / "coins.json").write_text("{}")
-        rec = ["--rec-inner-coins", str(tmp_path / "coins.json"), *session]
-    else:
-        rec = ["--rec-inner-circuit", str(circuit or u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
-               "--rec-inner-partition", str(u / "partition.json"), *(_form(tmp_path) if form is None else form),
-               *session] if files else []
+    rec = ["--rec-inner-circuit", str(circuit or u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
+           "--rec-inner-partition", str(u / "partition.json"), *(_form(tmp_path) if form is None else form),
+           *session] if files else []
     base = [str(BIN), "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"), "--rec-inner", str(inner),
             *rec]
     if verify:
@@ -895,14 +888,12 @@ def test_candidate_3s_session_checks_the_sparse_range_on_the_inner_statement(bui
 
 
 def test_candidate_3s_session_needs_the_inner_statements_files(built, tmp_path):
-    """Candidate 3's session without the inner statement's files, or with `rec-coins`' record of it in place of them, is
-    refused at setup, by `statement` and by `verify`; an inner shape naming no RecSparse shape needs none. The unit range's
+    """Candidate 3's session without the inner statement's files is refused at setup, by `statement` and by `verify`; an inner shape naming no RecSparse shape needs none. The unit range's
     own refusal (`RecCoins.unitRangeOf`) sits behind the inner statement's setup, which refuses a META without one unit
     range first; its Lean guards are `Test/InnerStreams.lean`'s."""
     need = ("setup: rec-inner: candidate 3's session needs the inner statement (--rec-inner-circuit, --rec-inner-public, "
             "--rec-inner-partition, --rec-inner-session): its sparse range is checked on it")
     assert _c3(tmp_path, C3_SPARSE, files=False) == need
-    assert _c3(tmp_path, C3_SPARSE, coins=True) == need
     assert _c3(tmp_path, C3_SPARSE, files=False, verify=True) == need
     assert _c3(tmp_path, (0, 12, 1, 0), verify=True) == (
         "setup: rec-inner: rec-sparse/n0-e12-s1-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16")

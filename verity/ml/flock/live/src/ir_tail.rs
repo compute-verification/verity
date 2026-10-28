@@ -2,7 +2,7 @@
 //! input word (RMSNorm's warp-aggregate sum and row scalar), from the program `verity_flock.ir_lower.tail_program` emits.
 //!
 //! A program is ops `[out slot, primitive id, operand slots...]` (constants `[slot, "Const", value]`) over slots
-//! `[cut words | temporaries]`. The primitives are the IR's (`verity_vllm.program.registry.prims`), line for line: IEEE f32
+//! `[cut words | temporaries]`. The primitives are the IR's (`verity.ml.definitions.registry.prims`), line for line: IEEE f32
 //! add, mul and div; fma with one rounding and every NaN the canonical 0x7FC00000 (`f32_fma_bits`); and the MUFU ops as the
 //! IR's C++ model computes them (`rms_triton_model.cpp`: `rsqrt_nonftz`, `mufu_sqrt`, `div_full_parts`, `mufu_rcp`) on the
 //! measured tables, which are pinned here by sha256.
@@ -365,7 +365,7 @@ pub fn eval(ops: &[Op], slots: &mut Vec<Option<u32>>, t: &Tables) {
 mod tests {
     use super::*;
 
-    /// `(a, b, add, mul, div)` from `verity_vllm.program.registry.prims` (numpy float32, x86-64): quiet and signaling NaNs of
+    /// `(a, b, add, mul, div)` from `verity.ml.definitions.registry.prims` (numpy float32, x86-64): quiet and signaling NaNs of
     /// both signs, one or both operands, and invalid operations.
     const VECTORS: [(u32, u32, u32, u32, u32); 10] = [
         (0x7FC0_0001, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),

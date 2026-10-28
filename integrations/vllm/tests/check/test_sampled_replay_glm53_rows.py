@@ -1,6 +1,6 @@
 """GLM-5.3 TP8's row evaluators (`kernels.glm53_rows`, and `kernels.cublas_gemm_rows` for the cuBLAS split-K pair) as the sampled
-replay calls them.  Every family the per-rank no-evaluator rule named on the TP8 B1 Commit r20261016-213336-6c35, and on B8 greedy's
-replay r20261021-213033-aa93, has one.  The replay hands a row kernel the statics `spec_statics` parses from
+replay calls them.  Every family the per-rank no-evaluator rule named on the TP8 B1 Commit, and on B8 greedy's
+replay, has one.  The replay hands a row kernel the statics `spec_statics` parses from
 the Program's spec text (`{"f64":...}` floats, `true` / `False`, `{"fn":...}` or bare step ids, quoted kernel names), not the Python
 values the kernel self-check binds, so each family is checked here on those spellings against its Definition's word reference."""
 from __future__ import annotations
@@ -15,10 +15,10 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.circuits.evaluation.reference import signature_of
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity_vllm.program.kernels import rows
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
-from verity_vllm.program.registry import ll_bf16, moe, sparse_mla_split
+from verity.ml.definitions.numerics import rows
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
+from verity.ml.definitions.registry import ll_bf16, moe, sparse_mla_split
 from verity_vllm.query.manifest import format as RM
 
 #: the families FIXWIT's per-rank rule failed GLM-5.3 TP8 B1's Commit on: four plane-fed MoE producers and eleven with no evaluator
@@ -80,6 +80,7 @@ def test_every_family_the_tp8_b1_and_b8_rule_named_has_a_row_evaluator():
     assert not missing, f"no replay row evaluator for {missing}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("spec", ['LlBf16SplitKGemm_v1{N=256,K=6144,SPLIT_K=6,TILE_K=256,WARPS=4,DOT=HopperBF16WgmmaDot16_v1}',
                                   'LlBf16SplitKGemm_v1{N=256,K=6144,SPLIT_K=8,TILE_K=256,WARPS=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'],
                          ids=["split-k-6", "split-k-8"])
@@ -113,8 +114,8 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
     from verity_vllm.program.frontend.conformance import status_of
-    from verity_vllm.program.kernels import batched_gemm_rows, glm53_rows
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.numerics import batched_gemm_rows, glm53_rows
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     p = rows.EVALUATOR_PROVENANCE["LlBf16SplitKGemm_v1"]
     assert p is glm53_rows.PROVENANCE["LlBf16SplitKGemm_v1"]

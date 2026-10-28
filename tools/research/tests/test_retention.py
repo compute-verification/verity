@@ -336,6 +336,17 @@ def test_gc_does_nothing_unless_the_filesystem_is_over_high_pct_or_forced(tmp_pa
     assert plan["acting"] and by_path(plan)["pouw/a"]["action"] == "delete" and not a.exists()
 
 
+def test_gc_acts_on_a_filesystem_out_of_inodes_with_blocks_to_spare(tmp_path):
+    """vy-dc-h200, 26 Oct: inodes at 100% with blocks at 32%, and gc skipped every path as "not needed"."""
+    a = kept(tmp_path, "pouw/a")
+    disk = Disk(100 * UNIT, 31 * UNIT, [a])                                   # blocks 32%
+    full = lambda _p: (1000, 990 if a.exists() else 0)                         # inodes 99% while a exists
+    assert not run_gc(tmp_path, disk)["acting"]
+    plan = run_gc(tmp_path, disk, apply=True, inodes=full)
+    assert (plan["acting"], plan["pct_before"], plan["inodes_pct_before"]) == (True, 99.0, 99.0)
+    assert by_path(plan)["pouw/a"]["action"] == "delete" and not a.exists() and plan["pct_after"] == 31.0
+
+
 def test_gc_deletes_low_before_normal_then_the_oldest_expiry_and_stops_under_low_pct(tmp_path):
     normal_old = kept(tmp_path, "pouw/normal-old", priority="normal", expires="2026-09-01T00:00:00Z")
     low_new = kept(tmp_path, "pouw/low-new", expires="2026-09-30T00:00:00Z")
@@ -666,3 +677,18 @@ def test_expires_now_is_what_rm_tells_an_owner_to_record():
     assert R.parse_expires("now", now) == R.fmt_utc(now) == R.parse_expires("0h", now)
     with pytest.raises(R.RecordError, match="never, now, a date"):
         R.parse_expires("soon", now)
+
+
+def test_a_python_package_named_passes_or_anything_in_a_venv_is_no_retained_pass(tmp_path):
+    """INF-264: torch's `fx/passes` and vLLM's `compilation/passes` in every venv refused proofs' twelve approved trees on cpu-1
+    (4.47M inodes). A data dir named passes still is one, wherever it lies."""
+    root = tmp_path / "ws"
+    tree = root / "src" / ("a" * 40)
+    for pkg in (".venv/lib/python3.12/site-packages/torch/fx/passes", "vllm/compilation/passes"):
+        (tree / pkg).mkdir(parents=True)
+        (tree / pkg / "__init__.py").write_text("")
+    (tree / ".venv/lib/python3.12/site-packages/x/passes").mkdir(parents=True)     # no __init__, but inside a venv
+    assert not R._holds_passes(tree, root)
+    assert not R._holds_passes(tree / "vllm/compilation/passes", root)
+    (tree / "out/passes/r0").mkdir(parents=True)
+    assert R._holds_passes(tree, root) and R._holds_passes(tree / "out/passes/r0", root)

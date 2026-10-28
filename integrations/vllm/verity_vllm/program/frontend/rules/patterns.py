@@ -22,14 +22,15 @@ import torch
 from verity.ml.circuits.refs import Coll, array_of
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
-from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 
 aten = torch.ops.aten
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 _SOFTMAX = {aten._softmax.default, aten.softmax.int}
-# dtype casts, including the device-carrying spellings `.to(device=…, dtype=…)` / `.to(dtype=…, layout=…, device=…)` (G-RH-2: the
+# dtype casts, including the device-carrying spellings `.to(device=…, dtype=…)` / `.to(dtype=…, layout=…, device=…)` (the
 # device is not semantics; every use below checks the dtypes)
 _CASTS = {aten._to_copy.default, aten.to.dtype, aten.to.device, aten.to.dtype_layout}
 _MATMUL = {aten.matmul.default, aten.bmm.default}
@@ -387,7 +388,7 @@ _POS_OFFSET = {aten.add.Tensor, aten.sub.Tensor, aten.add.Scalar, aten.sub.Scala
 
 def _static_positions_source(node):
     """The `arange` a positions tensor is made from through shape views, same-dtype casts and `+` / `-` of a Python int
-    (transformers 5.x: `position_ids = arange(T) + past_seen_tokens`, G-RH-6); None if anything else feeds it. This is the
+    (transformers 5.x: `position_ids = arange(T) + past_seen_tokens`); None if anything else feeds it. This is the
     graph-level pre-scan only (it runs before the Builder exists, to declare the table Inputs); the positions actually used are
     the StaticIndex values the view rules compute, which `applies` requires and `emit` records."""
     seen = 0
@@ -431,7 +432,7 @@ _TABLE_BUFFER_DTYPES = {torch.float32, torch.bfloat16}
 
 def _buffer_source(node):
     """The source of the rotary table's left operand through shape views, same-dtype casts and AT MOST ONE widening cast
-    bf16 -> f32 (G-RH-7: HF casts the `inv_freq` buffer to bf16 with the model — `model.to(bfloat16)` casts buffers too — so the
+    bf16 -> f32 (HF casts the `inv_freq` buffer to bf16 with the model — `model.to(bfloat16)` casts buffers too — so the
     forward's `.float()` is a real cast). Returns `(source node, cast node | None)`; `(None, None)` if anything else feeds it
     (a second dtype change, a cast from any other dtype, an arithmetic op)."""
     seen, cast = 0, None
@@ -470,11 +471,11 @@ class HFRotaryTableRule(OpRule):
     `inv_freq` stays a (now unread) field so the record's identity is the module's. Fires at the positions' `to(f32)`; the whole
     chain up to the two final casts becomes `Consumed`; the final casts are the table Inputs.
 
-    v2 (transformers 5.x spellings): the buffer views may include `.to(device=…, dtype=f32)` of the f32 buffer (a same-dtype cast,
-    G-RH-2); the positions pre-scan looks through `+` / `-` of a Python int (`arange(T) + past_seen_tokens`, G-RH-6) — the positions
+    v2 (transformers 5.x spellings): the buffer views may include `.to(device=…, dtype=f32)` of the f32 buffer (a same-dtype cast);
+    the positions pre-scan looks through `+` / `-` of a Python int (`arange(T) + past_seen_tokens`) — the positions
     bound are still the StaticIndex values, recorded per application.
 
-    v3 (G-RH-7, bf16 models): the `inv_freq` buffer may be **bf16** — `model.to(torch.bfloat16)` casts buffers with the parameters, so
+    v3 (bf16 models): the `inv_freq` buffer may be **bf16** — `model.to(torch.bfloat16)` casts buffers with the parameters, so
     on a real bf16 Llama / Qwen2 / Qwen3 the forward's `inv_freq[None, :, None].float()` is a real widening cast — and then exactly one
     bf16 -> f32 cast (`Bf16ToF32`, exact) is allowed on the buffer's path to the matmul. The table is then `cos|sin(pos * f32(bf16
     inv_freq))`: computed from the **bf16-rounded** inv_freq. That is the computation HF runs for that model (the fixed computation
@@ -484,7 +485,7 @@ class HFRotaryTableRule(OpRule):
     buffer's `.float()` or the positions' `.float()` — comes first in graph order, and translates the static positions on demand.
     Any other dtype change on the buffer path (f16, f64, a second cast) is not the pattern.
 
-    v4 (G-RH-16, Olmo): the terminal `.to(x.dtype)` may be ABSENT — `OlmoRotaryEmbedding.forward` returns the f32 `cos` / `sin` as
+    v4 (Olmo): the terminal `.to(x.dtype)` may be ABSENT — `OlmoRotaryEmbedding.forward` returns the f32 `cos` / `sin` as
     computed. Then the table is the f32 value the chain produced (cos|sin, or its scalar multiply), that node is the table Input
     (not consumed; the layers read it), and the application records `terminal_cast: none (...)` vs `cast to model dtype`. Both
     tables must agree. A terminal cast to a dtype outside {f32, bf16} is still not the pattern."""
@@ -495,7 +496,7 @@ class HFRotaryTableRule(OpRule):
                                    "exactly one bf16 -> f32 cast; the buffer dtype and the cast are recorded in the table's derivation",
                                    "the positions are a StaticIndex made from an arange through shape views, same-dtype casts and +/- of a Python int",
                                    "cos and sin are read exactly by an optional scalar multiply and then EITHER one cast each (to f32|bf16; the cast is the "
-                                   "table) OR no cast (the f32 cos|sin is the table, G-RH-16); which one is recorded as `terminal_cast`, the same for both",
+                                   "table) OR no cast (the f32 cos|sin is the table); which one is recorded as `terminal_cast`, the same for both",
                                    "the resulting tables are [1, T, D] with D = 2R"),
                     evidence_domain="structural; the tables are prescribed Inputs (derived tables), their derivation recorded in the weights record")
 
@@ -554,7 +555,7 @@ class HFRotaryTableRule(OpRule):
                         break
                     term, end = "cast to model dtype", n
                 else:
-                    # v4 (G-RH-16): NO terminal cast — the module returns cos/sin as computed (Olmo). The table is then the f32 the
+                    # v4: NO terminal cast — the module returns cos/sin as computed (Olmo). The table is then the f32 the
                     # matmul chain produced; `last` (cos|sin or its scalar multiply) is the value the layers read, so it is the table
                     # Input and NOT part of the consumed chain. Structural: the terminal's dtype must be f32 (it is, by the chain).
                     if getattr(last.meta.get("val"), "dtype", None) is not torch.float32:

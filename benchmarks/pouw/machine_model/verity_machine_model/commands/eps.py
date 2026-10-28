@@ -18,7 +18,7 @@
                                           (a no-op where the census has it there already); --checking full
                                           (default) is the protocol with every word and operand verified, the
                                           core ε alone (ε_luck in it, Corollary D3), and --checking sampled adds
-                                          ε_sample = ε_adapt on its own line, for the design's proof unit
+                                          ε_sample = ε_adapt on its own line, for the design's proof block
                                           (data/adapt.toml) or --adapt UNIT's
 machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X [--fill-mix K=V,...]] [--operands O]
                   [--credit C] [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
@@ -66,12 +66,12 @@ def add(sub) -> None:
     e.add_argument("--l2", type=float, help="with --lookups: L2 read bytes a second (default: the file's)")
     e.add_argument("--uni-issue", type=float, metavar="C",
                    help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
-                        "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
+                        "cost there (PREDICT's u16s_l7qs measured 0.92)")
     e.add_argument("--checking", choices=("full", "sampled"), default="full",
                    help="full: every word and operand verified, the core ε alone, ε_luck in it (default); sampled: "
                         "also ε_sample = ε_adapt, on its own line and columns")
     e.add_argument("--adapt", metavar="UNIT",
-                   help="with --checking sampled: the proof unit (data/adapt.toml; default: the design's own)")
+                   help="with --checking sampled: the proof block (data/adapt.toml; default: the design's own)")
     e.add_argument("--lookup-bytes", type=float, metavar="B",
                    help="with --lookups: L2 bytes a table word (default: the file's)")
     e.add_argument("--index-bits", type=int, metavar="B",
@@ -131,7 +131,7 @@ def _lookups(args) -> E.Table | None:
 def _adapt(args, d: E.Design) -> E.Adapt | None:
     if args.checking == "full":
         if args.adapt:
-            raise SystemExit("eps: --adapt picks the sampled protocol's proof unit: add --checking sampled")
+            raise SystemExit("eps: --adapt picks the sampled protocol's proof block: add --checking sampled")
         return None
     return E.adapt(args.adapt or d.unit, args.data)
 
@@ -191,7 +191,7 @@ def _eps_table(args, pi: E.Machine) -> int:
     sampled = args.checking == "sampled"
     look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
                                   f"word ({_l2(tb)})")
-    unit = "" if not sampled else (f" Sample (the sampling compiler, never in core): the proof unit ("
+    unit = "" if not sampled else (f" Sample (the sampling compiler, never in core): the proof block ("
                                    f"{f'{args.adapt} for every design' if args.adapt else 'each design its own'}), "
                                    f"ε_adapt, ε_sample = ε_adapt.")
     print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, checking {args.checking}. Core (every word "
@@ -266,7 +266,7 @@ def run(args) -> int:
              "floor": f"the floor program ♭ (the tensor route at φ_del = {floor} a MMA)"}
     print(f"{d.name}: {d.summary}")
     print(f"  {d.title}" + (f" (also {', '.join(d.aliases)})" if d.aliases else "") + ": noise "
-          + ", ".join(f"{k} {v}" for k, v in d.noise.items()) + f"; proof unit {d.unit}; {d.coin_bits}-bit coins; "
+          + ", ".join(f"{k} {v}" for k, v in d.noise.items()) + f"; proof block {d.unit}; {d.coin_bits}-bit coins; "
           + (f"perplexity arm {d.ppl}" if d.ppl else "no perplexity arm on main"))
     print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma} ({h.form}), {h.words} words a "
           f"MMA; the cheater's tensor route on any of {max(1, sum(f.kind in pi.c for f in E.forms(args.data)))} MMA "
@@ -310,7 +310,7 @@ def run(args) -> int:
           f"{_pct(sum(t[k] or 0.0 for k in core))})")
     if args.checking == "sampled":
         print(f"  ε_sample   {_pct(e.sample())} (the sampling compiler's, never in the core ε) = ε_adapt")
-        print(f"      ε_adapt {_pct(t['adapt'])}: proof unit {ad.name}, {ad.selection}: {ad.source}")
+        print(f"      ε_adapt {_pct(t['adapt'])}: proof block {ad.name}, {ad.selection}: {ad.source}")
     print(f"  q* threshold (ε_machine = its floor): {_thr(rec['threshold'])}; lanes alone "
           f"{_thr(rec['threshold_lanes'])}; the uniform route alone at q* = 16: {_pct(rec['uniform_at_16'])}")
     print(textwrap.fill("ε_machine(q*): " + ", ".join(f"{x:g} {100 * y:.2f}%" for x, y in rec["curve"]), width=120,

@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_indices_capture_gpu as X
-from verity_vllm.program.kernels import dsv4_indices_twin as T
+from verity.ml.definitions.numerics import dsv4_indices_twin as T
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 #: the cases simulated here (ratio 128's widest rows are left to the H200)

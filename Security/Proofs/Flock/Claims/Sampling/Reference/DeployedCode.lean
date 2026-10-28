@@ -111,7 +111,8 @@ theorem sessionSlots_code (H : Msg → Msg) : SessionSlots (code c reg L bytes s
 session of the reference prover's honest runs that check some unit. -/
 theorem δc_code (H : Msg → Msg) (x : Msg) :
     (deploy rel (code c reg L bytes sr sess)).δc H x =
-      sessErrAt H (Rhon H (commit c) c.parse c.partition) (refP c.step c.parse c.reads (commit c) c.wit) c.V
+      sessErrAt H (Rhon H (commit c) c.parse c.partition)
+        (refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit) c.V
         (code c reg L bytes sr sess).checked (fun x _ v => sess x v) (FlockComplete.ZkTables.δc H) x := by
   show ((1 : ℕ) : ℝ) * _ = _
   rw [Nat.cast_one, one_mul]

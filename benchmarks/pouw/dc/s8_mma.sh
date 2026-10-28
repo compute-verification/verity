@@ -4,34 +4,59 @@
 # scratch (their sha256 is kept; s8_mma.py gen rebuilds the cases from the seed).
 #
 #   research run --on vy-dc-h200 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/dc/s8_mma.sh sm90      (sm100 on vy-dc-b200)
+#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/dc/s8_mma.sh sm90 [FAMILY ...]      (sm100 on vy-dc-b200)
 #
-# sm90 runs families mma (mma.sync m16n8k32) and wg (wgmma m64n8k32); sm100 runs mma and tc (tcgen05.mma kind::i8). Exit:
-# 0 every form of every family matches the sm_120 model with one tensor instruction a kernel, 1 a mismatch, 2 wrong device
-# or no nvcc, 4 build or case generation failed, else the GPU part's code.
+# sm90 runs families mma (mma.sync m16n8k32), wg (wgmma m64n8k32) and wg64, wg128, wg256 (wgmma m64nNk32); sm100 runs mma
+# and tc (tcgen05.mma kind::i8); FAMILY ... runs those alone. `s8_mma.sh build sm90|sm100` on a CPU node only compiles:
+# out/s8_mma_<arch>, its .nvcc sidecar (nvcc --version) and its SASS; S8_MMA_BIN=<that binary, shipped with its sidecar>
+# then runs it instead of compiling here. Exit: 0 every form of every family matches the sm_120 model with one tensor
+# instruction a kernel, 1 a mismatch, 2 wrong device or no nvcc, 4 build or case generation failed, else the GPU part's code.
 set -uo pipefail
-FAM=${1:?usage: s8_mma.sh sm90|sm100}
+MODE=run
+[ "${1:-}" = build ] && { MODE=build; shift; }
+FAM=${1:?usage: s8_mma.sh [build] sm90|sm100 [FAMILY ...]}
+shift
 export O=${RESEARCH_RUN_DIR:?run under research run}/out
 mkdir -p "$O"
 HERE=benchmarks/pouw/dc
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || { echo "s8_mma.sh: no nvcc at $NVCC" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "s8_mma.sh: no nvcc at $NVCC (cuobjdump is beside it)" >&2; exit 2; }
 export PATH="$(dirname "$NVCC"):$PATH" PYTHONPATH=$PWD PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=8
 PY=${PY:-python3}
 case "$FAM" in
-  sm90) ARCH=90a; CC=9; FAMS="mma wg" ;;
-  sm100) ARCH=100a; CC=10; FAMS="mma tc" ;;
+  sm90) ARCH=90a; CC=9; FAMS=${*:-mma wg wg64 wg128 wg256} ;;
+  sm100) ARCH=100a; CC=10; FAMS=${*:-mma tc} ;;
   *) echo "s8_mma.sh: sm90 or sm100, not $FAM" >&2; exit 2 ;;
 esac
+build() {  # $1: the binary; writes $1.nvcc beside it
+  "$NVCC" --version | tail -2 > "$1.nvcc"
+  "$NVCC" -O2 -std=c++17 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -Xptxas -v -o "$1" "$HERE/probes/s8_mma.cu" \
+    > "$O/ptxas.txt" 2>&1 || { tail -40 "$O/ptxas.txt"; echo "build 4" | tee "$O/status.txt"; exit 4; }
+}
+sass() {
+  cuobjdump -sass "$1" > "$O/sass.txt"
+  grep -E 'Function|MMA|IDP' "$O/sass.txt" > "$O/sass_mma.txt"
+}
+if [ "$MODE" = build ]; then
+  build "$O/s8_mma_$ARCH"
+  sass "$O/s8_mma_$ARCH"
+  echo "build 0" | tee "$O/status.txt"
+  exit 0
+fi
 cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
 [ "${cap%%.*}" = "$CC" ] || { echo "s8_mma.sh: $FAM needs compute capability $CC.x, the device reports '$cap'" >&2; exit 2; }
 export B; B=$(mktemp -d /tmp/s8-mma.XXXXXX); trap 'rm -rf "$B"' EXIT
 git rev-parse HEAD > "$O/tree.txt" 2>/dev/null || true
-"$NVCC" --version | tail -2 > "$O/nvcc.txt"
-"$NVCC" -O2 -std=c++17 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -Xptxas -v -o "$B/s8_mma" "$HERE/probes/s8_mma.cu" \
-  > "$O/ptxas.txt" 2>&1 || { tail -40 "$O/ptxas.txt"; echo "build 4" | tee "$O/status.txt"; exit 4; }
-cuobjdump -sass "$B/s8_mma" > "$O/sass.txt"
-grep -E 'Function|MMA|IDP' "$O/sass.txt" > "$O/sass_mma.txt"
+if [ -n "${S8_MMA_BIN:-}" ]; then
+  case "$S8_MMA_BIN" in /*) ;; *) S8_MMA_BIN=$RESEARCH_RUN_DIR/$S8_MMA_BIN ;; esac  # --send puts it in the run dir's inputs/
+  cp "$S8_MMA_BIN" "$B/s8_mma" && cp "$S8_MMA_BIN.nvcc" "$B/s8_mma.nvcc" \
+    || { echo "s8_mma.sh: no $S8_MMA_BIN or its .nvcc sidecar" | tee "$O/ptxas.txt"; echo "build 4" | tee "$O/status.txt"; exit 4; }
+  echo "prebuilt $S8_MMA_BIN" > "$O/ptxas.txt"
+else
+  build "$B/s8_mma"
+fi
+cp "$B/s8_mma.nvcc" "$O/nvcc.txt"
+sass "$B/s8_mma"
 for f in $FAMS; do
   mkdir -p "$B/$f"
   "$PY" "$HERE/s8_mma.py" gen --family "$f" --out "$B/$f/cases.bin" --meta "$O/meta-$f.json" > "$O/gen-$f.txt" 2>&1 \
@@ -54,6 +79,6 @@ for f in $FAMS; do
     --sass "$O/sass.txt" --json "$O/check-$f.json" --structured "$O/structured-$f.json" > "$O/check-$f.txt" 2>&1 || rc=1
   tail -20 "$O/check-$f.txt"
 done
-sha256sum "$HERE/probes/s8_mma.cu" "$HERE/s8_mma.py" "$HERE/dc.cuh" >> "$O/inputs.sha256"
+sha256sum "$HERE/probes/s8_mma.cu" "$HERE/s8_mma.py" "$HERE/dc.cuh" "$HERE/wgmma.cuh" >> "$O/inputs.sha256"
 echo "check $rc" | tee "$O/status.txt"
 exit $rc

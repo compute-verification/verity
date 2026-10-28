@@ -117,8 +117,7 @@ def test_verify_reads_candidate_3s_transcript(tmp_path):
     """`verify --rec-inner-transcript` reads the transcript among its inputs, before it sets anything up: on candidate 3's
     session it goes on to the statement (here none, so the session is refused for its files), and on the session with a
     stream missing it stops there (exit 2). The inner statement is its circuit's header (whose META binds R's registration)
-    beside stand-ins for its public input and partition, which nothing reads before the session; `--rec-inner-coins` holds
-    no META, so it binds no registration."""
+    beside stand-ins for its public input and partition, which nothing reads before the session."""
     (tmp_path / "partition.json").write_text("{}")
     (tmp_path / "empty").write_text("")
 
@@ -592,9 +591,19 @@ def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE, holo=True) -> list[st
     return ["--rec-inner", str(_write(tmp_path / "rec-inner.json", j))]
 
 
+def _own(tmp_path: Path, d: Path) -> Path:
+    """`d`'s coin server's record in its own format (`rec_live.record_bytes`), which the verifier reads at its inner
+    shape (`RecSetup.checkReads`): the fixtures' records predate it."""
+    from verity_flock import rec_live as RL
+
+    f = tmp_path / f"own-{d.name}.json"
+    f.write_text(RL.record_bytes(json.loads((d / "public.json").read_text())))
+    return f
+
+
 def _covers(tmp_path: Path, shape: list[str], transcript: Path | None = None) -> tuple[int, str]:
     d = _fixture(C3)
-    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or d / "public.json"),
+    p = subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(transcript or _own(tmp_path, d)),
                         "--rec-inner-session", str(d / "prover"), *_inner(), *shape], capture_output=True, text=True)
     return p.returncode, p.stderr.strip()
 
@@ -724,7 +733,7 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
     """The plain session (`rec-coins`' inner session, two reps and no other stream) passes under its own inner shape, and is
     refused under one naming the bucket's RecSparse shape: the shape names a phase the session does not have."""
     d = _fixture(PLAIN)
-    run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(d / "public.json"),
+    run = lambda shape: subprocess.run([str(BIN), "rec-transcript", "--rec-inner-transcript", str(_own(tmp_path, d)),
                                         "--rec-inner-session", str(d / "session"), *shape], capture_output=True, text=True)
     p = run(["--rec-inner", str(_write(tmp_path / "plain.json", {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22,
                                                                  "claims": 8, "regions": 3}))])
@@ -787,12 +796,35 @@ def _transcript_of(transcript: Path, record: Path, shape: dict | None, tmp_path:
 
 def test_the_honest_records_are_on_the_verifiers_schedule(tmp_path):
     """`RecVStar.checkSchedule` and its mirror `rec_live.on_schedule` pass the plain session's record and 2d61's at
-    their inner shapes, round for round."""
+    their inner shapes, round for round, and both read in the coin server's own format as their JSON readers read
+    them (`RecSetup.checkReads`)."""
     t = json.loads((_fixture(PLAIN) / "public.json").read_text())
     assert not _python_off(t, PLAIN_SHAPE)
     assert not _python_off(json.loads((_fixture(C3) / "public.json").read_text()), C3_SHAPE)
-    assert _transcript_of(PLAIN / "public.json", PLAIN / "session", PLAIN_SHAPE, tmp_path) == (0, "")
+    assert _transcript_of(_own(tmp_path, _fixture(PLAIN)), PLAIN / "session", PLAIN_SHAPE, tmp_path) == (0, "")
     assert _covers(tmp_path, _shape(tmp_path)) == (0, "")
+
+
+NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: "
+                  "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the "
+                  "link's roots and points, at json.dumps' indent=1)")
+
+
+@pytest.mark.parametrize("write", [
+    json.dumps,
+    lambda t: json.dumps({"rounds": t["rounds"], **t}, indent=2),
+    lambda t: json.dumps({"rounds": t["rounds"], **t, "hello": dict(reversed(t["hello"].items()))}, indent=1),
+], ids=["compact", "indent-2", "hello-reordered"])
+def test_a_record_not_in_the_coin_servers_format_is_refused(tmp_path, write):
+    """`RecSetup.checkReads`: the recursion's transcript model reads the coin server's record in its own format
+    (`RecRecord.readFull`), so the verifier reads it so too. The plain session's record with its values unchanged,
+    written compactly, at another indent or with Hello's keys in another order, passes every check of the transcript
+    read without the verifier's inner shape, and is refused at that shape."""
+    t = json.loads((_fixture(PLAIN) / "public.json").read_text())
+    f = tmp_path / "transcript.json"
+    f.write_text(write(t))
+    assert _transcript_of(f, PLAIN / "session", None, tmp_path)[0] == 0
+    assert _transcript_of(f, PLAIN / "session", PLAIN_SHAPE, tmp_path) == (1, NOT_OWN_FORMAT)
 
 
 def _extra(rs: list) -> None:
@@ -849,7 +881,7 @@ NO_REGISTRATION = ("rec inner registration: candidate 3's session needs R's circ
 
 
 @pytest.mark.parametrize("cmd,transcript,why", [
-    ("statement", False, (1, f"setup: {NO_TRANSCRIPT}")),
+    pytest.param("statement", False, (1, f"setup: {NO_TRANSCRIPT}"), marks=pytest.mark.slow),
     ("statement", True, (2, NO_REGISTRATION)),
     ("verify", True, (2, NO_REGISTRATION)),
 ], ids=["no-transcript", "no-registration", "verify-no-registration"])

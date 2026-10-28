@@ -11,6 +11,7 @@ import pytest
 
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.ml.circuits.population import population_program
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -47,14 +48,6 @@ Step = bind(_comp("TStep", 1, (), lambda S: ((("c", V32), ("x", V32)), Tuple(V32
 X3 = Array(3, Array(2, V32))
 
 
-def population(template, n: int) -> Program:
-    """`TemplateInstances_v0{N=n}`, one-stage's population program at v0 (the pinned vectors'): a batch of the template over
-    arrays of its parameters."""
-    params, ret = template.signature()
-    return Program(bind(_comp("TemplateInstances", 0, ("N",), lambda S: (tuple((p, Array(S.N, t)) for p, t in params), Array(S.N, ret)),
-                              lambda B, S, *a: B.batch(template, *a, axes=(0,) * len(a))), N=n))
-
-
 def _mixed(B, S, xs, k, a, b):
     s = B.batch(Scale, xs, k, axes=(0, None))                        # 3 instances of Scale, k shared
     d0 = B.call(Dot, a[0], b[0])                                     # 1 instance of Dot
@@ -65,7 +58,7 @@ def _mixed(B, S, xs, k, a, b):
 
 MIXED = Program(_comp("TMix", 0, (), lambda S: ((("xs", X3), ("k", V32), ("a", X3), ("b", X3)), Tuple(X3, V32, Array(2, V32), V32)),
                       _mixed))
-POPULATION = population(Scale, 3)
+POPULATION = population_program(Scale, 3, version=0)  # the pinned vectors' version
 SCAN = Program(_comp("TScanProg", 0, (), lambda S: ((("xs", Array(3, V32)), ("c", V32)), Tuple(V32, Array(3, V32))),
                      lambda B, S, xs, c: B.scan(Step, c, xs=[xs])))
 PRIM = Program(_comp("TPrimProg", 0, (), lambda S: ((("x", Array(2, V32)),), V32), lambda B, S, x: B.call(TAdd, x[0], x[1])))

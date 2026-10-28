@@ -5,3 +5,10 @@
 vy-challenger-1 research@10.104.0.21
 vy-nebius-1 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.165
 vy-nebius-2 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.121
+vy-auditor-1 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes challenger@81.85.1.145
+vy-dc-h200 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.171.48
+vy-dc-b200 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.170.80
+vy-nebius-3 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.180
+vy-dc-h200-2 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@204.12.188.151
+vy-nebius-cpu-4 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@89.124.37.177
+vy-nebius-cpu-5 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@213.239.173.183

@@ -12,30 +12,36 @@ _TAG_RE = re.compile(r'^\{"\$e":\s*"(\w+)"')
 def read_record(log_path: str) -> dict:
     """RunHeader + per engine step: rows, input tokens, logits rows, sampled tokens; StepLinks."""
     header, steps, samples, links = None, {}, {}, []
-    sampler_batch: dict[int, int] = {}   # [M-0169 derived S] engine step -> rows of the sampler's logits tensor (SampleEnd.logits_view shape[0])
+    sampler_batch: dict[int, int] = {}   # engine step -> rows of the sampler's logits tensor (SampleEnd.logits_view shape[0])
+
+    def step_start(d: dict) -> None:
+        s = int(d["step"])
+        if s in steps:
+            raise ValueError(f"two StepStart records for step {s}")
+        steps[s] = {"rows": [(r, int(p)) for r, p in d["rows"]], "input_token_ids": [int(x) for x in d.get("input_token_ids") or []],
+                    "logits_rows": [(r, int(p)) for r, p in d["logits_rows"]]}
+
+    def sample_end(d: dict) -> None:
+        samples[int(d["step"])] = [int(x) for x in d["sampled_token_ids"]]
+        lv = (d.get("logits_view") or {}).get("$v") if isinstance(d.get("logits_view"), dict) else None
+        if isinstance(lv, list) and len(lv) > 2 and isinstance(lv[2], list) and lv[2]:
+            sampler_batch[int(d["step"])] = int(lv[2][0])
+
+    def step_link(d: dict) -> None:
+        links.append({k: d.get(k) for k in ("step", "row", "request_id", "src_step", "relation", "value")})
+
+    def run_header(d: dict) -> None:
+        nonlocal header
+        header = d
+
+    read = {"StepStart": step_start, "SampleEnd": sample_end, "StepLink": step_link, "RunHeader": run_header}
     opener = gzip.open if log_path.endswith(".gz") else open
     with opener(log_path, "rt") as f:
         for line in f:
             m = _TAG_RE.match(line)
-            tag = m.group(1) if m else None
-            if tag == "StepStart":
-                d = json.loads(line)
-                s = int(d["step"])
-                if s in steps:
-                    raise ValueError(f"two StepStart records for step {s}")
-                steps[s] = {"rows": [(r, int(p)) for r, p in d["rows"]], "input_token_ids": [int(x) for x in d.get("input_token_ids") or []],
-                            "logits_rows": [(r, int(p)) for r, p in d["logits_rows"]]}
-            elif tag == "SampleEnd":
-                d = json.loads(line)
-                samples[int(d["step"])] = [int(x) for x in d["sampled_token_ids"]]
-                lv = (d.get("logits_view") or {}).get("$v") if isinstance(d.get("logits_view"), dict) else None
-                if isinstance(lv, list) and len(lv) > 2 and isinstance(lv[2], list) and lv[2]:
-                    sampler_batch[int(d["step"])] = int(lv[2][0])
-            elif tag == "StepLink":
-                d = json.loads(line)
-                links.append({k: d.get(k) for k in ("step", "row", "request_id", "src_step", "relation", "value")})
-            elif tag == "RunHeader":
-                header = json.loads(line)
+            on = read.get(m.group(1)) if m else None
+            if on is not None:
+                on(json.loads(line))
     if header is None:
         raise ValueError(f"{log_path}: no RunHeader")
     return {"header": header, "steps": steps, "samples": samples, "links": links, "sampler_batch": sampler_batch}

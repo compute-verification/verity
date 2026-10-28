@@ -1,5 +1,5 @@
 """trace/v1 spans over a check run: `spans.jsonl` beside `steps.jsonl`, the queryable summary layer the watcher and the
-dashboard read (the observability report's section 2; the first slice of the job schema, CI-4).
+dashboard read (the observability report's section 2; the first slice of the job schema).
 
 One span is one JSON line.  The shape, FROZEN 14 Oct 2026 19:13Z (a contract infra's watcher builds against; change no
 field):
@@ -8,7 +8,8 @@ field):
      "start_utc": "...", "end_utc": null, "status": null, "attributes": {"step": "pytest", "rc": 0}}
 
 `parent_span_id` null marks the root; `end_utc`/`status` null while open; `status` is `ok`, `failed` or `cancelled`;
-`attributes` is a flat string-to-scalar map (check steps carry `step`, `rc`, `cache_key`, `log`).
+`attributes` is a flat string-to-scalar map (check steps carry `step`, `rc`, `cache_key`, `log`; a check in its own scope adds
+`mem_peak_gb` and `mem_current_gb` to each step and to the root's completion, `check_memory`).
 
 The file is append-only, so an open span is a line with `end_utc`/`status` null and its completion is a later line with
 the same `span_id`: the last line per `span_id` wins.  The root span (the check itself) opens when the run's `Steps`
@@ -39,6 +40,27 @@ def _scalar(v) -> bool:
     return isinstance(v, (str, int, float, bool))
 
 
+#: the check's own scope unit, set by slot.py on a `scope=1` slot (slot.SCOPE_ENV)
+SCOPE_ENV = "CHECK_SCOPE_UNIT"
+
+
+def check_memory(root: Path = Path("/")) -> dict:
+    """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the cgroup this process runs in,
+    when that is the check's own scope (SCOPE_ENV names it); else nothing, since a shared session scope's numbers are other
+    runs' too. GB are 10^9 bytes, one decimal."""
+    unit = os.environ.get(SCOPE_ENV)
+    if not unit:
+        return {}
+    try:
+        line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
+        d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
+        if d.name != f"{unit}.scope":
+            return {}
+        return {f"mem_{k}_gb": round(int((d / f"memory.{k}").read_text().strip()) / 1e9, 1) for k in ("peak", "current")}
+    except (OSError, StopIteration, ValueError):
+        return {}
+
+
 class SpanLog:
     """The one writer of a run's `spans.jsonl`: the open root line at construction, one completed child line per step
     record, and the root's completion line at `close`.  Append-only; the caller (`Steps`) serializes writes."""
@@ -63,15 +85,15 @@ class SpanLog:
         cache = rec.get("cache") or {}
         attributes = {"step": rec.get("step"), "rc": rec.get("rc"), "log": rec.get("log"),
                       "cache_key": cache.get("hit") or cache.get("stored"), "detail": rec.get("detail")}
-        attributes = {k: v for k, v in attributes.items() if v is not None and _scalar(v)}
+        attributes = {k: v for k, v in {**attributes, **check_memory()}.items() if v is not None and _scalar(v)}
         self._write(uuid.uuid4().hex[:16], self.root_id, str(rec.get("step")), start, ended,
                     STATUS.get(rec.get("status"), "failed"), attributes)
 
     def close(self, status: str) -> None:
-        """The root's completion line (`ok`, `failed` or `cancelled`); once."""
+        """The root's completion line (`ok`, `failed` or `cancelled`); once. In its own scope it carries the check's peak."""
         if not self.closed:
             self.closed = True
-            self._write(self.root_id, None, "check", self.root_start, _now_utc(), status, {})
+            self._write(self.root_id, None, "check", self.root_start, _now_utc(), status, check_memory())
 
     def _write(self, span_id: str, parent: str | None, name: str, start: str, end: str | None, status: str | None,
                attributes: dict) -> None:

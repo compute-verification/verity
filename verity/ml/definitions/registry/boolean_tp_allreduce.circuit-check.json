@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=1}": {
+   "and": 43904,
+   "type": "38ff664a634ad47690ac61a62ecd01346af1c74aaa48c157ac43ef4c3667474927064da6d54900c707e993f6836b3d742522be2c821279661e480c805fe81b2f"
+  },
+  "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=2}": {
+   "and": 43912,
+   "type": "ee22d71d0eccea5913bd95bfe2a315fec30dfe90777cc8dea4bb0d8a001e935ae8d727f2204bfa5d6cb9ae8397161014a4b9e1cd0995c51c03386cb8fecee573"
+  },
+  "AllReduceMultimemVector_v2{WORLD=8,TREE=((((((0,(1,2)),3),5),6),4),7),FTZ=False}": {
+   "and": 41808,
+   "type": "858e3af738a9229f5da129c85964cd852616c79f17e6102d419b194af910f721dd0a0c38aa2275d06bc422d40a277687b7fa103ac9210370a4998d83b99c2e36"
+  },
+  "AllReduceMultimemVector_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=True}": {
+   "and": 41864,
+   "type": "066def656ec91590a4084f5e18f837ebfc3d18a0b82fa183d7d84a0fb828fbebafbae7a9e582622e7549f1b9d8cb6fd0fa5d4f4ac3256e3d01df1702ba059821"
+  },
+  "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(0,1,2,3)}": {
+   "and": 17208,
+   "type": "82be889b830120b2a5ab7e047712d42470b53a82725d60afec888ca5e3eb6bbe86bdcec99d1974d2dacec24277f2ee70a9241c143bbb8ac160d97d0d8fc0a28a"
+  },
+  "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(2,0,3,1)}": {
+   "and": 17208,
+   "type": "57093b9966ba7a4f31bcda617eb1472ccadc84ceb502d47619ee3c44e6f5772fa7f68eb6cd1aa050e399be3daa220dd3acd93a9d92beed816378941b0fb6b583"
+  }
+ }
+}

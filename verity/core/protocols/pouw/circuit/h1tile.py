@@ -47,6 +47,14 @@ bit, the OR of the admit bits (`PouwOrBit`, `PouwMask32`). Its z, and a live til
 served values need no noise: its receipt is the constant 0 and its rows, which admission holds to the canonical empty row,
 give z = A Bᵀ = 0; its credit, the tally of its admit bits, is 0.
 
+**The J10-R units**, `PouwH1Tile_v5` (v1's z) and `PouwH1Tile_v6` (v3's one stream), are v1 and v3 under J10-R's noise
+(`seeds`' docstring), with two more public
+inputs: ``call``, the position of its call's first unit, and ``blocks``, the first block of its call row R I and of its call
+column C J in the call-scale `Layout(M, N, K)` (`j10r_blocks`). Its noise is seed_c's (`seeds.call_seed` of the salt,
+``call`` and the roots), row i from block ``blocks[0] + i RB`` and column j from ``blocks[1] + j CB``: the call-scale
+``noise(seed_c, Layout(M, N, K))``'s rows and columns of the unit (`j10r_noise`), each block derived once a call by whoever
+serves it (`j10r_compressions`). Its fold keys are σ_R's at its own position, v1's. No scheme takes v5 or v6.
+
 So z exists only through the MMAs whose words are credited, and A, B and the noise: a kernel serving y = dequant(z)
 serves the receipted words. The compile pass replaces its ``noise-in-z`` rule for a one-stream scheme
 (`compile.Scheme.stream`, here `STREAM`) with ``stream``: every z leaf is made by those Definitions from leaves the
@@ -61,6 +69,7 @@ input to give it. `reference` is the unit on words (``stream=True``: v3's; with 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any, Sequence
 
 from verity.ml.circuits import boolean as BL
@@ -395,18 +404,22 @@ def _value(bits: Sequence[int]) -> int:
     return sum((b & 1) << i for i, b in enumerate(bits))
 
 
-def noise(seed_j: bytes, lay: Layout) -> tuple[list, list]:
-    """The unit's noise from seed_j: per row (dither bits, digit coins), per column (coin bits, U's int8 encodings)."""
+def _noise_at(seed: bytes, lay: Layout, row0: int, col0: int) -> tuple[list, list]:
     k, m = lay.k, lay.m
     rows = []
     for i in range(lay.r):
-        s = _stream(seed_j, lay.row(i), lay.row_bits)
+        s = _stream(seed, row0 + i * lay.rb, lay.row_bits)
         rows.append((s[:k], [s[k + 32 * d:k + 32 * d + 32] for d in range(m - 1)]))
     cols = []
     for j in range(lay.c):
-        s = _stream(seed_j, lay.col(j), lay.col_bits)
+        s = _stream(seed, col0 + j * lay.cb, lay.col_bits)
         cols.append((s[:k], [u129(_value(s[k + 8 * t:k + 8 * t + 8])) for t in range(32)]))
     return rows, cols
+
+
+def noise(seed_j: bytes, lay: Layout) -> tuple[list, list]:
+    """The unit's noise from seed_j: per row (dither bits, digit coins), per column (coin bits, U's int8 encodings)."""
+    return _noise_at(seed_j, lay, lay.row(0), lay.col(0))
 
 
 def live_salt(commitment, coin: bytes, r: int, root: bytes) -> bytes:
@@ -477,11 +490,15 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
         if not any(g & 1 for g in gated):
             return [SG.seg_dot(0, a[i], b[j]) for i, j in pairs], [0] * (2 * lay.sets)
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
+    return _unit(a, b, rows, cols, fold_keys(SD.receipt_seed(salt, position, *roots), lay), lay, pairs, stream)
+
+
+def _unit(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], rows: list, cols: list, keys: list[list[int]],
+          lay: Layout, pairs: Sequence[tuple[int, int]], stream: bool) -> tuple[list[int], list[int]]:
     xs = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)] if stream else None
     wbs = [col_wrap(b[j], cols[j]) for j in range(lay.c)] if stream else None
     pis = [(rows[i][0][:lay.k], row_wrap(a[i], rows[i])) for i in range(lay.r)] if stream else None
     pjs = [(b[j], cols[j][0][:lay.k]) for j in range(lay.c)] if stream else None
-    keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     ks = lay.ks
     cp = [0] * (2 * lay.sets)
     served: dict[tuple[int, int], int] = {}
@@ -531,6 +548,68 @@ def lane_partials(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: 
     return [fold(keys[ln], lane_sets(a, b, rows, cols, lay, ln)) for ln in range(lay.lanes)]
 
 
+# -- J10-R -------------------------------------------------------------------------------------------------------------------
+
+def j10r_blocks(m: int, k: int, tile: tuple[int, int], I: int, J: int) -> tuple[int, int]:
+    """Unit (I, J)'s ``blocks`` under J10-R: the first block of call row R I and of call column C J in its call's one
+    stream at call scale, `Layout(m, ·, k)` (row i at i RB, column j at m RB + j CB), for a call of ``m`` A rows (its slot)
+    and an R × C ``tile``. The verifier derives them from the call's structure. Refused (ValueError): a slot of no whole
+    row tiles, a row tile outside it, a negative column tile."""
+    r, c = tile
+    if m < r or m % r or not 0 <= I < m // r or J < 0:
+        raise ValueError(f"unit ({I}, {J}) is no R × C = {r} × {c} tile of a call of {m} rows")
+    call = Layout(m, c, k)
+    return call.row(r * I), call.col(c * J)
+
+
+def j10r_noise(seed_c: bytes, lay: Layout, blocks: tuple[int, int]) -> tuple[list, list]:
+    """A unit's noise under J10-R, `noise`'s format: row i's blocks from ``blocks[0] + i RB`` and column j's from
+    ``blocks[1] + j CB`` of the call's seed_c (`seeds.call_seed`), the call-scale `noise(seed_c, Layout(M, N, K))`'s rows
+    R I .. R I + R - 1 and columns C J .. C J + C - 1 at `j10r_blocks`' (I, J)."""
+    return _noise_at(seed_c, lay, *blocks)
+
+
+def j10r_unit_blocks(lay: Layout, blocks: tuple[int, int]) -> list[int]:
+    """The counters of seed_c's blocks a unit reads under J10-R, rows' then columns', as its gates derive them."""
+    return ([blocks[0] + i * lay.rb + t for i in range(lay.r) for t in range(lay.rb)]
+            + [blocks[1] + j * lay.cb + t for j in range(lay.c) for t in range(lay.cb)])
+
+
+def j10r_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
+                   roots: tuple[bytes, bytes], call: int, blocks: tuple[int, int],
+                   pairs: Sequence[tuple[int, int]] | None = None, stream: bool = False) -> tuple[list[int], list[int]]:
+    """The J10-R unit on words (`PouwH1Tile5`, with ``stream`` `PouwH1Tile6`): `reference`'s (z, receipt) with its noise
+    `j10r_noise` of `seeds.call_seed`(salt, ``call``, roots) at ``blocks`` (`j10r_blocks`), ``call`` its call's first unit
+    position, and its fold keys today's, σ_R at its own ``position``."""
+    lay = Layout(len(a), len(b), len(a[0]))
+    if pairs is None:
+        pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
+    rows, cols = j10r_noise(SD.call_seed(salt, call, *roots), lay, blocks)
+    return _unit(a, b, rows, cols, fold_keys(SD.receipt_seed(salt, position, *roots), lay), lay, pairs, stream)
+
+
+def unit_compressions(k: int, tile: tuple[int, int] = (32, 32)) -> int:
+    """SHA-512 compressions a unit's noise, keys and seeds take under today's form (`PouwUnitSeeds`' four, its noise
+    blocks, a block a lane's keys): 612 at a warp and K = 4096."""
+    lay = Layout(*tile, k)
+    return lay.blocks + lay.lanes + 4
+
+
+def j10r_compressions(m: int, n: int, k: int, tile: tuple[int, int] = (32, 32)) -> Fraction:
+    """SHA-512 compressions a unit under J10-R when a call of ``m`` rows and ``n`` columns derives each block once: the
+    distinct counters of seed_c its units read (`j10r_unit_blocks` at `j10r_blocks`, counted, not computed), seed_c's two
+    compressions once a call, and each unit's own σ_R (two) and its lanes' key blocks, over the call's units."""
+    r, c = tile
+    if n % c:
+        raise ValueError(f"a call of {n} columns is no whole tiles of {c}")
+    lay, read = Layout(r, c, k), set()
+    for I in range(m // r):
+        for J in range(n // c):
+            read.update(j10r_unit_blocks(lay, j10r_blocks(m, k, tile, I, J)))
+    units = (m // r) * (n // c)
+    return Fraction(len(read) + 2, units) + 2 + lay.lanes
+
+
 # -- the unit ----------------------------------------------------------------------------------------------------------------
 
 def _layout(S: Any) -> Layout:
@@ -554,9 +633,14 @@ def _digits(B: Any, x: Coll, z: list[Coll], lay: Layout) -> list[Coll]:
     Y = B.batch(SG.PouwSx8, x[0:32], axes=(0,))
     for s in range(1, lay.ks):
         Y = B.batch(SG.PouwResAdd, Y, x[32 * s:32 * s + 32], axes=(0, 0))
+    return _sum_digits(B, Y, z, lay.m)
+
+
+def _sum_digits(B: Any, Y: Coll, z: list[Coll], m: int) -> list[Coll]:
+    """A row's digits A_0 .. A_(m-1) of its residue sums Y themselves (32 u32 words)."""
     out, R = [], Y
-    for d in range(lay.m - 1):
-        zd = B.batch(SG.PouwDigitZ, R, z[d], axes=(0, 0)) if d == lay.m - 2 else z[d]
+    for d in range(m - 1):
+        zd = B.batch(SG.PouwDigitZ, R, z[d], axes=(0, 0)) if d == m - 2 else z[d]
         out.append(B.batch(SG.PouwDigitLo, R, zd, axes=(0, 0)))
         R = B.batch(SG.PouwDigitHi, R, zd, axes=(0, 0))
     out.append(B.batch(SG.PouwLow8, R, axes=(0,)))
@@ -609,6 +693,10 @@ def _chain(B: Any, lay: Layout, X: list, W: list, U: list, NU: list, A: list, ke
     return cp, [[op[e]] + [d[e] for d in D] for e in range(32)]
 
 
+def _bits(blocks: Sequence[Coll], n: int) -> Coll:
+    return Coll(Array(n, BIT), concat([blk.refs for blk in blocks[:-(-n // SD.BLOCK_BITS)]]).slice(0, n))
+
+
 def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> tuple[list, dict, list, list, list]:
     """The receipt's refs; per cell (i, j) its lane's O' and D_1 .. D_(m-1) words, as the receipt folds them; each row's X;
     each column's (B, coin bits, U repeated over K), W''s addends; and each row's (A, dither bits), X's."""
@@ -616,19 +704,34 @@ def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
     seed_j, sigma_r = SD.unit_seeds_call(B, salt, position, roots, True)
     blocks = SD.noise_blocks(B, seed_j, lay.blocks, True)
     keys = SD.noise_blocks(B, sigma_r, lay.lanes, True)
+    return _lanes(B, lay, a, b, [_bits(blocks[lay.row(i):], lay.row_bits) for i in range(lay.r)],
+                  [_bits(blocks[lay.col(j):], lay.col_bits) for j in range(lay.c)], keys)
 
-    def bits(first: int, n: int) -> Coll:
-        return Coll(Array(n, BIT), concat([blocks[first + t].refs for t in range(-(-n // SD.BLOCK_BITS))]).slice(0, n))
 
+def _sets_j10r(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll, call: Coll,
+               blocks: Coll) -> tuple[list, dict, list, list, list]:
+    """`_sets` under J10-R: seed_c and σ_R from one `seeds.PouwCallSeeds`, row i's blocks of seed_c from counter
+    ``blocks[0] + i RB`` and column j's from ``blocks[1] + j CB``, and the lanes' keys σ_R's as today."""
+    lay = _layout(S)
+    seed_c, sigma_r = SD.call_seeds_call(B, salt, position, call, roots, True)
+    rows, cols = SD.noise_blocks_at(B, seed_c, [(blocks[0], range(lay.r * lay.rb)), (blocks[1], range(lay.c * lay.cb))],
+                                    True)
+    keys = SD.noise_blocks(B, sigma_r, lay.lanes, True)
+    return _lanes(B, lay, a, b, [_bits(rows[i * lay.rb:], lay.row_bits) for i in range(lay.r)],
+                  [_bits(cols[j * lay.cb:], lay.col_bits) for j in range(lay.c)], keys)
+
+
+def _lanes(B: Any, lay: Layout, a: Coll, b: Coll, row_bits: list[Coll], col_bits: list[Coll],
+           keys: list[Coll]) -> tuple[list, dict, list, list, list]:
     X, A, XIN = [], [], []
     for i in range(lay.r):
-        x, d, xin = _row(B, a[i], bits(lay.row(i), lay.row_bits), lay)
+        x, d, xin = _row(B, a[i], row_bits[i], lay)
         X.append(x)
         A.append(d)
         XIN.append(xin)
     W, U, NU, WIN = [], [], [], []
     for j in range(lay.c):
-        u, nu, w, win = _col(B, b[j], bits(lay.col(j), lay.col_bits), lay)
+        u, nu, w, win = _col(B, b[j], col_bits[j], lay)
         U.append(u)
         NU.append(nu)
         W.append(w)
@@ -669,7 +772,27 @@ def _body_v4(B: Any, S: Any, a: Coll, b: Coll, admit: Coll, salt: Coll, position
 
 def _one_stream(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> tuple[list, list]:
     """v3's z refs (cell by cell of PAIRS) and receipt refs (word by word)."""
-    receipt, words, X, WIN, XIN = _sets(B, S, a, b, salt, position, roots)
+    return _stream_z(B, S, _sets(B, S, a, b, salt, position, roots))
+
+
+def _signature_j10r(S: Any) -> tuple:
+    params, ret = _signature(S)
+    return (*params, ("call", SD.POS_BITS), ("blocks", Array(2, SD.POS_BITS))), ret
+
+
+def _body_v5(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll, call: Coll, blocks: Coll) -> Coll:
+    receipt = _sets_j10r(B, S, a, b, salt, position, roots, call, blocks)[0]
+    z = [B.call(S.EXACT, a[i], b[j]).refs for i, j in S.PAIRS]
+    return Coll(_signature(S)[1], concat(z + receipt))
+
+
+def _body_v6(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll, call: Coll, blocks: Coll) -> Coll:
+    z, receipt = _stream_z(B, S, _sets_j10r(B, S, a, b, salt, position, roots, call, blocks))
+    return Coll(_signature(S)[1], concat(z + receipt))
+
+
+def _stream_z(B: Any, S: Any, sets: tuple) -> tuple[list, list]:
+    receipt, words, X, WIN, XIN = sets
     lay = _layout(S)
     wb = {j: B.batch(PouwWrapBits, *WIN[j], axes=(0, 0, 0)) for j in sorted({j for _i, j in S.PAIRS})}
     xa = {i: B.batch(PouwXWrap, *XIN[i], axes=(0, 0)) for i in sorted({i for i, _j in S.PAIRS})}
@@ -716,6 +839,21 @@ PouwH1Tile4 = CompositeDefinition(
         "the zero receipt (each word AND the OR of the bits); z and a live tile's receipt are v3's.",
     **({"ports": _unit_ports} if _ports is not None else {}))
 
+PouwH1Tile5 = CompositeDefinition(
+    "PouwH1Tile", 5, ("EXACT", "R", "C", "PAIRS"), _signature_j10r, _body_v5, conformance="protocol-defined",
+    register=SG is not None,
+    doc="v1's H1 + fx1 tile (`circuit.h1tile`) under J10-R's noise: seed_c = `seeds.call_seed` at its call's first "
+        "position `call`, row i's noise from block blocks[0] + i RB of seed_c's stream and column j's from blocks[1] + j CB "
+        "(`j10r_blocks`, the call-scale stream's), the fold keys σ_R's at the unit's own position; z EXACT on each cell.",
+    **({"ports": _unit_ports} if _ports is not None else {}))
+
+PouwH1Tile6 = CompositeDefinition(
+    "PouwH1Tile", 6, ("EXACT", "R", "C", "PAIRS"), _signature_j10r, _body_v6, conformance="protocol-defined",
+    register=SG is not None,
+    doc="v3's one-stream H1 + fx1 tile (`circuit.h1tile`) under v5's J10-R noise: z each cell's O' - sum_d 128^d D_d with "
+        "its wrap correction and dither peel, A Bᵀ for every int8 A and B.",
+    **({"ports": _unit_ports} if _ports is not None else {}))
+
 
 @dataclass(frozen=True)
 class _Unit:
@@ -757,5 +895,6 @@ if SG is not None:
     C.register(scheme())
     C.register(scheme_v3())
 
-__all__ = ["FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SALT_BYTES", "SCHEME", "fold",
-           "fold_keys", "lane_partials", "live_salt", "noise", "reference", "scheme", "u129"]
+__all__ = ["FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwH1Tile5", "PouwH1Tile6", "PouwU129", "PouwU129Word",
+           "SALT_BYTES", "SCHEME", "fold", "fold_keys", "j10r_blocks", "j10r_compressions", "j10r_noise", "j10r_reference",
+           "j10r_unit_blocks", "lane_partials", "live_salt", "noise", "reference", "scheme", "u129", "unit_compressions"]

@@ -1,24 +1,35 @@
-# NCI literature index and slowdown board
+# The inference-only policy's literature index and overhead board
 
-Data and a calculator for the question negotiators will ask about the NCI policy ("bounding accumulation"): if both
-sides adopt it, how fast can a determined actor still advance frontier capability? Four parts:
+Data and a calculator for the question negotiators will ask about the
+[inference-only policy](../../verity/core/protocols/network/nci/README.md) ("bounding accumulation"): if both sides
+adopt it, how fast can a determined actor still advance frontier capability? Four parts:
 
 - every source we rely on, each claim quoted verbatim (`sources/`);
 - the parameters the bounds depend on, each estimate saying which findings it merges and how (`parameters.json`);
 - the policies they are evaluated under (`calibrations.json`);
-- the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
+- the board: one training method in one configuration per row, with an overhead bracket (`rows.json`, `slowdown.py`).
 
 Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Models/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
-(`Security/Models/Nci/Guarantees/Contained.lean`).
+(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
+(`Security/Definitions/Nci/Guarantees/Contained.lean`).
+
+The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
+`tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
+`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
+`fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
+`host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
+multiplications (NCI's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02, and rho's
+remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
+`GLOSSARY.md`, Older names).
 
 ## Files
 
 | Path | Holds |
 | --- | --- |
-| `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve`, the new id in the registry, then an INF issue asking infra to export it (only the control pod holds the export key) |
+| `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve` and the new id in the registry (the control pod exports it once the PR is admitted) |
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
-| `calibrations.json` | a policy (`K` bits a block may read besides committed parameters, `Gamma` gates per block, `b_tok`) and the model it is calibrated to |
+| `calibrations.json` | a policy (`K`, a block's fresh-input budget in bits; `Gamma`, its gate budget; `b_tok`) and the model it is calibrated to |
 | `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
 | `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`), measured multipliers and their evidence |
 | `models.json` | model shapes the library queries against |
@@ -28,11 +39,14 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
-| `tiers.py` | compute efficiency eta and the compute dampener D under the verification stack, per tier; `python benchmarks/nci/tiers.py [--json]` |
-| `exposure.py` | what eta is most exposed to: ranges, tornados, elasticities, thresholds on 1/eta, and the closed forms of mu, nu and chi |
+| `covering_priced.py` | Kimi K2's overhead under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
+| `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
+| `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
+| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
+| `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
-| `figures.py` | the dampener's talk figures, to the evidence store |
-| `statement.py` | every number the Notion page "The compute dampener: claims, model and tiers" quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
+| `figures.py` | `tiers.py`'s talk figures, with the slowdown from rho's `multiple_bound`, to the evidence store |
+| `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
@@ -54,8 +68,8 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 Agents writing from memory produce plausible but wrong citations. Every source here was found and checked by a
 web-search agent.
 
-- An auditor re-fetched a seeded random sample of 40 of the first 611 findings (2026-10-17). All 40 quotes were
-  verbatim; three findings were corrected, and those carry an `audit` field saying what changed.
+- An auditor re-fetched a seeded random sample of the findings. A finding the audit corrected carries an `audit` field
+  saying what changed.
 - The scaling corpus (findings marked `from_review: scaling-corpus`) was checked by its agent's script against the
   fetched pages but not yet audited.
 
@@ -73,20 +87,21 @@ large models on uncontaminated data over small ones. Rates that need training to
 rates, because decompressing is itself training. "Compression" by soft prompts counts positions, not bits, so it is
 not a bit ratio.
 
-## How we measure compute efficiency
+## How we measure overhead
 
 **The yardstick.** Suppose an actor's last pretrain reached held-out loss \(L^*\) with compute \(C^*\). After the deal,
-how much compute must a compliant circuit spend to reach \(L^*\) again? The overhead is
+how much compute must a compliant circuit spend to reach \(L^*\) again? The overhead, net of better recipes and of
+progress, is
 
 \[
-R \;=\; \frac{1}{g}\,\min_A \frac{\rho_A}{m_A}, \qquad \text{pretraining efficiency } \eta = 1/R.
+R \;=\; \frac{1}{g}\,\min_A \frac{\text{overhead}_A}{m_A}.
 \]
 
-- \(\rho_A\) is the policy's slowdown for training strategy \(A\): the board and the library compute it from \(A\)'s traits.
+- \(\text{overhead}_A\) is the policy's overhead for training strategy \(A\): the board and the library compute it from
+  \(A\)'s traits.
 - \(m_A(C) = C_{\text{ref}}(L_A(C))/C\) is \(A\)'s compute multiplier: the compute the reference recipe needs to reach the
-  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`)
-  and the labs' effective compute (`anthropic-2023-rsp/1`, `deepmind-2024-fsf/1`), with the reference and the test set
-  made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
+  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`),
+  with the reference and the test set made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
   \(C_{\text{ref}}(L)\) from a Chinchilla-form law (`besiroglu-2024-chinchilla-replication/2`).
 - \(g\) is algorithmic progress in the base recipe (architecture, data, optimizer, allocation) since the last pretrain. It
   applies with or without the policy, so the talk shows it and then brackets it. Loss-based estimates put it near 2.5x
@@ -95,7 +110,7 @@ R \;=\; \frac{1}{g}\,\min_A \frac{\rho_A}{m_A}, \qquad \text{pretraining efficie
   (`whitfill-2025-time-horizon/1`, `ho-2025-rosetta-stone/5`, `ho-2026-least-understood/1`). Most of it is
   scale-dependent (`gundlach-2025-origin/14`).
 
-So the strategies that matter are those that trade compute efficiency for fewer novel reads per block: low-rank and
+So the strategies that matter are those that trade compute for less fresh input per block: low-rank and
 sparse state, local or decoupled training, seed-described updates, reuse of registered models. Their \(m_A\) is measured
 against the same base recipe (DiLoCo against data-parallel training of the same model, a student against training from
 scratch). Base-recipe improvements enter only through \(g\).
@@ -120,7 +135,7 @@ blind to RL, which is reported in capability, and to inference-time compute. The
 compute-equivalent gain on a stitched capability index (`ho-2025-rosetta-stone/1`), reported as a pair:
 
 - weights-only: the RL model against its base at the same test-time tokens, the part the update carries and the only
-  part NCI meters;
+  part the inference-only policy meters;
 - deployed: at the model's actual thinking budget, the difference being inference, which the policy leaves free
   (`ord-2025-mostly-inference-scaling/1`, `ho-2025-reasoning-ceg/3`).
 
@@ -135,8 +150,9 @@ of new state per block can reach. What it throttles is moving the base model's f
 For each row under each calibration of its model, `slowdown.py` computes a bracket:
 
 - `lower` is the proven bound, `Nci.SecurityProofs.ThreadedTraining`:
-  \(\rho \ge \kappa\, b_a / (2\alpha\Lambda)\) with \(\alpha = K/\Gamma\) and \(\Lambda = \max(e,\ cK/(4 d\, b_w))\). It
-  holds under the row's rates and the theorem's assumptions. `rates` caps the inputs where a row's own numbers make an
+  \(\text{overhead} \ge \kappa\, b_a / (2\alpha\Lambda_T)\) with \(\alpha = K/\Gamma\) and the thread term
+  \(\Lambda_T = \max(e,\ cK/(4 d\, b_w))\) (not the Notation's Λ). It holds under the row's rates and the theorem's
+  assumptions. `rates` caps the inputs where a row's own numbers make an
   assumption false:
   - the weight rate is at most the whole update spread over its weights;
   - the activation rate is at most `b_tok`, since a token id is a thread value, and at most `w_cut / d`, since a block
@@ -149,16 +165,19 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`: \(\rho \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
+- `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`:
+  \(\text{overhead} \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
-  one chain of the reference circuit is incompressible at \(b_w\) and \(b_a\), in support form. A chain charges each
-  weight once per layer, so it is one forward path, and a row's `chain` gives that path's share \(\kappa_{\text{chain}}\)
-  and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared expert), 7% of training's
-  work. The activation rate is capped by a compressed boundary's bits per residual entry. Rows without a chain get none.
+  one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\), in support form. A
+  chain charges each weight once per layer, so it is one forward path, and a row's `chain` gives that path's share
+  \(\kappa_{\text{chain}}\) and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared
+  expert), 7% of training's work. The activation rate is capped by a compressed boundary's bits per residual entry.
+  Rows without a chain get none.
 
 \(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
-updated weight by an activation or an activation gradient, over every gate of the reference circuit, one gate per scalar
-operation (a multiply-add is two). `kappa.py` counts both from each model's config and its report's pretraining
+updated weight by an activation or an activation gradient, over every gate of the reference training algorithm's
+circuit, one gate per scalar operation (a multiply-add is two). `kappa.py` counts both from each model's config and
+its report's pretraining
 schedule. The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
 and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
 0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
@@ -179,8 +198,8 @@ additions are left to another block.
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
-`train.compute_multiplier`, and gives pretraining efficiency \(m/\rho\): a ceiling from the partial-sum law and the
-attack's from the construction. The attacker picks the best recipe.
+`train.compute_multiplier`, and gives each recipe's multiplier over its overhead, \(m/\text{overhead}\): a ceiling from
+the partial-sum law and the attack's from the construction. The attacker picks the best recipe.
 
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
@@ -193,7 +212,7 @@ one is a research target.
 | Rung | Claim | Status |
 | --- | --- | --- |
 | 1 | inference complies as declared | established |
-| 2 | within the monitored circuit, contained dense pretraining runs at about 1e-7 to 3e-7 efficiency | conditional |
+| 2 | within the circuit on registered hardware, contained dense pretraining pays an overhead of about 1e6 to 1e7 | conditional |
 | 3 | the policy throttles pretraining however long the run | conditional |
 | 4 | every known method is throttled or weak | open |
 | 5 | translated into capability and time | contested |
@@ -206,7 +225,7 @@ Each claim lists:
 - **what attacks it:** the red teams' findings, by severity, each with its repair;
 - **what comes next.**
 
-The monitored computation is one circuit, built by appending as it streams, over one registration up front. The
+What registered hardware computes is one circuit, built by appending as it streams, over one registration up front. The
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
@@ -238,11 +257,11 @@ All values below are from `parameters.json`; render the index for the findings b
     (`b_tok/entropy-coded`).
   - Requiring coded prompts shrinks `K` about 8x for the same fresh prompt tokens. That multiplies every full-weight
     bracket by about 5–10, but it also shrinks the free headroom for non-text state.
-  - `K` caps what a block reads, not what it serves: outputs are never charged, so tokens a block generates, and prompts
-    committed in `θ`, cost it nothing. Threads crowd out only fresh inputs read outside `θ`.
-- **Gradient compression does not evade a per-block cap.** DiLoCo-family methods cut traffic 100–3000x between workers
-  that each hold a full model (`grad.compression_ratio/frontier`). Their achieved per-step updates, 0.04–0.6 bits per
-  parameter, are thousands of times `K` at frontier scale (`update.bits_per_param_step/pretraining`).
+  - `K`, a block's fresh-input budget, caps what it takes in, not what it serves: its outputs, the tokens it generates,
+    and prompts committed in `θ` use none of it. Threads crowd out only fresh inputs read outside `θ`.
+- **Gradient compression does not evade a block's fresh-input budget.** DiLoCo-family methods cut traffic 100–3000x
+  between workers that each hold a full model (`grad.compression_ratio/frontier`). Their achieved per-step updates,
+  0.04–0.6 bits per parameter, are thousands of times `K` at frontier scale (`update.bits_per_param_step/pretraining`).
 - **Shared headroom is elicitation.**
   - Every demonstrated gain from a few MB or less elicits skill the base model has: TinyLoRA, one-shot RL, LIMA and s1,
     prompt and playbook optimization (`capability.bits/*`).
@@ -265,16 +284,16 @@ An algorithm is a set of traits that scale with the model's shape (`algorithms.j
 - the fraction of parameters it updates;
 - the bits of state per updated parameter, and whether that state splits across slices;
 - the width and bits of what crosses a layer boundary, and how many times per token;
-- the work per token and the novel data per token;
+- the work per token and the fresh input per token;
 - any decoding work;
 - the theorem's own parameters.
 
-A query takes an algorithm, a model (`models.json`), a policy and whether the training data is committed or novel. It
-returns:
+A query takes an algorithm, a model (`models.json`), a policy and whether the training data is registered information
+(committed in θ) or fresh input. It returns:
 
 - the bracket;
 - where a block's reads go: state, activations, data;
-- the efficiency under the policy, multiplier ÷ slowdown, both achievable and at the ceiling.
+- the multiplier over the overhead under the policy, both achievable and at the ceiling.
 
 ~~~sh
 python benchmarks/nci/library.py table --model kimi-k2 --policy kimi-k2-1m-raw    # brackets and read shares
@@ -284,7 +303,7 @@ python benchmarks/nci/library.py query lora-16 --model dense-7b --data committed
 
 **What the multipliers say.** Most algorithmic changes are worth 1–2×, constant with scale, and they don't stack.
 Optimizer gains shrink to about 1.1× near 1B. Fine-grained MoE is the one large multiplier that grows with scale, about
-20× at 10²⁰ FLOP. Against slowdowns of 10⁵–10⁷, a better recipe matters only if it also lowers the slowdown. The
+20× at 10²⁰ FLOP. Against overheads of 10⁵–10⁷, a better recipe matters only if it also lowers the overhead. The
 algorithms that lower it (compressed boundaries, low-rank updates, local learning, zeroth-order) all have multipliers
 of 1 or less.
 
@@ -302,33 +321,11 @@ Three caps keep the library's lower bounds valid. Each was added because a query
 
 - a token's charge is at most `b_tok`;
 - an activation's charge is at most the bits a compressed boundary carries per value;
-- a block that holds the whole state is charged no more per token than the novel data it reads.
-
-## The board today
-
-Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameters):
-
-| Row | Lower (proven) | Upper (construction) |
-| --- | --- | --- |
-| `pretrain-full` | 9.6e4 | 1.4e7 (shard) |
-| `rl-full-weights` | 6.2e4 | 3.7e6 (shard) |
-| `rl-rank1-lora-all-experts` | 4 | 6.3e4 (shard) |
-| `mezo-seed-finetune` | 1 | 2.4e3 (decode-shard) |
-| `zo-seed-pool` | 1 | about 3 (fit) |
-| `rl-tinylora`, `context-playbook` | 1 | about 1 (fit) |
-
-Each row's numbers move with the calibration. Under the 11 MB calibration every seed-based row fits in a block, at
-1.2–3.5. Coded prompts raise full-weight training's lower bound about 5x.
-
-The widest brackets are the research targets:
-
-- **`rl-rank1-lora-all-experts`** (4 to 6.3e4) decides whether frontier RL escapes.
-- **The seed-based rows.** Their lower bound is 1, so their cost is whatever the best construction pays.
-- **`pretrain-full`**. The proven bound (9.6e4) and the construction (1.4e7) are 150x apart.
+- a block that holds the whole state is charged no more per token than the fresh input it reads.
 
 ## What the committed parameters may hold
 
-Today the policy puts no limit on θ, the values committed before monitoring. That matters most for seed-based training.
+Today the policy puts no limit on θ, the registered information. That matters most for seed-based training.
 A developer may commit a noise table, one entry per parameter per direction, and then decode an update with one
 multiply-add per parameter instead of a PRNG draw.
 
@@ -361,22 +358,6 @@ training on smuggled data stays bounded, not closed.
 **The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since their premise
 `BaselineRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
 at most the bits of data the budgets allow.
-
-## What changed from the prior draft's appendix
-
-The prior review's citations all resolve, but these uses don't hold up. Each item cites its finding:
-
-- **TT-LoRA MoE.** Its "rank 5" is a tensor-train rank (33,920 parameters), and it trails rank-16 LoRA rather than
-  matching it (`kunwar-2025-ttloramoe/2`, `/3`).
-- **Wang et al. (OREO)** covers math and ALFWorld, not coding (`wang-2024-oreo/1`).
-- **Song et al.'s coverage result** is for offline contrastive methods only (`song-2024-onlinedata/1`).
-- **Rinberg et al.**
-  - The 33x is a lossy rewrite; the lossless result is about 11x (`rinberg-2026-haikutoopus/2`, `/3`).
-  - The 250–1667x buys part of a capability gap, not compressed responses (`rinberg-2026-haikutoopus/4`).
-- **Zhang et al.** is an empirical study whose gains are at about 2x (`zhang-2025-promptcompression/1`).
-- **Brown et al.'s 16–100x** is measured only at 1.5B. At 7B, about 10x costs 22 MMLU points
-  (`brown-2026-weight-theft/7`, `/8`).
-- **Unsourced claims.** "Updates compressible 50–100x" and the DeepSeek-V4-Pro LoRA sizes have no source here.
 
 ## Not yet here
 

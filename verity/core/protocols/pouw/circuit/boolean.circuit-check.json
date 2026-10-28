@@ -1,43 +1,56 @@
 {
  "definitions": {
   "PouwBf16Neg_v2": {
-   "and": 0
+   "and": 0,
+   "type": "39c9066549d55d67e941211327bc98c14d54f2ef08a6b6b917f4a0a88aff06dd9e355fafb2cd725ae164a96206bfb319d0d80e7adbe0e5d1736e1e6aad1320ad"
   },
   "PouwBlackwellE4m3SaltDead_v2": {
-   "and": 2493
+   "and": 2493,
+   "type": "3af3b4431f74d32bf1bd7e1565b810e369099f963276d5deb6599188764151f38279c1b0c49c0bdc4346c204f7fc39c80be47ceb01f6163d943d296ab929dc6a"
   },
   "PouwChi32_v2": {
-   "and": 64
+   "and": 64,
+   "type": "2908c0f77d4711b878a2802916a7eb6b62d600c01f3a0749db433c006c768e85749d698df6a50bc44fb7f89d49bbc288d7558b0e35148dbe26387c8f90a35864"
   },
   "PouwETilde_v2": {
-   "and": 88
+   "and": 88,
+   "type": "9b42c4de69cced3590072cae242a0789c17cc4d386083cc31adc40360ef48785d16526d2e109ee4019b2abf506a4ce18f8be29700ac4d421fc77c7f1b4bdb3f5"
   },
   "PouwF32SqrtRn_v2": {
-   "and": 937
+   "and": 937,
+   "type": "80a36398318b3b7bfd1ab78d020fdad7e685c104a23557297767076c3d15017198e91c1b8f70533389ebbd1c4c385e254035bac2f693778ceae71c1c49b44c50"
   },
   "PouwHopperE4m3SaltDead_v2": {
-   "and": 1806
+   "and": 1806,
+   "type": "1cabe0232e3a1146d03bd20d4569a1aefec1f142fde3a8cfea6f32f068c6b7afb04150048496c35e464a685365ca76419255a29ecf9250cab059b77048644262"
   },
   "PouwRotl64Hi_v2": {
-   "and": 218
+   "and": 218,
+   "type": "51d60f0def4c4de13d1d94614d43dee95f08362c1f1ffa9226ab50c525412a7a913dc3b23c3a62f57e73b2493cfbf63bb5230eb1295b3624615f7bc1840a8d0c"
   },
   "PouwRotl64Lo_v2": {
-   "and": 218
+   "and": 218,
+   "type": "2573f80903bf03629dcb0bf8cd0ec1d38dbf02eb1d754daa3ebd2a7f1bc23f10541067e555a018bfd74e15148996e68d3761b2335a41381f4e29cf8691a9fd64"
   },
   "PouwSqAcc_v2": {
-   "and": 2511
+   "and": 2511,
+   "type": "587378515b931e1d748d03134a49bff6137cb335a5ffb2e1e890b40173161c2957bb58c9544ec123a082c4afe672adc71e55e6b8cb79c33e911fb5b6af1fb016"
   },
   "PouwSqCeil_v2": {
-   "and": 27531
+   "and": 27531,
+   "type": "376f119d9338e02cd135661e83443328bf7a39e7f7ddada3073727ade1e6e7a8317a5cdffbb3637d3024ab55d52aace925fe38bd3c24b193e61988080fdae81e"
   },
   "PouwSqGe_v2": {
-   "and": 1036
+   "and": 1036,
+   "type": "f490451301e4c6d7632e9f13b89fd6188e20d7753f43a717afeb987a5434a454081f2ae58225ea68ff7d3f025cd65a878d3439adf82c86542e1f96bf3eb21f4e"
   },
   "PouwWindowWord_v2": {
-   "and": 503
+   "and": 503,
+   "type": "e51426858bc7665662a992f36725a41193b5552566a918644d84d9bdd80a812f4787a1973b3ddfce35c2f22b3fbdf81a6606e4b929f3f60f0b7195936f9e8ad2"
   },
   "PouwXor32_v2": {
-   "and": 0
+   "and": 0,
+   "type": "aace412922b0b15d4cbd01f34f19d89a5152d293294c55e4bb3f019862c9c2f96bb0e9484f6d64f2785bda250599c994665a6775ef4649af239bd657977455a0"
   }
  }
 }

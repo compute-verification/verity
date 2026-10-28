@@ -34,9 +34,11 @@ import hashlib
 import json
 import os
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import config as C
 from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
@@ -127,19 +129,22 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer=request.get("committer"), workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
-                           index={"attention_paths": p.attn_paths, "tp": p.tp})
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
-                required_manifest: str | None = None, threads: int = 8, workers: int | None = None) -> dict[str, Any]:
+                required_manifest: str | None = None, workers: int | None = None, programs: Any = None,
+                binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
-    (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way), its weight shards
+    (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way; ``programs``, the
+    rank's `rank_replay.Loaded` a registered compiler made from advice, instead, its ``binding`` in the window's provenance and its
+    ``transfer_gates`` proved whole, `pipeline.advice_windows`), its weight shards
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
-    without one, only the tensors the bundle carries; ``weights``, tests, replaces them), and every value read through an opening
-    verified against the rank's root."""
+    without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
+    (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root."""
     from types import SimpleNamespace
 
     from verity_vllm.check import oracle_compare as OC
@@ -170,20 +175,22 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     cfg = dict(ctx["replay"])
     if build_root is not None:
         cfg["programs"] = {str(r): str(Path(build_root) / f"rank{r}") for r in range(world)}
-    p = RR.load(cfg, rank, world, definitions=False)
+    p = programs if programs is not None else RR.load(cfg, rank, world, definitions=False)
     if weights is None:
         tree = json.loads((bdir / "weights" / "tree.json").read_text())
-        words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), checkpoint, threads=threads,
-                                     tp={"world": world, "rank": rank}, roles=CR.registered_roles(p))
-        if not wc["equal"]:
-            raise CR.Refused(f"rank {rank}: the bundle's weights: {wc['why']}")
+        try:
+            words = CPU.OnRead(bdir, tree, (c.get("weight_registration") or {}).get("root"), checkpoint, tp={"world": world, "rank": rank},
+                               roles=CR.registered_roles(p))
+        except ValueError as e:
+            raise CR.Refused(f"rank {rank}: the bundle's weights: {e}") from e
         weights = CPU.provider(words, p.index.prefix, set())
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": c["run_root"], "root_tag": rec["root_tag"]}
     res = SRW.after_commit(str(out_dir), partition_file=str(partition_file), programs=p.progs, bmap=bmap, committed=OC.OpenedReader(store, run),
                            weights=weights, manifest=RR.manifest_of_rank(man, rank), run_root=run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
-                           index={"attention_paths": p.attn_paths, "tp": p.tp}, stand_in=stand_in(tp, b["manifest_sha256"]))
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
+                           binding=binding, transfer_gates=transfer_gates)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -228,14 +235,13 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     ``<build_root>/rank<r>``, its run ``<TP run root>/rank<r>`` of `record`), and what `source` holds the rank's registration to.
     The requests are the workload's in order, ``r<position>``, as ``tp-commit`` names them, from a workload file refused unless the
     one the record served (its ``workload_sha256``, `vllm_adapter.load_workload`'s digest)."""
-    from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
     rec = record(commit_dir)
     rank, world = int(rank), int(rec["world"])
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
-    doc = json.loads(Path(workload_file).read_text())
+    doc = json.loads(C.workload_file(workload_file).read_text())
     got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if got != rec["workload_sha256"]:
         raise ValueError(f"{workload_file}: workload sha256 {got[:16]} is not the record's {str(rec['workload_sha256'])[:16]}")
@@ -243,19 +249,40 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
     p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world,
                 definitions=False)
+    return window_of(rec, rank, partition_file, p)
+
+
+def window_of(rec: dict[str, Any], rank: int, partition_file: str | os.PathLike, p: Any,
+              binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = ()) -> tuple[Any, dict[str, Any]]:
+    """The verifier's own window of rank ``rank`` of the record ``rec`` (`record`) over the rank's loaded Programs ``p`` (a
+    `rank_replay.Loaded`: of record, `window_of_record`, or a registered compiler's from advice, `pipeline.advice_windows`), and what
+    `source` holds the rank's registration to (``binding``: the compiler's digest and the advice's hiding root the window must name;
+    ``transfer_gates``: the templates the compiler lists as holding transfer gates, every unit of which the window proves)."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    rank, world = int(rank), int(rec["world"])
+    if not 0 <= rank < world:
+        raise ValueError(f"rank {rank} is not a rank of the world of {world}")
     window, _rows = SRW.population(p.progs, json.loads(Path(partition_file).read_text()), run_of(bytes.fromhex(rec["tp_run_root"]), rank),
-                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp})
+                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), transfer_gates=transfer_gates)
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]}
     sha = rec["bundles"].get(str(rank))
-    held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None}
+    held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None,
+            **{k: (binding or {}).get(k) for k in BINDING}}
     return window, held
 
 
+#: the window provenance's keys that bind the Programs to the registered compiler and the advice it read (`pipeline.advice_windows`)
+BINDING = ("compiler", "advice")
+
+
 def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -> dict[str, Any]:
-    """A rank's registration's ``window`` held to the verifier's own (`window_of_record`): ``served`` with no stand-in link, or a
+    """A rank's registration's ``window`` held to the verifier's own (`window_of_record`, `window_of`): ``served`` with no stand-in link, or a
     ``stand-in`` of a rank whose bundle the record names with `stand_in`'s ``of`` and ``link`` over it (``held["stand_in"]``); either
     way its run the rank's of record under a SHA-512 TP run root (``sha512``, `deferred_rows.source`'s 64-byte test: an old record's
-    SHA-256 v1 root is refused), its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    SHA-256 v1 root is refused), its ``tp`` the record's, its served Programs the ones the verifier loaded, and its ``compiler`` and
+    ``advice`` the verifier's (`BINDING`: none for Programs of record, the digests of the compiler and the advice the verifier
+    compiled for an advice window)."""
     from verity_vllm.pipeline.deferred_rows import SERVED_ROOT
 
     w = registered or {}
@@ -263,6 +290,7 @@ def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -
     ok = {"kind": w.get("kind") == "served" or si is not None, "run": w.get("run") == mine.run,
           "sha512": len(held["tp"]["tp_run_root"]) == 2 * SERVED_ROOT, "tp": w.get("tp") == held["tp"],
           "served_programs": w.get("served_programs") == held["served_programs"],
+          **{k: w.get(k) == held.get(k) for k in BINDING},
           **({"of": w.get("of") == si["of"], "link": w.get("link") == si["link"]} if si else {"no_link": "of" not in w and "link" not in w})}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
             "detail": {"kind": w.get("kind"), "run": w.get("run"), "tp": w.get("tp"), **({"of": w.get("of")} if si else {})}}
@@ -282,8 +310,9 @@ class Options:
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (shard sha256 pins)")
     model: str | None = option("--model", default=None, help="the checkpoint's repo (its checkpoints.json entry)")
     revision: str | None = option("--revision", default=None, help="the checkpoint's revision")
+    no_verify_shards: bool = option("--no-verify-shards", default=False, action="store_true",
+                                    help="skip the shard sha256 (each tensor read is still held to the committed weights root)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required manifest (default: its recorded path)")
-    threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
 
 
@@ -293,12 +322,13 @@ def main(o: Options) -> int:
     ck = None
     if o.checkpoint_dir:
         from verity_vllm.check import weights_of_record as WR
-        ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
+        ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision,
+                                verify_shards=not o.no_verify_shards)
     try:
         world = int(record(o.commit_out)["world"])
         for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(world):
             got = from_bundle(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", build_root=o.build_root, checkpoint=ck,
-                              required_manifest=o.required_manifest, threads=o.threads, workers=o.workers)
+                              required_manifest=o.required_manifest, workers=o.workers)
             print(f"[tp-serving-rows] rank {r}: stand-in window of {got['population']} units, run {got['run'][:16]} rank {r}, registration "
                   f"{str(got['registration_digest'])[:16]}", flush=True)
     except (CR.Refused, LookupError, ValueError, RuntimeError) as e:

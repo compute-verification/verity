@@ -58,7 +58,7 @@ def main() -> int:
 
     import torch
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
+    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -73,7 +73,7 @@ def main() -> int:
     llm = LLM(**kw)
     up = time.perf_counter() - t
     eng = llm.llm_engine
-    sched = get_scheduler(llm)
+    sched = handle.scheduler(llm)
     cfg = eng.vllm_config.model_config.hf_config
     vocab = cfg.vocab_size
     steps: list[dict] = []
@@ -106,7 +106,7 @@ def main() -> int:
         # One range `x<i> ...` a model step, around the runner's launches (execute_model, then sample_tokens when
         # execute_model leaves the sampling to it): sequential with async scheduling too, so a kernel's step is the
         # range its launch falls in.
-        runner = get_model_runner(llm)
+        runner = handle.model_runner(llm)
         ex_orig, st_orig = runner.execute_model, getattr(runner, "sample_tokens", None)
         xs: list = []
 

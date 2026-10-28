@@ -16,8 +16,8 @@ from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.check.match import program_compare as CMP
 from verity_vllm.check.match.canonical_operands import as_progression
-from verity_vllm.program.registry import b1, b1_tp2
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1, b1_tp2
+from verity.ml.definitions.registry import prims as P
 
 H, V = 8, 8
 BF16, I32 = Value(16), Value(32)

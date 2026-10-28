@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplSplitEq
 
 /-!
-# A templated unit slot's fold is the flat slot's (PRF-133, part 3)
+# A templated unit slot's fold is the flat slot's
 
 `Tmpl.foldUnit` is `foldSplit` behind the checks a verifier can make in `O(1)`: the point is the slot's, and the root is
 one chunk of 64 to `2^sl` columns. On a well-formed template at `layoutM`'s layouts, whose `unrollAt` net has `sl` bits,
@@ -90,5 +90,39 @@ theorem foldUnit_eq_project {t : Tmpl} {mode : Mode} {lays : Array Lay} {sl : �
   rw [foldSplit_eq_foldRef hS hR hlay hcall (wf_tmpl hwf).2.1 (wf_tmpl hwf).2.2.1 (wf_fit hwf)
       (layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)) (wf_tmpl hwf).1 hal (by omega) (by omega) hs,
     foldRef_eq_project hR hU hlw (by omega) (by omega) hsl32 hs]
+
+/-- **A templated unit slot's fold is the reference**: `foldUnit` on a well-formed template at `layoutM`'s layouts is,
+entry by entry, `foldRef`, the sum over the unrolled rows at their committed positions. -/
+theorem foldUnit_eq_foldRef {t : Tmpl} {mode : Mode} {lays : Array Lay} {sl : ℕ} {alpha : F128}
+    {lw rho r P P' : Array F128} (hwf : t.wellFormed = true) (hL : layoutM t mode = .ok lays)
+    (hF : foldUnit t lays sl alpha lw rho r = .ok P) (hR : foldRef t lays alpha lw rho r = .ok P') {s : ℕ}
+    (hs : s < 64) : of P[s]! = of P'[s]! := by
+  unfold foldUnit at hF
+  simp only [bind, Except.bind, pure, Except.pure] at hF
+  split at hF
+  · simp at hF
+  rename_i hpt
+  split at hF
+  · simp at hF
+  rename_i hroot'
+  split at hF
+  · simp at hF
+  rename_i v hS
+  simp only [Except.ok.injEq] at hF
+  subst hF
+  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq, not_or, not_not, not_lt] at hpt hroot'
+  obtain ⟨⟨⟨_hlw, _hrho⟩, _hr⟩, _hsl32⟩ := hpt
+  obtain ⟨hal, _hla⟩ := hroot'
+  have hcall : ∀ d i, i < (t.defs.getD d default).calls.size →
+      ((t.defs.getD d default).calls.getD i default).def_ < d := fun d i hi => by
+    by_cases hd : d < t.defs.size
+    · exact (wf_call hwf d hd i hi).1
+    · rw [getD_out hd] at hi
+      exact absurd hi (Nat.not_lt_zero _)
+  have hlay : LayOk t lays :=
+    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2⟩
+  obtain ⟨P, w1, w2, w3⟩ := v
+  exact foldSplit_eq_foldRef hS hR hlay hcall (wf_tmpl hwf).2.1 (wf_tmpl hwf).2.2.1 (wf_fit hwf)
+    (layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)) (wf_tmpl hwf).1 hal (by omega) (by omega) hs
 
 end FlockSoundness.TmplFold

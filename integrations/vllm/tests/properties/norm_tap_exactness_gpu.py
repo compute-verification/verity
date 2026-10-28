@@ -281,7 +281,7 @@ def run(so: str, out: str, quick: bool = False) -> dict[str, Any]:
     os.environ["VLLM_BATCH_INVARIANT"] = "1"                   # before vLLM's C++ reads it (vllm_is_batch_invariant caches the first read)
     import torch
     import vllm
-    import vllm._custom_ops  # noqa: F401  -- loads the installed _C ops
+    import vllm._custom_ops  # loads the installed _C ops
     from vllm.model_executor.determinism import batch_invariant as BI
 
     from verity_vllm.acquire.norm_tap_src import rms_norm_tap as RT

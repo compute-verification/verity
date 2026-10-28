@@ -10,9 +10,12 @@ TEMPLATE_PARAMS = {
                         {"K": 64, "semantics": "sm89.mma.m16n8k32.e4m3"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k32.e4m3"},
                         {"K": 128, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}],
     "attention-head": [{"D": 64, "BN": 128, "T": "1:17"}],
+    # one block of keys (MASKED_FROM 0), then two (MASKED_FROM 1: dead_free's own binding of the head)
+    "attention-head-v18": [{"D": 16, "BN": 32, "T": "16:48"}],
     "rope-head": [{"D": 64}],
     "rmsnorm-fused-cuda": [{"N": 2048, "EPS": 1e-05}],
     "rmsnorm-triton": [{"N": 128, "EPS": 1e-06}],
+    "rmsnorm-triton-v5": [{"N": 128, "EPS": 1e-06}],
     "silu-mul": [{"I": 8192}],
     "silu-mul-v2": [{"I": 256}, {"I": 1536}],
     # GLM-5.3's hidden 6144 at both launches of each kernel (fewer than 256 tokens, then 256 or more)
@@ -24,4 +27,7 @@ TEMPLATE_PARAMS = {
     "moe-expert-coordinate": [{"E": 4, "K": 64}],
     "moe-expert-coordinate-weighted": [{"E": 4, "K": 64}],
     "scaled-mm-fp8-block-coordinate": [{"K": 256, "G": 128}],
+    "ingress-prompt": [{"MODEL": "m", "LP": 3, "V": 1000}, {"MODEL": "served-model", "LP": 16, "V": 128256}],
+    "token-select-chunk": [{"C": 64}],
+    "token-select-combine": [{"V": 200, "C": 64}, {"V": 128256, "C": 64}],
 }

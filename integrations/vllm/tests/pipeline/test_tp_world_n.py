@@ -1,4 +1,4 @@
-"""[lane vllm-tp-n] Tensor parallelism at world N (synthetic world 3, offline): the world-parametric Definitions, their identities (world 2
+"""Tensor parallelism at world N (synthetic world 3, offline): the world-parametric Definitions, their identities (world 2
 keeps `AllReduce2_v1{N}` / `AllGather2_v1{N}` -- every recorded rank Program's digest unchanged), the registry-derived family selectors
 the consumers use instead of spelled prefixes, the N-ary collective bus (one peer input per (collective, peer rank), rank order), the
 `tp_links.json` v1 -> v2 reader, the three-rank collective linkage, and the three-rank cross-rank check / commit binding."""
@@ -13,7 +13,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2 as TP2, prims as P
+from verity.ml.definitions.registry import b1_tp2 as TP2, prims as P
 from verity_vllm.program.frontend import collective_kinds
 
 
@@ -187,7 +187,7 @@ def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: 
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry.tp_allreduce import settings_of
+    from verity.ml.definitions.registry.tp_allreduce import settings_of
 
     ensure_ops()
     monkeypatch.setitem(VB._OBSERVED, "allreduce_settings", settings_of(True, env))
@@ -274,7 +274,7 @@ def _rank_events(rank: int, world: int, *, ar_shape=(4, 8), steps=(0,)):
 
 
 def test_link_three_synthetic_ranks():
-    from tests.collectives import collective_link as CL
+    from tests.engine.collectives import collective_link as CL
     W = 3
     sh = {r: CL.extract_rank_shard(_rank_events(r, W), rank=r) for r in range(W)}
     for r in range(W):
@@ -283,7 +283,7 @@ def test_link_three_synthetic_ranks():
     assert link["ranks"] == [0, 1, 2] and link["world_size"] == 3 and link["by_status"] == {"linked": 2}
     ar, ag = link["links"]
     assert ar["definition"]["id"] == "AllReduce_v2{WORLD=3,N=32}" and set(ar["required_writes"]) == {"0", "1", "2"}
-    assert ar["definition"]["module"] == "verity_vllm.program.registry.b1_tp2"
+    assert ar["definition"]["module"] == "verity.ml.definitions.registry.b1_tp2"
     assert ag["definition"]["id"] == "AllGather_v1{WORLD=3,N=8}"
     # world 2 of the same synthetic run keeps the recorded gather identity
     sh2 = {r: CL.extract_rank_shard(_rank_events(r, 2), rank=r) for r in range(2)}
@@ -382,7 +382,7 @@ def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
     """A collective row's operand is `world` equal parts in rank order: rank r's own rows are its part's (N leaves for a per-row
     collective, M * N for a flat one), each named by the node producing it, not only the first (rank 0) or the last (rank W-1) run."""
     from verity_vllm.check.match import rank_match as RMx
-    N, spec = 7, lambda k: f"spec{k}"  # noqa: E731
+    N, spec = 7, lambda k: f"spec{k}"
     runs = [("n" if r % 2 else "p", r, 0, N) for r in range(W)]
     for rank in range(W):
         assert RMx._own_rows(runs, {"rank": rank, "world": W, "N": N}, spec) == ([f"spec{rank}"] if rank % 2 else ["<not-a-node>"])
@@ -398,10 +398,10 @@ def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
 
 def test_a_fused_norm_recorder_row_is_the_collective_its_path_folds_to_and_the_unfused_ones_are_the_commit_s():
     """The recorder files each `fused_allreduce_rms_norm` call as `fused_norm.KIND` over `stack([partial, residual])`: on its unfused path
-    the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance leg leaves the unfused
+    the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance check leaves the unfused
     calls to the Commit's replay, so they count with the checked ones."""
     from verity_vllm.check.match import rank_match as RMx
-    from verity_vllm.collectives import fused_norm as FN
+    from verity_vllm.engine.collectives import fused_norm as FN
     W, steps = 3, 2
     colls = {r: _colls(r, W, steps=steps) for r in range(W)}
 

@@ -133,7 +133,7 @@ The pipeline:
 | require_link | `true` | configuration (R5, E0, F1) |
 | prime_live | `false` | none of these statements has a prime half |
 | coin source | `os` (default) or `seed` (`coin-commit/sha256/v1`, PR #83 only when its `Hello` names it) | configuration (§7) |
-| grinding | none: every proof-of-work nonce is a message and is never checked (R4) | configuration |
+| grinding | none: every proof-of-work nonce must be `0`, and any other is refused (R4, D21) | configuration |
 
 ## 5. The session record
 
@@ -141,6 +141,12 @@ The pipeline:
 
 The record is UTF-8 JSON. The verifier reads only the fields below; it ignores every other field, including `verdict`
 (the live server's own opinion) and timing fields. Hex strings are lowercase, even-length.
+
+Every writer emits the record in its canonical text: Lean's `Json.compress` of it (keys in code-point order, no
+whitespace, Lean's string escapes and number printing), which `live/src/record_text.rs` (`canonical_json`) and
+`verity_flock.record_text` (`session_text`) write, both held to Lean's output by `live/src/record_text_vectors.json`. The
+agreement job re-renders the stored vectors that predate it (`verifier/ci.py`). The verifier refuses a record in any
+other text (S0), so one session has exactly one record.
 
 | field | type | meaning |
 |---|---|---|
@@ -188,6 +194,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 
 | id | check | condition it enforces |
 |---|---|---|
+| S0 | the record's text is `Json.compress` of what it parses to (§5.1), checked after every other check (intended divergence D20, §17.1) | one record per session: two accepted texts that parse alike are the same text |
 | S1 | `kind = "flock-live-session/v1"` and `aborted = null` | the session completed |
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
@@ -231,7 +238,7 @@ to a multiple of 16 bytes.
 | `observe_bytes(b)` | 5 | 0 | byte length | `b`, padded |
 | `sample_f128()` | 4 | 1 | 1 | none (the header ends the round) |
 | `sample_f128_vec(n)` | 4 | 2 | `n` | none |
-| `verify_pow(nonce, bits)` | as `observe_bytes(le64(nonce))` | | | returns true; `bits` is unused |
+| `verify_pow(nonce, bits)` | as `observe_bytes(le64(nonce))` | | | returns true; `bits` is unused (the decoder has refused every `nonce ≠ 0`, R4) |
 
 ### 6.2 State and rounds
 
@@ -371,7 +378,7 @@ the sizes differ. The stratified sampling design is unchanged.
   `n_s` units faulty has acceptance probability at most `((n_s − b_s)/n_s)^(f_s)`, so `f_s ≈ ln(1/δ)/ε_s` catches a
   faulty fraction `ε_s` of it up to `δ`. Floors of at least the stratified sampling design's sizes at `C` for the strata
   that do no work keep that design's guarantee for them.
-- **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Faulty units that do a fraction `ε` of the work
+- **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Faulty proof blocks that do a fraction `ε` of the work
   have acceptance probability at most `(1 − ε)^K` (`work_escape_le`), whatever the floors. At the sizing of record,
   `δ = 2^-40` and `ε = 0.1%`, `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not
   (`record_sizing_one_fewer`). Rounding up keeps every unit's inclusion probability at least `K w_s / W`, which the bound
@@ -391,13 +398,13 @@ the sizes differ. The stratified sampling design is unchanged.
   - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's acceptance probability under the closure
     draw is the work sampling design's for the set with the units it makes unsound, those whose closure meets it
     (`closure_escape`). The unsound work is the work of both: the closure map need not list a tile in its own closure,
-    so the faulty units' own work is counted explicitly. A faulty unit's harm is its own work and that of every unit
+    so the faulty proof blocks' own work is counted explicitly. A faulty proof block's harm is its own work and that of every unit
     above it, so one that is never drawn on its own, such as a node, is charged all of it (`harm_le_unsoundWork`). At
     any floors, the audit accepts while the unsound work is at least a fraction `ε` of the work with probability at most
     `(1 − ε)^K + ε_ks + ε_bind` (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40`
     (`audit_work_closure_of_record`).
   - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base sampling design's bounds on acceptance
-    probability, and only to a widening on the same coins, and those bound the faulty units' own work, not the unsound
+    probability, and only to a widening on the same coins, and those bound the faulty proof blocks' own work, not the unsound
     work.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
@@ -513,13 +520,14 @@ per-level `Q_ℓ`, `d_ℓ`, cap depth `c_ℓ`, `ext`):
 | `recursive_proofs` | `R − 1` entries, entry `ℓ − 1`: `Q_ℓ` rows of 16 elements, `Q_ℓ · (d_ℓ − c_ℓ)` hashes |
 | `final_proof` | `yr` of `2^{ext+1}`; `Q_R` rows of 16; `Q_R · (d_R − c_R)` hashes |
 | `sumcheck_transcript_f256` | `k0 + 8 + 7(R − 1)` |
-| Ligerito `grinding_nonces` (query), `consistency_batch_grinding_nonces` | `R + 1` each |
+| Ligerito `grinding_nonces` (query), `consistency_batch_grinding_nonces` | `R + 1` each, every one `0` |
 | `ood_values` | `1 + 2R` |
-| `claim_batch_grinding_nonces` | `3R + 2` |
+| `claim_batch_grinding_nonces` | `3R + 2`, every one `0` |
 
 Upstream checks the same counts lazily (at use, or by requiring exhaustion at the end); checking them up front gives the
-same verdict. The nonces' values are messages (§6.1) and are not checked, except `grinding_nonce = 0` in each ring switch,
-which upstream checks structurally.
+same verdict. Every nonce must be `0`, and the decoder refuses any other (R4, D21: `grinding_nonce ≠ 0 (R4)`,
+`claim_batch_grinding_nonce ≠ 0 (R4)`, `consistency_batch_grinding_nonce ≠ 0 (R4)`); upstream checks only the ring switch's
+`grinding_nonce = 0`, structurally, and absorbs the others as messages (§6.1).
 
 Check at m = 32 (a recorded pure-block proof, 543,929 bytes): `cap` 128, `multilinear_rounds` 26, lincheck rounds 14,
 14 ring switches, level-0 rows 218 × 64 with 2,834 hashes, recursive caps 64, 64, 32, 32, 32, `yr` 32, 42 messages,
@@ -759,7 +767,7 @@ exists. A challenge `r ← sample_f256()` sets `s ← q(r)`. Introducing a new c
 ### 13.3 Transcript
 
 Counters start at 0; "the next X" reads list X of the proof and rejects if it is exhausted. `PoW(list)` is
-`observe_bytes(le64(next nonce of list))` (a message; never checked, R4). Preconditions: `R ≥ 1`;
+`observe_bytes(le64(next nonce of list))` (a message, `0`: the decoder refused any other, R4). Preconditions: `R ≥ 1`;
 `initial_cap = commitment.cap`; `sumcheck_transcript = []`; `sumcheck_transcript_f256 ≠ []`; `fold_grinding_nonces = []`;
 every recursive `k ≥ 2`.
 
@@ -1173,7 +1181,7 @@ An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound
 check, as `Flock.Qcall` documents them.
 
 **σ, a Boolean Program's lift of its word Program** (`Flock.Sigma`, `flock-verify sigma-check WORD BITS`; the mirror is
-`verity_vllm.program.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
+`verity.ml.definitions.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
 partition of record is its word Program's, lifted by σ (each word Definition to its Boolean version), and the verifier checks
 the lift on the two descriptors, in their size and never over the unrolled circuit. The Boolean descriptor carries σ as data:
 `"word": {"program_sha512": <the word descriptor's SHA-512, hex>, "sigma": {<word definition id>: <Boolean definition id>}}`,
@@ -1357,6 +1365,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `Δ_A` entry `(q, col)`, summed over GF(2) as `addDelta` sums them. An entry twice cancels. `B` is the same.
   - Today only a tail stage's `Out` region is partial. On the GEMM coordinate it is 16 bits of a word, and the other 112
     columns are checked.
+- **The region-size check** (`checkRegionBytes`). The extra claims read each block's bytes of a region as its `2^|free|`
+  bits, so `setupH` and `setupHidden` refuse a statement in which any region's bytes in any of the `2^nbl` blocks are
+  another size (a public file whose `b ‖ c` or pinned `dummy.bc` is not 128 bytes, say), before any proof is read.
 - **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
   instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
   `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
@@ -1435,20 +1446,30 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   failing cut refuses the partition, naming the Call and its codes. For any other query, or without `--program`, `units`
   is `as stated`, with the reason in `note`, which an audit reports as a gap.
 - **Registered reads**. A shared-row header may name `registered`, `{port: {value, positions, paths}}`: registered rows.
-  The verifier needs its own `--registered F` (`verity/registered-reads/v0`: per port the value, root, leaves, domain,
-  read positions, `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows, and `row_schema`, the rows'
+  The verifier needs its own `--registered F` (`verity/registered-reads/v1`: per port the value, root, leaves, domain,
+  read positions `reads` from unit `reads_from` (default 0: unit `reads_from + i` reads `reads[i]`, every other unit
+  nothing), `words`, `word_bits` 16 or 32, absent for the port's own 16-bit rows, and `row_schema`, the rows'
   format: `hm96-sha512/row/v1`, the default when absent, `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the last two
-  with `words`). Each port is checked in its own format: the port's row schema must be the one `F` names, a `row/v1`
+  with `words`, and `param`, the template parameter the port reads when it is not named after it (below); a key beside
+  the file's and a port's own refuses. `verity/registered-reads/v0` is still read: no
+  `reads_from`, and other keys ignored). Each port is checked in its own format: the port's row schema must be the one `F` names, a `row/v1`
   port's rows `sha512/row/v1` rows of their u16 words, padded to whole SHA-512 blocks, and a bit row (`row/v2`,
   `row-seg/v1`) exactly `words · word_bits` bits. A port is any row of the circuit: an input port's, or (§16.13) an
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
   registered row at `positions[i]`. Each table row's leaf, the frame-v3-sha512 leaf under the port's row schema, must
   climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
-  program (units `derived`). A port on
+  program (units `derived`). With `F`, a circuit that names a port twice refuses (`Registered.namesOnce`), since `F`
+  names a port by its name. A port on
   one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
   with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
   refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
-  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A port `F` names at
+  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. With the verifier's own
+  `--program`, `F` must also cover every registered input the program's root feeds the circuit's template: each
+  parameter of the template whose argument at a root instance reads a `RegisteredInput<w>_v1` node is read by a port of
+  `F`, under the parameter's name, as each row `name[i]` of an array of rows, or by a port whose `param` names it
+  (`reads_file`'s renamed ports); one that none reads, a registered-reading program under a partition that is no template
+  query, and a circuit whose META names no template refuse (`Registered.checkCover`, `checkCover_ok`). It reads the
+  descriptor's root nodes and their argument parts, never the unrolled circuit. A port `F` names at
   known content (`known`: each row's u16 words and its salt) refuses unless its root is the frame-v3-sha512 root of
   those rows (`Registered.checkKnownAll`), and, in the statement (`KnownRead.check`), unless the circuit names each of
   its ports once and has a port of each known name (`namesOk`), and its row is a `sha512/row/v2` row without segments of the known rows' words and each bit of its row is on a wire of the unit: at an
@@ -1480,6 +1501,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   each instance's public words. The header repeats `public_inputs`; the body ends with every instance's public words
   (u16 LE). The verifier needs its own `--public-inputs F` (`verity/flock-public-inputs/v1`: `{format, instances,
   ports}`, then the population's words), refusing a differing word, a missing file and a port named on one side only.
+- **Shared reads** (`Flock.HmIn.checkReads`; form (B)'s one writer a window). META may name `shared_reads`
+  (`[{port, group, position}]`, only with `public_inputs`): input row `port` is one table row per group of `G = group`
+  instances, and public input `position` is the instance index mod `G` (seed `instance`, derivation `mod:G`). The
+  population's public file must be a shared-row file whose `port` table has `n / G` rows (`n` a multiple of `G`) and
+  whose instance `i` reads table row `⌊i/G⌋`, so each window `(⌊i/G⌋, i mod G)` is one instance's. A statement without
+  hidden outputs refuses the key. `circuit.write` refuses the same files with the same refusals
+  (`circuit.check_shared_reads`).
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1542,13 +1570,16 @@ setting (`verify --session-tables J`, default 1), never the record's. Only `veri
 statements define such a session; any other statement refuses `J > 1`.
 
 - **The tables.** Take the session's units: the record's draw's (§7.3), or without a draw the population's `0 … N − 1`.
-  - The draw must be a `subset` draw of the registered population. A Bernoulli or stratified draw is refused, since its
-    count is not fixed.
+  - The draw must have a fixed count: a `subset` draw of the registered population (`k` units), or a `stratified` one
+    (Σ_s k_s units, one draw over the sampling block, every stratum included). A Bernoulli draw is refused, since its
+    count is not fixed, and so is a work draw, whose closure is not split (`Draw.tablesWhy`, `Draw.TABLES_LAW`).
   - Refused as well: `J > 64`, no units, or a count `J` doesn't divide.
   - The units split into `J` equal consecutive parts of `k` units. Table `j` is `circuit-{j:02}`. Its statement is §16.10's
     drawn statement of `{"law": "subset", "population": N, "k": k, "units": part j}`, under the identity plus
     `session: {tables: J, table: j, units: "the draw's units (without a draw, the population's) in equal consecutive
-    parts; table j proves part j as a subset draw of the population"}`.
+    parts; table j proves part j as a subset draw of the population"}`. A stratified draw's parts are subset
+    statements too: the draw's sorted units split consecutively, whatever their strata, and only the session's draw
+    (U1–U3) is held to the stratified law.
   - Nothing in the record describes a table's units.
 - **The session.**
   - Every table must have the same `m_pts`.
@@ -1656,11 +1687,19 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    leaves`, `... with <leaf> leaves under --zk`;
 4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`; and at most
    `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
-   than 65536`;
+   than 65536`. Under `--plain-tables` (never with `--zk`), the plain path past one table, `ProvedScope.checkP`: a
+   statement with public outputs, or with hidden outputs and `hm96-sha512/v1` leaves (`<name>, a statement with hidden
+   outputs and <leaf> leaves under --plain-tables`), at up to `Tags.MAX_TABLES` (64) tables (`<J> tables in a session under --plain-tables, more than 64`), every other rule as
+   at one table without `--zk`, and the verifier's own program held to the circuit's (`ProvedScope.programP`): its
+   `--program` bytes' digest (`programDigest`, the verdict's `program_sha512`) must be META's `program_sha512`, refused
+   as `refused: the verifier's program (--program, program_sha512 <h>) is not the circuit's (META program_sha512 <m>)`,
+   with a circuit whose META binds none, bytes that are not a JSON descriptor, and no `--program` refused too. Without
+   the flag, the provisional unit cover holds no `--program` to META (only `verity/partition/v1` objects name a
+   program, `HmRow.checkPartition`);
 5. no public input ports: `public input ports (--public-inputs)`;
-6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
-   own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
-   table row): `a shared-row public file (header shared_rows)`;
+6. no shared-row public file, except at a statement with hidden outputs and `hm96-sha512/v1` leaves whose verifier holds
+   its own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
+   table row), with or without `--zk` (plain leaves stay refused): `a shared-row public file (header shared_rows)`;
 7. wherever the wires feed the unit or the outputs (the unit reads more than one input group, or a tail stage returns
    the outputs: `ProvedScope.wiresFeed`), an order of the wires that fills every slot's input ports from the leaves, each
    slot reading only port bits among its inputs (`ProvedScope.wiresAcyclic`): `a slot no order of the wires computes from
@@ -1691,10 +1730,15 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
-design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
-design, with or without `--zk`, and under `--zk` by the subset one (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is
-`refused: <why>: no soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`,
-`a work draw with a closure` and `a subset draw without --zk`. A session without a draw is refused too, since every
+design (`Flock.ProvedScope.drawLaw`, by the one rule `Flock.ProvedScope.lawWhy`), whatever flags the verifier holds:
+the claims draw by the stratified sampling design, with or without `--zk`, and by the subset one under `--zk`
+(`FailClosed.SoundZJ`, `SoundZHJ`) and, at one table, at a statement with hidden outputs without it
+(`FailClosed.SoundExecH`, the plain hidden-output claim, which takes its sampling design as a parameter,
+`DrawDesign`: the stratified design or the subset one; without `--plain-tables` rule 4 keeps a plain session to one table). The verdict is `refused: <why>: no soundness claim draws by this law`,
+`<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and `a subset draw without --zk` (at a
+statement with public outputs only). Under `--plain-tables` the claim (`FailClosed.SoundExecJ`) draws by the subset
+design alone (`lawWhy`'s third input, `plainTables`), so a stratified draw is refused there (`a stratified draw under
+--plain-tables`) and a subset draw passes at public outputs. A session without a draw is refused too, since every
 claim is about a drawn session (each claim's record hypothesis reads the record's draw): it is verified against the
 population's statement, and its verdict is
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every check has
@@ -1714,15 +1758,35 @@ shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) 
 (--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
 without it` (one line).
 
+Under `--rec-inner`, setup also refuses a session of more than one table, or one whose table holds fewer instances than
+its population (a table drawn short), since V*'s slots are read at the one table's addresses and RecCap reads every
+instance's (`RecSetup.oneFull`): `setup: refused: a V* session of <k> tables: a V* session is one table, the only form
+the recursion's proof covers`, or `setup: <unit>: refused: a table of <n> of its population's <N> instances: a V*
+session's table holds every instance, the only form the recursion's proof covers`. An honest V* session, one table
+drawn in full, passes both.
+
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
 the wires don't feed passes `scopeOkH`, and the headlines at the unit's program (`keyProg`) cover it; one they feed
 passed `wiresAcyclic`, and the headlines at the template instance's program (`instProg`, `FailClosed.Inst`) cover it. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
-`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose
-rows read no `pub.tables = none` and so cover rule 6's shared-row exception), and elsewhere `--registered F` accepts no
-more than the verifier does without it. The live server refuses the same statements with the same reason
+`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`; without
+`--zk`, `--registered F` at hidden outputs, `FailClosed.SoundExecHR` over `VerifiesR`, the hidden headline with every
+drawn unit's registered reads checked; both on rows that read no `pub.tables = none` and so cover rule 6's shared-row
+exception), and elsewhere `--registered F` accepts no more than the verifier does without it. Its third conjunct is `--plain-tables`': over `VerifiesP` (accepted and
+`ScopeP`, `checkP` passing), a plain session at 1 to 64 tables under the live subset draw is bounded by the subset law's
+miss, the key-switch average and the link bound, with no named assumption beyond the one-table plain claims'. At public
+outputs it is `FailClosed.SoundExecJ` (`PlainJ.plain_session_soundJ`, at `Prog.flock_headline_live_tables_subset_miss`),
+at the circuit's unit's key program (`keyProg`). At hidden outputs it is `FailClosed.SoundExecHJ`
+(`PlainHJ.plain_session_soundHJ`, at `Prog.flock_headline_live_tables_subset_missX`), each table set up with
+`Stmt.setupHidden` and its rows, outputs included, bound as one-table hidden-output headlines bind them: at the unit's key
+program where the wires feed neither the unit nor the outputs (`SoundExecHJU`), and at the template instance's program
+(`instProg`) where they feed either (`SoundExecHJG`). Each one's first part says what the bound is about: every session
+`--plain-tables` accepts is over a circuit whose META `program_sha512` is the verifier's own program's digest
+(`FailClosed.ProgramOfCircuit`). That the circuit's gates compute the program is META's binding, which
+the verifier does not recompile. The claims layer (`FlockDeploy`, `InScope`) reads `check` without the flag, so its plain
+key-switch results stay at one table. The live server refuses the same statements with the same reason
 (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is the refusal, and
 `without_refusal` keeps the session's verdict otherwise. Its rule 6 reads the registered reads off the public header
 (`registered`): the Lean verifier holds `--registered F` exactly when the header names them, refusing either without the
@@ -1810,7 +1874,7 @@ expectation):
 - **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Closed upstream at `631567f7`: `from_record`
   requires `msg` on every round when `Hello` says `"rounds": "bytes retained"`, and checks its length and digest.
 - **D5:** registered reads (§16.10). Upstream ignores the header's `registered` (the public digest binds it); the spec
-  refuses a row that does not open its registered root.
+  refuses a row that does not open its registered root, and under `--registered` a circuit that names a port twice.
 - **D6:** a `--zk` record's `coin_tree` (§7.4); upstream ignores it.
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
 - **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
@@ -1834,12 +1898,15 @@ expectation):
   in `vectors.json` expects that refusal of each session that upstream accepts, and of every other session its own reason
   (`agree.py --lean-refuses`): a session refused for its form alone passed every check, and is compared as accepted. So,
   too, a draw by a sampling design no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a
-  closure, and a subset draw without `--zk`), which the Lean verifier alone refuses, at setup (the live server and
+  closure, and a subset draw without `--zk` at a statement with public outputs), which the Lean verifier alone refuses, at setup (the live server and
   upstream verify it): a set marked `lean_refuses_drawn` expects that refusal of every drawn session
   (`agree.py --lean-refuses-drawn`). `verity/ml/flock/tests/test_lean_draw_laws.py` runs each sampling design on the
   Lean verifier. So, too, a session without a draw (§16.15), which the Lean verifier alone refuses, and only once every
   check has passed: a set marked `lean_refuses_drawless` expects that refusal of each session without a draw that
   upstream accepts, and of every other session without a draw its own reason (`agree.py --lean-refuses-drawless`).
+  So, too, a session verified without the verifier's own program (`--program`, `ProvedScope.NO_PROGRAM`), which the
+  Lean verifier alone refuses, last: every session of a set with no program (upstream reads none) is compared as
+  accepted when refused for that alone (`agree.py`'s `NO_PROGRAM`).
   `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
@@ -1878,6 +1945,14 @@ expectation):
   and verifies such a session as any flock-circuit; the spec refuses at setup. No vector exercises it;
   `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
   and its refusals on the Lean verifier.
+- **D21:** a nonzero proof-of-work nonce (R4, §8.1). Upstream absorbs every nonce as a message and checks none at the
+  pinned schedules' zero grinding bits; the spec refuses any nonce but `0` at decode (`Reader.nonce0`: `grinding_nonce ≠ 0
+  (R4)`, `claim_batch_grinding_nonce ≠ 0 (R4)`, `consistency_batch_grinding_nonce ≠ 0 (R4)`; the ring switch's
+  `ring switch grinding_nonce ≠ 0`, and the zerocheck's, lincheck's, batching's and fold's lists, which must be empty), so
+  the soundness proof covers every proof the verifier accepts. Every honest prover sends `0`. `redigest.py`'s
+  `lig-query-nonce`, `lig-claim-nonce` and `lig-consistency-nonce` and `fuzz.py`'s nonce `proof-value` cases expect the
+  Lean verifier's refusal and upstream's acceptance (`upstream_accepted`); `Flock.Test.ProofCanon` runs each kind on a
+  plain and a `--zk` file.
 
 - **D17:** a plain file in the form its statement doesn't pin (§8.1: the zk patch's `zk_level0 = None` tag after the
   pair, by default, as every deployed prover writes it, or none under `--upstream-plain`), a tag other than 0 there, a
@@ -1893,13 +1968,18 @@ expectation):
 - **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
   (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
   exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
+- **D20:** a record not in its canonical text (S0, §5.1). Upstream parses the record with serde and accepts any text of
+  it; the spec refuses (`S0: the record is not in its canonical text …`, `Flock.RecordText.check`), for D17's reason at
+  the record: the recursion binds a session's record, so a session has one accepted text
+  (`Flock.RecordText.check_inj`). No vector exercises it: S0 is the Lean verifier's last check, and every set the
+  agreement job mutates is refused ahead of it (D12's form refusal, and `NO_PROGRAM` without `--program`), so its
+  sessions are compared as accepted. `Flock.Test.RecordText` runs the non-canonical forms on `RecordText.check`.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
 
 Elsewhere the spec follows upstream, even where upstream is lenient without soundness cost: record keys for unconfigured
-tables are ignored, nonces at proof-of-work sites are accepted as
-messages, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream panics (`m` without a schedule,
+tables are ignored, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream panics (`m` without a schedule,
 `|s_hat_v| ≠ 128`), its statement verifier catches the panic as a rejection; the spec rejects explicitly.
 
 ### 17.2 Assumptions (for Table 1 and the soundness lane)
@@ -2060,7 +2140,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 | A9 | ring switching | one claim, own `(m−7)`-round sumcheck, B̂ via MBP | each claim switched with its own 7 coins, then one independent coin per claim; no standalone sumcheck: Ligerito's F256 folding sumcheck replaces it; B̂ at K points |
 | A10 | packing | `(r_hi, r_lo)` generic | the 7 low address bits; `b_v = x^v` |
 | A11 | Ligerito | uniform queries; unique or list decoding; OOD after every commitment | as §13: stratified queries, GF(2^256) folding challenges, OOD at level 0 despite Remark 11 (see §13), clear residual of `2^e` values |
-| A12 | proof of work | a small amount of grinding | Fast100 grinds only Ligerito's claim and consistency batching; under live coins every nonce is a message and is never checked (R4); structural zero-nonce checks remain where upstream has them (§8, §12, §13) |
+| A12 | proof of work | a small amount of grinding | Fast100 grinds only Ligerito's claim and consistency batching; under live coins grinding buys nothing, so every nonce must be `0` and the verifier refuses any other (R4, D21, §8.1); an honest prover sends only `0` |
 | A13 | statement binding | absent | label, statement digest and Merkle cap absorbed before the first coin |
 | A14 | extra claims | step 4, an auxiliary protocol | public-region claims at the verifier's link points, opened in the same batch as `ab` and `c`; their points and values are not absorbed (the session order fixes them before any Flock coin) |
 | A15 | `root_F` | — | the live server skips it when `points = 2`; the spec requires it (S6, D1), as the replay tools do |

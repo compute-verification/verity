@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 
 /-!
 # The recursion's premises at `deployRec`
@@ -14,7 +15,8 @@ What the recursion's claims read of the compiled verifier, at `deployRec IV ivSc
   compiled verifier's accepted runs. On such a run each V* statement is the one staged at the run's inner and staging
   rounds (`runVstar_staged`, from `run_round`), and the inner view is the inner verifier's run of the readers' messages
   at the run's inner coins. So each reduces to a fact about V*'s circuits and the readers alone, over the V* statements
-  staged at any inner and staging messages and coins, with no prover or run: `ReadersTrue` gives `CallsTrue`
+  staged at any inner and staging messages and coins (`ReadersTrue` at the ones each part's scope check passes,
+  `StagedPart`, which an accepted run gives: `stagedAll_run`), with no prover or run: `ReadersTrue` gives `CallsTrue`
   (`callsTrue`), with it `ReadersLogColl` gives `CallsLogColl` (`callsLogColl`), `ReadersOpenPlayed` gives
   `CallsOpenPlayed` (`callsOpenPlayed`), and `ReadersAccept shape` gives `VStarAccepts shape` (`vstarAccepts`); with
   `Refuses`, the three shapes' give `InnerAcceptsColl` (`innerAcceptsColl`). The readers' facts are the forms V*'s parts give: an
@@ -137,6 +139,63 @@ theorem runVstar_staged (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (i
   split_ifs
   rfl
 
+/-! ## The staging on an accepted run, per part -/
+
+/-- **Part `s`'s V\* statement as V\* stages it**: `xO` is `staged st x ms s` at some list of messages, its setup
+decodes, and its read's check passes. -/
+def StagedPart (st : Stage) (s : ℕ) (x xO : Msg) : Prop :=
+  ∃ (ms : List (Msg × Out)) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
+    xO = staged st x ms s ∧ setupO xO = some (i, spec, sts) ∧ i.base.read.check = .ok ()
+
+section StagedRun
+
+variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+  (r : Fin ((V IV st).k x) → Coin)
+
+/-- **An accepted run stages every part**: session `s` decided (`run_decides`) and did not refuse, so its outer
+statement's setup decoded and its read checked (`nextO_decide`, `actO_decide`, `scope_of_checks`), and that statement
+is part `s`'s V\* statement at the run's inner messages (`ract_sess`, `innerPairs_run`). -/
+theorem stagedPart_run (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs : s < nS x) :
+    StagedPart st s x (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) := by
+  obtain ⟨i, f, hi, ⟨j, xO, as', cs', ins, spec, sts, link, c₁, mids, hr, hO⟩, hn⟩ :=
+    run_decides H IV st x P ω r hacc hs
+  rw [next_sess H hr] at hn
+  have hacc' : ((nextO xO as' cs').eval H).1 = .acc := by
+    rcases nextO_decide_out H hO with ho | ho
+    · exact ho
+    · rw [ho] at hn
+      exact absurd rfl hn
+  obtain ⟨⟨spec', sts', -, -, hc⟩, -⟩ := (nextO_decide H hO).1 hacc'
+  obtain ⟨i', hi', hib⟩ := actO_decide hO
+  obtain ⟨hk, -, -⟩ := ract_sess_locate hr
+  obtain ⟨-, -, hxO⟩ := ract_sess hr
+  have hK := run_acc_length H IV st x P ω r hacc
+  have hlen : (((run H P (V IV st) x ω r).msgs.take (i + 1)).map Prod.fst).length = i + 1 := by
+    simp only [List.length_map, List.length_take]
+    omega
+  rw [hlen] at hk
+  have hip := innerPairs_run H IV st x P ω r hacc (off := i + 1) hk.le (by omega) []
+    (range_map_take (coinSeq r) hk.le)
+  rw [List.append_nil] at hip
+  rw [hip] at hxO
+  subst hxO
+  refine ⟨_, i', spec, sts, rfl, hi', ?_⟩
+  rw [hib]
+  exact scope_of_checks hc
+
+end StagedRun
+
+/-- **An accepted run stages every part, at its inner and staging rounds**: `stagedPart_run` at `stagedAll`
+(`take_roundsOf`). -/
+theorem stagedAll_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (x : Msg) {Ω : Type} (P : Prover Ω)
+    (ω : Ω) (r : Fin ((V IV b.st).k x) → Coin) (hacc : (run H P (V IV b.st) x ω r).out = .acc) :
+    ∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x (runAs (IV.k (xIOf x) + kS x) (run H P (V IV b.st) x ω r))
+      (runCs (IV.k (xIOf x) + kS x) r)).getD s []) := by
+  intro s hs
+  rw [stagedAll, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hs, Option.map_some,
+    Option.getD_some, ← take_roundsOf H IV b x P ω r hacc]
+  exact stagedPart_run H IV b.st x P ω r hacc hs
+
 /-! ## V*'s circuits and the readers -/
 
 section Readers
@@ -144,48 +203,56 @@ section Readers
 variable {Col T : Type}
 
 /-- **The V\* witnesses record only true evaluations** (a code fact about V*'s circuits and the readers): outer
-witnesses in the outer relation at the V* statements staged at inner and staging messages `as` and coins `cs` record
-only true evaluations of `H`. At SHA-512, V*'s circuits compute each recorded call. -/
+witnesses in the outer relation at the V* statements staged at inner and staging messages `as` and coins `cs`, each
+part's staged as V\* stages it (`StagedPart`: its setup decodes and its read's scope check passes, as on every
+accepted run, `stagedAll_run`), record only true evaluations of `H`. At SHA-512, V*'s circuits compute each recorded
+call. Off `StagedPart` the staged statement's circuit and tags are the staging message's, which the parts' readers
+don't read. -/
 def ReadersTrue (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
-      ∀ e ∈ callsOf b.rd x ws, H e.1 = e.2
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws → ∀ e ∈ callsOf b.rd x ws, H e.1 = e.2
 
 /-- **The readers record the inner verifier's calls, off a collision** (a code fact about V*'s circuits and the
-readers): at outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, whose recorded calls
-are true evaluations, the inner verifier's calls in its run of the readers' messages at the inner coins `cs` are among
-the recorded calls, or two recorded calls collide. Where two parts hold different messages at one round, the run's
+readers): at outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, each part's staged as
+V\* stages it (`StagedPart`, as in `ReadersTrue`), whose recorded calls are true evaluations, the inner verifier's
+calls in its run of the readers' messages at the inner coins `cs` are among the recorded calls, or two recorded calls
+collide. Where two parts hold different messages at one round, the run's
 calls on the message the readers take aren't the other part's, so V*'s parts give this only off a collision. -/
 def ReadersLogColl (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ e ∈ (innerRunAt H IV b.rd x ws cs).vLog, e ∈ callsOf b.rd x ws) ∨
           ∃ u v, Claims.findColl (callsOf b.rd x ws) = some (u, v) ∧ Claims.Collision H u v
 
 /-- **The readers record each played inner message's opening** (a code fact about V*'s circuits and the readers): at
-outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, at each round `j` the inner
-verifier's run of the readers' messages plays, some recorded calls open the commit string `as[j]` to the readers'
-message `j` under `opening`. A run that rejects early has message `[]` at the rounds it doesn't play, which no part
-opens. -/
+outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, each part's staged as V\* stages it
+(`StagedPart`), at each round `j` the inner verifier's run of the readers' messages plays, some recorded calls open
+the commit string `as[j]` to the readers' message `j` under `opening`. A run that rejects early has message `[]` at
+the rounds it doesn't play, which no part opens. -/
 def ReadersOpenPlayed (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T)
     (opening : Claims.Recursion.Opening) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       ∀ j < (innerRunAt H IV b.rd x ws cs).msgs.length, ∃ es, es ⊆ callsOf b.rd x ws ∧
         opening.opens (as.getD j []) (((innerRunAt H IV b.rd x ws cs).msgs.map Prod.fst).getD j []) es
 
 /-- **V\*'s circuits compute the inner verifier at the shape `shape`, off a collision** (a code fact about V*'s circuits
 and the readers): at a statement whose form has the shape, outer witnesses in the outer relation at the V* statements
-staged at `as` and `cs`, whose recorded calls are true evaluations, give the inner verifier's acceptance of the readers'
-messages at the inner coins `cs`, or two of their recorded calls collide. -/
+staged at `as` and `cs`, each part's staged as V\* stages it (`StagedPart`), whose recorded calls are true
+evaluations, give the inner verifier's acceptance of the readers' messages at the inner coins `cs`, or two of their
+recorded calls collide. -/
 def ReadersAccept (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ (x : Msg) (s : Claims.Recursion.Stmt), parse x = some s → shape s.form →
     ∀ (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-      cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+      cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+        Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
         (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
           (innerRunAt H IV b.rd x ws cs).out = .acc ∨
             ∃ u v, Claims.findColl (callsOf b.rd x ws) = some (u, v) ∧ Claims.Collision H u v
@@ -200,7 +267,7 @@ theorem callsTrue (hT : ReadersTrue H I.V b DO) : Claims.Recursion.CallsTrue H (
   rw [runVstar_staged H I ivScope b P ω r hg.1] at ho
   have hl := runAs_length H I.V b x P ω r hg.1
   have hc : (runCs (I.V.k (xIOf x) + kS x) r).length = _ := (runCs_length I.V b x r).trans hl.symm
-  exact hT x _ _ ws hl hc ho
+  exact hT x _ _ ws hl hc (stagedAll_run H I.V b x P ω r hg.1) ho
 
 /-- **`CallsLogColl` at `deployRec`** from the readers' facts. -/
 theorem callsLogColl (hT : ReadersTrue H I.V b DO) (hL : ReadersLogColl H I.V b DO) :
@@ -218,7 +285,8 @@ theorem callsLogColl (hT : ReadersTrue H I.V b DO) (hL : ReadersLogColl H I.V b 
     rw [run_replay_seen, coins_getD r (show I.V.k (xIOf x) ≤ I.V.k (xIOf x) + kS x by omega)]
     rfl
   rw [hrun]
-  exact hL x _ _ ws hl hc ho (hT x _ _ ws hl hc ho)
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  exact hL x _ _ ws hl hc hsp ho (hT x _ _ ws hl hc hsp ho)
 
 /-- **`CallsOpenPlayed` at `deployRec`** from the readers' facts: the inner view is the inner verifier's run of the
 readers' messages, which plays at most the inner rounds (`run_length_le`). -/
@@ -233,7 +301,7 @@ theorem callsOpenPlayed (opening : Claims.Recursion.Opening) (hO : ReadersOpenPl
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv] at hj ⊢
-  obtain ⟨es, hes, hop⟩ := hO x _ _ ws hl hc ho j hj
+  obtain ⟨es, hes, hop⟩ := hO x _ _ ws hl hc (stagedAll_run H I.V b x P ω r hg.1) ho j hj
   refine ⟨es, hes, ?_⟩
   have hjk : j < I.V.k (xIOf x) :=
     Nat.lt_of_lt_of_le hj (Claims.Recursion.run_length_le H _ I.V (xIOf x) () _)
@@ -256,7 +324,7 @@ theorem vstarAccepts (shape : Claims.Recursion.Form → Prop) (hA : ReadersAccep
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv]
-  exact hA x s hs hf _ _ ws hl hc ho ht
+  exact hA x s hs hf _ _ ws hl hc (stagedAll_run H I.V b x P ω r hacc) ho ht
 
 /-- **`InnerAcceptsColl` at `deployRec`** from the readers' facts and V*'s circuits at the dense, holo and sparse
 shapes, with `refuses`. -/
@@ -308,7 +376,7 @@ theorem ksA_deployed (rel relO : Flock.Readable.Parsed → Flock.Readable.Relati
 /-- **`KSFlock` at `deployRec`**: the recursion's KS over the deployed plain inner record (trimmed), its V* sessions at
 the masked outer record (`deployZkRec`), at every inner decoder that meets the spec: `ksA_deployed`, as `KSA` is `KS`.
 Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`,
-`γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
+`γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight.
 Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
 but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
 open (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those

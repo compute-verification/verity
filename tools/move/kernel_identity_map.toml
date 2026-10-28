@@ -1,0 +1,47 @@
+# Generated-kernel identity down from `check/` to `engine/`: what
+# `tools/move/layout.py --map tools/move/kernel_identity_map.toml` moves and rewrites.
+#
+# `kernel_identity.collect` digests the Inductor output code and Triton binaries this process compiled. `engine.code_identity`
+# reads it for the run header's and versions.json's generated-kernel pin (`generated_kernels_of_this_process`), and is the one
+# package module that imports it, so that import pointed up from `engine` to `check`. `kernel_identity` imports only `config`.
+# Beside `code_identity`, which pins the executed code objects, it points down from every reader. The whole module moves; nothing
+# is split, edited or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"integrations/vllm/verity_vllm/check/kernel_identity.py" = "integrations/vllm/verity_vllm/engine/kernel_identity.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[split]
+
+[rewrite]
+# defs_map.toml's: records of what was, and files whose bytes a digest pins, are never rewritten.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]
+
+[aliases]
+"check.kernel_identity" = "engine.kernel_identity"
+
+[modules]
+"verity_vllm.check.kernel_identity" = "verity_vllm.engine.kernel_identity"

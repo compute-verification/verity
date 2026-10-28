@@ -13,8 +13,8 @@ from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
-from verity_vllm.program.registry import act
-from verity_vllm.program.registry import moe as M
+from verity.ml.definitions.registry import act
+from verity.ml.definitions.registry import moe as M
 
 H, E, TOPK, VPT, I = 32, 8, 2, 4, 16
 OP = "torch.ops.vllm.moe_forward.default"
@@ -166,8 +166,9 @@ def test_the_expert_gemms_are_hoppers_k16_chain_at_every_launched_config() -> No
         plan(16)
 
 
-def test_cc_10_binds_the_same_expert_gemms() -> None:
-    assert SM.expand(_wired(), {**RECORD, "cc": [10, 0]})[1](256) == SM.expand(_wired(), RECORD)[1](256)
+@pytest.mark.parametrize("cc", [[10, 0], [12, 0]])
+def test_cc_10_and_12_bind_the_same_expert_gemms(cc: list[int]) -> None:
+    assert SM.expand(_wired(), {**RECORD, "cc": cc})[1](256) == SM.expand(_wired(), RECORD)[1](256)
 
 
 def test_step_plans_carry_the_expert_gemms_only_with_moe() -> None:
@@ -194,7 +195,7 @@ def _flag(k: str, v):
     (_flag("w2", {"weight": f"{LAYER}.w2_weight", "shape": [E, H, 2 * I]}), "w2"),
     (_flag("gate", {"weight": None, "shape": [E, H]}), "gate"),
     (_flag("E", 2 * E), "gate"),
-    (lambda rec: rec.update(cc=[12, 0]), "compute capability"),
+    (lambda rec: rec.update(cc=[8, 9]), "compute capability"),
     (lambda rec: rec.update(pieces={"2": LAYER}), "the serving process ran layer None"),
     (lambda rec: rec.update(layers={"model.layers.1.mlp.experts": FACTS}), "no facts"),
 ])

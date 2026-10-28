@@ -87,7 +87,7 @@ def test_the_broker_wrapper_is_preferred_when_the_checkout_has_one(checkout):
 
 
 def test_open_with_dry_run_sends_nothing(tmp_path, monkeypatch, capsys):
-    """17 Oct (CI-52): `research queue open --dry-run` opened #2276 for real."""
+    """`research queue open --dry-run` opens no PR for real."""
     import subprocess
 
     from research import queue as Q
@@ -101,3 +101,59 @@ def test_open_with_dry_run_sends_nothing(tmp_path, monkeypatch, capsys):
     assert research_main(["queue", "open", "--dry-run", "--head", "cursor/x", "--title", "T", "--body-file", str(body),
                           "--remote", "https://github.com/o/verity.git"]) == 0
     assert "would open cursor/x onto main in o/verity" in capsys.readouterr().out
+
+
+AGENT = "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3"
+FOOTER = (f'<div><a href="https://cursor.com/agents/{AGENT}?cursor_ref=pr_footer&cursor_cta=open_in_web"><picture>'
+          '<img alt="Open in Web" width="114" height="28"></picture></a></div>')
+BEGIN, END = "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->", "<!-- CURSOR_AGENT_PR_BODY_END -->"
+#: a stacked PR's body: the one `open` gave it, then the PR tool's marked section below it, and the footer
+STACKED = f"Lane memory-accounting\n\nthin lanes and a MAC cap\n\n{BEGIN}\nLane memory-accounting\n\nthe rule\n{END}\n\n{FOOTER}\n"
+
+
+class ViewGh:
+    """Answers `gh pr view` with ``body``, recording every call."""
+
+    def __init__(self, body: str):
+        self.body, self.calls = body, []
+
+    def __call__(self, argv, **kw):
+        self.calls.append(argv[1:])
+        out = json.dumps({"body": self.body, "url": "https://github.com/o/r/pull/4622"}) if argv[2] == "view" else ""
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+
+def test_edit_replaces_the_whole_body_keeping_only_the_pr_tools_markers_and_footer(tmp_path):
+    """An edited PR doesn't keep the body it was opened with above every later one."""
+    from research.queue import PR, edit_pr
+
+    gh = ViewGh(STACKED)
+    url, body = edit_pr(tmp_path, "o/r", 4622, "Lane memory-accounting\n\nthe current text\n", gh="gh", run=gh)
+    assert url == "https://github.com/o/r/pull/4622"
+    assert body == f"{BEGIN}\nLane memory-accounting\n\nthe current text\n{END}\n\n{FOOTER}\n"
+    assert gh.calls[-1] == ["pr", "edit", "4622", "--repo", "o/r", "--body", body]
+    assert "thin lanes" not in body and PR(4622, "", body=body).owner == "memory-accounting"
+    again = ViewGh(body)                                                     # an edit of an edited body stacks nothing
+    assert edit_pr(tmp_path, "o/r", 4622, f"{STACKED}\n", gh="gh", run=again)[1].count(FOOTER) == 1
+
+
+def test_edit_of_a_body_without_the_pr_tools_markup_is_the_file_verbatim(tmp_path):
+    from research.queue import edit_pr
+
+    gh = ViewGh("Lane ci\n\nold\n")
+    assert edit_pr(tmp_path, "o/r", 7, "Lane ci\n\nnew\n", gh="gh", run=gh)[1] == "Lane ci\n\nnew\n"
+
+
+def test_edit_refuses_a_body_that_drops_or_changes_the_prs_lane_and_dry_run_edits_nothing(tmp_path):
+    from research.queue import edit_pr
+
+    for new, says in (("no lane here\n", f"names owner {AGENT}"), ("Lane proofs\n", "names owner proofs")):
+        gh = ViewGh(STACKED)
+        with pytest.raises(QueueError, match=f"{says}, and the PR's is memory-accounting: keep its `Lane memory-accounting` line"):
+            edit_pr(tmp_path, "o/r", 4622, new, gh="gh", run=gh)
+        assert [c[1] for c in gh.calls] == ["view"]
+    gh = ViewGh(f"[Open in Web](https://cursor.com/agents/{AGENT})\n")         # owned by its agent id: a Lane line may come in
+    assert edit_pr(tmp_path, "o/r", 9, "Lane ci\n", gh="gh", run=gh)[1] == "Lane ci\n"
+    gh = ViewGh(STACKED)
+    edit_pr(tmp_path, "o/r", 4622, "Lane memory-accounting\n", dry_run=True, gh="gh", run=gh)
+    assert [c[1] for c in gh.calls] == ["view"]

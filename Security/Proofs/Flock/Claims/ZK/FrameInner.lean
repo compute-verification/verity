@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
-# What the frame takes at the inner proof's rounds (Stage B, R3)
+# What the frame takes at the inner proof's rounds
 
 At the inner proof's rounds the frame fixes every frame and value it computes from its draws and the coins
 (`innerOwn`), so a round it takes there is the firewall's own (`ownRound`) at its configuration and state, whatever
@@ -1325,7 +1325,6 @@ for `stopped`: as `progOf_check_step`, where the placeholder's schedule so far i
 theorem progOf_own_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
-    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1)
     {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
@@ -1343,8 +1342,8 @@ theorem progOf_own_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList) :
     progOf x (cs ++ [d]) = { s with stopped := (progOf x (cs ++ [d])).stopped } := by
   have hle' := locate_snd_le (roundsOf spec sts) 0 q
-  rw [progOf_at x cs hx hq hph, hj] at ha
-  rw [progOf_snoc x cs d hx hq hk, hph]
+  rw [progOf_at x cs hx hq hj hph, hj] at ha
+  rw [progOf_snoc x cs d hx hq, hph]
   dsimp only
   rw [hj]
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
@@ -1432,7 +1431,6 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (h : List (Msg × Msg)) (a : Msg) {m : Masker} {out : ByteArray}
     (hA : (ofLoop T L₀ real).answered x ρ h = .ok m)
-    (hrep : (ofLoop T L₀ real).rep x (h.length + 1) = (ofLoop T L₀ real).rep x h.length)
     (hex : ∃ v s' why, (ofLoop T L₀ real).checkAt x w ρ h m false v = .ok (out, s', why))
     {cs : List FlockDeploy.Coin} (hcs : h.tail.map (fun p => ZKMal.CoinLayer.rd p.2) = cs)
     {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
@@ -1473,13 +1471,6 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
     rw [← hcs1, List.length_map]
     simp only [List.length_cons] at hq
     omega
-  have hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 =
-      (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 := by
-    have h2 : repOf x (q + 2 + 1) = repOf x (q + 2) := by rw [← hq]; exact hrep
-    unfold repOf at h2
-    rw [hx] at h2
-    simp only at h2
-    rwa [show q + 2 + 1 - 2 = q + 1 by omega, show q + 2 - 2 = q by omega] at h2
   have hcr : coinsAt x ((m0, r0) :: h1) = readCoins x cs := by
     rw [← hcs1]
     exact loop_coinsRead loopNr T (withFrames T L₀ real) x m0 r0 h1
@@ -1488,9 +1479,8 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
     split at hA
     · exact hA
     · cases hA
-  change (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ ((m0, r0) :: h1))
-    (coinsAt x ((m0, r0) :: h1)) = .ok m at hF
-  rw [hcs1] at hF
+  rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
+    hcs1] at hF
   have hsch : schedOf (real x w ρ) x cs = none :=
     schedOf_none (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hle)
@@ -1517,7 +1507,7 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
   rw [hcs']
   rw [hcr, readCoins_eq x cs hq1] at hF
   have hsz := roundsAt_size hrs
-  exact progOf_own_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hz hH hM hrow hj
+  exact progOf_own_step x cs (ZKMal.CoinLayer.rd a) hx hq1 (by rw [hk1]; exact hph) hc hz hH hM hrow hj
     (by rw [hk1]; exact hs') (by rw [← hsz]; exact hle) (fun k' hk' => roundsAt_framed hrs hk') hF hv'
     (fun hS => by
       obtain ⟨w', hw', he⟩ := hL0 (by rw [hsz]; exact hS)
@@ -1568,8 +1558,8 @@ theorem ofLoop_progChecks (T : ZKMal.CoinLayer.TableData)
         (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList) :
     ProgChecks (ofLoop T L₀ real) x w := by
   refine ofLoop_progChecks_of T L₀ real x w hS hR hP ?_
-  intro ρ h a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq hki hph hreal hrs hle hA hrep hex
-  have hqs := loop_round_in_plan T (withFrames T L₀ real) x ρ h hA hx hq hki
+  intro ρ h a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq hki hph hreal hrs hle hA hkd hex
+  have hqs := loop_round_in_plan T (withFrames T L₀ real) x ρ h hA (kindAt_masked hkd).2.2 hx hq
   have hk : k < spec.repStreams.size := by
     have := locate_lt (roundsOf spec sts) 0 q hqs
     rw [hki] at this
@@ -1602,7 +1592,7 @@ theorem ofLoop_progChecks (T : ZKMal.CoinLayer.TableData)
         fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched := by
     rw [← hdm, ← hxe]
     exact hrs
-  exact ofLoop_progChecks_own T L₀ real x w ρ h a hA hrep hex rfl hx hq hki hph hc hz hH hM
+  exact ofLoop_progChecks_own T L₀ real x w ρ h a hA hex rfl hx hq hki hph hc hz hH hM
     (hRow s0 spec sts k _ c' t dom xs hi hx hk hph) hreal hrs0 hR' hs' hle
     (fun hS vals => hL0 ρ h vals s0 spec sts q k j tr hr rsched hx hq hki hreal hrs0 hS)
 

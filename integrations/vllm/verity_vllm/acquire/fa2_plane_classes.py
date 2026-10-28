@@ -1,4 +1,4 @@
-"""X-03 per-layer attention plane classes (F-r19-int-22): the expected FA2/FA3 hidden-plane inventory of a step is DERIVED per attention
+"""X-03 per-layer attention plane classes: the expected FA2/FA3 hidden-plane inventory of a step is DERIVED per attention
 layer from the Program's attention Call statics x the step's active-sequence set; uniformity across layers is a consequence, never a rule.
 
 The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` differs only in the launch geometry):
@@ -15,7 +15,7 @@ The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` diff
     tensor (`g<HB>x<M>x<NB>[x<BN>x<D>]`) or, on the compacted path (b >= 2 sequences, un-swapped), six per-sequence rectangles
     (`s<i>/g<h>x<sl>x<NB>[..]/{S,P,RP,ROW,O,FIN}`) -- so a step's plane class per layer is (kernel rule) x (staging rule) x (active set).
  5. Occurrence resolution: layer k = the step's k-th launch (`launches_in_step`); sequence i = the global index in `cu_seqlens_q`
-    order = the step's row order (`step_rows`, BIND-01): (request, seqlen_q) per active sequence.
+    order = the step's row order (`step_rows`): (request, seqlen_q) per active sequence.
  6. Binding: the name splits into (op_path `fa2.m1/L<k>`, member) -> the manifest identity of that layer at that engine step
     (`verity_vllm.query.manifest.bind`; at B>1 coverage holds the op's tensors at the step to the launch's whole stream, each tensor
     the words its name's geometry declares, `format.batch_launch_shortfall`); leaves are position-identified in the packed step stream.
@@ -103,9 +103,10 @@ def declarations_from_attention_impls(impls: Mapping[str, Mapping[str, Any]]) ->
 
 
 def attention_impls_of_record(program_dir: str | None = None, programs_root: str | None = None) -> tuple[dict | None, str | None]:
-    """The Build record's `attention_impls_observed` for a Commit: `<program_dir>/result.json` (B=1) or the first `build_request*/result.json`
-    under `programs_root` that carries it (B>=2: every component Program of a row is the same model; the record is per layer, not per shape).
-    -> (impls, path) or (None, None).  json only (no torch)."""
+    """The Build record's `attention_impls_observed` (a trace's) or `attention_impls_declared` (predict's, `program.predict.naming`) for
+    a Commit: `<program_dir>/result.json` (B=1) or the first `build_request*/result.json` under `programs_root` that carries it (B>=2:
+    every component Program of a workload is the same model; the record is per layer, not per shape).  -> (impls, path) or (None,
+    None).  json only (no torch)."""
     cands: list[str] = []
     if program_dir:
         cands.append(os.path.join(str(program_dir), "result.json"))
@@ -117,7 +118,7 @@ def attention_impls_of_record(program_dir: str | None = None, programs_root: str
                 res = json.load(f)
         except (OSError, ValueError):
             continue
-        obs = res.get("attention_impls_observed") if isinstance(res, dict) else None
+        obs = (res.get("attention_impls_observed") or res.get("attention_impls_declared")) if isinstance(res, dict) else None
         if isinstance(obs, dict) and obs:
             return obs, p
     return None, None
@@ -148,7 +149,7 @@ class StepSequences:
 
     @classmethod
     def from_rows(cls, rows: Iterable[tuple[Any, int, int]]) -> "StepSequences":
-        """From the collector's `step_rows[step]` = [(request_id, row_lo, row_hi), ..] (BIND-01, launch order)."""
+        """From the collector's `step_rows[step]` = [(request_id, row_lo, row_hi), ..] (launch order)."""
         return cls(tuple(int(hi) - int(lo) for _rid, lo, hi in rows), exact=True)
 
     @classmethod
@@ -346,7 +347,7 @@ def check_step(decls: Iterable[AttnLayerDecl], seqs: StepSequences, names: Itera
 
 
 def uniform_rule(counts_by_layer: Mapping[int, int], attention_layers: Iterable[int]) -> dict[int, int]:
-    """The R13 X-03 rule, unchanged, as a pure function (the no-declaration fallback of `identity_check`): every attention layer of the step
+    """The uniform X-03 rule as a pure function (the no-declaration fallback of `identity_check`): every attention layer of the step
     must carry the SAME positive count -- the modal count (ties -> smallest); layers outside `attention_layers` are reported with their count."""
     layers = list(attention_layers)
     counts = {k: int(counts_by_layer.get(k, 0)) for k in layers}
@@ -358,7 +359,7 @@ def uniform_rule(counts_by_layer: Mapping[int, int], attention_layers: Iterable[
 
 
 def counts_by_layer(names: Iterable[str]) -> Counter:
-    """Hidden-plane tensors per layer, every plane counted (executed and padding alike -- what the R13 rule read)."""
+    """Hidden-plane tensors per layer, every plane counted (executed and padding alike -- what `uniform_rule` reads)."""
     c: Counter = Counter()
     for n in names:
         m = _NAME_RE.match(n)

@@ -395,7 +395,8 @@ def parse_gb(text: str) -> int:
 
 # ---- source trees --------------------------------------------------------------------------------------------------------------------
 
-SRC_KEEP_S = 2 * 3600        # a tree changed, or named by a run recorded, this recently may be being shipped or about to run
+SRC_KEEP_S = 3600            # a tree changed, or named by a run recorded, this recently may be being shipped or about to run;
+#   a live run's tree is kept by its process anyway, and at 2 h cpu-5 kept 100 trees and reached 98% inodes (26 Oct, INF-248)
 SRC_BUDGET_S = 30 * 60       # no deletion starts after this long, so the unit's `timeout 3000` never cuts a pass off mid-tree
 GIT_TIMEOUT_S = 300
 ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name

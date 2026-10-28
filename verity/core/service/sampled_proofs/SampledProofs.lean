@@ -1,6 +1,7 @@
 import SampledProofs.Json
 import SampledProofs.Program
 import SampledProofs.Partition
+import SampledProofs.PartitionRef
 import SampledProofs.Draw
 import SampledProofs.Supplied
 import SampledProofs.Registration
@@ -9,6 +10,7 @@ import SampledProofs.Bound
 import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
+import SampledProofs.OneStageZk
 import SampledProofs.Rate
 import SampledProofs.HiddenDraw
 import SampledProofs.Select
@@ -23,3 +25,9 @@ import SampledProofs.DomainAgrees
 import SampledProofs.Challenger
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
+import SampledProofs.ChallengerCoins
+import SampledProofs.Wires
+import SampledProofs.WiresSpan
+import SampledProofs.WiresSound
+import SampledProofs.WiresComplete
+import SampledProofs.WiresDrawn

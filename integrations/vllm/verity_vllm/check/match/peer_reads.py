@@ -9,7 +9,7 @@ from __future__ import annotations
 
 
 class PeerReads:
-    """`Prog`'s reads of peers Input nodes (`program_compare.Prog`, and through it `batch_decomp.Projection`)."""
+    """`Prog`'s reads of peers Input nodes (`instance_sequence.Prog`, and through it `batch_decomp.Projection`)."""
 
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""
@@ -49,7 +49,7 @@ class PeerReads:
         return parts
 
     def _peer_srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """[R17 D90 x mfast] `_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
+        """`_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
         iff every run's [lo, hi) lies inside the SAME field (the whole span does: fields are disjoint and sorted), else the record's
         per-run answer (a run outside every field or spanning two is ("PEER?", ..) run by run)."""
         import bisect

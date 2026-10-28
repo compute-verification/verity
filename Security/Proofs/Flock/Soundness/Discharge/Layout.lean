@@ -3,6 +3,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.Bytes
 import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
 import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+import Proofs.Flock.Soundness.Discharge.Layout.InCover
 import Proofs.Flock.Soundness.Discharge.Layout.Pins
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows

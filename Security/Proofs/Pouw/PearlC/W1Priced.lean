@@ -3,7 +3,7 @@ import Definitions.Pouw.PearlC.W1
 /-!
 # The γ-gap property over W1's priced sum
 
-Daniel's item 9 splits W1's charge between two accounts: a run's compute (the instructions' prices) to the compute
+A ruling splits W1's charge between two accounts: a run's compute (the instructions' prices) to the compute
 account, and every word it fetches first to the bandwidth account, with no refund for a correct unit's operands
 (`w1Priced`). The γ-gap property over the priced sum, compute plus `fetch` per word read, follows from the property over
 W1 itself at the same `γ` and `η`, with no new assumption:

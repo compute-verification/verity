@@ -1,4 +1,4 @@
-"""R11 cb-harden (1) — mutation / alias effects of the Bet A circuit builder (`torch.export(strict=False)` training IR ->
+"""Mutation / alias effects of the Bet A circuit builder (`torch.export(strict=False)` training IR ->
 `verity_vllm.program.frontend.derive`).
 
 What is under test. `derive` translates the pre-dispatch export graph WITH in-place ops kept in place (no functionalisation):
@@ -16,7 +16,7 @@ evaluated with `materialize` (registered gate semantics) and compared to eager: 
 tolerance and are DISCRIMINATING — every case also has the "wrong read" alternative (pre- vs post-mutation value), which
 differs from the right one by O(1), and the test asserts the derived value is NOT the wrong one.
 
-Cases (verdict semantics in the docstrings; the R11 report table is built from `RESULTS`):
+Cases (verdict semantics in the docstrings; the report table is built from `RESULTS`):
     A  disjoint aliases: rotary writes q,k through split views; v (disjoint) stays readable       -> Program == eager
     B  read-before-mutation snapshot (`q.clone()` before rotary), q returned after              -> Program == eager (snap = pre, q = post)
     C  pre-taken view of the mutated operand read after the mutation                              -> refuse(stale) | Program == eager(post)
@@ -51,7 +51,7 @@ import torch.nn as nn
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import vllm_iface as vi
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager")
 C = dict(T=3, NH=2, KVH=1, D=8, H=16, MAX_POS=16, EPS=1e-5, POS0=2)
@@ -685,7 +685,7 @@ class Y_AsStrided(nn.Module):
 
 
 class Y_WeightDataWrite(_Norm):
-    """R10 open item A6: a write through `.data` of a parameter inside forward (rebinding weight storage) must be refused."""
+    """A write through `.data` of a parameter inside forward (rebinding weight storage) must be refused."""
 
     def forward(self, x, y):
         self.weight.data.mul_(2.0)
@@ -721,7 +721,7 @@ def _test_Y(cls):
 # ---------------------------------------------------------------------------------------------------------
 # T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
 # tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings.py`) decide from the pinned kernel
-# (name + source sha256 + constexprs + geometry) which operand the kernel actually writes. R10 open item A1: input_ptr /
+# (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.
 # ---------------------------------------------------------------------------------------------------------
 

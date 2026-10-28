@@ -1,3 +1,4 @@
+import Definitions.Flock.Game.Prob
 import Proofs.Flock.Soundness.Game.Union
 
 /-!
@@ -16,7 +17,6 @@ they use:
 namespace FlockSoundness.Game
 
 open scoped ENNReal
-
 variable {α β : Type}
 
 theorem prob_mono {p q : α → Prop} (h : ∀ a, p a → q a) :
@@ -119,12 +119,6 @@ theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → 
         simp only [hi, ite_true]
         exact avg_ite_eq_prCoin _
 
-/-- A strategy for the relabelled game is a strategy for the game. -/
-def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofMap f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofMap f (k c) (s c)
-
 /-- Relabelling the output relabels the event. -/
 theorem prob_map (p : β → Prop) (f : α → β) :
     ∀ (g : Game α) (s : Strategy (g.map f)),
@@ -141,12 +135,6 @@ theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s
   | @Game.coin _ _ _ _ k, s => by
       rw [prob_coin]
       exact (congrArg avg (funext fun c => prob_true (k c) (s c))).trans (avg_const 1)
-
-/-- A strategy for `g.bind f`, restricted to `g`. -/
-def Strategy.ofBind (f : α → Game β) : (g : Game α) → Strategy (g.bind f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofBind f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofBind f (k c) (s c)
 
 /-- **Additive composition, for a fixed strategy.** If from every doomed output of `g` the
 continuation succeeds with probability at most `ε₂` whatever the prover does, the composition

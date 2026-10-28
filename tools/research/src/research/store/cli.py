@@ -45,11 +45,18 @@
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                                   copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
+                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
+  research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
+                                                   the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
+                                                   --apply marks them and deletes those still candidates a grace after their mark
+  research data withdraw ART... --reason T --ref ISSUE --by WHO --cache DIR [--apply]
+                                                   delete the blobs of artifacts holding values that must never be shared, cited or
+                                                   not, and label each `withdrawn` (withdraw.py, README §7.4); a blob another
+                                                   artifact holds is kept and named
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
                                                    the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
@@ -60,7 +67,7 @@
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
   research data reconcile-attempts (RUN... | --all) [--apply] [--json]
                                                    local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
-  research data parity --fresh DIR [--render] [--json-out FILE]
+  research data parity --fresh DIR [--json-out FILE]
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
@@ -84,7 +91,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..secret_hint import lost
 from . import ids, vocab
@@ -554,7 +561,10 @@ def cmd_label(argv: list[str]) -> int:
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
+    st = LocalStore(ns.store)
     why = vocab.check(key, value) or vocab.check_ref(key, ns.ref)
+    if not why and key == vocab.MEMORY_LINE_OF_RECORD:
+        why = vocab.check_line_of_record(value, _run_file(st, ns.ref, vocab.MEMORY_LINE_FILE))
     if why and not ns.off_vocab:
         print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
         return 2
@@ -564,11 +574,19 @@ def cmd_label(argv: list[str]) -> int:
             print(f"research data label: {note}", file=sys.stderr)
     if why:
         print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
-    st = LocalStore(ns.store)
     print(st.add_label(ns.target, key, value, ns.by, ref=ns.ref))
     said, lost = _label_write_through(st, ns.target)
     print(f"research data label: {said}", file=sys.stderr)
     return 1 if lost else 0
+
+
+def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
+    """The JSON file `rel` of run `run_id`'s run record (its Attempt's `outputs.run_record`), or None where the store has none."""
+    try:
+        art = ((st.get_attempt(run_id) or {}).get("outputs") or {}).get("run_record")
+        return json.loads((st.fetch(art, paths=[rel]) / rel).read_text()) if art else None
+    except (StoreError, OSError, ValueError):
+        return None
 
 
 def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
@@ -773,19 +791,16 @@ def cmd_refresh(argv: list[str]) -> int:
 
 def cmd_parity(argv: list[str]) -> int:
     """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
-    rows, and with `--render` the canonical tables.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
+    rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
     from . import parity as PA  # noqa: PLC0415
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
-    ap.add_argument("--render", action="store_true", help="also compare the daily render (tables + drilldowns) over the same records")
-    ap.add_argument("--render-source", default=None, metavar="TREE", help="the tree to render with (default: steward.toml [[render]] source)")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
-                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)), source=Path(ns.render_source) if ns.render_source else None)
+    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
     if ns.json_out:
         Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
     if ns.json:
@@ -1202,8 +1217,8 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block and any `--blobs`, to the public export
-    (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
@@ -1214,6 +1229,7 @@ def cmd_export(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
+    ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
     ap.add_argument("--verify-url", default=None, metavar="URL", help="fetch everything back through URL and check it; export nothing")
     ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
     ap.add_argument("--json", action="store_true")
@@ -1241,7 +1257,7 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   jobs=ns.jobs, dry_run=ns.dry_run)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run)
     if ns.json:
         _dump(rep)
     else:
@@ -1305,6 +1321,95 @@ def cmd_doctor(argv: list[str]) -> int:
     return 0
 
 
+def cmd_gc(argv: list[str]) -> int:
+    """README §7.4 (`gc.py`): which blobs only uncited artifacts past their kind's TTL hold; `--apply` marks them and deletes those
+    marked at least `gc.GRACE_S` ago that still are.  Read-only without `--apply`."""
+    from . import gc  # noqa: PLC0415
+
+    ap = _ap("gc")
+    ap.add_argument("--cite", action="append", default=[], metavar="DIR", required=True,
+                    help="a tree whose files cite art ids and runs (the notes repository; a checkout of the code); repeatable")
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests, labels and attempts read from the remote are kept")
+    ap.add_argument("--state", metavar="FILE", help="the marks (required with --apply)")
+    ap.add_argument("--apply", action="store_true", help="mark this pass's candidates and delete the ones marked a grace ago")
+    ap.add_argument("--report", metavar="FILE", help="write the plan's summary and the expired ids here (JSON)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (a local disk; default the temp dir)")
+    ap.add_argument("--cite-linear", action="store_true", help="Linear's issues, comments, projects, project updates and "
+                    "documents cite too (research.linear's credentials; required with --apply)")
+    ap.add_argument("--jobs", type=int, default=gc.JOBS)
+    ns = ap.parse_args(argv)
+    if ns.apply and not (ns.state and ns.cite_linear):
+        ap.error("--apply needs --state and --cite-linear (lanes cite in Linear most: top, 26 Oct)")
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data gc: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        linear = None
+        if ns.cite_linear:
+            from ..linear import Linear  # noqa: PLC0415
+            linear = Linear().gql
+        p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
+                    work=Path(ns.work) if ns.work else None, linear=linear, log=say)
+        out: dict[str, Any] = {"remote": st.remote.describe(), "ttl_days": gc.TTL_DAYS, **p.summary()}
+        if ns.apply:
+            out["applied"] = gc.apply(st.remote, p, Path(ns.cache), Path(ns.state), now=gc.clock(), jobs=ns.jobs, log=say)
+    except gc.GcError as e:
+        print(f"research data gc: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    if ns.report:
+        Path(ns.report).write_text(json.dumps({**out, "expired": p.expired}, sort_keys=True) + "\n")
+    _dump(out)
+    applied = out.get("applied") or {}
+    return 1 if applied.get("error_count") or applied.get("lost_count") else 0
+
+
+def cmd_withdraw(argv: list[str]) -> int:
+    """README §7.4 (`withdraw.py`): delete the blobs of artifacts holding values that must never be shared, cited or not, and label
+    each `withdrawn` with the reason.  A blob another artifact also holds is kept and named.  Read-only without `--apply`."""
+    from . import gc, withdraw
+
+    ap = _ap("withdraw")
+    ap.add_argument("arts", nargs="+", metavar="ART", help="full art: ids")
+    ap.add_argument("--reason", required=True, help="why, in a few words: the `withdrawn` label's value")
+    ap.add_argument("--ref", required=True, help="the issue or ruling that asked for it (INF-333)")
+    ap.add_argument("--by", required=True)
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests read from the remote are kept (gc's cache works)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (default the temp dir)")
+    ap.add_argument("--path", dest="paths", action="append", metavar="PREFIX",
+                    help="withdraw only the files under PREFIX in the arts' trees (repeatable; a run's out/sampled-proofs/served, say)")
+    ap.add_argument("--apply", action="store_true", help="delete the blobs and write the labels")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data withdraw: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        p = withdraw.plan(st.remote, Path(ns.cache), ns.arts, work=Path(ns.work) if ns.work else None, log=say, paths=ns.paths)
+        out: dict[str, Any] = {"remote": st.remote.describe(), **p.summary()}
+        if p.missing:
+            _dump(out)
+            print("research data withdraw: no manifest for some ids; nothing deleted", file=sys.stderr)
+            return 1
+        if ns.apply:
+            out["applied"] = withdraw.apply(st.remote, p, log=say)
+            lost = False
+            for art in p.arts:
+                value = f"{ns.reason} (only {', '.join(ns.paths)})" if ns.paths else ns.reason
+                st.add_label(art, vocab.WITHDRAWN, value, ns.by, ref=ns.ref)
+                said, bad = _label_write_through(st, art)
+                say(f"{art}: withdrawn label {said}")
+                lost |= bad
+            out["labels_lost"] = lost
+    except gc.GcError as e:
+        print(f"research data withdraw: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    _dump(out)
+    return 1 if out.get("labels_lost") else 0
+
+
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
 _VERBATIM_COMMANDS = ("sql",)
 
@@ -1365,7 +1470,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }
 
 

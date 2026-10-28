@@ -1,1 +1,2 @@
-"""Program layer: Definitions (`registry`), lowering (`frontend`), the lifted / padded and workload Programs; `program_digest`."""
+"""Program layer: lowering (`frontend`) onto the Definitions (`verity.ml.definitions.registry`), the lifted / padded and workload
+Programs; `program_digest`."""

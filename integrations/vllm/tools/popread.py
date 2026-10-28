@@ -415,7 +415,7 @@ def _cut_pending(i: int, verify_below: int, jobs: int = 1) -> dict[str, Any]:
 
 class Units:
     """Q_word{X=16} units per activation of each Definition: a unit rule cached under the Definition's content digest
-    (`verity_vllm.query.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
+    (`verity.ml.definitions.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
     `lean_units` in `jobs` forked processes, largest first, each result appended to `log` as it lands.  A Definition of at most
     `verify_below` gates is also cut by the reference (`evaluate_definition`, `CallGraph`); `recut` recuts cached ones too.
     Any disagreement is listed in `summary()["mismatches"]`."""
@@ -444,7 +444,7 @@ class Units:
 
     def of(self, fns: dict[str, Any]) -> dict[str, int]:
         """name -> units per activation of `fns[name]`."""
-        from verity_vllm.query.word import definition_digest
+        from verity.ml.definitions.word import definition_digest
         digest = {fn.id: definition_digest(fn) for fn in fns.values()}
         by_id: dict[str, int] = {}
         todo: dict[str, Any] = {}
@@ -513,7 +513,7 @@ def q_word_units(path: str | Path, units: Units | None = None) -> tuple[dict[int
     """Q_word{X=16, W=32} v1's units per Call (root node index), and the population (`partition_object.Partition`'s)."""
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.cut import QueryInapplicable
-    from verity_vllm.program.boolean import load_program
+    from verity.ml.definitions.boolean import load_program
     program, _digest = load_program(Path(path))
     calls = PO.calls(program)
     for k, fn in calls:
@@ -708,7 +708,7 @@ IGNORE_EOS = "the row serves with ignore_eos, so every request runs to max_token
 
 
 def _eos(lag: int, counted: bool, ignore: bool, why: str | None) -> dict[str, Any]:
-    """`counted`: the keyed counts are filled (what an EOS stop would key); `applied`: the row's stop rule honors EOS, so they are."""
+    """`counted`: the keyed counts are filled (what an EOS stop would key); `applied`: the workload's stop rule honors EOS, so they are."""
     return {"lag": lag, "keyed_from_step": 1 + lag, "counted": counted, "applied": counted and not ignore,
             "why_not": why if not counted else (IGNORE_EOS if ignore else None)}
 
@@ -766,11 +766,11 @@ def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, igno
     token row, attention once per query row and layer, the logits and the sampled id once per request.  The plan runs every
     request to max_tokens, so a request's rows from its own step 1 + LAG on are the activity an EOS stop would key
     (`eos_keyed`), and every row of an engine step holding one of them is in a batch whose shape that stop would change
-    (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the row serves
+    (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the workload serves
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.program import Program
-    from verity_vllm.query.call_scope import specialization
+    from verity.ml.definitions.call_scope import specialization
 
     P = build["program"]
     width = {k: int(v["width"]) for k, v in P["values"].items()}
@@ -1019,7 +1019,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--out", required=True)
     for x in (d, s):
         x.add_argument("--rules", action="append", default=[], metavar="PATH",
-                       help="cached unit rules: a `verity_vllm.query.word` rule directory or a --units-log JSONL (repeatable)")
+                       help="cached unit rules: a `verity.ml.definitions.word` rule directory or a --units-log JSONL (repeatable)")
         x.add_argument("--units-log", default=None, help="append each Definition's cut here (JSONL) as it lands")
         x.add_argument("--jobs", type=int, default=1, help="forked processes cutting Definitions, largest first")
         x.add_argument("--verify-below", type=int, default=0, metavar="GATES",

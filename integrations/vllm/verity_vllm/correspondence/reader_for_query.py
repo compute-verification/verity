@@ -19,10 +19,15 @@ is the frontend's naming of the Call (module, fx node, return-slot hint, row) th
 The fallback is taken ONLY when the record is absent, and which reader served is recorded (`source`, `digest`) in the manifests the
 bridge writes -- never silent.
 
+The record's return leaves place a Call in the runtime tensors it lands in (`call_place`): `Correspondence.rows` holds the row of
+them every return of the Call lies in (an attention row's `[t=<position>]` names its position, not that row), and
+`Correspondence.columns`, for a Call whose one return covers part of its row, the columns it covers (a narrowed linear's rows:
+`program.prune.kept_records` cuts their leaves to the columns read).  The fallback records neither.
+
 The second correspondence fact is the map from a Program module path to the IMPLEMENTATION's path (the collector's `named_modules()`
 name): the export wrapper holds the served model under an attribute, so `model.model.layers.0...` in the Program is `model.layers.0...` at
-the collector.  It is determined from the Build's observed implementation paths (`result.json: attention_impls_observed`, keys =
-implementation module paths) by suffix match against the Program's module paths -- the one prefix every observed path is a suffix under
+the collector.  It is determined from the Build's implementation paths (`result.json: attention_impls_observed`, or predict's
+`attention_impls_declared`, keys = implementation module paths) by suffix match against the Program's module paths -- the one prefix every observed path is a suffix under
 -- never assumed.
 
 A HELD module path (`held_module_paths`) is resolved to the registered module it names: a module that another module holds under an
@@ -43,13 +48,14 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
 
 from verity_vllm.query.program_view import ProgramView, param_reads
 
-__all__ = ["CallName", "parse_call_name", "Correspondence", "implementation_prefix", "held_module_paths", "SOURCES"]
+__all__ = ["CallName", "parse_call_name", "row_place", "call_place", "runtime_rows", "recorded_names", "Correspondence", "implementation_prefix",
+           "held_module_paths", "SOURCES"]
 
 SOURCES = ("correspondence", "v1_annotations")
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
@@ -85,6 +91,40 @@ def parse_call_name(name: str) -> CallName:
     return CallName(module, node, hint, row, suffix)
 
 
+def row_place(leaves: Any, shape: Any) -> tuple[int, int, int, int] | None:
+    """(row, c0, c1, width): the row of a row-major tensor of `shape` that leaves [lo, hi) lie in, the columns [c0, c1) of it they
+    cover and the row's width; None when they are not located or span rows."""
+    if leaves is None or not shape:
+        return None
+    w = 1
+    for s in shape[1:]:
+        w *= int(s)
+    lo, hi = int(leaves[0]), int(leaves[1])
+    if w <= 0 or hi <= lo or lo // w != (hi - 1) // w:
+        return None
+    return lo // w, lo % w, lo % w + hi - lo, w
+
+
+def call_place(slots: Iterable[tuple[Any, Any]]) -> tuple[int | None, tuple[int, int] | None]:
+    """A Call's row and columns from its located return slots, (leaves, shape of the tensor they land in) each: the row of that tensor
+    every slot lies in, when one; and for a Call of one slot that covers part of the row, the columns it covers.  (None, None) when no
+    slot is located or one spans rows."""
+    places = [row_place(leaves, shape) for leaves, shape in slots]
+    if not places or None in places or len({p[0] for p in places}) != 1:
+        return None, None
+    r, c0, c1, w = places[0]
+    return r, ((c0, c1) if len(places) == 1 and c1 - c0 < w else None)
+
+
+def runtime_rows(at: Sequence[int | None]) -> list[int] | None:
+    """`[r0, r0 + n)`: the rows of their runtime tensor n Calls' Values are, when the Calls' rows (`call_place`) are r0, r0 + 1, ... in
+    Program order with r0 > 0 (the last layer's prompt step, whose rows before the last `dead_free` removed); None when they start at
+    row 0, are not consecutive or one is not placed."""
+    if not at or at[0] is None or at[0] <= 0 or any(r != at[0] + i for i, r in enumerate(at)):
+        return None
+    return [at[0], at[0] + len(at)]
+
+
 def call_name_of(rec: CallCorrespondence) -> CallName:
     """The record's naming of a Call as a CallName.  When the record kept the frontend's naming suffix RAW (`hint`: a form it did not parse
     into member / row -- `.../<fx>/<member>[row]`, `[t=3]`, a Call lowered from no source node) it is parsed here exactly as the fallback
@@ -97,6 +137,53 @@ def call_name_of(rec: CallCorrespondence) -> CallName:
     if rec.collective is not None and rec.member == rec.collective.kind:
         return CallName(rec.module, rec.node or "", "", row, rec.member)
     return CallName(rec.module, rec.node or "", rec.member or "", row, "")
+
+
+def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[int], dict[int, int], dict[int, tuple[int, int]]]:
+    """`call_name_of` of each Call record of a `runtime-correspondence/v1` document, the tensorless Calls (every return slot neither
+    an fx output nor a written argument), and each placed Call's row and columns (`call_place`), read off the fields
+    `RuntimeCorrespondence.records` reads them from without building the records: their argument slots (a request Program's are
+    millions) are read by neither."""
+    if doc.get("schema") != SCHEMA:
+        raise ValueError(f"not a {SCHEMA} document (schema={doc.get('schema')!r})")
+    occs = doc["occurrences"]
+    names: dict[int, CallName] = {}
+    tensorless: list[int] = []
+    rows: dict[int, int] = {}
+    columns: dict[int, tuple[int, int]] = {}
+    for k, c in enumerate(doc["calls"]):
+        o = (occs[c["occ"]] if c.get("occ") is not None else None) or {}
+        module, member, hint = o.get("module", ""), c.get("member"), c.get("hint")
+        coll = o.get("collective")
+        kind = coll["kind"] if coll else None
+        if hint:
+            n = parse_call_name(hint)
+            names[k] = CallName(module, n.node, n.hint, n.row, n.suffix)
+        else:
+            row = c.get("row")
+            row = str(row) if row is not None else None
+            if coll and member == kind:
+                names[k] = CallName(module, o.get("node") or "", "", row, member)
+            else:
+                names[k] = CallName(module, o.get("node") or "", member or "", row, "")
+        rets = c.get("returns")
+        if rets and all(r.get("output") is None and r.get("written_arg") is None for r in rets):
+            tensorless.append(k)
+        elif rets:
+            outs, ins = o.get("outputs") or [], o.get("inputs") or []
+
+            def shape(r: Mapping[str, Any]) -> Any:
+                if r.get("output") is not None:
+                    return (outs[r["output"]] or {}).get("shape") if r["output"] < len(outs) else None
+                wa = r.get("written_arg")
+                return ((ins[wa] or {}).get("view") or {}).get("shape") if wa is not None and wa < len(ins) else None
+
+            r, cols = call_place([(x["leaves"], shape(x)) for x in rets if x.get("leaves") is not None])
+            if r is not None:
+                rows[k] = r
+            if cols is not None:
+                columns[k] = cols
+    return names, tensorless, rows, columns
 
 
 def implementation_prefix(program_modules: Iterable[str], implementation_paths: Iterable[str]) -> str:
@@ -176,9 +263,9 @@ def held_module_paths(P: ProgramView, names: Mapping[int, CallName]) -> tuple[di
 class Correspondence:
     """The correspondence table of one ProgramView: Call id -> CallName (module first), plus the implementation-path map.
 
-    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), or its `document`, whose Call records are
-    read one at a time and not held (what `of` gives: a request Program's table is GBs); neither = the v1-annotation fallback (the
-    Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
+    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), or its `document`, whose Calls' names are
+    read off its fields and no record is built (`recorded_names`; what `of` gives: a request Program's table is GBs); neither = the
+    v1-annotation fallback (the Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
 
     def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = (), table: RuntimeCorrespondence | None = None,
                  digest: str | None = None, problem: str | None = None, document: dict | None = None) -> None:
@@ -189,13 +276,25 @@ class Correspondence:
         #: the Calls the record lowers to no runtime tensor: every return slot is neither an fx output nor a written argument (a Value
         #: internal to its occurrence's lowering, `runtime.ReturnSlot`); empty under the fallback, which records no return slots
         self.tensorless: frozenset[int] = frozenset()
+        #: Call -> the row of the runtime tensors its returns land in, and the columns [c0, c1) of it its one return covers when part
+        #: of the row (`call_place`); empty under the fallback
+        self.rows: dict[int, int] = {}
+        self.columns: dict[int, tuple[int, int]] = {}
         if table is not None or document is not None:
-            records = iter(table) if table is not None else RuntimeCorrespondence.records(document)
-            recorded, tensorless = {}, []
-            for rec in records:
-                recorded[rec.call] = call_name_of(rec)
-                if rec.returns and all(r.output is None and r.written_arg is None for r in rec.returns):
-                    tensorless.append(rec.call)
+            if table is None:
+                recorded, tensorless, self.rows, self.columns = recorded_names(document)
+            else:
+                recorded, tensorless = {}, []
+                for rec in table:
+                    recorded[rec.call] = call_name_of(rec)
+                    if rec.returns and all(r.output is None and r.written_arg is None for r in rec.returns):
+                        tensorless.append(rec.call)
+                        continue
+                    r, cols = call_place([(x.leaves, x.view.shape if x.view is not None else None) for x in rec.returns if x.leaves is not None])
+                    if r is not None:
+                        self.rows[rec.call] = r
+                    if cols is not None:
+                        self.columns[rec.call] = cols
             if len(recorded) != len(P.calls):
                 raise ValueError(f"correspondence record has {len(recorded)} Calls, the Program {len(P.calls)}: the record is of another Program")
             self.names: dict[int, CallName] = {c.id: recorded[c.id] for c in P.calls}
@@ -257,8 +356,9 @@ class Correspondence:
 
     @staticmethod
     def implementation_paths_of(result_json: Mapping[str, Any] | None) -> tuple[str, ...]:
-        """The observed implementation module paths a Build's `result.json` records (`attention_impls_observed` keys)."""
+        """The implementation module paths a Build's `result.json` records: `attention_impls_observed` keys (a trace's), else
+        `attention_impls_declared` keys (predict's, `program.predict.naming`)."""
         if not result_json:
             return ()
-        obs = result_json.get("attention_impls_observed") or {}
+        obs = result_json.get("attention_impls_observed") or result_json.get("attention_impls_declared") or {}
         return tuple(str(k) for k in obs)

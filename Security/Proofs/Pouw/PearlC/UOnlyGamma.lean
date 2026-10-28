@@ -1,9 +1,10 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
-import Models.Pouw.Assumptions.PearlC.TTOutUOnly
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
-# TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it (the TT_OUT restatements lane's file)
+# TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it
 
 Staged; nothing pinned.
 * `correctSet_subset_correctSetU`: a unit correct under (C̃, U) binding is correct under U alone.
@@ -172,6 +173,12 @@ theorem pearlCGammaUOnlyUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [Decid
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192 : Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192 := @Pouw.PearlC.pearlCGammaUOnlySm120Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192 : Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192 :=
+  fun sha fetch salt d sem hG hp hTT =>
+    @Pouw.PearlC.pearlCGammaUOnlySm120Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevUOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192 := @Pouw.PearlC.pearlCGammaUOnlyUnpromotedCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUOnlyUnpromotedCap1000_8192 :=
+  fun sha fetch salt d sem hG hp hTT =>
+    @Pouw.PearlC.pearlCGammaUOnlyUnpromotedCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevUOnly_of_w1 hTT)

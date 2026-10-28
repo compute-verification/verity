@@ -1,4 +1,4 @@
-"""A drawn H1 leaf proved as its lanes and their combine (PRF-134, option A): the statement set, the values each statement
+"""A drawn H1 leaf proved as its lanes and their combine: the statement set, the values each statement
 reads and at which row, and the lane partials' layout, the after-draw value the statements share.
 
 Serving keeps one CP-W receipt a 32 × 32 leaf. A drawn leaf's proof is its 32 lane statements and one combine statement
@@ -45,6 +45,24 @@ input its ok's cone reads (the lane index's ``pub`` among them) or an output row
   is proofs' `PouwWindow.knownRows`, the rows `LeafLanesSound` takes, whose difftest reads this through h1_lanes'
   `known_rows` (`benchmarks/pouw/h1_lanes/run.py`), a wrapper over it.
 
+**A J10-R leaf** (``j10r``, the leaf's K: a unit over `PouwH1Tile_v5`) is proved as `h1zy`'s v2 statements, each lane in
+n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10-R K is past `CHUNK_MAX`, so n >= 2), then
+`PouwH1Combine_v2`, which folds the other statements' oks into its own:
+
+* `statements`: ``("lane", l)`` at n = 1, else ``("chunk", l, c)`` for each chunk c of lane l in chain order, lane by
+  lane, then ``("combine", None)``. Statement i < 32 n is lane i // n's chunk i % n.
+* `reads`: chunk c of lane l reads ``a<s>`` and ``b<t>`` at its chunk rows, row n i + c of a table that commits row i as n
+  chunk rows (`h1zy.chunk_leaves`), ``carry_in`` (c > 0) at row l of ``carry<c - 1>`` and ``carry_out`` (c < n - 1) at row
+  l of ``carry<c>`` (`CARRY`, what chunk c hands on, `h1zy.CARRY`), and the last chunk ``zy`` and ``partials`` (row l).
+  A lane or chunk's ``o0`` is row i of ``oks``, the statements' ok rows (`OKS`): its output is a committed value, never
+  public. The combine reads ``p<x>``, ``receipt`` and ``ok<i>``, row i of ``oks`` for each statement i < 32 n.
+* `known`: lane l's ``pub`` (`PUBLIC_J10R`: the unit's call and blocks after its roots, `pub_words`) in each of its
+  chunks, ``admit`` in its last, and the combine's ``o0`` (value ``ok<32 n>``), the leaf's one known ok.
+* The carries and ``oks`` are after-draw values like the partials, each one table committed once
+  (`one_stage.produced`): ``carry<c>`` 32 rows of `carry_words`, ``oks`` 32 n rows of one word (`verifier_entries`).
+  A port of a carry or of ``oks`` is read in full (`read_in_full`), but never ``o0``: an output row binds only the bits
+  the circuit returns, and the combine holds the rest of each ok row to 0.
+
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
 window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
 """
@@ -54,8 +72,10 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.pouw.weights import chunks
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
@@ -68,8 +88,18 @@ PUB, OK = "pub", "o0"
 OK_ROW = (1,)
 #: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
 COMPLETE = "complete"
+#: a ``--registered`` port's key that the statement reads its row in full (Flock's `KnownRead.READ_KEY`)
+READ_IN_FULL = "read_in_full"
+#: a J10-R lane's public row's fields (`h1zy.PUBLIC_J10R`): the unit's call and blocks after its roots
+PUBLIC_J10R = ("salt", "position", "roots", "call", "blocks", "lane")
+#: their bits: a digest, a u64, two digests, a u64, two u64 and the lane index's u16 word
+PUBLIC_J10R_BITS = (512, 64, 1024, 64, 128, 16)
+#: a J10-R leaf's after-draw ok rows (`h1zy.OK_WORD`), statement i's at row i, and its carries, chunk c's ``carry<c>``
+OKS, CARRY = "oks", "carry"
+#: the values a statement reads in full (`READ_IN_FULL`): each is read by several statements at one row
+FULL = (A, B, PARTIALS, OKS)
 LANE_ROWS, LANE_COLS = 4, 8
-LANE, COMBINE = "lane", "combine"
+LANE, CHUNK, COMBINE = "lane", "chunk", "combine"
 
 
 def n_digits(ks: int) -> int:
@@ -128,33 +158,84 @@ def words(k: int) -> int:
     return len(word_order(k))
 
 
-def statements(r: int, c: int) -> list[tuple[str, int | None]]:
-    """The leaf's statements in order: ``("lane", l)`` for each lane, then ``("combine", None)``."""
-    return [(LANE, ln) for ln in range(lanes(r, c))] + [(COMBINE, None)]
+def n_chunks(j10r: int | None) -> int:
+    """The statements a lane of the leaf is: 1 for v1's, a J10-R leaf's (``j10r`` its K) `weights.chunks`(K)."""
+    if j10r is None:
+        return 1
+    word_order(int(j10r))
+    return chunks(int(j10r))
 
 
-def reads(r: int, c: int, kind: str, ln: int | None = None) -> dict[str, tuple[str, int]]:
-    """A statement's registered ports, each ``(value, row)``: the value it reads and the row the verifier reads it at."""
-    if kind == LANE:
-        out = {f"a{s}": (A, i) for s, i in enumerate(lane_rows(r, c, int(ln)))}
-        out.update({f"b{t}": (B, j) for t, j in enumerate(lane_cols(r, c, int(ln)))})
-        return {**out, ZY: (ZY, 0), PARTIALS: (PARTIALS, int(ln))}
-    if kind == COMBINE and ln is None:
-        return {**{f"p{x}": (PARTIALS, x) for x in range(lanes(r, c))}, RECEIPT: (RECEIPT, 0)}
-    raise ValueError(f"a leaf's statement is a lane with its index or the combine, not {(kind, ln)!r}")
+def carry(ch: int) -> str:
+    """The value chunk ``ch`` of each lane hands chunk ``ch`` + 1 (`h1zy.CARRY`): ``carry<ch>``, row l lane l's."""
+    return f"{CARRY}{int(ch)}"
 
 
-def known(r: int, c: int, kind: str, ln: int | None = None) -> dict[str, str]:
+def carry_words(k: int, n: int, ch: int) -> int:
+    """A ``carry<ch>`` row's u16 words at K in n chunks: `h1zy.CARRY`'s 880 + 8 (ch + 1) KS_c bytes, KS_c = K / 32 n."""
+    if not 0 <= ch < n - 1 or k % (32 * n):
+        raise ValueError(f"chunk {ch} of {n} at K = {k} hands on no carry: chunks 0 .. {n - 2} do, at 32 n | K")
+    return 440 + 4 * (ch + 1) * (k // (32 * n))
+
+
+def statements(r: int, c: int, *, j10r: int | None = None) -> list[tuple]:
+    """The leaf's statements in order: ``("lane", l)`` for each lane, then ``("combine", None)``; a J10-R leaf's lanes in
+    n >= 2 chunks each ``("chunk", l, ch)``, lane by lane in chain order."""
+    n = n_chunks(j10r)
+    if n == 1:
+        return [(LANE, ln) for ln in range(lanes(r, c))] + [(COMBINE, None)]
+    return [(CHUNK, ln, ch) for ln in range(lanes(r, c)) for ch in range(n)] + [(COMBINE, None)]
+
+
+def _key(r: int, c: int, kind: str, ln: int | None, ch: int | None, j10r: int | None) -> tuple:
+    key = (kind, None if ln is None else int(ln)) + (() if ch is None else (int(ch),))
+    if key not in statements(r, c, j10r=j10r):
+        if kind in (LANE, CHUNK) and ln is not None and not 0 <= int(ln) < lanes(r, c):
+            lane_rows(r, c, int(ln))
+        form = "J10-R " if j10r is not None else ""
+        raise ValueError(f"a {form}leaf's statement is a lane with its index (a chunk of one past K = 4096, with its chunk) "
+                         f"or the combine, not {key!r}")
+    return key
+
+
+def reads(r: int, c: int, kind: str, ln: int | None = None, ch: int | None = None, *,
+          j10r: int | None = None) -> dict[str, tuple[str, int]]:
+    """A statement's registered ports, each ``(value, row)``: the value it reads and the row the verifier reads it at.
+    ``ch``: a J10-R lane chunk's chunk; ``j10r``: a J10-R leaf's K."""
+    key, n = _key(r, c, kind, ln, ch, j10r), n_chunks(j10r)
+    if kind == COMBINE:
+        out = {**{f"p{x}": (PARTIALS, x) for x in range(lanes(r, c))}, RECEIPT: (RECEIPT, 0)}
+        return out if j10r is None else {**out, **{f"ok{i}": (OKS, i) for i in range(lanes(r, c) * n)}}
+    ln, ch = int(ln), 0 if ch is None else int(ch)
+    out = {f"a{s}": (A, n * i + ch) for s, i in enumerate(lane_rows(r, c, ln))}
+    out.update({f"b{t}": (B, n * j + ch) for t, j in enumerate(lane_cols(r, c, ln))})
+    if ch:
+        out["carry_in"] = (carry(ch - 1), ln)
+    out.update({ZY: (ZY, 0), PARTIALS: (PARTIALS, ln)} if ch == n - 1 else {"carry_out": (carry(ch), ln)})
+    return out if j10r is None else {**out, OK: (OKS, statements(r, c, j10r=j10r).index(key))}
+
+
+def known(r: int, c: int, kind: str, ln: int | None = None, ch: int | None = None, *,
+          j10r: int | None = None) -> dict[str, str]:
     """A statement's ports the verifier registers at known content, each its value: lane l's ``pub`` (``pub<l>``) and
-    ``admit``, and every statement's ``o0`` (``ok<i>``, i its place in `statements`)."""
-    reads(r, c, kind, ln)
-    i = statements(r, c).index((kind, None if ln is None else int(ln)))
-    return {PUB: f"pub{int(ln)}", ADMIT: ADMIT, OK: f"ok{i}"} if kind == LANE else {OK: f"ok{i}"}
+    ``admit``, and every statement's ``o0`` (``ok<i>``, i its place in `statements`); a J10-R leaf's lane's ``pub`` in each
+    chunk, ``admit`` in its last, and only the combine's ``o0``."""
+    key, n = _key(r, c, kind, ln, ch, j10r), n_chunks(j10r)
+    i = statements(r, c, j10r=j10r).index(key)
+    if kind == COMBINE:
+        return {OK: f"ok{i}"}
+    last = {ADMIT: ADMIT} if (0 if ch is None else int(ch)) == n - 1 else {}
+    return {PUB: f"pub{int(ln)}", **last, **({OK: f"ok{i}"} if j10r is None else {})}
 
 
-def own(r: int, c: int, kind: str, ln: int | None = None) -> set[str]:
+def own(r: int, c: int, kind: str, ln: int | None = None, ch: int | None = None, *, j10r: int | None = None) -> set[str]:
     """Every port the verifier registers for a statement: its `reads` and its `known` ports."""
-    return set(reads(r, c, kind, ln)) | set(known(r, c, kind, ln))
+    return set(reads(r, c, kind, ln, ch, j10r=j10r)) | set(known(r, c, kind, ln, ch, j10r=j10r))
+
+
+def read_in_full(value: str) -> bool:
+    """Whether a port of ``value`` reads its row in full (`READ_IN_FULL`): `FULL`'s and a J10-R leaf's carries."""
+    return value in FULL or (value.startswith(CARRY) and value[len(CARRY):].isdigit())
 
 
 def bits_words(bits: Sequence[int]) -> list[int]:
@@ -165,48 +246,107 @@ def bits_words(bits: Sequence[int]) -> list[int]:
     return [sum(x << t for t, x in enumerate(b[i:i + 16])) for i in range(0, len(b), 16)]
 
 
-def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int) -> list[int]:
+def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, call: int | None = None,
+              blocks: Sequence[int] | None = None) -> list[int]:
     """Lane ln's ``pub`` row: the salt's, the position's and the two roots' leaves as the unit's seed reads them
     (`seeds.leaves`, `seeds.position_leaves`: big-endian 32-bit halves, each least significant bit first), 100 words, then
-    ln as the 101st."""
+    ln as the 101st. A J10-R lane's (`PUBLIC_J10R`) has the unit's ``call`` and its two ``blocks`` (each a u64 as the
+    position's leaves) after the roots, 112 words, then ln as the 113th."""
     if len(salt) != 64 or len(roots) != 2 or any(len(x) != 64 for x in roots):
         raise ValueError("the salt and the two roots are 64-byte digests")
     if not 0 <= int(ln) < 1 << 16:
         raise ValueError(f"the lane index is a u16 word, not {ln!r}")
+    if (call is None) != (blocks is None) or (blocks is not None and len(blocks) != 2):
+        raise ValueError("a J10-R lane's row has the unit's call and its two blocks, a v1 lane's neither")
     bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
-    assert len(bits) == sum(PUBLIC_BITS[:-1])
+    if call is not None:
+        bits += SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True) + SD.position_leaves(blocks[1], True)
+    assert len(bits) == sum((PUBLIC_BITS if call is None else PUBLIC_J10R_BITS)[:-1])
     return bits_words(bits) + [int(ln)]
 
 
-def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, admit: Sequence[int] | None = None,
-               salt: bytes | None = None, position: int | None = None,
-               roots: Sequence[bytes] | None = None) -> dict[str, tuple[str, list[int]]]:
+def known_rows(r: int, c: int, kind: str, ln: int | None = None, ch: int | None = None, *,
+               admit: Sequence[int] | None = None, salt: bytes | None = None, position: int | None = None,
+               roots: Sequence[bytes] | None = None, j10r: int | None = None, call: int | None = None,
+               blocks: Sequence[int] | None = None) -> dict[str, tuple[str, list[int]]]:
     """A statement's `known` ports' rows, each ``(value, words)``: lane l's ``pub`` (`pub_words` of the unit's ``salt``,
-    ``position`` and ``roots``) and ``admit`` (`bits_words` of the leaf's ``admit`` bits, its R), and every statement's
-    ``o0`` (`OK_ROW`), the combine's one known port. Lean's is `PouwWindow.knownRows`, with its arguments in this order."""
-    vals = known(r, c, kind, ln)
-    out = {OK: (vals[OK], list(OK_ROW))}
-    if kind == LANE:
-        if salt is None or position is None or roots is None or admit is None:
+    ``position`` and ``roots``, and a J10-R leaf's ``call`` and ``blocks``) and ``admit`` (`bits_words` of the leaf's
+    ``admit`` bits, its R), and every statement's ``o0`` (`OK_ROW`), the combine's one known port (a J10-R leaf's only
+    known ``o0``). Lean's is `PouwWindow.knownRows`, with its arguments in this order."""
+    vals = known(r, c, kind, ln, ch, j10r=j10r)
+    out = {OK: (vals[OK], list(OK_ROW))} if OK in vals else {}
+    if kind != COMBINE:
+        if salt is None or position is None or roots is None or (ADMIT in vals and admit is None):
             raise ValueError("a lane's known rows are of the leaf's admit bits and the unit's salt, position and roots")
-        out[PUB] = (vals[PUB], pub_words(salt, position, roots, int(ln)))
-        out[ADMIT] = (vals[ADMIT], bits_words(admit))
+        if (j10r is None) != (call is None or blocks is None):
+            raise ValueError("a J10-R lane's pub row has the unit's call and blocks, a v1 lane's neither")
+        out[PUB] = (vals[PUB], pub_words(salt, position, roots, int(ln), call=call, blocks=blocks))
+        if ADMIT in vals:
+            out[ADMIT] = (vals[ADMIT], bits_words(admit))
     return out
+
+
+def produced_values(r: int, c: int, k: int, *, j10r: bool = False) -> dict[str, tuple[int, int]]:
+    """The drawn leaf's after-draw values (`one_stage.produced`), each ``(rows, u16 words a row)``: ``partials`` (a row a
+    lane of 2 `words`(k)), and a J10-R leaf's ``carry<ch>`` (a row a lane, `carry_words`) and ``oks`` (a row a lane or
+    chunk statement, one word)."""
+    out = {PARTIALS: (lanes(r, c), 2 * words(k))}
+    if j10r:
+        n = n_chunks(k)
+        out.update({carry(ch): (lanes(r, c), carry_words(k, n, ch)) for ch in range(n - 1)})
+        out[OKS] = (lanes(r, c) * n, len(OK_ROW))
+    return out
+
+
+def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any], lanes_: int,
+                     words_: int, *, values: Mapping[str, tuple[int, int]] | None = None,
+                     ) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
+    """The verifier's entries and roots of a drawn leaf's values, from the accepted registration record and the accepted
+    produced record alone (Lean's `PouwWindow.Lanes.roots?`): each registered value's entry in the registration's
+    ``registered`` (the first of its value) and that entry's root, and ``partials``' own entry (`produced.entry`:
+    ``lanes_`` rows of ``words_`` u16 words under the registration's digest) at the produced record's root of
+    ``partials``; with ``values`` (`produced_values`, a J10-R leaf's) each of those after-draw values' the same way.
+    `registered_file` reads them; `pouw-leaf-own` holds a statement's file to them."""
+    ent: dict[str, Mapping[str, Any]] = {}
+    roots: dict[str, str] = {}
+    for e in registration.get("registered") or ():
+        if e["value"] not in ent:
+            ent[e["value"]], roots[e["value"]] = e, e["root"]
+    for value, (rows, wds) in (values or {PARTIALS: (lanes_, words_)}).items():
+        got = [e for e in produced["produced"] if e.get("value") == value]
+        if not got:
+            raise ValueError(f"the produced record has no {value}")
+        ent[value] = PR.entry(registration["program"], value, rows, wds, R.digest(registration))
+        roots[value] = got[0]["root"]
+    return ent, roots
 
 
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
                     roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
-                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True) -> dict[str, Any]:
+                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True,
+                    place: Mapping[str, tuple[str, int]] | None = None) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` file of one statement (one unit) from its `reads`: each port's value's entry
     (a registered value's from the accepted registration, or ``partials``' from `produced.entry`) and root (the accepted
-    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``complete``:
+    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``place``: the
+    unit's placement, ``{value: (table, base)}``: port ``(value, row)`` reads row ``base + row`` of ``table``, whose
+    entry, root and schema it takes (Lean's `PouwWindow.Lanes.ownOf`); a value it doesn't name is its own table from row 0
+    (`selfPlace`), every value so where it is None. ``complete``:
     the ports are every port of the statement (`own`), which the verifier then holds the circuit to
-    (`Registered.checkComplete`)."""
+    (`Registered.checkComplete`). A port of an A row, a B row or a partials row (`FULL`: lane l's ``a<s>``, ``b<t>``
+    and ``partials``, the combine's ``p<x>``, by the value it reads, whatever table that is placed in) is marked
+    ``read_in_full`` (`READ_IN_FULL`): the verifier holds it to one row of the registered row's words, every bit of
+    which the statement reads (Flock's `KnownRead.fullRows`), so the statements that read one row (four lanes an A row,
+    four a B row, lane l and the combine a partials row) read its same bits (proofs' `PouwWindow.Lanes.readFull`, which
+    `LeafLanesSound` takes). So is a J10-R leaf's port of a carry or of ``oks`` (`read_in_full`), but never an ``o0``,
+    an output row, of which the circuit returns only the ok bit."""
     out = {}
     for port, (value, row) in ports.items():
-        if value not in entries or value not in roots:
-            raise ValueError(f"port {port!r} reads {value!r}, whose entry and root the verifier does not hold")
-        out[port] = PR.port(value, entries[value], roots[value], [row], (schemas or {}).get(value, G.SCHEMA))
+        table, base = (place or {}).get(value, (value, 0))
+        if table not in entries or table not in roots:
+            raise ValueError(f"port {port} reads {table}, whose entry and root the verifier does not hold")
+        out[port] = PR.port(table, entries[table], roots[table], [base + row], (schemas or {}).get(table, G.SCHEMA))
+        if read_in_full(value) and port != OK:
+            out[port][READ_IN_FULL] = True
     if set(out) & set(known_ports or {}):
         raise ValueError(f"ports {sorted(set(out) & set(known_ports or {}))} are both reads and known")
     return {"format": G.READS, "ports": {**out, **(known_ports or {})}, **({COMPLETE: True} if complete else {})}
@@ -214,34 +354,47 @@ def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, 
 
 __all__ = [
     "ADMIT",
+    "CARRY",
+    "CHUNK",
     "COMBINE",
     "COMPLETE",
+    "FULL",
     "LANE",
     "LANE_COLS",
     "LANE_ROWS",
     "OK",
+    "OKS",
     "OK_ROW",
     "PARTIALS",
     "PUB",
     "PUBLIC",
     "PUBLIC_BITS",
+    "PUBLIC_J10R",
+    "PUBLIC_J10R_BITS",
+    "READ_IN_FULL",
     "RECEIPT",
     "ZY",
     "A",
     "B",
     "bits_words",
+    "carry",
+    "carry_words",
     "key_block",
     "known",
     "known_rows",
     "lane_cols",
     "lane_rows",
     "lanes",
+    "n_chunks",
     "n_digits",
     "own",
+    "produced_values",
     "pub_words",
+    "read_in_full",
     "reads",
     "registered_file",
     "statements",
+    "verifier_entries",
     "word_order",
     "words",
 ]

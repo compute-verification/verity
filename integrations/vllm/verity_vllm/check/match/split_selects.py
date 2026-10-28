@@ -1,18 +1,19 @@
 """A top-p select's split count S in a compared pair of Programs.
 
 `program_compare.Prog._bind_splits` binds each select's `Const32[S]` operand and removes it from the sequence, so neither the
-canonical hash nor a DAG hash carries S.  A single-request Program carries its own `Const32[S]`, bound the same way
+canonical hash nor a DAG hash carries S.  A Program at the registered S carries its own `Const32[S]`, bound the same way
 (`sampler_geometry.constant_splits_agree` holds the two sides' values equal per event), and may state its select specialised on S:
 `GumbelTopPTokenSelect_v2{V,S}` (`registry.topp_words`: the keep word as word gates at the constant split count, the same six
-operands).  The fold never does, so a specialised select compares as the fold's `GumbelTopPTokenSelect_v1{V}` (`as_fold_selects`)
-with its S held to the value of the `Const32` its splits operand binds (`hold`).
+operands), or `GumbelTopPTokenSelect_v3{V,S}`, v2 without its dead gates (`registry.dead_free`, the registered compiler's form).
+The fold never does, so a specialised select compares as the fold's `GumbelTopPTokenSelect_v1{V}` (`as_fold_selects`) with its S
+held to the value of the `Const32` its splits operand binds (`hold`).
 """
 from __future__ import annotations
 
 import re
 
 #: a specialised select's spec: an optional scope prefix, V and S
-SPECIALISED = re.compile(r"((?:[^:]*:)?)GumbelTopPTokenSelect_v2\{V=(\d+),S=(\d+)\}")
+SPECIALISED = re.compile(r"((?:[^:]*:)?)GumbelTopPTokenSelect_v[23]\{V=(\d+),S=(\d+)\}")
 FOLD_SELECT = "GumbelTopPTokenSelect_v1"
 
 

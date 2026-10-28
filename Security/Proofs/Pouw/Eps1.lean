@@ -5,10 +5,10 @@ import Proofs.Pouw.Eps1.ClassP
 /-!
 # Dither's CUDA-core lower bounds in M3: proofs
 
-Theorem B's two instances of `Models.Pouw.Guarantees.Eps1`, each as `Pouw.SecurityProofs.Eps1.G`, proved in
+Theorem B's two instances of `Definitions.Pouw.Guarantees.Eps1`, each as `Pouw.SecurityProofs.Eps1.G`, proved in
 `Eps1/WordLocal.lean` from the lemmas in `Eps1/Basics.lean`, and Theorem C's count over issue slots (`ClassPSlots`),
-proved in `Eps1/ClassP.lean`. Theorem C itself (`ClassPPacked`) is not proved, so `lean-audit.json` doesn't list it:
-its paper proof caps a writer's creations at 4, and a writer can create 8 (note:20261018T0230Z-draft-floors).
+proved in `Eps1/ClassP.lean`. Theorem C's packed form is retired: its paper proof caps a writer's creations at 4, and
+a writer can create 8.
 -/
 
 namespace Pouw.SecurityProofs.Eps1

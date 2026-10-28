@@ -10,6 +10,8 @@ epoch's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin
 (`pouw/round`, rounds numbered from 0), all committed before the epoch. Round `r`'s coin opens once, after the verifier
 recorded round `r`'s root. `liveEpochReason` is `live_epoch_reason`, `roundsReason` is `rounds_reason`, the rule on a
 window's round coins, and `roundKey` is `round_key`, round `r`'s noise key from its opened coin and the round's root.
+A Pearl-C pass's live session is reserved for its salt coin alone (`SALT_FAMILIES`), which `saltEpochReason`
+(`salt_epoch_reason`) checks.
 -/
 
 namespace PouwWindow
@@ -53,6 +55,18 @@ def liveEpochReason (c : LiveCommitment) : Option String :=
   else match c.families with
     | [s, d, (r, _)] => if s == (SALT, 1) && d == (DRAW, 1) && r == ROUND then none else some NOT_LIVE_EPOCH
     | _ => some NOT_LIVE_EPOCH
+
+/-- `SALT_FAMILIES`: a Pearl-C pass's live layout, its salt coin alone, so a session reserved with it is complete exactly
+when it released that coin. -/
+def SALT_FAMILIES : List (String × Nat) := [(SALT, 1)]
+
+def NOT_SALT_EPOCH : String := "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
+
+/-- `salt_epoch_reason`: why `c` is not a Pearl-C salt session's coin commitment; `none` when it is. -/
+def saltEpochReason (c : LiveCommitment) : Option String :=
+  if c.scheme != LIVE_SCHEME then some s!"the coin commitment's scheme is {c.scheme}, not {LIVE_SCHEME}"
+  else if c.families != SALT_FAMILIES then some NOT_SALT_EPOCH
+  else none
 
 /-- `rounds_reason`: why `openings` are not a live window's round coins over the round roots the verifier recorded,
 `roots` in order; `none` when they are. -/

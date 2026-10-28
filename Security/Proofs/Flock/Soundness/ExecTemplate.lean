@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.ExecSetup
 /-!
 # A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)
 
-`HmRow.parse … (tmpl := some t)` is the path `parseTyped` takes for a typed template (#277, #307):
+`HmRow.parse … (tmpl := some t)` is the path `parseTyped` takes for a typed template:
 - `parse_facts_tmpl`: its nets are the template's root and placed layouts' circuits, then the file's own text nets and
   lookup slots; its unit is the root (`unitNet = 0`), one per template instance; its block is `blockOf t` over those nets; its wires are
   the rows' own chains (`rowWires`), with no leaf map or cut; and `HmRow.check` passed. A typed statement's rows are
@@ -388,7 +388,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           leafCuts := hlc (hkeys "leaf_cuts" (by simp [HmRow.TEMPLATE_DERIVED]))
           v1 := fun ht => rowPorts_typed (ht ▸ hrp) }
 
-/-- **What `parseTyped` accepted** (#307): `Typed.read`'s class `k` and block, then `parse` on the block, a template's
+/-- **What `parseTyped` accepted**: `Typed.read`'s class `k` and block, then `parse` on the block, a template's
 (`tmpl`) or a flat class's unit net (`pre`), with the class recorded as `cls`. -/
 theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parseTyped tags bytes tables = .ok c) :
@@ -460,6 +460,7 @@ theorem setupH_spec_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
   obtain ⟨hk, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jpD] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨pin, hpin, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)

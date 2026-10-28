@@ -1,7 +1,7 @@
 """A windowed record run whose learning step outgrows the transient host budget fails by name and never crashes the serving thread, on
 the real collector, window ring and kernels.
 
-WS-D (r20261018-190716-bc01, GLM-5.3 TP8 eager, rows-sha512): the worker abandoned step 0 past the 4 GiB budget, erasing the step's
+GLM-5.3 TP8 eager, rows-sha512: the worker abandoned step 0 past the 4 GiB budget, erasing the step's
 windows, and the serving thread then segfaulted in `Collector::ensure_windows` on them.  Here the budget is 16 KiB and each step ~56 KiB
 over a ring of four 8 KiB windows, so the worker abandons step 0 at its third window while the serving thread is still staging it: every
 later acquisition is refused, every step is a placeholder, the run has no root and names the failure, and its verdict leads with that
@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.
 
 from tests.commit import test_windowed_retain_levels as WR  # noqa: E402
 from tests.commit import test_windowed_rows_sha512 as RS  # noqa: E402
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 
 

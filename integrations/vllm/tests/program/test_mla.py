@@ -1,6 +1,6 @@
 """`registry.mla`: Triton's one-split MLA decode, the absorb bmm and the shared-expert combine on bits are Boolean; agree with
 `mla_check`'s numpy models of the kernels (equal to the sm_120 captures of `mla_capture` word for word, 12,420 decode rows, 3,028
-bmm rows and 84 combine rows of art run r20261004-060203-ba52) on random words and on words that reach every branch: the exp's
+bmm rows and 84 combine rows of one run) on random words and on words that reach every branch: the exp's
 small-argument path, masked columns, signed zeros, subnormals, infinities and NaNs; reduce stage 2's one-split merge to the
 gate and `TritonMlaOut` exactly; reproduce captured hardware outputs at GLM-4.7-Flash's statics (by digest); and are pinned by
 gate count and program digest."""
@@ -19,10 +19,10 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import mla as M
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import mla_check as MK
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import mla as M
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import mla_check as MK
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -155,7 +155,6 @@ def test_decode_agrees_with_the_model(T: int, kind: str) -> None:
     _agree_decode(T, kind)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("T", [2, 16, 17, 31, 32, 64, 65])
 @pytest.mark.parametrize("kind", ["spread", "large", "special", "uniform", "tiny"])
 def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> None:
@@ -168,7 +167,7 @@ def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> 
         _agree_decode(T, kind, SCALE=0x41000000)
 
 
-#: captured `o` of one-split requests of `decode-v1` (run r20261004-060203-ba52; `mla_capture.case_inputs` rebuilds their inputs
+#: captured `o` of one-split requests of `decode-v1` (`mla_capture.case_inputs` rebuilds their inputs
 #: from the case): (case index, request, sha256 of its 20 x 512 output words, little-endian)
 CAPTURED = [
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 0, "1b7483a67b1bb456"),
@@ -177,8 +176,7 @@ CAPTURED = [
 ]
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("case,b,digest", CAPTURED, ids=[f"T={c['seqlens'][b]}" for c, b, _ in CAPTURED])
+@pytest.mark.parametrize("case,b,digest", [*CAPTURED[:2], pytest.param(*CAPTURED[2], marks=pytest.mark.slow)], ids=[f"T={c['seqlens'][b]}" for c, b, _ in CAPTURED])
 def test_decode_reproduces_the_captured_hardware_output(case: dict, b: int, digest: str) -> None:
     """`TritonMlaDecode_v1` at GLM-4.7-Flash's statics (20 heads, 512 + 64 latent, sm_scale 2^-4) on a captured request: its
     output words hash to what the RTX PRO 6000 (sm_120) wrote. The only check of the Definition itself at the served widths,

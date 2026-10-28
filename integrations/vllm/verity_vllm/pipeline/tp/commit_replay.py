@@ -296,7 +296,7 @@ def fold(out: Path) -> bool | None:
 
 def main(o: Options) -> int:
     from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.program.kernels.compiled_relations import warm_vml
+    from verity_vllm.program.compiled_relations import warm_vml
 
     out = Path(o.commit_out)
     try:

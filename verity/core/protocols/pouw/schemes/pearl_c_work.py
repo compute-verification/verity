@@ -1,5 +1,5 @@
 """Pearl-C's records: what the prover declares for each matmul before the draws, and the root that binds them (statement
-review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocol_options.pouw_pearl_c_device`).  The work law
+review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocols.pouw.pearl_c`).  The work law
 that credits, draws and checks by them, with its clear audit, is a reference tool, not a verifier:
 ``benchmarks/pouw/clear/clear_work.py``.
 
@@ -14,6 +14,8 @@ that credits, draws and checks by them, with its clear audit, is a reference too
   - Its excluded rows: A rows of the matmul and B rows of its weight that fail the scheme's per-row rules.
   - Its voluntary rows (V-EX): rows it gives up, which earn no credit.
   `records_root` binds the records and the splits.
+* **`pad_weight`**: a weight whose n is not whole column tiles (GLM-5.3's lm_head, 19360 rows a TP8 rank) is served with
+  zero rows up to the next whole tile, and the last tile's rows are voluntary, so that tile is neither credited nor drawn.
 """
 
 from __future__ import annotations
@@ -92,6 +94,19 @@ class UnitRecord:
         """The tile's credited rows and columns: real, neither excluded nor voluntary."""
         ua, ub = set(self.excluded_a) | set(self.voluntary_a), set(self.excluded_b) | set(self.voluntary_b)
         return [i for i in tile.rows if i < self.real_rows and i not in ua], [j for j in tile.cols if j not in ub]
+
+
+def pad_weight(rows: Sequence[bytes], tile_n: int) -> tuple[list[bytes], tuple[int, ...]]:
+    """(the rows, the padded tile's rows): a weight's rows (FP32 words along k) with all-zero rows appended up to a whole
+    number of `tile_n`-column tiles, and the rows of the last tile when it holds any of them, its real columns with the
+    zero rows.  The glue drops the padded rows' outputs.  The prover declares the padded tile's rows voluntary
+    (`voluntary_b`, through `declare`'s `padded_b`), so that tile has no credited cell: no draw lands on it and it opens
+    no exclusion tile, so no tile check sees a zero row, and the credit is the full tiles' real columns at the padded
+    n's cell credit, under an unpadded n's honest credit."""
+    if not rows or len({len(r) for r in rows}) != 1:
+        raise ValueError("a weight's rows are one length")
+    pad = -len(rows) % tile_n
+    return list(rows) + [bytes(len(rows[0]))] * pad, tuple(range(len(rows) // tile_n * tile_n, len(rows) + pad) if pad else ())
 
 
 def records_root(salt: bytes, weights_root: bytes, splits: Mapping[int, Split], records: Sequence[UnitRecord]) -> bytes:

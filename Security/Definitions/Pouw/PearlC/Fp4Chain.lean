@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.Fp4
 /-!
 # Pearl-C4's chain and noise atom on the block-scaled FP4 step (trusted definitions)
 
-The FP4 line's two uses of `Fp4Atom.step` (`internal/pouw/rtx-pro/fp4-design.md`: `pearl-c-nvfp4-v0` on `sm120Nvf4`,
+The FP4 line's two uses of `Fp4Atom.step` (`pearl-c-nvfp4-v0` on `sm120Nvf4`,
 `pearl-c-mxfp4-v0` on `sm120Mxf4`), parametric in the atom:
 
 * **The chain** (`Fp4Atom.chain`, `BlockScaledAlignAdd.chain`): the ascending-K chain of firings over `K` code pairs (a

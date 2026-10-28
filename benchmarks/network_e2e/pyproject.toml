@@ -1,0 +1,32 @@
+[project]
+name = "verity-network-e2e"
+version = "0.0.0"
+description = "Network accounting end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
+requires-python = ">=3.12"
+dependencies = ["verity"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# e2e.py runs certifier-serve's rehearsals and N2's verdicts through n2_zk, and the chain the negatives
+# (`negatives.py`), which it imports from there; the chain's derived bits are `encodings/derived.py`'s (the encodings
+# suite's module, loaded by path); the claim's zero-knowledge gaps are checked against the certifier README's. The
+# compact finish's regression ties the gate's own compact runs, network_traces' `gate_compact`, whose command is the
+# auditor host's. The tests build and run the Lake packages whose lakefiles they list: `network-records`
+# (certifier.lean_audit) and `sampled-proofs-verifier` (one_stage.verifier). The endpoint's Commit windows are the vLLM
+# integration's window advice (`window_advice`), which the chain reads.
+inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
+          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
+          "integrations/vllm/verity_vllm/pipeline/window_advice.py",
+          "verity/core/protocols/certifier/README.md", "benchmarks/live_challenger/auditor.py",
+          "benchmarks/live_challenger/host.json",
+          "verity/core/protocols/network/lean/lakefile.toml", "verity/core/service/sampled_proofs/lakefile.toml"]

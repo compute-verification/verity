@@ -1,5 +1,5 @@
 """`Flock.Sigma.check`, the Lean verifier's check that a Boolean Program is σ of its word Program, held to the Python that
-mirrors it, `verity_vllm.program.boolean.sigma_check`.
+mirrors it, `verity.ml.definitions.boolean.sigma_check`.
 
 The reference decodes both descriptors (`codec.decode_program`), checks the Boolean descriptor's `word` link, σ's table and the
 input streams as the Lean does, then runs `sigma_check` itself on the two roots seen as Definitions: each root's Calls in
@@ -25,6 +25,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+import verity.ml.definitions.boolean as BB
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
@@ -33,10 +34,9 @@ from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
-from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.catalog import load as load_registry
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.catalog import load as load_registry
+from verity.ml.definitions.replay import replayer
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

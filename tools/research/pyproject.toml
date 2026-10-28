@@ -23,7 +23,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
 # test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (integrations/vllm, verity,
 # catalog, kernels, core);
-# test_store_prov loads the tc_probe and bench_vu declarations (benchmarks/tc_probe, archive/direct), content-resolves a golden
+# test_store_prov loads the tc_probe declaration (benchmarks/tc_probe), content-resolves a golden
 # fixture (verity/ml/circuits/ops/tests/fixtures) and git-archives benchmarks/tc_probe and verity/ml/circuits/silicon;
 # test_repo_replicas hashes every tracked fixture fixtures/artifacts.json registers (today under fixtures, integrations/vllm
 # and verity/ml/circuits/ops/tests/fixtures). test_pythonpath and test_notes derive every workspace member's import root from the
@@ -34,13 +34,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # them to the node (test_queue, test_merge_gate, test_nebius_lean_sandbox). tools/verity/lean/merge.py and check.py: test_queue
 # commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures. tools/verity/check/suites.py:
 # test_queue commits it into its origin, so the preflight's tests select suites by its own `touched`.
-inputs = [".agents/skills", "verity/README.md", ".gitignore", "archive/direct", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
+# tools/verity/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
+# runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
+# the sync's pin rebuild (`repinned`) reads the real `PINS`.
+inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
           "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
-          "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
-          "benchmarks/harness/pyproject.toml", "archive/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
+          "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "benchmarks/numerical/pyproject.toml",
+          "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/circuit_check/pyproject.toml",
           "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
-          "tools/verity/lean/check.py", "tools/verity/check/suites.py", "benchmarks/native_peak/pyproject.toml",
+          "tools/verity/lean/check.py", "tools/verity/check/suites.py", "tools/verity/check/gates/markdown_caps.py", "tests/test_repository.py", "tools/verity/check/pins.py", "benchmarks/native_peak/pyproject.toml",
           "benchmarks/tc_probe_fp4/pyproject.toml"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its

@@ -52,3 +52,18 @@ def test_a_tp_build_of_a_workload_without_the_field_is_refused(tmp_path, monkeyp
 
 def test_a_tp_build_without_a_workload_leaves_vllm_meta_s_default(tmp_path, monkeypatch):
     assert _construct_engine_args(tmp_path, monkeypatch, None, 2) == {}
+
+
+def test_a_tp_rank_s_dead_free_request_reaches_the_construction(tmp_path, monkeypatch):
+    """`--dead-free` reaches `_construct`, whose derive takes it, and the result records it; a one-rank Build refuses it (one rank's
+    request always is)."""
+    seen: dict = {}
+    monkeypatch.setattr(B, "_construct", lambda *a, **k: seen.update(k))
+    monkeypatch.setattr(B.engine_env, "apply_target", lambda env: None)
+    monkeypatch.setattr(B, "_cuda_available", lambda: False)
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    B.main(B.Options(out=str(tmp_path / "tp2"), wrapper="request", tp=2, rank=1, dead_free=True))
+    assert (seen["tp"], seen["rank"], seen["dead_free"]) == (2, 1, True)
+    assert json.loads((tmp_path / "tp2" / "result.json").read_text())["tp"] == {"world": 2, "rank": 1, "dead_free": True}
+    assert B.main(B.Options(out=str(tmp_path / "tp1"), wrapper="request", dead_free=True)) == 2
+    assert "--dead-free" in json.loads((tmp_path / "tp1" / "result.json").read_text())["message"]

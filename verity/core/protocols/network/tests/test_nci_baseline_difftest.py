@@ -1,6 +1,6 @@
 """The difftest of θ's provenance check (`NciCheck.Baseline`): the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py` writes 1,211 declarations with θ, θ's
+`verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py` writes 1,213 declarations with θ, θ's
 provenance and the service's trusted input (the deployment's registration log, the run and its parameters), each expanded
 gate by gate where the policy check gives a verdict, and `scripts/nci_reference.py`'s `check_baseline` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/BaselineDifftestMain.lean`
@@ -40,7 +40,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.Basel
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 1,211 cases, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 1,213 cases, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{baseline_difftest/cases.jsonl}", "{baseline_difftest/expanded.jsonl}",
@@ -59,10 +59,12 @@ def test_the_random_cases_reach_every_code():
 
 
 def test_the_pinned_cases_get_their_codes():
-    """Two accepted, one per refusal code, an entry of the `output` kind, then θ holding an input bound per run
-    (`theta-not-registered`); the unrolled check on each expansion gives the same."""
+    """Two accepted, one per refusal code, an entry of the `output` kind, θ holding an input bound per run
+    (`theta-not-registered`), then a field of another JSON type than the string or null the check compares it with
+    (`TYPED`); the unrolled check on each expansion gives the same."""
     pinned = vectors.pinned()
-    assert [p["malformed"] for p in pinned] == [None, None, *vectors.CODES, "theta-provenance", "theta-not-registered"]
+    assert [p["malformed"] for p in pinned] == [None, None, *vectors.CODES, "theta-provenance", "theta-not-registered",
+                                                *(code for _, code in vectors.TYPED)]
     for p in pinned:
         inst, tr = p["case"]["instance"], p["case"]["trusted"]
         out = reference.check_baseline(inst, tr)
@@ -72,7 +74,7 @@ def test_the_pinned_cases_get_their_codes():
 
 
 def test_an_output_entry_is_refused_as_an_unknown_kind():
-    """θ holds registered public data only, never an earlier run's output (Daniel, 21 Oct). The pinned `output` entry
+    """θ holds registered public data only, never an earlier run's output. The pinned `output` entry
     cites a port that an earlier record of the log holds under the root the run registers the parameter with, in the form
     the check took until then: it is refused `theta-provenance`, the code of an entry of an unknown kind, while the same
     record's registered value of that root, cited as `registered`, is accepted."""
@@ -93,7 +95,7 @@ def test_an_output_entry_is_refused_as_an_unknown_kind():
 
 
 def test_theta_cites_the_first_record_of_the_deployments_log():
-    """One registration log is one deployment, and θ cites its first record (compute-accounting, 21 Oct). The two pinned
+    """One registration log is one deployment, and θ cites its first record. The two pinned
     acceptances cite it from the deployment's first run, whose own record it is, and from its third. The pinned
     `theta-not-at-deployment-start` case cites, from the third run, the second record, which registers the same value
     under the same root and precedes the run's own, so the rule it replaces (a record before the run's own) took it; cited

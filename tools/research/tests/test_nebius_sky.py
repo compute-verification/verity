@@ -58,7 +58,7 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
     borrow = {r: usage_report().quantity(v) for r, v in re.findall(r"\{name: (\S+), nominalQuota: [^,]+, borrowingLimit: \"([^\"]+)\"\}", provers)}
     others = {res: sum(x[res] for name, x in q.items() if name != "provers") for res in ("nvidia.com/gpu", "cpu", "memory")}
-    assert borrow == others                    # proofs borrows every idle GPU, with the CPU and memory to run them (Daniel 10:58 PM PDT)
+    assert borrow == others                    # proofs borrows every idle GPU, with the CPU and memory to run them
     assert text.count("    withinClusterQueue: Never") == 5 and text.count("policy: LowerPriority") == 2   # never evict a running Build
     assert text.count("cohortName: nebius") == 5 and text.count("    reclaimWithinCohort: Any") == 1
     backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
@@ -864,7 +864,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
     deploy = (SKY.parent / "deploy.toml").read_text()
-    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]' in deploy
+    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]' in deploy
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
         assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()

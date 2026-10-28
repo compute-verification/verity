@@ -64,12 +64,14 @@ refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
 from __future__ import annotations
 
 import fcntl
+import gc
 import hashlib
 import json
 import os
 import re
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -309,16 +311,19 @@ def lms_verify(params: lms.Params) -> Verify:
 
 
 class LmsSigner:
-    """A memory challenger's S1 key (`lms.PrivateKey`) and its leaf state (`lms.LeafState`), which refuses a used or
-    missing leaf; `scheme` is `LMS` at `lms.DEPLOYED`, else a test's own id for other parameters."""
+    """A memory challenger's S1 key (`lms.PrivateKey`) and the path of its leaf state (`lms.LeafState`), which refuses a
+    used or missing leaf; `scheme` is `LMS` at `lms.DEPLOYED`, else a test's own id for other parameters. Each `sign`
+    opens the state only to sign, waiting on its lock while another signer of the key holds it, so concurrent sessions on
+    one key take turns, each signature at a leaf of its own reserved on disk before it is made."""
 
-    def __init__(self, key: lms.PrivateKey, state: lms.LeafState, scheme: str = LMS) -> None:
+    def __init__(self, key: lms.PrivateKey, state: str | os.PathLike, scheme: str = LMS) -> None:
         if (scheme == LMS) != (key.params == lms.DEPLOYED):
             raise ValueError(f"{LMS} is LMS at {lms.DEPLOYED}, not {key.params}")
-        self.key, self.state, self.scheme, self.public_key = key, state, scheme, lms.public_key(key)
+        self.key, self.state, self.scheme, self.public_key = key, Path(state), scheme, lms.public_key(key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:
-        return lms.sign(self.key, self.state, lms.memory_challenger_message(self.key.I, session, record)).encode()
+        with lms.LeafState(self.state, self.public_key, self.key.params.H, wait=True) as state:
+            return lms.sign(self.key, state, lms.memory_challenger_message(self.key.I, session, record)).encode()
 
 
 _SCHEMES: dict[str, Verify] = {LMS: lms_verify(lms.DEPLOYED)}
@@ -385,9 +390,8 @@ class SessionLog:
 
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
     another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
-    has run.  A file can see neither.  The claim that the host does neither is `trusted-nebius-host`
-    (`verity.core.claims`) as network-accounting widens it, in Daniel's words: its host "never restores an earlier copy
-    of the state the device keeps there" (pending network-accounting's widening, Daniel decision 2)."""
+    has run.  A file can see neither.  The claim that the host does neither is `trusted-host`
+    (`verity.core.claims`): its host never restores an earlier copy of the state the device keeps there."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
@@ -510,9 +514,11 @@ class MemoryChallenger:
         return r
 
     def run(self, respond: Callable[[int], bytes]) -> SignedSession:
-        """Drive the session against `respond(index)` and close it."""
-        while not self.done:
-            self.receive(respond(self.challenge()))
+        """Drive the session against `respond(index)`, the collector paused for its rounds (`collector_paused`), and close
+        it."""
+        with collector_paused():
+            while not self.done:
+                self.receive(respond(self.challenge()))
         return self.close()
 
     def close(self) -> SignedSession:
@@ -530,6 +536,20 @@ class MemoryChallenger:
         if self.signed is None:
             raise RuntimeError("the coins are opened after the session, once it is signed")
         return tuple(self.coins.opening(r.j) for r in self.rounds)
+
+
+@contextmanager
+def collector_paused() -> Iterator[None]:
+    """Python's cyclic garbage collector off inside, and as it was after. A timed round can't absorb a collection: the
+    first full one after `period.challenger` loads the deployed key, whose tree is 2^21 objects, stalls the process
+    for about 35 ms, 40 times Δ + RTT at the certified point, and where it falls is set by the allocation count."""
+    was = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if was:
+            gc.enable()
 
 
 @dataclass(frozen=True, slots=True)
@@ -590,5 +610,6 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner",
            "MemoryChallenger", "Round", "SessionCommitment", "SessionLog", "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf", "covering_certificate", "lms_verify", "message",
+           "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf", "collector_paused", "covering_certificate",
+           "lms_verify", "message",
            "records_root", "register", "verdict", "verify_coin"]

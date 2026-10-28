@@ -1,4 +1,4 @@
-"""sweep/workload.py — the ONE deterministic heterogeneous workload generator of the R12 sweep (BRIEF §12).
+"""sweep/workload.py — the ONE deterministic heterogeneous workload generator of the sweep.
 
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
@@ -22,7 +22,10 @@ every earlier workload) and truncated to the exact planned length.  Sampling `st
 independent stored seed per request (`requests[i].seed`, read by `load_workload`).  `stoch-t0.8-p1`: the same without the top-p mask (temperature and
 Gumbel-max only).  Arrivals `staggered`: request 0 at 0 s, the
 others at seeded offsets over the first ~60 % of a full-length run; stored as `arrival_offsets_s` and as the step-indexed
-`arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded).
+`arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded), declared
+where the serving loop admits it (`arrivals.realized_arrive_steps`): an arrival after every earlier request has finished is the
+forward after the last of them, since the loop never idles.  The TP Commit places the Build's manifest at the declared steps, so a
+declaration the engine doesn't realize leaves the served identities unbound.
 `--shared-prefix N` (a prefix-caching row): every prompt longer than N starts with the same N tokens of one seeded passage, then its own
 text (`requests[i].shared_prefix_tokens`), the row's `engine.args.enable_prefix_caching` is true, and `--check` requires a request
 longer than N to arrive after the first one (a hit needs the first one's blocks computed).
@@ -32,7 +35,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import uuid
 from importlib import resources
@@ -41,9 +43,11 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
                                 rows_of_record)
 from verity_vllm.engine import served
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
@@ -54,7 +58,9 @@ SAMPLING = {
     "stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0},
     "stoch-t0.8-p1": {"temperature": 0.8, "top_p": 1.0, "top_k": 0},
 }
-NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R11: 7.5–10.9 ms); converts arrival seconds -> arrive_step
+NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (7.5–10.9 ms); converts arrival seconds -> arrive_step
+ARRIVE_STEP_RULE = ("realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished "
+                    "is declared at the forward after the last of them, where the serving loop admits it")
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
 #: the row file's reason for the switch a target with the int8 attention in scope sets (`TargetProfile.engine_args`)
 INT8_ATTENTION_REASON = ("TargetProfile.int8_exact serves the exact-int8 attention (engine.int8_attention_vllm.Int8AttentionImpl), "
@@ -160,7 +166,8 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
         horizon_s = max(0.1, 0.6 * max_output * NOMINAL_STEP_S)            # arrivals over the first ~60 % of a full-length run
         offs = sorted(round(float(x), 3) for x in r.uniform(0.05, horizon_s, size=batch - 1))
         offsets_s = [0.0] + offs
-        steps = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        drawn = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        steps = realized_arrive_steps([{"max_tokens": c, "arrive_step": a} for c, a in zip(caps, drawn)])
     else:
         offsets_s = [0.0] * batch
         steps = [0] * batch
@@ -169,7 +176,7 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
             "min_input": lo, "min_output": MIN_CAP if max_output >= MIN_CAP else max_output,
             "sampling": sampling, "sampling_params": SAMPLING[sampling], "arrivals": arrivals,
             "input_lengths": lengths, "output_caps": caps, "sampling_seeds": seeds, "arrival_offsets_s": offsets_s, "arrive_steps": steps,
-            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": "round(offset_s / nominal_step_s)",
+            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": ARRIVE_STEP_RULE,
                              "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"},
             "length_rule": {"input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] "
                                      "nudged off powers of two; seeded permutation", "output": "same over [2, O]; paired by seeded permutation",
@@ -188,7 +195,7 @@ def prefix_sharers(p: dict) -> list[int]:
 # the §12 self-check
 # ---------------------------------------------------------------------------------------------------------------------------------
 def check_plan(p: dict) -> list[str]:
-    """BRIEF §12 requirements; returns the list of violations (empty = PASS).  The B >= 8 clauses apply only for B >= 8."""
+    """The sweep's workload requirements; returns the list of violations (empty = PASS).  The B >= 8 clauses apply only for B >= 8."""
     B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     L, C = [int(x) for x in p["input_lengths"]], [int(x) for x in p["output_caps"]]
     lo, olo = int(p["min_input"]), int(p["min_output"])
@@ -262,7 +269,7 @@ class Tok:
 
 
 def hf_home() -> Path:
-    env = os.environ.get("HF_HOME")
+    env = settings.HF_HOME
     if env:
         return Path(env)
     try:
@@ -361,7 +368,7 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         "sweep": {k: p[k] for k in ("schema", "row_id", "seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling",
                                     "sampling_params", "arrivals", "input_lengths", "output_caps", "sampling_seeds", "arrival_offsets_s",
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
-        "note": (f"R12 sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
+        "note": (f"sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
                  f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
                  + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
@@ -372,8 +379,8 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         doc["sweep"]["shared_prefix"] = n
         doc["note"] += (f"  Shared prefix: requests {sharers} (every prompt longer than {n} tokens) start with the same {n} tokens and "
                         f"prefix caching is on, so each after the first reuses its cached KV blocks.")
-    # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: the execution label's VLLM_BATCH_INVARIANT, or what a `--target` declares; on a SYS target, where P2P hangs,
+    # a tensor-parallel workload (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
+    # (the execution label's VLLM_BATCH_INVARIANT, or what a `--target` declares; on a SYS target, where P2P hangs,
     # disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
@@ -386,13 +393,10 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
 def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
     if explicit:
         return explicit
-    try:                                    # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
-        from verity_vllm.engine.engine_profile import CASES
-        for k, v in CASES.items():
-            if v.get("repo") == hf_repo:
-                return k
-    except Exception:  # noqa: BLE001
-        pass
+    from verity_vllm.engine.profiles.cases import CASES
+    for k, v in CASES.items():              # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
+        if v.get("repo") == hf_repo:
+            return k
     try:
         doc = json.loads(CHECKPOINTS.read_text())
     except (OSError, ValueError):
@@ -428,7 +432,7 @@ class Options:
                                 "runs with enable_prefix_caching (vLLM reuses whole KV blocks: N a multiple of the block size reuses all of it)")
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
     target: str | None = option("--target", default=None,
-                                help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
+                                help="TargetProfile overrides of the workload as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
                                 "to the row's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
                                 "`engine.args`, a TP row's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
     reason: list[str] = option("--reason", action="append", default=[], metavar="SWITCH=TEXT",

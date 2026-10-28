@@ -170,7 +170,7 @@ def test_a_new_lease_waits_for_another_process_to_leave_its_gpus(monkeypatch, lo
 
 
 def test_a_commit_whose_leased_gpu_stays_occupied_ends_by_name_and_gives_the_lease_back(tmp_path):
-    """r20261019-001854-76c1: a cancelled Commit's engine workers outlived its lease, and the next Commit's engine found its GPUs full."""
+    """A cancelled Commit's engine workers can outlive its lease, so the next Commit's engine can find its GPUs full."""
     fake_smi(tmp_path, ["GPU-5"] * 4)
     env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": fake_lease(tmp_path)}
     GL.hide_devices(env)
@@ -347,6 +347,7 @@ ONE = {"CUDA_VISIBLE_DEVICES": "5", "GPU_LEASE_UUID": "GPU-5"}
     (_args(replay_deferred=False), _com(), ENG, ONE, "no --replay-deferred", False),
     (_args(replay_bundle_overlap=0), _com(), ENG, ONE, "--replay-bundle-overlap 0", False),
     (_args(), _com(), ENG, ONE, "replay_bundle.start began no write", False),
+    (_args(serving_rows="request.json"), _com(), ENG, ONE, "--serving-rows commits its window at the C2 site", True),
     (_args(tensor_digests=True), _com(), ENG, ONE, "--tensor-digests", True),
     (_args(), _com(retain="none"), ENG, ONE, "replay the run on the engine", True),
     (_args(), _com(retain_exclude={"fa3_hidden_m1"}), ENG, ONE, "replay the run on the engine", True),
@@ -531,7 +532,7 @@ def test_a_single_gpu_match_holds_its_lease_for_its_gpu_phase_only(tmp_path, lea
         env["GPU_LEASE"] = fake_lease(tmp_path)
         GL.hide_devices(env)
     t.child_env = env
-    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its legs
+    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its stages
         t.match()
     assert [json.loads(ln) for ln in (tmp_path / "legs.jsonl").read_text().splitlines()] == legs
     rec = Path(t.d, "match", "lease", GL.RECORD)

@@ -37,12 +37,16 @@ def thm(reads: list[dict], statement: str = "P.f n = n", h: str = "0000000000000
             "type_sha256": sha(h), "hypotheses": [], "reads": reads}
 
 
+def built(**guarantees: dict) -> dict:
+    """The facts of a build whose guarantees are ``guarantees`` (name suffix: its facts)."""
+    return {"lean": "4.34.0", "modules": list(FILES), "imports": {}, "declarations": {}, "axioms": STD, "offenders": [],
+            "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in guarantees.items()}}
+
+
 def record(deps: dict | None = None, **guarantees: dict) -> dict:
     """The record `check.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
-    facts = {"lean": "4.34.0", "modules": list(FILES), "imports": {}, "declarations": {}, "axioms": STD, "offenders": [],
-             "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in guarantees.items()}}
-    fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, facts, FILES,
-                         update=True, owner="@lean")
+    fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, built(**guarantees),
+                         FILES, update=True, owner="@lean")
     assert fails == []
     return pol | {"dependencies": deps or {"mathlib": "a" * 64, "toolchain": "c" * 64}}
 
@@ -79,20 +83,56 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge (#2600)"
 
 
-def test_a_key_both_sides_changed_refuses():
+def test_a_derived_record_both_sides_changed_merges_as_ours_and_the_merged_build_regenerates_it():
+    """A guarantee restated on both sides, a definition's hash and a new guarantee's record each written two ways: what the
+    build determines, so ours' value is the candidate, and the merged tree's build (a third statement) regenerates it."""
     base = record(t=thm([F]))
     u, v = thm([F, G], "P.g n = n", "00000000000000bb"), thm([H], "P.h n = n", "00000000000000cc")
-    restated = M.merge(base, record(t=thm([F], "P.f n ≤ n", "00000000000000dd"), u=u),
-                       record(t=thm([F], "P.f n < n + 1", "00000000000000ee"), v=v))[1]
-    assert restated == ["guarantees[P.t]: changed on both sides, differently"]
-    moved = M.merge(base, record(t=thm([read("P.f", "P.Defs", "9" * 16)]), u=u),
-                    record(t=thm([read("P.f", "P.Defs", "8" * 16)]), v=v))[1]
-    assert moved == ["reads[P.Defs].definitions[P.f]: changed on both sides, differently"]
-    bumped = M.merge(base, base | {"dependencies": {"mathlib": "b" * 64, "toolchain": "c" * 64}},
-                     base | {"dependencies": {"mathlib": "d" * 64, "toolchain": "c" * 64}})[1]
-    assert bumped == ["dependencies[mathlib]: changed on both sides, differently"]
-    added = M.merge(base, record(t=thm([F]), u=u), record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000ff")))[1]
-    assert added == ["guarantees[P.u]: added on both sides, differently"]
+    ours = record(t=thm([F], "P.f n ≤ n", "00000000000000dd"), u=u)
+    theirs = record(t=thm([F], "P.f n < n + 1", "00000000000000ee"), v=v)
+    merged, why = M.merge(base, ours, theirs, candidate := [])
+    assert why == [] and candidate == ["guarantees[P.t] (ours)"]
+    assert merged["guarantees"]["P.t"] == ours["guarantees"]["P.t"]
+    tree = built(t=thm([F], "P.f n ≤ n + 1", "00000000000000ab"), u=u, v=v)
+    fails = A.judge(merged, tree, FILES)[0]
+    assert {f.code for f in fails} == {"guarantees.signature"} and all(map(A.RECORD_DIFFERENCE.match, fails)), fails
+    regen = A.regenerated(merged, tree, FILES, fails)
+    assert A.judge(regen, tree, FILES)[0] == [] and regen["guarantees"]["P.t"]["signature"] == ["(n : Nat) : P.f n ≤ n + 1"]
+
+    f9, f8 = read("P.f", "P.Defs", "9" * 16), read("P.f", "P.Defs", "8" * 16)
+    ours, theirs = record(t=thm([f9]), u=u), record(t=thm([f8]), v=v)
+    merged, why = M.merge(base, ours, theirs, candidate := [])
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.f] (ours)"]
+    assert merged["reads"]["P.Defs"]["definitions"]["P.f"] == ours["reads"]["P.Defs"]["definitions"]["P.f"]
+    tree = built(t=thm([read("P.f", "P.Defs", "7" * 16)]), u=u, v=v)
+    fails = A.judge(merged, tree, FILES)[0]
+    assert fails and all(map(A.RECORD_DIFFERENCE.match, fails)), fails
+    assert A.judge(A.regenerated(merged, tree, FILES, fails), tree, FILES)[0] == []
+
+    w = thm([F], "P.f n = 0 + n", "00000000000000ff")
+    merged, why = M.merge(base, record(t=thm([F]), u=u), record(t=thm([F]), u=w), candidate := [])
+    assert why == [] and candidate == ["guarantees[P.u] (ours)"] and merged["guarantees"]["P.u"]["type_hash"] == sha(
+        "00000000000000bb")
+
+
+def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
+    """A dependency bumped two ways, an owner set two ways and a `frozen` entry written two ways refuse, whatever derived
+    record merges as a candidate beside them."""
+    base = record(t=thm([F]))
+    restated = lambda s, h: record(t=thm([F], s, h))
+    ours, theirs = restated("P.f n ≤ n", "00000000000000dd"), restated("P.f n < n + 1", "00000000000000ee")
+    deps = lambda d: {"dependencies": {"mathlib": d * 64, "toolchain": "c" * 64}}
+    assert M.merge(base, ours | deps("b"), theirs | deps("d"))[1] == [
+        "dependencies[mathlib]: changed on both sides, differently"]
+    owner = lambda rec, who: rec | {"guarantees": {"P.t": rec["guarantees"]["P.t"] | {"owner": who}}}
+    assert M.merge(base, owner(ours, "@proofs"), owner(theirs, "@circuits"))[1] == [
+        "guarantees[P.t].owner: changed on both sides, differently"]
+    frozen = lambda rec, why: rec | {"shape": {"frozen": {"P.t": why}}}
+    assert M.merge(base, frozen(ours, "lemma"), frozen(theirs, "restatable"))[1] == [
+        "shape[frozen][P.t]: added on both sides, differently"]
+    hyp = lambda rec, who: rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
+    assert M.merge(hyp(base, "@lean"), hyp(ours, "@proofs"), hyp(theirs, "@circuits"))[1] == [
+        "assumptions[P.Hyp].owner: changed on both sides, differently"]
 
 
 def test_an_owner_merges_apart_from_the_statement():
@@ -105,24 +145,130 @@ def test_an_owner_merges_apart_from_the_statement():
     assert M.merge(unowned, base, other)[1] == ["guarantees[P.t].owner: added on both sides, differently"]
 
 
-def test_a_definition_one_side_stops_reading_refuses_when_the_other_side_changed_its_module():
+def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_side_changed_its_module():
+    """A reads-only clash (lean's One-vocabulary PRs move definitions out of a module that queued PRs' new guarantees read):
+    the record doesn't say which guarantees read the definition, so it stays, and the train's Lean check regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
-    assert M.merge(base, ours, theirs)[1] == [
-        "reads[P.Defs].definitions[P.g]: no longer read on one side, while the other side changed what the guarantees read "
-        "in P.Defs; the record does not say which guarantees read P.g"]
+    candidate: list[str] = []
+    merged, why = M.merge(base, ours, theirs, candidate)
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.g]"]
+    assert merged["guarantees"] == record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"),
+                                          v=thm([H], "P.h n = n", "00000000000000cc"))["guarantees"]
+    group = merged["reads"]["P.Defs"]
+    assert group["definitions"] == theirs["reads"]["P.Defs"]["definitions"] and list(group["definitions"]) == ["P.f", "P.g", "P.h"]
+    assert group["guarantees"] == ["P.t", "P.v"] and group["digest"] == A.module_digest(group["definitions"])
+    other = record(t=thm([F, read("P.g", "P.Defs", "7" * 16)]), v=thm([H], "P.h n = n", "00000000000000cc"))
+    merged, why = M.merge(base, ours, other, candidate := [])
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.g]"]
+    assert merged["reads"]["P.Defs"]["definitions"] == other["reads"]["P.Defs"]["definitions"], \
+        "with the other side's hash when it changed it"
     assert M.merge(base, ours, record(t=thm([F, G]), v=thm([K], "P.k n = n", "00000000000000cc")))[1] == []
 
 
-def test_a_32_bit_group_is_not_merged_with_a_rehashed_one():
+def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread_is_dropped():
+    base = record(t=thm([F, K]))
+    ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
+    m = read("P.m", "P.More", "6" * 16)
+    theirs = record(t=thm([F, K]), w=thm([m], "P.m n = n", "00000000000000cc"))
+    candidate: list[str] = []
+    merged, why = M.merge(base, ours, theirs, candidate)
+    assert why == [] and candidate == ["reads[P.More]"]
+    assert merged["reads"]["P.More"]["definitions"] == theirs["reads"]["P.More"]["definitions"]
+    assert list(merged["reads"]["P.More"]["definitions"]) == ["P.k", "P.m"]
+    assert merged["reads"]["P.More"]["guarantees"] == ["P.w"], "t stopped reading it on ours"
+    rehashed = read("P.k", "P.More", "5" * 16)
+    merged, why = M.merge(base, ours, record(t=thm([F, rehashed])), candidate := [])
+    assert why == [] and "P.More" not in merged["reads"] and candidate == ["reads[P.More]"] * 2, \
+        "no guarantee of the merged record reads it: dropped"
+
+
+def test_a_definition_one_side_moved_to_another_module_leaves_the_module_the_other_side_changed():
+    """A side that moves definitions to a new module (`Definitions.Flock.Circuit`'s to `Definitions.Core.Boolean` in queue
+    merge 0aaf13f4f6) while the other changes the old module's readers: the union kept them under both modules, which no
+    build writes."""
+    base = record(t=thm([F, G]), s=thm([G], "P.g n = n", "00000000000000bb"))
+    ours = record(t=thm([F, G]))
+    moved_f = read("P.f", "P.More", "1" * 16)
+    theirs = record(t=thm([moved_f, G]), s=thm([G], "P.g n = n", "00000000000000bb"))
+    merged, why = M.merge(base, ours, theirs, candidate := [])
+    assert why == [] and candidate == []
+    assert A.text(merged) == A.text(record(t=thm([moved_f, G])))
+    assert list(merged["reads"]["P.Defs"]["definitions"]) == ["P.g"] and list(merged["reads"]["P.More"]["definitions"]) == ["P.f"]
+    assert merged["reads"]["P.Defs"]["digest"] == theirs["reads"]["P.Defs"]["digest"]
+
+    u = thm([G], "P.g n = 0 + n", "00000000000000cc")
+    merged, why = M.merge(base, record(t=thm([F, G]), s=thm([G], "P.g n = n", "00000000000000bb"), u=u), theirs, candidate := [])
+    assert why == [] and candidate == ["reads[P.More] (definitions moved from P.Defs)"], \
+        "ours' new reader of P.Defs may read P.f where it moved"
+    assert A.text(merged) == A.text(record(t=thm([moved_f, G]), s=thm([G], "P.g n = n", "00000000000000bb"), u=u))
+
+
+def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merges_and_regenerates():
+    """LEAN-60 (#4656) records a digest for every premise, so two PRs that each change a premise's definition clash on it:
+    ours' digest is the candidate, and an entry one side dropped while the other changed it stays until the merged build
+    says no guarantee reads it (`assumptions.unread`)."""
+    base = record(t=thm([F, G]))
+    drop_g = record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000bb"))
+    keep_g = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
+    hyp = lambda rec, d: rec | {"assumptions": {"P.Hyp": {"owner": "@lean", "digest": d * 64}}}
+    merged, why = M.merge(hyp(base, "a"), hyp(drop_g, "b"), hyp(keep_g, "c"), candidate := [])
+    assert why == [] and "assumptions[P.Hyp].digest (ours)" in candidate
+    assert merged["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": "b" * 64}}
+    merged, why = M.merge(hyp(base, "a"), drop_g, hyp(keep_g, "c"), candidate := [])
+    assert why == [] and "assumptions[P.Hyp]" in candidate and merged["assumptions"]["P.Hyp"]["digest"] == "c" * 64
+    tree = built(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000bb"), v=thm([H], "P.h n = n", "00000000000000cc"))
+    fails = A.judge(merged, tree, FILES)[0]
+    assert "assumptions.unread" in {f.code for f in fails} and all(map(A.RECORD_DIFFERENCE.match, fails)), fails
+    regen = A.regenerated(merged, tree, FILES, fails)
+    assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
+
+
+def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner():
+    base = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"))
+    ours = record(t=thm([F]))
+    theirs = record(t=thm([F]), u=thm([F, G], "P.g n = n + 0", "00000000000000dd"))
+    merged, why = M.merge(base, ours, theirs, candidate := [])
+    assert why == [] and candidate == ["guarantees[P.u] (removed)"] and merged["guarantees"] == ours["guarantees"]
+    owner = theirs | {"guarantees": theirs["guarantees"] | {"P.u": theirs["guarantees"]["P.u"] | {"owner": "@proofs"}}}
+    assert M.merge(base, ours, owner)[1] == ["guarantees[P.u]: removed on one side and changed on the other"]
+
+
+FIXTURES = HERE / "fixtures" / "merge"
+
+
+def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
+    """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
+    moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
+    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones)."""
+    sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
+    for n in ("base", "ours", "theirs"):
+        (tmp_path / n).write_text(A.text(sides[n]))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    err = capsys.readouterr().err.strip().splitlines()
+    assert err == ["merge.py: Security/lean-audit.json: merged derived records as a candidate (the union, or ours' value where "
+                   "marked), which the train's Lean check regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest]; "
+                   "reads[Definitions.Hash.Basic].definitions[Hash.Digest.bytes]"]
+    group = json.loads((tmp_path / "ours").read_text())["reads"]["Definitions.Hash.Basic"]
+    theirs = sides["theirs"]["reads"]["Definitions.Hash.Basic"]["definitions"]
+    assert group["definitions"] == dict(sorted({**theirs, **{d: sides["ours"]["reads"]["Definitions.Hash.Basic"]["definitions"][d]
+                                                            for d in ("Hash.Digest", "Hash.Digest.bytes")}}.items()))
+    assert set(group["guarantees"]) == set(sides["ours"]["reads"]["Definitions.Hash.Basic"]["guarantees"]) | set(
+        sides["theirs"]["reads"]["Definitions.Hash.Basic"]["guarantees"])
+
+
+def test_a_32_bit_group_merged_with_a_rehashed_one_is_a_candidate_the_train_regenerates():
     base = record(t=thm([F]))
     old = base | {"reads": A.read_groups(A.guarantee_reads({"pins": {"P.t": thm([F])}}), old=True)}
     ours = old | {"reads": A.read_groups(A.guarantee_reads({"pins": {"P.t": thm([F]), "P.u": thm([F, G])}}), old=True),
                   "guarantees": record(t=thm([F]), u=thm([F, G]))["guarantees"]}
-    why = M.merge(old, ours, base)[1]
-    assert why and all(w.startswith("reads[P.Defs]") for w in why)
-    assert "reads[P.Defs]: its definitions would mix 32-bit and SHA-256 hashes (one side's record was rehashed)" in why
+    merged, why = M.merge(old, ours, base, candidate := [])
+    assert why == [] and candidate == ["reads[P.Defs] (32-bit and SHA-256 hashes mixed)"]
+    tree = built(t=thm([F]), u=thm([F, G]))
+    fails = A.judge(merged, tree, FILES)[0]
+    assert fails and all(map(A.RECORD_DIFFERENCE.match, fails)), fails
+    assert A.judge(A.regenerated(merged, tree, FILES, fails), tree, FILES)[0] == []
 
 
 def before_the_rename(rec: dict) -> dict:
@@ -178,8 +324,8 @@ def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict
     git(repo, "init", "-q", "-b", "main")
     u, v = thm([F, G], "P.g n = n", "00000000000000bb"), thm([H, K], "P.h n = P.k n", "00000000000000cc")
     branches = {"main": record(t=thm([F])), "a": record(t=thm([F]), u=u), "b": record(t=thm([F]), v=v),
-                "c": record(t=thm([F], "P.f n ≤ n", "00000000000000dd")),
-                "d": record(t=thm([F], "P.f n < n + 1", "00000000000000ee"))}
+                "c": record(t=thm([F], "P.f n ≤ n", "00000000000000dd"), deps={"mathlib": "b" * 64, "toolchain": "c" * 64}),
+                "d": record(t=thm([F], "P.f n < n + 1", "00000000000000ee"), deps={"mathlib": "d" * 64, "toolchain": "c" * 64})}
     for name, doc in branches.items():
         if name != "main":
             git(repo, "checkout", "-q", "-b", name, "main")
@@ -200,7 +346,8 @@ def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict
     git(repo, "checkout", "-q", "c")
     refused = git(repo, "merge", "--no-edit", "d", check=False)
     assert refused.returncode and "merge.py: pkg/lean-audit.json: refused" in refused.stderr
-    assert "guarantees[P.t]: changed on both sides, differently" in refused.stderr
+    assert "dependencies[mathlib]: changed on both sides, differently" in refused.stderr
+    assert "guarantees[P.t]" not in refused.stderr, "the restatement alone would merge as a candidate"
     assert git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == ["pkg/lean-audit.json"]
     assert rec.read_text() == A.text(branches["c"])
 
@@ -267,6 +414,69 @@ def test_a_lean_file_whose_sides_only_add_imports_merges_and_any_other_conflict_
     assert left == 1 and "<<<<<<< ours" in text and "import G.Actual\nimport G.Memory\n" in text
 
 
+def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(tmp_path):
+    """Ours removes `G.B` and adds `G.F`; theirs moves `G.B` to the end.  Git sees the removal on both sides where `G.B` was
+    and two additions at the end, so a merge of that hunk alone brings `G.B` back (#4690 onto `next`)."""
+    imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
+    text, left = _lean(tmp_path, imports("A", "B", "C", "D", "E"), imports("A", "C", "D", "E", "F"), imports("A", "C", "D", "E", "B"))
+    assert left == 0 and text == imports("A", "C", "D", "E", "F")
+
+
+def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tmp_path):
+    imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
+    text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "C"), imports("A", "Y", "C"))
+    assert left == 0 and text == imports("A", "Y", "X", "C"), "both added: the union; both removed B: gone"
+    text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "B", "C"), imports("A", "Y", "B", "C"))
+    assert left == 0 and text == imports("A", "Y", "X", "B", "C")
+
+
+def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
+    """`Security/Definitions/Accounting.lean` as git gave it to the driver when drive merged #4690 onto `next` (5534d5ccd4,
+    26 Oct): the merge kept the import of the module #4690 retired, and Security stopped building (ci's check 83067ace)."""
+    sides = json.loads((FIXTURES / "accounting-4690-onto-next.json").read_text())
+    text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
+    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
+    assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
+    assert gone not in text
+    assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(
+        sides["base"]))
+
+
+def test_a_lakefile_root_or_require_one_side_removed_stays_removed_where_the_other_side_moved_it():
+    """As for imports: ours removes a root (a require) and appends another, theirs moves it to the end."""
+    import tempfile
+    import tomllib
+    tmp = Path(tempfile.mkdtemp())
+    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    text, left = _lakefile(tmp, roots("A", "B", "C", "D", "E"), roots("A", "C", "D", "E", "F"), roots("A", "C", "D", "E", "B"))
+    assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == ["A", "C", "D", "E", "F"], text
+    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns)
+    text, left = _lakefile(tmp, req("a", "b", "c"), req("a", "c", "d"), req("a", "c", "b"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "d"], text
+    text, left = _lakefile(tmp, req("a", "c"), req("a", "c", "x"), req("a", "c", "y"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "x", "y"], "both added: both"
+
+
+def test_a_root_or_require_one_side_removed_stays_removed_where_git_merges_the_other_side_s_move_cleanly(tmp_path):
+    """ci's case against ef47f3bd (#4814): roots A..H, ours removes B, theirs moves B after D.  Git merges that without a
+    conflict, to [A, C, D, B, E, F, G, H]; the whole merged file is held to `kept`, so B stays removed.  Requires alike."""
+    import tomllib
+    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns) + \
+        '\n[[lean_lib]]\nname = "P"\n'
+    for side, (o, a, b) in {"roots": (roots(*"ABCDEFGH"), roots(*"ACDEFGH"), roots(*"ACDBEFGH")),
+                            "require": (req(*"abcdefgh"), req(*"acdefgh"), req(*"acdbefgh"))}.items():
+        for n, t in (("base", o), ("ours", a), ("theirs", b)):
+            (tmp_path / n).write_text(t)
+        clean = subprocess.run(["git", "merge-file", "-p", *(str(tmp_path / n) for n in ("ours", "base", "theirs"))],
+                               capture_output=True, text=True)
+        assert clean.returncode == 0 and tomllib.loads(clean.stdout) != tomllib.loads(a), "git alone brings it back"
+        text, left = _lakefile(tmp_path, o, a, b)
+        assert left == 0 and text == a, text
+    text, left = _lakefile(tmp_path, req(*"abcd"), req(*"acd"), req(*"acdbx"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "d", "x"], text
+
+
 def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installed_driver(tmp_path, monkeypatch):
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
@@ -306,8 +516,8 @@ path = "../../pouw/window"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pouw", "Properties.Proofs.Pouw",
-  "Properties.Nci", "Properties.Proofs.Nci"]
+roots = ["Properties.Pouw", "Proofs.Properties.Pouw",
+  "Properties.Nci", "Proofs.Properties.Nci"]
 '''
 
 
@@ -325,21 +535,21 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     tmp = Path(tempfile.mkdtemp())
     req = lambda n: f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
-    tail = '"Properties.Proofs.Nci"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]')
+    tail = '"Proofs.Properties.Nci"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
     theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
-        tail, '"Properties.Proofs.Nci", "Properties.Network"]')
+        tail, '"Proofs.Properties.Nci", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
     assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
-    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Properties.Proofs.Pouw", "Properties.Nci",
-                                           "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.Nci",
+                                           "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
-    gone = LAKEFILE.replace(', "Properties.Proofs.Pouw"', "")
-    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]'), theirs)
+    gone = LAKEFILE.replace(', "Proofs.Properties.Pouw"', "")
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
-        "Properties.Pouw", "Properties.Nci", "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"], text
+        "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
     comment = lambda s: LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
     assert left == 1 and "<<<<<<< ours" in text, "a comment both sides changed stays git's"

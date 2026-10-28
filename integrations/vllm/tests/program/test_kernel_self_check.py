@@ -1,16 +1,25 @@
-"""Every (Definition, kernel) pair registered through `verity_vllm.program.kernels.kernel_registry` — the replay row
+"""Every (Definition, kernel) pair registered through `verity.ml.definitions.numerics.kernel_registry` — the replay row
 kernels (`rows`) and the twins — against the reference by core `verity.ml.circuits.evaluation.self_check`, on each of the kernel's
 check specialisations: no mismatch, and not every instance declined."""
 from __future__ import annotations
+
+import importlib
+import pkgutil
 
 import numpy as np
 import pytest
 
 from verity.ml.circuits.evaluation import kernels, self_check
-from verity_vllm.program.kernels import kernel_registry as KR
-from verity_vllm.program.kernels import rows, twins
+from verity_vllm.commit import challenge as CH
+from verity.ml.definitions import registry
+from verity.ml.definitions.numerics import kernel_registry as KR
+from verity.ml.definitions.numerics import rows, twins
 
 N = 6
+# a registry module registers its composites' twins as it loads, and the pairs are read at collection: unless this file
+# imports them all, which twins it checks depends on the modules collected before it
+for _m in pkgutil.iter_modules(registry.__path__):
+    importlib.import_module(f"{registry.__name__}.{_m.name}")
 PAIRS = [(r.key, r.kernel) for r in KR.registered()]
 
 
@@ -23,7 +32,7 @@ def test_every_row_family_and_twin_is_registered_with_core():
 
 @pytest.mark.parametrize("key,kernel", PAIRS, ids=[f"{k}-{kern}" for k, kern in PAIRS])
 def test_kernel_matches_the_reference(key, kernel):
-    assert KR.check(key, kernel, n=N) == []
+    assert KR.check(key, kernel, CH.generator, n=N) == []
 
 
 def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
@@ -33,8 +42,8 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
     q = 0, whose every ex2 input is 0."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import b1
 
     statics = {"T": 20, "NH": 2, "KVH": 1, "D": 16, "BN": 16}
     target = bind(b1.AttentionV3, **statics)

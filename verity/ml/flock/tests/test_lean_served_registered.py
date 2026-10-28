@@ -5,12 +5,16 @@ served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circui
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
 on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
+`--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots`), which all three sessions are in.
+A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
+and refused with the root changed and without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
 a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't
 reach."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import shutil
 import subprocess
@@ -30,10 +34,14 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a",
-    G.SCHEMA_V2: "art:4eadb4798932aa89be0c06869a1b057c4b811c4e815483675f14b5ef71979c2a",
-    G.SCHEMA_SEG: "art:77b4e30bd61738eaac34ca8a8318a0624df05d03dd46289862d27e69c75d4be3",
+    G.SCHEMA: "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5",
+    G.SCHEMA_V2: "art:2425aa5eff7e781331bda47d22e1fcd7eb813cbd7e64e39965d851b6f843b0cd",
+    G.SCHEMA_SEG: "art:1a17e14138bb6ab7412ad3ee01c62e49c9f84c666ca0fd9848c2688d6311f403",
 }
+#: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
+#: (stage/draw.json), and session/ a plain session (no --zk, OS coins) drawn by it; vectors/ is vectors.json's live set
+PLAIN = "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9"
+PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
@@ -51,17 +59,18 @@ def fx(request, built, tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURES[request.param], tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURES[request.param], tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     return request.param, root
 
 
-def _verify(fx: Path, registered: Path) -> dict:
+def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",)) -> dict:
     st = fx / "stage"
-    p = subprocess.run([str(BIN), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"), "--public",
+    reads = ["--registered", str(registered)] if registered else []
+    p = subprocess.run([str(BIN), "verify", *mode, "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"), "--public",
                         str(st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
-                        str(st / "program.json"), "--registered", str(registered), "--session", str(fx / "session")],
+                        str(st / "program.json"), *reads, "--session", str(fx / "session")],
                        capture_output=True, text=True, check=False)
     (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     return line
@@ -88,6 +97,15 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
 
 
+def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
+    """`live.json`'s ``public_file_sha512`` is the SHA-512 of ``stage/pub-32.bin``, the file `verify --public` reads. Its
+    ``public_sha512`` is Σ's public digest, over the drawn statement's header, which no file holds."""
+    _, fx = fx
+    live = json.loads((fx / "live.json").read_text())
+    assert live.get("public_file_sha512") == hashlib.sha512((fx / "stage" / "pub-32.bin").read_bytes()).hexdigest()
+    assert live["public_sha512"] != live["public_file_sha512"]
+
+
 def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tmp_path):
     """A bit row is exactly `words * word_bits` bits: `register_served` refuses a tree whose words or width are not the
     parameter's rows, and `flock-verify` refuses the session on a file whose `cs` port names 63 or 65 16-bit words, or 64
@@ -111,3 +129,53 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         bad = _verify(fx, tmp_path / f"{name}.json")
         assert bad["accepted"] is False and f"not {SR.VALUE}'s registered {want}" in bad["why"], (name, bad)
+
+
+def test_ks_form_is_the_default_under_zk_and_accepts_every_row_format(fx, tmp_path):
+    """`--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots.checkOf`), which every served row
+    format is in: the session at a `row/v1` circuit, at `row/v2` rows and with `cs` a `row-seg/v1` row is accepted, and
+    `--ks-form`, the check's old flag, gives the same verdict. `--ks-form` without `--zk` is a usage error."""
+    import served_registered as SR
+
+    _, fx = fx
+    program, query = SR.program()
+    tree = ServedTree(**json.loads((fx / "stage" / "served.json").read_text()))
+    reg = register_served(program, query, [tree]).write(tmp_path / "registered.json")
+    v = _verify(fx, reg, ("--zk", "--ks-form"))
+    assert v["accepted"] is True, v
+    assert v == _verify(fx, reg), v
+    p = subprocess.run([str(BIN), "verify", "--ks-form", "--statement", STATEMENT, "--circuit", str(fx / "stage" / "circuit.txt"),
+                        "--public", str(fx / "stage" / "pub-32.bin"), "--session", str(fx / "session")],
+                       capture_output=True, text=True, check=False)
+    assert p.returncode == 2 and "--ks-form goes with --zk" in p.stderr, p.stderr
+
+
+@pytest.fixture(scope="module")
+def plain(built, tmp_path_factory):
+    sys.path.insert(0, str(VERIFIER))
+    import ci
+
+    try:
+        return ci.fetch(PLAIN, tmp_path_factory.mktemp("store"))
+    except (subprocess.CalledProcessError, OSError) as e:
+        pytest.skip(f"the evidence store is not reachable: {e}")
+
+
+def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its_reads(plain, tmp_path):
+    """Without `--zk`, a shared-row public file at hidden outputs and `hm96-sha512/v1` leaves is a covered form when the
+    verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session drawn by
+    the verifier's own stratified law is accepted on `register_served`'s file, and refused on it with the tree's root changed
+    (the registered check opens no row) and without `--registered`."""
+    import served_registered as SR
+
+    program, query = SR.program()
+    tree = ServedTree(**json.loads((plain / "stage" / "served.json").read_text()))
+    mode = ("--stratified", str(PLAIN_K), "--coins", "os")
+    ok = _verify(plain, register_served(program, query, [tree]).write(tmp_path / "registered.json"), mode)
+    assert ok["accepted"] is True, ok
+    assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}}
+    moved = register_served(program, query, [dataclasses.replace(tree, root="00" * 64)])
+    bad = _verify(plain, moved.write(tmp_path / "registered-root.json"), mode)
+    assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
+    none = _verify(plain, None, mode)
+    assert none["accepted"] is False and "the verifier holds no registered roots" in none["why"], none

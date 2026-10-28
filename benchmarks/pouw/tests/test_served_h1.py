@@ -398,6 +398,10 @@ EPOCH, ROUNDS = 1, 3
 ROOT = hashlib.sha512(b"the window's root").digest()
 SID, LANE, PERIOD, CIRCUIT, PIN = "s20261020T120000Z-0a1b", "kernels", "test-period", "ab" * 64, "0" * 40
 WINDOW = {"root": ROOT.hex(), "period": PERIOD}
+#: the host's pins log as infra publishes it, recording `PIN`, which the session's open seals, and the verifier's own
+#: first-parent history of main, which holds `PIN`
+PINS = [CO.Ch.pin_line(PIN, PIN, "2026-10-20T11:00:00Z")]
+MAIN = ["e1" * 20, PIN]
 
 
 @functools.cache
@@ -433,7 +437,8 @@ class _Host:
         reserve = self.append("reserve", SID, {**req, "pinned": PIN, "key_sha512": pin, "host": f"{host}.{SID}",
                                                "started_utc": "2026-10-20T12:00:00Z", "expires_utc": "2026-10-20T12:05:00Z"})
         self.append("open", SID, {"window": {"root": root.hex()}, "reserve": reserve, **req, "opened_by": LANE,
-                                  "pinned": PIN, "key_sha512": pin, "host": f"{host}.{SID}", "port": 7811,
+                                  "pinned": PIN, "pins": CO.Ch.pins_seal(PINS), "key_sha512": pin,
+                                  "host": f"{host}.{SID}", "port": 7811,
                                   "secret_sha512": hashlib.sha512(secret).hexdigest(),
                                   "started_utc": "2026-10-20T12:01:00Z"})
         (self.directory.parent / "request.json").write_text(json.dumps({**req, "session": SID}))
@@ -521,7 +526,9 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     root and its period and all match.  The ledger and the session's files are core's to accept
     (`remote.trusted_session`): it refuses a key.json with another key, a key other than the record's, a root the
     ledger opens no session on, an edited or forked ledger, an open that binds another reserve or a second open, a
-    record of another host, a refused hello the end didn't seal and a session that ended unclosed.  The check itself
+    record of another host, a refused hello the end didn't seal, a session that ended unclosed, and a session read
+    without the host's pins log or the verifier's first-parent history of main, or whose pin isn't on that history
+    (`challenger.pinned_session`).  The check itself
     refuses a session the manifest doesn't name, a manifest naming another window, a window outside the verifier's
     period, an open of another layout, and a window whose round root, opening, salt or draw root isn't what the
     challenger logged."""
@@ -540,7 +547,10 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     record = {"schema": "challenger-key/v1", "H": 4, "W": 4, "pubkey": host.public.hex(),
               "pubkey_sha512": hashlib.sha512(host.public).hexdigest()}
     (tmp_path / "key-record.json").write_text(json.dumps(record))
+    (tmp_path / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
+    (tmp_path / "main.txt").write_text("".join(c + "\n" for c in MAIN))
     assert CO.main(["check", "--challenger-out", str(session), "--ledger", str(early), "--ledger", str(host.ledger),
+                    "--pins", str(tmp_path / "pins.jsonl"), "--main", str(tmp_path / "main.txt"),
                     "--manifest", str(tmp_path / "manifest.json"), "--key-record", str(tmp_path / "key-record.json"),
                     "--period", PERIOD, "--root", ROOT.hex()]) == 0
     for bad, why in (({"pubkey_sha512": "00" * 64}, "not the one whose SHA-512 it names"),
@@ -549,26 +559,27 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
         with pytest.raises(CO.Ch.CoinError, match=why):
             CO.key_record(tmp_path / "bad-record.json")
     e = SV.coins_expect(m)
-    got = CO.check(session, m["coins"], heads, **e, key=key, period=PERIOD, root=ROOT)
+    got = CO.check(session, m["coins"], heads, PINS, MAIN, **e, key=key, period=PERIOD, root=ROOT)
     assert got["ok"] and got["coins"] == f"off-node vy-challenger-1.{SID} (checked)"
     assert (got["rounds"], got["draws"], got["window"], got["root"]) == (ROUNDS, 1, WINDOW, ROOT.hex())
     assert got["ledger"] == {"session": SID, "prover": LANE, "reserve": 1, "open": 2, "end": 3, "end_complete": True,
                              "refused_hellos": 0, "period": PERIOD, "cap": 2, "circuit": CIRCUIT}
-    loose = CO.check(host.directory, m["coins"], heads, **e)
+    loose = CO.check(host.directory, m["coins"], heads, PINS, MAIN, **e)
     assert loose["ok"] and loose["coins"] == f"off-node vy-challenger-1.{SID} (checked; key, root, period unanchored)"
     other = lms.public_key(lms.keygen(lms.Params(64, 4, 2), bytes([8]) * 64))
-    wrong = CO.check(session, m["coins"], heads, **e, key=CO.Ch.ChallengerKey(4, 2, other))
+    wrong = CO.check(session, m["coins"], heads, PINS, MAIN, **e, key=CO.Ch.ChallengerKey(4, 2, other))
     assert not wrong["ok"] and wrong["reason"].startswith("the session's key is sha512")
     forged = tmp_path / "forged"
     shutil.copytree(session, forged)
     (forged / "out" / "key.json").write_text(json.dumps(CO.Ch.ChallengerKey(4, 2, other).to_json()))
-    bad = CO.check(forged, m["coins"], heads, **e)
+    bad = CO.check(forged, m["coins"], heads, PINS, MAIN, **e)
     assert not bad["ok"] and bad["coins"] == "refused" and "not the window's pinned key" in bad["reason"]
-    nameless = CO.check(session, {**m["coins"], "window": {}}, heads, **e)
+    nameless = CO.check(session, {**m["coins"], "window": {}}, heads, PINS, MAIN, **e)
     assert not nameless["ok"] and nameless["reason"].startswith("the verifier names no window root")
 
     def check(coins=m["coins"], directory=session, heads=heads, **kw) -> dict:
-        r = CO.check(directory, coins, heads, **{**e, "key": key, "period": PERIOD, "root": ROOT, **kw})
+        r = CO.check(directory, coins, heads, **{**e, "pins": PINS, "main": MAIN, "key": key, "period": PERIOD,
+                                                 "root": ROOT, **kw})
         assert not r["ok"] and r["coins"] == "refused"
         return r
 
@@ -614,6 +625,9 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert "names host" in core(heads=resigned("rehosted", lambda x: [x[i]["body"].update(host=f"vy-challenger-2.{SID}")
                                                                       for i in (1, 2)]))
     assert "unclosed" in core(heads=resigned("unclosed", lambda x: x[3]["body"].update(closed=False)))
+    assert core(pins=None) == f"CoinError: {CO.Ch.NO_PINS}"
+    assert core(main=None) == f"CoinError: {CO.Ch.NO_MAIN}"
+    assert core(main=MAIN[:1]) == f"CoinError: {CO.Ch.first_parent_reason(SID, PIN, MAIN[:1])}"
     hello = republished("hello", lambda out: (out / "hellos.jsonl").write_text('{"n":0,"reason":"r"}\n'))
     assert "hellos.jsonl is not the one the auditor's ledger sealed" in core(directory=hello)
     assert refused(period="another") == {"period"}
@@ -880,6 +894,42 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
         assert [json.loads(x)["event"] for x in (host.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
 
 
+def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_any_other_error_at_once():
+    """An onsite window's client retries a refused connect (no hello, no coin) until the session's tunnel listens, every
+    half second up to `wait_s` on the injected clock; past it `CoinError` refuses it, and any other error raises at once."""
+    at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
+    challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
+
+    def run(outcomes, wait_s=CO.R.TUNNEL_WAIT_S):
+        now, calls, slept = [0.0], [], []
+
+        def connect(address, secret):
+            calls.append((address, secret))
+            got = outcomes[min(len(calls), len(outcomes)) - 1]
+            if isinstance(got, BaseException):
+                raise got
+            return got
+
+        def sleep(s):
+            slept.append(s)
+            now[0] += s
+
+        try:
+            return CO.open_coins(at, EPOCH, ROUNDS, connect=connect, wait_s=wait_s, clock=lambda: now[0], sleep=sleep)
+        finally:
+            assert calls == [(at.address, at.secret)] * len(calls)
+            run.calls, run.slept = len(calls), slept
+
+    cs = run([ConnectionRefusedError(), ConnectionRefusedError(), challenger])
+    assert cs.challenger is challenger and cs.source == "off-node" and (run.calls, run.slept) == (3, [0.5, 0.5])
+    with pytest.raises(CO.Ch.CoinError, match="nothing listened"):
+        run([ConnectionRefusedError()], wait_s=2)
+    assert (run.calls, run.slept) == (5, [0.5] * 4)
+    with pytest.raises(ConnectionResetError):
+        run([ConnectionResetError()])
+    assert (run.calls, run.slept) == (1, [])
+
+
 def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):
     for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV, CO.COMMITMENT_ENV):
         monkeypatch.delenv(name, raising=False)
@@ -902,7 +952,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     `$POUW_CHALLENGER_SECRET_FILE`) and no ``--coins``, it opens the challenger's session before anything else (this
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
     ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
-    path (`integrations/vllm/verity_vllm/protocol_options/pouw_h1.py`)."""
+    path (`integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`)."""
     SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)
@@ -921,7 +971,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
             for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
                 monkeypatch.delenv(name)
         with pytest.raises(ValueError, match=r"--gate research@gate: served_h1's own gated window is superseded; .*"
-                                             r"integrations/vllm/verity_vllm/protocol_options/pouw_h1\.py \(#3053\)"):
+                                             r"integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py \(#3053\)"):
             SV.main([*argv, "--gate", "research@gate"])
 
 

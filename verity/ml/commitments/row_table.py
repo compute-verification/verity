@@ -15,7 +15,8 @@ rule).  Two tables' leaves agree on a row exactly when their strings do, and a s
 
 An opening of a set of ranks is their strings and the multiproof over their leaves (:mod:`multiproof`).  :func:`verify` checks
 one from public data alone (the root, the domain id, the leaf count); a proof that holds the rows and salts recomputes the
-strings from them inside it, and :func:`verify_rows` is that check in the clear (tests, the prover).
+strings from them inside it, and :func:`verify_rows` is that check in the clear (tests, the prover).  :meth:`RowTable.path` is one
+row's own path, the form a statement's registered read of the row opens (``one_stage.registered``).
 
 Serving commits its tables step by step, each step's before that step's live coin.  A step's tables (one per int8 quantize
 output, in the step's order) take serve-time domains, :func:`table_domain` over ``context`` (64 bytes serving knows before
@@ -146,6 +147,11 @@ class RowTable:
         ordered = tuple(sorted(set(ranks)))
         proof = tuple(multiproof(self._tree, ordered))
         return RowOpening(ordered, tuple(self.strings[r] for r in ordered), proof)
+
+    def path(self, rank: int) -> bytes:
+        """The row at ``rank``'s path to the root: its siblings, leaf level first, 64 bytes each (a registered read's path,
+        ``one_stage.registered.verify_read``)."""
+        return b"".join(self._tree.open(rank).path)
 
 
 def commit(domain: CommitmentDomain, rows: Sequence[tuple[bytes, int]], salts: Sequence[bytes]) -> RowTable:

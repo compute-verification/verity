@@ -126,6 +126,8 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
             space, idx, leaf = fn.body.ret[j]
             continue
         # scan: output is (carry_n, Array<n, Y>)
+        if node.n == 0:
+            raise ValueError("a scan with no iterations has no output to read")
         c = node.out.fields[0].leaves
         if leaf < c:
             m, j = node.n - 1, leaf
@@ -381,7 +383,7 @@ class FunctionCall(Region):
     `in_` / `out`: boundary gates (IR §D.2) — distinct, ascending by gate index. `out` is the set of gates
     produced inside the call with a wire to a gate outside it or designated as root outputs. A gate inside
     can only leave through the returns, so `out ⊆ distinct_returns`; a declared return nobody reads (a dead
-    gate) is in `returns` and `distinct_returns` but **not** in `out` (frontend rulings §8.6).
+    gate) is in `returns` and `distinct_returns` but **not** in `out`.
     `distinct_returns` is the cheap declared-interface adapter — a conservative superset of `out` computed
     without scanning consumers; it is named for what it is and never stands in for `out`.
 

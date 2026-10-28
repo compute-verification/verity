@@ -9,7 +9,7 @@ the prover's file and the unit index; nothing else changes.
 * **`--served DIR`** holds `registration.json`, `pub-N.bin`, `inst-N.bin` (rows and salts: the prover's only) and
   `index.json`. `--template-set` is any input set of the template, for the verifier's own lowering.
 * **The verifier's own copies.** It builds the population program and the partition itself, recomputes every served
-  domain (`registration.served_domain`) from the record's program, partition and `window.run`, composes the bound circuit
+  domain (`registration.window_domain`) from the record's program, partition and `window.run`, composes the bound circuit
   itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
   verifier doesn't yet derive it from #101's program, and the audit record says so.
 * **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
@@ -32,8 +32,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 
@@ -56,8 +58,8 @@ def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, di
         if made.get("class_sha512"):
             head["units"]["classes"] = [made["class_sha512"]] * n
         head["circuit_sha512"] = pin
-        with open(ub / name, "wb") as f:
-            f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
+        (ub / name).write_bytes(FC.public_file(head, body) if name.startswith("pub-")
+                                else json.dumps(head, sort_keys=True).encode() + b"\n" + body)
     text = (ub / "circuit.txt").read_text()
     new = {"dir": ub, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": pin}
     return new, a0.public_header(ub, n)
@@ -121,7 +123,7 @@ def main() -> int:
 
     # registration: R1-R6 against the verifier's own copies, the served domains recomputed
     run_id = rec.get("window", {}).get("run", "")
-    want = {port: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
+    want = {port: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
             for port, (schema, leaves) in a0.ports(st["meta"], n).items()}
     leaf_layer = a0.sha512_file(st_dir / f"pub-{n}.bin")
     checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
@@ -160,11 +162,11 @@ def main() -> int:
     v = V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
     neg["public-file-b||c-byte-flipped (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, law, a0.SCHEME,
-                {p_: {**w, "domain": R.served_domain(part["program"], P.digest(part), p_, s_, w["leaves"], run_id + "-other")}
+                {p_: {**w, "domain": R.window_domain(part["program"], P.digest(part), p_, s_, w["leaves"], run_id + "-other")}
                  for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer,
                 partition=part)
     neg["domains-of-another-run (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, P.population_program(template, n - 1), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
     v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)

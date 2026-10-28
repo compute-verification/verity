@@ -7,7 +7,8 @@ import Proofs.Flock.Claims.Complete.Reps
 its value and the state after. `H.pure`, `H.bind`, `H.get`, `H.modify`, `H.lift` and `H.forIn_upto` (a loop over
 `[0:n]` that keeps an invariant of its value and state) walk a computation by its steps.
 
-At Ligerito's state, `meas` is what the opening's lengths read: its lists' sizes and the folded table's size (`Ms`).
+At Ligerito's state, `meas` is what the opening's lengths read: its lists' sizes and the folded table's size, and whether
+every grinding nonce is `0` (`Ms`, `zeros_of_meas`).
 Each of Ligerito's steps moves it by a fixed amount: `sendMsg_H` (one message), `powP_H0`, `powP_H1` and `powP_H2` (one
 query, consistency or claim nonce), `challengeP_H` (one message, the table halved, then doubled where it splits),
 `oodIntroP_H` (a message, a claim nonce and an out-of-domain value) and `queryP_H` (a query and a consistency nonce, and
@@ -90,7 +91,8 @@ theorem H.forIn_upto {M : Type → Type} [Monad M] [MonadLiftT V M] {C : Total M
 
 end Total
 
-/-- What the Ligerito walk tracks of its state: its lists' lengths and the folded table's size. -/
+/-- What the Ligerito walk tracks of its state: its lists' lengths, the folded table's size, and whether every grinding
+nonce is `0` (R4). -/
 structure Ms where
   msgs : ℕ
   qn : ℕ
@@ -98,8 +100,16 @@ structure Ms where
   cbn : ℕ
   oods : ℕ
   tab : ℕ
+  z : Bool
 
-def meas (s : LigState) : Ms := ⟨s.msgs.size, s.qn.size, s.cn.size, s.cbn.size, s.oods.size, s.tab.size⟩
+def meas (s : LigState) : Ms :=
+  ⟨s.msgs.size, s.qn.size, s.cn.size, s.cbn.size, s.oods.size, s.tab.size,
+    s.qn.all (· == 0) && s.cn.all (· == 0) && s.cbn.all (· == 0)⟩
+
+theorem zeros_of_meas {s : LigState} (h : (meas s).z = true) :
+    (∀ x ∈ s.qn, x = 0) ∧ (∀ x ∈ s.cbn, x = 0) ∧ (∀ x ∈ s.cn, x = 0) := by
+  simp only [meas, Bool.and_eq_true, Array.all_eq_true', beq_iff_eq] at h
+  exact ⟨h.1.1, h.2, h.1.2⟩
 
 theorem H_modify (f : LigState → LigState) (g : Ms → Ms) (hf : ∀ s, meas (f s) = g (meas s)) (v : Ms) :
     totT.H (modify f : LP PS PUnit) (fun s => meas s = v) fun _ s => meas s = g v :=
@@ -127,11 +137,10 @@ theorem powP_H (nonce : ℕ → ℕ → UInt64) (kind : ℕ) (v : Ms) :
       | _ => { v with cbn := v.cbn + 1 } := by
   unfold powP
   refine Total.H.bind Total.H.get fun st => ?_
-  extract_lets i x
   refine Total.H.bind (Total.H.modify _) fun _ => ?_
   refine Total.H.mono (H_liftTM _ fun _ => ⟨_, rfl⟩) ?_
   rintro _ s ⟨s₀, ⟨rfl, rfl⟩, rfl⟩
-  rcases kind with _ | _ | k <;> simp [meas]
+  rcases kind with _ | _ | k <;> simp [meas, Array.all_push]
 
 theorem powP_H0 (nonce : ℕ → ℕ → UInt64) (v : Ms) :
     totT.H (powP (M := PS) nonce 0) (fun s => meas s = v) fun _ s => meas s = { v with qn := v.qn + 1 } :=

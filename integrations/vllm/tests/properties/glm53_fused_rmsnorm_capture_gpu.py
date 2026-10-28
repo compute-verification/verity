@@ -54,8 +54,8 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import dsa_norm_rows as NR
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"
@@ -72,7 +72,7 @@ PROBE_W = np.arange(0x3F80, 0x4000, dtype=np.uint16)
 TOTALS = ("rows", "words", "mismatch", "reference", "twin_mismatch")
 CASES = ("served", "probe")
 KERNEL = "_fused_norm_rope_kernel"
-#: r20261013-001802-7e95's `_fused_norm_rope_kernel.a3d95dc37831.ptx` (Triton 3.7.1, vLLM d9105ea80), before its first `.file`
+#: a capture's `_fused_norm_rope_kernel.a3d95dc37831.ptx` (Triton 3.7.1, vLLM d9105ea80), before its first `.file`
 PTX_CODE_SHA256 = "2218fc75966f0924bcfac4e4d21f743cd33424d60dcc5c16e6f512a0137d5090"
 PTX_COUNTS = {"div.full.f32": 4, "rsqrt.approx.ftz.f32": 3, "ld.global.v4.b32": 4, "ld.global.v2.b32": 2, "cvt.rn.bf16x2.f32": 10,
               "shfl.sync.bfly.b32": 35}
@@ -121,8 +121,8 @@ def model_r(x: np.ndarray, eps: float, layout: str = "strided", chains: str = "o
     8-element vector added in order (`chains` "one" / "per_vector"), each warp's butterfly, the CTA's two adds ("02_13" =
     (w0 + w2) + (w1 + w3), "01_23" = (w0 + w1) + (w2 + w3)), then `epilogue` "rsqrt" (RsqrtApprox(eps + DivFull(sum, N))) or
     "sqrt" (`RMSNormTriton_v1`'s DivFull(1, MufuSqrtFtz(fma(DivFullRcp(N), sum, eps))))."""
-    from verity_vllm.program.registry import dsa_norm as DN
-    from verity_vllm.program.registry.prims import bits_of
+    from verity.ml.definitions.registry import dsa_norm as DN
+    from verity.ml.definitions.registry.prims import bits_of
 
     R, N = x.shape
     E = N // DN.THREADS
@@ -346,8 +346,8 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program import boolean as SW
-    from verity_vllm.program.registry import dsa_norm as DN
+    from verity.ml.definitions import boolean as SW
+    from verity.ml.definitions.registry import dsa_norm as DN
 
     out: dict[str, Any] = {}
     for _, N, _, _ in NORMS:
@@ -371,7 +371,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.registry import dsa_norm as DN
+    from verity.ml.definitions.registry import dsa_norm as DN
 
     (r0, r1), N = job["span"], job["N"]
     a = DS._load(job["paths"])

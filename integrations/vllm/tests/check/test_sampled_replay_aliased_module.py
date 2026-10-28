@@ -1,9 +1,9 @@
-"""[rel M-0367 / ruling R17-11 / reqval] END TO END: the sampled replay over a Program whose rotary rows live under a per-layer path that is an
+"""END TO END: the sampled replay over a Program whose rotary rows live under a per-layer path that is an
 ALIAS of the shared module's canonical identity (vLLM's one RotaryEmbedding instance: the binding map holds
 `model.layers.0.self_attn.rotary_emb` at invocation = layer; the manifest records `model.layers.1.self_attn.rotary_emb -> [.., 1]`).
 
   * WITHOUT the manifest (the pre-fix reading, and any caller that passes none): every VU that reads or produces the aliased identity is
-    'no committed identity for (.., model.layers.1.self_attn.rotary_emb/..)' BY NAME -- the M-0367 record, reproduced: partial, never PASS;
+    'no committed identity for (.., model.layers.1.self_attn.rotary_emb/..)' BY NAME -- the failing record, reproduced: partial, never PASS;
   * WITH the manifest: the replay is complete and bit-exact (the RoPE rows' own outputs and, where the tree registers it, the Attention_v3
     row's q / K-history inputs are read at invocation 1 of the canonical path);
   * an alias table that points at the WRONG invocation (0, where nothing of layer 1 is bound... but layer 0's words would be) never reads
@@ -19,12 +19,12 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import driver as SR, index as IX, opening as OP
-from verity_vllm.program.kernels import rows as RK
+from verity.ml.definitions.numerics import rows as RK
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 
-# the rope / attention Program is dense's (ruling R17-9 / R17-11 units, on the int line); a tree without it cannot run this end to end
+# needs the rope / attention test Program (`_program(rope=...)`); a tree without it cannot run this end to end
 pytestmark = pytest.mark.skipif("rope" not in inspect.signature(_program).parameters,
-                                reason="dense's rope/attention test Program (R17-9) is not on this tree; run on the int line")
+                                reason="dense's rope/attention test Program is not on this tree; run on the int line")
 
 CANON = "model.layers.0.self_attn.rotary_emb"
 ALIAS = "model.layers.1.self_attn.rotary_emb"
@@ -94,6 +94,7 @@ def test_with_the_manifest_alias_table_the_replay_reads_invocation_one_of_the_ca
     assert pop["query_checks"]["identities_without_rows"]["n"] == 0 and pop["query_checks"]["vus_outside_query"]["n"] == 0, pop["query_checks"]
 
 
+@pytest.mark.slow
 def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     world, bmap, committed, manifest, attn = _aliased_world()
     # (a) the alias points at invocation 0 -- nothing of the shared module is bound there in this world: missing by name, not layer 1's words

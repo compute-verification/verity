@@ -27,14 +27,14 @@ def _stream(b: bytes):
 
 
 def _stratified(k: int = 4) -> dict:
-    """A stratified law over 10 units: stratum A the units [0, 4) and [7, 10), stratum B [4, 7)."""
+    """A stratified sampling design over 10 proof blocks: stratum A the proof blocks [0, 4) and [7, 10), stratum B [4, 7)."""
     strata = [("A", [[0, 4], [7, 10]]), ("B", [[4, 7]])]
     return {"law": "stratified", "k": k,
             "strata": [{"template": t, "units": rs, "k": D.stratum_k(k, sum(h - l for l, h in rs), 10)} for t, rs in strata]}
 
 
 def _work(k: int = 4) -> dict:
-    """A work law over the same strata: A's units do work 3, B's none (drawn at their floor)."""
+    """A work sampling design over the same strata: A's proof blocks do work 3, B's none (drawn at their floor)."""
     strata = [("A", [[0, 4], [7, 10]], 3), ("B", [[4, 7]], 0)]
     total = sum(w * sum(h - l for l, h in rs) for _, rs, w in strata)
     return {"law": "work", "k": k, "strata": [{"template": t, "units": rs, "work": w, "floor": 1,
@@ -115,9 +115,9 @@ def test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes():
 
 
 def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
-    """`draw_first` reads the verifier's bytes as `Flock.Draw.drawWith` does: on a stream that doesn't run out, its units
-    are `drawOn`'s on the same bytes, for every law (a bernoulli law at its NUM/DEN as written, unreduced), and
-    `one_stage.draw.check_draw` accepts the draw against the law and the population."""
+    """`draw_first` reads the verifier's bytes as `Flock.Draw.drawWith` does: on a stream that doesn't run out, its proof blocks
+    are `drawOn`'s on the same bytes, for every sampling design (a bernoulli sampling design at its NUM/DEN as written, unreduced), and
+    `one_stage.draw.check_draw` accepts the draw against the sampling design and the population."""
     rng = random.Random(8)
     laws = [{"law": "subset", "k": 0}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
             {"law": "bernoulli", "p": "0/3"}, {"law": "bernoulli", "p": "3/3"}, _stratified(1), _stratified(4), _stratified(10),
@@ -144,8 +144,8 @@ def test_a_stream_that_runs_out_is_extended_as_lean_does():
 
 
 def test_a_work_draw_carries_its_closure():
-    """PoUW's shape: a work law over tiles with the verifier's closure map (a tile and what its credit reads).  The draw
-    carries `closure_of` (Lean `closureOf`: what drawn units' closures hold beyond the drawn units, ascending, omitted
+    """PoUW's shape: a work sampling design over tiles with the verifier's closure map (a tile and what its credit reads).  The draw
+    carries `closure_of` (Lean `closureOf`: what drawn proof blocks' closures hold beyond the drawn proof blocks, ascending, omitted
     when empty), and `one_stage.draw.proved` is drawn and closure."""
     closure = {0: [1, 4], 2: [3], 4: [5, 0], 7: [8, 9], 9: [7]}
     assert closure_of(closure, [0, 4]) == [1, 5] and closure_of(closure, [7, 9]) == [8] and closure_of(closure, [6]) == []

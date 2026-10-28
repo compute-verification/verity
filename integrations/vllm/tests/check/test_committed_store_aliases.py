@@ -1,7 +1,7 @@
-"""[rel M-0367 / ruling R17-11 / reqval] `CommittedStore` resolves a Program op_path through the manifest's `op_path_aliases` -- the ONE
+"""`CommittedStore` resolves a Program op_path through the manifest's `op_path_aliases` -- the ONE
 table the population reconciliation resolves through -- and reads THAT invocation's entry exactly.
 
-The record that failed (smollm2 B1 on the int-2 canary, M-0367): vLLM has one RotaryEmbedding instance called by every layer; the required
+The record that failed (smollm2 B1 on the canary): vLLM has one RotaryEmbedding instance called by every layer; the required
 manifest binds it under `model.layers.0.self_attn.rotary_emb` with invocation = layer order and records
 `model.layers.N.self_attn.rotary_emb -> [model.layers.0.self_attn.rotary_emb, N]`.  The Attention_v3/v2 row evaluator reads the layer's
 query (rotary_emb/0) and key history (rotary_emb/1) through the Program's per-layer path; the pre-fix store looked that path up verbatim
@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from verity_vllm.check.replay import coverage as COV, opening as OP
+from verity_vllm.records.required_manifest import SCHEMA
 
 ROT = "model.layers.0.self_attn.rotary_emb"
 W = 8                                                                            # words per identity
@@ -101,13 +102,15 @@ def test_the_store_and_the_population_reconciliation_resolve_through_the_same_ta
     bmap, committed, manifest = _world()
     ids = [{"family": "instance_outputs", "request_id": "r0", "step": 0, "op_path": ROT, "output_member": "0", "invocation": n, "element_range": [0, W],
             "rank": 0, "spec": "RoPE_v1{}"} for n in range(4)]
-    man = dict(manifest, identities=ids, query={"id": "Q_module_v1"}, header={})
+    man = dict(manifest, schema=SCHEMA, program_digest="ab" * 64, manifest_digest="cd" * 64, requests=["r0"], identities=ids,
+               query={"id": "Q_module_v1"})
     table = OP.alias_table(man)
     assert table == {f"model.layers.{n}.self_attn.rotary_emb": (ROT, n) for n in range(1, 4)}
     # the Program's row addresses, per-layer paths: every manifest identity is addressed (0 without rows) iff the aliases resolve
     addresses = {("r0", 0, ROT if n == 0 else f"model.layers.{n}.self_attn.rotary_emb", "0"): {"class": "vu", "rows": 1, "spec": "RoPE_v1{}", "why": None}
                  for n in range(4)}
     qp = COV.query_population(man, addresses, set(), ranks=[0])
+    assert "manifest_refused" not in qp["query_checks"] and qp["query_total"]["identities"] == 4
     assert qp["query_checks"]["identities_without_rows"]["n"] == 0 and qp["query_checks"]["vus_outside_query"]["n"] == 0
     store = OP.CommittedStore.of_record(bmap, committed, man)
     for (rid, step, op, mem) in addresses:

@@ -64,6 +64,8 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
+from . import rec_circuits as RC
 from . import rec_live as RL
 from . import rec_open as R
 from . import rec_residuals as RR
@@ -246,13 +248,20 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     out_rows, out_salts, entry = tops.reg.statement(tops_at)
     if [list(r) for r in out_rows] != [R.expected(q.cap_node) for q in qs]:
         raise ValueError(f"level {level['level']}: an opening's top node is not its row of the level's tops")
-    low = lowering(LANES, H, name)
-    flat = np.concatenate([rows, aux, np.array(acc_rows, np.uint16), coef, dirs], axis=1).astype(np.uint64)
-    got, _cut, ok = low.evaluate(flat)
-    opened = [bool((int(ok) >> i) & 1) and got[i, :R.OUT_WORDS].astype(np.uint16).tolist() == list(out_rows[i]) for i in range(n)]
-    summed = [bool((int(ok) >> i) & 1) and got[i, R.OUT_WORDS:].astype(np.uint16).tolist() == list(out_acc[i]) for i in range(n)]
     sub = subcircuit(LANES, H, name)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    key = {"LANES": LANES, "H": H, "name": sub.id, "n": n, "version": version}
+    opened = summed = None
+    if kept := RC.load("rec-open", key):
+        text, info = kept
+    else:
+        low = lowering(LANES, H, name)
+        flat = np.concatenate([rows, aux, np.array(acc_rows, np.uint16), coef, dirs], axis=1).astype(np.uint64)
+        got, _cut, ok = low.evaluate(flat)
+        opened = [bool((int(ok) >> i) & 1) and got[i, :R.OUT_WORDS].astype(np.uint16).tolist() == list(out_rows[i]) for i in range(n)]
+        summed = [bool((int(ok) >> i) & 1) and got[i, R.OUT_WORDS:].astype(np.uint16).tolist() == list(out_acc[i]) for i in range(n)]
+        text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+        info = {"unit_rows": low.layout.useful, "digests": [FC.digest(text), FC.class_digest(text)]}
+        RC.store("rec-open", key, text, info)
     read = lambda e, reads: {**e, "word_bits": 16, "reads": list(reads)}
     own = {"format": G.READS, "ports": {"out": read(tops.own, tops_at), "acc": read(chain.reg.entry(), at),
                                        "coef": read(coef_reg.entry(), range(n)), "dirs": read(dirs_reg.entry(), range(n)),
@@ -271,18 +280,21 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program_)))
     (d / "partition.json").write_text(json.dumps(part))
+    RB.check(own, f"rec-L{level['level']}", n)
     (d / "registered.json").write_text(json.dumps(own))
     tables = {"row": rows, "aux": aux, "acc": np.array(acc_rows, np.uint16), "coef": coef, "dirs": dirs}
     outs = {"out": np.asarray(out_rows, np.uint16), "acc_out": np.asarray(out_acc, np.uint16)}
     FC.write(text, SimpleNamespace(name=f"rec-L{level['level']}", subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None,
              list(range(n)), share_rows=True, outs=outs, tables=tables, refs={nm: list(range(n)) for nm in tables}, salts=salts,
-             registered=registered)
-    meta = json.loads(text.split("\n", 2)[1][5:])
+             registered=registered, digests=tuple(info["digests"]))
+    meta = FC.meta_of(text)
+    count = lambda xs: None if xs is None else sum(xs)
+    missed = lambda xs: None if xs is None else [(q.rep, q.j) for q, x in zip(qs, xs) if not x]
     return {"level": level["level"], "value": tops.own["value"], "template": defn.id, "LANES": LANES, "H": H, "instances": n,
-            "opened": sum(opened), "not_opened": [(q.rep, q.j) for q, o in zip(qs, opened) if not o],
-            "summed": sum(summed), "not_summed": [(q.rep, q.j) for q, s in zip(qs, summed) if not s],
-            "unit_rows": low.layout.useful, "unit_log": meta["unit_log"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"],
-            "per_vu": meta["per_vu"], "compressions": R.compressions(LANES, H), "circuit_sha512": FC.digest(text),
+            "opened": count(opened), "not_opened": missed(opened), "summed": count(summed), "not_summed": missed(summed),
+            "circuit_kept": kept is not None, "unit_rows": info["unit_rows"], "unit_log": meta["unit_log"], "k_log": meta["k_log"],
+            "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"], "compressions": R.compressions(LANES, H),
+            "circuit_sha512": info["digests"][0],
             "program_sha512": prog, "partition_digest": P.digest(part), "registered_root": tops.own["root"],
             "top_rows": tops.own["leaves"], "acc_root": chain.reg.root.hex(), "rows_root": linked.root.hex() if linked else None,
             "coef_root": coef_reg.root.hex(), "dirs_root": dirs_reg.root.hex()}

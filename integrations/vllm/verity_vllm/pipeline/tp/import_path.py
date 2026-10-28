@@ -10,7 +10,7 @@ def write_import_path_runtime(llm, out: Path, rpc_timeout: float) -> None:
     finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a static
     closure; the tag-candidate equivalence rule reads `import_path_runtime.json` when it exists."""
     try:
-        from verity_vllm.engine.rank_worker import repo_modules_loaded
+        from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
         drv = repo_modules_loaded()
         ranks_mods = llm.collective_rpc("tp2_repo_modules", timeout=rpc_timeout)
         union = set(drv["files"])

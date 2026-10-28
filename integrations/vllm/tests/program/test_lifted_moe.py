@@ -1,6 +1,6 @@
-"""Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**, lane `pad` (R16, BRIEF §7B).
+"""Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**.
 
-The registered fused-MoE block (`verity_vllm/program/registry/moe.py`, R13 MOE-01: router top-k → expert row gather with the expert index as an
+The registered fused-MoE block (`verity/ml/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
 I32 VALUE → expert GEMMs → routed sum) lifted by node replay (`lifted.lift_def`), on a tiny per-token MoE FFN (E=4 experts, TOPK=2,
 K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for gate:
 
@@ -19,8 +19,7 @@ K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for 
     every expert's weight row is in the dataflow of every pair (the wide-fan-in gather), so no per-request Program shape depends on
     who is routed where — the fixed population holds for MoE as for dense.
 
-What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger cap is the `moe` lane's pod time; not
-tonight).
+What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger cap needs a pod).
 """
 from __future__ import annotations
 
@@ -31,9 +30,9 @@ from verity.ml.circuits import Program, bind
 from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
 from verity.ml.circuits.defs import composite
 from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity_vllm.program.registry import b1, lifted as L, moe, prims as P
-from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.prims import BF16, F32, I32
+from verity.ml.definitions.registry import b1, lifted as L, moe, prims as P
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.prims import BF16, F32, I32
 from verity.ml.circuits.types import Array, Tuple
 
 E, TOPK, VPT, K, N = 4, 2, 2, 16, 16
@@ -94,13 +93,13 @@ def data():
 def _run(sp, inputs):
     prog = Program(sp)
     if L.has_enable(sp) and len(inputs) == len(sp.signature()[0]) - 1:
-        inputs = list(inputs) + [[1]]  # v0.6 B7: a lifted composite takes its enable LAST; the tests run it enabled (Active(1))
+        inputs = list(inputs) + [[1]]  # a lifted composite takes its enable LAST; the tests run it enabled (Active(1))
     t = ref.materialize(prog, inputs)
     return prog, t, [t[g] for g in prog.circuit.root_outputs()]
 
 
 def _gate_for_gate(pl, tl, pu, tu):
-    """v0.6 B7: the lifted Program has ONE more gate -- the enable Input (its LAST prescribed input); every other gate, in order,
+    """The lifted Program has ONE more gate -- the enable Input (its LAST prescribed input); every other gate, in order,
     carries the unlifted word (an Active word is its payload; G1 keeps the weights unwidened)."""
     from verity.ml.circuits.layout import resolve
     last = pl.input_coll(len(pl.root.signature()[0]) - 1)
@@ -217,7 +216,7 @@ def test_the_route_is_a_value_not_a_structure_the_fixed_shape_holds_for_moe(data
     assert all(c.node.fn is row for c in rows)
     # so the gathered weight elements per slot are 2N×K (w13) + K×N (w2), each a fan-in over ALL E experts — the shape does not depend on the route
     assert len(rows) * K == TOPK * (2 * N * K + K * N)
-    # the digest differs from the unlifted block's and the unlifted block's shape is the same node list (PAD-03 by construction here)
+    # the digest differs from the unlifted block's and the unlifted block's shape is the same node list (the deletion rule holds by construction here)
     assert d1 != program_digest(encode_program(Program(FFN))) and len(lsp.body.nodes) == len(FFN.body.nodes) and lsp.gates == FFN.gates
 
 

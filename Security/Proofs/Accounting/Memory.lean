@@ -4,7 +4,7 @@ import Proofs.Accounting.Memory.Adds
 /-!
 # Memory adds, by counting: the guarantees
 
-Each statement of `Security/Models/Accounting/Guarantees/Memory.lean`, proved:
+Each statement of `Security/Definitions/Accounting/Guarantees/Memory.lean`, proved:
 
 * `Memory/Counting.lean`: the counting core, Markov's inequality over the disjoint fibres;
 * `Memory/Adds.lean`: the composition with PoUS's guarantee: each fibre coded into `S` bits, the coded adversary

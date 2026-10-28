@@ -48,7 +48,7 @@ the verdict without stopping the others.
   bind       the Programs bind at the served statics.
 
 The RoPE contraction.  GLM-5.3's capture map named `RoPEHeadGptJ_v1` for the k_pe and q_pe RoPE (`fused-rope-triton`) before a run
-measured it; run r20261012-222325-ce92 settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
+measured it; a run settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
 The kernels compute `r1 = x1*cos - x2*sin`, `r2 = x2*cos + x1*sin` in f32
 from bf16 words (kernels.py:233-236, 718-731), so nvcc/ptxas may contract either product into an FMA: L_a = bf16(fma(x1, c, -RN(x2 s)))
 (`RoPEHeadGptJ_v1`'s `RopeOut_v1`), L_b = bf16(fma(-x2, s, RN(x1 c))), L_n = bf16(RN(x1 c) - RN(x2 s)); H_a = bf16(fma(x2, c, RN(x1
@@ -259,7 +259,7 @@ def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> t
     `fmaxf(acc, +0)`, then the quad lanes' sums in ascending j (j = 0's product contracted into j = 1's add, `fma(r0, w0, r1 *
     w1)`, then FFMAs), `(s0 + s1) * ks` and `(v0 + v1) + (v2 + v3)`.  An entry whose dot steps flag a non-finite accumulator or an
     e4m3 NaN, or whose logit is NaN, is unresolved."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     n, Hh, Dd = q.shape
     relu = np.empty((n, Hh), dtype=np.uint32)
@@ -328,7 +328,7 @@ def convert_rows(topk: np.ndarray, block_table: np.ndarray, block_stride_rows: i
 def split_counts(valid, num_sm: int, num_splits: int = 0) -> list[int]:
     """Each token's FA3 split count in one sparse decode launch over the valid counts ``valid`` on ``num_sm`` SMs, the call's
     ``num_splits`` 0 (none, as `forward_mqa` passes) or the count it gives (`sparse_mla_split.launch_num_splits`)."""
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     return W.launch_num_splits(valid, num_sm, TOPK, num_splits)
 
@@ -340,7 +340,7 @@ NEG = np.uint32(0x80000000)
 def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
     """Every candidate contraction (module docstring) of the interleaved RoPE on bf16 words (arrays of one shape): name -> bf16
     words of the even (L_*) or odd (H_*) output."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     X1, X2, Cc, Ss = (DR.bf16_to_f32_words(np.asarray(v)) for v in (x1, x2, c, s))
     out = {}
@@ -468,8 +468,8 @@ def index_k_forms(b: np.ndarray, cs: np.ndarray, got: np.ndarray) -> dict[str, A
     """Which contraction of `roped = normed * cos + sign * partner * sin` (kernels.py:392) the probe's bytes are: A (the
     Definition's) = fma(x, cos, RN(+-partner sin)), B = fma(+-partner, sin, RN(x cos)), N = RN(x cos) + RN(+-partner sin), separately
     for even (L) and odd (H) elements; b (launches, D) f32 words, cs (launches, ROPE) bf16 words, got (launches, D) bytes."""
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 
     half = ROPE // 2
     x = np.asarray(b, dtype=np.uint32)[:, :ROPE]
@@ -583,7 +583,7 @@ def fused_q_call(o: dict[str, Any], cs):
 
 def _rms_info(x: np.ndarray, w: np.ndarray, got: np.ndarray, eps: float) -> dict[str, Any]:
     """Triton `_rms_norm` (kernels.py:25-31), no Definition here: the outputs against f64 sums of an f32 model, in bf16 ulps."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     xf = DR.as_f32(DR.bf16_to_f32_words(x)).astype(np.float64)
     r = np.float32(1.0) / np.sqrt((np.mean(xf * xf, axis=1, keepdims=True) + eps).astype(np.float32))
@@ -760,7 +760,7 @@ def phase_rope(o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any]) -> d
     `RoPEHeadGptJ_v1` on a sample of them against the L_a/H_a candidate words."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import ref_prims as RP
+    from verity.ml.definitions.registry import ref_prims as RP
 
     pos = o["pos"].cpu().numpy()
     cs_rows = _u16(o["cs"])[pos]
@@ -911,7 +911,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     if lst is None:
@@ -1040,7 +1040,7 @@ def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache slots [r0, r1): their bytes and scale against `DsaIndexerKRow_v1{128,64,1e-06}` (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS)
@@ -1059,7 +1059,7 @@ def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [r0, r1): index_q_fp8 and index_weights_out against `DsaIndexerQ_v1{32,128,64}` (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE)
@@ -1078,7 +1078,7 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, the reference on the first two."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
@@ -1106,8 +1106,8 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     the launch splits the token's keys (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import sparse_mla as M
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
     h, T, NS = job["head"], job["T"], job["NS"]
@@ -1177,10 +1177,10 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import boolean_rope as BR
-    from verity_vllm.program.registry import dsa
-    from verity_vllm.program.registry import sparse_mla as M
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import boolean_rope as BR
+    from verity.ml.definitions.registry import dsa
+    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),

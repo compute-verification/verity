@@ -1,11 +1,11 @@
-"""`SplitsFor_v1(n_live, num_SMs)` -- the split count S of vLLM's `_apply_topp_split` as a VALUE of the live sampler batch
-(RULING M-0571 (3); LIFTING-SPEC [D4]; pad M-0070).  CPU, torch-free.
+"""`SplitsFor_v1(n_live, num_SMs)` -- the split count S of vLLM's `_apply_topp_split` as a VALUE of the live sampler batch.
+CPU, torch-free.
 
   * the threshold tables at 142 (L40S) and 132 (H100) SMs, computed -- they differ (n = 17, 34..35, 67..71), so S is a function of
     (n, num_SMs), never a per-device-class table;
   * domain: n_live in 1..64, num_SMs >= 1; n_live = 0 (no sampling event) and n_live > 64 (not the split pipeline) REFUSE by name;
   * range: a power of two in 1..32 (Value<6>), non-increasing in n_live, non-decreasing in num_SMs;
-  * the real record: the R15 B8 staggered row (157 engine steps, 526 sampled rows, 8 requests arriving 0..44 with caps 2..128): the
+  * the real record: the B8 staggered workload (157 engine steps, 526 sampled rows, 8 requests arriving 0..44 with caps 2..128): the
     mask kernel's constexpr S at every step == SplitsFor_v1(live count at that step, 142) -- the live count from the DECLARED
     chronology (arrivals + caps, every request served to its cap) and from the realized one agree at every step; the flips are
     (step 0, live 1, S 32) -> (step 32, live 5, S 16) -> (step 101, live 4, S 32).
@@ -17,7 +17,7 @@ import os
 
 import pytest
 
-from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, SPLITS_FOR_V1_WIDTH, splits_for, splits_for_v1
+from verity.ml.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, SPLITS_FOR_V1_WIDTH, splits_for, splits_for_v1
 
 DATA = os.path.join(os.path.dirname(__file__), "data", "topp_split_fixture")
 
@@ -51,7 +51,7 @@ def test_threshold_table_rtx_pro_6000_188_sms():
 def test_lifted_splits_primitives_resolve_at_188_sms():
     from verity.ml.circuits.codec import _lookup_primitive
     from verity.ml.circuits.defs import REGISTRY
-    from verity_vllm.program.registry import lifted as L
+    from verity.ml.definitions.registry import lifted as L
     assert _lookup_primitive(REGISTRY, "SplitsForSMS188_v1") is L.splits_for_prim(188)
     assert _lookup_primitive(REGISTRY, "LSplitsForSMS188_v1") is L.l_splits_for(188)
     assert [L.l_splits_for(188).evaluate(n) for n in (1, 5, 6, 11, 12, 23, 24, 47, 48, 64)] == [32, 32, 16, 16, 8, 8, 4, 4, 2, 2]

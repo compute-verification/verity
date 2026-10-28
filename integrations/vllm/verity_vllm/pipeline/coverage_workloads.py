@@ -29,13 +29,13 @@ import hashlib
 import json
 import sys
 import uuid
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
-import numpy as np
-from dataclasses import dataclass
-
+from verity_vllm.commit import challenge as CH
 from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, option
+from verity_vllm.engine.profiles.coverage_roles import ROLE_REPOS
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = WORKLOAD_SCHEMA
@@ -46,7 +46,7 @@ BATCHED_TOKENS = {"C256": 2048 + 64, "C1024": 8192 + 64}
 
 
 class Tok:
-    """`tokenizers` tokenizer (tokenizer.json) with the decode side; `add_special_tokens=False` like the batch lane's workloads."""
+    """`tokenizers` tokenizer (tokenizer.json) with the decode side; `add_special_tokens=False` like the batch workloads."""
 
     def __init__(self, path: str | Path) -> None:
         from tokenizers import Tokenizer
@@ -69,7 +69,7 @@ def draw_lengths(profile: str, ctx: str, seed: int) -> list[dict]:
     """The (prompt_len, max_tokens, arrive_step) draws of one (profile, ctx, seed) -- model independent."""
     c = CTX[ctx]
     n = 1 if profile == "B1" else 8
-    rng = np.random.default_rng([seed, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0FFEE])
+    rng = CH.generator([seed, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0FFEE])
     plens = [int(x) for x in rng.integers(c["lo"], c["cap"] + 1, size=n)]
     mts = [max(c["min_out"], pl // 10) for pl in plens]
     if profile == "B8-mixed":
@@ -101,12 +101,12 @@ def corpus_paragraphs() -> list[dict]:
     return out
 
 
-def build_requests(tok: Tok, draws: list[dict], *, case: str, profile: str, ctx: str, seed: int, prompt_seed: int | None = None) -> list[dict]:
+def build_requests(tok: Tok, draws: list[dict], *, case: str, profile: str, ctx: str, seed: int, prompt_seed: int | None) -> list[dict]:
     """The requests: lengths from `draws` (a function of (profile, ctx, seed) only), text from the corpus chosen by `prompt_seed`
-    (default: the length seed).  A replicate keeps the draws and changes the prompt seed -- same structural configuration, other prompts."""
+    (None: the length seed).  A replicate keeps the draws and changes the prompt seed -- same structural configuration, other prompts."""
     paras = corpus_paragraphs()
     ps = seed if prompt_seed is None else prompt_seed
-    rng = np.random.default_rng([ps, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0DE])
+    rng = CH.generator([ps, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0DE])
     starts = rng.choice(len(paras), size=len(draws), replace=False)
     reqs = []
     for i, (d, s0) in enumerate(zip(draws, starts)):
@@ -138,7 +138,7 @@ DTYPE_VARIANTS = {"float16": "f16", "half": "f16"}
 
 
 # =========================================================================================================
-# [chunked owner, window 2026-09-17] feature variant `--variant chunked=<max_num_batched_tokens>`
+# feature variant `--variant chunked=<max_num_batched_tokens>`
 #
 # vLLM V1 always has chunked prefill enabled, but the campaign's `engine.args.max_num_batched_tokens` (2048+64 /
 # 8192+64) keeps every prefill in ONE engine step, so no coverage cell so far has exercised partial-prefill attention.  The
@@ -282,14 +282,14 @@ def simulate_schedule_chunked(reqs: list[dict], budget: int, max_num_seqs: int =
 
 
 def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, seed: int, tokenizer_revision: str | None,
-                 replicate: int = 0, variant: str = "greedy", sampling_seed: int | None = None, chunked: int | None = None,
+                 sampling_seed: int | None, replicate: int = 0, variant: str = "greedy", chunked: int | None = None,
                  dtype: str | None = None) -> dict:
     """replicate r > 0: same length draws (same structural configuration), prompts from prompt seed seed + 1000 r.  variant "t1":
     the temp=1 column -- every request sampled at temperature 1.0 with `sampling_seed` (vLLM's per-request seeded sampler).
     chunked = N: the chunked-prefill feature variant (max_num_batched_tokens N forces several prefill chunks; see the block above).
     dtype (`DTYPE_VARIANTS`): the numerical-format column -- `engine.args.dtype` makes the harness build `LLM(dtype=...)`;
     the requests (ids, token ids, lengths, arrivals) are identical to the bf16 workload of the same (profile, ctx, seed, replicate).
-    [integ 2026-09-17: the two feature variants compose -- `chunked=64,dtype=float16` is one workload with both keys, suffix `_ck64_f16`.]"""
+    The two feature variants compose: `chunked=64,dtype=float16` is one workload with both keys, suffix `_ck64_f16`."""
     draws = draw_lengths(profile, ctx, seed)
     prompt_seed = seed + 1000 * replicate if replicate else None
     reqs = build_requests(tok, draws, case=case, profile=profile, ctx=ctx, seed=seed, prompt_seed=prompt_seed)
@@ -339,7 +339,7 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    case: str = option("--case", help="checkpoint role (B0, B1, LLAMA32_1B, ...)")
+    case: str = option("--case", help="checkpoint role (B0, B1, ...: a role of checkpoints.json)")
     model: str | None = option("--model", default=None,
                                help="HF repo of the served model (default: from checkpoints.json by role)")
     tokenizer: str = option("--tokenizer", help="HF snapshot dir or tokenizer.json of the served model")
@@ -360,6 +360,22 @@ class Options:
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the draws only")
 
 
+def checkpoint_repo(path: str | Path, role: str) -> str | None:
+    """The repo of the first checkpoint of `role` in a checkpoints.json; None when the file is unreadable, isn't the
+    `{"checkpoints": [{...}, ...]}` form up to that entry, or that entry carries no repo."""
+    try:
+        doc = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    cks = doc.get("checkpoints") if isinstance(doc, dict) else None
+    for c in cks if isinstance(cks, list) else []:
+        if not isinstance(c, dict):
+            return None
+        if c.get("role") == role:
+            return c.get("repo")
+    return None
+
+
 def main(a: Options) -> int:
     # [chunked] one parse of --variant: the sampling variant name + the feature variants (fp16's dtype= lands in the same dict);
     # [integ] the flag is repeatable (fp16's calling style) -- the values are joined and parsed once
@@ -369,15 +385,9 @@ def main(a: Options) -> int:
 
     model = a.model
     if model is None:
-        try:
-            for c in json.loads(Path(a.checkpoints).read_text())["checkpoints"]:
-                if c.get("role") == a.case:
-                    model = c["repo"]
-                    break
-        except Exception:  # noqa: BLE001
-            pass
+        model = checkpoint_repo(a.checkpoints, a.case)
     if model is None:
-        model = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B"}.get(a.case)
+        model = ROLE_REPOS.get(a.case)
     if a.dry_run:
         for prof in a.profiles.split(","):
             for ctx in a.ctx.split(","):

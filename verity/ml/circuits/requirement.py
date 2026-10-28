@@ -1,4 +1,4 @@
-"""A declared circuit's requirement of memory, from its wiring and its schedule (the IR, never a kernel): the values its
+"""A declared circuit's requirement of memory, from its wiring and its schedule (the Program, never a kernel): the values its
 execution keeps live when each step begins and the values each step reads, in bits, in all and by block of the store.
 The Python counterpart of `Security/Definitions/Accounting/Requirement.lean`, by explicit expansion of the canonical
 circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean definitions and the memory map (I3) are held to.
@@ -8,7 +8,7 @@ circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean defi
 
 A gate's operands are `layout.Circuit.gate(i).operands`. It uses all of them, except that a primitive with an
 `evaluate_lazy` (a gather: its index and the word it selects) uses the operands its evaluator fetches, which takes the
-run's values (`inputs`, as `evaluate.py`'s transcript holds them). Without them `requirement` refuses a gather, and
+run's values (`inputs`, as `evaluate.py`'s trace holds them). Without them `requirement` refuses a gather, and
 `upper_bound` counts its whole column: an upper bound on what a step reads, which over-counts reads, so it is never
 credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t` the gates of the steps
 before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;
@@ -16,9 +16,10 @@ before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that
 
 `execution` is the gate pass: `Accounting.Requirement`'s `Wiring` and `Execution` gate by gate (an `Execution`: widths,
 the registered values, each produced value's engine step, each gate's operands and those it uses, the run's values and
-inputs), and `Requirement.of` derives each value's birth and last read from it. Placed on devices (`leaf`, and
-`ticks`: the tick at which each device begins each engine step), an `Execution` also has `Placement`'s regions, ingress
-and credits (`region`, `ingress`, `credits`). `verity/core/primitives/requirement/` holds `Requirement.of`, `pack`,
+inputs), and `Requirement.of` derives each value's birth and last structural reader from it (`last`: the last step
+running a gate with it as an operand, whether or not that gate uses it). Placed on devices (`leaf`, and `ticks`: the
+tick at which each device begins each engine step), an `Execution` also has `Placement`'s regions, ingress and credits
+(`region`, `ingress`, `credits`). `verity/core/primitives/requirement/` holds `Requirement.of`, `pack`,
 `credited`, `credited_reads`, `store_matches`, `plan_matches` and the placed functions to the Lean definitions on
 `Execution`s by difftest.
 
@@ -47,8 +48,9 @@ resident or planned (filler, dead or another workload's): they hold none of the 
 
 `pack` places the values that are ever live in blocks of `block_bits`: the registered ones in canonical order from store
 index 0 (the registered store), then each step's newly live values in fresh blocks after them (the memory map's appends),
-each block written at its values' step and freed at their last read. Each block is complete and encoded at its values'
-step (no deferral, `encoded` empty), so every live value is credited. That is the honest layout: `store_matches` and `plan_matches` hold at every step.
+each block written at its values' step and freed at their last structural reader. Each block is complete and encoded at
+its values' step (no deferral, `encoded` empty), so every live value is credited. That is the honest layout:
+`store_matches` and `plan_matches` hold at every step.
 """
 
 from __future__ import annotations
@@ -445,7 +447,8 @@ class Layout:
 
 def pack(req: Requirement, block_bits: int = BLOCK_BITS) -> tuple[Layout, Store]:
     """The honest layout and the store it implies: the registered values that are ever live packed from store index 0, then
-    each step's newly live values in fresh blocks, each block written at its values' step and freed at their last read."""
+    each step's newly live values in fresh blocks, each block written at its values' step and freed at their last
+    structural reader."""
     block: dict[int, int] = {}
     offset: dict[int, int] = {}
     groups = [sorted(v for v in req.registered if v in req.last)]

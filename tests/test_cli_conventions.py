@@ -40,7 +40,7 @@ SYNONYMS = {
     "--by": "--as for the handle acting, or a name that says what it filters (e.g. --labeled-by, --bucket)",
 }
 
-#: (file, flag): how many definitions existed when this test landed (14 Oct 2026); shrink it, never grow it
+#: (file, flag): how many definitions existed when this test landed; shrink it, never grow it
 KNOWN = {
     ("infra/cluster/src/cluster/cli.py", "--by"): 1,
     ("infra/ops/verity_ops/deploy.py", "--by"): 2,
@@ -53,7 +53,6 @@ KNOWN = {
     ("tools/research/src/research/pods/nebius/keeper.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/lean_sandbox.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/lockout/lockout.py", "--node"): 1,
-    ("tools/research/src/research/pods/nebius/n1_alerts.py", "--node"): 1,
     ("tools/research/src/research/pods/nebius/resource_probe.py", "--node"): 1,
     ("tools/research/src/research/pods/nebius/write_probe.py", "--handle"): 1,
     ("tools/research/src/research/pods/nebius/write_probe.py", "--node"): 1,

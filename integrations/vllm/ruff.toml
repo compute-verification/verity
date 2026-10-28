@@ -1,0 +1,17 @@
+# The vLLM integration's ruff configuration (`ruff check integrations/vllm`): the repository's rules (../../ruff.toml, which says
+# which and why), with the integration's own exclusions and per-file exceptions, which replace the root's. tests/lint/test_ruff.py
+# holds the findings to tests/lint/allowlists/ruff.json, which only shrinks, and the ratchet gate judges a change here or to the
+# root's by running the base's copies on the change's tree.
+extend = "../../ruff.toml"
+# captured output (Inductor's generated kernels), not ours
+extend-exclude = ["fixtures"]
+
+[lint.per-file-ignores]
+# a pytest fixture imported from a sibling module and taken as an argument
+"tests/**" = ["F811"]
+# Programs in the frontend's notation, whose `Arr["N", BF16]` names a dimension with a string that pyflakes reads as a name
+"verity_vllm/program/frontend/examples.py" = ["F821"]
+"tests/program/b1_authored.py" = ["F821"]
+"tests/program/serve3_authored.py" = ["F821"]
+"tests/program/test_frontend_rulings.py" = ["F821"]
+"tests/program/test_torch_frontend.py" = ["F821"]

@@ -1,25 +1,32 @@
 {
  "definitions": {
   "FrameV3LeafAt_v1{R=1,B=4,SCHEMA='hm96-sha512/row/v2'}": {
-   "and": 157405
+   "and": 157405,
+   "type": "7ed6a60d2d91cbb9aadac48c46eb744da0cc0f8f22afaa4bd0594c02285dc834cb09fa8700ea169fd08a12a1ae58c762d5b47407bc983a00118e28974c03aa71"
   },
   "FrameV3Leaf_v1{B=1,SCHEMA='hm96-sha512/row/v2'}": {
-   "and": 155359
+   "and": 155359,
+   "type": "5cf074037f7ee27b62f089323b72073fc231b67008b72edf01e25e42b651e3e818a9dca064ccb739cd43d7dbb7e5a91a3b52b41ff5ecd89469a67b8f388df5c1"
   },
   "FrameV3Node_v1{B=1}": {
-   "and": 234767
+   "and": 234767,
+   "type": "4b4243f21a8ae0d178355d8302f3367771425746f3d4067a0fd262cbea43bb6bf6e6a3dd139c840c38d9bb8b49453298bce2fe79024c57f1760bc9d9e745307b"
   },
   "FrameV3Pick_v1{D=1}": {
-   "and": 1044
+   "and": 1044,
+   "type": "05e8264088d1f66f10aac0aea0e462fe47f6b4c9d1dc223d93cb3d2b9478fe05ae11d797727b041b4d6317c9f5e4155f300111be789b00cb873d523b6a24bdd8"
   },
   "FrameV3Pick_v1{D=2}": {
-   "and": 1561
+   "and": 1561,
+   "type": "967f91125395a8da8536559fdb42ef3814677cc3b92861a4099ce0eacc6eae0f00343f010f89fb355b23115331b82babdb82a2aeb9f322b27ad0695a42f8553e"
   },
   "FrameV3ReadAt_v1{D=1,B=4,SCHEMA='hm96-sha512/row/v2'}": {
-   "and": 393142
+   "and": 393142,
+   "type": "556dcd9c924a2b970a2b18eab2924389d6d649a96962e0477df72d2c4bfd6075830afdc7905f0872e411d72c89a7a5c3201c0992b498a2315c28ca1ec3837ed5"
   },
   "FrameV3Read_v1{D=1,SCHEMA='hm96-sha512/row/v2'}": {
-   "and": 390555
+   "and": 390555,
+   "type": "5a2860924ebe9d7fbc5e99ca175050b5ef302fc25d1ce34bb932d77b501f4f8544d312ecfda5de7f3cf3bd25c66c9092ffa1af0e7abb1919aca99630debec9a2"
   }
  }
 }

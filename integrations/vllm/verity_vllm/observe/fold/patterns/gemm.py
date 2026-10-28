@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
@@ -27,7 +27,7 @@ class GemmLaunch:
     `aten.mm/matmul/linear/addmm` dispatcher node that wraps exactly one such launch (the launch fired inside the
     op's CUDA implementation), consuming the wrapper as scope.
 
-    Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  [R13 ampere] The TILING pinned is the
+    Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  The TILING pinned is the
     record target's launch geometry for (M, N, K) — `gemm_target_of(ctx)`: the registered GEMM specialization of the
     header's capability (`verity_vllm.program.frontend.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
     = the default for every shape); `constexprs` / `num_warps` / `num_stages` given at construction are the profile's default
@@ -65,7 +65,7 @@ class GemmLaunch:
             return None
         a = bound_args(launch)
         consts = dict(launch.enter.constexprs)
-        # [R13 ampere] the tiling (BLOCK_SIZE_*, num_warps, num_stages) a launch must show is the record TARGET's launch geometry for
+        # the tiling (BLOCK_SIZE_*, num_warps, num_stages) a launch must show is the record TARGET's launch geometry for
         # (M, N, K) — the registered GEMM specialization's `launch_config` (verity_vllm.program.frontend.gemm_targets: vLLM's tuned-table row for the
         # target's arch family, else the default), the same source Bet A pins.  An unregistered target is refused whatever the launch shows.
         gt, refusal = gemm_target_of(ctx)
@@ -122,7 +122,7 @@ class GemmLaunch:
         roots = ctx.roots_of(w)
         wname = roots[0].name if roots else ""
         rows = M
-        # [R13 hopper] the registered GEMM Definition of the record's target (`frontend.targets.gemm_spec`: Gemm_v1 on the accepted
+        # the registered GEMM Definition of the record's target (`frontend.targets.gemm_spec`: Gemm_v1 on the accepted
         # Ampere-family target, Gemm_v2{DOT=<target step>} otherwise) — the same selection the Bet A builder makes
         try:
             spec = _targets().gemm_spec(target_of(ctx)[0], K, N)

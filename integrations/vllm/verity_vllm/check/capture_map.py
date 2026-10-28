@@ -200,8 +200,8 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
             problems.append(f"program {pid}: status {p['status']!r} is not one of {STATUSES}")
         if p["status"] == "exists" and not p["definitions"]:
             problems.append(f"program {pid}: status exists names no Definition")
-        if p["status"] == "tonight" and not p.get("branch"):
-            problems.append(f"program {pid}: status tonight names no branch")
+        if p["status"] == "pending" and not p.get("branch"):
+            problems.append(f"program {pid}: status pending names no branch")
         if registry is not None:
             for d in p["definitions"]:
                 if d not in registry:
@@ -325,7 +325,7 @@ def main(a: CheckOptions | CountsOptions | IdsOptions) -> int:
     if a.cmd == "counts":
         print(json.dumps({"all routes": counts(cmap, env), **{r: counts(cmap, env, (r,)) for r in cmap.get("routes", {})}}, indent=1))
         return 0
-    from verity_vllm.program.registry import catalog
+    from verity.ml.definitions.registry import catalog
 
     registry, errors = catalog.load()
     doc = json.loads(Path(a.inventory).read_text())

@@ -13,8 +13,8 @@ from verity.ml.circuits.constants import REGISTRATION, inputs
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import tables as T
+from verity.ml.definitions.registry import dense as D
+from verity.ml.definitions.registry import tables as T
 
 
 def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
@@ -59,7 +59,7 @@ def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     d = tmp_path / "p.json"
     d.write_text(json.dumps(encode_program(prog)))
     code = ("import json, sys; from verity.ml.circuits.codec import decode_program, program_digest; from verity.ml.circuits.defs import REGISTRY; "
-            "import verity_vllm.program.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
+            "import verity.ml.definitions.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
             "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
     out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()
     assert out == [program_digest(prog)]
@@ -103,8 +103,8 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
     active, a ⊥ and an invalid table word as the flat widths do."""
     from verity.ml.circuits.ops import scalar as SC
-    from verity_vllm.program.registry import lifted as L
-    from verity_vllm.program.registry import operand_widths as OW
+    from verity.ml.definitions.registry import lifted as L
+    from verity.ml.definitions.registry import operand_widths as OW
 
     assert OW.leaf_widths(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
     assert OW.leaf_widths(SC.SelectF32.params) == [1, 32, 32]
@@ -116,16 +116,10 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
 
 
-def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
-    """One batch over all 65,536 bf16 gate words (random up words), plus the special up words, against `GeluTanhMulBf16_v1`."""
-    rng = np.random.default_rng(13)
+def test_gelu_tanh_mul_bf16_v3_is_v1_reading_the_registered_table():
+    """`GeluTanhMulBf16_v3` on special words, `gelu_tanh_bf16` its operand, against `GeluTanhMulBf16_v1` (the Lean evaluator's
+    difftest runs it on every gate word)."""
     table = T.table_words("gelu_tanh_bf16")
-    assert table == [D.gelu_tanh_bf16_bits(g) for g in range(1 << 16)]
-    I = 1 << 16
-    gu = list(range(I)) + rng.integers(0, 1 << 16, I).tolist()
-    new = bind(T.GeluTanhMulV3, I=I)
-    assert new.id == f"GeluTanhMul_v3{{I={I}}}"
-    assert list(evaluate(new, gu, table)) == [D.GeluTanhMulBf16.evaluate(g, u) for g, u in zip(gu[:I], gu[I:])]
     for g, u in [(0x3F80, 0x8000), (0xFF80, 0), (0x7FC0, 0x3F80), (0x0001, 0x7F80), (0x8000, 0xFF80)]:
         assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
 
@@ -138,7 +132,7 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-    from verity_vllm.program.kernels.serve3_reference import materialize
+    from verity.ml.definitions.numerics.serve3_reference import materialize
 
     class GeGLU(torch.nn.Module):
         def __init__(self, I: int) -> None:

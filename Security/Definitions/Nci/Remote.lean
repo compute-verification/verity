@@ -4,15 +4,23 @@ import Definitions.Nci.Dampener
 # The compute dampener, remote protocol: the vocabulary
 
 The remote protocol's dampener (NCI, PoUW and network accounting, with no memory layer: `benchmarks/nci/tiers.py` at
-tiers T1 and T2, with no wipes and no sampling; "The dampener ρ, remote protocol", Notion) is
-`1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Two of its terms come from reading the monitored compute residual
-`r̂ = 1 − W_cert/C` (`residualShare`) against what the developer can do outside it:
+tiers T1 and T2, with no wipes and no sampling) is `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past
+`r̂` come from reading the monitored compute residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer
+can do outside it:
 
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
   (`wrongCapacity`), which is at most `ε' C` outside an event of probability (`prob`) at most `p/ε'`;
-* the verdict lag `JΔ/H` (`lagShare`): from an identity's first faulty proof block until the halt `Δ` later, its
-  developer skips declared work, once for each of its `J` identities, over the horizon `H`.
+* the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected faulty proof block until the halt `Δ` later,
+  its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
+* the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't drawn is accepted, so the faulty blocks
+  an identity runs before its first detection (`escaped`) skip declared work too, at most `θ C` outside an event of
+  probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
+  (`noDetectionBefore`) being detected with probability at least `q`.
+
+PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that isn't wrong may still credit up to `ε_W`
+of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
+residual read there is `r̂ + ε_W W_cert/C`.
 
 `remoteDampener` is the hardware multiple the bound gives, as `tiers.evaluate` computes `dampener` and `fit.dampener`
 computes it at `s = 0`; `hardwareMultiple` is the one a developer needs.
@@ -33,6 +41,17 @@ noncomputable def wrongCapacity {N : ℕ} (c : Fin N → ℝ) (wrong : Fin N →
 /-- **The verdict lag's share** `JΔ/H`: `J` identities, each skipping declared work for at most `Δ` of the horizon
 `H`. -/
 noncomputable def lagShare (J Δ H : ℝ) : ℝ := J * Δ / H
+
+/-- **The faulty proof blocks accepted before their identity's first detection**: of the faulty proof blocks `bad`,
+block `b` run by identity `ident b` at time `τ b`, those with no detected faulty block (`detected`) of the same
+identity at or before `τ b`. When every faulty block is detected (every proof block proved, tiers T1–T4), none is. -/
+noncomputable def escaped {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) : Finset β :=
+  open scoped Classical in bad.filter fun b => ∀ b' ∈ bad, b' ∈ detected → ident b' = ident b → τ b < τ b'
+
+/-- **No earlier detection**: no faulty block (`bad`) of block `b`'s identity other than `b` is detected at or before
+`τ b`. A faulty block with no earlier detection that is not detected itself is escaped (`escaped`). -/
+def noDetectionBefore {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) (b : β) : Prop :=
+  ∀ b' ∈ bad, b' ∈ detected → b' ≠ b → ident b' = ident b → τ b < τ b'
 
 /-- **The hardware multiple a developer needs**, `max(1, MFU₀/η)`: the hardware-time it spends, `C + U` FLOP at peak,
 over the hardware-time an unconstrained developer at model-FLOP utilization `MFU₀` needs for the same `M` counted

@@ -12,16 +12,15 @@ premises on the layer, it proves three and the window's law stays a premise:
 * `ServedChecksHold`: the relation, the unit's Definition with `ok` registered, holds at the session's value layer
   wherever its drawn units are right (`RowsSession.RowsAt` is the circuit's evaluation there);
 * `ServedRootsLinked` at `δs = 0`: under full checking (`kd = n`) every outcome of the session's game draws every unit,
-  and `Flock.SecurityProofs.ServedRowsLinked` puts the registered rows at the value layer on each drawn unit, at a
-  circuit that names each port once and where every unit's served roots are registered
-  (`RowsSession.ServedRegistered`);
+  and `Flock.SecurityProofs.ServedRowsLinked` puts the registered rows at the value layer on each drawn unit, where
+  every unit's served roots are registered (`RowsSession.ServedRegistered`);
 
 and so `pf.SoundAt δ`. It sits in the proofs package because the sessions do (`reads_exempt`).
 
 It proves the checked layer only. Its relation, `CheckedRel`, says the opened rows are one wire assignment the circuit's
 evaluation agrees with, and nothing of what the circuit computes: don't cite it for the product or `dq`. The tile's
 Definition with `ok = 1` (each cell `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`) is
-`Accounting.Guarantees.TS.TileSessionSound`'s, under its premise `Accounting.Assumptions.TS.TileChecks`; the declared
+`Accounting.Guarantees.TS.TileSessionSound`'s, under its premise `Accounting.TS.Tile.TileComputes`; the declared
 circuit's checks are `Accounting.Guarantees.TS.HeldSessionSound`'s.
 -/
 
@@ -32,12 +31,12 @@ open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **A checked unit's proof layer is sound at `δ` through its C-Flock sessions, fully checked.** For any window whose
-proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (#2909's `RowsSession`) with outcome
+proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome
 `out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where flock-verify `--zk --registered`
 accepts, opening the committed rows at the registered reads, its relation the unit's Definition with the port `ok`
 registered): given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's
 opening (`RowsSession.CR`), the window's law (`Accounting.Assumptions.TS.WindowLaw`), and at every session full
-checking (`kd = n`), a circuit that names each port once, every unit's served roots registered as ports of `own`
+checking (`kd = n`), every unit's served roots registered as ports of `own`
 (`RowsSession.ServedRegistered`) and a port named `ok` in the circuit and in `own`, and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
 at every session a path runs, the layer meets `SessionSoundAt`'s premises `AcceptedLive`, `ServedChecksHold` and
@@ -50,8 +49,6 @@ def CheckedSessionSound : Prop :=
     (∀ x w i, (sess x w i).CR) →
     Accounting.Assumptions.TS.WindowLaw sess out →
     (∀ x w i, (sess x w i).kd = (sess x w i).n) →
-    (∀ x w i (q q' : Fin (sess x w i).c.ports.size),
-      (sess x w i).c.ports[q].name = (sess x w i).c.ports[q'].name → q = q') →
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →

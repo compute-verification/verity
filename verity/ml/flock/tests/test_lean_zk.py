@@ -2,9 +2,9 @@
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
 two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
-them with upstream's offline verdict (§18). Only the drawn session is accepted: the others have no draw, which `verify` refuses
-after every check has passed (§16.15, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other
-session its own reason."""
+them with upstream's offline verdict (§18). None is accepted: the circuit is no Program's, so the drawn session is refused for
+want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no draw, which `verify` refuses
+first (§16.15, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
 from __future__ import annotations
 
 import json
@@ -19,27 +19,30 @@ import pytest
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 5c33464c…) with the live build's --zk sessions:
+#: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 d12a2420…) with the live build's --zk sessions:
 #: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
 #: sessions/m26 (one table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all
-#: accepted); its identity's refused_coins name the zerocheck outer coin r_j = 1 (run r20261004-033801-14b6)
-FIXTURE = "art:5542740a"
-STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
+#: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-022105-c4fb); a fetched
+#: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs: `art:b9cc903c`
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
+STATEMENT = "verity/flock-circuit+seed-injection"
 #: the refusal of a session without a draw, which `verify` reaches only when every check has passed
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+#: a session verified without the verifier's program, refused once every check has passed (`ProvedScope.NO_PROGRAM`)
+NO_PROGRAM = ("refused: a session without the verifier's program (--program): a verifier that cannot read the Program "
+              "cannot know what the statement computes, nor which of its values are registered")
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 
 @pytest.fixture(scope="module")
 def zk(tmp_path_factory):
+    assert (FIXTURE / "stage" / "circuit.txt").is_file(), (
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/zk-sessions`")
     sys.path.insert(0, str(VERIFIER))
     import ci
 
-    try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
+    root = ci.canonical_tree(FIXTURE, tmp_path_factory.mktemp("store") / "zk-sessions")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     return root
 
@@ -136,12 +139,13 @@ def test_zk_takes_no_coins_flag(zk):
 
 @pytest.mark.slow
 def test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
-    """The drawn session is accepted; the sessions of two tables and of one m = 26 table, which have no draw, pass every check
-    and are refused for that alone."""
+    """The drawn session passes every check and, verified without the verifier's program (the fixture's circuit is no
+    Program's), is refused for that alone; the sessions of two tables and of one m = 26 table, which have no draw, pass
+    every check and are refused for that alone."""
     [j2] = _verify(zk, _one(zk, "j2"), public="pub-32.bin", tables=2)
     m26, drawn = _verify(zk, _one(zk, "m26"), _one(zk, "drawn"), public="pub-32.bin")
     assert _passes(j2) and _passes(m26), (j2["why"], m26["why"])
-    assert drawn["accepted"], drawn["why"]
+    assert (drawn["accepted"], drawn["why"]) == (False, NO_PROGRAM), drawn["why"]
 
 
 @pytest.mark.slow
@@ -161,7 +165,7 @@ def test_another_table_count_is_refused(zk, tmp_path):
 
 #: one tampered copy per check that catches it (`zk_mutants.py`'s names)
 TAMPERED = ["zk-zc-final-a", "zk-lig-lane-message", "zk-l0-ybar", "zk-l0-missing", "zk-lig-row-extra-lane", "zk-pads-root",
-            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes"]
+            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes", "zk-lig-claim-nonce"]
 
 
 @pytest.mark.slow

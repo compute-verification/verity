@@ -1,4 +1,4 @@
-description = "FPX-DESIGN FP4-g1's served path on int8 with GPTQ weights: the whole E2M1 grid as integers (twice its values: 0..4, 6, 8, 12) in blocks of 16 with odd UE4M3 scales to 9 (moved by one, 9 * 13, they stay in int8), one FP32 scale per token and per output row, on every linear and lm_head, activations rounded to nearest, the linears' weights by GPTQ on the grid (lm_head's rounded) (the gap-one twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+description = "FP4-g1's served path on int8 with GPTQ weights: the whole E2M1 grid as integers (twice its values: 0..4, 6, 8, 12) in blocks of 16 with odd UE4M3 scales to 9 (moved by one, 9 * 13, they stay in int8), one FP32 scale per token and per output row, on every linear and lm_head, activations rounded to nearest, the linears' weights by GPTQ on the grid (lm_head's rounded) (the gap-one twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
 
 [[linear]]
 step = "smooth"

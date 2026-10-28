@@ -1,4 +1,4 @@
-import Proofs.Accounting.TS.Session.Tile.Assumptions
+import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.Session.Checked.Guarantees
 
 /-!
@@ -12,9 +12,16 @@ statement names what the Definition reading takes:
 
 * (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
   as in `Accounting.Guarantees.TS.HeldSessionSound`, not a premise;
-* (b) every drawn unit's decoded view meets the Definition's checks (`TileOk`), under the named premise
-  `Accounting.Assumptions.TS.TileChecks`, at sessions whose every circuit port is a port of `own`, what flock-verify's
-  complete check establishes (`Flock.Registered.checkComplete_ok`).
+* (b) every drawn unit's view of the words its registered reads carry (`Accounting.TS.Tile.tileView` of `rd`) meets
+  the Definition's checks (`TileOk`) at the Definition's own dequant (`Accounting.TS.Lanes.dqOf dqW`), under the named
+  premise `Accounting.TS.Tile.TileComputes` (the circuit computes `PouwH1TileZy_v1{TILE}` there, TILE `PouwH1Tile_v1`
+  or `PouwH1Tile_v3`). That every circuit port is a port of `own` is not a hypothesis: `tileLayer`'s acceptance
+  includes flock-verify's complete check (`Flock.Registered.checkComplete`), from which `checkComplete_ok` reads it.
+  That the Definition's `ok = 1` means `TileOk` is proved
+  (`Accounting.TS.Tile.tileChecks_of_computes`, which gives `Accounting.Assumptions.TS.TileChecks`), at a `K` the
+  tile's EXACT binds at (`32 ∣ K`, `K < 2^17`), which the statement takes of its `K`: the tile verifier pins each
+  template's circuit by digest (`PouwCheck.tiles`) and reads no `K` it could refuse, and the served tiles' `K`s are
+  in range.
 
 The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `CheckedRel` meets `TileRel` on every path,
 so the tile layer's unsound event is inside the checked layer's. It sits in the proofs package because the sessions do
@@ -29,34 +36,38 @@ open scoped ENNReal
 
 /-- **A tile unit's proof layer, with its Definition's checks, is sound at `δ` through its C-Flock sessions, fully
 checked.** `CheckedSessionSound`'s window and premises, at the tile layer `tileLayer sess out ok known dq dec right`
-(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i`;
-opening the committed rows at the registered reads; its relation `TileRel`), and in addition at every session: every
-port of its circuit is a port of `own` (what `Flock.Registered.checkComplete` establishes, `checkComplete_ok`), the
-known content names the port `ok` with rows each the word `1` (`okRow`), and its circuit computes `PouwH1TileZy_v1`'s
-Definition at the decode `dec x w i` (`Accounting.Assumptions.TS.TileChecks`). Then the layer accepts only where
-flock-verify accepts (`AcceptedLive`), and each proof is accepted with committed rows that fail `TileRel` on the path
-with probability at most `δ`: outside `δ` the rows are one assignment the circuit's evaluation agrees with on every
-drawn unit, at which every drawn unit's decoded cells have `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`, or the
-registrant's `ok` openings exhibit an explicit SHA-512 collision (`OkColl`). -/
+(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i` and
+under its complete check, `Flock.Registered.checkComplete`: every port of the circuit is a port of `own`; opening the
+committed rows at the registered reads; its relation `TileRel`), and in addition at every session: the known content
+names the port `ok` with rows each the word `1` (`okRow`), and, at a `K` the tile's EXACT binds at
+(`32 ∣ K`, `K < 2^17`), its circuit computes `PouwH1TileZy_v1{TILE}`'s Definition (`Pouw.H1Zy.tileOk` at TILE's form
+`form` and the dequant's word view `dqW`) on the words `rd x w i` reads from the registered reads
+(`Accounting.TS.Tile.TileComputes`). Then the layer, at the Definition's dequant `dqOf dqW` and the view of those words
+(`tileView`), accepts only where flock-verify accepts (`AcceptedLive`), and each proof is accepted with committed rows
+that fail `TileRel` on the path with probability at most `δ`: outside `δ` the rows are one assignment the circuit's
+evaluation agrees with on every drawn unit, at which every drawn unit's cells have `z = Σ_k a_k b_k` and
+`y = dq [z, s_a, s_b]`, or the registrant's `ok` openings exhibit an explicit SHA-512 collision (`OkColl`). -/
 def TileSessionSound : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {S nπ R C K : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
+  ∀ {Ω : Type} [Fintype Ω] {S nπ R C K : ℕ} {P : Type} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)
-    (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray))) (dq : List ℤ → ℤ)
-    (dec : Paths Ω S → Fin S → Fin nπ → (ℕ → ℕ → Option Bool) → ℕ → TileView R C K)
+    (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray)))
+    (form : Pouw.H1Zy.TileForm R C K P) (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16)
+    (rd : Paths Ω S → Fin S → Fin nπ → (ℕ → ℕ → Option Bool) → ℕ → Pouw.H1Zy.TileIn R C K P)
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) (δ : ℝ),
     (∀ x w i, (sess x w i).CR) →
     Accounting.Assumptions.TS.WindowLaw sess out →
     (∀ x w i, (sess x w i).kd = (sess x w i).n) →
-    (∀ x w i (q q' : Fin (sess x w i).c.ports.size),
-      (sess x w i).c.ports[q].name = (sess x w i).c.ports[q'].name → q = q') →
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →
-    (∀ x w i, ∀ p ∈ (sess x w i).c.ports, ∃ r ∈ (sess x w i).own, r.name = p.name) →
     (∀ x w i, ∃ ks, (ok, ks) ∈ known x w i ∧ ∀ r ∈ ks, r.1 = okRow) →
-    (∀ x w i, Accounting.Assumptions.TS.TileChecks dq (sess x w i) ok (dec x w i)) →
+    32 ∣ K → K < 2 ^ 17 →
+    (∀ x w i, Accounting.TS.Tile.TileComputes form dqW (sess x w i) ok (rd x w i)) →
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
-    Accounting.Assumptions.TS.AcceptedLive (tileLayer sess out ok known dq dec right) sess out ∧
-      (tileLayer sess out ok known dq dec right).SoundAt δ
+    Accounting.Assumptions.TS.AcceptedLive
+      (tileLayer sess out ok known (Accounting.TS.Lanes.dqOf dqW)
+        (fun x w i v u => Accounting.TS.Tile.tileView (rd x w i v u)) right) sess out ∧
+      (tileLayer sess out ok known (Accounting.TS.Lanes.dqOf dqW)
+        (fun x w i v u => Accounting.TS.Tile.tileView (rd x w i v u)) right).SoundAt δ
 
 end Accounting.Guarantees.TS

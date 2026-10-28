@@ -1,7 +1,7 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
 accepted; the same window over a store that lost its first drawn block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-service's (pinned from C-Flock's commit strings)."""
+system's (pinned from C-Flock's commit strings)."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def window(store: O.Store) -> SimpleNamespace:
     return SimpleNamespace(session=s, passes=passes, c3=c3)
 
 
-def test_a_plan_rows_commitment_is_the_proof_services() -> None:
+def test_a_plan_rows_commitment_is_the_proof_systems() -> None:
     assert O.commit(16 * 64, list(range(64, 128)), SALT).hex() == PLAN_BC
     with pytest.raises(ValueError, match="1024 bits is 64 u16 words, not 63"):
         O.commit(16 * 64, list(range(64, 127)), SALT)
@@ -110,6 +110,13 @@ def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
     w = window(lost)
     assert w.session.drawn(0)[0].block == d0.block
     assert O.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
+
+
+def test_a_window_with_no_draws_is_malformed(store) -> None:
+    """A window whose draws are empty (none a session makes) is `malformed` at `decide`, as at `verify`."""
+    w = window(store)
+    w.session.windows[0].draws = ()
+    assert w.session.decide(0, []) == audit.Verdict(0, False, "malformed")
 
 
 def test_the_plan_link_and_the_public_rows(store) -> None:

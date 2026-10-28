@@ -54,10 +54,10 @@ def test_dry_run_gpu_phase():
     assert all(x[0] == "/pod/py311" for k, x in c.items() if k != "gpu_done")
 
 
+@pytest.mark.slow
 def test_dry_run_cpu_phase():
-    c = dry("--phase", "cpu", "--laptop", "--tier-c", "--full-replay", "--seed", "12345")
-    assert list(c) == ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring", "replay_a",
-                       "replay_chain", "replay_b_step0", "replay_b_step1", "replay_b_step2", "replay_b_step3", "replay_c", "gates"]
+    c = dry("--phase", "cpu", "--laptop", "--full-replay", "--seed", "12345")
+    assert list(c) == ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "golden", "gates"]
     log = "/r/RUN/capture/log.jsonl.gz"
     r = c["resolve"]
     assert r[:5] == ["/pod/py312", "-m", "verity_vllm.pipeline.cli", "resolve-log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
@@ -71,62 +71,44 @@ def test_dry_run_cpu_phase():
     for st, out in (("fold", "/r/RUN/fold_summary.json"), ("fold_2", "/r/RUN/fold_summary_2.json")):
         f = c[st]
         assert f[1:6] == ["-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold"] and f[f.index("--out") + 1] == out
-    rp = c["root_policy"]
-    assert rp[1:4] == ["-m", "verity_vllm.pipeline.cli", "root-policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
-    assert rp[rp.index("--out") + 1] == "/r/RUN/root_policy.json" and rp[rp.index("--snapshots") + 1] == "/r/RUN/capture"
     assert c["golden"][1:6] == ["-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
-    ra = c["replay_a"]
-    assert ra[1:4] == ["-m", "verity_vllm.pipeline.cli", "replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
-    assert ra[ra.index("--max-arg-leaves") + 1] == "4000000" and ra[ra.index("--out") + 1] == "/r/RUN/replay_a.json"
-    assert ra[ra.index("--seed") + 1] == "12345"                      # the verifier's seed reaches the sampler
-    assert ra[ra.index("--jobs") + 1] == "1"                          # sequential unless --replay-a-jobs says otherwise
-    jobs = dry("--phase", "cpu", "--seed", "12345", "--replay-a-jobs", "14")["replay_a"]
-    assert jobs[jobs.index("--jobs") + 1] == "14" and jobs[jobs.index("--seed") + 1] == "12345"
-    w = c["wiring"]
-    assert w[1:4] == ["-m", "verity_vllm.pipeline.cli", "operand-provenance"] and w[w.index("--log") + 1] == log and w[w.index("--out") + 1] == "/r/RUN/wiring.json"
-    ch = c["replay_chain"]
-    assert ch[ch.index("--tier") + 1] == "chain" and ch[ch.index("--chains") + 1] == str(RC.DEFAULT_CHAINS) and ch[ch.index("--seed") + 1] == "12345"
-    assert ch[ch.index("--out") + 1] == "/r/RUN/replay_chain.json"
-    for n in range(4):
-        rb = c[f"replay_b_step{n}"]
-        assert rb[rb.index("--tier") + 1] == "b" and rb[rb.index("--step") + 1] == str(n) and rb[rb.index("--out") + 1] == f"/r/RUN/replay_b_step{n}.json"
-    assert c["replay_c"][c["replay_c"].index("--tier") + 1] == "c"
     assert c["gates"][0].startswith("in-process") and "/r/RUN/gates.json" in c["gates"][0] and "out/gen/cards/cid.json" in c["gates"][0]
     assert all(x[0] == "/pod/py312" for k, x in c.items() if k != "gates")
 
 
-def test_dry_run_no_laptop_no_tier_c_and_skip():
+@pytest.mark.slow
+def test_dry_run_no_laptop_and_skip():
     c = dry("--phase", "cpu", "--skip", "replay,census,nonint,golden")
-    assert "replay_c" not in c and "--max-arg-leaves" not in c["fold"]
-    assert not any(k.startswith("replay_b_step") for k in c)          # full replay is opt-in (--full-replay), diagnostic only
+    assert "--max-arg-leaves" not in c["fold"]
     for st in ("census_reconcile", "nonint_compare", "golden", "replay_a", "replay_chain"):
         assert c[st][0].startswith("SKIP")
-    assert c["wiring"][0] == "/pod/py312"                              # provenance is not a replay stage: never skipped by `replay`
     assert c["resolve"][0] == "/pod/py312" and c["compare"][0] == "/pod/py312"
 
 
-def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
-                       cwd=ROOT)
-    assert p.returncode == 2 and "--seed is required to run replay_a and replay_chain" in p.stderr
-    c = dry("--phase", "cpu", "--skip", "replay_a,replay_chain", "--tier-c")
-    assert c["replay_a"][0].startswith("SKIP") and c["replay_chain"][0].startswith("SKIP")
-    assert c["replay_c"][c["replay_c"].index("--tier") + 1] == "c" and "--seed" not in c["replay_c"]
+@pytest.mark.slow
+def test_the_stage_names_without_a_command_run_nothing_and_a_skip_naming_them_is_printed():
+    retired = ("root_policy", "wiring", "replay_a", "replay_chain")
+    c = dry("--phase", "cpu")                                         # no --seed: no stage draws a sample
+    assert not set(retired) & set(c)
+    c = dry("--phase", "cpu", "--skip", ",".join(retired))
+    assert all(c[st][0].startswith("SKIP") for st in retired)
 
 
+@pytest.mark.slow
 def test_dry_run_all_and_snapshot_steps():
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--seed", "7")
     assert list(c)[:4] == ["capture", "control", "census", "nonint"]
     assert c["capture"][c["capture"].index("--snapshot-steps") + 1] == "0,1,2"
-    assert "wiring" in c and "replay_chain" in c and not any(k.startswith("replay_b_step") for k in c)
+    assert "fold" in c and "gates" in c
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--full-replay", "--seed", "7")
-    assert "replay_b_step2" in c and "replay_b_step3" not in c
+    assert not any(k.startswith("replay") for k in c)
     with pytest.raises(subprocess.CalledProcessError):
         dry("--snapshot-steps", "0,2")           # not contiguous from 0
 
 
+@pytest.mark.slow
 def test_dry_run_snapshot_caps_reach_the_capture_only():
-    # D87 cap and the cov-moe dispatcher-call cap are capture flags.  [R16 global F-global-SNAP, rel r17-int-1] the D87 cap is no longer
+    # D87 cap and the cov-moe dispatcher-call cap are capture flags.  The D87 cap is not
     # absent by default: run_config DERIVES it (rows x widest row x 2 B, never below m1_capture's 32 MiB floor) so every prefill MLP row of a
     # >= 1024-prompt row has snapshot evidence; with an unresolvable workload / checkpoint (this dry run) the derivation is the floor.  The
     # dispatcher-call cap stays absent by default, and an explicit CLI value still wins (below).
@@ -139,6 +121,7 @@ def test_dry_run_snapshot_caps_reach_the_capture_only():
     assert all("--snapshot-max-bytes" not in c[st] for st in ("control", "census", "nonint"))
 
 
+@pytest.mark.slow
 def test_dry_run_existing_capture_paths():
     c = dry("--phase", "cpu", "--log", "/data/x/log.jsonl.gz", "--snapshots", "/data/x", "--control-tokens", "/data/ctl.json", "--other-log", "/data/y.jsonl.gz",
             "--seed", "7")
@@ -147,6 +130,7 @@ def test_dry_run_existing_capture_paths():
     assert c["fold_other"][c["fold_other"].index("--log") + 1] == "/data/y.jsonl.gz"
 
 
+@pytest.mark.slow
 def test_dry_run_writes_nothing(tmp_path):
     subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
                    capture_output=True, text=True, cwd=ROOT, check=True)
@@ -196,7 +180,7 @@ def test_local_cpu_stages_on_m1(tmp_path):
     gates = json.loads((run / "gates.json").read_text())
     assert gates["verdict"] == "INCOMPLETE" and list(gates["gates"]) == list(G.ALL_GATES)
     st = {g: v["status"] for g, v in gates["gates"].items()}
-    # nothing fails on m1; every frozen gate lacks an artifact we skipped (G8: no query_use.json); [R9 ref] R1 reads the fold summary
+    # nothing fails on m1; every frozen gate lacks an artifact we skipped (G8: no query_use.json); R1 reads the fold summary
     # that IS written (errors/unresolved/unsupported 0) and passes -- it is never `skipped`
     assert st == {**{g: "skipped" for g in G.GATES + G.STRUCTURAL_GATES}, "R1": "pass"}, st
     assert "replay_a skipped" in gates["gates"]["G4"]["reason"] and "--skip" in gates["gates"]["G4"]["reason"]

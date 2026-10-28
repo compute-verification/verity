@@ -1,5 +1,5 @@
-"""`SiluMul_v2` (`registry.act`, promoted from quarantine `act`) is vLLM `_C.silu_and_mul` on the words the red-team measured on
-sm_120 where `SiluMul_v1` is not (r20260930-092038-7dbc, `silu-edge-cases`), and `SiluMul_v1` on every other word. The served
+"""`SiluMul_v2` (`registry.act`, promoted from quarantine `act`) is vLLM `_C.silu_and_mul` on the words measured on
+sm_120 where `SiluMul_v1` is not (`silu-edge-cases`), and `SiluMul_v1` on every other word. The served
 vocabulary `b1-eager-v3` binds it; the older vocabularies keep `SiluMul_v1`. The replay's row kernel is the same function."""
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.registry.act import SiluMul, SiluMulBf16
-from verity_vllm.program.registry.quarantine.act import silu_mul_difftest as DT
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry import b1, prims as P
+from verity.ml.definitions.registry.act import SiluMul, SiluMulBf16
+from verity_vllm.program.quarantine.act import silu_mul_difftest as DT
 
 V1 = P.SiluMulBf16.evaluate
 V2 = SiluMulBf16.evaluate
@@ -82,7 +82,7 @@ def test_the_served_vocabulary_binds_v2():
 
 
 def test_the_served_kind_has_its_boolean_version():
-    from verity_vllm.program import boolean as BB
+    from verity.ml.definitions import boolean as BB
 
     assert BB.boolean_version(bind(SiluMul, I=8)).id == "SiluMul_v4{I=8}"
     assert BB.boolean_version(SiluMulBf16).id == "SiluMulBf16_v4"
@@ -101,9 +101,10 @@ def test_the_replay_row_is_v2_past_expf_overflow():
     assert [int(w) for w in got] == want == [V2(g, u) for g, u in pairs]
     band = [k for k, (g, _) in enumerate(pairs) if _f(g) >= -97.0]
     assert len(band) == 4 * 17 and all(int(old[k]) not in (POS_ZERO, NEG_ZERO) for k in band)
-    assert RK.EVALUATORS["SiluMul_v2"].startswith("verity_vllm.program.kernels.act_rows.silu_mul_expf_rows")
+    assert RK.EVALUATORS["SiluMul_v2"].startswith("verity.ml.definitions.numerics.act_rows.silu_mul_expf_rows")
 
 
+@pytest.mark.slow
 def test_the_replay_row_is_the_element_on_every_gate_word():
     ups = (POS_ZERO, NEG_ZERO, ONE, NEG_ONE, POS_INF, NEG_INF, 0x7FC0, 0x0001, 0x4049)
     for u in ups:

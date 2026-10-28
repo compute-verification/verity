@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import tp_allreduce as T
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import tp_allreduce as T
+from verity.ml.definitions.registry import tp_allreduce_check as K
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 N = 1536
@@ -377,6 +377,7 @@ def test_ftz_is_decided_only_by_a_whole_flush() -> None:
 
 # --- comparisons -----------------------------------------------------------------------------------------------------------------
 
+@pytest.mark.slow
 @pytest.mark.parametrize("M", [3, 6])
 @pytest.mark.parametrize("fma", [0, 1])
 def test_a_fused_launch_takes_the_kernel_words(small, tmp_path, M: int, fma: int) -> None:
@@ -397,6 +398,7 @@ def test_a_flipped_fused_word_is_found_and_located(small, tmp_path, flip: tuple,
     assert (t["mismatch"], t["fma1_mismatch"]) == ((1, 0) if flip[0] == "residual" else (0, 1)) and t["rank_mismatch"] == 0
 
 
+@pytest.mark.slow
 def test_a_rank_that_differs_is_counted(small, tmp_path) -> None:
     t = X.compare(_fused_job(tmp_path, 3, 1, flip=("normed", (0, 9)), rank=5))
     assert (t["rank_mismatch"], t["fma1_mismatch"], t["mismatch"]) == (1, 0, 0)

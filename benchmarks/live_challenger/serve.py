@@ -1,4 +1,4 @@
-"""The proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
@@ -14,21 +14,24 @@ log signed when the session ends.
   `--out` is refused, since a run's `out/` is published.
 - **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
-  answer starts no session.
+  answer starts no session, and neither does one whose source no claim instance names (`challenger.served_claim`: A3's
+  is `uniform/io-getrandombytes`).
 - **The session.**  `--session` is the id the auditor launched it under, which the auditor's signed ledger opens for
   its window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
   `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
   `releases.jsonl` to `--out` (`remote.open_session`), makes `hellos.jsonl` (empty), and only then listens on
-  127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it then opens
-  `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for its
-  verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the first client whose hello it accepts
-  (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
+  127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  A window's session (`--root`)
+  opens no tunnel: PORT is one of its peer's certifier coin link, which carries it to the peer (`auditor.py`, the coins'
+  path), and `--peer` with `--root` is refused (`CoinsConfidential`).  Only a development session (`run.sh`) takes
+  `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
+  `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
+  serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
   "reason"}`, fsynced) and the next connection is taken, each hello read within 10 s; once one is accepted it stops
   listening, so every later connection is refused.  However the session ends, a tunnel that ends first included, it
   signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor host
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
-  `.../salt`) opens only after that root (RT4-INT-24), and any other is refused, which ends the session.
+  `.../salt`) opens only after that root, and any other is refused, which ends the session.
 - **Signing.**  The key's leaf state is opened only for each signature (the session id's start with the record's, then
   the close's), under `--sign-lock` when given (the auditor host's `sign.lock`, which every signer of the key takes), so
   the host's other sessions and the ledger sign between them.
@@ -56,7 +59,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import ChallengerKey, CoinError, LiveChallenger  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+                                                             served_claim)
 from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
@@ -183,9 +187,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.root is not None and not re.fullmatch(r"[0-9a-f]{128}", args.root):
         print("--root: the window's Commit root, 128 lowercase hex digits", file=sys.stderr)
         return 2
+    if args.root is not None and args.peer is not None:
+        print("the challenger refused to start: a window's session (--root) reaches its peer through the peer's "
+              "certifier coin link, never its own ssh -R (--peer; CoinsConfidential)", file=sys.stderr)
+        return 2
     try:
         secret = read_secret(args.secret_file)
         params = lms.DEPLOYED if args.params is None else lms.Params(64, *map(int, args.params.split(",")))
+        served_claim(V.coins)
         challenger = LiveChallenger(args.scheme, args.epoch, args.families, V.coins)
         ssh = peer_ssh(args.peers, args.peer) if args.peer else None
         out.mkdir(parents=True, exist_ok=True)

@@ -222,7 +222,7 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
+Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
 illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
@@ -349,9 +349,9 @@ algorithm: `remote-replicas/README.md`.
   lacks, and indexes just those. A fresh machine builds its catalog this way.
 - **Atomic rebuild.** `reindex` builds the new catalog beside the old one, carries the replica records over, and renames it into
   place once complete; an open `LocalStore` notices the new file and reopens it.
-- **Parity.** `research data parity --fresh DIR [--render] [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
-  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, every verified replica
-  row confirmed by HEAD (manifest + blobs, sizes), and with `--render` the `bench.tables` markdown. Every difference gets a cause
+- **Parity.** `research data parity --fresh DIR [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
+  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, and every verified replica
+  row confirmed by HEAD (manifest + blobs, sizes). Every difference gets a cause
   (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
 
 ### 7.3 Fetched fixtures and the public export
@@ -367,6 +367,25 @@ algorithm: `remote-replicas/README.md`.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
   A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
+### 7.4 Retention on the remote — `research data gc` (`gc.py`)
+
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
+TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-replay-bundle/v1 and vllm-replay-slim/v1 7 days, vllm-rowdir-tar/v1 3,
+run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
+(target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
+(`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
+untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent.
+A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
+after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
+keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
+label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
+
+An artifact that holds values which must never be shared leaves by `research data withdraw ART... --reason T --ref ISSUE`
+(`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
+tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
+also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
+`--apply`; it runs where the store's write keys are, the control pod.
+
 ## 8. Labels
 
 `labels/<target>/<ts>-<by>.json` locally; on the remote `labels/<target>/<sha256 of the canonical assertion>.json` (content key,
@@ -380,7 +399,7 @@ immutable, append-only; a target's assertion set is the listing of its prefix):
 Assertions travel with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
 about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
 one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/machine assertions into the local layout and index.
-`preserved` is a three-leg gate (attempt manifest, artifacts, labels) naming the leg that fails; a preserved Attempt is not
+`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails; a preserved Attempt is not
 preserved until its assertions are on the remote. `labels TARGET --remote` marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
 trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
@@ -400,16 +419,20 @@ a table read the same key. One constant per key (`vocab.PROOF_CLASS`, never the 
 value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `text`, `list`. `research data vocab [--json]`
 prints the table; the groups are:
 
-- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: the backend
+- **result** — the producing lane about its own result (the r20 ledger import, or `label` by hand): `candidate` (enum: the backend
   families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
   `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
+  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for), `run_of_record` (the table record a run or artifact is, by the record's name),
+  `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
-  stay valid when the file moves into a month folder).
+  stay valid when the file moves into a month folder); `memory-line-of-record` (text `lean conditional on NAMES`, on a gate run's
+  verifier run: its line of record is the `auditor_line.json` of the run `--ref` names by id, which `label` requires, computed by the
+  Lean, that file's `line_by`, and conditional on what that file's `conditional_on` names, in its order, which must include
+  `NoOutsideCompute` or `ProviderLockdown`; `label` reads the file from the ref run's record and refuses a value that isn't its).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
@@ -426,7 +449,7 @@ Enum and bool values are compared as the catalog stores them (`scalar_text`: str
 (naming the nearest known one), a measurement (`l`, `subbatches`, `rtt_ms_path`, ...: the number belongs in the result or the
 artifact's meta), a ref written as a label, a value outside its enum, or a word where the form is bool / int / number.
 `--off-vocab` writes it anyway, for a concept the vocabulary has not learnt yet; add the word to `vocab.py` next. Readers stay
-lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`bench.tables`, the trust
+lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`verity_numerical`'s contract tests, the trust
 module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
@@ -453,8 +476,8 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids to the export bucket (§7.3)
+research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
@@ -529,7 +552,7 @@ run-record/v1            every file of a run dir (logs included) as one tree; ou
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
-                         the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
+                         the lane's claims are labels on it
 trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
@@ -539,7 +562,8 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 ## 12. Design rules
 
 1. **A derivation key is a claim of dependency completeness.** Bias to false misses. Exact reuse includes the source tree.
-2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once; the index is disposable.
+2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once, never rewritten; the index is disposable. The
+   one deletion is §7.4's: blobs of uncited artifacts past their kind's TTL.
 3. **Labels are assertions, not fields.** Keep every assertion; policy chooses.
 4. **Verify uploads.** Size + a content check before anything is called PRESERVED, and the record says which check: a single-part
    ETag is the object's MD5 and is accepted as the transport check (`etag-md5`); a multipart ETag is not a hash and never is; the

@@ -7,7 +7,7 @@ A statement of the outer verifier the compiled verifier runs per V* part, `flock
 flags, is the canonical byte encoding (`RecRaw.encode`) of exactly what that command reads besides the session
 directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and numbers of `--rec-inner`, `--rec-part`,
 `--rec-bindings`, `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
-`--rec-inner-partition`) or the verifier's record of them (`--rec-inner-coins`), the inner session's record
+`--rec-inner-partition`; `--rec-inner-coins`, which the verifier refuses), the inner session's record
 (`--rec-inner-session`'s `session.json`), the coin server's transcript (`--rec-inner-transcript`), the circuit
 registration (`--rec-inner-registration`) and how the inner statement is set up (`--rec-inner-statement`,
 `--rec-inner-statement-coins`, `--rec-inner-tables`' tables, `--rec-inner-draw`). `decodeRec` keeps only a reading whose encoding is `x`, so it is injective
@@ -19,7 +19,8 @@ registration (`--rec-inner-registration`) and how the inner statement is set up 
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
 on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
 `--identifier`, in its order: `RecSetup.checkInner`, the session's statement (`Stmt.setupTables`) with each table's
-registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk`,
+registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`,
+`Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
@@ -160,20 +161,11 @@ def formOf (w : RecRaw) : Except String (Option RecCoins.InnerForm) :=
     else .ok none
   | some s => .ok (some ⟨s, w.innerStatementCoins.getD false, w.innerTables.getD [], w.innerDraw⟩)
 
-/-- **Check 5's source** (`RecCoins.filesInput`): `--rec-inner-coins` with the inner session's record, or the inner
-statement's three files with it and how it is set up (`formOf`), or none. -/
+/-- **Check 5's source** (`RecCoins.filesInput`): the inner statement's three files with the inner session's record and
+how it is set up (`formOf`), or none; `--rec-inner-coins` is refused (`RecCoins.refuseCoins`). -/
 def sourceOf (w : RecRaw) : Except String (Option RecCoins.Source) :=
   match w.innerCoins with
-  | some c =>
-    match w.innerSession with
-    | none => .error "--rec-inner-coins goes with the inner session (--rec-inner-session)"
-    | some s =>
-      if w.innerCircuit.isSome || w.innerPublic.isSome || w.innerPartition.isSome then
-        .error "--rec-inner-coins stands in for --rec-inner-circuit, --rec-inner-public and --rec-inner-partition"
-      else do
-        let j ← jsonOf "--rec-inner-coins" c
-        let r ← textOf "rec inner session" s
-        pure (some (.coins j r))
+  | some _ => .error RecCoins.NO_INNER_COINS
   | none =>
     match w.innerCircuit, w.innerPublic, w.innerPartition, w.innerSession with
     | none, none, none, none => .ok none
@@ -253,6 +245,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   Registered.checkFull s.base.registered r.draw
   RecSetup.checks s.inner s.commits s.base.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program
     s.base.registered s.part s.bindings s.rows
+  RecSetup.oneFull s.inner sts
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
     (RecSetup.c3 s.inner s.commits))
@@ -261,7 +254,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   sts.forM (RecVStar.checkTopRows · s.base.registered s.link)
   sts.forM (RecCoins.checkLink · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits) s.link)
   if s.inner.isSome then RecVStar.checkLabels r.draw r.I.count sts
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.draw
+  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
   pure (spec, sts)
 
 /-- The statement's inputs: a statement of the masked verifier only. -/

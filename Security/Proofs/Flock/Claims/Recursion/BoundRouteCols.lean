@@ -4,8 +4,8 @@ import Proofs.Flock.Claims.Recursion.LastBindsEC
 /-!
 # `KSBoundRoute` from the bridge, the last message bound modulo what `E*` reads (R1′)
 
-`ksBoundRoute_of_bridge` reads (P4, `Bound.LastBinds`) once, in `forksBind_nf`, and (P4) is false at the deployed
-record (`lastBinds_deployed_rejects`). This file proves the route with (P4) replaced by `Bound.LastBindsEC` and
+`ksBoundRoute_of_bridge` reads (P4, `Bound.LastBinds`) once, in `forksBind_nf`, and (P4) was false at the deployed
+record before S0 (a trailing space in the record's text, `BindsDeployed`). This file proves the route with (P4) replaced by `Bound.LastBindsEC` and
 `Bound.LastCoinFree`, through REC1's chain as it stands (`KS_of_flockKS_binds`):
 
 * The compiled record's inner view reads the last message as a representative of its reading (`RecDeploy.deployRecC`):
@@ -19,7 +19,7 @@ record (`lastBinds_deployed_rejects`). This file proves the route with (P4) repl
   (`Bound.readL_ne_of_repL`). Both accept, so their call sets or their columns differ, and `LastBindsEC` gives a
   collision among `IVStar`'s calls, which the witnesses record (`RecDeploy.forksBind_C`).
 
-The reading takes the calls as a set because `LastBindsEC` compares them so (ASK-76): the record's stream order and
+The reading takes the calls as a set because `LastBindsEC` compares them so: the record's stream order and
 its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set
 (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
 
@@ -367,26 +367,26 @@ theorem ksA_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col
       try exact Iff.rfl
   exact hE.trans_le (h decO hdec x Ω P)
 
-/-- **The inner rounds' forks bind at `deployRecC`, at the statement `x`** (`ForksBindAt`): two inner views at `Be`'s
-fork at round `j` that differ at message `j` differ before the last round, where the readers' messages are the runs'
-(`hP`) and the runs share their coins before `j`; or at the last, where the two representatives differ, so the readings
-do (`Bound.readL_ne_of_repL`). Both views accept (`hA`), so the calls or the columns differ, and `LastBindsEC` gives a
-collision among `IVStar`'s calls, which the witnesses record (`hL`). -/
-theorem forksBindAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
+/-- **The inner rounds' forks bind at `deployRecC`, at the statement `x`, with the readers' rounds before the last
+read through a choice `pk` of the runs'** (`ForksBindAt`): two inner views at `Be`'s fork at round `j` that differ at
+message `j` differ before the last round, where the readers' messages are `pk` of the runs' (`hP`) and the runs share
+their coins before `j`, so their messages before `j`; or at the last, where the two representatives differ, so the
+readings do (`Bound.readL_ne_of_repL`). Both views accept (`hA`), so the calls or the columns differ, and
+`LastBindsEC` gives a collision among `IVStar`'s calls, which the witnesses record (`hL`). -/
+theorem forksBindAt_C_pick {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
-    (hEC : Bd.LastBindsEC H) (hCF : Bd.LastCoinFree H)
+    (pk : Msg → ℕ → Msg → Msg) (hEC : Bd.LastBindsEC H) (hCF : Bd.LastCoinFree H)
     (hT : Claims.Recursion.CallsTrue H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO)
     (hL : Claims.Recursion.CallsLogColl H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO)
-    (hP : ∀ (decO : List (ℕ × Col') → List T') (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω)
+    (x : Msg) (hP : ∀ (decO : List (ℕ × Col') → List T') (Ω : Type) (P : Prover Ω) (ω : Ω)
       (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)
       (c : (Claims.Recursion.EO (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO).C x)
       (ws : List Claims.Flock.Wit),
       Claims.Recursion.EOGives H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P x ω r c
         ws →
       (∀ j, j + 1 < Bd.DE.V.k (xIOf x) → (b.rd.msgs x ws).getD j [] =
-          ((run H P (deployRec Bd.IVStar ivScope b).V x ω r).msgs.map Prod.fst).getD j []) ∨
+          pk x j (((run H P (deployRec Bd.IVStar ivScope b).V x ω r).msgs.map Prod.fst).getD j [])) ∨
         ∃ u v, findColl ((deployRec Bd.IVStar ivScope b).calls x ws) = some (u, v) ∧ Collision H u v)
-    (x : Msg)
     (hA : Claims.Recursion.InnerAcceptsCollAt H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
       x) :
     Claims.Recursion.ForksBindAt H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO x := by
@@ -418,15 +418,15 @@ theorem forksBindAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd :
   swap
   · exact absurd (by simp [hjK]) hne
   simp only [hjK, ↓reduceIte] at hne
-  rcases hP decO x Ω P t.1 t.2.1 t.2.2.2.1 ws hg₁' with h₁ | h₁
+  rcases hP decO Ω P t.1 t.2.1 t.2.2.2.1 ws hg₁' with h₁ | h₁
   swap
   · exact hleft h₁
-  rcases hP decO x Ω P t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hg₂' with h₂ | h₂
+  rcases hP decO Ω P t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hg₂' with h₂ | h₂
   swap
   · exact hright h₂
   have hag : ∀ i, i + 1 < Bd.DE.V.k (xIOf x) → i ≤ j → (b.rd.msgs x ws).getD i [] = (b.rd.msgs x ws').getD i [] :=
-    fun i hi hij => (h₁ i hi).trans ((Claims.Recursion.run_fst_getD H P _ x t.1 i fun i' hi' =>
-      Claims.Recursion.fork_agree j t.2.1 t.2.2.1 i' (by omega)).trans (h₂ i hi).symm)
+    fun i hi hij => (h₁ i hi).trans ((congrArg (pk x i) (Claims.Recursion.run_fst_getD H P _ x t.1 i fun i' hi' =>
+      Claims.Recursion.fork_agree j t.2.1 t.2.2.1 i' (by omega))).trans (h₂ i hi).symm)
   unfold msgsC at hne
   by_cases hj1 : j + 1 < Bd.DE.V.k (xIOf x)
   · rw [Bd.nfMsgsC_getD_lt _ _ _ _ hj1, Bd.nfMsgsC_getD_lt _ _ _ _ hj1] at hne
@@ -502,6 +502,27 @@ theorem forksBindAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd :
     exact List.mem_map.2 ⟨e, hsub e he, rfl⟩
   exact hlift _ (fun p hp => hp) (Claims.Recursion.findColl_of_coll H htrue (hmem q hq) (hmem q' hq') hc)
 
+/-- `forksBindAt_C_pick` with the readers' rounds before the last the runs' own (`pk x j m = m`). -/
+theorem forksBindAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
+    (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
+    (hEC : Bd.LastBindsEC H) (hCF : Bd.LastCoinFree H)
+    (hT : Claims.Recursion.CallsTrue H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO)
+    (hL : Claims.Recursion.CallsLogColl H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO)
+    (hP : ∀ (decO : List (ℕ × Col') → List T') (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω)
+      (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)
+      (c : (Claims.Recursion.EO (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO).C x)
+      (ws : List Claims.Flock.Wit),
+      Claims.Recursion.EOGives H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P x ω r c
+        ws →
+      (∀ j, j + 1 < Bd.DE.V.k (xIOf x) → (b.rd.msgs x ws).getD j [] =
+          ((run H P (deployRec Bd.IVStar ivScope b).V x ω r).msgs.map Prod.fst).getD j []) ∨
+        ∃ u v, findColl ((deployRec Bd.IVStar ivScope b).calls x ws) = some (u, v) ∧ Collision H u v)
+    (x : Msg)
+    (hA : Claims.Recursion.InnerAcceptsCollAt H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
+      x) :
+    Claims.Recursion.ForksBindAt H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO x :=
+  forksBindAt_C_pick H Bd decI ivScope b DO (fun _ _ m => m) hEC hCF hT hL x (fun decO => hP decO x) hA
+
 theorem forksBind_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (hEC : Bd.LastBindsEC H) (hCF : Bd.LastCoinFree H)
@@ -548,7 +569,7 @@ def KSBoundRouteCols (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -562,7 +583,7 @@ inner view reads the last message as its representative modulo what `E*` reads, 
 deployed record's (`callsLogColl_C`, `innerAcceptsColl_C`); every other fact of the compiled record is `deployRec`'s,
 which `deployRecC` shares. -/
 theorem ksBoundRoute_of_bridge_cols (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512)
     (hB : ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -580,7 +601,7 @@ theorem ksBoundRoute_of_bridge_cols (rel relO : _root_.Flock.Readable.Parsed →
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSh, hCk, hOp, hDc⟩ := hshapes shape hs
     exact vstarAccepts_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape decC chk shows cmt hplay
-      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRRP
+      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRows hRRP
   have hA := innerAcceptsColl_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hT
     (hacc _ (by simp)) (hacc _ (by simp)) (hacc _ (by simp))
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT

@@ -18,9 +18,10 @@
   (`cut`'s step 0); otherwise `evaluate` raises `QueryInapplicable` and `verify` refuses (`query-inapplicable`).
 * **Q_word v2**, the same parameters: v1's evaluation exactly (the same Calls, units, owners and committed sets, so the same
   `owners_digest`; the object's digest differs by its version), and `verify` checks every Call's cut as v1 does but for one rule: a
-  value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's units
-  may compute a common value, so a count of them bounds wrong work but is not distinct work; a consumer that credits work takes v1.
-* **Q_call v1**, `params = {"X": <bits>}` (`call_query`, 32 the agreed value; `CallPartition`; the algorithm in `cut`'s "Q_call v1",
+  value computed in two units is reported (`recomputed_across`), not refused (`gate-recomputed`) (`cut`'s "Q_word v2").  v2's proof
+  blocks may compute a common value, so a count of them bounds the faulty ones' size but counts a shared value more than once;
+  a consumer that credits size takes v1.
+* **Q_call v1**, `params = {"X": <bits>}` (`call_query`, 32 in use; `CallPartition`; the algorithm in `cut`'s "Q_call v1",
   `PROTOCOL.md` §11).  The same Calls, each cut in isolation; a unit is a gate interval of the Call (the Call, a body node, a member or
   an iteration), cut down from the Call until its outputs fit in X bits; Input gates and constants are in no unit and every other gate
   is in exactly one.  Units are numbered by Call, then layout order (`locate`, `gates`); `owners_digest` digests their owners.  The
@@ -53,10 +54,11 @@ from __future__ import annotations
 import bisect
 import hashlib
 import re
+from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from .codec import canonical_json, descriptor_id, encode_program, program_digest
-from .codec import SCHEMA_V1
+from .codec import canonical_json, descriptor_id, program_digest
+from .codec import SCHEMA, SCHEMA_V1
 from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
                   check_call_cut, check_cut, derived_committed, evaluate_call, evaluate_definition, member_refs)
 from .layout import resolve
@@ -102,11 +104,11 @@ QueryRefused = QueryInapplicable
 
 
 def _program(program_or_desc: Any) -> str:
-    """The `program` field: `codec.program_digest` of a v1 descriptor."""
-    desc = program_or_desc if isinstance(program_or_desc, dict) else encode_program(program_or_desc)
-    if desc.get("schema") != SCHEMA_V1:
-        raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {desc.get('schema')!r}")
-    return program_digest(desc)
+    """The `program` field: `codec.program_digest` of a v1 descriptor (a program's, streamed, is `codec.SCHEMA`'s)."""
+    schema = program_or_desc.get("schema") if isinstance(program_or_desc, dict) else SCHEMA
+    if schema != SCHEMA_V1:
+        raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {schema!r}")
+    return program_digest(program_or_desc)
 
 
 #: the program field under the name META's `program_sha512` and its callers use; equal to `codec.program_digest`
@@ -379,20 +381,22 @@ def order_violation(program: Any) -> dict | None:
     name any of its nodes), over every body the root reaches, root first and callees in node order, each Definition once; None when the
     program is topological.  A program with such a reference is no computation (a gate would read itself or a later gate): every query
     is inapplicable to it."""
-    seen: set[int] = set()
-    todo = [program.root]
+    # each Definition queued once, at its first reference: a body's nodes call few Definitions many times
+    queued = {id(program.root)}
+    todo = deque([program.root])
     while todo:
-        fn = todo.pop(0)
-        if id(fn) in seen or not hasattr(fn, "body"):
+        fn = todo.popleft()
+        if not hasattr(fn, "body"):
             continue
-        seen.add(id(fn))
         body = fn.body
         for k, node in enumerate(body.nodes):
             for i, a in enumerate(node.args):
                 bad = _out_of_order(a.refs, len(body.params), k)
                 if bad is not None:
                     return {"definition": fn.id, "node": k, "arg": i, "reference": bad, "why": "not topological"}
-            todo.append(node.fn)
+            if id(node.fn) not in queued:
+                queued.add(id(node.fn))
+                todo.append(node.fn)
         bad = _out_of_order(body.ret, len(body.params), len(body.nodes))
         if bad is not None:
             return {"definition": fn.id, "node": "ret", "reference": bad, "why": "not topological"}
@@ -403,9 +407,9 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     """The first (space, index) of `refs` outside the body's parameters `0..params-1` and nodes `0..nodes-1`, or None."""
     parts = [refs]
     while parts:
-        r = parts.pop(0)
+        r = parts.pop()
         if isinstance(r, Concat):
-            parts[:0] = r.parts
+            parts.extend(reversed(r.parts))
             continue
         names = [(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else ([(r.space, r.idx)] if r.count else [])
         for space, idx in names:

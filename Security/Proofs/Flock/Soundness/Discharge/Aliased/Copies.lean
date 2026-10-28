@@ -35,6 +35,22 @@ structure UnitFacts (tags : Tags) (st : Stmt) : Prop where
   rowsA : st.c.unit.a.rows ≤ st.c.unit.useful
   rowsB : st.c.unit.b.rows ≤ st.c.unit.useful
 
+/-- **`UnitFacts` with nets `pre` first, of any kind** (a templated file's unit net, `Tmpl.unitNet`, is not `Built`): its
+parse is `ParseFactsPre`'s. -/
+structure UnitFactsPre (tags : Tags) (pre : Array (String × Net)) (st : Stmt) : Prop where
+  parse : ParseFactsPre tags pre st.c
+  check : CheckFacts st.c
+  delta : FlatDelta st.c st.pin st.da
+  sha : st.c.unitNet ≠ st.c.shaNet
+  hm : st.c.unitNet ≠ st.c.hmNet
+  rowsA : st.c.unit.a.rows ≤ st.c.unit.useful
+  rowsB : st.c.unit.b.rows ≤ st.c.unit.useful
+
+/-- `UnitFactsPre` with `pre`'s nets `Built` is `UnitFacts`. -/
+theorem UnitFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {st : Stmt} (F : UnitFactsPre tags pre st)
+    (hpre : ∀ x ∈ pre.toList, Built x.2) : UnitFacts tags st :=
+  ⟨F.parse.facts hpre, F.check, F.delta, F.sha, F.hm, F.rowsA, F.rowsB⟩
+
 section copies
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))

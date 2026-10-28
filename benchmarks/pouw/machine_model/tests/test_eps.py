@@ -224,7 +224,7 @@ def test_luck_and_the_total():
 
 
 def test_adapt_is_a_proof_units_term():
-    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof unit's."""
+    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035
     assert {E.design(n).unit for n in E.designs()} == {"whole"}   # decision 72: whole dot products
@@ -233,7 +233,7 @@ def test_adapt_is_a_proof_units_term():
     assert e0.terms()["adapt"] is None and e.terms()["adapt"] == 0.0035
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck - 0.0035) * (1 - e.clock))
     assert E.eps(DUO, PI, 8, adapt=E.adapt("per-stage")).total() == pytest.approx(e0.total())
-    with pytest.raises(SystemExit, match="no proof unit 'none'"):
+    with pytest.raises(SystemExit, match="no proof block 'none'"):
         E.adapt("none")
     assert all(E.adapt(n).selection for n in E.adapts())
 
@@ -258,7 +258,7 @@ def test_two_bit_entries_on_the_indexed_operand(tmp_path):
 
 
 def test_core_and_sample_are_two_layers():
-    """The core ε is the protocol with 100% checking (Daniel, 06:29Z), Corollary D3's: every check is one draw, so ε_luck
+    """The core ε is the protocol with 100% checking, Corollary D3's: every check is one draw, so ε_luck
     is in it (LEDGER; JL is not assumed) and ε_adapt = 0; ε_sample = ε_adapt is the sampling compiler's and never
     enters it."""
     e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))
@@ -312,19 +312,18 @@ def test_the_table_route_is_bound_by_L2():
 
 
 def test_designs_read_what_exists():
-    """Every design reads the census, names a leaf of NOISE for each product, a proof unit and, where one is on main,
+    """Every design reads the census, names a leaf of NOISE for each product, a proof block and, where one is on main,
     its perplexity arm; decision 79's three names are designs, and each alias names one design."""
     c = census(model(), vector(PIN).epoch)
     for n in E.designs():
         d = E.design(n)
         assert d.name == n and d.honest in E.profiles() and d.floor and "SPEC" in d.floor_source
         assert set(d.fold) | set(d.baseline) | set(d.floor) | {k for f in d.filler for k in f.mix} <= set(c), n
-        assert all("note:" in p.source or "CALC" in p.source or "assumption" in p.source
-                   for p in (*d.skip.values(), *d.mand.values())), n
+        assert all("CALC" in p.source or "assumption" in p.source for p in d.mand.values()), n
         assert all(p.source.startswith("eps_budget.py") for p in d.skip.values()), n
         assert 0 <= E.eps(d, PI, 8).total() < 1
         assert d.title.startswith("Dither-") and set(d.noise) == set(E.PRODUCTS) and d.unit in E.adapts(), n
-        assert d.coin_bits >= 1 and "note:" in d.coins_source, n
+        assert d.coin_bits >= 1 and "CALC" in d.coins_source, n
         assert not d.ppl or (SPECS / f"{d.ppl}.toml").read_text(), n
         assert all(E.design(a).name == n for a in d.aliases), n
     assert {E.design(n).title for n in E.designs()} >= {"Dither-1S", "Dither-2S", "Dither-C"}
@@ -392,7 +391,7 @@ def test_cli(capsys):
     assert "ε core     " in out and "ε_sample" not in out and "ε_luck     0.153%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled"]) == 0
     out = capsys.readouterr().out
-    assert "ε_adapt 0.350%: proof unit whole" in out and "ε_sample   0.350%" in out
+    assert "ε_adapt 0.350%: proof block whole" in out and "ε_sample   0.350%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled", "--adapt", "segment"]) == 0
     assert "ε_sample   21.000%" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="--checking sampled"):
@@ -438,7 +437,7 @@ def test_cli(capsys):
     assert main(["eps", "--vector", PIN, "--table", "dither-c", "dither-2s", "--operands", "floor", "--credit",
                  "floor", "--checking", "sampled"]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert "checking sampled" in lines[0] and "the proof unit (each design its own)" in lines[0]
+    assert "checking sampled" in lines[0] and "the proof block (each design its own)" in lines[0]
     head = lines[1].split()
     assert head[-4:] == ["|", "unit", "adapt", "sample"] and lines[2].split()[-4:-2] == ["|", "whole"]
     assert head[head.index("floor") + 1:head.index("floor") + 3] == ["luck", "core@2"]
@@ -589,8 +588,8 @@ def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
     after them the counted folds, none built: RT4-SHEET-13's and -14's moves of LI on li and each route, and li-bulk's
     BT1024 and trimmed W = ∞ members (RT4-SHEET-22); li-bulk itself (RT4-SHEET-17) is built, at its measured cost. With
     ♭ at REDUX they beat it by 1.47% on DS-90 and 2.25% on DC-90-ri, where the cheater folds by the generic CP_RED2 and
-    li-bulk's trimmed W = ∞ member (ATOME32, REDUX and the stores on the JI90 lines the H200 measured beside the IGMMA,
-    r20261021-070616-d06c, r20261021-074303-da7f and r20261021-161119-62ac). ♭ folds by the built routes alone: by
+    li-bulk's trimmed W = ∞ member (ATOME32, REDUX and the stores on the JI90 lines the H200 measured beside the IGMMA).
+    ♭ folds by the built routes alone: by
     cp-red2 (3 LOP3 and 2 REDG a segment) on DS-90, as the cheater does, and on DC-90-ri by CP_RED2 and CP_RED8 (global
     and generic tie there), so ε_machine is 0 on DS-90 and 0.330% on DC-90-ri. Honest's kernel folds by REDUX, so γ
     doesn't move."""
@@ -662,7 +661,7 @@ def test_the_l2_xor_checkpoints_on_the_menu_span_their_family():
         assert r.machine_eps(1.22) == pytest.approx(s.machine_eps(1.22), abs=1e-9), vec
 
 
-HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)
+HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10)
 HEADLINE = {fam: (f["design"], f["measured"]["vector"]) for fam, f in headline_spec()["family"].items()}   # headline.toml's
 
 
@@ -689,7 +688,7 @@ def _worst_core_under_margin(data, pi, d, m):
 
 
 def test_dc_the_headline_holds_decision_76s_margin():
-    """EPS1 DC's margin audit (note:20261017T0452Z-draft-eps1-dc Round 8): each device family's headline core ε, on
+    """EPS1 DC's margin audit: each device family's headline core ε, on
     data/headline.toml's design at its measured reading's vector, stays under 1% when each measured facet the headline
     reads moves 2% in the cheater's favour (decision 76), at the decision-89 reading (operands free, q* = 1.22), ε_luck
     in the core (Corollary D3). A family whose core is at or over 1% before the margin is the headline's own row
@@ -819,7 +818,7 @@ def test_the_cheater_mixes_forms():
 ])
 def test_eps_with_a_class_per_form(n, eps2, eps3, q0, lookups):
     """Core ε's machine term on VF3q-16, credit and operands at the floor: FACET-BREAK's IMMA16832-own counterfactual
-    (#2244: 3.50%/3.45% at q* = 2, 0 at q* = 4, the floor at q* = 3.2), now with the cheater free to mix forms. With
+    (3.50%/3.45% at q* = 2, 0 at q* = 4, the floor at q* = 3.2), now with the cheater free to mix forms. With
     the table route the floor is 5.98%/5.88% (4.81%/5.11% under the generic MMA at the minimum over forms)."""
     s = E.setup(E.design(n), QPI, operands="floor", credit="floor")
     assert s.machine_eps(2) == pytest.approx(eps2, abs=1e-5) and s.machine_eps(3) == pytest.approx(eps3, abs=1e-5)
@@ -840,7 +839,7 @@ def test_cli_names_the_forms(capsys):
     assert d["honest_form"] == "IMMA16832" and d["cheat"]["forms"] == {"IMMA16832": pytest.approx(0.7194, abs=1e-4)}
 
 
-RPI = E.machine("VF3r-16")   # FACET-BREAK r4 (#2286), the fx numbers below were read on it
+RPI = E.machine("VF3r-16")   # FACET-BREAK r4, the fx numbers below were read on it
 
 
 @pytest.mark.parametrize("x, row, q0", [(1.0, "JI3s_0", 1.1261), (0.5, "JI3s_2", 1.3760)])

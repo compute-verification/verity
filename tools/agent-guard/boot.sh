@@ -12,7 +12,9 @@
 # copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
 # be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
 # /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
-# and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once.
+# and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
+# names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
+# has them: without them `git merge-tree` here merges a lean-audit.json line by line and calls clean what the queue refuses.
 set -euo pipefail
 ws=${1:-/workspace}
 dest=${AGENT_GUARD_DEST:-/opt/agent-guard}
@@ -63,8 +65,28 @@ esac
 line='export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH'
 rc=${AGENT_GUARD_BASHRC:-$HOME/.bashrc}
 grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
+if git -C "$ws" show origin/main:tools/research/src/research/clone.py > "$tmp/clone.py" 2>/dev/null; then
+  python3 - "$ws" "$tmp/clone.py" <<'PY' || echo "agent-guard: merge drivers not set in $ws (above)" >&2
+import importlib.util, subprocess, sys
+spec = importlib.util.spec_from_file_location("clone", sys.argv[2])
+clone = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(clone)
+for k, v in clone.RECORD_DRIVER.items():
+    subprocess.run(["git", "-C", sys.argv[1], "config", k, v], check=True)
+print(f"agent-guard: {len(clone.RECORD_DRIVER)} merge driver settings in {sys.argv[1]}'s git config")
+PY
+fi
 if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   bash "$dest/install.sh" || echo "agent-guard: install.sh failed or refused (above); the shell hook is in place" >&2
+  # a snapshot older than USN-8944-1 still trusts the roots that cross-signed the compromised eMudhra intermediates
+  if ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root'; then
+    { sudo -n apt-get update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l \
+        apt-get install -y -qq --only-upgrade ca-certificates 'libnss3*'; } > /tmp/agent-trust-upgrade.log 2>&1 \
+      && echo "agent-guard: ca-certificates $(dpkg-query -W -f='${Version}' ca-certificates)" \
+      || echo "agent-guard: the ca-certificates upgrade failed (/tmp/agent-trust-upgrade.log)" >&2
+  fi
+  line='export UV_SYSTEM_CERTS=1'          # uv reads the system trust store, not the roots it ships
+  grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
   # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless
   setsid nohup python3 "$dest/oom_watch.py" loop >> /tmp/agent-oom-watch.log 2>&1 < /dev/null &
   echo "agent-guard: OOM recorder started ($dest/oom_watch.py, records in ~/.research/agent-oom.jsonl)"

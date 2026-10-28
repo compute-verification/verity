@@ -1,5 +1,8 @@
 {
  "roots": ["PouwWindow", "PouwWindow.DifftestMain"],
+ "exempt": {
+  "PouwWindow.LeafOwnMain": "the pouw-leaf-own executable's entry point, one line; its command is PouwWindow.Lanes.leafOwnCmd, audited under PouwWindow"
+ },
  "layers": {
   "PouwWindow.Grid": {
    "imports": [],
@@ -60,6 +63,16 @@
    "imports": ["PouwWindow.Lanes"],
    "except": [],
    "why": "the leaf's known rows are code over the layout: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads them (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.OwnPorts": {
+   "imports": ["PouwWindow.Lanes", "Flock.Registered"],
+   "except": [],
+   "why": "the leaf's registered data ports are code over the layout and C-Flock's registered-file format: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads them (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.FullDraw": {
+   "imports": ["Flock.Draw", "Flock.Norm"],
+   "except": [],
+   "why": "the leaf's draw policy is code over C-Flock's draw format: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads it (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

@@ -103,10 +103,12 @@ draw.
 Every per-window registered value (each call's A table and z table, and ``ok``) is registered under the window's open root
 (PRF-127: `h1unit.open_root`, a stand-in, as this harness has no auditor's ledger), and only the weights' b/<K> under none;
 the verifier computes the root itself and refuses a commitment that registers its tables without it
-(``unrooted-registration``). Window credit's last two steps (`credit_registration`: the layout of the descriptor, one
-accepted outcome per drawn unit, and `credit._registration`) take the window's evidence: in ``prepare`` with each drawn
-unit's finding the ports of its call's ``--registered`` file, and refused for entries without the root, an ``ok``
-without it and another window's root; in ``summarize`` on Lean's own VERDICT findings.
+(``unrooted-registration``). Window credit's last two steps (`credit_registration`: the layout of the descriptor, each
+session's ok held to the verifier's own, `credit._ok_held`, one accepted outcome per drawn unit, and
+`credit._registration`) take the window's evidence: in ``prepare`` with each drawn unit's finding the ports of its
+call's ``--registered`` file, and refused for entries without the root, sessions that opened ``ok`` at its rows
+registered without the root (``ok-unrooted``: credit reads no entry of ``ok``, the verifier's own) and another window's
+root; in ``summarize`` on Lean's own VERDICT findings.
 
 ``summarize`` reads the job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving
 time and Lean verify time, every check's verdict against its expectation, and credit's registration on Lean's findings.
@@ -114,7 +116,9 @@ time and Lean verify time, every check's verdict against its expectation, and cr
 from __future__ import annotations
 
 import argparse
+import bisect
 import hashlib
+import itertools
 import json
 import os
 import subprocess
@@ -317,7 +321,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
         raise SystemExit(f"call {call}'s registered file: {why}")
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
-        got = {p: (e["value"], e["reads"][u]) for p, e in doc["ports"].items()}
+        got = {p: (e["value"], CC.port_reads(e)[u]) for p, e in doc["ports"].items()}
         if got != want:
             raise SystemExit(f"unit {u}: the registered reads {got} are not the window's {want}")
     path.write_text(json.dumps(doc))
@@ -367,25 +371,41 @@ def findings_of(doc: dict) -> dict:
     return {p: {"value": e["value"], "root": e["root"]} for p, e in doc["ports"].items()}
 
 
-def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str
-                        ) -> list | None:
+def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str,
+                        ok: dict) -> list | None:
     """Window credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
-    that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), one accepted outcome per
-    drawn unit (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
-    (`credit._registration`): the window's registered ``entries`` (the commitment's and the verifier's ``ok``), each
+    that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
+    held to the verifier's own (`credit._ok_held`, step 5's rule: each drawn unit's finding opened ``o1`` at ``ok``,
+    the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per drawn unit
+    (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
+    (`credit._registration`): the window's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
-    the open root ``window_root``. Each proof's ``program`` is the descriptor's SHA-512, the Program Lean was given. The
+    the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
+    descriptor's SHA-512, the Program Lean was given. The
     steps before them (the challenger's log, the credit bits, the round roots) need a served window's ledger, which this
     harness has none of."""
     layout, why = CR.layout_of(descriptor)
     if why is None:
         ss, why = CR.strata(layout)
     if why is None:
+        starts = list(itertools.accumulate((size for size, _work in CR.call_work(layout)), initial=0))[:-1]
+        why = next((w for u, f in sorted(findings.items())
+                    if (w := CR._ok_held(bisect.bisect_right(starts, u) - 1, f"of unit {u}", f, ok)) is not None), None)
+    if why is None:
         program = hashlib.sha512(descriptor).hexdigest()
         proofs = [{"program": program, "registered": f, "unit": int(u), "verdict": "accept"} for u, f in sorted(findings.items())]
         why = CR._proved(sorted(drawn), proofs) or CR._registration(
-            window_root, program, CR._prefix(descriptor), entries, ss, layout, proofs)
+            window_root, program, CR._prefix(descriptor), entries, ss, layout, len(layout["calls"]), proofs)
     return None if why is None else list(why)
+
+
+def unrooted_ok(win: SimpleNamespace, com: dict) -> G.Registered:
+    """The window's ok rows as `ok_registration` registers them, the same rows and salts, but under the registered domain
+    of ``ok`` with no window root: the ok a session opens when its ``--registered`` file states ok's domain without the
+    window's open root (flock-verify roots known rows at the domain the file gives)."""
+    n = int(win.tp.population)
+    return G.Registered.commit(win.obj["program"], U.OK_VALUE, np.tile(U.OK, (n, 1)).tolist(),
+                               [U.ok_salt(com["window"], u) for u in range(n)], G.WORD_BITS, U.V2, None)
 
 
 def forge(base: Path, out: Path, pub: bytes, outs: dict, rows: dict, circuit: Path) -> list[dict]:
@@ -591,19 +611,21 @@ def cmd_prepare(a) -> int:
 
     # window credit's registration step on this window's evidence, each drawn unit's finding the ports of its call's
     # --registered file (what a session verified against it states; `summarize` repeats it on Lean's own findings), and
-    # refused for entries without the window root, an ok without it, and another window's root
+    # refused for entries without the window root, sessions that opened ok at its rows registered without it, and
+    # another window's root
     descriptor_c = credit_descriptor(win)
     (vp / "descriptor.json").write_bytes(descriptor_c)
-    wr1, okd = U.window_open_root(com1), G.domain(win.obj["program"], U.OK_VALUE, len(U.OK), T).domain_id.hex()
-    entries1 = [*com1["registered"], ok1.entry()]
+    wr1, entries1, okv = U.window_open_root(com1), com1["registered"], {"value": U.OK_VALUE, "root": ok1.root.hex()}
     found = {u: findings_of(docs1[c]) for c, us in by_call.items() for u in us}
+    oku = unrooted_ok(win, com1).root.hex()
+    if oku == okv["root"]:
+        raise SystemExit("the ok rows registered without the window root have the window's ok root: ok-unrooted is vacuous")
+    found_oku = {u: dict(f, **{U.OUT_PORTS["ok"]: dict(f[U.OUT_PORTS["ok"]], root=oku)}) for u, f in found.items()}
     cr = {"window": w1, "window_root": wr1, "descriptor_sha512_is_program": hashlib.sha512(descriptor_c).hexdigest() == win.obj["program"],
-          "reads": credit_registration(descriptor_c, units, entries1, found, wr1),
-          "unrooted": credit_registration(descriptor_c, units, [*unrooted(com1)["registered"], dict(ok1.entry(), domain=okd)],
-                                          found, wr1),
-          "ok-unrooted": credit_registration(descriptor_c, units, [*com1["registered"], dict(ok1.entry(), domain=okd)],
-                                             found, wr1),
-          "other-window-root": credit_registration(descriptor_c, units, entries1, found, U.window_open_root(com2))}
+          "reads": credit_registration(descriptor_c, units, entries1, found, wr1, okv),
+          "unrooted": credit_registration(descriptor_c, units, unrooted(com1)["registered"], found, wr1, okv),
+          "ok-unrooted": credit_registration(descriptor_c, units, entries1, found_oku, wr1, okv),
+          "other-window-root": credit_registration(descriptor_c, units, entries1, found, U.window_open_root(com2), okv)}
     record["credit_registration"] = cr
     log(f"credit's registration on {w1}'s reads: {cr}")
     if (not cr["descriptor_sha512_is_program"] or cr["reads"] is not None
@@ -852,9 +874,9 @@ def lean_credit(work: Path, out: Path, record: dict) -> dict:
             return {"ran": True, "result": ["registration", f"{tag}'s sessions state different registered findings"]}
         found.update({u: regs[0] for u in call["units"]})
     com = json.loads((work / f"{cr['window']}-commitment.json").read_text())
-    entries = [*com["registered"], record["ok_registration"][cr["window"]]]
-    got = credit_registration((work / "verifier" / "descriptor.json").read_bytes(), record["draw"]["units"], entries, found,
-                              U.window_open_root(com))
+    ok = record["ok_registration"][cr["window"]]
+    got = credit_registration((work / "verifier" / "descriptor.json").read_bytes(), record["draw"]["units"],
+                              com["registered"], found, U.window_open_root(com), {"value": ok["value"], "root": ok["root"]})
     return {"ran": True, "units": sorted(found), "result": got}
 
 

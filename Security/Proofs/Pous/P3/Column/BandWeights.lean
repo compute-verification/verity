@@ -1,6 +1,6 @@
 import Proofs.Pous.P3.Column.BandComb
 import Definitions.Pous
-import Models.Pous.Assumptions
+import Definitions.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers

@@ -1,8 +1,7 @@
 # C-Flock (`verity-flock`)
 
 The active backend family. C-Flock proves a committed relation, the commitment's hash leaves included, in one
-binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patched here). Where the frozen families are
-and what the merge gate runs per family: `../../../archive/README.md`.
+binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patched here).
 
 ## Layout
 
@@ -14,7 +13,7 @@ and what the merge gate runs per family: `../../../archive/README.md`.
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
     (`verity/flock-ir-sampling/v1`): their frame-v3 statements.
   - `partition_units.py`: every unit class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
-    reference evaluator; `boolean_export.py`: a served row's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
+    reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
   - M0: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,
@@ -42,7 +41,7 @@ and what the merge gate runs per family: `../../../archive/README.md`.
 
 C-Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
 `verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it
-(`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
+(`verity.ml.windows.rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
 (`--m0-pythonpath`), not from the checkout. C-Flock ZK is `flock-circuit prove --zk` (`live/PROTOCOL.md`).
 `flock-circuit` also reads the typed statement (`verity/flock-circuit/types`, `verity_flock.typed_statement`) of a
 flat class and of a template whose instance type places calls (GEMM) and reads tables (attention, as placed `table/v2`

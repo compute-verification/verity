@@ -7,8 +7,8 @@ import sys
 
 
 def test_importlib_metadata_listings_count_as_the_installed_distributions(tmp_path):
-    """17 Oct: since every workspace member is installed (#2166), `importlib.metadata` listed every member's root for every
-    target, and a file added to one member (#2158, #2159, #2173) made every target's entry miss."""
+    """Every workspace member is installed, so were `importlib.metadata` held by its listings, every member's root would be in
+    every target's reads, and a file added to one member would make every target's entry miss."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "member").mkdir()
     (tmp_path / "member" / "m.py").write_text("")

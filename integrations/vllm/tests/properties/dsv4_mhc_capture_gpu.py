@@ -87,7 +87,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity.ml.circuits.silicon.models import GroupSum
-from verity_vllm.program.kernels import mhc_twin as W
+from verity.ml.definitions.numerics import mhc_twin as W
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-mhc-capture/v1"
@@ -476,7 +476,7 @@ def phase_mufu(work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     import torch
 
     from verity.ml.circuits.ops import mufu as MU
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     x = mufu_inputs()
 
@@ -674,7 +674,7 @@ def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
     """The piece's Definition at the job's statics and its arguments on token ``job["token"]``, and the kernel's words it
     states."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import mhc as R
+    from verity.ml.definitions.registry import mhc as R
 
     S, NS, t, piece = job["statics"], job["NS"], job["token"], job["piece"]
     hc, h = S["HC"], S["H"]
@@ -764,7 +764,7 @@ def sources(outdir: Path) -> dict[str, Any]:
 
 def served_bindings() -> dict[str, Any]:
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import mhc as R
+    from verity.ml.definitions.registry import mhc as R
 
     norm = {"REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}
     out = {"HopperTf32WgmmaDot8_v1": lambda: R.HopperTf32WgmmaDot8, "MhcSigmoid_v1": lambda: bind(R.MhcSigmoid),

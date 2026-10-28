@@ -1,7 +1,7 @@
 """Served trees as registered ports: the one form in which a served path registers what it served and has the Lean verifier
 open it (`register_served`).
 
-A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serving committed and that a proof unit reads:
+A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serving committed and that a proof block reads:
 a template's operands, Dither's z/y leaves or receipt roots, H1's per-call A, y and z tables. Its root is a hiding
 commitment, which binds nothing on its own: `EndToEndRegisteredRows` links a proof's value layer to a committed row only at
 a registered read. So the service registers each served tree as a port of the verifier's own `--registered` file before
@@ -14,18 +14,18 @@ record as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when
 verifier's own (`registration.check(..., registered=values, outputs=outputs, schemas=schemas, window_root=, held=)`), and
 the verifier's
 `--registered` file as one port per circuit port that reads it (`registered.reads_file`: the value, root, leaves, words,
-word_bits, domain, and the row each unit of the population reads, from the verifier's own program and query). Its domain
+word_bits, domain, and the row each proof block of the population reads, from the verifier's own program and query). Its domain
 is one of three, and no other:
 
 * the registered-value domain of `value` in the verifier's own program (`registered.registered_entries`), when serving
   committed the tree as a registered value (`Registered.commit`): under the window's open root R (`window_root`, from
   the challenger's signed open of the window) for a per-window value, and without it for a value held across windows
   (`held`, the weights), so a window-independent program registers each window's values under the same names;
-* an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`, #2929's output values):
+* an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`):
   the log's record with that digest names the port, its root and its leaf count, and the tree is that port's;
 * an earlier record's registered value's domain, when the tree is that value (`reused`: `(record digest, value)`): the
   log's record with that digest registered the value with its root, domain, rows, words and word bits, and the tree is
-  that entry, registered under no domain of its own (H1's `a/<K>@<c>` as a Commit's AROW, say).
+  that entry, registered under no domain of its own (H1's `a/<K>@<s>` as a Commit's AROW, say).
 
 Each tree names its row format (`row_schema`, the `--registered` port's key for it, one of `SCHEMAS`): the
 frame-v3-sha512 leaf schema its leaves were hashed under, which must be the format of the circuit port that reads it
@@ -36,12 +36,12 @@ u16 words), which sets the tree's rows and its domain. The record's `registered`
 row's leaves in the format the verifier holds for the value (`registration.check(..., schemas=)`, the returned
 `schemas`), and without it as `row/v1`, so it refuses a bit-row tree of leaves narrower than its words, such as H1's A.
 
-**The program and the partition.** The positions are the verifier's: `reads` derives each unit's row from the program and
+**The program and the partition.** The positions are the verifier's: `reads` derives each proof block's row from the program and
 the query it is given, the path's own public Program and its `Q_template_instance` query, never the universal unit's. The
-Lean verifier derives the same units only from the same objects, so the session is verified with `--program` the
+Lean verifier derives the same proof blocks only from the same objects, so the session is verified with `--program` the
 program's canonical encoding (`codec.encode_program`), `--partition` the returned `partition` (`partition.partition(program,
-query)`), and `--unit-indices` the staged instances' units. Rows are fixed slots: a tree pads its unused rows with zeros,
-so the positions are a function of the unit index alone, and the layout is protocol structure.
+query)`), and `--unit-indices` the staged instances' proof blocks. Rows are fixed slots: a tree pads its unused rows with zeros,
+so the positions are a function of the proof block index alone, and the layout is protocol structure.
 
 `register_served` refuses (ValueError) a served tree whose value is not a parameter the program reads in whole rows, a
 value twice, a root or domain that is not lowercase hex of 64 bytes, no rows or no leaves to a row, a width other than 16
@@ -50,7 +50,7 @@ leaves or whose rows are not the parameter's, a domain that is none of the three
 not hold or whose root, domain or rows are not the port's, a reused tree whose record or value the log does not hold or
 whose root, domain, rows, words or word bits are not that entry's, a tree that is both an output and reused, a root other than the one an earlier record of the log
 registered under the same domain (R7-held), without `window_root` a tree it doesn't hold that the log registered under
-the same domain (`registration.unwindowed`: a fixed name served again needs the window's root), and a tree no unit of the
+the same domain (`registration.unwindowed`: a fixed name served again needs the window's root), and a tree no proof block of the
 population reads, which no proof would open.
 """
 from __future__ import annotations

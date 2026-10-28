@@ -109,7 +109,7 @@ def install_codegen_hooks(hook: Any, into: hooks.Hooks, batch: bool = False) -> 
     stats: dict[str, Any] = {"nodes": 0, "hooks": 0, "skipped": {}, "batch": batch, "flushes": 0, "kept": 0}
 
     class KeptFree(iw.FreeIfNotReusedLine):
-        def plan(self, state: Any) -> Any:  # noqa: ARG002
+        def plan(self, state: Any) -> Any:
             return iw.NullLine(self.wrapper) if self.node.get_name() in V.graph.removed_buffers else self
 
     def flush(wrapper: Any) -> None:

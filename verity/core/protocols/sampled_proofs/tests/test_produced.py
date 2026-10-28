@@ -30,7 +30,7 @@ def test_the_produced_tree_opens_under_its_registrations_domain_only():
     assert not G.verify_read(dom, tree.root, 2, other.bcs[2], other.path(2)), "another tree's row opens under no root but its own"
     with pytest.raises(ValueError, match="registration digest"):
         PR.domain(PD, "partials", 2, 3, 16, "AB" * 64)
-    with pytest.raises(ValueError, match="not both"):
+    with pytest.raises(ValueError, match="not two"):
         G.domain(PD, "partials", 2, 3, 16, window="00" * 64, produced=REG)
 
 
@@ -81,7 +81,7 @@ def test_the_opened_roots_are_the_records():
                                               "p0": {"value": "partials", "root": root}}}}
     assert PR.opened(rec, audit.session_registered(v(tree.root.hex()))) == ()
     assert PR.opened(rec, audit.session_registered(v("00" * 64))) == ("P-opened",)
-    assert PR.opened(rec, audit.session_registered({})) == ("P-opened",), "a produced value no verifier of record opened"
+    assert PR.opened(rec, audit.session_registered({})) == ("P-opened",), "a produced value no verifier opened"
     two = {**v(tree.root.hex()), "lean2": {**v("00" * 64)["lean"]}}
     assert PR.opened(rec, audit.session_registered(two)) == ("P-opened",), "two roots for one value"
 

@@ -55,6 +55,7 @@ instance file's header carries each block's unit indices (the VUs of the partiti
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 from dataclasses import dataclass
@@ -146,7 +147,8 @@ def class_digest(text: str) -> str:
     i = text.index("\n") + 1
     j = text.index("\n", i)
     meta = {k: v for k, v in json.loads(text[i + 5:j]).items() if k not in BINDING_KEYS}
-    return _sha512([text[:i], "META ", *_COMPACT.iterencode(meta), text[j:]]).hexdigest()
+    rest = (text[k:k + _HASH_CHUNK] for k in range(j, len(text), _HASH_CHUNK))
+    return _sha512(itertools.chain([text[:i], "META "], _COMPACT.iterencode(meta), rest)).hexdigest()
 
 
 def set_statics(input_set) -> dict:
@@ -331,8 +333,9 @@ def out_row(name: str, words: int, bit_row: bool = False) -> Port:
 
 def out_rows(outs: dict, out_ports: list[tuple[str, int]], rows: list[Port], counts: list[int] | None = None) -> dict:
     """Each output port's words ``{port: (n, words)}`` as its output row's (zero past the port's words); ``counts`` (META
-    ``out_row_ports``): each row's run of output ports, their words concatenated in port order."""
-    counts = counts or [1] * len(out_ports)
+    ``out_row_ports``): each row's run of output ports, their words concatenated in port order. Output ports past the rows'
+    runs (META ``pinned_outputs``) have no row."""
+    counts = counts if counts is not None else [1] * len(rows)
     out, at = {}, 0
     for k, p in zip(counts, rows, strict=True):
         run = out_ports[at:at + k]
@@ -462,12 +465,13 @@ def _wires(low: IL.Lowering, tail) -> list:
     return wires
 
 
-def _ret_ports(st) -> list:
-    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's as ``[slot, port]``."""
+def _ret_ports(st, slotted: bool = False) -> list:
+    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's, or every stage's
+    when ``slotted``, as ``[slot, port]``."""
     at = {tag[1]: (s, j) for s in range(st.count) for j, tag in enumerate(st.tags(s)[1]) if tag[0] == "ret"}
     if sorted(at) != list(range(len(at))):
         raise ValueError("the last stage's returned outputs are not each output word once")
-    return [at[o][1] if st.count == 1 else list(at[o]) for o in range(len(at))]
+    return [at[o][1] if st.count == 1 and not slotted else list(at[o]) for o in range(len(at))]
 
 
 def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:
@@ -548,7 +552,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
             v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
-            leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None, layout: str | None = None) -> str:
+            leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None, layout: str | None = None,
+            pinned_outputs: tuple = ()) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -560,7 +565,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     has the writer's leaf; ``v2_out_rows``: runs (one port or several) each committed as one ``sha512/row/v2`` row of exactly
     their words (PoUW's ok, tile digest and role-W rows), in place of a lone port's row zero-padded to whole blocks.
     ``leaf_scheme``: the proof's own Merkle leaves (META ``leaf_scheme``), :data:`LEAF_SCHEME` by default or
-    :data:`LEAF_SCHEME_PLAIN`.
+    :data:`LEAF_SCHEME_PLAIN`. ``pinned_outputs``: the last output ports' names (META ``pinned_outputs``), which have no
+    row: each of their bits Δ's copy of the unit's forced-zero row, so the proof holds only where they are zero (a writer's
+    ``S[j] XOR y``); bit rows only, and the all-zero instance's must be zero.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
@@ -575,8 +582,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     them one META already has.
 
     ``tail`` (a :class:`tail.Tail`): the stages as given, in place of :func:`tail.lower_tail`'s, for a lowering whose split is
-    its own (`multi_unit`): a stage of ``count`` slots per VU is a second repeated unit type, wired slot by slot (META
-    ``per_vu``), and returned outputs on a repeated last stage are ``out_net_ports`` of ``[slot, port]``.
+    its own (`multi_unit`; `read_slots`, whose tail carries its wires): a stage of ``count`` slots per VU is a second repeated
+    unit type, wired slot by slot (META ``per_vu``), and returned outputs on a repeated last stage (or a ``slotted_rets`` tail's)
+    are ``out_net_ports`` of ``[slot, port]``.
 
     ``layout`` (a layout mode, `tmpl.mode_of`; TMPL1's is ``iv/hybrid/4``): the templated statement
     (:data:`TMPL_STATEMENT`, PRF-133, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
@@ -623,7 +631,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
     if (seg_out_rows or v2_out_rows) and port_bits is None:
         raise ValueError(f"{low.name}: output rows of exactly their words are bit rows (row_schemas)")
-    orows, counts = _out_ports(outs, bool(port_bits), seg_out_rows, v2_out_rows)
+    k_pin = len(pinned_outputs)
+    if pinned_outputs and (port_bits is None or layout is not None or list(pinned_outputs) != [nm for nm, _ in outs[len(outs) - k_pin:]]):
+        raise ValueError(f"{low.name}: pinned outputs {list(pinned_outputs)} are the last output ports, of a flat statement of bit rows")
+    orows, counts = _out_ports(outs[:len(outs) - k_pin], bool(port_bits), seg_out_rows, v2_out_rows)
     ports = ins + orows
     if links:
         named = {p.name: p for p in ins}
@@ -686,7 +697,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     tmpl_text = TM.write(template) if template is not None else None
     per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": tail.stages[i].count for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
-    tail_wires = _wires(low, tail) if tail else []
+    tail_wires = (tail.wires if tail.wires is not None else _wires(low, tail)) if tail else []
     public = dict(getattr(U, "public", []))
     # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16
     leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
@@ -694,7 +705,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise NotImplementedError(f"{low.name}: a cut input read from a public input port")
     leaf_cuts = [[*x[:3], owner[x[3]][1]] for x in leaf_cuts]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
-    out_net_ports = _ret_ports(tail.stages[-1]) if U.tail_rets else []
+    out_net_ports = _ret_ports(tail.stages[-1], tail.slotted_rets) if U.tail_rets else []
     programs = program_digests(sub, statics)
     unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
     unit_sha256 = low.sha256_of(unit)
@@ -711,6 +722,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts),
             "leaf_scheme": leaf_scheme or LEAF_SCHEME,
             **({"out_row_ports": counts} if seg_out_rows or max(counts, default=1) > 1 else {}),
+            **({"pinned_outputs": list(pinned_outputs)} if pinned_outputs else {}),
             **({"links": links} if links else {}), **({"definition": definition} if definition else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
             **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
@@ -718,6 +730,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "program_sha512": program or program_sha512(sub, statics),
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
                           {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
+    if pinned_outputs and any(meta["dummy"]["outputs"][sum(w for _, w in outs[:len(outs) - k_pin]):]):
+        raise ValueError(f"{low.name}: the all-zero instance's pinned outputs are not zero (it pads every block)")
     if template is not None:
         meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=_SPLICE, layout=layout)
     if extra_meta:
@@ -762,13 +776,13 @@ def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], o
            counts: list[int] | None = None) -> dict:
     """The all-zero instance's output words (every output leaf) and every row's ``b || c`` under zero salts (its zero input rows,
     then its output rows), as the padding instances hold (a tail that returns the outputs: the template's reference evaluation of
-    the zero instance). Its public inputs are zero too."""
+    the zero instance, or the lowering's own where it evaluates the tail, ``evaluates_rets``). Its public inputs are zero too."""
     n_in = sum(w for _, w in in_ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     reads_cut = any(k == "cut" for src in low.units.in_src for k, _ in src)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut and reads_cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
-    if low.units.tail_rets:
+    if low.units.tail_rets and not getattr(low, "evaluates_rets", False):
         ev = sub.evaluate({nm: [np.zeros(w, dtype=np.uint16)] for nm, w in in_ports})
         outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     words = [int(x) for x in outs[0]]
@@ -854,6 +868,54 @@ def share(rows: dict) -> tuple[dict, dict]:
     return tables, refs
 
 
+def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | None) -> None:
+    """META ``shared_reads`` (``[{port, group, position}]``) held to the public file the Lean verifier refuses otherwise
+    (``Flock.HmIn.parse`` and ``checkReads``, with its refusals): input row ``port`` is one table row per group of ``group``
+    instances, instance ``i`` reading row ``i // group``, and public input ``position`` is ``i % group`` (seed ``instance``,
+    derivation ``mod:G``): one writer a window of each shared row. ``counts`` and ``refs`` (``{port: R_p}``,
+    ``{port: (n,)}``): a shared-row file's tables, else ``None``."""
+    if "shared_reads" not in meta:
+        return
+    if "public_inputs" not in meta:
+        raise ValueError("META: shared_reads without public_inputs (a shared read's position is a public input)")
+    rs = meta["shared_reads"]
+    if not isinstance(rs, list):
+        raise ValueError("META shared_reads: not a list")  # noqa: TRY004 (one refusal type, the verifier's text)
+    if not rs:
+        raise ValueError("META: shared_reads names no port")
+    if counts is None or refs is None:
+        raise ValueError("shared reads: the public file is not a shared-row file (header shared_rows)")
+    rows = [p.name for p in _meta_ports(meta)[:meta["input_ports"]]]
+    pins = {pp["port"]: pp for pp in meta["public_inputs"]}
+    seen = set()
+    for r in rs:
+        if not isinstance(r, dict):
+            raise ValueError("META: a shared read is not an object")  # noqa: TRY004
+        port, pos, g = r.get("port"), r.get("position"), r.get("group")
+        if (sorted(r) != ["group", "port", "position"] or not isinstance(port, str) or not port or not isinstance(pos, str)
+                or not pos or type(g) is not int or g <= 0):
+            raise ValueError("META: a shared read names no port, position, or group (a positive count of instances)")
+        if port in seen:
+            raise ValueError(f"shared read {port}: named twice")
+        seen.add(port)
+        if port not in rows:
+            raise ValueError(f"shared read {port}: not an input row")
+        if pos not in pins:
+            raise ValueError(f"shared read {port}: its position {pos} is not a public input")
+        if pins[pos].get("seed") != "instance" or pins[pos].get("derivation") != f"mod:{g}":
+            raise ValueError(f"shared read {port}: its position {pos} is not the instance index mod {g} (seed instance, "
+                             f"derivation mod:{g})")
+        if n % g:
+            raise ValueError(f"shared read {port}: {n} instances are not whole groups of {g}")
+        if counts[port] != n // g:
+            raise ValueError(f"shared read {port}: its table is not one row per group of {g} ({n // g} rows)")
+        ref = np.asarray(refs[port]).reshape(-1)
+        bad = np.flatnonzero(ref != np.arange(n) // g)
+        if len(bad):
+            i = int(bad[0])
+            raise ValueError(f"shared read {port}: instance {i} reads table row {int(ref[i])}, not its group's {i // g}")
+
+
 PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 
 
@@ -872,6 +934,14 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
     pins = meta_of(text).get("public_inputs", [])
     head = {"format": PUBLIC_INPUTS_FORMAT, "instances": n, "ports": pins}
     Path(path).write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + _public_bytes(pins, words, n))
+
+
+def public_file(head: dict, public: bytes) -> bytes:
+    """The verifier's own ``flock-circuit-inputs`` file of header ``head`` (``rows`` false) and its public bytes, its header
+    line as C-Flock writes it (`Instances::public_file`: compact, key-sorted, UTF-8), so the file's SHA-512 is the prover's
+    record's ``public_file_sha512``."""
+    line = json.dumps(dict(head, rows=False), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return line.encode() + b"\n" + public
 
 
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
@@ -939,6 +1009,10 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
     if registered is not None:
+        names = [p.name for p in ports]
+        if len(set(names)) != len(names):
+            dup = next(nm for i, nm in enumerate(names) if nm in names[:i])
+            raise ValueError(f"registered reads: the circuit names port {dup} twice, and a registered read names one port")
         if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
             raise ValueError("registered: some rows' tables (input ports' or output rows'), given with their tables, refs and "
                              "registered salts")
@@ -965,6 +1039,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows, meta.get("out_row_ports"))}
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
+    check_shared_reads(meta, n, {p.name: len(rows[p.name]) for p in ins} if refs is not None else None, refs)
     if salts is None:
         salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
@@ -1004,8 +1079,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         with open(path, "wb") as f:
             f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + private + public)
     if pub_path is not None:
-        with open(pub_path, "wb") as f:
-            f.write(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + public)
+        Path(pub_path).write_bytes(public_file(head, public))
     return head
 
 

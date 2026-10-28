@@ -19,8 +19,8 @@ import torch
 from tests.properties import dsv4_mhc_capture_gpu as X
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.kernels import mhc_twin as W
-from verity_vllm.program.registry import mhc as R
+from verity.ml.definitions.numerics import mhc_twin as W
+from verity.ml.definitions.registry import mhc as R
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 SMALL = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}
@@ -137,7 +137,7 @@ def test_the_probe_words_are_the_definitions(launches, family: str, rows: tuple)
 
 
 def test_the_failed_h200_capture_is_pinned() -> None:
-    """The small committed cut of r20261013-115825-580e pins the before counts and why no raw-word replay is possible."""
+    """The small committed cut of the failed capture pins the before counts and why no raw-word replay is possible."""
     path = Path(__file__).with_name("fixtures") / "dsv4_mhc_capture_20261013.json"
     rec = json.loads(path.read_text())
     assert rec["run"] == "r20261013-115825-580e" and rec["head"] == "c07829364"
@@ -369,7 +369,6 @@ def test_the_tf32_line_reads_the_probe_and_the_tf32_cases() -> None:
         assert not X.tf32_go(doc), k
 
 
-@pytest.mark.slow
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     """`main --quick` with the GPU's phases stood in for (small-statics cases, one word flipped in the broadcast's layer input)
     and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case verdicts, the sealed record, the

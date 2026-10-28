@@ -1,7 +1,7 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
 The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
-proof units, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
+proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
 Definitions (`verity/ml/circuits/PROTOCOL.md`):
 
@@ -25,13 +25,14 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
   between blocks when they sit apart;
 - a node's *work* (`work`) is its gates by kind: a tensor-core step's products (`mac:<precision>`, the census's `PRODUCTS`),
   a Boolean gate (`cuda:gate`) or any other word operation (`cuda:op`). Inputs, constants and wiring (`cut.WIRING`) are no
-  work.
+  work. It times the work and is never credited;
+- a node's *ANDs* (`ands`), what is credited: the census's Boolean work, Lean's `Circuit.andSize`.
 
 `evaluate` computes the census values, each Call through `verity.ml.circuits.evaluation.evaluate_batch` (a kernel where
 one is registered, a Boolean Definition's word Definition's among them; bit-sliced otherwise); `register` commits the
 registered inputs before any run, bound to the occupancy profiles the developer may choose from (`profile_digest`), and
 `commit` gives the hiding commitment a run's values sit under: the census values,
-which are what can cross between devices (a Call's own wires are witness of its proof units). Both are hm96-sha512 rows,
+which are what can cross between devices (a Call's own wires are witness of its proof blocks). Both are hm96-sha512 rows,
 one per element, in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
 """
 from __future__ import annotations
@@ -54,7 +55,7 @@ from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.evaluation import evaluate as reference
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.batch import type_dtype
-from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
+from verity.ml.circuits.layout import FunctionCall, resolve
 from verity.ml.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
 from verity.ml.commitments import advice
 
@@ -108,11 +109,13 @@ def parameters(program: Program) -> list[tuple[str, str]]:
 _census: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
-def census_of(program: Program) -> dict:
-    """The Program's census/v1 (one step), computed once."""
-    if program not in _census:
-        _census[program] = census(program, digest=program_digest(program))
-    return _census[program]
+def census_of(program: Program, boolean: bool = False) -> dict:
+    """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
+    memo = _census.setdefault(program, {})
+    if boolean not in memo:
+        from verity.ml.definitions.boolean import boolean_version
+        memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
+    return memo[boolean]
 
 
 def values(program: Program) -> list[Value]:
@@ -187,17 +190,12 @@ def read(program: Program, transcript: dict[int, int], v: Value) -> list[int]:
     return [_word(transcript, gs, ws) for gs, ws in rows(program, v)]
 
 
-def precision(fam: str) -> str:
-    """A tensor-core step family's operand format, the census's (`PRECISION`)."""
-    return PRECISION[fam]
-
-
 def _own(fn) -> dict[str, int] | None:
     """The work one activation of `fn` is when it is one thing (a tensor-core step, a primitive); None for any other
     composite, whose work is its body's."""
     fam = family(fn)
     if fam in PRODUCTS:
-        return {f"mac:{precision(fam)}": PRODUCTS[fam]}
+        return {f"mac:{PRECISION[fam]}": PRODUCTS[fam]}
     if not isinstance(fn, PrimitiveDefinition):
         return None
     if is_input(fn) or not fn.params or fn.id in WIRING:
@@ -225,28 +223,20 @@ def work(program: Program) -> dict[int, dict[str, int]]:
     return {k: dict(of(nodes_[k].fn)) for k in calls(program)}
 
 
-def gate_work(circuit: Circuit, g: int) -> dict[str, int]:
-    """Gate `g`'s share of `work`: a tensor-core step's products sit on its last gate, every other gate of it is none."""
-    return _gate_work(circuit.gate(g))
-
-
-def _gate_work(gate) -> dict[str, int]:
-    step, s = None, gate.scope
-    while s.parent is not None:
-        if family(s.spec) in PRODUCTS:
-            step = s
-        s = s.parent
-    if step is None:
-        return _own(gate.prim) or {}
-    return _own(step.spec) if gate.index == step.offset + step.spec.gates - 1 else {}
+def ands(program: Program) -> dict[int, int]:
+    """Each Call's ANDs: its class's Boolean work in the census, every facet's, times its batch's n."""
+    doc = census_of(program, boolean=True)
+    classes, callees, nodes = doc["classes"], doc["callees"], doc["nodes"]
+    return {k: nodes["n"][k] * sum(f["and"] for f in classes[callees[nodes["callee"][k]]]["work"].values())
+            for k in calls(program)}
 
 
 _reach: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
-def reach(program: Program, roots: frozenset[int]) -> dict[int, dict[str, int]]:
-    """Each root Call's work on the gates the root nodes `roots` reach, gate by gate. Only the Calls their census values
-    reach are expanded, and none past the explicit limit (then nothing is reached)."""
+def reach(program: Program, roots: frozenset[int]) -> dict[int, int]:
+    """Each root Call's ANDs among the gates the root nodes `roots` reach, gate by gate (a word gate has none). Only the
+    Calls their census values reach are expanded, and none past the explicit limit (then nothing is reached)."""
     memo = _reach.setdefault(program, {})
     if roots in memo:
         return memo[roots]
@@ -264,13 +254,13 @@ def reach(program: Program, roots: frozenset[int]) -> dict[int, dict[str, int]]:
         memo[roots] = {}
         return {}
     gate_readers: dict[int, list[int]] = {}
-    shares: dict[int, dict[str, int]] = {}
+    shares: dict[int, int] = {}
     for k in calls:
         for gate in c.region(body.offsets[k], body.offsets[k + 1]):
             for o in set(gate.operands):
                 gate_readers.setdefault(o, []).append(gate.index)
-            if share := _gate_work(gate):
-                shares[gate.index] = share
+            if (kind := BL.gate_kind(gate.prim)) and kind[0] == "and":
+                shares[gate.index] = kind[1] - 1
     seen = {g for k in roots for g in range(body.offsets[k], body.offsets[k + 1])}
     todo = list(seen)
     while todo:
@@ -278,10 +268,10 @@ def reach(program: Program, roots: frozenset[int]) -> dict[int, dict[str, int]]:
             if r not in seen:
                 seen.add(r)
                 todo.append(r)
-    out: dict[int, Counter] = {}
+    out: Counter = Counter()
     for g in seen & shares.keys():
-        out.setdefault(body.node_at(g), Counter()).update(shares[g])
-    memo[roots] = {k: dict(w) for k, w in out.items()}
+        out[body.node_at(g)] += shares[g]
+    memo[roots] = dict(out)
     return memo[roots]
 
 
@@ -389,7 +379,7 @@ _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
     """The rows a run commits: the census values' elements (`rows`), what the Program's nodes pass each other, each once
-    in value order. A Call's own wires are witness of its proof units, whose commitments are the proof service's."""
+    in value order. A Call's own wires are witness of its proof blocks, whose commitments are the proof system's."""
     if program not in _committed:
         seen: dict[tuple[int, ...], tuple[int, ...]] = {}
         for v in values(program):
@@ -408,6 +398,6 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
                            width, _binding(b"datacenter/values/v1", program), salts)
 
 
-__all__ = ["REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
-           "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision", "reach",
+__all__ = ["REGISTRATION", "RUN", "Registration", "Value", "ands", "bind_inputs", "binding", "calls", "census_of",
+           "commit", "committed", "evaluate", "gates", "layout", "names", "nodes", "parameters", "reach",
            "read", "register", "rows", "values", "work"]

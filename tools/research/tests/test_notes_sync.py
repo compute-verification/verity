@@ -59,6 +59,17 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+def test_a_sync_commits_where_signing_is_configured_but_cannot_sign(machines):
+    origin, a, _ = machines
+    _git(a, "config", "commit.gpgsign", "true")
+    _git(a, "config", "gpg.program", "false")
+    (a / "lanes" / "x").mkdir(parents=True)
+    (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["paths"]) == (0, True, 1)
+    assert _git(origin, "show", "main:lanes/x/report.md").startswith("CHECKPOINT")
+
+
 
 
 def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
@@ -620,6 +631,21 @@ def test_a_missing_notes_clone_is_cloned_once_the_token_is_set(cloud_vm, tmp_pat
     assert (root / DOC).is_file() and _git(root, "config", "remote.origin.url").strip() == NS.NOTES_URL
     assert _git(root, "rev-parse", "HEAD") == _git(origin, "rev-parse", "main") and not any(TOKEN in " ".join(c) for c in seen)
     assert NS.ensure_clone(root) is None, "there already"
+    assert [p.name for p in root.parent.iterdir()] == ["notes"]
+
+
+def test_parallel_callers_in_one_process_clone_the_notes_once(cloud_vm, tmp_path, monkeypatch):
+    """26 Oct: `research run` on a fresh VM probes machines in parallel threads, each asking for the notes clone; the clone
+    directory was named by pid alone, so one thread's cleanup deleted another's clone mid-way and the run couldn't start."""
+    import concurrent.futures
+
+    origin = cloud_vm[0]
+    root = tmp_path / "home" / ".research" / "notes"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        lines = list(pool.map(lambda _: NS.ensure_clone(root), range(6)))
+    assert lines.count(f"notes: cloned {NS.NOTES_URL} into {root}") == 1 and lines.count(None) == 5
+    assert _git(root, "rev-parse", "HEAD") == _git(origin, "rev-parse", "main")
     assert [p.name for p in root.parent.iterdir()] == ["notes"]
 
 

@@ -8,7 +8,7 @@ optional fields omitted (never blank), every value non-empty and free of ``/`` a
     weight    w=<param>[/s=<tp rank>][/c=<row>]
     boundary  p=<profile_id>/r=<request_id>/b=<field>[/t=<pos>]
 
-``c=<row>`` on a weight id (capture format v2, 2026-09-07 W3c) names one row block of a 2-D
+``c=<row>`` on a weight id (capture format v2) names one row block of a 2-D
 parameter in its own ``[N, K]`` layout: the leaf holding rows ``row .. row + rows_per_leaf - 1``.  For a ``torch.nn.Linear`` weight that is the
 GEMM's weight *column* ``W[:, j]`` in the ``x @ W.T`` sense.  Without ``c`` the id names the whole
 tensor (format v1 leaves, and the range opening of a v2 tensor).
@@ -19,12 +19,12 @@ tensor (format v1 leaves, and the range opening of a v2 tensor).
 - ``l``: a decimal layer index or one of ``embed``, ``norm``, ``lm_head``, ``sampler``.
 - ``op``: ``[A-Za-z0-9_.]+`` (``layers.3.self_attn.qkv_proj.gemm``, ``sampler.select``).
 - ``c``: a coordinate, decimal ints joined by ``,`` (``c=17`` or ``c=3,7``).
-- ``x`` (capture-format speculative extension, lane SD 2026-09-08): the
+- ``x`` (capture-format speculative extension): the
   request-local step in which a *speculative* value was computed.  Without ``x`` a value id names the
   committed value at position ``t`` (unique per request, position, op, port — the format's identity
   rule); with ``x=<step>`` it names a value computed at ``t`` during step ``<step>``'s speculation that
   the step did not commit — a rejected verification slot's target value, or the draft model's
-  proposal-row value — kept as a first-class leaf of that step's replay unit and never confused with
+  proposal-row value — kept as a first-class leaf of that step's replay block and never confused with
   the committed value at the same position (which a later step produces under the unqualified id).
 - ``param``: ``[A-Za-z0-9_.]+`` (the safetensors / ``named_parameters`` name).
 - ``field`` (boundary tree leaves; a POC choice, the contract leaves them open): one of
@@ -50,7 +50,7 @@ COORD_RE = re.compile(r"^(0|[1-9][0-9]*)(,(0|[1-9][0-9]*))*$")
 
 PHASES = ("prefill", "decode")
 NAMED_LAYERS = ("embed", "norm", "lm_head", "sampler")
-# ``output_logprob`` (WB2, 2026-09-07): the chosen token's logprob as the API reported it, one
+# ``output_logprob``: the chosen token's logprob as the API reported it, one
 # ``float32`` leaf per present output record; a boundary written before the field has no such leaves.
 BOUNDARY_FIELDS_WITH_T = ("prompt_token", "output_token", "output_presence", "output_logprob")
 BOUNDARY_FIELDS_WITHOUT_T = ("sampling_params", "seed", "finish_reason")

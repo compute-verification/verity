@@ -1,5 +1,5 @@
 import Proofs.Accounting.TS.Drawn
-import Models.Accounting.Guarantees.TS.Fixed
+import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)

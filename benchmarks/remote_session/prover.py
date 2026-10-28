@@ -24,7 +24,7 @@ kv:P            honest, beside a serving node's KV writes (`ServingTrace`): befo
 kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts for them are of zeros, and an
                 opening of one carries the true page, as skip's do
 serve           honest, beside the backend's own serving (`backend.serving`: a node's `Store`, whose engine steps
-                write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
+                write, free and re-key its KV, `verity_vllm.protocols.remote_bandwidth.remote`): before each pass the backend's engine runs
                 its next step (pass 0's before the first window, `ready`), and the pass reads every live block at it;
                 one pass in flight, since a launch waits on its step, and a pass whose step ran past a boundary of a
                 window with a root is the next window's first, so the allowance covers a read, not a step; paced, a
@@ -37,7 +37,9 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
 ~~~
 
 In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
-waits for the next, and a window's first pass starts at its coin's arrival.
+waits for the next, and a window's first pass starts at its coin's arrival.  At one window in flight (the message's
+`in_flight`, 1) a pass whose window's boundary message came before its root is sent is dropped: the verifier would
+reject that root as out of turn.
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
@@ -75,11 +77,11 @@ trace's step before pass n is recorded as step n − 1, so pass n reads the stor
                                                         serving up to 4 steps past the passes, each slot reused 5 steps
                                                         after its free
     python prover.py ... --cpu 1024 --model-dir DIR --engines 2 --arena-blocks 512
-                                                        the store a model in DIR pins (`store_layout`), which
-                                                        `verifier.py --model` holds the hello to
+                                                        the store a model in DIR pins (`remote_bandwidth.store`),
+                                                        which `verifier.py --model` holds the hello to
 
 The payload's salts are under the key the verifier sends first (`payload-key`), so it can recompute a pinned model's
-payload root (`store_layout`); `--seed-payload-key`, for tests only, keeps the backend's own key, from --seed.
+payload root (`remote_bandwidth.store`); `--seed-payload-key`, for tests only, keeps the backend's own key, from --seed.
 """
 from __future__ import annotations
 
@@ -106,10 +108,11 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.remote_bandwidth import wire as rwire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
-import store_layout  # noqa: E402
 import wire  # noqa: E402
-from store_layout import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
 OPENINGS_PART = 128
 """Openings a frame: a window's go out in parts, so a root waits for one part's send, not the window's."""
@@ -330,7 +333,7 @@ class ServingTrace:
     (`ahead`, an `Ahead`), `run` is serving on its own thread and `take` the session's half at each pass."""
 
     def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
-                 lifetime: int = audit.LIFETIME, headroom: int = 0) -> None:
+                 lifetime: int, headroom: int = 0) -> None:
         N = registration.blocks
         pool = max(1, min(pool, N))
         self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
@@ -459,12 +462,12 @@ class CpuBackend:
     a block freed before its coin arrived (its pass dropped at a boundary) is never put over serving's later write.
     `misread(ticket)` is the pass's blocks whose slot held other bytes than the block when it read.
 
-    With `store` (a `store_layout.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
+    With `store` (a `remote_bandwidth.store.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
     the hello carries its layout. The payload salts are the verifier's key's (`set_payload_key`), or random ones drawn
     from `rng` when the prover takes no key (`ProverSide`'s `seed_payload_key`)."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12,
-                 store: store_layout.Store | None = None) -> None:
+                 store: rstore.Store | None = None) -> None:
         if store is not None and store.blocks != blocks:
             raise ValueError(f"the store is {store.blocks} blocks, not {blocks}")
         self.blocks, self.rng, self.read_bytes_per_s, self.store_layout = blocks, rng, read_bytes_per_s, store
@@ -635,6 +638,13 @@ class ProverSide:
                 self.jobs.task_done()
 
     def _open_window(self, t: int, draws: list) -> None:
+        """Window t's openings of `draws`, sent in parts. A window whose share of its draw is none
+        (`audit.Params.groups_per_coin` above 1) has nothing to open: the verifier accepted it at its draw's close."""
+        if not draws:
+            with self.lock:
+                for key in [key for key in self.kept if key[0] == t]:
+                    del self.kept[key]
+            return
         c0 = time.perf_counter_ns()
         by_pass = defaultdict(list)
         for k, (i, p) in enumerate(draws):
@@ -657,7 +667,7 @@ class ProverSide:
         del out
         c3, sent = time.perf_counter_ns(), 0
         for k in range(len(parts)):
-            body = wire.encode_openings(parts[k])
+            body = rwire.encode_openings(parts[k])
             self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
             parts[k] = None
             sent += len(body)
@@ -688,8 +698,8 @@ class ProverSide:
         if hasattr(self.backend, "set_payload_key") and not self.seed_payload_key:
             head, _, _ = self.expect("payload-key")
             key = bytes.fromhex(head["key"])
-            if len(key) != store_layout.KEY_BYTES:
-                raise ValueError(f"the verifier's payload key is {store_layout.KEY_BYTES} bytes, not {len(key)}")
+            if len(key) != rstore.KEY_BYTES:
+                raise ValueError(f"the verifier's payload key is {rstore.KEY_BYTES} bytes, not {len(key)}")
             self.backend.set_payload_key(key)
         root = self.backend.payload_root(self.node)
         layout = self.backend.layout() if hasattr(self.backend, "layout") else None
@@ -708,8 +718,9 @@ class ProverSide:
 
     def session(self, head: dict, mode: str, fraction: float) -> dict:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
+        one = head.get("in_flight") == 1
         commitment = wire.commitment_of(head["commitment"])
-        why = coins.layout_reason(commitment, k, W)
+        why = coins.layout_reason(commitment, k, W, head.get("groups_per_coin", 1))
         if why is not None:
             raise ValueError(f"the session's coins are not session {k}'s: {why}")
         N = self.backend.blocks
@@ -721,7 +732,7 @@ class ProverSide:
             if mode == "kvoverwrite" and self.ahead is None:
                 raise ValueError("a kvoverwrite session's serving runs ahead of its passes (ahead=K)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
-                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME),
+                                 random.Random(self.rng.getrandbits(64)), head["lifetime"],
                                  self.kv_headroom)
             if self.ahead is not None:
                 trace.ahead = Ahead(self.ahead, self.fill)
@@ -729,8 +740,8 @@ class ProverSide:
                                            daemon=True)
         elif mode in ("serve", "servedrop"):
             if not hasattr(self.backend, "serving"):
-                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.store.remote)")
-            trace = self.backend.serving(self.registration, head.get("lifetime", audit.LIFETIME))
+                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.protocols.remote_bandwidth.remote)")
+            trace = self.backend.serving(self.registration, head["lifetime"])
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
             dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)
@@ -887,7 +898,7 @@ class ProverSide:
                 unsent = x.plan is not None and x.upto[0] > sent_appends
                 if unsent and not x.discard:
                     self._drain(pending)
-                    if not pending or (pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
+                    if not pending or (not one and pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
                         if (gone := flush(x)) is not None:
                             ended, stopping = gone, True
                             discarded += 1 + len(inflight)
@@ -921,7 +932,7 @@ class ProverSide:
                     ended, stopping = msg, True
                     discarded += 1
                     continue
-                if stamp < x.start and not x.flushed:
+                if (stamp < x.start or one) and not x.flushed:
                     discarded += 1
                 else:
                     send(x, root, handle, seen)
@@ -1036,7 +1047,7 @@ def main() -> int:
                          "device.py's options")
     ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
-                    help="with --cpu: the store is the checkpoint in DIR's (`store_layout.Store`): --engines arenas of "
+                    help="with --cpu: the store is the checkpoint in DIR's (`remote_bandwidth.store.Store`): --engines arenas of "
                          "--arena-blocks, then the rest of the BLOCKS zero host filler, as `verifier.py --model` holds "
                          "it")
     ap.add_argument("--engines", type=int, default=1, help="with --model-dir: the store's arenas, an engine's each")
@@ -1064,8 +1075,8 @@ def main() -> int:
     if a.model_dir is not None and not (a.cpu and a.arena_blocks):
         ap.error("--model-dir needs --cpu BLOCKS and --arena-blocks")
     if a.cpu:
-        store = None if a.model_dir is None else store_layout.Store(
-            store_layout.arena_of(a.model_dir), a.engines, a.arena_blocks, a.cpu - a.engines * a.arena_blocks)
+        store = None if a.model_dir is None else rstore.Store(
+            rstore.arena_of(a.model_dir), a.engines, a.arena_blocks, a.cpu - a.engines * a.arena_blocks)
         backend = CpuBackend(a.cpu, random.Random(a.seed), store=store)
     else:
         backend = device.from_arguments(a, log=lambda m: print(m, flush=True))
@@ -1106,7 +1117,7 @@ def main() -> int:
              "calibration": cal, "gates": backend.gates, "calibration_trace": stalls, "sessions": results,
              "wire": conn.totals()}, indent=1))
     # Tearing down a whole-node store (every pass handle in host memory, every GPU's mapped segments) kept the process
-    # alive 12 minutes past its last output, to the end of its GPU lease (r20261015-171223-cc99).
+    # alive 12 minutes past its last output, to the end of its GPU lease.
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)

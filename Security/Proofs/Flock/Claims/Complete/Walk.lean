@@ -243,7 +243,7 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
       ∃ s0, commitP o.hs o.tabs[0]!.merkle ((o.sch 0).levels.getD 0 default) tbl s0 = .ok cm0 := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
-  obtain ⟨hct, hsig, hdraw, -⟩ := JsonRT.stmtOk S o.toCase
+  obtain ⟨hct, hsig, hdraw, -⟩ := JsonRT.stmtOk o.toCase
   obtain ⟨hC, hRk⟩ := hP o.toCase st (by rw [hst]; simp)
   have htabs : o.tabs = #[Setup.ofCircuit st] := by simp [Run.tabs, tabsOf, hst]
   have htab0 : o.tabs[0]! = Setup.ofCircuit st := by rw [htabs]; rfl
@@ -413,12 +413,13 @@ theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec prin
     fun o _ hi _ hr => o.repWalk S h64 hP hi hr
   have hD := JsonRT.repDecodes_goal S h64 hP
   exact complete_of_goals H Readable.relation
-    { session := JsonRT.sessionRuns_goal S
+    { session := JsonRT.sessionRuns_goal
       sends := sendCount_goal H _
       linkFirst := linkFirst_goal H h64 _
       finalFits := JsonRT.finalFits_goal S h64 hP
       draw := JsonRT.drawMatches_goal S h64 hP
       liveReads := JsonRT.liveReads_goal S h64 hP
+      canonical := JsonRT.canonical_goal S h64 hP
       rootB := JsonRT.custodyRootB_goal S h64 hP
       publicsLink := JsonRT.custodyPublics_goal S h64 hP
       points := JsonRT.custodyPoints_goal S h64 hP

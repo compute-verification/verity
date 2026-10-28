@@ -1,6 +1,6 @@
-"""[#57] Form (B) over a `v2-query` manifest: the oracle's producer facts come from the Programs of record by dataflow.
+"""Form (B) over a `v2-query` manifest: the oracle's producer facts come from the Programs of record by dataflow.
 
-Row #57's Commit (r20260924-011108-8cb4, gemma2-2b L40S b8) left 45,360 `instance_outputs` not compared under a v2 manifest, whose rows
+The gemma2-2b L40S b8 Commit left 45,360 `instance_outputs` not compared under a v2 manifest, whose rows
 carry none of the v1 producer annotations: 44,928 fused-norm narrowings ("ambiguous producer: 2 instances of NarrowF32ToBf16_v1 per
 row") and 432 `model/out` ("no fold instance of this op at this step": the embed scale is hinted `model.normalizer` by the fold).
 `producers_of_programs` reads, per required Value, the producing family, the family its first operand reads and the modules reading it
@@ -24,6 +24,7 @@ from verity_vllm.query import program_view as pv
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
+from verity_vllm.records.fields import MissingField
 
 NORM, MLP, LAYER = "model.layers.0.input_layernorm", "model.layers.0.mlp", "model.layers.0"
 EMBED_W, NORM_W, MLP_W = "model.embed_tokens.weight", f"{NORM}.weight", f"{MLP}.weight"
@@ -175,7 +176,7 @@ def test_consumers_are_not_consulted_when_the_fold_names_the_producer_under_the_
 
 
 def test_handed_down_member_is_observed_at_its_first_consumer_input():
-    """#57's rerun (r20260924-061950-2148): with the v2 row unannotated the acquisition hooked Gemma2Model's forward output for
+    """#57's rerun: with the v2 row unannotated the acquisition hooked Gemma2Model's forward output for
     `model/out` (the final norm's rows) while the Value is the embed scale model's body hands to layer 0 -- 432 form (B) mismatches.
     Marked promoted from the Program's consumers, the manifest's own observation rule arms `<first consumer>/in` for it and nothing else."""
     P = gemma_like_program()
@@ -215,11 +216,14 @@ def test_only_a_value_every_reader_of_which_is_inside_the_producer_subtree_is_pr
 
 
 def test_form_b_families_are_the_required_outputs_the_replay_cannot_evaluate():
-    man = {"identities": [
+    header = {"schema": MF.SCHEMA, "program_digest": "ab" * 64, "manifest_digest": "cd" * 64, "requests": ["r0"]}
+    man = dict(header, identities=[
         {"family": "instance_outputs", "spec": "LayerNormAten_v1"}, {"family": "instance_outputs", "spec": "LayerNormAten_v1{N=4}"},
         {"family": "instance_outputs", "spec": "Gemm_v1"}, {"family": "instance_outputs", "spec": "AttentionHead_v1"},
         {"family": "instance_outputs", "spec": "TokenSelect_v1"}, {"family": "sampled_token_ids", "spec": "Bf16MulScalar_v1"},
-        {"family": "instance_outputs"}, {"family": "moe_block_stream", "spec": "MoeExpertGemm_v1"}]}
+        {"family": "instance_outputs"}, {"family": "moe_block_stream", "spec": "MoeExpertGemm_v1"}])
     assert form_b_families(man) == {"LayerNormAten_v1": 2}
-    assert form_b_families(None) == {} and form_b_families({"identities": [{"family": "instance_outputs", "spec": "Gemm_v1"}]}) == {}
+    assert form_b_families(None) == {} and form_b_families(dict(header, identities=[{"family": "instance_outputs", "spec": "Gemm_v1"}])) == {}
     assert json.loads(json.dumps(form_b_families(man))) == {"LayerNormAten_v1": 2}
+    with pytest.raises(MissingField, match="field 'schema' is missing"):          # identities without the header its writers write
+        form_b_families({"identities": man["identities"]})

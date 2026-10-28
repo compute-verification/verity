@@ -1,7 +1,7 @@
-"""R16 tp TP-10 -- the pin's acceptance-set negative 'TP shard / reference mismatch' (`tp2_commit --serve-shard-from <rank>:<param>:<from_rank>`):
+"""The pin's acceptance-set negative 'TP shard / reference mismatch' (`tp2_commit --serve-shard-from <rank>:<param>:<from_rank>`):
 a rank serves ANOTHER rank's shard of one parameter, composed from the SAME pinned checkpoint.  Every served byte is a checkpoint byte and
 the multiset of shard digests over the world is unchanged -- a whole-tensor / whole-checkpoint hash cannot see it -- but the per-rank pin
-(MAN-09: served shard == the slice the rank Program's shard map prescribes) must FAIL naming exactly that parameter on exactly that rank.
+(served shard == the slice the rank Program's shard map prescribes) must FAIL naming exactly that parameter on exactly that rank.
 Engine-free: the same `weights_of_record.compose` / `check` the rank worker runs, on the synthetic checkpoint of test_weights_of_record."""
 from __future__ import annotations
 
@@ -79,20 +79,20 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
-    """[TP-11, rev F-r16-19] the import path of record is written from the RUNNING process (sys.modules), not a static closure."""
-    from verity_vllm.engine.rank_worker import repo_modules_loaded
+    """The import path of record is written from the RUNNING process (sys.modules), not a static closure."""
+    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
     r = repo_modules_loaded()
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
-    assert "verity_vllm/engine/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]
+    assert "verity_vllm/pipeline/tp/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]
     assert all(not f.startswith("/") and not f.endswith(".pyc") for f in r["files"])
     assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu", ".h")) for f in r["native_collect_jit_sources"])
 
 
-# ---- [rev M-0460] the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
+# ---- the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
 
 def test_swap_spec_all_steps_and_ranged():
-    from verity_vllm.engine.rank_worker import parse_swap_spec, swap_label
+    from verity_vllm.pipeline.tp.rank_worker import parse_swap_spec, swap_label
     assert parse_swap_spec(None) is None
     a = parse_swap_spec(["r3", "r4"])
     assert a == {"a": "r3", "b": "r4", "lo": None, "hi": None, "mode": "all"}
@@ -115,7 +115,7 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
     """The map the binding/attribution consumers see under the ranged swap: prefill rows (step 0) carry their true labels; on the shared
     decode steps r3 and r4 exchange labels; per-step row COUNTS per label are unchanged (each row one token) -- what coverage sees is
     identical to the honest map, which is why only the attribution can catch it."""
-    from verity_vllm.engine.rank_worker import parse_swap_spec, swap_label
+    from verity_vllm.pipeline.tp.rank_worker import parse_swap_spec, swap_label
     r = parse_swap_spec(["r3", "r4", 1, 37])
     step_rows = {0: [("r3", 0, 305), ("r4", 305, 313)], 1: [("r3", 0, 1), ("r4", 1, 2)], 40: [("r3", 0, 1)]}
     seen = {s: [(swap_label(l, r, s), lo, hi) for l, lo, hi in rows] for s, rows in step_rows.items()}
@@ -129,7 +129,7 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
     assert cnt(seen[1]) == cnt(step_rows[1])
 
 
-# ---- a negative that did not inject is an ERROR, never a PASS (measured b1_r16_tp12b 08:34Z: ':ulp' on a tree without parse_flip -> flipped 0 -> PASS)
+# ---- a negative that did not inject is an ERROR, never a PASS (':ulp' on a tree without parse_flip flips 0 -> PASS)
 
 def test_negative_not_applied_is_named_not_passed():
     from verity_vllm.pipeline.tp.negatives import negatives_applied

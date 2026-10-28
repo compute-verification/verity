@@ -82,7 +82,8 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        ".cursor/"
+        ".cursor/",
+        ".python-version"
       ],
       "branch_suffixes": [
         "558b",
@@ -99,8 +100,11 @@
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct; generation 3 bc-8f4b652b finishes its workers and stops)",
-      "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
+      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+      "lineage": [
+        "bc-8f4b652b"
+      ],
+      "remit": "Proofs: Lean, red team, C-Flock, proof-system sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
@@ -115,22 +119,19 @@
         "Security/Definitions/Core/",
         "verity/",
         "verity/core/protocols/sampled_proofs/",
-        "archive/",
         "benchmarks/one_stage/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "archive/sp1/benchmarks/dot_product/",
-        "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
-        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
+        "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Models/Hash/",
-        "Security/Proofs/Hash/"
+        "Security/Proofs/Hash/",
+        "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -184,8 +185,8 @@
         "integrations/vllm/tests/properties/",
         "integrations/vllm/tests/check/test_capture_map.py",
         "integrations/vllm/tests/check/test_capture_map_versions.py",
-        "integrations/vllm/verity_vllm/predict/",
-        "integrations/vllm/tests/predict/",
+        "integrations/vllm/verity_vllm/program/predict/",
+        "integrations/vllm/tests/program/predict/",
         "integrations/vllm/tests/program/",
         "integrations/vllm/tests/commit/",
         "integrations/vllm/tests/acquire/",
@@ -206,7 +207,7 @@
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which posts as it too: the machine model, the Lean accounting statements and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; the research work is @compute-research's",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
@@ -217,10 +218,9 @@
       "owns": [
         "verity/core/protocols/pouw/",
         "Security/Definitions/Pouw/",
-        "Security/Models/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
-        "Security/Models/Nci/",
+        "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
@@ -228,25 +228,23 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/int8_class_rate/",
         ".agents/skills/kernel-engineering/",
-        "integrations/vllm/verity_vllm/protocol_options/pouw.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pass.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocols/pouw/device.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/native.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
         "fixtures/bench-instances/",
-        "fixtures/redteam/",
-        "fixtures/redteam-3/",
-        "fixtures/redteam-zk/",
         "benchmarks/census/",
         "Security/Definitions/Accounting/CoinFlow.lean",
         "Security/Definitions/Accounting/Filler.lean",
@@ -254,18 +252,18 @@
         "Security/Definitions/Accounting/PouwWork.lean",
         "Security/Definitions/Accounting/TS.lean",
         "Security/Definitions/Accounting/TS/",
-        "Security/Models/Accounting/Assumptions/PouwFloor.lean",
-        "Security/Models/Accounting/Assumptions/PouwWork.lean",
-        "Security/Models/Accounting/Assumptions/Sheet.lean",
-        "Security/Models/Accounting/Assumptions/Stages.lean",
-        "Security/Models/Accounting/Assumptions/TS.lean",
-        "Security/Models/Accounting/Guarantees/CoinFlow.lean",
-        "Security/Models/Accounting/Guarantees/FillerLuck.lean",
-        "Security/Models/Accounting/Guarantees/HMu.lean",
-        "Security/Models/Accounting/Guarantees/PouwWork.lean",
-        "Security/Models/Accounting/Guarantees/Sheet.lean",
-        "Security/Models/Accounting/Guarantees/TS.lean",
-        "Security/Models/Accounting/Guarantees/TS/",
+        "Security/Definitions/Accounting/Assumptions/PouwFloor.lean",
+        "Security/Definitions/Accounting/Assumptions/PouwWork.lean",
+        "Security/Definitions/Accounting/Assumptions/Sheet.lean",
+        "Security/Definitions/Accounting/Assumptions/Stages.lean",
+        "Security/Definitions/Accounting/Assumptions/TS.lean",
+        "Security/Definitions/Accounting/Guarantees/CoinFlow.lean",
+        "Security/Definitions/Accounting/Guarantees/FillerLuck.lean",
+        "Security/Definitions/Accounting/Guarantees/HMu.lean",
+        "Security/Definitions/Accounting/Guarantees/PouwWork.lean",
+        "Security/Definitions/Accounting/Guarantees/Sheet.lean",
+        "Security/Definitions/Accounting/Guarantees/TS.lean",
+        "Security/Definitions/Accounting/Guarantees/TS/",
         "Security/Proofs/Accounting/ChainWork.lean",
         "Security/Proofs/Accounting/CoinFlow.lean",
         "Security/Proofs/Accounting/CoinFlow/",
@@ -274,7 +272,9 @@
         "Security/Proofs/Accounting/HMu/",
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
-        "Security/Proofs/Accounting/TS/"
+        "Security/Proofs/Accounting/TS/",
+        "examples/h200/",
+        "examples/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -291,6 +291,13 @@
       ]
     },
     {
+      "handle": "compute-research",
+      "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
+      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
+      "usergroup": "S0CBZ2L8542"
+    },
+    {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
@@ -301,17 +308,15 @@
       ],
       "linear": "MEM",
       "owns": [
+        "verity/core/deploy/",
         "Security/Definitions/Pous/",
-        "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
-        "benchmarks/kv_lifetime/",
         "benchmarks/live_verifier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
-        "benchmarks/rate_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
@@ -319,7 +324,7 @@
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
-        "integrations/vllm/verity_vllm/protocol_options/pous.py",
+        "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
@@ -350,28 +355,27 @@
         "Security/Definitions/Accounting/Requirement.lean",
         "Security/Definitions/Accounting/Responder.lean",
         "Security/Definitions/Accounting/Window.lean",
-        "Security/Models/Accounting/Assumptions/EncodeChain.lean",
-        "Security/Models/Accounting/Assumptions/RateAudit.lean",
-        "Security/Models/Accounting/Assumptions/RateAuditDeployed.lean",
-        "Security/Models/Accounting/Assumptions/Remote.lean",
-        "Security/Models/Accounting/Guarantees/Bandwidth.lean",
-        "Security/Models/Accounting/Guarantees/Bandwidth/",
-        "Security/Models/Accounting/Guarantees/BandwidthAudit.lean",
-        "Security/Models/Accounting/Guarantees/BoundReceipt.lean",
-        "Security/Models/Accounting/Guarantees/BoundSketch.lean",
-        "Security/Models/Accounting/Guarantees/Capacity.lean",
-        "Security/Models/Accounting/Guarantees/Gates.lean",
-        "Security/Models/Accounting/Guarantees/Memory.lean",
-        "Security/Models/Accounting/Guarantees/RateAudit.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditDeployed.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditHorizon.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditNamed.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditPartial.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditRemote.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditSketch.lean",
-        "Security/Models/Accounting/Guarantees/Remote.lean",
-        "Security/Models/Accounting/Guarantees/Requirement.lean",
-        "Security/Models/Accounting/Guarantees/Responder.lean",
+        "Security/Definitions/Accounting/Assumptions/EncodeChain.lean",
+        "Security/Definitions/Accounting/Assumptions/RateAudit.lean",
+        "Security/Definitions/Accounting/Assumptions/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/Assumptions/Remote.lean",
+        "Security/Definitions/Accounting/Guarantees/Bandwidth.lean",
+        "Security/Definitions/Accounting/Guarantees/Bandwidth/",
+        "Security/Definitions/Accounting/Guarantees/BandwidthAudit.lean",
+        "Security/Definitions/Accounting/Guarantees/BoundReceipt.lean",
+        "Security/Definitions/Accounting/Guarantees/BoundSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/Capacity.lean",
+        "Security/Definitions/Accounting/Guarantees/Gates.lean",
+        "Security/Definitions/Accounting/Guarantees/Memory.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAudit.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/Requirement.lean",
+        "Security/Definitions/Accounting/Guarantees/Responder.lean",
         "Security/Proofs/Accounting/Bandwidth.lean",
         "Security/Proofs/Accounting/Bandwidth/",
         "Security/Proofs/Accounting/BandwidthAudit.lean",
@@ -412,14 +416,16 @@
       ],
       "linear": "NET",
       "owns": [
+        "verity/core/protocols/network/",
         "verity/core/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
-        "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/"
+        "benchmarks/network_sim/",
+        "benchmarks/prove_path/"
       ],
       "branch_suffixes": [
         "728f",
@@ -460,7 +466,6 @@
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py",
         "tools/research/src/research/drive.py",
-        "tools/research/src/research/mergequeue.py",
         "tools/research/tests/test_queue_drive.py"
       ],
       "branch_suffixes": [
@@ -516,7 +521,7 @@
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
         "tools/research/tests/test_linear.py",
-        "integrations/slack-events/"
+        "infra/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
@@ -545,10 +550,13 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
+        "GLOSSARY.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
+        "examples/README.md",
+        "examples/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -562,7 +570,10 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "integrations/vllm/"
+        "verity/ml/windows/",
+        "integrations/vllm/",
+        "examples/vllm/",
+        "ruff.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
@@ -582,15 +593,17 @@
     {
       "handle": "benchmarks",
       "holder": "the benchmarks coordinator (bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9)",
-      "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
+      "remit": "Benchmarks: the overhead and throughput measurements across proof systems, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py"
+        "benchmarks/judge.py",
+        "benchmarks/README.md"
       ],
       "branch_suffixes": [
         "47e4",
@@ -610,8 +623,10 @@
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
+      "linear": "HASH",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"
@@ -630,7 +645,11 @@
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
-      "owns": [],
+      "linear": "TRN",
+      "owns": [
+        "benchmarks/rho/",
+        "benchmarks/circuit_properties/"
+      ],
       "branch_suffixes": [
         "4207"
       ],
@@ -641,6 +660,27 @@
         "If a lab hides some of its GPUs from monitoring, how much protection is left?",
         "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
       ]
+    },
+    {
+      "handle": "soundness",
+      "holder": "the soundness coordinator (bc-d2745108-9b89-5c53-8137-de8e75809c4d), a new slice launched from top's charter, split from proofs to own the Full proofs project",
+      "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
+      "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
+      "owns": [
+        "verity/core/protocols/onsite/",
+        "verity/core/protocols/remote/"
+      ],
+      "branch_suffixes": [
+        "9c4d"
+      ],
+      "examples": [
+        "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
+        "Which subprotocols of the soundness theorem are proved, and which are still premises?",
+        "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
+        "When will Verity.Soundness be on main with no subprotocol left as a hypothesis?",
+        "Does the theorem cover the code that actually runs, or a model of it?"
+      ],
+      "usergroup": "S0CBTDSL95M"
     }
   ]
 }

@@ -366,6 +366,114 @@ def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
 
 
+pipes_verdict = _load("opcode_probe_pipes_verdict", POUW / "opcode_probe" / "pipes_verdict.py")
+
+
+def _pipes_rows(**over: dict[str, float]) -> dict[str, dict]:
+    rates = {
+        "lop3": {"LOP3.LUT": 2.0}, "mufu": {"MUFU.EX2": 0.5},
+        "plop3": {"PLOP3.LUT": 2.0}, "mix_plop3_lop3": {"PLOP3.LUT": 0.5, "LOP3.LUT": 1.5},
+        "sgxt": {"SGXT": 2.0}, "mix_sgxt_lop3": {"SGXT": 1.0, "LOP3.LUT": 1.0},
+        "bmsk": {"BMSK": 2.0}, "mix_bmsk_lop3": {"BMSK": 1.0, "LOP3.LUT": 1.0},
+        "i2f_f2i": {"I2F.U32.RP": 0.25, "F2I.FTZ.U32.TRUNC.NTZ": 0.25},
+        "mix_i2f_f2i_mufu": {"I2F.U32.RP": 0.125, "F2I.FTZ.U32.TRUNC.NTZ": 0.125, "MUFU.EX2": 0.25},
+        "i2f16_f2i16": {"I2F.S16": 0.25, "F2I.TRUNC.NTZ": 0.25},
+        "mix_i2f16_f2i16_mufu": {"I2F.S16": 0.125, "F2I.TRUNC.NTZ": 0.125, "MUFU.EX2": 0.25},
+        "f2f64": {"F2F.F64.F32": 0.029, "F2F.F32.F64": 0.029},
+        "frnd": {"FRND.FLOOR": 0.5, "FADD": 0.5}, "mix_frnd_mufu": {"FRND.FLOOR": 0.25, "FADD": 0.25, "MUFU.EX2": 0.25},
+        "bar_or": {"BAR.RED.OR*": 0.05}, "mix_bar_or_lop3": {"BAR.RED.OR*": 0.04, "LOP3.LUT": 1.9},
+        "iadd64": {"IADD.64": 4.0}, "mix_iadd64_lop3": {"IADD.64": 2.0, "LOP3.LUT": 2.0},
+        "iabs": {"IABS": 2.0}, "mix_iabs_lop3": {"IABS": 1.0, "LOP3.LUT": 1.0},
+        "dfma": {"DFMA": 0.0625},
+        "mix_f2f64_mufu24": {"F2F.F64.F32": 0.01, "F2F.F32.F64": 0.01, "MUFU.EX2": 0.24},
+        "mix_f2f64_dfma": {"F2F.F64.F32": 0.0145, "F2F.F32.F64": 0.0145, "DFMA": 0.0145},
+        "i2f64": {"I2F.F64": 0.029, "F2I.F64.TRUNC": 0.029},
+        "mix_i2f64_mufu24": {"I2F.F64": 0.01, "F2I.F64.TRUNC": 0.01, "MUFU.EX2": 0.24},
+        "mix_i2f64_dfma": {"I2F.F64": 0.02, "F2I.F64.TRUNC": 0.02, "DFMA": 0.02},
+        "s64": {"I2F.S64": 0.029, "F2I.S64.TRUNC": 0.029},
+        "mix_s64_mufu24": {"I2F.S64": 0.01, "F2I.S64.TRUNC": 0.01, "MUFU.EX2": 0.24},
+        "mix_s64_dfma": {"I2F.S64": 0.0145, "F2I.S64.TRUNC": 0.0145, "DFMA": 0.0145},
+        "bar16": {"BAR.RED.OR*": 0.1}, "mix_bar16_lop3": {"BAR.RED.OR*": 0.1, "LOP3.LUT": 1.9},
+    }
+    for n in ("cvt_s32", "cvt_u16", "cvt_s8", "cvt_frnd", "cvt_i2i", "cvt_i2ip"):
+        rates |= {n: {"A": 0.25, "B": 0.25}, f"mix_{n}_mufu": {"A": 0.125, "B": 0.125, "MUFU.EX2": 0.25}}
+    for n in ("cvt_u64", "cvt_frnd64", "cvt_f64_u32", "cvt_f64_s64"):
+        rates |= {n: {"A": 0.029, "B": 0.029}, f"mix_{n}_mufu24": {"A": 0.02, "B": 0.02, "MUFU.EX2": 0.5},
+                  f"mix_{n}_dfma": {"A": 0.0145, "B": 0.0145, "DFMA": 0.0145}}
+    rates |= over
+    return {n: {"probe": n, "binary": "pipes", "rates": {f"0:{k}": v for k, v in r.items()}} for n, r in rates.items()}
+
+
+def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
+    """`pipes_verdict.py`: each alu row's opcode within 2 alone and with LOP3, each 32-bit conversion within 0.5 alone and
+    with MUFU.EX2 (FRND's FADD off the XU), each 64-bit one within 0.0625 alone and with DFMA, LOP3 + BAR.RED/2 within 2;
+    a conversion at the ALU's rate fails the XU, a 64-bit pair at DFMA's rate beside DFMA fails f64."""
+    held, lines = pipes_verdict.verdict(_pipes_rows())
+    assert held, lines
+    assert "FRND.FLOOR 0.5000 alone, 0.2500 + 0.2500 = 0.5000 beside MUFU" in lines
+    assert "BAR.RED.OR 0.0500 alone; LOP3 + BAR/2 = 1.9000 + 0.0400/2 = 1.9200" in lines
+    assert "IADD.64 4.0000 alone, 4.0000 with LOP3 (beside alu)" in lines
+    assert ("I2F.F64+F2I.F64.TRUNC 0.0580 alone, 0.0400 + 0.0200 = 0.0600 beside DFMA, 0.0200 + 0.2400 = 0.2600 beside "
+            "24 MUFU (on the XU)") in lines
+    assert "A+B 0.0580 alone, 0.0290 + 0.0145 = 0.0435 beside DFMA, 0.0400 + 0.5000 = 0.5400 beside 24 MUFU (beside the XU)" \
+        in lines
+    assert "BAR.RED.OR (16 warps) 0.1000 alone; beside a LOP3 stream LOP3 + BAR/2 = 1.9000 + 0.1000/2 = 1.9500" in lines
+    held, lines = pipes_verdict.verdict(_pipes_rows(i2f_f2i={"I2F.U32.RP": 1.0, "F2I.FTZ.U32.TRUNC.NTZ": 1.0}))
+    assert not held and lines[0] == "I2F.U32.RP+F2I.FTZ.U32.TRUNC.NTZ alone 2.0000 > sfu's 0.5"
+    held, lines = pipes_verdict.verdict(_pipes_rows(mix_s64_dfma={"I2F.S64": 0.029, "F2I.S64.TRUNC": 0.029,
+                                                                  "DFMA": 0.029}))
+    assert not held and lines[0] == "I2F.S64+F2I.S64.TRUNC beside DFMA 0.0870 > f64's 0.0625"
+    rows = tmp_path / "rows.jsonl"
+    rows.write_text("".join(json.dumps(r) + "\n" for n, r in _pipes_rows().items() if n != "mix_bar_or_lop3"))
+    assert pipes_verdict.main([str(rows)]) == 0
+    assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_bar_or_lop3; ")
+
+
+collective_verdict = _load("opcode_probe_collective_verdict", POUW / "opcode_probe" / "collective_verdict.py")
+
+
+def _collective_rows(**over: dict[str, float]) -> dict[str, dict]:
+    match = {"match_any_u32": {"MATCH.ANY": 0.5}, "match_any_u64": {"MATCH.ANY.U64": 0.25},
+             "mix_u32_lop3_32_ffma_32": {"MATCH.ANY": 0.379, "LOP3.LUT": 1.516, "FFMA": 1.516},
+             "mix_u64_lop3_16": {"MATCH.ANY.U64": 0.2499, "LOP3.LUT": 0.4999}}
+    coll = {"redux_add": {"REDUX.SUM": 0.499, "IADD3": 0.56, "MOV": 0.499}, "vote_ballot": {"VOTE.ANY": 1.39},
+            "mix_redux_match": {"REDUX.SUM": 0.25, "MATCH.ANY": 0.25},
+            "mix_redux_lop3_16": {"REDUX.SUM": 0.4984, "LOP3.LUT": 0.9969},
+            "mix_vote_lop3_16": {"VOTE.ANY": 0.55, "LOP3.LUT": 1.65},
+            "mix_vote_lop3_32": {"VOTE.ANY": 0.36, "LOP3.LUT": 1.78},
+            "mix_vote_lop3_64": {"VOTE.ANY": 0.21, "LOP3.LUT": 1.89}}
+    out = {n: {"probe": n, "binary": b, "rates": {f"0:{k}": v for k, v in r.items()}}
+           for b, rs in (("match", match), ("collective", coll)) for n, r in rs.items()}
+    for n, r in over.items():
+        out[n]["rates"] = {f"0:{k}": v for k, v in r.items()}
+    return out
+
+
+def test_collective_verdict_holds_match_and_redux_to_one_unit_and_vote_to_16_alu_lanes(tmp_path, capsys):
+    """`collective_verdict.py`: MATCH.ANY and REDUX beside each other within their faster one's rate alone, .U64 as 2
+    units, MATCH beside LOP3 and FFMA within it, LOP3 + VOTE/2 within 2; REDUX and MATCH on two units fail it, and so
+    does a VOTE that spends a whole LOP3 of alu."""
+    held, lines = collective_verdict.verdict(_collective_rows())
+    assert held, lines
+    assert lines[0] == "the unit 0.5000 (MATCH.ANY 0.5000, REDUX.SUM 0.4990 alone)"
+    assert "REDUX.SUM + MATCH.ANY = 0.2500 + 0.2500 = 0.5000 beside each other" in lines
+    assert "MATCH beside LOP3 and FFMA at most 0.4998 units (mix_u64_lop3_16, of 2)" in lines
+    assert ("VOTE.ANY 1.3900 alone; LOP3 + VOTE/2 = 1.6500 + 0.5500/2 = 1.9250, 1.7800 + 0.3600/2 = 1.9600, "
+            "1.8900 + 0.2100/2 = 1.9950 at Q 16, 32, 64") in lines
+    assert "REDUX.SUM beside 16 LOP3 0.4984 (LOP3 0.9969)" in lines
+    held, lines = collective_verdict.verdict(_collective_rows(mix_redux_match={"REDUX.SUM": 0.45, "MATCH.ANY": 0.45}))
+    assert not held and lines[0] == "REDUX.SUM + MATCH.ANY 0.9000 > the unit's 0.5000 beside each other: two units"
+    held, lines = collective_verdict.verdict(_collective_rows(mix_vote_lop3_64={"VOTE.ANY": 0.21, "LOP3.LUT": 1.99}))
+    assert not held and lines[0] == "LOP3 + VOTE.ANY/2 2.0950 > alu's 2 (mix_vote_lop3_64)"
+    match, coll = tmp_path / "match.jsonl", tmp_path / "collective.jsonl"
+    rows = _collective_rows()
+    match.write_text("".join(json.dumps(r) + "\n" for r in rows.values() if r["binary"] == "match"))
+    coll.write_text("".join(json.dumps(r) + "\n" for n, r in rows.items() if r["binary"] == "collective"
+                            and n != "mix_redux_match"))
+    assert collective_verdict.main([str(match), str(coll)]) == 0
+    assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_redux_match; the unit 0.5000")
+
+
 def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, capsys):
     """`eps1.py jitter`: each (trial, length) group's host-timed SM clock mean, its random spread (rel u%) and the
     systematic gap below the chip's own timer, and a per-trial u taken at the longest length (the tightest bound)."""

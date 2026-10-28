@@ -1,19 +1,19 @@
 """The bridge between the layers: a placement of a Program onto a datacenter, what it implies, and what of it is public.
 
-A `Placement` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
+`Placed` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
 where it enters (the outside world, a block's own device, a trusted device), and each device maps its steps onto ticks of
 the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration put a copy of it in
-every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy
-(memory accounting, review 4). A registered value kept in one copy instead (`held`, or a registered parameter named in
-`place`) is moved to its readers in other blocks, and those crossings are bandwidth like any other. Every gate of a node
-is placed with it, so this is Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the
-census's grain: a gate's leaf and step are its node's. The placement is private and committed. A crossing is a census
+every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy.
+A registered value kept in one copy instead (`held`, or a registered parameter named in `place`) is moved to its readers
+in other blocks, and those crossings are bandwidth like any other. Every gate of a node is placed with it, so this is
+Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
+node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
 
 What is public is the placement's `Profile`: the occupancy each certifier port must show, the committed bits each block
-exports through it, the work each block is to be credited with and the proof units it rests on, the trusted data each
-block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
+exports through it, the work each block runs, the ANDs it is credited and the proof blocks they rest on, the trusted
+data each block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
 placement itself.
 """
 from __future__ import annotations
@@ -25,12 +25,13 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
+from verity.ml.circuits.census import NoBooleanWork
 from verity.ml.circuits.program import Program
 
 from . import logical as L
 from .logical import Registration, Value
-from .memory import Store
-from .physical import Datacenter, Link, Port
+from .memory import StoreEntry
+from .physical import Datacenter, LinkEntry, Port
 from .plan import Plan
 
 #: where a node's bits come from: registration, a trusted device's fresh data (part of the verifier's coins), a device in a
@@ -57,7 +58,7 @@ def _partition(evaluate: Callable, program: Program, query: Mapping[str, Any]) -
 
 
 @dataclass
-class Placement:
+class Placed:
     """Where and when each root node runs."""
 
     program: Program
@@ -68,7 +69,7 @@ class Placement:
     #: the device the Program's outputs are delivered to (usually the outside world), or None
     deliver: str | None = None
     #: registered state, each on the device the registration says holds it
-    stores: tuple[Store, ...] = ()
+    stores: tuple[StoreEntry, ...] = ()
     #: the registration of the Program's registered inputs
     registration: Registration | None = None
     #: registered values (by census value id) kept in one copy, on this device, rather than in every reading block
@@ -116,21 +117,26 @@ class Placement:
     def _gates(self) -> dict[int, list[int]]:
         return {}
 
-    def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None,
-               record: Mapping[str, Any] | None = None, query: Mapping[str, Any] | None = None) -> Profile:
+    def public(self, plan: Plan, ticks: dict[str, float] | None = None, record: Mapping[str, Any] | None = None,
+               query: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block
         (`benchmarks/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
-        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `weights` is what an
-        audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
-        doesn't list. `record` is the sampled proofs' one-stage registration of the Program and `query` the verifier's
-        copy of its partition query: each block's proof units are the units of that partition whose gates run there, and
-        the record must name that query, its partition and its population (proofs, review 4). Without a record they are
-        the served query's (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed
-        (`Profile.partition`), and none for a Program that query doesn't apply to."""
+        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is the sampled
+        proofs' one-stage registration of the Program and `query` the verifier's copy of its partition query: each
+        block's proof blocks are the units of that partition whose gates run there, and the record must name that query,
+        its partition and its population (proofs, review 4). Without a record they are the served query's
+        (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed (`Profile.partition`), and
+        none for a Program that query doesn't apply to."""
         dc = self.datacenter
+        try:
+            doc, per_call, uncounted = L.census_of(self.program, boolean=True), L.ands(self.program), None
+        except NoBooleanWork as e:
+            doc, per_call, uncounted = L.census_of(self.program), {}, str(e)
         work: dict[str, dict[str, float]] = {b.name: {} for b in dc.blocks}
+        ands = {b.name: 0 for b in dc.blocks}
         for k, w in L.work(self.program).items():
             if (b := self.block(self.device[k])) is not None:
+                ands[b] += per_call.get(k, 0)
                 for kind, n in w.items():
                     work[b][kind] = work[b].get(kind, 0.0) + n
         units, partition = self._units(record, query)
@@ -141,17 +147,20 @@ class Placement:
                     forced[b] += v.bits
         stores = {s.name: s for s in self.stores}
         stores.update({w.store.name: w.store for w in plan.wipes})
-        salt, salt_out, pinned = self._custody(plan.registration, weights or {})
-        return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
-                       dict(ticks or {}), self.registration.root if self.registration else None, units,
-                       L.census_of(self.program)["digest"], partition, self._exported(plan))
+        salt, salt_out, pinned = self._custody(plan.registration)
+        return Profile(dc, plan, occupancy(self), work, forced, stores, ands, salt, salt_out, pinned, dict(ticks or {}),
+                       self.registration.root if self.registration else None, units, doc["digest"], partition,
+                       self._exported(plan), uncounted)
 
     def _exported(self, plan: Plan) -> dict[Port, float]:
         """The committed bits each egress port carries out of its block in the epoch: every crossing from a block, to
-        another block or outside, at the first egress port on its path, read within `plan.epoch`."""
+        another block or outside, at the first egress port on its path, read within `plan.epoch`. With the
+        datacenter's pair links sealed (`Datacenter.sealed`), a crossing to another block is ciphertext between the two
+        blocks' certifiers, which only they open, so only a crossing to a reader off every block counts: the export at
+        the facility boundary."""
         dc, out = self.datacenter, {}
         for x in crossings(self):
-            if self.block(x.src) is None or x.at not in plan.epoch:
+            if self.block(x.src) is None or x.at not in plan.epoch or (dc.sealed and self.block(x.dst) is not None):
                 continue
             port = next((q for hop in hops(x.path, x.src) if (q := dc.port(*hop)) and q.direction == "egress"), None)
             if port is not None:
@@ -159,7 +168,7 @@ class Placement:
         return out
 
     def _units(self, record: Mapping[str, Any] | None, query: Mapping[str, Any] | None) -> tuple[dict[str, int], str | None]:
-        """Each block's proof units under the registered partition, as core's one-stage verifier evaluates and checks it,
+        """Each block's proof blocks under the registered partition, as core's one-stage verifier evaluates and checks it,
         or the served query's as circuits evaluates it, assumed; and which it was."""
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
         from verity.core.protocols.sampled_proofs.one_stage.registration import query_digest
@@ -188,13 +197,13 @@ class Placement:
                 units[b] = units.get(b, 0) + n
         return units, how
 
-    def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
+    def _custody(self, registration: int) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
         could carry it out before registration (the values the salt reaches that cross out, and the block's inside inputs
-        that reach anything crossing out, both at the census's grain, which can only over-count), and the credit of the
+        that reach anything crossing out, both at the census's grain, which can only over-count), and the ANDs of the
         block's work that depends on it, gate by gate within the Calls it reaches (`logical.reach`; none past the
-        explicit limit)."""
-        dc, program = self.datacenter, self.program
+        explicit limit nor on a word gate)."""
+        dc = self.datacenter
         readers: dict[int, set[int]] = {}
         for v in self.values:
             readers.setdefault(v.node, set()).update(v.reads)
@@ -223,23 +232,23 @@ class Placement:
                     reach_k = cone({k})
                     if any(x.value.node in reach_k and self.block(x.src) == b for x in out):
                         salt_out[b] += sum(v.bits for v in self.values if v.node == k)
-            pinned[b] = sum(weights.get(kind, 1.0) * n for k, w in L.reach(self.program, frozenset(roots)).items()
-                            if self.block(self.device.get(k)) == b for kind, n in w.items())
+            pinned[b] = sum(n for k, n in L.reach(self.program, frozenset(roots)).items()
+                            if self.block(self.device.get(k)) == b)
         return salt, salt_out, pinned
 
 
 @dataclass(frozen=True)
 class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
-    each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with, by kind
-    (`work`; per-kind counts, as the census gives them), what one unit of each kind is credited (`weights`, W_ref),
+    each certifier port shows in each bucket (`occupancy`), the work each block runs, by kind (`work`, never credited),
+    its Calls' ANDs (`ands`, its credit; none, and `uncounted` says why, for a Program the census can't lower to bits),
     the trusted data each block consumes (`forced`, in bits), the registered stores and the registration's root
-    (`registered`), and the digest of the census/v1 its values and work are read from (`census`, which names the
-    Program's digest). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
-    carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
+    (`registered`), and the digest of the census/v1 it is read from (`census`, which names the Program's digest and the
+    lowering). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
+    carry it out before registration (`salt_out`, in bits), and the ANDs of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
     in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Each
-    block's proof units (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
+    block's proof blocks (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
     rests on, and whether that partition was the one-stage registration's or the served query's, assumed (`partition`:
     "registered", "assumed", or None when no partition applies). The export (`exported`): the committed bits each
     egress port carries out of its block in the epoch, to another block or outside, from the declared crossings."""
@@ -249,8 +258,8 @@ class Profile:
     occupancy: dict[Port, dict[int, int]]
     work: dict[str, dict[str, float]]
     forced: dict[str, float]
-    stores: dict[str, Store]
-    weights: dict[str, float] = field(default_factory=dict)
+    stores: dict[str, StoreEntry]
+    ands: dict[str, int] = field(default_factory=dict)
     salt: dict[str, float] = field(default_factory=dict)
     salt_out: dict[str, float] = field(default_factory=dict)
     pinned: dict[str, float] = field(default_factory=dict)
@@ -260,10 +269,7 @@ class Profile:
     census: str | None = None
     partition: str | None = None
     exported: dict[Port, float] = field(default_factory=dict)
-
-    def credit(self, block: str) -> float:
-        """The work `block` is to be credited with: each kind's units at its weight."""
-        return sum(self.weights.get(k, 1.0) * n for k, n in self.work[block].items())
+    uncounted: str | None = None
 
     @property
     def windows(self) -> range:
@@ -272,9 +278,9 @@ class Profile:
         return range(e.start // per, -(-e.end // per))
 
 
-def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None, stores: tuple[Store, ...] = (),
-          registration: Registration | None = None, start: int = 0, ticks_per_step: int = 1, transfer_steps: int = 2,
-          **where: str) -> Placement:
+def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None,
+          stores: tuple[StoreEntry, ...] = (), registration: Registration | None = None, start: int = 0,
+          ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placed:
     """Place `program` on `dc`: each keyword names a root node (a parameter or a named Call) and the device it runs or
     enters on; any other Call or run input goes where its first reader runs, if that is in a block, else on `default`.
     A registered input goes nowhere unless named: registration put a copy in every block that reads it. Named, it is
@@ -305,7 +311,7 @@ def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None
         elif L.binding(program, k) != L.REGISTRATION:
             inside = [device[r] for r in sorted(readers.get(k, ())) if dc.block_of(device[r]) is not None]
             device[k] = inside[0] if inside else default
-    p = Placement(program, dc, device, {}, {}, deliver, tuple(stores), registration)
+    p = Placed(program, dc, device, {}, {}, deliver, tuple(stores), registration)
     read: dict[int, list[Value]] = {}
     for v in vals:
         for r in v.reads:
@@ -330,17 +336,17 @@ class Crossing:
     value: Value
     src: str
     dst: str
-    path: tuple[Link, ...]
+    path: tuple[LinkEntry, ...]
     at: int = 0
 
 
-def route(dc: Datacenter, src: str, dst: str) -> tuple[Link, ...]:
+def route(dc: Datacenter, src: str, dst: str) -> tuple[LinkEntry, ...]:
     """The shortest path of links from device `src` to device `dst`."""
-    adj: dict[str, list[tuple[str, Link]]] = {}
+    adj: dict[str, list[tuple[str, LinkEntry]]] = {}
     for l in dc.links:
         adj.setdefault(l.a, []).append((l.b, l))
         adj.setdefault(l.b, []).append((l.a, l))
-    prev: dict[str, tuple[str, Link] | None] = {src: None}
+    prev: dict[str, tuple[str, LinkEntry] | None] = {src: None}
     queue = deque([src])
     while queue:
         u = queue.popleft()
@@ -359,7 +365,7 @@ def route(dc: Datacenter, src: str, dst: str) -> tuple[Link, ...]:
     return tuple(reversed(path))
 
 
-def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
+def hops(path: tuple[LinkEntry, ...], src: str) -> list[tuple[str, str]]:
     """The links of `path` as directed hops (from, to), walking from `src`."""
     out, here = [], src
     for l in path:
@@ -369,14 +375,14 @@ def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
     return out
 
 
-def crosses(p: Placement, v: Value, dst: str) -> bool:
+def crosses(p: Placed, v: Value, dst: str) -> bool:
     """Whether value `v`, read at device `dst`, comes from another block: never for a registered value with a copy in
     every block that reads it."""
     src = p.home(v)
     return src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst)
 
 
-def crossings(p: Placement) -> list[Crossing]:
+def crossings(p: Placed) -> list[Crossing]:
     """Every (value, reader device) pair where a value is read in a block other than its own, once each, at its first
     read; and each output the Program returns, at the delivery device the step after it is produced."""
     first: dict[tuple[int, str], int] = {}
@@ -395,7 +401,7 @@ def crossings(p: Placement) -> list[Crossing]:
     return out
 
 
-def traffic(p: Placement) -> dict[Port, dict[int, list[Value]]]:
+def traffic(p: Placed) -> dict[Port, dict[int, list[Value]]]:
     """The honest run's traffic at each certifier port, bucket by bucket: the crossing values it carries, each in the
     bucket of its read tick."""
     out: dict[Port, dict[int, list[Value]]] = {}
@@ -412,7 +418,7 @@ def frames(values: list[Value], frame_bits: int) -> int:
     return -(-sum(v.bits for v in values) // frame_bits)
 
 
-def occupancy(p: Placement) -> dict[Port, dict[int, int]]:
+def occupancy(p: Placed) -> dict[Port, dict[int, int]]:
     """The public occupancy profile: for each certifier port and each bucket, the frames the honest run shows there."""
     fb = p.datacenter.cadence.frame_bits
     return {port: {b: frames(vs, fb) for b, vs in row.items()} for port, row in traffic(p).items()}

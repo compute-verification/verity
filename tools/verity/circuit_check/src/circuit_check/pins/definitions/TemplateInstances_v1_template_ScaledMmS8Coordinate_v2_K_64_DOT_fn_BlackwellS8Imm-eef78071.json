@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "TemplateInstances_v1{template='ScaledMmS8Coordinate_v2{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}',N=2}": {
+   "and": 27112,
+   "type": "625bff3e921e9f9d1561042e078b728d551c7bbd167f9a70e42e7413eed4cb1b812c92d9c725e9edca082648912723c3f97a8988c4df803b43513caf99290282"
+  }
+ }
+}

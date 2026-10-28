@@ -5,8 +5,9 @@ A row unit's checks pass `--public-inputs`, a form flock-verify refuses until it
 REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and passes
 when not accepted, an honest check only with the refusal as its reason. A plain tile is refused once every check has
 passed, its output row holding two output ports, a form the proof does not cover: its honest checks pass only with a
-refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session drawn, so its
-honest checks pass only when accepted. Every other tile check passes only when a check rejects it.
+refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session drawn, but a
+tile is no Program's: the verifier holds no descriptor (`--program`), so its honest checks pass only refused for that
+alone, once every check has passed (`NO_PROGRAM`). Every other tile check passes only when a check rejects it.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""
 import json
 import os
@@ -18,6 +19,8 @@ OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
 REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 REFUSED = "refused: "
+#: flock-verify's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`)
+NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
 def load(p: Path):
@@ -89,8 +92,8 @@ def lean(d: Path, refused: bool, covered: bool) -> dict:
             expect, ok = "REFUSED", got == "REFUSED" or (got == "REJECT" and not EXPECT.get(tag, False))
         else:
             got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why.startswith(REFUSED) else "REJECT"
-            expect = ("ACCEPT" if covered else "REFUSED") if EXPECT.get(tag, False) else "REJECT"
-            ok = got == expect
+            expect = "REFUSED" if EXPECT.get(tag, False) else "REJECT"
+            ok = got == expect and (not covered or expect != "REFUSED" or why.startswith(NO_PROGRAM))
         out[tag] = {"expect": expect, "verdict": got, "pass": ok,
                     "why": why[:300] if verdict else tail(f.with_suffix(".err"), 2),
                     "exit": t.get("exit"), "wall_s": t.get("wall_s"), "maxrss_gb": gb(t) if t else None}

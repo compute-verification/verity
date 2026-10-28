@@ -1,5 +1,5 @@
 """The exact-int8 profile's calls as named torch ops, so that a capture sees each int8 linear as two nodes, its quantizer and its
-product, and each request's int8 attention as two, its KV quantization and its rows (`observe.fold.patterns.int8`):
+product, and each layer's int8 attention as two, its batch's KV quantization and its batch's rows (`observe.fold.patterns.int8`):
 
     verity_int8::row_quant(Tensor x) -> (Tensor xq, Tensor s_a)
         x bf16 [M, K]: `engine.int8_exact.quantize_rows`, xq int8 [M, K] and s_a f32 [M] (`registry.int8_exact.Int8RowQuant_v1{K}`
@@ -9,23 +9,32 @@ product, and each request's int8 attention as two, its KV quantization and its r
         (`registry.int8_exact.ScaledMmS8_v1{K,N}` per row)
     verity_int8::scaled_mm_zy(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int rows) -> (Tensor y, Tensor zy)
         scaled_mm's y, and from the same product (on CUDA the same accumulator) the call's z/y records over `rows` slots
-        (T), zy uint8 [units, `int8_exact.ZY_BYTES`]: a 32 x 32 unit's exact s32 z, then its y = dq(z) (`int8_exact.zy_records`,
-        CA's layout of 21 Oct 04:32Z), what H1 commits as one hiding leaf a unit
+        (T), zy uint8 [units, `int8_exact.ZY_BYTES`]: a 32 x 32 unit's exact s32 z, then its y = dq(z) (`int8_exact.zy_records`),
+        what H1 commits as one hiding leaf a unit
 
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
 On CUDA each of the two is one Triton kernel (`engine.int8_fused`) with int8_exact's values bit for bit; the torch bodies
 serve every other device and stay the reference.
-    verity_int8::kv_quant(Tensor key_cache, Tensor value_cache, Tensor blocks, int s, Tensor k_scales)
+    verity_int8::kv_quant_batch(Tensor key_cache, Tensor value_cache, Tensor block_table, int[] lens, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
-        one request's first s tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row `blocks`, with the
-        layer's K scales [G]: K' and V' int8 [G, s, d], s_v and f32(V'(0)) float32 [G, d] (`registry.int8_exact.Int8KvQuant_v1{s,d}`
-        per KV head)
-    verity_int8::window_rows(Tensor q, Tensor kq, Tensor vq, Tensor sv, Tensor v0, Tensor k_scales, float scale) -> Tensor out
-        that request's last n query rows q bf16 [n, H, d] over kv_quant's results (`registry.int8_exact.Int8LutAttentionRow_v1{d,
-        pos+1,scale}` per (row, head))
-    verity_int8::kv_quant_window(Tensor k, Tensor v, Tensor k_scales) -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
-        kv_quant of one request's window already read, k and v bf16 [s, G, d] (a credited read's rows, `engine.int8_window`)
+        every request r's first lens[r] tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row, with
+        the layer's K scales [G]: K' and V' int8 [B, G, s_max, d] (0 past each window), s_v and f32(V'(0)) float32 [B, G, d];
+        request r's K'[r, g, :s], V'[r, g, :s], s_v[r, g], f32(V'(0))[r, g] are `registry.int8_exact.Int8KvQuant_v1{s,d}`'s
+        per KV head g (s = lens[r]; a request that brings no rows has lens 0 and no window)
+    verity_int8::window_rows_batch(Tensor query, Tensor kq, Tensor vq, Tensor sv, Tensor v0, Tensor k_scales, int[] qsl, int[] lens,
+            float scale) -> Tensor out
+        every query row of the step, query bf16 [T, H, d], request r's rows qsl[r] .. qsl[r+1] - 1 the last of its lens[r]-token
+        window, over kv_quant_batch's results (`registry.int8_exact.Int8LutAttentionRow_v1{d,pos+1,scale}` per (row, head))
+    verity_int8::kv_quant_window_batch(Tensor keys, Tensor values, int[] starts, int[] lens, Tensor k_scales)
+            -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
+        kv_quant_batch of windows already read, request r's at rows starts[r] .. starts[r] + lens[r] - 1 of keys and values bf16
+        [rows, G, d] (a credited read's rows, `engine.int8_window`)
+
+No Python loop runs over requests or KV heads: the ops take the step's offsets and lengths as host lists (read once a step,
+`host_lists`) and compute every window at once, padded to the step's longest, each value bit for bit the per-request form's
+(`int8_attention.reference_paged`, `kv_quant` and `window_rows`, the tests' reference).  On CUDA each of the three is one
+Triton launch (`engine.int8_attention_triton`), bit for bit its torch body, which serves every other device.
     verity_int8::credited_step(Tensor seq_lens, int batch, int kv_heads, int head_dim, int read) -> (Tensor lens, Tensor wo,
             Tensor k, Tensor v)
         a credited read's step (`int8_window.CreditedRead.buffers`): request r's window at rows wo[r] .. wo[r + 1] - 1 of the
@@ -38,6 +47,8 @@ serve every other device and stay the reference.
 Importing this module defines them (once per process).
 """
 from __future__ import annotations
+
+import functools
 
 import torch
 
@@ -121,72 +132,137 @@ def linear_zy(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
     return xq, s_a, y, zy
 
 
-@torch.library.custom_op(f"{LIBRARY}::kv_quant", mutates_args=())
-def kv_quant(key_cache: torch.Tensor, value_cache: torch.Tensor, blocks: torch.Tensor, s: int,
-             k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    k, v = A.window_of(key_cache, value_cache, blocks, s)
-    return A.kv_quant(k, v, k_scales)
+def _kv_fake(like: torch.Tensor, b: int, g: int, s: int, d: int):
+    q8 = like.new_empty((b, g, s, d), dtype=torch.int8)
+    return q8, torch.empty_like(q8), like.new_empty((b, g, d), dtype=torch.float32), like.new_empty((b, g, d), dtype=torch.float32)
 
 
-@kv_quant.register_fake
-def _kv_quant_fake(key_cache, value_cache, blocks, s, k_scales):
-    g, d = key_cache.shape[2], key_cache.shape[3]
-    q8 = key_cache.new_empty((g, s, d), dtype=torch.int8)
-    return q8, torch.empty_like(q8), key_cache.new_empty((g, d), dtype=torch.float32), key_cache.new_empty((g, d), dtype=torch.float32)
+@torch.library.custom_op(f"{LIBRARY}::kv_quant_batch", mutates_args=())
+def kv_quant_batch(key_cache: torch.Tensor, value_cache: torch.Tensor, block_table: torch.Tensor, lens: list[int],
+                   k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    k, v = A.paged_windows(key_cache, value_cache, block_table, lens)
+    A.batch_check(k, k_scales, lens)
+    return A.kv_quant_batch(k, v, k_scales)
 
 
-@torch.library.custom_op(f"{LIBRARY}::window_rows", mutates_args=())
-def window_rows(q: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor, k_scales: torch.Tensor,
-                scale: float) -> torch.Tensor:
-    return A.window_rows(q, kq, vq, sv, v0, k_scales, scale)
+@kv_quant_batch.register_fake
+def _kv_quant_batch_fake(key_cache, value_cache, block_table, lens, k_scales):
+    return _kv_fake(key_cache, len(lens), key_cache.shape[2], max(lens, default=0), key_cache.shape[3])
 
 
-@window_rows.register_fake
-def _window_rows_fake(q, kq, vq, sv, v0, k_scales, scale) -> torch.Tensor:
-    return torch.empty_like(q)
+@torch.library.custom_op(f"{LIBRARY}::kv_quant_window_batch", mutates_args=())
+def kv_quant_window_batch(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int],
+                          k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    if len(starts) != len(lens) or any(o < 0 or o + s > keys.shape[0] for o, s in zip(starts, lens) if s):
+        raise ValueError(f"int8 attention: windows at rows {starts[:8]} of lengths {lens[:8]} past the {keys.shape[0]} rows read")
+    k, v = A.packed_windows(keys, values, starts, lens)
+    A.batch_check(k, k_scales, lens)
+    return A.kv_quant_batch(k, v, k_scales)
 
 
-@torch.library.custom_op(f"{LIBRARY}::kv_quant_window", mutates_args=())
-def kv_quant_window(k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    return A.kv_quant(k, v, k_scales)
+@kv_quant_window_batch.register_fake
+def _kv_quant_window_batch_fake(keys, values, starts, lens, k_scales):
+    return _kv_fake(keys, len(lens), keys.shape[1], max(lens, default=0), keys.shape[2])
 
 
-@kv_quant_window.register_fake
-def _kv_quant_window_fake(k, v, k_scales):
-    s, g, d = k.shape
-    q8 = k.new_empty((g, s, d), dtype=torch.int8)
-    return q8, torch.empty_like(q8), k.new_empty((g, d), dtype=torch.float32), k.new_empty((g, d), dtype=torch.float32)
+@kv_quant_batch.register_kernel("cuda")
+def _kv_quant_batch_cuda(key_cache: torch.Tensor, value_cache: torch.Tensor, block_table: torch.Tensor, lens: list[int],
+                         k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_attention_triton
+    return int8_attention_triton.kv_quant_paged(key_cache, value_cache, block_table, lens, k_scales)
 
 
-def _requests(query: torch.Tensor, query_start_loc: torch.Tensor, seq_lens: torch.Tensor, kv_of, k_scales: torch.Tensor,
-              scale: float, output: torch.Tensor) -> None:
-    qsl, lens = query_start_loc.tolist(), seq_lens.tolist()
-    for r, s in enumerate(lens[:len(qsl) - 1]):
-        q0, q1 = qsl[r], qsl[r + 1]
-        if q1 == q0:
-            continue
-        if q1 - q0 not in (1, s):
-            raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window (a chunked prefill)")
-        output[q0:q1] = window_rows(query[q0:q1], *kv_of(r, s), k_scales, float(scale))
+@kv_quant_window_batch.register_kernel("cuda")
+def _kv_quant_window_batch_cuda(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int],
+                                k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_attention_triton
+    if len(starts) != len(lens) or any(o < 0 or o + s > keys.shape[0] for o, s in zip(starts, lens) if s):
+        raise ValueError(f"int8 attention: windows at rows {starts[:8]} of lengths {lens[:8]} past the {keys.shape[0]} rows read")
+    return int8_attention_triton.kv_quant_packed(keys, values, starts, lens, k_scales)
+
+
+@torch.library.custom_op(f"{LIBRARY}::window_rows_batch", mutates_args=())
+def window_rows_batch(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor, k_scales: torch.Tensor,
+                      qsl: list[int], lens: list[int], scale: float) -> torch.Tensor:
+    return A.batch_rows(query, kq, vq, sv, v0, k_scales, *_rows_of_step(query, qsl, lens), scale)
+
+
+@window_rows_batch.register_fake
+def _window_rows_batch_fake(query, kq, vq, sv, v0, k_scales, qsl, lens, scale) -> torch.Tensor:
+    return torch.empty_like(query)
+
+
+@window_rows_batch.register_kernel("cuda")
+def _window_rows_batch_cuda(query: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor,
+                            k_scales: torch.Tensor, qsl: list[int], lens: list[int], scale: float) -> torch.Tensor:
+    from verity_vllm.engine import int8_attention_triton
+    return int8_attention_triton.batch_rows(query, kq, vq, sv, v0, k_scales, *_rows_of_step(query, qsl, lens), scale)
+
+
+def _rows_of_step(query: torch.Tensor, qsl: list[int], lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
+    if not qsl or qsl[0] != 0 or qsl[-1] != query.shape[0] or len(lens) != len(qsl) - 1:
+        raise ValueError(f"int8 attention: {query.shape[0]} query rows under start offsets {qsl[:8]} and {len(lens)} windows")
+    if why := A.step_refusal(qsl, lens):
+        raise ValueError(why)
+    return _token_rows(tuple(qsl), tuple(lens), query.device)
+
+
+@functools.lru_cache(maxsize=4)
+def _token_rows(qsl: tuple[int, ...], lens: tuple[int, ...], device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+    """`int8_attention.token_rows`, once a step: every layer of a step reads the same rows."""
+    return A.token_rows(list(qsl), list(lens), device)
+
+
+_HOST: list = [None, None]
+
+
+def host_lists(meta) -> tuple[list[int], list[int]]:
+    """(query_start_loc, seq_lens) of a step's attention metadata as host lists, read once a step (every layer shares ``meta``)."""
+    if _HOST[0] is not meta:
+        _HOST[:] = [meta, (meta.query_start_loc.tolist(), meta.seq_lens.tolist())]
+    return _HOST[1]
+
+
+def _step(query_start_loc: torch.Tensor, seq_lens: torch.Tensor, host) -> tuple[list[int], list[int]] | None:
+    """The step's (qsl, lens), lens 0 for a request that brings no rows (its window is read by none); None for a step of no rows."""
+    qsl, lens = host if host is not None else (query_start_loc.tolist(), seq_lens.tolist())
+    b = len(qsl) - 1
+    if why := A.step_refusal(qsl, lens):
+        raise ValueError(why)
+    if b <= 0 or qsl[-1] == qsl[0]:
+        return None
+    return list(qsl), [s if qsl[r + 1] > qsl[r] else 0 for r, s in enumerate(lens[:b])]
 
 
 def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
-                    seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
+                    seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor,
+                    host: tuple[list[int], list[int]] | None = None) -> None:
     """Every request of a batch, one window each, into output [T, H, d]: request r's query rows query[qsl[r]:qsl[r+1]] are its
-    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
-    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  A request whose rows are neither its whole window nor one row (a chunked prefill's later chunk) is refused."""
-    _requests(query, query_start_loc, seq_lens, lambda r, s: kv_quant(key_cache, value_cache, block_table[r], s, k_scales), k_scales,
-              scale, output)
+    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), in ONE
+    ``verity_int8::kv_quant_batch`` and ONE ``verity_int8::window_rows_batch`` call for the whole batch, every request and KV
+    head at once (`int8_attention.reference_paged` is the same values request by request).  Its m rows are positions
+    s - m .. s - 1: one for a decode step, s for a whole prompt, and a chunked prefill's chunk in between; a request with more
+    rows than keys is refused.  ``host`` is (query_start_loc, seq_lens) as host lists when the caller has them (`host_lists`)."""
+    step = _step(query_start_loc, seq_lens, host)
+    if step is None:
+        return
+    qsl, lens = step
+    kv = kv_quant_batch(key_cache, value_cache, block_table[:len(lens)], lens, k_scales)
+    output[:qsl[-1]] = window_rows_batch(query[:qsl[-1]], *kv, k_scales, qsl, lens, float(scale))
 
 
 def window_attention(query: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, offsets: list[int], query_start_loc: torch.Tensor,
-                     seq_lens: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
+                     seq_lens: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor,
+                     host: tuple[list[int], list[int]] | None = None) -> None:
     """`paged_attention` over a step's windows already read (`engine.int8_window`): request r's window is rows
-    offsets[r] .. offsets[r] + seq_lens[r] - 1 of keys and values [rows, G, d] bf16, one ``verity_int8::kv_quant_window`` and one
-    ``verity_int8::window_rows`` call each."""
-    _requests(query, query_start_loc, seq_lens,
-              lambda r, s: kv_quant_window(keys[offsets[r]:offsets[r] + s], values[offsets[r]:offsets[r] + s], k_scales), k_scales,
-              scale, output)
+    offsets[r] .. offsets[r] + seq_lens[r] - 1 of keys and values [rows, G, d] bf16, in ONE ``verity_int8::kv_quant_window_batch``
+    and ONE ``verity_int8::window_rows_batch`` call."""
+    step = _step(query_start_loc, seq_lens, host)
+    if step is None:
+        return
+    qsl, lens = step
+    kv = kv_quant_window_batch(keys, values, [int(o) for o in offsets[:len(lens)]], lens, k_scales)
+    output[:qsl[-1]] = window_rows_batch(query[:qsl[-1]], *kv, k_scales, qsl, lens, float(scale))
 
 
 @torch.library.custom_op(f"{LIBRARY}::credited_step", mutates_args=())
@@ -222,4 +298,4 @@ def credited_attention(read: W.CreditedRead, query: torch.Tensor, kv_cache: torc
             host.append(host[-1] + max(int(n), 0))
         read.current = st = W.Step(meta, batch, lens, wo, host, k, v)
     credited_window(kv_cache, meta.block_table, meta.slot_mapping, st.lens, st.wo, st.k, st.v, layer, read.handle)
-    window_attention(query, st.k, st.v, st.offsets, meta.query_start_loc, meta.seq_lens, k_scales, scale, output)
+    window_attention(query, st.k, st.v, st.offsets, meta.query_start_loc, meta.seq_lens, k_scales, scale, output, host=host_lists(meta))

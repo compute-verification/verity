@@ -84,10 +84,14 @@ def colOf (T : Tile) (l t : Nat) : Nat := 2 * (l % T.q) + 2 * T.q * (t / 2) + t 
 
 private def pow2 (n : Nat) : Bool := n != 0 && n &&& (n - 1) == 0
 
-/-- `h1zy`'s refusal of a leaf's tile (`_refuse_lane`), and its s8 accumulator's of a `K` past whole 32-wide steps:
-`R / 4` and `C / 8` powers of two, at least 2 lanes and at most `2^16`. -/
+/-- `h1zy`'s refusal of a leaf's tile (`_refuse_lane`), and its s8 accumulator's (`gemm._refuse_k`) of a `K` past whole
+32-wide steps or at or past `S8_K_LIMIT = 2^17`, from which a step can clamp and `z` is not the exact dot: `K` at least
+64 (`KS ≥ 2`, a digit word, as `h1tile`'s scheme asks), `R / 4` and `C / 8` powers of two, at least 2 lanes and at most
+`2^16`. -/
 def check (T : Tile) : Except String Unit := do
   if T.k % 32 != 0 then throw s!"K = {T.k} is not a multiple of the 32-wide step"
+  if T.k < 64 then throw s!"K = {T.k} is under 64: H1's lanes need KS = K / 32 >= 2 (a digit word)"
+  if 2 ^ 17 ≤ T.k then throw s!"K = {T.k} is at or past 2^17, from which the s8 accumulator can clamp"
   if T.r % 4 != 0 || T.c % 8 != 0 || T.lanes < 2 || !pow2 T.g || !pow2 T.q || T.lanes > 2 ^ 16 then
     throw s!"a leaf's lanes are a public index of whole bits: R / 4 and C / 8 powers of two, at least two lanes and at \
       most 2^16, not {T.r} × {T.c}"
@@ -178,6 +182,78 @@ def lane? (T : Tile) (l : Nat) : Except String (List Port) := do
 def combine? (T : Tile) : Except String (List Port) := do
   T.check
   pure (combinePorts T)
+
+/-! ## A J10-R leaf
+
+A drawn unit over J10-R's `PouwH1Tile_v5` is proved as `h1zy`'s v2 statements: each lane in `n` chunks along K
+(`PouwH1LaneZyChunk_v2`, `n = weights.chunks K`, `PouwCheck.Chunks.chunks`, which the caller passes; at `n = 1` the whole
+lane, `PouwH1LaneZy_v2`), then `PouwH1Combine_v2`, which folds the other statements' oks into its own. Statement `i < lanes n`
+is lane `i / n`'s chunk `i % n`; `leaf_lanes`' J10-R leaf reads them so:
+
+* chunk `c` of lane `l` reads its A and B rows' chunk `c` (`h1zy.ROW` at `K / n`), row `n i + c` of a table that commits
+  row `i` as `n` chunk rows (`h1zy.chunk_leaves`); `carry_in` (`c > 0`) row `l` of `carry<c - 1>` and `carry_out`
+  (`c < n - 1`) row `l` of `carry<c>` (`h1zy.CARRY`); its last chunk `admit`, `zy` and `partials` (row `l`) as v1's lane;
+  `pub` (`h1zy.PUBLIC_J10R`: the unit's `call` and `blocks` after its roots); and its output `o0` is row `n l + c` of
+  `oks`, a committed value (`okRead`), never a known row;
+* the combine reads v1's `p<x>` and `receipt`, then `ok<i>` row `i` of `oks` (`h1zy.OK_WORD`, 16 bits) for each
+  statement `i < lanes n`, and its `o0` is the known row 1 of `ok<lanes n>`, the leaf's one known ok. -/
+
+/-- A J10-R lane's `call` and each of its two `blocks` (`seeds.POS_BITS`): a u64's 2 u32 halves. -/
+def callBits : Nat := 64
+
+/-- A J10-R lane's public row (`h1zy.PUBLIC_J10R`): salt, position, roots, call, blocks, index. -/
+def pubJ10r (l : Nat) : Port := ⟨"pub", .known s!"pub{l}", fieldsFrom 0 [("salt", digestBits), ("position", positionBits),
+  ("roots", 2 * digestBits), ("call", callBits), ("blocks", 2 * callBits), ("lane", laneBits)], false⟩
+
+/-- Statement `i`'s output port under J10-R: row `i` of the committed `oks`. -/
+def okRead (i : Nat) : Port := ⟨"o0", .read "oks" i, fieldsFrom 0 [("ok", 1)], true⟩
+
+/-- What chunk `c` of a lane in `n` hands chunk `c + 1` (`h1zy.CARRY`): its fx1 state (16 u32), each entry's prefix sum
+(32 u32), each row slot's residue sums (4 × 32 u32), each cell's z (32 s32), the chain's words so far (`2 (c + 1) KS_c`
+u32, `KS_c = K / 32 n`) and its rows' scales (4 and 8 f32). -/
+def carryFields (path : String) (T : Tile) (n c : Nat) : List Field :=
+  fieldsFrom 0 [(path ++ ".state", 512), (path ++ ".t", 1024), (path ++ ".res", 4096), (path ++ ".z", 1024),
+    (path ++ ".words", 64 * (c + 1) * (T.k / (32 * n))), (path ++ ".sa", 128), (path ++ ".sw", 256)]
+
+/-- **Chunk `c` of J10-R lane `l` in `n`'s ports**, in order (`h1zy.statement_rows`): `a0 .. a3`, `b0 .. b7` at the chunk's
+`K / n` entries, `carry_in` past the first chunk, then the last chunk's `admit`, `zy` and `partials` or any other's
+`carry_out`, `pub`, then `o0`. At `n = 1` the whole lane's. -/
+def chunkPorts (T : Tile) (n l c : Nat) : List Port :=
+  (List.range 4).map (fun s => ⟨s!"a{s}", .read "a" (n * T.rowOf l s + c), rowFields s!"a[{s}]" (T.k / n), false⟩) ++
+  (List.range 8).map (fun t => ⟨s!"b{t}", .read "b" (n * T.colOf l t + c), rowFields s!"b[{t}]" (T.k / n), false⟩) ++
+  (if c = 0 then [] else [⟨"carry_in", .read s!"carry{c - 1}" l, carryFields "carry_in" T n (c - 1), false⟩]) ++
+  (if c + 1 = n then
+    [⟨"admit", .known "admit", fieldsFrom 0 [("admit", T.r)], false⟩,
+     ⟨"zy", .read "zy" 0, fieldsFrom 0 [("zy.z", 32 * T.r * T.c), ("zy.y", 16 * T.r * T.c)], false⟩,
+     ⟨"partials", .read "partials" l, fieldsFrom 0 [("partials", 32 * T.nw)], false⟩]
+   else [⟨"carry_out", .read s!"carry{c}" l, carryFields "carry_out" T n c, false⟩]) ++
+  [pubJ10r l, okRead (n * l + c)]
+
+/-- **The J10-R combine's ports**, in order: v1's `p<x>` and `receipt`, then `ok<i>` row `i` of `oks` for each of the
+`lanes n` lane and chunk statements, then `o0` (statement `lanes n`'s). -/
+def combine2Ports (T : Tile) (n : Nat) : List Port :=
+  (combinePorts T).dropLast ++
+  (List.range (T.lanes * n)).map (fun i => ⟨s!"ok{i}", .read "oks" i, fieldsFrom 0 [(s!"oks[{i}]", 16)], false⟩) ++
+  [okPort (T.lanes * n)]
+
+/-- `h1zy`'s refusal of a J10-R lane in `n` chunks (`_refuse_chunk`): the tile's (`Tile.check`), and `K` whole 32-entry
+segments in each of `n ≥ 1` chunks. -/
+def checkChunks (T : Tile) (n : Nat) : Except String Unit := do
+  T.check
+  if n = 0 then throw "a lane is at least one chunk"
+  if T.k % (32 * n) != 0 then throw s!"K = {T.k} is {n} chunks of whole 32-entry segments only where 32 {n} divides it"
+
+/-- Chunk `c` of J10-R lane `l` in `n`'s ports, where the tile is a leaf's, `l` one of its lanes and `c` one of `n`. -/
+def chunk? (T : Tile) (n l c : Nat) : Except String (List Port) := do
+  checkChunks T n
+  if T.lanes ≤ l then throw s!"an {T.r} × {T.c} leaf has {T.lanes} lanes, not lane {l}"
+  if n ≤ c then throw s!"a lane in {n} chunks has chunks 0 .. {n - 1}, not chunk {c}"
+  pure (chunkPorts T n l c)
+
+/-- The J10-R combine's ports over lanes in `n` chunks, where the tile is a leaf's. -/
+def combine2? (T : Tile) (n : Nat) : Except String (List Port) := do
+  checkChunks T n
+  pure (combine2Ports T n)
 
 /-- The port holding the input or output at `path`, and its field there. -/
 def fieldOf? (ps : List Port) (path : String) : Option (Port × Field) :=

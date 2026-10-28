@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# served_zk's window through the proof service on a node's CPUs: SZ_CALLS served calls of a retained request committed as
+# served_zk's window through the proof system on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
 # drawn subset:K' once, every drawn tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
 # serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
@@ -43,22 +43,24 @@
 #        select-again          a second select of the same registration: no retry redraws                     REFUSED
 #        receive-after-draw    the request's registration on a stream of its own, after the epoch's draw coin  REFUSED
 #        open-u<t>             each drawn unit's proof opens that unit's rows under the window root            ACCEPT
-#        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
+#        lean-u<t>             the Lean verifier on each drawn unit's --zk session, every check passed and
+#                              refused for the tile's want of a Program (no --program: NO_PROGRAM)             REFUSED
 #        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
-#        lean-filler           the Lean verifier on the filler unit's --zk session                             ACCEPT
+#        lean-filler           the Lean verifier on the filler unit's --zk session, as lean-u<t>               REFUSED
 #        shape-filler          the filler's proof and a real tile's: circuit, class, proof files' sizes and
 #                              the session record's skeleton (its integers, string lengths)                      SAME
 #        open-foreign-proof    the other request's proof, against the request's registration                   REJECT
 #        open-foreign-commit   the request's proof, against the other request's registration                   REJECT
 #        lean-foreign-pub      the first unit's session against the other request's public file               REJECT
-#        lean-st-<case>        the selftest build's records on the first unit: honest ACCEPT; the tampered REJECT
+#        lean-st-<case>        the selftest build's records on the first unit: honest REFUSED; the tampered REJECT
 #        deliver-honest        the drawn units' session records, once                                           DELIVERED
-#        outcome-honest        every drawn unit's verdicts, one audit record; public = PoUW's items            ACCEPT
+#        outcome-honest        every drawn unit's verdicts, one audit record; public = PoUW's items: the Lean
+#                              verifier accepts no unit without its Program                                    REJECT
 #        outcome-again         a second outcome of the same registration: final                                 REFUSED
 #        deliver-again         a second delivery of the same draw                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
 #        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
-#        outcome-st-<case>     the first unit's Lean verdict a selftest case's: honest ACCEPT; the tampered    REJECT
+#        outcome-st-<case>     the first unit's Lean verdict a selftest case's: every case                     REJECT
 #        replay                the challenger's requests again from its recorded coins, Lean drawing          SAME
 #        replay-twin           the same, stream_subset (Lean's draw's Python twin) drawing                    SAME
 set -uo pipefail
@@ -70,7 +72,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
+export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -238,21 +240,23 @@ prove_unit() {   # prove_unit TAG: the --zk session, then its Lean checks in the
   ( lean_jobs "$W/$1" "$OUT/$1" hidden ) &
   BG+=($!)
 }
+# REFUSED: rejected for the want of the verifier's program alone, once every check has passed (ProvedScope.NO_PROGRAM)
 lean_verdict() { "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
-print(('ACCEPT' if v[0]['accepted'] else 'REJECT') if v else 'NONE')" "$1" 2>/dev/null || echo NONE; }
+print(('ACCEPT' if v[0]['accepted'] else 'REFUSED' if v[0]['why'].startswith(sys.argv[2]) else 'REJECT') if v else 'NONE')" \
+  "$1" "refused: a session without the verifier's program (--program)" 2>/dev/null || echo NONE; }
 
 unit_work() {    # unit_work TAG SIDE UNIT: one unit's stage -> open -> (controls on FIRST) -> --zk session -> Lean, its
   local tag=$1 p=$2 t=$3 v vf                             # open-TAG and lean-TAG verdicts to its own file for the reduce below
   vf=$OUT/$tag/verdicts.tsv                               # a separate assignment: set -u expands a single local's words before any take effect
   mkdir -p "$OUT/$tag"; : > "$vf"
-  stage_unit "$tag" "$p" "$t" || { printf 'open-%s\tACCEPT\tERROR\nlean-%s\tACCEPT\tNONE\n' "$tag" "$tag" > "$vf"; return 0; }
+  stage_unit "$tag" "$p" "$t" || { printf 'open-%s\tACCEPT\tERROR\nlean-%s\tREFUSED\tNONE\n' "$tag" "$tag" > "$vf"; return 0; }
   v=$("$PY" "$SC" check "$OUT/$p/params.json" "$OUT/$p/registration.json" "$OUT/draw.json" "$t" "$OUT/$tag/pub.bin" "$OUT/$tag/opening.json" \
     --out "$OUT/open-$tag.json" | tee "$OUT/open-$tag.out" | first)
   printf 'open-%s\tACCEPT\t%s\n' "$tag" "${v:-ERROR}" > "$vf"
   [ "$t" = "$FIRST" ] && controls "$W/$tag" "$OUT/$tag" hidden
   session "$W/$tag" "$OUT/$tag" || log "$tag: --zk session FAILED: $(tail -2 "$OUT/$tag/prove.err")"
   lean_jobs "$W/$tag" "$OUT/$tag" hidden
-  printf 'lean-%s\tACCEPT\t%s\n' "$tag" "$(lean_verdict "$OUT/$tag/lean-honest-own.out")" >> "$vf"
+  printf 'lean-%s\tREFUSED\t%s\n' "$tag" "$(lean_verdict "$OUT/$tag/lean-honest-own.out")" >> "$vf"
   rm -f "$W/$tag/inst.bin"; [ "$t" = "$FIRST" ] || rm -f "$W/$tag/circuit.txt"   # free the ~486 MB circuit; FIRST's stays for lean-foreign-pub
 }
 
@@ -277,7 +281,7 @@ log "units: fan-out done, reducing per-unit verdicts"
 for t in $UNITS; do
   vf=$OUT/u$t/verdicts.tsv
   if [ -f "$vf" ]; then while IFS=$'\t' read -r k e g; do [ -n "$k" ] && expect "$k" "$e" "$g"; done < "$vf"
-  else expect "open-u$t" ACCEPT ERROR; expect "lean-u$t" ACCEPT NONE; fi
+  else expect "open-u$t" ACCEPT ERROR; expect "lean-u$t" REFUSED NONE; fi
 done
 U0=; for t in $UNITS; do [ -f "$OUT/u$t/stage.json" ] && { U0=$t; break; }; done
 [ -n "$U0" ] || { log "no drawn unit staged: $(tail -1 "$OUT/u$FIRST/stage.out" 2>/dev/null)"; finish; summary; exit 3; }
@@ -310,11 +314,11 @@ if [ -n "$s" ]; then
 fi
 log "waiting for the post-loop Lean checks"
 [ "${#BG[@]}" -gt 0 ] && wait "${BG[@]}"   # not the challenger: the filler, u0-real and foreign-pub Lean (the drawn units' ran in the fan-out)
-expect lean-filler ACCEPT "$(lean_verdict "$OUT/$FT/lean-honest-own.out")"
+expect lean-filler REFUSED "$(lean_verdict "$OUT/$FT/lean-honest-own.out")"
 expect lean-foreign-pub REJECT "$(lean_verdict "$OUT/u$U0/lean-foreign-pub.out")"
 for c in $HZ_CASES; do
   [ -f "$OUT/u$U0/lean-st-$c.out" ] || continue
-  expect "lean-st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$(lean_verdict "$OUT/u$U0/lean-st-$c.out")"
+  expect "lean-st-$c" "$([ "$c" = honest ] && echo REFUSED || echo REJECT)" "$(lean_verdict "$OUT/u$U0/lean-st-$c.out")"
 done
 for d in "$FT" "u$REAL_UNIT"; do
   s=$(ls -d "$W/$d"/sessions/*/ 2>/dev/null | tail -1); [ -n "$s" ] && cp "$s/session.json" "$OUT/$d/session.json"
@@ -356,7 +360,7 @@ units_json "$OUT/units-honest.json"
 ask deliver-honest "$(req op deliver name honest units "$OUT/units-honest.json")"
 expect deliver-honest DELIVERED "$REPLY"
 ask outcome-honest "$(req op outcome name honest units "$OUT/units-honest.json" out "$OUT/outcome-honest")"
-expect outcome-honest ACCEPT "$REPLY"
+expect outcome-honest REJECT "$REPLY"
 ask outcome-again "$(req op outcome name honest units "$OUT/units-honest.json" out "$W/outcome-again")"
 expect outcome-again REFUSED "$REPLY"
 ask deliver-again "$(req op deliver name honest units "$OUT/units-honest.json")"
@@ -369,7 +373,7 @@ expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
   units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out" "" "$W/u$U0/st/$c/session.json"
-  control "st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$OUT/units-st-$c.json"
+  control "st-$c" REJECT "$OUT/units-st-$c.json"
 done
 finish
 summary

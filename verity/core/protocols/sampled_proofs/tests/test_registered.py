@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tracemalloc
 
 import pytest
 
@@ -14,7 +15,7 @@ from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
+from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.ml.circuits.types import Array, Value
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
@@ -22,7 +23,7 @@ XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Valu
                            register=False)
 MIX = bind(CompositeDefinition("RegisteredTestMix", 0, (), lambda S: ((("x", Array(2, Value(8))), ("w", Array(2, Value(8)))), Value(8)),
                                lambda B, S, x, w: B.call(XOR8, B.call(XOR8, x[0], w[0]), B.call(XOR8, x[1], w[1])), register=False))
-#: the row of the table W each unit reads, fixed by the program
+#: the row of the table W each proof block reads, fixed by the program
 POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -36,7 +37,7 @@ ROOT_32 = ("111850c621f50137b50e36ee9e22fe8cefd28761e8b7ad98b175eaf0e8c7413d"
            "27364f184783f7680bf638c9b039154a53ef8908faba261a4eb208c22552c40f")
 
 
-#: each unit's seed group: the row of `pouw.roots` it reads
+#: each proof block's seed group: the row of `pouw.roots` it reads
 GROUPS = (0, 0, 1, 1, 1, 0)
 SEEDED = bind(CompositeDefinition(
     "RegisteredTestSeeded", 0, ("BITS",),
@@ -73,7 +74,7 @@ def _registered(prog: Program) -> G.Registered:
 def _record(prog: Program, reg: G.Registered, **kw):
     part = P.partition(prog, Q)
     n = P.units(prog, Q)
-    ports = {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
+    ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
              for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", n))}
     roots = [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
     return R.record(prog, Q, LAW, SCHEME, roots, SERVED, registered=[reg.entry()], **kw), ports
@@ -199,7 +200,7 @@ def test_reads_come_from_the_verifiers_own_program():
 
 
 def test_a_read_that_is_not_one_whole_row_is_refused():
-    """A unit reading across two rows, or a parameter that reads the table in one unit and not in another, has no public
+    """A proof block reading across two rows, or a parameter that reads the table in one proof block and not in another, has no public
     position."""
     def straddle(B, S, x, W):
         flat = [W[r][j] for r in range(len(TABLE)) for j in range(2)]
@@ -250,6 +251,23 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
         G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
 
 
+def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
+    """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
+    ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
+    registration's root and domain id, and at no other token's."""
+    from verity.ml.commitments.gates import embedding as E
+
+    V, H = 5, 3
+    rows = [[(7919 * t + 31 * j) & 0xFFFF for j in range(H)] for t in range(V)]
+    salts = [bytes([t + 1]) * 192 for t in range(V)]
+    reg = G.Registered.commit(P.program_digest(_program()), "W", rows, salts, schema=G.SCHEMA_SEG)
+    dom, D = reg.domain.domain_id, merkle_depth(V)
+    for t in range(V):
+        path = [reg.path(t)[64 * k:64 * (k + 1)] for k in range(D)]
+        assert E.reference(V, t, reg.root, dom, rows[t], salts[t], path) == (rows[t], 1)
+        assert E.reference(V, (t + 1) % V, reg.root, dom, rows[t], salts[t], path)[1] == 0
+
+
 def test_the_verifiers_reads_file_names_a_bit_row_values_format():
     """`row_schema` is the reads file's key for a value read by a bit-row port (`schemas`), absent for `row/v1`, so a v1
     file is the bytes it was. A bit row is its leaves' bits: W's two 8-bit leaves are one u16 word of a `row/v2` row, where
@@ -274,14 +292,14 @@ XOR1 = PrimitiveDefinition("RegisteredTestXor1", 1, (("a", Value(1)), ("b", Valu
 #: an A row of K = 64 int8 codes, its bits one-bit leaves: a `row/v2` row of K/2 = 32 u16 words
 K = 64
 A_ROW = Array(8 * K, Value(1))
-#: a tile reading R = 2 rows of A (H1's tile unit: its parameter `a`, the circuit's ports `a0` and `a1`)
+#: a tile reading R = 2 rows of A (H1's tile proof block: its parameter `a`, the circuit's ports `a0` and `a1`)
 TILE = bind(CompositeDefinition("RegisteredTestTile", 0, (), lambda S: ((("a", Array(2, A_ROW)),), Value(1)),
                                 lambda B, S, a: B.call(XOR1, a[0][0], a[1][0]), register=False))
 QT = P.template_instance_query(TILE.id)
 
 
 def _tiles(rows=lambda A, B, u: A[2 * u:2 * u + 2]) -> Program:
-    """Two tiles over A's four rows, unit u reading `rows(A, B, u)` (default rows 2u and 2u + 1); B is another value of A's
+    """Two tiles over A's four rows, proof block u reading `rows(A, B, u)` (default rows 2u and 2u + 1); B is another value of A's
     shape."""
     def sig(S):
         return (("A", Array(4, A_ROW)), ("B", Array(4, A_ROW))), Array(2, Value(1))
@@ -308,7 +326,7 @@ def test_a_bit_row_value_counts_its_parameters_leaves_in_its_bits():
 
 
 def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
-    """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): unit u's rows 2u
+    """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): proof block u's rows 2u
     and 2u + 1. The reads file names each as a port of A, in A's row format, with its own positions; a parameter that is
     exactly one row keeps its name."""
     prog = _tiles()
@@ -321,7 +339,8 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
                        schemas={"A": G.SCHEMA_V2})
     port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
             "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
-    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2]}, "a1": {**port, "reads": [1, 3]}}}
+    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2], "param": "a[0]"},
+                                                "a1": {**port, "reads": [1, 3], "param": "a[1]"}}}
     for p, reads in (("a0", [0, 2]), ("a1", [1, 3])):
         for u, r in enumerate(reads):
             assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), G.SCHEMA_V2)
@@ -501,7 +520,7 @@ def _windows(prog: Program, xs, w: G.Registered):
 
 
 def test_two_honest_windows_register_the_same_names_under_their_own_roots():
-    """PRF-127 (a), (c): a window-independent program registers x afresh every window under the same name. Without the
+    """A window-independent program registers x afresh every window under the same name. Without the
     window's open root R, x's domain is the same in both windows, so R7 would hold the second window's x to the first's
     root (`R7-held`, and a replay of the first window's root would pass): the verifier refuses its own inputs instead,
     naming `window_root`, whether or not it holds W. With R (`window_root`, from the challenger's signed open), x's domain
@@ -542,7 +561,7 @@ def test_two_honest_windows_register_the_same_names_under_their_own_roots():
 
 
 def test_a_window_replaying_an_earlier_windows_root_is_refused():
-    """PRF-127 (b): a second window that names the first window's x root opens it under no domain R7 takes. Under the
+    """A second window that names the first window's x root opens it under no domain R7 takes. Under the
     first window's domain R7 refuses the entry (`R7-domain`); under its own window's domain the entry passes R7, which
     holds a per-window value to nothing, but no row of the first window's tree opens that root under the second
     window's domain, so every registered read of the replayed root is refused (`verify_read`, the Lean verifier's
@@ -567,7 +586,7 @@ def test_a_window_replaying_an_earlier_windows_root_is_refused():
 
 
 def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
-    """PRF-127: R7 reads the window's open root and the values held across windows from the verifier alone (the challenger's
+    """R7 reads the window's open root and the values held across windows from the verifier alone (the challenger's
     signed open, and the window Program the period commits), never from the record. A record whose window names another
     root or holds x gets the verdict it gets without them; a record or entry carrying them as keys of its own is refused
     by its form."""
@@ -592,6 +611,20 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
         assert R.check({**recs[1], "registered": entries}, prog, Q, **kw, **win).codes == ("R7-registered",)
 
 
+def test_a_session_bound_domain_binds_the_session_alone():
+    """A value whose root the window's open root contains (PoUW's round-0 input-ids table) binds the window's session in
+    the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
+    domain binds at most one of a window, a registration and a session."""
+    prog = P.program_digest(_program())
+    rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
+    doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
+            ({}, {"window": WINDOWS[0]}, {"session": "s-1"}, {"session": "s-2"})}
+    assert len(doms) == 4 and rec.domain.domain_id == G.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
+    for kw in ({"window": WINDOWS[0], "session": "s-1"}, {"produced": "0" * 128, "session": "s-1"}, {"session": ""}):
+        with pytest.raises(ValueError):
+            G.domain(prog, "x", 2, len(X_ROWS), **kw)
+
+
 def _prefixed(prefix: str) -> Program:
     """The program as a window-dependent path wrote it before the window's root was in the domain: every parameter's name
     carries its window's prefix."""
@@ -606,7 +639,7 @@ def _prefixed(prefix: str) -> Program:
 
 
 def test_the_window_prefixed_form_still_verifies():
-    """PRF-127 (d): a registration whose names carry their window's prefix is still accepted, with or without the window's
+    """A registration whose names carry their window's prefix is still accepted, with or without the window's
     root: each window's values are other names, so nothing in the log holds them. (It holds nothing across windows
     either, the weights included, which is what the window's root in the domain gives back.)"""
     for windowed in (False, True):
@@ -665,7 +698,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier of record opened, and fails closed on anything else."""
+    passes on what the verifier opened, and fails closed on anything else."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
@@ -693,7 +726,7 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
 
 def _seeded(bits: int = 32) -> Program:
     """Units that read a row of x, a row of the registered table W and their seed group's row of `pouw.roots`, a pair of
-    digests, as PoUW's compiled units read theirs."""
+    digests, as PoUW's compiled proof blocks read theirs."""
     unit = bind(SEEDED, BITS=bits)
 
     def sig(S):
@@ -712,7 +745,7 @@ def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
     prog = _seeded(bits)
     q = P.template_instance_query(bind(SEEDED, BITS=bits).id)
     part, n = P.partition(prog, q), P.units(prog, q)
-    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
+    ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
@@ -751,13 +784,13 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
                                G.registered_entries(check["program"], check["registered"])["pouw.roots"],
                                ["pouw.roots"]) == roots.root.hex()
         assert R.check(rec, **check).ok, bits
-        # its reads are a registered value's: each unit's row is its seed group's
+        # its reads are a registered value's: each proof block's row is its seed group's
         assert G.reads(check["program"], check["query"], check["registered"])["roots"] == {"value": "pouw.roots",
                                                                                          "rows": list(GROUPS)}
 
 
 def test_r7_refuses_a_supplied_value_the_prover_chose():
-    """CMP-38: a record whose `pouw.roots` is any other root than the one the verifier fills from the record is refused,
+    """A record whose `pouw.roots` is any other root than the one the verifier fills from the record is refused,
     whether its rows are other roots (all zero, as the witness fixes them), the right rows under fresh salts, or the right
     commitment of a record whose x root moved since."""
     rec, check, w, roots = _seeded_case()
@@ -845,10 +878,10 @@ def _mixed_case(base, sup=MIXED, log=(), window=BOUND, binding=BINDING):
 
 
 def test_a_position_follows_the_logs_units():
-    """W-a: a position source is K after every unit of the log's earlier records, as a u64 big-endian, so a unit served
+    """W-a: a position source is K after every proof block of the log's earlier records, as a u64 big-endian, so a proof block served
     again in a later record takes another position and so another seed (the red team's replay, two calls of one A and B
     at one position under one salt, gets no second receipt); a record that names the positions it would have had first,
-    or a source past its own units, is `R7-supplied`."""
+    or a source past its own proof blocks, is `R7-supplied`."""
     assert G.log_base([]) == 0 and G.log_base([{"population": 6}, {"population": 3}]) == 9
     for bad in ([{"population": -1}], [{"population": True}], [{}], [{"population": 1.0}], ["r"]):
         with pytest.raises(ValueError):
@@ -959,7 +992,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     reg = _registered(prog)
     first, ports = _record(prog, reg)
     part = P.partition(prog, Q)
-    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
     earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom},
                                               {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
@@ -988,7 +1021,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
 
 
 def test_r7_reuses_an_earlier_records_registered_value():
-    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<c>` as
+    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
     same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
     doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is
@@ -1028,7 +1061,7 @@ def test_r7_reuses_an_earlier_records_registered_value():
             R.check(rec, prog, Q, **kw, outputs=bad)
 
 
-#: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+#: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 
@@ -1039,7 +1072,7 @@ def test_pouw_roots_reads_an_arow_row_table_root():
     _, check, w, _ = _seeded_case()
     prog, q = check["program"], check["query"]
     part = P.partition(prog, q)
-    dom = R.served_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
+    dom = R.window_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
     ports = {**check["ports"], ROW_TABLE: {"leaves": 5, "domain": dom}}
     sup = {"pouw.roots": [[{"port": ROW_TABLE}, {"value": "W"}]] * 2}
     check = {**check, "ports": ports, "supplied": sup}
@@ -1054,3 +1087,76 @@ def test_pouw_roots_reads_an_arow_row_table_root():
     assert [list(r) for r in roots.rows] == [G.bytes_leaves(bytes.fromhex("5e" * 64) + w.root, 32)] * 2
     assert R.check(rec, **check).ok
     assert R.check(record("5f" * 64, roots)[0], **check).codes == ("R7-supplied",)
+
+
+class _Program:
+    """A stand-in with what `parameter_gates` and `shape` read: a parameter `W` of `n` 16-bit leaves over `refs`."""
+
+    def __init__(self, refs, n: int | None = None) -> None:
+        params = [("x", Value(8)), ("W", Array(len(refs) if n is None else n, Value(16)))]
+        self.fn = type("Fn", (), {"signature": staticmethod(lambda: (params, Value(8)))})()
+        self._refs = refs
+
+    def input_coll(self, i: int):
+        return type("Coll", (), {"refs": self._refs})() if i == 1 else None
+
+
+def _gates_by_list(program, value: str) -> range:
+    """`parameter_gates` as it was, one Python int per leaf: the oracle the run scan must equal."""
+    names = [name for name, _ in program.fn.signature()[0]]
+    if value not in names:
+        raise ValueError(f"{value!r} is not a parameter of the program ({names})")
+    gates = [ref[2] for ref in program.input_coll(names.index(value)).refs]
+    if not gates or gates != list(range(gates[0], gates[0] + len(gates))):
+        raise ValueError(f"parameter {value!r}: its gates are not one interval")
+    return range(gates[0], gates[0] + len(gates))
+
+
+def _outcome(f, program, value):
+    try:
+        return f(program, value)
+    except ValueError as e:
+        return str(e)
+
+
+@pytest.mark.parametrize("refs", [
+    Affine("g", 0, 7, 12),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 0, 7, 5)]),
+    Concat([Affine("g", 0, 3, 4), Explicit((("g", 0, 7), ("g", 0, 8))), Strided("g", 0, 9, 2, 2, 1, 6)]),
+    Strided("g", 0, 9, 3, 3, 1, 9),
+    Explicit((("g", 0, 4), ("g", 0, 5), ("g", 0, 6))),
+    Concat([Affine("g", 0, 3, 4), Affine("h", 0, 7, 2)]),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 1, 7, 2)]),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 0, 8, 2)]),
+    Concat([Affine("g", 0, 7, 2), Affine("g", 0, 3, 4)]),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 0, 6, 2)]),
+    Explicit((("g", 0, 4), ("g", 0, 6), ("g", 0, 5))),
+    Explicit((("g", 0, 4), ("g", 0, 4))),
+    Strided("g", 0, 9, 3, 1, 3, 9),
+    Strided("g", 0, 5, 1, 0, 0, 3),
+    Strided("g", 0, 9, 2, 3, 1, 6),
+    Explicit(()),
+], ids=["affine", "two-runs", "mixed", "strided-contiguous", "explicit", "other-space-contiguous",
+        "other-idx-contiguous", "gap", "out-of-order", "overlap", "explicit-swap", "repeat", "transpose", "broadcast",
+        "strided-gaps", "empty"])
+def test_parameter_gates_reads_runs_as_the_leaf_list_did(refs):
+    """The run scan returns the range, or refuses with the message, that the per-leaf list did, on every refs form; the
+    list read only each ref's leaf, so a run in another space or idx that continues the interval is accepted by both."""
+    prog = _Program(refs)
+    assert _outcome(G.parameter_gates, prog, "W") == _outcome(_gates_by_list, prog, "W")
+    assert _outcome(G.parameter_gates, prog, "V") == _outcome(_gates_by_list, prog, "V")
+
+
+def test_parameter_gates_of_an_h200_weight_is_its_range_in_constant_memory():
+    """A weight tensor's parameter at H200 width (2^30 leaves, one `Affine`) is its range and its rows without a Python int
+    per leaf: the per-leaf list held ~2 x 43 GB here and was OOM-killed."""
+    n = 1 << 30
+    prog = _Program(Affine("g", 0, 5, n), n)
+    tracemalloc.start()
+    try:
+        gates, rows = G.parameter_gates(prog, "W"), G.shape(prog, "W", 1024)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert gates == range(5, 5 + n) and rows == n // 1024
+    assert peak < 1 << 16, peak

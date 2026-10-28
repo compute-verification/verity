@@ -253,10 +253,40 @@ def test_registry_and_domain():
     assert s.first_adds(sh) == 32 * 128 * 256
 
 
+def test_the_census_k_is_in_v1s_domain_only():
+    """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's cap
+    is 4ρ (card a6872606), and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
+    h3 = get("pearl-c-h100-v1-h3")
+    params = dict(h3.certificate.parameters)
+    assert h3.census_ks == (256,) and params["census_ks"] == (256,) and params["census_row_cap"] == "1/100"
+    assert any("TT_OUT per tile at ρr = 1/100" in h for h in h3.certificate.hypotheses)
+    h3.check(Matmul(0, Shape(64, 256, 6144), 1))
+    h3.check(Matmul(0, Shape(8192, 256, 6144), 1))
+    for bad in (Shape(64, 128, 6144), Shape(64, 512, 6144), Shape(64, 256, 96)):
+        with pytest.raises(DomainError, match="or k in 256"):
+            h3.check(Matmul(0, bad, 1))
+    for name in ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-sm120-v1", "pearl-c-sm120-v1-h3"):
+        assert get(name).census_ks == () and dict(get(name).certificate.parameters)["census_ks"] == ()
+        assert "census_row_cap" not in dict(get(name).certificate.parameters)
+        with pytest.raises(DomainError, match="1024 <= k"):
+            get(name).check(Matmul(0, Shape(64, 256, 6144), 1))
+    assert C.PearlC(k_min=32, tile=(16, 16), forming="v1").census_ks == ()
+
+
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
 def test_vectors_are_pinned(case):
     spec = next(c for c in CV.CASES if c[0] == case)
     assert CV.case_vector(*spec) == next(c for c in PINNED["cases"] if c["case"] == case)
+
+
+def test_the_h100_h3_vectors_are_the_registered_schemes():
+    """`pearl-c-h100-v1-h3` (GLM-5.3's FP8 form on the H200) is the scheme its pinned production case was made under, and
+    the case is in its domain."""
+    s, case = get("pearl-c-h100-v1-h3"), next(c for c in PINNED["cases"] if c["case"] == "decode-32-v1-h3")
+    v = CV.scheme(case["test_instance"], "v1", "h3")
+    assert s.name == case["scheme"] == v.name and s.commitment_hash == "hm96-sha512" and s.device is C.H100
+    assert (s.k_min, s.tile, s.forming, s.hashing, s.prices) == (v.k_min, v.tile, v.forming, v.hashing, v.prices)
+    s.check(Matmul(case["index"], Shape(*case["shape"]), case["weight"]))
 
 
 def test_lifecycle_on_a_test_instance():
@@ -785,3 +815,17 @@ def test_domain_needs_whole_promotion_groups():
     s.check(Matmul(0, Shape(64, 1152, 64), 1))
     with pytest.raises(DomainError):
         s.check(Matmul(0, Shape(64, 1056, 64), 1))
+
+
+@pytest.mark.parametrize("name", ["pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1",
+                                  "pearl-c-sm120-v1-h3"])
+def test_the_domain_has_lean_s_n_floor(name):
+    """Lean's `pearlCDomainDev` takes `64 <= n` and `64 | n` (a 1 x (n mod 64) edge tile's words can be guessed
+    whole); the 64-column tile is that floor, and it keeps GLM-5.3's n = 512 w13 and gate_up and n = 256 router at TP8."""
+    s = get(name)
+    assert s.tile[1] == 64
+    for n in (16, 32, 63, 96, 160, 1000):
+        with pytest.raises(DomainError):
+            s.check(Matmul(0, Shape(32, 6144, n), 1))
+    for n in (64, 256, 512, 1024, 4096):
+        s.check(Matmul(0, Shape(32, 6144, n), 1))

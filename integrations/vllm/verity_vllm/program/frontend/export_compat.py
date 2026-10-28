@@ -218,9 +218,9 @@ def read_back_applied() -> dict:
 
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
-    import os
     import socket
-    h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
+    from verity_vllm import settings
+    h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
          "host_gpu": None}
     if h["cuda_available"]:
         try:
@@ -233,11 +233,11 @@ def host_facts() -> dict:
     return h
 
 
-#: [R13 moe] the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
+#: the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
 #: `vllm.moe_forward[_shared](hidden, router_logits, ..., layer_name)` -> `MoERunner._forward_impl`, and inside it
 #: `vllm.fused_experts(...)` -> `fused_moe.fused_experts_op` -> `fused_experts_impl` (the router top-k, the block schedule, the two
 #: grouped-GEMM Triton launches, the activation and the routed sum).  Exported as opaque nodes they hide the whole MoE block behind
-#: ONE mutating op no rule can bind (R12 F-moe-02 / B-MOE); traced through their bodies, the block is the leaf kernels the rules bind
+#: ONE mutating op no rule can bind; traced through their bodies, the block is the leaf kernels the rules bind
 #: (`_moe_C.topk_softmax`, `_moe_C.moe_align_block_size`, `fused_moe_kernel` x2 via `verity_cba::triton_launch`, `_C.silu_and_mul`,
 #: `_moe_C.moe_sum`) -- the same launches the eager capture records.  Generic: names the dispatcher ops, not a model/layer.
 _MOE_DISPATCH_OPS = ("moe_forward", "moe_forward_shared", "fused_experts")
@@ -586,7 +586,7 @@ def moe_gate_leaf(model=None, site=None):
         site = importlib.import_module(_LL_BF16_SITE)
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
     from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
-    from verity_vllm.program.registry.bf16_gemm_check import LL_MAX_M
+    from verity.ml.definitions.registry.bf16_gemm_check import LL_MAX_M
     cublas_tier = all(getattr(g, "allow_cublas_router_gemm", False) and not getattr(g, "allow_fp32_router_gemm", False)
                       and not getattr(g, "allow_bf16x3_router_gemm", False) for g in gates)
 

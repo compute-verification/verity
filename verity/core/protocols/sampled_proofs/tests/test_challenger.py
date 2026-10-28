@@ -1,4 +1,4 @@
-"""The proof service's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
+"""The proof system's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
 once, after the root the verifier recorded for it; the verifier refuses a coin opened twice, one opened before its root
 was recorded, a foreign epoch's or another challenger's, a coin that isn't the one asked for, and a recorded root whose
 coin was never opened.  The layouts are any client's: named by no protocol.  The verifier trusts only the commitment in
@@ -112,7 +112,7 @@ def test_the_record_asks_for_each_coin_only_after_recording_its_root():
 
 def test_the_record_logs_each_release_after_the_root_it_follows():
     """`LiveRecord.log` is the release order on the record's clock: root i's receipt, then coin i's release.  That the
-    challenger released coin i only after receiving root i is trusted (`trusted-nebius-host`), not checked: the log
+    challenger released coin i only after receiving root i is trusted (`trusted-host`), not checked: the log
     records the order, and `order_reason` reads only the roots the openings name."""
     ticks = iter(range(100))
     ch = C.LiveChallenger("verity/test/coins/v1", 3, [("other", 1), (LABEL, 3)], entropy("t"))

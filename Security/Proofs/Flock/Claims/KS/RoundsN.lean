@@ -585,13 +585,14 @@ theorem map_n_of_forall₂ {l₁ l₂ : List Round} (h : List.Forall₂ (fun a b
 
 /-- **Each plain rep stream's rounds issued its table's coins**: when the plain verdict accepts the record at any
 hashes and `liveOf` reads it, there are two rep streams per table, and the rounds of stream `k` (table `k / 2`'s rep
-`k % 2`) issued `plainRepNs spec sts[k / 2]`, one count per round, so the statement fixes every round's coin count. -/
-theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
-    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
-    (hl : liveOf spec record = .ok lv) :
+`k % 2`) issued `plainRepNs spec sts[k / 2]`, one count per round, so the statement fixes every round's coin count.
+At any `keep` (`verifyWithMK`). -/
+theorem streams_ns_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
+    {record : String} {proofs : Array ByteArray} {lv : Live}
+    (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧
       ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = plainRepNs spec sts[k / 2]! := by
-  obtain ⟨hsz, hall⟩ := rep_plain hs hv hl
+  obtain ⟨hsz, hall⟩ := rep_plainK keep hs hv hl
   refine ⟨hsz, fun k hk => ?_⟩
   obtain ⟨sess, sch, stream, c, -, hpn, hf, hrep, hfind, hfa⟩ := hall k hk
   obtain ⟨stream', extras, hfind', hex, hns⟩ := verifyRepWith_readsN hs rfl hf hrep
@@ -602,6 +603,13 @@ theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array
     simp only [Claims.Flock.plainSched, hf, Option.getD_some]
   rw [map_n_of_forall₂ hfa, hns, hx, hpn, plainRepNs, hsch, Nat.mul_comm]
   rfl
+
+theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = plainRepNs spec sts[k / 2]! :=
+  streams_ns_plainK id hs hv hl
 
 /-- The plain session's coins, round by round in `spec.repStreams` order: each table's two reps' `plainRepNs`. -/
 def plainNs (spec : SessionSpec) (sts : Array Stmt) : List ℕ :=

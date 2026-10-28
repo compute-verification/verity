@@ -9,15 +9,14 @@ rejected, and an accepted unit is credited (1 − ρ)·`creditDevRev1`).  `pearl
 the work law (`clear_work`) read the record; nothing else in them names hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
-  Rounds 10-11's W1 prices, k <= 2^16 (the pure-chain freezing bound)
-  and ρ = 1/400 (TT_OUT(1/400)).
+  Rounds 10-11's W1 prices, k <= 2^16 (the pure-chain freezing bound), k = 256 under forming v1 and -h3 beside Pearl-C's
+  k >= 1,024 (`census_ks`, where a row's cap is 4ρ: `pearl_c.CENSUS_ROW_CAP`) and ρ = 1/400 (TT_OUT(1/400)).
 * `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
   card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are
-  `SM120_PRICES` (`Prices.sm120`, measured on node 2); the other fields are stand-ins (`standins` names each):
-  `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  Its cap is ρ = 1/1,000 (Daniel, 9:43 AM PDT on
-  2 Oct; Lean `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its twins).  G, the prices, the k
-  bound and the cap are statement parameters: they change through the coordinator and the cheap-binding and Lean lanes,
-  not here.
+  `SM120_PRICES` (`Prices.sm120`); the other fields are stand-ins (`standins` names each):
+  `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  Its cap is ρ = 1/1,000 (Lean
+  `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its twins).  G, the prices, the k
+  bound and the cap are statement parameters: they change with the Lean statements, not here.
 * `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
   the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme
   is registered on it and its debit raises until the theory and Lean lanes restate Pearl-C without promotion.
@@ -60,6 +59,9 @@ class Device:
     k_max: int               # the domain's bound on k
     standins: tuple[str, ...] = ()   # the fields that are stand-ins, each with what it stands in for
     cap: Fraction = Fraction(1, 400)  # ρ: the tile rule's debit cap and the credit's (1 − ρ)
+    #: the ks below Pearl-C's k_min that forming v1 takes on this record: a linear whose per-rank k is outside the census's
+    #: tested ks is credited under TT_OUT only once a census at that k passes
+    census_ks: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.atom.dtype, self.atom.k, self.peel.dtype, self.peel.k) != ("e4m3", 32, "bf16", 16):
@@ -92,7 +94,9 @@ H100_PRICES = Prices("sm_90", fadd=32, bf16_mac=2, forming_credited=64, forming_
 SM120_PRICES = Prices("sm_120", fadd=8, bf16_mac=2, forming_credited=40, forming_a_only=1)
 PRICES = {p.device: p for p in (H100_PRICES, SM120_PRICES)}
 
-H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16)
+#: k = 256 is GLM-5.3's shared-expert down_proj and sharded routed w2 per TP8 rank: TT_OUT's census at k = 256 (hopper, s5
+#: at line norm 16, δ = 1, every family, tiles 64 x 64 and 64 x 16, runs 1-3) passed with the debit in r20261023-170626-9dea
+H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16, census_ks=(256,))
 
 SM120 = Device(
     "sm120", BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, SM120_PRICES, 1 << 16,

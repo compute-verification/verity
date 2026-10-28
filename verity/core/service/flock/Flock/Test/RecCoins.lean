@@ -51,4 +51,17 @@ def hexOf (b : ByteArray) : String := String.join (b.toList.map fun x => (Nat.to
     "af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7bad14ce4f03dc487265b9"
   | .error _ => false
 
+/-! `--rec-inner-coins` is refused, with a value or bare, before any file is read; the inner statement's files pass. -/
+
+def refused (args : List String) : Option String :=
+  match refuseCoins args with
+  | .error e => some e
+  | .ok () => none
+
+#guard refused ["--rec-inner-coins", "coins.json", "--rec-inner-session", "inner"] == some NO_INNER_COINS
+#guard refused ["--rec-inner-session", "inner", "--rec-inner-coins"] == some NO_INNER_COINS
+#guard refused ["--rec-inner-circuit", "c", "--rec-inner-public", "p", "--rec-inner-partition", "q",
+  "--rec-inner-session", "inner"] == none
+#guard refused [] == none
+
 end Flock.Test.RecCoins

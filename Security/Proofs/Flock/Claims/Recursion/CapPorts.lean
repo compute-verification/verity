@@ -41,7 +41,7 @@ theorem capPorts (shape : Claims.Recursion.Form → Prop) : CapPorts shape := by
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' and RecCap's ports discharged**:
 `ksLin2_deployed_rows` with `CapPorts` from `capPorts` and the schedule from `schedMatches_dense`. What stays at the
 dense form is the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and `VstarShowsB`,
-`PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no number by
+`PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no number by
 itself: those premises are open, and `VstarShowsB` with `HeldB` leaves no accepted run (`vstarShowsB_deployed_rejects`),
 so they hold only where no honest run is accepted. `ksLin2_deployed_staged` reads the staging off the run instead. -/
 theorem ksLin2_deployed_caps (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -60,18 +60,17 @@ theorem ksLin2_deployed_caps (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hP hRT hRL hRP
-  refine ksLin2_deployed_rows b fin wE join final w ?_ hRT hRL hRP
+  intro L Bd D bL hP hRT hRP
+  refine ksLin2_deployed_rows b fin wE join final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain rfl := List.mem_singleton.1 hsh

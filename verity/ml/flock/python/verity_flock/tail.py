@@ -288,9 +288,10 @@ class Stage:
     """One stage circuits: its input ports (``("cut", k)`` a cut word, ``("pass", slot)`` a value the previous stage hands on,
     ``("lookup", j)`` lookup j's table word) and its output ports (``("pass", slot)``, ``("index", j)``, ``("cut", k)``,
     ``("ret", o)``). ``count`` slots of it per VU, slot ``i``'s ports tagged ``slot_ins[i]`` / ``slot_outs[i]`` (default: one
-    slot, tagged ``ins`` / ``outs``): a repeated stage is a second repeated unit type, its slots reading other cut words."""
+    slot, tagged ``ins`` / ``outs``): a repeated stage is a second repeated unit type, its slots reading other cut words.
+    ``layout``: the stage already laid out (:func:`stage_layout`'s), its circuit then None (`read_slots`)."""
 
-    circuit: Circuit
+    circuit: Circuit | None
     ins: list = field(default_factory=list)
     outs: list = field(default_factory=list)
     in_widths: list = field(default_factory=list)
@@ -298,6 +299,7 @@ class Stage:
     count: int = 1
     slot_ins: list | None = None
     slot_outs: list | None = None
+    layout: IL.Layout | None = field(default=None, repr=False)
 
     def tags(self, i: int) -> tuple[list, list]:
         """Slot ``i``'s input and output port tags."""
@@ -314,12 +316,17 @@ class Tail:
     computes: list
     #: the program slots of the tail's returned outputs (the last stage's ``("ret", i)`` ports), in output order
     rets: list = field(default_factory=list)
+    #: the instance-local wires as given (`read_slots`, whose stages read any earlier stage), else `circuit._wires`' from the tags
+    wires: list | None = None
+    #: the returned outputs as ``[slot, port]`` pairs (META ``out_net_ports``) even on a single last stage: a statement with hidden
+    #: outputs whose output words are not a power of two times 16 bits
+    slotted_rets: bool = False
 
 
 def _fold_constant_mufu(prog: list) -> list:
     """A MUFU operation on constants is a constant (its value from the IR primitive's own evaluator, as the lowering does for
     every constant gate): no lookup slot for it."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     const: dict[int, int] = {}
     out = []
@@ -456,4 +463,6 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
 
 def stage_layout(st: Stage) -> IL.Layout:
     """A stage laid out as ``flock-ir-unit/v2``: one input group, one output group."""
+    if st.layout is not None:
+        return st.layout
     return IL.layout(st.circuit, [f"in{j}" for j in range(len(st.ins))], [f"out{j}" for j in range(len(st.outs))])

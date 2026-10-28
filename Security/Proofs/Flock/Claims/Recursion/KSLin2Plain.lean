@@ -28,7 +28,8 @@ theorem plain_KSFlockLin_DE (wE : Msg → ℝ) :
 
 /-- **`KSLin2` at the intended choice's dense statements, at the deployed relations and caps**: `ksLin2_deployed` at
 `Flock.Readable.relation` and `CpDep`, with `KSFlockLin` at `DE` from `plain_KSFlockLin_DE`. -/
-theorem ksLin2_deployed_plain (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (wE : Msg → ℝ)
+theorem ksLin2_deployed_plain (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hC : CanonicalProofFiles) (hK : PlainCallsBindOrSlack FlockDeploy.sha512) :
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
@@ -44,17 +45,16 @@ theorem ksLin2_deployed_plain (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
-  ksLin2_deployed _root_.Flock.Readable.relation b L FlockDeploy.KS.CpDep wE join final w hC hK
+  ksLin2_deployed _root_.Flock.Readable.relation b L hRows FlockDeploy.KS.CpDep wE join final w hC hK
     (plain_KSFlockLin_DE wE)
 
 end RecDeploy

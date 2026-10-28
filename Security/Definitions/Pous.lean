@@ -30,6 +30,7 @@ import Definitions.Pous.Model.SecureErasure
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.StreamedWipe
 import Definitions.Pous.P2.Cost
+import Definitions.Pous.P2.Mutable
 import Definitions.Pous.P2.Rounds
 
 /-! `Definitions.Pous`: every module of PoUS's definitions, the protocol's definitions (trusted). -/

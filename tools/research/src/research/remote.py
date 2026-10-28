@@ -142,6 +142,7 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
+_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
 SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (laptop -> pod measured 130-220 KB/s, 2026-09-24)
@@ -333,6 +334,11 @@ def sender(environ: dict[str, str] | None = None) -> str | None:
 
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
 NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64")
+# A VM stopped since before USN-8944-1 boots trusting the roots that cross-signed the compromised eMudhra intermediates, and its
+# image's apt timers are off, so a wake upgrades ca-certificates before the run; a patched VM skips it at once.
+TRUST_UPGRADE = ("ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root' || exit 0; "
+                 "sudo -n apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive "
+                 "NEEDRESTART_MODE=l apt-get -o DPkg::Lock::Timeout=120 install -y -qq --only-upgrade ca-certificates 'libnss3*'")
 CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
 
 
@@ -391,6 +397,10 @@ def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, 
     while clock() < end:
         sleep(WAKE_POLL_S)
         if ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+            r = ssh_run(ssh, ["sh", "-c", TRUST_UPGRADE], timeout=600)
+            if r.returncode != 0:
+                print(f"research: {machine['name']}: its ca-certificates upgrade failed (exit {r.returncode}); "
+                      f"`research deploy drift --on {machine['name']}` lists a distrusted root it still trusts", file=sys.stderr)
             return f"started from {state}"
     raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
 
@@ -866,7 +876,20 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
     doc = read_ready(Path(path))
     if doc["identity"] != identity:
         raise SourceNotReady(f"{path}/{READY_FILE} names identity {doc['identity']}, the run asked for {identity}; refusing to execute")
+    if dirt := tracked_dirt(Path(path)):
+        raise SourceNotReady(f"{path} is shared by every run of {identity}, and an earlier run edited its tracked files ({', '.join(dirt[:3])}); "
+                             f"refusing to execute from it: relaunch (the launcher sets it aside and ships the commit afresh), or use --cwd clone")
     return doc
+
+
+def tracked_dirt(path: Path) -> list[str]:
+    """The tracked paths of a shipped checkout that differ from its commit (INF-225: one run's edit to the shared per-commit tree would
+    otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
+    no .git, has nothing to compare and gives none."""
+    if not (Path(path) / ".git").exists():
+        return []
+    r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=path, capture_output=True, text=True)
+    return [line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else []
 
 
 def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: str) -> dict[str, Any]:
@@ -875,10 +898,14 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
-    """(`ready` | `legacy` | `absent`, READY.json doc when ready)."""
+    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
+    no longer match its commit (INF-225); the doc then carries the first such paths under `dirt`."""
     q = shlex.quote(dest)
-    r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
-    out = r.stdout.decode(errors="replace").strip()
+    r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
+                                  f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
+                                  f"elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
+    out, _, dirt = r.stdout.decode(errors="replace").partition(_DIRT_MARK)
+    out = out.strip()
     if r.returncode != 0:
         raise Refused(f"probing {dest} failed: {r.stderr.decode(errors='replace')[-400:]}")
     if out == "ABSENT":
@@ -889,6 +916,8 @@ def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None
         doc = json.loads(out)
     except ValueError:
         raise SourceNotReady(f"{dest}/{READY_FILE} is not JSON; inspect the machine") from None
+    if paths := [line[3:] for line in dirt.splitlines() if line.strip()]:
+        return "dirty", {**doc, "dirt": paths}
     return "ready", doc
 
 
@@ -1025,11 +1054,21 @@ def _mark_ready(ssh: list[str], partial: str, dest: str, sha: str, doc: dict[str
     return have
 
 
+def _quarantine(ssh: list[str], root: str, dest: str, sha: str, why: str) -> None:
+    """Move a tree that is not the commit to <root>/src/.quarantine/ (kept for inspection, never executable by name), so it is shipped afresh."""
+    quarantine = f"{root}/src/.quarantine/{sha}-{secrets.token_hex(4)}"
+    r = ssh_run(ssh, ["sh", "-c", f"mkdir -p {shlex.quote(root)}/src/.quarantine && mv {shlex.quote(dest)} {shlex.quote(quarantine)}"])
+    if r.returncode != 0:
+        raise SourceNotReady(f"{dest} is {why} and could not be moved aside: {r.stderr.decode(errors='replace')[-300:]}")
+    print(f"research: {dest} is {why}; moved to {quarantine}, shipping afresh", file=sys.stderr)
+
+
 def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dict[str, Any]]:
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
-      1. probe <root>/src/<identity>/: READY.json naming this identity -> done; a foreign READY.json -> SourceNotReady (never touched);
+      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
+         run edited (INF-225), which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -1062,18 +1101,17 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
         return sha, dest, doc
     man = archive_manifest_git(git_dir)
+    if state == "dirty":
+        if doc.get("identity") != sha or doc.get("schema") != READY_SCHEMA:
+            raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
+        _quarantine(ssh, root, dest, sha, f"a READY checkout whose tracked files an earlier run edited ({', '.join(doc['dirt'][:3])})")
     if state == "legacy":
         bad = _verify_legacy(ssh, dest, man)
         if not bad:
             doc = _ready_doc(sha, tree, man, "legacy-sha256-per-file")
             _write_ready(ssh, dest, doc)
             return sha, dest, doc
-        quarantine = f"{root}/src/.quarantine/{sha}-{secrets.token_hex(4)}"
-        r = ssh_run(ssh, ["sh", "-c", f"mkdir -p {shlex.quote(root)}/src/.quarantine && mv {shlex.quote(dest)} {shlex.quote(quarantine)}"])
-        if r.returncode != 0:
-            raise SourceNotReady(f"{dest} is an unverified tree that does not match HEAD ({len(bad)} file(s): {'; '.join(bad[:3])}) and could not be moved aside: "
-                                 f"{r.stderr.decode(errors='replace')[-300:]}")
-        print(f"research: {dest} did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])}); moved to {quarantine}, shipping afresh", file=sys.stderr)
+        _quarantine(ssh, root, dest, sha, f"an unverified tree that did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])})")
     if os.environ.get(SHIP_ENV, "").strip().lower() != "stream":
         gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:

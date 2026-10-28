@@ -20,6 +20,7 @@ that GEMM alone; the last two time only M a multiple of 16).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import statistics
@@ -28,8 +29,7 @@ from pathlib import Path
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 import kgate
 
@@ -129,9 +129,10 @@ def copies_for(n: int, k: int) -> int:
     return max(2, math.ceil(3 * torch.cuda.get_device_properties(0).L2_cache_size / (n * k)))
 
 
-def timed(fns: dict, reps: int, clock, calls: int) -> tuple[dict, dict, dict]:
+def timed(fns: dict, reps: int, clock, calls: int, around=None) -> tuple[dict, dict, dict]:
     """Each fn captured in a CUDA graph and replayed in items of about ITEM_MS, the fns alternating item by item (order
-    rotated each rep); median microseconds a call (`calls` calls a graph), every item's, and the SM clocks around each."""
+    rotated each rep); median microseconds a call (`calls` calls a graph), every item's, and the SM clocks around each.
+    `around`: a context manager factory each timed item runs inside (its exit before the item's device sync)."""
     graphs, per = {}, {}
     for arm, f in fns.items():
         side = torch.cuda.Stream()
@@ -162,10 +163,11 @@ def timed(fns: dict, reps: int, clock, calls: int) -> tuple[dict, dict, dict]:
             g = graphs[arm]
             c0 = clock()
             e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            e0.record()
-            for _ in range(per[arm]):
-                g.replay()
-            e1.record()
+            with around() if around else contextlib.nullcontext():
+                e0.record()
+                for _ in range(per[arm]):
+                    g.replay()
+                e1.record()
             torch.cuda.synchronize()
             c1 = clock()
             us[arm].append(1e3 * e0.elapsed_time(e1) / (per[arm] * calls))

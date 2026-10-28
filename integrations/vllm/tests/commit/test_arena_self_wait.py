@@ -242,3 +242,27 @@ def test_an_overflowed_step_is_concatenated_without_waiting_and_commits_the_one_
     assert committer._done[0].root == _one_block_root(0, small)
     assert committer._done[1].root == _one_block_root(1, big)
     assert len(committer.arena.free) == len(committer.arena.all)        # every block back in the ring, the grown one included
+
+
+def test_a_step_the_worker_fails_gives_its_blocks_back_and_the_next_step_takes_one_without_waiting(committer, monkeypatch):
+    """A step whose commit raises on the worker (here the GPU tree's extension failing to load) is recorded as an error with an
+    empty commitment and gives back every block it held, its overflow included. Kept, two such steps held the whole ring and
+    serve-openai's engine waited the arena's full timeout on the next step, with the worker idle."""
+    def no_extension():
+        raise RuntimeError("hidden_gpu: build failed")
+
+    monkeypatch.setattr(committer, "_gpu_ext_load", no_extension)
+    big = _tensors(3, [("model.embed_tokens/in", torch.int32, (2,)), ("layers.0.qkv_proj", torch.bfloat16, (2, 200)),
+                       ("layers.0.mlp", torch.bfloat16, (2, 200)), ("logits", torch.float32, (2, 30))])
+    job = _step(committer, _Sched(ntok=2, nreq=2), big)
+    assert job.overflow
+    committer._q.put(job)
+    committer._q.put(committer._stop)
+    committer._run_worker()
+    assert committer.errors == ["worker step 0: RuntimeError('hidden_gpu: build failed')"]
+    assert committer._done[0].root == b""
+    assert len(committer.arena.free) == len(committer.arena.all)
+    monkeypatch.setattr(committer, "_gpu_ext_load", lambda: _TreeExt())
+    nxt = _step(committer, _Sched(ntok=8, nreq=1), _tensors(4, PREFILL_STEP))
+    committer._commit_step(nxt)
+    assert committer.errors[1:] == [] and committer._done[1].root == _one_block_root(1, _tensors(4, PREFILL_STEP))

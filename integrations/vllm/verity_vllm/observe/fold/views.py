@@ -1,6 +1,6 @@
 """Physical view geometry (pure): element runs, leading-axis indexing, view algebra on `ViewDesc`.
 
-Implemented by lane L2 (memory).  Contract used by `memory.py`, `resolver.py` patterns and `fold.py`:
+Contract used by `memory.py`, `resolver.py` patterns and `fold.py`:
 
     row_view(v, i)            -> ViewDesc        v[i] along the leading axis (rank-1 lower; a 1-D view gives rank 0)
     rows_view(v, lo, hi)      -> ViewDesc        v[lo:hi] along the leading axis
@@ -16,7 +16,7 @@ Implemented by lane L2 (memory).  Contract used by `memory.py`, `resolver.py` pa
 
 Views never carry values; all functions are total on well-formed descriptors and raise ValueError otherwise.
 
-Conventions (L2):
+Conventions:
 
 - Well-formed means non-negative shape entries and non-negative strides (torch never produces negative strides;
   they are rejected with ValueError rather than silently mis-mapped).  Size-1 axes are free: their stride is
@@ -29,7 +29,7 @@ Conventions (L2):
   one ends, so the result is the greedy maximal-run compression of the storage-element sequence.
 - `collapsed_dims(v)` (helper) is the geometry the memory model reads refs through: size-1 axes dropped and
   row-major-contiguous axes merged (the same normalisation the authored frontend applies in
-  `verity_vllm/program/frontend/torch_frontend.py:_strided_refs`), so a `Strided`/`Affine` produced from it has the same
+  `verity_vllm/program/frontend/strided_views.py:_strided_refs`), so a `Strided`/`Affine` produced from it has the same
   normal form as authored view refs.
 """
 

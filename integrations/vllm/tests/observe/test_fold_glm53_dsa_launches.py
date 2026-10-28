@@ -12,7 +12,7 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import pytest
 
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns import dsa as D
 from verity_vllm.observe.fold.resolver import Group, StepContext, Transparent, Unsupported, spec_label

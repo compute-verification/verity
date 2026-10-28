@@ -9,7 +9,8 @@ other slot the canonical empty row), the window's random key:
              domain with the call's base), and two B tables of the int8 pin (b/<w>, `serve.b_tables`' domain); no poison
              left in any level; a control: one A byte flipped moves that call's root and no other; the step's three sets
              captured as one CUDA graph, replayed at s, then with s + 1 written into the device step in place, against
-             `commit.py` at s + 1
+             `commit.py` at s + 1; with a library that has h1c_tail, the step trees through `Tail` from poison, the
+             same roots, and the time of each form from the leaves on
     time     the graph replayed between CUDA events: what precedes a step's coin (A and admit tables, the three step
              trees) and the receipt trees, at T = 64, 256 and 1024
 
@@ -37,8 +38,10 @@ import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
 import serve as SV  # noqa: E402
 
-from h1c import H1C, Dom, Tab, unwords  # noqa: E402
+from h1c import H1C, Dom, Tab, Tail, unwords  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 POISON = -0x5A5A5A5A5A5A5A5B  # 0xA5A5A5A5A5A5A5A5 as int64
 SITES = [("self_attn.qkv_proj", 6144, 4096), ("self_attn.o_proj", 4096, 4096), ("mlp.gate_up_proj", 28672, 4096),
@@ -205,6 +208,35 @@ def no_poison(st: Step) -> bool:
     return True
 
 
+def tail_check(lib: H1C, st: Step, step, ref: dict, reps: int) -> dict:
+    """The step's mid and round trees through `Tail` (h1c_tail), from poison, against `ref`; and the time from the
+    leaves on of h1c_build's two builds and of `Tail.levels`."""
+    tl = Tail(lib, st.mid, st.round, host_root=True)
+    st.poison()
+    lib.build(st.calls, step)
+    tl.pre(step)
+    tl.levels()
+    st.post(lib, step)
+    torch.cuda.synchronize()
+    c = {**compare(st, ref), "no_poison_left": no_poison(st), "host_root": tl.root(0) == ref["round"]}
+    e = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
+    ms = {"build": [], "pre": [], "levels": []}
+    for _ in range(reps):
+        e[0].record()
+        lib.build(st.mid, step)
+        lib.build(st.round, step)
+        e[1].record()
+        tl.pre(step)
+        e[2].record()
+        tl.levels()
+        e[3].record()
+        e[3].synchronize()
+        for k, (i, j) in zip(ms, ((0, 1), (1, 2), (2, 3))):
+            ms[k].append(e[i].elapsed_time(e[j]))
+    c["again"] = compare(st, ref)
+    return {**c, **{f"{k}_ms": round(statistics.median(v), 4) for k, v in ms.items()}}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lib", required=True)
@@ -215,7 +247,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     key = os.urandom(64)
-    window = os.environ.get("RESEARCH_RUN_ID") or "gate"
+    window = settings.RESEARCH_RUN_ID or "gate"
     t0 = time.perf_counter()
     lib = H1C(a.lib, key, dev)
     doc: dict = {"gpu": torch.cuda.get_device_name(), "init_s": round(time.perf_counter() - t0, 1)}
@@ -275,8 +307,16 @@ def main() -> int:
     def pre_ok(c: dict) -> bool:
         return not c["a_bad"] and not c["admit_bad"] and c["a_step"] and c["admit_step"] and c["round"]
 
+    tail_ok = True
+    if hasattr(lib.lib, "h1c_tail") and lib.lib.h1c_tail_words():
+        step.fill_(7)
+        doc["tail"] = tail_check(lib, st, step, ref, a.reps)
+        print(json.dumps({"tail": doc["tail"]}), flush=True)
+        tail_ok = (pre_ok(doc["tail"]) and pre_ok(doc["tail"]["again"]) and doc["tail"]["no_poison_left"]
+                   and doc["tail"]["host_root"])
     ok = (pre_ok(doc["pre"]) and not doc["receipts"]["bad"] and doc["no_poison_left"] and all(doc["control"].values())
-          and all(pre_ok(r) and not r["receipts_bad"] and r["no_poison_left"] for r in replays) and doc["b_tables"]["ok"])
+          and all(pre_ok(r) and not r["receipts_bad"] and r["no_poison_left"] for r in replays) and doc["b_tables"]["ok"]
+          and tail_ok)
     doc["gate_ok"] = ok
     (out / "h1c-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     if not ok:

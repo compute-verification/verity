@@ -22,7 +22,7 @@ from verity.ml.circuits.program import Program
 ROOT = Path(__file__).resolve().parents[4]
 FILES = {
     "core": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
-    "vllm": ROOT / "integrations" / "vllm" / "verity_vllm" / "program" / "registry" / "annotations.json",
+    "vllm": ROOT / "verity" / "ml" / "definitions" / "registry" / "annotations.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
 #: specializations of one Definition validated against, smallest first
@@ -63,7 +63,7 @@ def _owner(stem: str) -> str:
     `verity.ml.circuits`), or of a primitive's evaluator."""
     d = REGISTRY.defs.get(stem)
     impl = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return "vllm" if getattr(impl, "__module__", "").startswith("verity_vllm") else "core"
+    return "vllm" if getattr(impl, "__module__", "").startswith(("verity_vllm", "verity.ml.definitions")) else "core"
 
 
 def _files():

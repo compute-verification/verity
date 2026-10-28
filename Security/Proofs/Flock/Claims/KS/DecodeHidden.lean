@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec
 
 * `decodesTable_wrP_scH`: `decodesTable_wrP_sc` at the hidden tables, from `accepts_repsH` and `tableAtH_of_acceptsI`;
   `accepts_opens₀L` holds at hidden outputs too.
-* `plain_setupHidden`: a plain statement in scope with hidden outputs and `hm96-sha512/v1` leaves sets its one table up
-  at its draw under setupHidden, with the tags `HiddenDec.TagsOkH` asks.
+* `plain_setupHiddenT`, `plain_setupHidden`: a plain statement in scope with hidden outputs sets its one table up at its
+  draw under setupHidden, with `HiddenDec.TagsOkH`'s tags at any leaf tag and at `hm96-sha512/v1` leaves.
 
 None of them reads which net returns the outputs: `InScope`'s general instance form (hidden outputs and `wiresAcyclic`)
 may have tail stages, which the verifier evaluates and the table's statement (`stmtOf` of setupHidden's) carries, and
@@ -157,17 +157,18 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A plain statement in scope with hidden outputs and `hm96-sha512/v1` leaves sets up its one table at its draw**:
+/-- **A plain statement in scope with hidden outputs sets up its one table at its draw, under any leaf tag**:
 `plain_setupH` with setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input
-groups, any tail stages the verifier evaluates, whichever net returns the outputs). The scope also admits plain SHA-512
-leaves here, which `TagsOkH` does not. -/
-theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+groups, any tail stages the verifier evaluates, whichever net returns the outputs), with `TagsOkH`'s tags at the tag
+`merkleLeaf` names. -/
+theorem plain_setupHiddenT {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
-    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hh : ins.read.I.tags.hiddenOutputs = true) {tag : String} (hl : ins.read.I.tags.merkleLeaf = tag) {d : Json}
     (hd : ins.read.draw = some d) :
     ins.read.I.tags.typed = false ∧ HmOut.parse ins.read.I.tags ins.read.I.circuitFile ins.read.I.tables = .ok st.c ∧
-      HiddenDec.TagsOkH ins.read.I ∧
+      (ins.read.I.tags.hiddenOutputs = true ∧ ins.read.I.tags.retainRounds = true ∧ ins.read.I.tags.merkleLeaf = tag ∧
+        ins.read.I.count ≤ 1) ∧
       Stmt.setupHidden ins.read.I.tags ins.read.I.circuitFile ins.read.I.publicFile ins.read.I.coins
         ins.read.I.tables (some d) ins.read.I.partition ins.read.I.program = .ok st ∧ spec = st.spec ∧ 22 ≤ st.m ∧
       st.m ≤ 35 := by
@@ -201,6 +202,22 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   refine ⟨ht, hc, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
+
+/-- **A plain statement in scope with hidden outputs and `hm96-sha512/v1` leaves sets up its one table at its draw**:
+`plain_setupH` with setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input
+groups, any tail stages the verifier evaluates, whichever net returns the outputs). The scope also admits plain SHA-512
+leaves here, which `TagsOkH` does not: `plain_setupHiddenT` at `hm96-sha512/v1`. -/
+theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hd : ins.read.draw = some d) :
+    ins.read.I.tags.typed = false ∧ HmOut.parse ins.read.I.tags ins.read.I.circuitFile ins.read.I.tables = .ok st.c ∧
+      HiddenDec.TagsOkH ins.read.I ∧
+      Stmt.setupHidden ins.read.I.tags ins.read.I.circuitFile ins.read.I.publicFile ins.read.I.coins
+        ins.read.I.tables (some d) ins.read.I.partition ins.read.I.program = .ok st ∧ spec = st.spec ∧ 22 ≤ st.m ∧
+      st.m ≤ 35 :=
+  plain_setupHiddenT hs hin hset h hh hl hd
 
 /-- **The hidden table of a draw that sets up `st` is `plainTab` at `st`**: its statement `stmtOf st` is the one any
 layout reads (`Integrate.model_eq`), and the schedule is `fast100`'s at `st.m`. -/

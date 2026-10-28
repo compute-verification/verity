@@ -16,15 +16,15 @@ window    once a layer: `pg_window` of the layer's cache into the buffers at wor
           [KV heads][K ‖ V], `int8_attention_vllm.KV_LAYOUT`): each word decoded at its codec index, the layer's region's
           first word plus the physical word (a layer to a region, a 4 KiB block a slot: `store.int8_kv`), under the
           slot's bound offset (`LayerKeys.bj`; None: the seed's key), or read as it is where the slot's plaintext flag is
-          set (deferred residency, #2460); with ``encoded`` False, copied
+          set (deferred residency); with ``encoded`` False, copied
 ~~~
 
 The windows are the cache's plaintext K and V, so `int8_ops.window_attention`, reading each request's rows where
 `int8_ops.paged_attention` gathers them from the pages, gives the same bits.  `int8_ops.credited_attention` runs the read as
 two named ops, ``verity_int8::credited_step`` (the offsets and buffers) and ``verity_int8::credited_window`` (a layer's
 flags and window), so a capture records the cache, block table and buffers each window read, and the int8 fold
-(`observe.fold.patterns.int8`) binds each request's ``verity_int8::kv_quant_window`` to its KV slots as it binds
-``verity_int8::kv_quant``.  The ops find their read by its ``handle``.
+(`observe.fold.patterns.int8`) binds each request's slice of ``verity_int8::kv_quant_window_batch`` to its KV slots as
+it binds ``verity_int8::kv_quant_batch``'s.  The ops find their read by its ``handle``.
 """
 from __future__ import annotations
 

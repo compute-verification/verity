@@ -31,3 +31,15 @@ def test_uncovered_lm_head():
     import json
     model = json.loads(G.WORKLOAD.read_text())["model"]
     assert 0.09 < G.uncovered_fraction(model) < 0.11
+
+
+def test_ncp_gamma_only_where_ttncp_is_claimed():
+    """TT_NCP's premise γ_0 >= d/(3k) holds at every workload shape (k >= 1067 at γ_0 = 1/200, d = 16) and is refused
+    below it, where the one-segment adversary wins (CMP-77)."""
+    import json
+    import pytest
+    for m, k, n in json.loads(G.WORKLOAD.read_text())["gamma_shapes"]:
+        assert G.GAMMA0_NCP * 3 * k >= G.D and G.row("ncp-v1", m, k, n).gamma
+    assert G.row("ncp-v1", 16, 1088, 1600).gamma
+    with pytest.raises(ValueError, match="d/\\(3k\\)"):
+        G.row("ncp-v1", 16, 1024, 1024)

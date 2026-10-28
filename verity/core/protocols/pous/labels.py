@@ -1,6 +1,6 @@
 """Bit layout: Lean's `Bits L = Fin L → Bool` as a Python int whose bit `i` is Lean's bit `i`.
 
-Every string of blocks is laid out by `codeEquiv B ℓ`, whose `finProdFinEquiv` puts bit `j` of block `i` at
+Every string of labels is laid out by `codeEquiv B ℓ`, whose `finProdFinEquiv` puts bit `j` of label `i` at
 `i * ℓ + j`.  So component `v` of a label is bits `v * wc .. v * wc + wc - 1`, label `u` of `W` is bits
 `u * m .. u * m + m - 1`, and bytes are little-endian with bit `i` at bit `i % 8` of byte `i // 8`.
 """
@@ -17,13 +17,13 @@ def mask(bits: int) -> int:
 
 
 def split(x: int, count: int, width: int) -> list[int]:
-    """`(codeEquiv count width).symm`: `count` blocks of `width` bits."""
+    """`(codeEquiv count width).symm`: `count` labels of `width` bits."""
     m = mask(width)
     return [(x >> (i * width)) & m for i in range(count)]
 
 
 def join(parts: Sequence[int], width: int) -> int:
-    """`codeEquiv count width`: the concatenation of the blocks, block 0 lowest."""
+    """`codeEquiv count width`: the concatenation of the labels, label 0 lowest."""
     x = 0
     for i, part in enumerate(parts):
         if not 0 <= part < 1 << width:

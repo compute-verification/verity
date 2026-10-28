@@ -21,9 +21,11 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array
 
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.pouw.circuit import reference as REF
 from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.pouw.circuit import segment as SG
 
 M32 = (1 << 32) - 1
 
@@ -336,7 +338,7 @@ def test_a_lane_or_combine_of_a_leaf_of_one_lane_or_no_whole_index_bits_is_refus
 
 
 def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compress_before_their_last_block():
-    """A partial and the receipt are 8 (KS + m) bytes. The Lean verifier takes a v2 row of any length (#3148), so K = 384,
+    """A partial and the receipt are 8 (KS + m) bytes. The Lean verifier takes a v2 row of any length, so K = 384,
     416, 896 and 928, whose rows' padding spills into another block, are staged. The combine reads only those rows, and
     C-Flock needs a row of the statement that compresses before its last block, ceil((bytes + 17) / 128) - 1 >= 1, so
     112 bytes or more: K = 384 is the least, and K = 352's 104-byte rows are refused. A lane has such rows at every K."""
@@ -354,7 +356,8 @@ def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compr
 def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole_16_bit_words():
     """A lane reads the leaf's R admit bits as one row, and C-Flock lowers only a row of whole 16-bit words
     (`class_statement.unit_lowering`), so `lane` and `combine` refuse a leaf of R = 4 or 8, whose lanes the Definitions
-    bind, and take R = 16 and the served 32. Both refuse K = 0, which the Definitions bind too and `leaf_lanes` refuses."""
+    bind, and take R = 16 and the served 32. Both refuse K = 0, which `leaf_lanes` refuses too; the Definitions refuse
+    K = 0 and K = 32 themselves (KS >= 2, as `h1tile`'s scheme asks and the leaf verifier's `Tile.check`)."""
     for r, c in ((4, 16), (8, 8), (8, 16)):
         t = _tile(r=r, c=c, k=384)
         bind(Z.PouwH1LaneZy, TILE=t).signature()
@@ -364,8 +367,11 @@ def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole
     for r, c in ((16, 8), (16, 16), (32, 32)):
         t = _tile(r=r, c=c, k=384)
         assert Z.lane(t) == bind(Z.PouwH1LaneZy, TILE=t) and Z.combine(t) == bind(Z.PouwH1Combine, TILE=t)
+    for k in (0, 32):
+        for d in (Z.PouwH1LaneZy, Z.PouwH1Combine):
+            with pytest.raises(ValueError, match=f"K = {k} is under 64"):
+                bind(d, TILE=_tile(r=32, c=32, k=k))
     t = _tile(r=32, c=32, k=0)
-    bind(Z.PouwH1LaneZy, TILE=t).signature()
     for stage in (Z.lane, Z.combine):
         with pytest.raises(ValueError, match="K = 0: a leaf's lanes and combine are staged only at a positive K"):
             stage(t)
@@ -460,3 +466,642 @@ def test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls():
                                    ports=lambda S: ports)
     prog = Program(bind(template))
     assert [n.fn.id for n in prog.root.body.nodes if not is_input(n.fn)] == [lane.id]
+
+
+# -- a lane in chunks along K ---------------------------------------------------------------------------------------------------
+
+def test_a_lane_past_4096_is_proved_in_the_fewest_chunks_of_whole_noise_blocks():
+    """`chunks`: the whole lane up to K = 4096, past it the least n whose K / n is at most 4096 and a multiple of 512, at
+    every served K (6144: 2 × 3072, 12288: 3 × 4096, 14336: 4 × 3584, 16384: 4 × 4096); a K with no such n is refused."""
+    assert [Z.chunks(k) for k in (32, 448, 4096, 6144, 12288, 14336, 16384)] == [1, 1, 1, 2, 3, 4, 4]
+    assert (Z.CHUNK_MAX, Z.CHUNK_ALIGN) == (4096, 512) and Z.CHUNK_ALIGN == SD.BLOCK_BITS
+    for k in (6144, 12288, 14336, 16384):
+        n = Z.chunks(k)
+        assert k // n <= Z.CHUNK_MAX and (k // n) % 512 == 0
+        assert not any(k % (m * 512) == 0 and k // m <= Z.CHUNK_MAX for m in range(2, n))
+    for k, why in ((0, "positive K"), (4128, "no n splits it")):
+        with pytest.raises(ValueError, match=why):
+            Z.chunks(k)
+
+
+def _chunk_rows(rows, n, c):
+    kc = len(rows[0]) // n
+    return [r[c * kc:c * kc + kc] for r in rows]
+
+
+def test_a_lanes_chunks_on_words_chain_to_the_whole_lane():
+    """`lane_chunk_carries`: chunk c's carry is the whole lane's chain after its (c + 1) KS_c segments (the fx1 state after
+    those sets of `h1tile.lane_sets` from the lane's keys, the last of those sets as T, the rows' residue sums and each
+    cell's z over those entries, the chain's words so far), and the last chunk's words and z are the lane's partial and
+    its cells' exact products, at 2, 3 and 4 chunks; `lane_chunk_reference` is 1 on each chunk's honest rows and carries."""
+    rng = random.Random(44)
+    for r, c, k, n in ((8, 16, 64, 2), (8, 16, 96, 3), (32, 32, 1024, 4)):
+        a, b, sa, sw = _unit_rows(rng, r, c, k)
+        lay, live, kc = H.Layout(r, c, k), [1] * r, k // n
+        zy = Z.records(a, b, sa, sw)
+        parts = H.lane_partials(a, b, SALT, 5, ROOTS)
+        noise = H.noise(SD.seed(SALT, 5, *ROOTS), lay)
+        keys = H.fold_keys(SD.receipt_seed(SALT, 5, *ROOTS), lay)
+        for ln in (0, lay.lanes - 1):
+            ra, rb, ras, rbs = _lane_rows(lay, ln, a, b, sa, sw)
+            carries = Z.lane_chunk_carries(ra, rb, ras, rbs, SALT, 5, ROOTS, ln, (r, c), n)
+            sets = H.lane_sets(a, b, *noise, lay, ln)
+            for ch, carry in enumerate(carries[:-1]):
+                done = (ch + 1) * kc // 32
+                st = keys[ln]
+                for p in sets[:done]:
+                    st = SG.absorb(H.FOLD, st, p)
+                x = [[(v + noise[0][i][0][t]) & 0xFF for t, v in enumerate(a[i][:done * 32])] for i in lay.rows(ln)]
+                assert carry["state"] == st and carry["t"] == sets[done - 1] and carry["words"] == parts[ln][:2 * done]
+                assert carry["res"] == [[sum(v - 256 if v & 0x80 else v for v in xi[rho::32]) & M32 for rho in range(32)]
+                                        for xi in x]
+                assert carry["z"] == [SG.seg_dot(0, ra[s][:done * 32], rb[t][:done * 32]) for s in range(4) for t in range(8)]
+                assert (carry["sa"], carry["sw"]) == (ras, rbs)
+                assert len(Z.carry_words(carry)) == Z.CARRY(lay, n, ch).leaves // 32
+            assert carries[-1]["words"] == parts[ln]
+            assert carries[-1]["z"] == [SG.seg_dot(0, ra[s], rb[t]) for s in range(4) for t in range(8)]
+            for ch in range(n):
+                last = ch == n - 1
+                assert Z.lane_chunk_reference(_chunk_rows(ra, n, ch), _chunk_rows(rb, n, ch), ras, rbs, live if last else None,
+                                              zy if last else None, parts[ln] if last else None,
+                                              carries[ch - 1] if ch else None, None if last else carries[ch], SALT, 5, ROOTS,
+                                              ln, (r, c), n, ch) == 1
+
+
+def _off(carry, field, at, bit):
+    out = {f: [list(v) for v in w] if f == "res" else list(w) for f, w in carry.items()}
+    if field == "res":
+        out["res"][at // 32][at % 32] ^= 1 << bit
+    else:
+        out[field][at] ^= 1 << bit
+    return out
+
+
+def test_a_chunk_on_words_holds_its_carries_scales_partial_and_cells():
+    """`lane_chunk_reference` at 3 chunks of an 8 × 16 leaf at K = 96: a bit off any field of a chunk's committed carry out
+    makes it 0, and so does a carried scale that is not its rows' or a carry in off the honest one in a bit its chain
+    reads (the chain it computes no longer gives the carry out, or the partial); at the last chunk a bit off the partial
+    or one of its own cells off the record makes it 0, another lane's cell leaves it 1. A dead leaf's last chunk is 1 on
+    the zero partial and 0 on its ungated chain's, and an index past the leaf's lanes makes every chunk 0. What holds a
+    carry in to the honest one is the chunk before's check of the same row as its carry out: the last chunk's digits
+    read only a residue sum's low bits and whether its quotient is 127, so a carried sum off in bit 31 leaves it 1."""
+    rng = random.Random(45)
+    n, lay = 3, H.Layout(8, 16, 96)
+    a, b, sa, sw = _unit_rows(rng, 8, 16, 96)
+    live, zy = [1] * 8, Z.records(a, b, sa, sw)
+    ra, rb, ras, rbs = _lane_rows(lay, 1, a, b, sa, sw)
+    cs = Z.lane_chunk_carries(ra, rb, ras, rbs, SALT, 5, ROOTS, 1, (8, 16), n)
+    part = H.lane_partials(a, b, SALT, 5, ROOTS)[1]
+
+    def ref(ch, cin=None, cout=None, partial=part, rec=zy, admit=live, rows=(ra, rb, ras, rbs), idx=1):
+        last = ch == n - 1
+        return Z.lane_chunk_reference(_chunk_rows(rows[0], n, ch), _chunk_rows(rows[1], n, ch), rows[2], rows[3],
+                                      admit if last else None, rec if last else None, partial if last else None,
+                                      (cin or cs[ch - 1]) if ch else None, None if last else (cout or cs[ch]), SALT, 5,
+                                      ROOTS, idx, (8, 16), n, ch)
+
+    assert [ref(ch) for ch in range(n)] == [1, 1, 1]
+    for field, at in (("state", 3), ("t", 30), ("res", 77), ("z", 9), ("words", 1), ("sa", 2), ("sw", 7)):
+        assert ref(0, cout=_off(cs[0], field, at, 4)) == 0 and ref(1, cout=_off(cs[1], field, at, 31)) == 0
+        assert ref(1, cin=_off(cs[0], field, at, 4)) == 0 and ref(2, cin=_off(cs[1], field, at, 4)) == 0
+    assert ref(2, cin=_off(cs[1], "res", 77, 31)) == 1 and ref(1, cout=_off(cs[1], "res", 77, 31)) == 0
+    assert ref(2, partial=[*part[:5], part[5] ^ 1 << 12, *part[6:]]) == 0
+    for other, want in ((1, 0), (2, 1)):
+        bad = (list(zy[0]), zy[1])
+        bad[0][Z.lane_cells(lay, other)[20]] ^= 1
+        assert ref(2, rec=bad) == want
+    empty = [[0] * 96 for _ in range(8)]
+    rows0 = _lane_rows(lay, 1, empty, b, [0] * 8, sw)
+    dead = Z.lane_chunk_carries(*rows0, SALT, 5, ROOTS, 1, (8, 16), n)
+    zy0 = Z.records(empty, b, [0] * 8, sw)
+    zeros = [0] * (2 * lay.sets)
+    assert ref(2, cin=dead[1], partial=zeros, rec=zy0, admit=[0] * 8, rows=rows0) == 1
+    assert ref(2, cin=dead[1], partial=dead[2]["words"], rec=zy0, admit=[0] * 8, rows=rows0) == 0
+    assert [ref(ch, idx=idx) for ch in range(n) for idx in (1 + lay.lanes, 1 | 1 << 15)] == [0] * 6
+
+
+@pytest.mark.parametrize("k,n", [(6144, 2), (14336, 4)])
+def test_a_chunk_reads_its_rows_carries_and_index_and_returns_ok(k, n):
+    """At the served 32 × 32 leaf: chunk c reads its 4 A and 8 B rows at K / n entries with their scales, the carry in past
+    the first (880 + 8 c KS_c bytes) and the carry out before the last (880 + 8 (c + 1) KS_c), the last chunk the leaf's
+    admit bits, record and the lane's whole partial (2 (KS + m) words), and every chunk the tile's salt, position and roots
+    and the index; its one output ``ok`` is a sink, so no chunk is a seed. `statement_rows` reads them in that order, and
+    `lane_statements` is the whole lane up to K = 4096 and the n chunks past it."""
+    t = _tile(H.PouwH1Tile, 32, 32, k)
+    kc, ks = k // n, k // n // 32
+    lay = H.Layout(32, 32, k)
+    tail = [(nm, tp.leaves) for nm, tp in t.signature()[0][2:]] + [("lane", 16)]
+    assert Z.lane_statements(t) == [Z.lane_chunk(t, n, c) for c in range(n)]
+    assert Z.lane_statements(_tile(H.PouwH1Tile, 32, 32, 4096)) == [Z.lane(_tile(H.PouwH1Tile, 32, 32, 4096))]
+    for c in range(n):
+        d = Z.lane_chunk(t, n, c)
+        params, ret = d.signature()
+        want = [("a", 4 * (8 * kc + 32)), ("b", 8 * (8 * kc + 32))]
+        want += [("carry_in", 8 * (880 + 8 * c * ks))] if c else []
+        want += ([("admit", 32), ("zy", 8 * 6144), ("partials", 64 * lay.sets)] if c == n - 1 else
+                 [("carry_out", 8 * (880 + 8 * (c + 1) * ks))])
+        assert [(nm, tp.leaves) for nm, tp in params] == want + tail and ret.fields == (("ok", Z.BIT),)
+        assert params[0][1].elem == Z.ROW(kc)
+        decl = d.defn.ports(d.S())
+        assert {nm: p.kind for nm, p in decl.params.items()} == {"salt": "coin", "position": "position"}
+        assert set(decl.ret) == {"ok"} and decl.ret["ok"].sink and PT._coin_role(d) is None
+        rows = Z.statement_rows(d)
+        assert [p for p, _ps in rows] == [*(f"a{i}" for i in range(4)), *(f"b{i}" for i in range(8)),
+                                          *(nm for nm, _l in want[2:]), "pub"]
+        assert Z.statement_ports(d)[-1] == ("o0", [("ok", 0, 1)])
+
+
+@pytest.mark.parametrize("bindings,why", [
+    (lambda: dict(TILE=_tile(H.PouwH1Tile3, 8, 16), CHUNKS=2, CHUNK=0), "over PouwH1Tile_v1"),
+    (lambda: dict(TILE=_tile(H.PouwH1Tile4, 8, 16), CHUNKS=2, CHUNK=0), "an H1 tile"),
+    (lambda: dict(TILE=_tile(r=4, c=8), CHUNKS=2, CHUNK=0), "whole bits"),
+    (lambda: dict(TILE=_tile(r=8, c=16), CHUNKS=1, CHUNK=0), "at least 2"),
+    (lambda: dict(TILE=_tile(r=8, c=16), CHUNKS=2, CHUNK=2), r"index in \[0, 2\)"),
+    (lambda: dict(TILE=_tile(r=8, c=16, k=96), CHUNKS=2, CHUNK=0), "whole 32-entry segments"),
+])
+def test_a_chunk_of_another_tile_or_out_of_its_chunks_is_refused(bindings, why):
+    with pytest.raises(ValueError, match=why):
+        bind(Z.PouwH1LaneZyChunk, **bindings()).signature()
+
+
+@pytest.mark.slow
+def test_a_lane_chunk_on_bits_is_its_word_reference():
+    """`PouwH1LaneZyChunk` over an 8 × 16 leaf on bits against `lane_chunk_reference`, about 2 minutes: the first and last
+    of 2 chunks at K = 64 and the middle of 3 at K = 96, each on every lane's honest rows and carries (1) and an index past
+    the leaf's lanes (0); the first and middle with a bit off their carry out (0); the middle and last with a carried
+    scale off (0) and a carried state word off (0); the last with a bit off its partial (0), one of its own cells off (0),
+    and a dead leaf with its zero partial (1) and its ungated one (0). It is the only test of a chunk's gates: its noise at
+    the chunk's offsets and U's, the chain, residue sums and z continued from the carry, and the checks of the carry out,
+    the scales and the last chunk's partial and cells."""
+    rng = random.Random(46)
+    got, want = [], []
+    for k, n, ch in ((64, 2, 0), (64, 2, 1), (96, 3, 1)):
+        lay, last = H.Layout(8, 16, k), ch == n - 1
+        a, b, sa, sw = _unit_rows(rng, 8, 16, k)
+        live, zy = [1] * 8, Z.records(a, b, sa, sw)
+        parts = H.lane_partials(a, b, SALT, 5, ROOTS)
+        empty = [[0] * k for _ in range(8)]
+        zy0 = Z.records(empty, b, [0] * 8, sw)
+        cases = []
+        for ln in range(lay.lanes):
+            rows = _lane_rows(lay, ln, a, b, sa, sw)
+            cs = Z.lane_chunk_carries(*rows, SALT, 5, ROOTS, ln, (8, 16), n)
+            cases.append((ln, rows, cs, live, zy, parts[ln]))
+        ln, rows, cs, *_ = cases[1]
+        cases.append((1 + lay.lanes, rows, cs, live, zy, parts[1]))
+        if not last:
+            cases.append((1, rows, [*cs[:ch], _off(cs[ch], "words", 2 * ch, 17), *cs[ch + 1:]], live, zy, parts[1]))
+        if ch:
+            cases.append((1, rows, [*cs[:ch - 1], _off(cs[ch - 1], "sw", 3, 0), *cs[ch:]], live, zy, parts[1]))
+            cases.append((1, rows, [*cs[:ch - 1], _off(cs[ch - 1], "state", 11, 22), *cs[ch:]], live, zy, parts[1]))
+        if last:
+            cell = (list(zy[0]), zy[1])
+            cell[0][Z.lane_cells(lay, 1)[5]] ^= 8
+            cases += [(1, rows, cs, live, zy, [parts[1][0] ^ 1 << 3, *parts[1][1:]]), (1, rows, cs, live, cell, parts[1])]
+            rows0 = _lane_rows(lay, 2, empty, b, [0] * 8, sw)
+            dead = Z.lane_chunk_carries(*rows0, SALT, 5, ROOTS, 2, (8, 16), n)
+            cases += [(2, rows0, dead, [0] * 8, zy0, [0] * (2 * lay.sets)), (2, rows0, dead, [0] * 8, zy0, dead[-1]["words"])]
+        d = bind(Z.PouwH1LaneZyChunk, TILE=_tile(H.PouwH1Tile, 8, 16, k), CHUNKS=n, CHUNK=ch)
+        names = [p for p, _t in d.signature()[0]]
+        inputs = []
+        for idx, (ra, rb, ras, rbs), cs, admit, rec, partial in cases:
+            ca, cb = _chunk_rows(ra, n, ch), _chunk_rows(rb, n, ch)
+            cin, cout = cs[ch - 1] if ch else None, None if last else cs[ch]
+            want.append(Z.lane_chunk_reference(ca, cb, ras, rbs, admit if last else None, rec if last else None,
+                                               partial if last else None, cin, cout, SALT, 5, ROOTS, idx, (8, 16), n, ch))
+            v = {"a": _row_bits(ca, ras), "b": _row_bits(cb, rbs), "salt": SD.leaves(SALT, True),
+                 "position": SD.position_leaves(5, True), "roots": SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True),
+                 "lane": _bits(idx, 16), "admit": list(admit), "partials": _word_bits(partial),
+                 "zy": _word_bits(rec[0]) + [x for y in rec[1] for x in _bits(y, 16)]}
+            v.update({nm: _word_bits(Z.carry_words(cr)) for nm, cr in (("carry_in", cin), ("carry_out", cout)) if cr})
+            inputs.append([v[p] for p in names])
+        out = evaluate_bits(d, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
+        got += [int(o) for o in out.reshape(len(cases))]
+    assert want == [1, 1, 1, 1, 0, 0] + [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0] + [1, 1, 1, 1, 0, 0, 0, 0]
+    assert got == want
+
+
+# -- the unit on chunk rows ------------------------------------------------------------------------------------------------------
+
+def _split(rows, scales, n):
+    """Each row's n chunk rows and their scales, row i's chunk c at n i + c, each chunk row its row's scale."""
+    kc = len(rows[0]) // n
+    return [r[c * kc:c * kc + kc] for r in rows for c in range(n)], [s for s in scales for _c in range(n)]
+
+
+@pytest.mark.parametrize("r,c,k,n", [(4, 8, 64, 2), (32, 32, 6144, 2), (32, 32, 14336, 4)])
+def test_the_unit_on_chunk_rows_reads_the_tables_chunk_rows_and_returns_the_units_outputs(r, c, k, n):
+    """`PouwH1TileZyChunks` takes the window's tile parameters (`h1window.TILE_PARAMS`): n R A and n C B rows of `ROW`(K / n)
+    in place of UNIT's R and C of `ROW`(K), then UNIT's record, salt, position and roots, and returns UNIT's receipt and ok
+    with its ports (the salt a coin, the receipt a sink, so it is no seed); `window_unit` binds it at the served K past
+    4096 with n = `chunks`(K), and UNIT itself up to 4096."""
+    t = _tile(H.PouwH1Tile, r, c, k)
+    u = Z.unit_chunks(t, n)
+    params, ret = u.signature()
+    inner = Z.unit(t).signature()
+    assert [nm for nm, _t in params] == list(HW.TILE_PARAMS) and ret == inner[1]
+    assert [(nm, tp.n, tp.elem) for nm, tp in params[:2]] == [("a", n * r, Z.ROW(k // n)), ("b", n * c, Z.ROW(k // n))]
+    assert params[2:] == inner[0][2:]
+    decl = u.defn.ports(u.S())
+    assert {nm: p.kind for nm, p in decl.params.items()} == {"salt": "coin", "position": "position"}
+    assert set(decl.ret) == {"receipt"} and decl.ret["receipt"].sink and PT._coin_role(u) is None
+    if r == 32:
+        assert Z.window_unit(t) == u and Z.window_unit(_tile(H.PouwH1Tile, r, c, 4096)) == Z.unit(_tile(H.PouwH1Tile, r, c, 4096))
+
+
+@pytest.mark.parametrize("bindings,why", [
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile3, 4, 8)), CHUNKS=2), "over PouwH1Tile_v1, not PouwH1Tile_v3"),
+    (lambda: dict(UNIT=_tile(H.PouwH1Tile, 4, 8), CHUNKS=2), "PouwH1TileZy_v1 over an H1 tile"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile, 4, 8)), CHUNKS=1), "at least 2"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile, 4, 8, 96)), CHUNKS=2), "whole 32-entry segments"),
+])
+def test_a_unit_on_chunk_rows_of_another_unit_or_chunking_is_refused(bindings, why):
+    with pytest.raises(ValueError, match=why):
+        bind(Z.PouwH1TileZyChunks, **bindings())
+
+
+def test_a_window_unit_at_a_chunked_k_is_refused_over_v3_and_v4():
+    """Past `CHUNK_MAX` a drawn leaf is proved as lanes in chunks, which only v1 has: `window_unit` refuses v3 there (the
+    wrapper's refusal) and v4 anywhere (the zy unit's), and takes v3 at K <= 4096."""
+    for defn, why in ((H.PouwH1Tile3, "over PouwH1Tile_v1"), (H.PouwH1Tile4, "an H1 tile")):
+        with pytest.raises(ValueError, match=why):
+            Z.window_unit(_tile(defn, 32, 32, 6144))
+    assert Z.window_unit(_tile(H.PouwH1Tile3, 32, 32, 4096)) == Z.unit(_tile(H.PouwH1Tile3, 32, 32, 4096))
+
+
+def test_the_unit_on_chunk_rows_reads_the_bits_of_the_leaves_its_table_commits():
+    """A chunk row's bits are its `chunk_leaves` leaf's bytes, least significant bit first: its K / n codes, then its row's
+    scale, so the unit's ``a`` and ``b`` are its table's leaves n r + c in order."""
+    rng = random.Random(48)
+    for k, n in ((4096, 1), (6144, 2), (14336, 4)):
+        assert Z.chunks(k) == n
+        a, _b, sa, _sw = _unit_rows(rng, 3, 1, k)
+        raw = b"".join(leaf for row, s in zip(a, sa) for leaf in Z.chunk_leaves(bytes(row) + s.to_bytes(4, "little"), k))
+        rows, scales = _split(a, sa, n)
+        assert _row_bits(rows, scales) == [(byte >> i) & 1 for byte in raw for i in range(8)]
+
+
+def test_the_unit_on_chunk_rows_on_words_is_the_unit_on_its_whole_rows():
+    """`chunks_reference`: `reference` on each row's chunks joined, so the honest chunk rows give the whole unit's receipt
+    and ok; a later chunk's scale off its row's leaves the receipt and makes ok 0, and a code off in a later chunk moves
+    the receipt as it moves the whole row's."""
+    rng = random.Random(49)
+    a, b, sa, sw = _unit_rows(rng, 4, 8, 192)
+    zy = Z.records(a, b, sa, sw)
+    whole = Z.reference(a, b, sa, sw, zy, SALT, 5, ROOTS)
+    for n in (2, 3):
+        (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+        assert whole[1] == 1 and Z.chunks_reference(ca, cb, csa, csw, zy, SALT, 5, ROOTS, n) == whole
+        for at in (1, n * 2 + n - 1):
+            off = list(csa)
+            off[at] ^= 1 << 7
+            assert Z.chunks_reference(ca, cb, off, csw, zy, SALT, 5, ROOTS, n) == (whole[0], 0)
+        moved = [list(row) for row in cb]
+        moved[n * 3 + n - 1][5] ^= 0x40
+        b2 = [list(row) for row in b]
+        b2[3][(n - 1) * (192 // n) + 5] ^= 0x40
+        assert Z.chunks_reference(ca, moved, csa, csw, zy, SALT, 5, ROOTS, n)[0] == Z.reference(
+            a, b2, sa, sw, zy, SALT, 5, ROOTS)[0] != whole[0]
+
+
+@pytest.mark.slow
+def test_the_unit_on_chunk_rows_on_bits_is_its_word_reference():
+    """`PouwH1TileZyChunks` over the 4 × 8 unit at K = 64 in 2 chunk rows a row, on bits against `chunks_reference`, about
+    50 s: the honest chunk rows (ok 1), a later A chunk's scale off (0), a later B chunk's (0) and a record cell off (0),
+    each with the whole unit's receipt. It is the only test of the wrapper's gates: the whole rows it joins from the chunk
+    rows (the receipt and the record check see the row's codes in order and chunk 0's scale) and the scales' equality."""
+    rng = random.Random(47)
+    n = 2
+    a, b, sa, sw = _unit_rows(rng, 4, 8, 64)
+    (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+    zy = Z.records(a, b, sa, sw)
+    off_a, off_b = list(csa), list(csw)
+    off_a[3] ^= 1 << 5
+    off_b[2 * 5 + 1] ^= 1 << 30
+    cases = [(csa, csw, zy), (off_a, csw, zy), (csa, off_b, zy), (csa, csw, (zy[0], [zy[1][0] ^ 1, *zy[1][1:]]))]
+    u = Z.unit_chunks(_tile(H.PouwH1Tile, 4, 8, 64), n)
+    names = [p for p, _t in u.signature()[0]]
+    inputs, want = [], []
+    for xsa, xsw, rec in cases:
+        want.append(Z.chunks_reference(ca, cb, xsa, xsw, rec, SALT, 5, ROOTS, n))
+        v = {"a": _row_bits(ca, xsa), "b": _row_bits(cb, xsw), "zy": _word_bits(rec[0]) + [x for y in rec[1] for x in _bits(y, 16)],
+             "salt": SD.leaves(SALT, True), "position": SD.position_leaves(5, True),
+             "roots": SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True)}
+        inputs.append([v[p] for p in names])
+    out = evaluate_bits(u, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
+    got = [([_int(o[32 * w:32 * w + 32]) for w in range((len(o) - 1) // 32)], int(o[-1])) for o in out]
+    receipt = Z.reference(a, b, sa, sw, zy, SALT, 5, ROOTS)[0]
+    assert want == [(receipt, 1), (receipt, 0), (receipt, 0), (receipt, 0)]
+    assert got == want
+
+
+# -- the unit on chunk rows over J10-R ------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("defn", [H.PouwH1Tile5, H.PouwH1Tile6], ids=["v5", "v6"])
+@pytest.mark.parametrize("r,c,k,n", [(4, 8, 64, 2), (32, 32, 14336, 4)])
+def test_the_j10r_unit_on_chunk_rows_takes_the_call_and_blocks_after_the_tiles_parameters(defn, r, c, k, n):
+    """Over J10-R's tiles the unit on chunk rows is `PouwH1TileZyChunks_v2`, with `h1window.TILE_PARAMS_J10R`: n R A and n C
+    B rows of `ROW`(K / n), then UNIT's record, salt, position, roots, call and blocks, its outputs and ports UNIT's;
+    `window_unit` binds it past 4096 (Llama-3.1-8B's down projection at K = 14336 in 4 chunks), and UNIT up to 4096. v1's
+    stays `PouwH1TileZyChunks_v1`."""
+    t = _tile(defn, r, c, k)
+    u = Z.unit_chunks(t, n)
+    params, ret = u.signature()
+    inner = Z.unit(t).signature()
+    assert u.defn is Z.PouwH1TileZyChunks2 and u.id.startswith("PouwH1TileZyChunks_v2{")
+    assert [nm for nm, _t in params] == list(HW.TILE_PARAMS_J10R) and ret == inner[1]
+    assert [(nm, tp.n, tp.elem) for nm, tp in params[:2]] == [("a", n * r, Z.ROW(k // n)), ("b", n * c, Z.ROW(k // n))]
+    assert params[2:] == inner[0][2:]
+    decl = u.defn.ports(u.S())
+    assert {nm: p.kind for nm, p in decl.params.items()} == {"salt": "coin", "position": "position"}
+    assert set(decl.ret) == {"receipt"} and decl.ret["receipt"].sink and PT._coin_role(u) is None
+    assert Z.unit_chunks(_tile(H.PouwH1Tile, r, c, k), n).defn is Z.PouwH1TileZyChunks
+    if r == 32:
+        assert Z.window_unit(t) == u and Z.window_unit(_tile(defn, r, c, 4096)) == Z.unit(_tile(defn, r, c, 4096))
+
+
+@pytest.mark.parametrize("bindings,why", [
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile, 4, 8)), CHUNKS=2), "PouwH1Tile_v1's unit on chunk rows is .*_v1"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile3, 4, 8)), CHUNKS=2), "over J10-R's tiles"),
+    (lambda: dict(UNIT=_tile(H.PouwH1Tile5, 4, 8), CHUNKS=2), "PouwH1TileZy_v1 over a J10-R tile"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile5, 4, 8)), CHUNKS=1), "at least 2"),
+    (lambda: dict(UNIT=Z.unit(_tile(H.PouwH1Tile5, 4, 8, 96)), CHUNKS=2), "whole 32-entry segments"),
+])
+def test_a_j10r_unit_on_chunk_rows_of_another_unit_or_chunking_is_refused(bindings, why):
+    """v2 takes only J10-R's zy unit, at whole 32-entry segments a chunk, and v1 still refuses a J10-R tile."""
+    with pytest.raises(ValueError, match=why):
+        bind(Z.PouwH1TileZyChunks2, **bindings())
+    with pytest.raises(ValueError, match="over PouwH1Tile_v1, not PouwH1Tile_v5"):
+        bind(Z.PouwH1TileZyChunks, UNIT=Z.unit(_tile(H.PouwH1Tile5, 4, 8)), CHUNKS=2)
+
+
+#: a 4-tile-row slot's call at the J10-R unit (1, 0), its first unit at position 40 and the unit at 41
+J10R_M, J10R_I, J10R_J, J10R_CALL, J10R_AT = 16, 1, 0, 40, 41
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["v5", "v6"])
+def test_the_j10r_unit_on_chunk_rows_on_words_is_j10r_reference_on_its_whole_rows(stream):
+    """`chunks_reference` with ``j10r``: `h1tile.j10r_reference` on each row's chunks joined, at the blocks
+    `h1tile.j10r_blocks` gives at the whole K (the call-scale stream's rows and columns), so a J10-R unit of
+    Llama-3.1-8B's down projection (K = 14336, 4 chunks, on a 4 × 8 tile) has its whole-row receipt and ok 1. Blocks
+    taken at a chunk's K / n move the receipt; a later chunk's scale off its row's leaves the receipt and makes ok 0; a
+    code off in the last chunk moves the receipt as it moves the whole row's."""
+    rng, k, n = random.Random(50), 14336, 4
+    a, b, sa, sw = _unit_rows(rng, 4, 8, k)
+    zy = Z.records(a, b, sa, sw)
+    blocks = H.j10r_blocks(J10R_M, k, (4, 8), J10R_I, J10R_J)
+    j10r = (J10R_CALL, blocks)
+    z, receipt = H.j10r_reference(a, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks, stream=stream)
+    assert Z.reference(a, b, sa, sw, zy, SALT, J10R_AT, ROOTS, stream, j10r) == (receipt, 1)
+    (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+    assert Z.chunks_reference(ca, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n, stream, j10r) == (receipt, 1)
+    chunk_blocks = H.j10r_blocks(J10R_M, k // n, (4, 8), J10R_I, J10R_J)
+    assert chunk_blocks != blocks and Z.chunks_reference(ca, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n, stream,
+                                                         (J10R_CALL, chunk_blocks))[0] != receipt
+    assert Z.chunks_reference(ca, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n)[0] != receipt, "v1's noise is no J10-R's"
+    off = list(csw)
+    off[n * 6 + n - 1] ^= 1 << 7
+    assert Z.chunks_reference(ca, cb, csa, off, zy, SALT, J10R_AT, ROOTS, n, stream, j10r) == (receipt, 0)
+    moved = [list(row) for row in ca]
+    moved[n * 2 + n - 1][7] ^= 0x40
+    a2 = [list(row) for row in a]
+    a2[2][(n - 1) * (k // n) + 7] ^= 0x40
+    got = Z.chunks_reference(moved, cb, csa, csw, zy, SALT, J10R_AT, ROOTS, n, stream, j10r)
+    assert got[0] == H.j10r_reference(a2, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks, stream=stream)[1] != receipt
+    assert got[1] == 0, "the record is the honest rows' product, not the moved row's"
+
+
+def _j10r_tail(position, call, blocks):
+    return {"salt": SD.leaves(SALT, True), "position": SD.position_leaves(position, True),
+            "roots": SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True), "call": SD.position_leaves(call, True),
+            "blocks": SD.position_leaves(blocks[0], True) + SD.position_leaves(blocks[1], True)}
+
+
+@pytest.mark.slow
+def test_the_j10r_unit_on_chunk_rows_on_bits_is_its_word_reference():
+    """`PouwH1TileZyChunks_v2` over the 4 × 8 v5 unit at K = 64 in 2 chunk rows a row, on bits against `chunks_reference`
+    with ``j10r``, about a minute: the honest chunk rows (ok 1), a later A chunk's scale off (0), a code off in a later
+    B chunk (the moved row's receipt, ok 0), and the blocks of another unit of the call (another receipt, ok 1). It is
+    the only test of v2's gates: the whole rows it joins, the call and blocks it passes on to UNIT and the scales'
+    equality."""
+    rng, n, k = random.Random(51), 2, 64
+    a, b, sa, sw = _unit_rows(rng, 4, 8, k)
+    (ca, csa), (cb, csw) = _split(a, sa, n), _split(b, sw, n)
+    zy = Z.records(a, b, sa, sw)
+    blocks = H.j10r_blocks(J10R_M, k, (4, 8), J10R_I, J10R_J)
+    other = H.j10r_blocks(J10R_M, k, (4, 8), J10R_I + 1, J10R_J)
+    off_a = list(csa)
+    off_a[3] ^= 1 << 5
+    moved = [list(row) for row in cb]
+    moved[n * 5 + 1][9] ^= 0x10
+    cases = [(cb, csa, blocks), (cb, off_a, blocks), (moved, csa, blocks), (cb, csa, other)]
+    u = Z.unit_chunks(_tile(H.PouwH1Tile5, 4, 8, k), n)
+    names = [p for p, _t in u.signature()[0]]
+    inputs, want = [], []
+    for xb, xsa, blk in cases:
+        want.append(Z.chunks_reference(ca, xb, xsa, csw, zy, SALT, J10R_AT, ROOTS, n, j10r=(J10R_CALL, blk)))
+        v = {"a": _row_bits(ca, xsa), "b": _row_bits(xb, csw),
+             "zy": _word_bits(zy[0]) + [x for y in zy[1] for x in _bits(y, 16)], **_j10r_tail(J10R_AT, J10R_CALL, blk)}
+        inputs.append([v[p] for p in names])
+    out = evaluate_bits(u, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
+    got = [([_int(o[32 * w:32 * w + 32]) for w in range((len(o) - 1) // 32)], int(o[-1])) for o in out]
+    receipt = H.j10r_reference(a, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks)[1]
+    assert [(w[0] == receipt, w[1]) for w in want] == [(True, 1), (True, 0), (False, 0), (False, 1)]
+    assert got == want
+
+
+# -- a J10-R leaf's lanes ------------------------------------------------------------------------------------------------------
+
+#: an 8 × 16 leaf of a 16-row slot's call at its unit (1, 0), and blocks whose sums carry across a counter's u32 halves
+J10R_LEAF_BLOCKS = H.j10r_blocks(16, 64, (8, 16), 1, 0)
+J10R_CARRY_BLOCKS = ((1 << 32) - 3, (5 << 32) - 1)
+
+
+def test_a_j10r_leafs_lanes_on_words_are_v5s_receipt_split_by_lane():
+    """Over J10-R's v5 (`lane_partial`, `lane_reference`, `lane_chunk_carries` and `lane_chunk_reference` with ``j10r``):
+    the lanes' partials XOR to `h1tile.j10r_reference`'s receipt, at the call's blocks and at blocks whose counters carry
+    into their high halves; each lane's reference is 1 on its partial and 0 on today's (v1's) partial or another unit's
+    blocks'; its chain in 2 and 4 chunks ends at the whole lane's partial, each chunk 1 on its honest rows and carries."""
+    rng = random.Random(52)
+    for r, c, k, blocks in ((8, 16, 64, J10R_LEAF_BLOCKS), (8, 16, 64, J10R_CARRY_BLOCKS), (32, 32, 512, J10R_CARRY_BLOCKS)):
+        a, b, sa, sw = _unit_rows(rng, r, c, k)
+        lay, live, j10r = H.Layout(r, c, k), [1] * r, (J10R_CALL, blocks)
+        zy = Z.records(a, b, sa, sw)
+        receipt = H.j10r_reference(a, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks)[1]
+        parts = [Z.lane_partial(*_lane_rows(lay, ln, a, b, sa, sw)[:2], live, SALT, J10R_AT, ROOTS, ln, (r, c), j10r)
+                 for ln in range(lay.lanes)]
+        assert Z.combine_reference(parts, receipt) == 1
+        today = H.lane_partials(a, b, SALT, J10R_AT, ROOTS)
+        other = (J10R_CALL, (blocks[0] + lay.rb, blocks[1]))
+        for ln in (0, lay.lanes - 1):
+            rows = _lane_rows(lay, ln, a, b, sa, sw)
+            assert Z.lane_reference(*rows, live, zy, parts[ln], SALT, J10R_AT, ROOTS, ln, (r, c), j10r) == 1
+            assert Z.lane_reference(*rows, live, zy, today[ln], SALT, J10R_AT, ROOTS, ln, (r, c), j10r) == 0
+            assert Z.lane_reference(*rows, live, zy, parts[ln], SALT, J10R_AT, ROOTS, ln, (r, c), other) == 0
+            for n in (2, 4) if k % 128 == 0 else (2,):
+                cs = Z.lane_chunk_carries(*rows, SALT, J10R_AT, ROOTS, ln, (r, c), n, j10r)
+                assert cs[-1]["words"] == parts[ln]
+                for ch in range(n):
+                    last = ch == n - 1
+                    assert Z.lane_chunk_reference(_chunk_rows(rows[0], n, ch), _chunk_rows(rows[1], n, ch), *rows[2:],
+                                                  live if last else None, zy if last else None, parts[ln] if last else None,
+                                                  cs[ch - 1] if ch else None, None if last else cs[ch], SALT, J10R_AT,
+                                                  ROOTS, ln, (r, c), n, ch, j10r) == 1
+
+
+@pytest.mark.parametrize("k", [4096, 16384, 65536])
+def test_a_j10r_leafs_lane_takes_the_call_and_blocks_before_the_index(k):
+    """At the served 32 × 32 leaf over v5, `lane_statements` is `PouwH1LaneZy_v2` up to K = 4096 and `chunks`(K)
+    `PouwH1LaneZyChunk_v2` past it (4 at 16,384, 16 at 65,536), each with v1's parameters and v5's ``call`` and
+    ``blocks`` between ``roots`` and ``lane``, read as one public row (`PUBLIC_J10R`, whole 16-bit words), its one output
+    ``ok`` a sink; the combine is `PouwH1Combine_v2` over the v5 tile, v1's rows and then the 32 n statements' ok rows
+    (``ok0`` ..), one 16-bit word each, its one output the leaf's ok."""
+    t, t1 = _tile(H.PouwH1Tile5, 32, 32, k), _tile(H.PouwH1Tile, 32, 32, k)
+    stmts, n = Z.lane_statements(t), Z.chunks(k)
+    assert [s.defn for s in stmts] == [Z.PouwH1LaneZy2] if n == 1 else [Z.PouwH1LaneZyChunk2] * n
+    comb, comb1 = Z.combine(t), Z.combine(t1)
+    assert comb == bind(Z.PouwH1Combine2, TILE=t) and comb1 == bind(Z.PouwH1Combine, TILE=t1)
+    assert Z.leaf_statements(H.Layout(32, 32, k)) == 32 * n
+    assert dict(comb.signature()[0])["oks"] == Array(32 * n, Z.OK_WORD)
+    assert Z.statement_rows(comb) == Z.statement_rows(comb1) + [(f"ok{i}", [f"oks[{i}]"]) for i in range(32 * n)]
+    assert Z.statement_ports(comb)[-2:] == [(f"ok{32 * n - 1}", [(f"oks[{32 * n - 1}]", 0, 16)]), ("o0", [("ok", 0, 1)])]
+    for s, s1 in zip(stmts, Z.lane_statements(t1), strict=True):
+        params, ret = s.signature()
+        names = [nm for nm, _t in params]
+        assert names == [nm for nm, _t in s1.signature()[0]][:-1] + ["call", "blocks", "lane"]
+        assert dict(params)["call"] == SD.POS_BITS and dict(params)["blocks"] == Array(2, SD.POS_BITS)
+        assert Z.statement_rows(s)[-1] == ("pub", list(Z.PUBLIC_J10R))
+        assert Z.statement_rows(s)[:-1] == Z.statement_rows(s1)[:-1]
+        assert sum(tp.leaves for nm, tp in params if nm in Z.PUBLIC_J10R) % 16 == 0
+        assert ret.fields == (("ok", Z.BIT),) and Z.statement_ports(s)[-1] == ("o0", [("ok", 0, 1)])
+        decl = s.defn.ports(s.S())
+        assert {nm: p.kind for nm, p in decl.params.items()} == {"salt": "coin", "position": "position"}
+        assert set(decl.ret) == {"ok"} and decl.ret["ok"].sink and PT._coin_role(s) is None
+
+
+@pytest.mark.parametrize("d,bindings,why", [
+    (lambda: Z.PouwH1LaneZy2, lambda: dict(TILE=_tile(H.PouwH1Tile, 8, 16)), "PouwH1Tile_v1's lane is PouwH1LaneZy_v1"),
+    (lambda: Z.PouwH1LaneZy2, lambda: dict(TILE=_tile(H.PouwH1Tile6, 8, 16)), r"an H1 tile \(PouwH1Tile_v5\)"),
+    (lambda: Z.PouwH1LaneZy2, lambda: dict(TILE=_tile(H.PouwH1Tile5, 4, 8)), "whole bits"),
+    (lambda: Z.PouwH1LaneZy, lambda: dict(TILE=_tile(H.PouwH1Tile5, 8, 16)), "an H1 tile"),
+    (lambda: Z.PouwH1Combine, lambda: dict(TILE=_tile(H.PouwH1Tile5, 8, 16)), "an H1 tile"),
+    (lambda: Z.PouwH1Combine2, lambda: dict(TILE=_tile(H.PouwH1Tile6, 8, 16)), r"an H1 tile \(PouwH1Tile_v5\)"),
+    (lambda: Z.PouwH1Combine2, lambda: dict(TILE=_tile(H.PouwH1Tile, 8, 16)), r"an H1 tile \(PouwH1Tile_v5\)"),
+    (lambda: Z.PouwH1LaneZyChunk2, lambda: dict(TILE=_tile(H.PouwH1Tile, 8, 16), CHUNKS=2, CHUNK=0), "over PouwH1Tile_v5"),
+    (lambda: Z.PouwH1LaneZyChunk2, lambda: dict(TILE=_tile(H.PouwH1Tile6, 8, 16), CHUNKS=2, CHUNK=0), "over PouwH1Tile_v5"),
+    (lambda: Z.PouwH1LaneZyChunk2, lambda: dict(TILE=_tile(H.PouwH1Tile5, 8, 16), CHUNKS=2, CHUNK=2), r"in \[0, 2\)"),
+    (lambda: Z.PouwH1LaneZyChunk, lambda: dict(TILE=_tile(H.PouwH1Tile5, 8, 16), CHUNKS=2, CHUNK=0), "over PouwH1Tile_v1"),
+])
+def test_a_j10r_lane_of_another_tile_is_refused(d, bindings, why):
+    """v2's lane, lane chunk and combine take only J10-R's v5 (v6's one-stream z has no lane in chunks), and v1's
+    refuse it."""
+    with pytest.raises(ValueError, match=why):
+        bind(d(), **bindings()).signature()
+
+
+def test_a_j10r_combine_on_bits_folds_the_statements_ok_rows_into_its_own():
+    """`PouwH1Combine_v2` over an 8 × 16 v5 leaf at K = 64 (4 lanes, one statement each) on bits against
+    `combine_reference` with ``oks``: 1 on the honest partials, receipt and four ok rows of the word 1; 0 with one ok row
+    0, with one the word 3 (a bit past the ok set), with every ok row 0, and with the receipt off by one bit."""
+    rng = random.Random(55)
+    lay = H.Layout(8, 16, 64)
+    parts = [[rng.randrange(1 << 32) for _ in range(2 * lay.sets)] for _ in range(lay.lanes)]
+    receipt = [0] * (2 * lay.sets)
+    for p in parts:
+        receipt = [x ^ v for x, v in zip(receipt, p)]
+    ones = [1] * Z.leaf_statements(lay)
+    cases = [(parts, receipt, ones), (parts, receipt, [1, 1, 0, 1]), (parts, receipt, [1, 3, 1, 1]),
+             (parts, receipt, [0] * 4), (parts, [receipt[0] ^ 1, *receipt[1:]], ones)]
+    args = [np.array([[x for p in ps for x in _word_bits(p)] for ps, _r, _o in cases], np.uint8),
+            np.array([_word_bits(r) for _ps, r, _o in cases], np.uint8),
+            np.array([[x for w in oks for x in _bits(w, 16)] for _ps, _r, oks in cases], np.uint8)]
+    out = evaluate_bits(bind(Z.PouwH1Combine2, TILE=_tile(H.PouwH1Tile5, 8, 16)), *args).reshape(len(cases))
+    assert [int(o) for o in out] == [Z.combine_reference(*c) for c in cases] == [1, 0, 0, 0, 0]
+
+
+def _j10r_lane_inputs(names, ca, cb, ras, rbs, admit, rec, partial, cin, cout, idx, blocks):
+    v = {"a": _row_bits(ca, ras), "b": _row_bits(cb, rbs), "admit": list(admit or []), "partials": _word_bits(partial or []),
+         "zy": _word_bits(rec[0]) + [x for y in rec[1] for x in _bits(y, 16)] if rec else [], "lane": _bits(idx, 16),
+         **_j10r_tail(J10R_AT, J10R_CALL, blocks)}
+    v.update({nm: _word_bits(Z.carry_words(cr)) for nm, cr in (("carry_in", cin), ("carry_out", cout)) if cr})
+    return [v[p] for p in names]
+
+
+@pytest.mark.slow
+def test_a_j10r_lane_on_bits_is_its_word_reference():
+    """`PouwH1LaneZy_v2` over an 8 × 16 v5 leaf at K = 64 on bits against `lane_reference` with ``j10r``, every case at
+    once: each lane on its honest rows (1), a lane with one of its cells off (0), with today's partial (0), at another
+    unit's blocks (0), at blocks whose counters carry across their u32 halves (1), a dead leaf on its zero partial (1),
+    and an index past the leaf's lanes (0). It is the only test of the v2 lane's gates: its seed_c and σ_R from one
+    PouwCallSeeds, each block's counter the picked offset plus the blocks input, and v1's chain and checks on them."""
+    rng = random.Random(53)
+    a, b, sa, sw = _unit_rows(rng, 8, 16)
+    lay, live = H.Layout(8, 16, 64), [1] * 8
+    zy = Z.records(a, b, sa, sw)
+    d = bind(Z.PouwH1LaneZy2, TILE=_tile(H.PouwH1Tile5, 8, 16))
+    names = [p for p, _t in d.signature()[0]]
+
+    def part(ln, blocks, admit=live, rows=(a, sa)):
+        return Z.lane_partial(*_lane_rows(lay, ln, rows[0], b, rows[1], sw)[:2], admit, SALT, J10R_AT, ROOTS, ln, (8, 16),
+                              (J10R_CALL, blocks))
+
+    cell = (list(zy[0]), zy[1])
+    cell[0][Z.lane_cells(lay, 2)[11]] ^= 2
+    empty = [[0] * 64 for _ in range(8)]
+    zy0 = Z.records(empty, b, [0] * 8, sw)
+    today = H.lane_partials(a, b, SALT, J10R_AT, ROOTS)
+    other = H.j10r_blocks(16, 64, (8, 16), 0, 0)
+    blk = J10R_LEAF_BLOCKS
+    cases = [(ln, (a, sa), live, zy, part(ln, blk), blk) for ln in range(lay.lanes)]
+    cases += [(2, (a, sa), live, cell, part(2, blk), blk), (1, (a, sa), live, zy, today[1], blk),
+              (3, (a, sa), live, zy, part(3, blk), other), (3, (a, sa), live, zy, part(3, J10R_CARRY_BLOCKS), J10R_CARRY_BLOCKS),
+              (0, (empty, [0] * 8), [0] * 8, zy0, [0] * (2 * lay.sets), blk), (1 + lay.lanes, (a, sa), live, zy, part(1, blk), blk)]
+    want, inputs = [], []
+    for idx, (aa, ss), admit, rec, partial, blocks in cases:
+        ra, rb, ras, rbs = _lane_rows(lay, idx % lay.lanes, aa, b, ss, sw)
+        want.append(Z.lane_reference(ra, rb, ras, rbs, admit, rec, partial, SALT, J10R_AT, ROOTS, idx, (8, 16),
+                                     (J10R_CALL, blocks)))
+        inputs.append(_j10r_lane_inputs(names, ra, rb, ras, rbs, admit, rec, partial, None, None, idx, blocks))
+    got = evaluate_bits(d, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))]).reshape(len(cases))
+    assert want == [1] * lay.lanes + [0, 0, 0, 1, 1, 0]
+    assert [int(o) for o in got] == want
+
+
+@pytest.mark.slow
+def test_a_j10r_lane_chunk_on_bits_is_its_word_reference():
+    """`PouwH1LaneZyChunk_v2` over an 8 × 16 v5 leaf on bits against `lane_chunk_reference` with ``j10r``: the first and
+    last of 2 chunks at K = 64, each on lanes 0 and 3's honest rows and carries (1), at another unit's blocks (0), at
+    blocks whose counters carry across their u32 halves (1), and the last with a bit off its partial (0). It is the only
+    test of the v2 chunk's gates: seed_c in every chunk, the counters from the blocks input at the chunk's entries and
+    U's, and chunk 0's keys from σ_R."""
+    rng, n = random.Random(54), 2
+    a, b, sa, sw = _unit_rows(rng, 8, 16)
+    lay, live = H.Layout(8, 16, 64), [1] * 8
+    zy = Z.records(a, b, sa, sw)
+    other = H.j10r_blocks(16, 64, (8, 16), 0, 0)
+    got, want = [], []
+    for ch in range(n):
+        last = ch == n - 1
+        d = bind(Z.PouwH1LaneZyChunk2, TILE=_tile(H.PouwH1Tile5, 8, 16), CHUNKS=n, CHUNK=ch)
+        names = [p for p, _t in d.signature()[0]]
+        cases = []
+        for ln, honest, blocks in ((0, J10R_LEAF_BLOCKS, J10R_LEAF_BLOCKS), (3, J10R_LEAF_BLOCKS, J10R_LEAF_BLOCKS),
+                                   (3, J10R_LEAF_BLOCKS, other), (3, J10R_CARRY_BLOCKS, J10R_CARRY_BLOCKS)):
+            rows = _lane_rows(lay, ln, a, b, sa, sw)
+            cs = Z.lane_chunk_carries(*rows, SALT, J10R_AT, ROOTS, ln, (8, 16), n, (J10R_CALL, honest))
+            cases.append((ln, rows, cs, cs[-1]["words"], blocks))
+        if last:
+            ln, rows, cs, words, blocks = cases[1]
+            cases.append((ln, rows, cs, [words[0], words[1] ^ 1 << 20, *words[2:]], blocks))
+        inputs = []
+        for ln, (ra, rb, ras, rbs), cs, partial, blocks in cases:
+            ca, cb = _chunk_rows(ra, n, ch), _chunk_rows(rb, n, ch)
+            cin, cout = cs[ch - 1] if ch else None, None if last else cs[ch]
+            args = (live if last else None, zy if last else None, partial if last else None, cin, cout)
+            want.append(Z.lane_chunk_reference(ca, cb, ras, rbs, *args, SALT, J10R_AT, ROOTS, ln, (8, 16), n, ch,
+                                               (J10R_CALL, blocks)))
+            inputs.append(_j10r_lane_inputs(names, ca, cb, ras, rbs, *args, ln, blocks))
+        out = evaluate_bits(d, *[np.array([row[p] for row in inputs], np.uint8) for p in range(len(names))])
+        got += [int(o) for o in out.reshape(len(cases))]
+    assert want == [1, 1, 0, 1] + [1, 1, 0, 1, 0]
+    assert got == want

@@ -1,9 +1,8 @@
-"""In-test stand-ins for the partition tests (qpart-owned).  Until `gateset.py` / `boundary.py` are merged the
-partition validator is exercised against:
+"""In-test stand-ins for the partition tests.  The partition validator is exercised against:
 
 * `StubGateSet` / `StubFamily` -- the `GateSet` / `Family` shape of the freeze doc, built from explicit `Part`s;
-* `BodyTiling` / `Tiling` -- the structural description `validate_partition`'s fast path reads (INTERFACE NOTE in
-  `out/gen/window/qpart.md`); `materialise` turns a tiling into the family it induces, so the fast path can be checked
+* `BodyTiling` / `Tiling` -- the structural description `validate_partition`'s fast path reads; `materialise` turns a
+  tiling into the family it induces, so the fast path can be checked
   against the interval sweep on the same sets;
 * `OracleBoundary` -- `w_out` from the explicit oracle `GateSelection.out` (gate widths from the producing primitive),
   with an adjustable slack on the bound and an optional "exact is Unsupported" mode;
@@ -21,9 +20,9 @@ from verity.ml.circuits.layout import Scope, GateSelection
 from verity.ml.circuits.parts import Part, Unsupported, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry.prims import BF16, F32
 from verity.ml.circuits.types import Array, Tuple, Value
 
 
@@ -107,7 +106,7 @@ class FakeProgram:
 # ---------------------------------------------------------------------------------------------------------
 
 
-# The Query API owner's structures (qapi INTERFACE NOTE, 21:20Z), same field names, so the real classes are drop-in.
+# The Query API's structures, same field names, so the real classes are drop-in.
 @dataclass(frozen=True)
 class NodeTiling:
     node: int

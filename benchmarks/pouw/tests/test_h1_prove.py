@@ -174,7 +174,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
     assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
-    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], u, 1) for u in range(T)]
+    assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], c["tile0"], c["tiles"])
+                                                                    for c in com["calls"]]
     assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "zy", "salt", "position", "roots"]
     assert U.window_ports(win.program) == {**{f"a_k{K}[{i}]": f"a{i}" for i in range(R)},
                                            **{f"b_k{K}[{j}]": f"b{j}" for j in range(C)}, "zy": "zy"}
@@ -206,20 +207,22 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         U.registered_reads(win.program, win.tp, 0, roots, "w", wr, win.obj["program"])
     roots["ok"], leaves = okr.root.hex(), {**tables, "ok": T}
     docs = {}
+    params = {port: key for key, port in U.window_ports(win.program).items() if port != key}
     for c, (first, n) in enumerate(U.HW.call_units(win.program)):
         reads = U.registered_reads(win.program, win.tp, c, roots, "w", wr, win.obj["program"])
         assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
-            assert {x: e[x] for x in e if x not in ("reads", "known")} == {
+            assert e.get(G.PARAM_KEY) == params.get(p), "a renamed A or B row names the parameter it reads"
+            assert {x: e[x] for x in e if x not in ("reads", G.READS_FROM, "known", G.PARAM_KEY)} == {
                 "value": v, "root": roots[v], "leaves": leaves[v], "words": U.value_words(v), "word_bits": 16,
                 "domain": G.domain(win.obj["program"], v, U.value_words(v), leaves[v],
                                    window=None if v == f"b/{K}" else wr).domain_id.hex(), "row_schema": U.V2}
-            assert e["reads"] == [U.unit_reads(win.program, win.tp, u)[p][1] if first <= u < first + n else None
-                                  for u in range(T)]
+            assert (e[G.READS_FROM], e["reads"]) == (first, [U.unit_reads(win.program, win.tp, u)[p][1]
+                                                              for u in range(first, first + n)])
         assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
         assert reads["ports"]["o1"]["value"] == "ok" and reads["ports"]["o1"]["words"] == 1
-        assert reads["ports"]["o1"]["reads"] == [u if first <= u < first + n else None for u in range(T)]
+        assert reads["format"] == G.READS_V1 and reads["ports"]["o1"]["reads"] == list(range(first, first + n))
         assert [p for p, e in reads["ports"].items() if "known" in e] == ["o1"]
         assert reads["ports"]["o1"]["known"] == U.known_ok("w", T) == {
             "rows": [[1]] * T, "salts": [U.ok_salt("w", u).hex() for u in range(T)]}
@@ -245,23 +248,38 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     # window credit's registration step takes the window's evidence: one drawn unit of each call, its finding its call's
     # --registered ports, under the descriptor whose SHA-512 is the Program's; and refuses each per-window value without
-    # the window root, ok among them, and another window's root
+    # the window root, and another window's root
     desc, calls = RN.credit_descriptor(win), U.HW.call_units(win.program)
     assert hashlib.sha512(desc).hexdigest() == win.obj["program"]
     drawn = [calls[0][0] + 1, calls[1][0]]
     found = {u: RN.findings_of(docs[c]) for c, u in enumerate(drawn)}
     assert found[drawn[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
-    entries = [*com["registered"], okr.entry()]
-    assert RN.credit_registration(desc, drawn, entries, found, wr) is None
+    entries, ok = com["registered"], {"value": "ok", "root": okr.root.hex()}
+    assert RN.credit_registration(desc, drawn, entries, found, wr, ok) is None
     okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
-    for bad_entries, root, why in (
-            ([*RN.unrooted(com)["registered"], okr.entry()], wr, f"registered value a/{K}@0's domain is not"),
-            ([*com["registered"], dict(okr.entry(), domain=okd)], wr, "registered value ok's domain is not"),
-            (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
-            (entries[1:], wr, f"against b/{K}, which the window registers not")):
-        got = RN.credit_registration(desc, drawn, bad_entries, found, root)
+    assert RN.credit_registration(desc, drawn, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
+        "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
+        "reads no entry of them")
+    # ok-unrooted: the sessions opened ok at its rows registered without the window root (the domain a file states
+    # without it, which flock-verify roots its known rows at), and credit's step-5 rule refuses them
+    oku = RN.unrooted_ok(win, com)
+    assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
+    assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
+                                           16, U.V2, None).root
+    bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
+    for bad, why in ((bad_found, f"call 0's session of unit {drawn[0]} opened the ok rows at another port, value or root"),
+                     ({drawn[0]: found[drawn[0]], drawn[1]: {p: e for p, e in found[drawn[1]].items() if p != "o1"}},
+                      f"call 1's session of unit {drawn[1]} opened the ok rows"),
+                     ({u: dict(f, o2=f["o1"]) for u, f in found.items()}, "opened the ok rows at another port")):
+        got = RN.credit_registration(desc, drawn, entries, bad, wr, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
-    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr)[0] == "missing"
+    for bad_entries, root, why in (
+            (RN.unrooted(com)["registered"], wr, f"registered value a/{K}@0's domain is not"),
+            (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
+            ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the window registers not")):
+        got = RN.credit_registration(desc, drawn, bad_entries, found, root, ok)
+        assert got is not None and got[0] == "registration" and why in got[1], got
+    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr, ok)[0] == "missing"
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
@@ -414,17 +432,49 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
             ST.check_against_reference(got, {"o0": got["w_o0"], "o1": got["w_o1"]})
 
 
-def test_the_h1_statement_is_flat_unless_h1_tmpl_names_a_layout_mode(monkeypatch):
-    """`h1unit.layout`, what every H1 stager passes `UnitStager` as its ``layout``: unset or empty the flat statement, a mode
-    the templated one, and anything else refused by name."""
+def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
+    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement, the
+    one the Lean verifier accepts; ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated
+    one at it, and anything else refused by name."""
     monkeypatch.delenv("H1_TMPL", raising=False)
     assert U.layout() is None
-    for value, want in (("", None), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):
+    for value, want in (("", None), ("flat", None), ("structural", U.LAYOUT), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):
         monkeypatch.setenv("H1_TMPL", value)
         assert U.layout() == want
     monkeypatch.setenv("H1_TMPL", "hybrid/4")
     with pytest.raises(ValueError, match="'hybrid/4' is not a layout mode"):
         U.layout()
+
+
+def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
+    """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
+    statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
+    for assertions or table reads), the flat statement, said on stderr."""
+    from verity.ml.circuits.boolean import BIT
+    from verity.ml.circuits.boolean.forms import add
+    from verity.ml.circuits.boolean.trace import definition
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.types import Array
+    from verity_flock import circuit as FC
+    from verity_flock import struct_lower as SL
+
+    d = bind(definition("H1StagerToy", 1, lambda C, a, b, w: add(C, a, b, width=20, carry_out=True) + [C.AND(w[0], w[2047]) ^ w[1000]],
+                        (("a", Array(12, BIT)), ("b", Array(20, BIT)), ("w", Array(2048, BIT))), Array(22, BIT), register=False))
+    rows, outs = [("ab", U.V2, 32, ["a", "b"]), ("w", U.V2, 2048, ["w"])], [(U.V2, (0,))]
+    tmpl, flat = U.stager(d, "unit/toy", rows, outs, U.LAYOUT), U.stager(d, "unit/toy", rows, outs, None)
+    assert hasattr(tmpl.low, "template") and tmpl.meta["statement"] == FC.TMPL_STATEMENT and tmpl.meta["layout"] == U.LAYOUT
+    assert not hasattr(flat.low, "template") and flat.meta["statement"] == FC.STATEMENT
+    x = np.random.default_rng(3).integers(0, 1 << 16, size=(5, 2 + 128), dtype=np.uint64)
+    assert np.array_equal(tmpl.low.evaluate(x)[0], flat.low.evaluate(x)[0])
+
+    def refuse(definition, **_):
+        raise NotImplementedError(f"{definition.id}: assertions and table reads are not laid out by the structural lowering yet")
+
+    monkeypatch.setattr(SL, "lower", refuse)
+    capsys.readouterr()
+    fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
+    assert not hasattr(fell.low, "template") and fell.pin == flat.pin
+    assert "the flat statement: struct_lower refuses H1StagerToy" in capsys.readouterr().err
 
 
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():

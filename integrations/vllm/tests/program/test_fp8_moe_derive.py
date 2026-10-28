@@ -17,8 +17,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 E, M, TOPK, K, N, G = 3, 2, 2, 64, 40, 32
 NB, KG, NV = -(-N // G), K // G, M * TOPK
@@ -167,7 +167,7 @@ def test_the_dot_roles_bind_the_pair_forms_under_a_block_and_keep_their_notes():
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-    from verity_vllm.program.registry import moe
+    from verity.ml.definitions.registry import moe
     from verity_vllm.program.frontend.targets import FP8_DOTS
     dot = FP8_DOTS["BlackwellE4m3QmmaDot32"]
     assert V.kind("moe_expert_gemm_dot", E=E, K=K, N=N, DOT=dot, G=G, KB=32, SWAP=False).id == \

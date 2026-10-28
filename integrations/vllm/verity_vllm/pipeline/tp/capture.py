@@ -1,4 +1,4 @@
-"""Lane tp2 (mechanism prototype): the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
+"""Mechanism prototype: the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. verity-vllm tp-capture \
         --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
@@ -8,7 +8,7 @@ Same κ as `bench/m1_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enfo
 uninstrumented throwaway warm-up, our request ids) with two differences forced by the process topology:
 
   * `tensor_parallel_size` (and any `--engine-arg`) is passed to `LLM(...)` directly — `vllm_adapter.build_engine` exposes no
-    engine-argument passthrough and ends in `get_model_runner(llm)`, which has no in-process runner to find under the
+    engine-argument passthrough and ends in `handle.model_runner(llm)`, which has no in-process runner to find under the
     multiprocess executor (PROPOSED: `build_engine(engine_args=...)`, `m1_capture/run_config --engine-arg`);
   * the observer is installed in every rank's process through `worker_extension_cls` = `tp2_worker.EXTENSION` and driven with
     `llm.collective_rpc("tp2_install" | "tp2_close")`; the run directory holds one raw log per rank (`log.rank<r>.jsonl.gz`)
@@ -39,13 +39,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
-from verity_vllm.engine import engine_profile as prof, env as engine_env
+from verity_vllm.config import option, workload_arg
+from verity_vllm.engine import engine_profile as prof, env as engine_env, handle
 
 prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.engine.rank_worker import EXTENSION
+from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 from verity_vllm.pipeline.tp import target as TT
 
 
@@ -72,7 +72,7 @@ def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_qwen15_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_qwen15_32x16_1req.json")
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
@@ -100,7 +100,7 @@ class Options:
     param_hashes: bool = option("--param-hashes", default=False, action="store_true",
                                 help="capture mode: sha256 of every rank's parameter shards -> param_hashes.rank<r>.json")
     record_collectives: bool = option("--record-collectives", default=False, action="store_true",
-                                      help="[R17 tp D90] capture mode: also run tp2_match's collective recorder in the same engine run -> <out>/coll.rank<r>.jsonl (+ .pt of --store-steps)")
+                                      help="capture mode: also run tp2_match's collective recorder in the same engine run -> <out>/coll.rank<r>.jsonl (+ .pt of --store-steps)")
     store_steps: int = option("--store-steps", type=int, default=1 << 30,
                               help="--record-collectives: store the partial/received tensors of steps < N (default all)")
     adapter_revision: str | None = option("--adapter-revision", default=None)
@@ -122,7 +122,7 @@ def main(args: Options) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
-    TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
+    TPL.acquire()        # a leased row's Match stage: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
     target = va.target_of_workload(wl)
     target_env, target_kw = TT.apply(target, wl["execution"])       # its env knobs before vLLM reads them; its engine args under the CLI's
     case = va.case_of(wl, args.case)
@@ -137,7 +137,7 @@ def main(args: Options) -> None:
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(args.max_num_seqs)
     kw.update(target_kw)
@@ -162,7 +162,7 @@ def main(args: Options) -> None:
                             "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "env_flags": env_flags,
                             "effective_execution": va.effective_execution_doc(llm), "in_process_runner": None, "ranks": None}
     try:
-        prof.get_model_runner(llm)
+        handle.model_runner(llm)
         topo["in_process_runner"] = True
     except Exception as e:  # noqa: BLE001
         topo["in_process_runner"] = f"none: {e}"
@@ -183,7 +183,7 @@ def main(args: Options) -> None:
         print(f"[tp2] live inventory of ranks {sorted(inv['ranks'])} -> {args.inventory_out}", flush=True)
 
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[tp2] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
 
@@ -202,9 +202,9 @@ def main(args: Options) -> None:
             ranks_doc["param_hashes"] = llm.collective_rpc("tp2_param_hashes", timeout=args.rpc_timeout, kwargs={"out_dir": str(out)})
             print(f"[tp2] param shard hashes: {ranks_doc['param_hashes']}", flush=True)
         if args.record_collectives:
-            # [R17 tp D90] the collective recorder of tp2_match's capture arm in the SAME engine run as the observer: every collective of
+            # the collective recorder of tp2_match's capture arm in the SAME engine run as the observer: every collective of
             # every rank in call order (step, k, kind, module, partial + received sha256; tensors of the first --store-steps steps), the
-            # rows the cross-rank leg of the per-rank fold Match (tp2_fold_match / tp.rank_match) keys by the same engine step as the fold.
+            # rows the cross-rank check of the per-rank fold Match (tp2_fold_match / tp.rank_match) keys by the same engine step as the fold.
             # Its bookkeeping is hidden from the observer (tp2_worker.coll_wrap pauses the recorder's aten observer around the copies).
             # (rows land beside the logs -- the layout of tp2_match's capture arm, so `tp2_match --arm check` runs unchanged over this dir)
             ranks_doc["coll_install"] = llm.collective_rpc("tp2_coll_install", timeout=args.rpc_timeout,

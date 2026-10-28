@@ -2,9 +2,9 @@
 // (benchmarks/pouw/commit_gpu/sha512.cuh, included by path); the rest is vendored from three seeds, each piece re-pointed
 // from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run back to back on one
 // stream with no symbol copy:
-//   * native_rows.cu (circuits, cursor/commit-speed-21f3 934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
+//   * native_rows.cu (934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
 //     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
-//   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
+//   * sharaw.cu (4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
 //     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
 //     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
 //     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
@@ -41,7 +41,7 @@ struct RowK {
   u64 kw_xpad[80];                   // row/v2: the all-padding last block (lb % 128 == 0)
   u64 kw_segpad[80];                 // row-seg: a whole segment's padding block
   u64 kw_fold[80];                   // row-seg rows of an even s: the fold's all-padding last block
-  u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row block's)
+  u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row tile's)
   u32 scheme, lb, xpad;
   u32 s[2];                          // segments a unit, per shape
   u32 last[2];                       // the last segment's bytes, per shape
@@ -174,7 +174,7 @@ __global__ void __launch_bounds__(128, 2) k_row_segs(const __grid_constant__ Row
 }
 
 // Pearl-C's tiles: segment j of tile (ti, tj) is the tile's rows 2j and 2j + 1, each row's two 32-column chunks as le32 C~ ||
-// le32 U; the full row blocks' tiles first (32 segments each), then the last row block's (s = R / 2).
+// le32 U; the full row tiles' tiles first (32 segments each), then the last row tile's (s = R / 2).
 __global__ void __launch_bounds__(128, 2) k_tile_segs(const __grid_constant__ RowK R, const uint8_t* __restrict__ tab,
                                                       const uint8_t* __restrict__ C, const uint8_t* __restrict__ U, u64* __restrict__ dig) {
   const u32 rows = R.rows, cols = R.cols, tn = cols / 64;
@@ -218,7 +218,7 @@ template <bool SH> DEV void ld_dig(const u64* p, u64* d, int n) {
 }
 // a unit's digest over its s segment digests (words; SH, in shared memory) from the Q state, into out (byte order); an even
 // s's all-padding last block through kw_pad, its schedule from the host, when given. k_rows_seg passes it: on sm_120 its fold
-// compressing that block of constants came out wrong for some rows (37cc862b6's probe, r20261018-232746-4eed).
+// compressing that block of constants came out wrong for some rows.
 template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out, const u64* kw_pad) {
   u64 st[8], w[16];
   cpy8(st, qst);
@@ -686,6 +686,18 @@ __global__ void k_put64(uint8_t* dst, ulonglong4 a, ulonglong4 b) {
   }
 }
 
+// vc_chunk_rows_launch: a thread a 16 bytes of a leaf (kc16 of codes, then the scale's, then zeros to the stride)
+__global__ void __launch_bounds__(THREADS) k_chunk_rows(const uint4* __restrict__ codes, u64 cs16, const u32* __restrict__ scales,
+                                                        u64 n_leaves, u32 chunks, u32 kc16, uint4* __restrict__ out, u64 os16) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= n_leaves * os16) return;
+  const u64 j = t / os16, w = t % os16, r = j / chunks;
+  uint4 v = make_uint4(0, 0, 0, 0);
+  if (w < kc16) v = codes[r * cs16 + (j % chunks) * kc16 + w];
+  else if (w == kc16) v.x = scales[r];
+  out[t] = v;
+}
+
 // The arity what-if: a thread a parent, its message assembled byte by byte (a slow path: it is not served)
 DEV void put_byte(u64* W, u32 off, u32 b) { W[off >> 3] |= (u64)(b & 0xFF) << (56 - 8 * (off & 7)); }
 DEV void put_be(u64* W, u32 off, u64 v, int n) {
@@ -908,6 +920,20 @@ int vc_sha512_launch(const uint8_t* msgs, uint64_t stride, uint64_t len, uint64_
 int vc_compress_launch(const uint8_t* states, const uint8_t* blks, uint64_t n, uint8_t* out, cudaStream_t st) {
   if (!n) return 0;
   k_compress<<<blocks(n, THREADS), THREADS, 0, st>>>(states, blks, n, out);
+  return rc();
+}
+
+int vc_chunk_rows_launch(const uint8_t* codes, uint64_t codes_stride, const uint8_t* scales, uint64_t n_rows, uint32_t k,
+                         uint32_t chunks, uint8_t* out, uint64_t out_stride, cudaStream_t st) {
+  if (!chunks || k % chunks || (k / chunks) % 16 || codes_stride % 16 || codes_stride < k || out_stride % 16 ||
+      out_stride < k / chunks + 4 || (reinterpret_cast<uintptr_t>(codes) | reinterpret_cast<uintptr_t>(out)) % 16 ||
+      reinterpret_cast<uintptr_t>(scales) % 4)
+    return -1;
+  if (!n_rows) return 0;
+  const u64 n = n_rows * chunks, os16 = out_stride / 16;
+  k_chunk_rows<<<blocks(n * os16, THREADS), THREADS, 0, st>>>(reinterpret_cast<const uint4*>(codes), codes_stride / 16,
+                                                             reinterpret_cast<const u32*>(scales), n, chunks, k / chunks / 16,
+                                                             reinterpret_cast<uint4*>(out), os16);
   return rc();
 }
 

@@ -65,12 +65,23 @@ theorem oneAt_uniform_val : ∀ (n : ℕ) (u : Fin n),
 
 end uniform
 
-/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted: message bit `b < 8` of byte `byte` of row
-port `p` at template instance `g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
-theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
-    (h : HmRow.parse tags bytes tables = .ok c) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
-    (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
-  have P := parse_facts h
+/-- **A net of a circuit `HmRow.parse` accepted with nets `pre` first fits its slot**, when `pre`'s nets do. -/
+theorem netOK_ofPre {tags : Tags} {pre : Array (String × Net)} {c : Flock.Circuit} (P : ParseFactsPre tags pre c)
+    (hpre : ∀ x ∈ pre.toList, NetOK x.2 ∧ 7 ≤ x.2.unitLog ∧ (x.2.unitLog ≤ 32 → ConstRow x.2)) {i : ℕ}
+    (hi : i < c.nets.size) : NetOK (c.nets.getD i default).2 := by
+  rcases P.nets _ (getD_mem_toList hi) with hx | hx | ⟨_, _, _, _, _, hx⟩
+  · exact (hpre _ hx).1
+  · exact (netOK_built hx).1
+  · exact (netOK_lookup hx).1
+
+/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted with nets `pre` first (a templated file's
+unit net), when `pre`'s nets fit their slots: message bit `b < 8` of byte `byte` of row port `p` at template instance
+`g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
+theorem msgCol_lt_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {c : Flock.Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
+    (hpre : ∀ x ∈ pre.toList, NetOK x.2 ∧ 7 ≤ x.2.unitLog ∧ (x.2.unitLog ≤ 32 → ConstRow x.2)) {g : ℕ} (hg : g < c.g)
+    {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
+  have P := (parse_factsPre_nets h).1
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have hws := rowSlots_spec c.ports
@@ -88,7 +99,7 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
   · obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.hmNet)
     have hc := C.count _ hm _ hk
     have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
-    obtain ⟨-, hW, hports⟩ := (nets_ok P c.hmNet).1
+    obtain ⟨-, hW, hports⟩ := netOK_ofPre P hpre P.hmNet
     have hin := C.hm_in
     have hsz : (portCols (c.nets.getD c.hmNet default).2.inGroups).size = 3 := by
       simpa using congrArg Array.size hin
@@ -119,7 +130,7 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
   have hc := C.count _ hm _ hk
   have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
-  obtain ⟨-, hW, hports⟩ := (nets_ok P c.shaNet).1
+  obtain ⟨-, hW, hports⟩ := netOK_ofPre P hpre P.shaNet
   obtain ⟨hsz, hsin⟩ := C.sha_in
   generalize hE : (where_[p]!)[kk]! = e at hent ⊢
   obtain ⟨slot, sub⟩ := e
@@ -144,6 +155,13 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
       have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
       omega
   exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
+
+/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted (`msgCol_lt_of_parsePre` with no net
+ahead of the file). -/
+theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
+    (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog :=
+  msgCol_lt_of_parsePre h (fun _ hx => by simp at hx) hg hp byte b hb
 
 private theorem ite_throw_ok {α β : Type} {c : Prop} [Decidable c] {e : String} {f : α → Except String β}
     {g : Except String β} {v : β} (h : (if c then (throw e >>= f) else g) = .ok v) : ¬c ∧ g = .ok v := by

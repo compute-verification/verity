@@ -11,20 +11,23 @@ from typing import Any, Mapping
 from verity_vllm.check.codes import VerificationCode as VC
 
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult, code_of
+from verity_vllm.records.commit_binding import CommitBinding
+from verity_vllm.records.fields import RecordError
 
-# The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model (the R12 canary rows' `required_classes`
-# minus the two derived-from-bound norm classes, which are protocol clauses with no leaves and are checked for presence only when declared).
-# Lanes override with `commit_delta --required-classes a,b,c` (recorded in verdict.json) when the model's producers genuinely differ
-# (e.g. a native FA3 tap class on Hopper) -- never to make a missing producer pass.
+BINDING = "the run's Commit block"
+
+# The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model: the canary rows' `required_classes`
+# minus the two derived-from-bound norm classes (protocol clauses with no leaves, checked for presence only when declared).  When a model's
+# producers differ (FA3's tap on Hopper), `commit_delta --required-classes` overrides it (kept in verdict.json), never to hide a missing one.
 REQUIRED_CLASSES_DEFAULT = ("input_token_ids", "instance_outputs_native", "sampled_token_ids", "weights", "fa2_hidden_m1_stream")
 LEAF_HOWS = ("bound-as-leaf", "registered-input")
 HIDDEN_CLASS_BY_FA = {2: "fa2_hidden_m1_stream", 3: "fa3_hidden_m1_stream"}
 
 
 def required_classes_default(flash_attn_version: int | None) -> tuple[str, ...]:
-    """R13 hopper: the default manifest keyed by the engine's attention implementation (the TargetProfile fact `effective_flash_attn_version`,
+    """The default manifest keyed by the engine's attention implementation (the TargetProfile fact `effective_flash_attn_version`,
     the same fact that selects the Bet A attention Definition and the Match pattern): the attention hidden class is the FA2 tap's under FA2
-    and the FA3 tap's (`fa3_hidden_m1_stream`, hidden_source.HiddenM1SourceFA3) under FA3.  None -> the FA2 default (pre-R13 rows)."""
+    and the FA3 tap's (`fa3_hidden_m1_stream`, hidden_source.HiddenM1SourceFA3) under FA3.  None -> the FA2 default (rows recorded without the fact)."""
     hidden = HIDDEN_CLASS_BY_FA.get(int(flash_attn_version) if flash_attn_version is not None else 2, "fa2_hidden_m1_stream")
     return tuple(hidden if c == "fa2_hidden_m1_stream" else c for c in REQUIRED_CLASSES_DEFAULT)
 
@@ -68,30 +71,35 @@ def required_classes_check(declaration: dict | None, required: tuple[str, ...] |
     return True, "PASS"
 
 
-def binding_check(bnd: dict, *, min_openings: int = 64) -> tuple[bool, str]:
-    """R14 BIND-01 (TABLE-RULES r14-v1 Commit): (1) the binding map was built and its context (roots, layout) is the run's; (2) every identity of
+def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int = 64) -> tuple[bool, str]:
+    """BIND-01: (1) the binding map was built and its context (roots, layout) is the run's; (2) every identity of
     the collector-independent expected population has a binding (a duplicate / alias / extra copy never counts for a missing one --
-    F-rev-01 drop `/1` + bind `/0` twice fails here); (3) openings drawn from the EXPECTED population all had a binding and all verified
+    dropping `/1` and binding `/0` twice fails here); (3) openings drawn from the EXPECTED population all had a binding and all verified
     (retain=none: the values come from replay and are checked by openings_after_release)."""
-    if bnd.get("error"):
-        return False, f"binding map not built: {bnd['error']}"
-    ctx = bnd.get("context") or {}
-    if not ctx.get("ok"):
-        return False, f"binding-map context: {ctx.get('why')}"
-    cov = bnd.get("coverage") or {}
-    if cov.get("error"):                                                         # [MAN-02] incomplete manifest (unmodelled families) -> fail closed, named
-        return False, f"identity coverage: {cov['error']}"
-    if not cov.get("ok"):
-        if int(cov.get("missing_n") or 0) == 0 and int(cov.get("ambiguous_n") or 0) > 0:
-            # [R16 rev F-r16-08 / M-0077] every required identity is bound, but not UNAMBIGUOUSLY: two leaf entries under one identity
-            amb = (cov.get("ambiguous") or [{}])[0]
-            return False, (f"identity coverage: {cov.get('ambiguous_n')} of {cov.get('expected_n')} required identities have more than one binding "
+    try:
+        b = CommitBinding.of(bnd, BINDING)
+    except RecordError as e:
+        return False, f"binding record refused: {e}"
+    if b.error:
+        return False, f"binding map not built: {b.error}"
+    if not b.context_ok:
+        return False, f"binding-map context: {b.context_why}"
+    cov = b.coverage
+    if cov is None:
+        return False, "identity coverage: not recorded"
+    if cov.error:                                                                # incomplete manifest (unmodelled families) -> fail closed, named
+        return False, f"identity coverage: {cov.error}"
+    if not cov.ok:
+        if cov.missing_n == 0 and (cov.ambiguous_n or 0) > 0:
+            # every required identity is bound, but not UNAMBIGUOUSLY: two leaf entries under one identity
+            amb = cov.ambiguous[0] if cov.ambiguous else {}
+            return False, (f"identity coverage: {cov.ambiguous_n} of {cov.expected_n} required identities have more than one binding "
                            f"(C1 requires one unambiguous binding; first: step {amb.get('step')} {amb.get('op_path')}/{amb.get('output_member')} inv {amb.get('invocation')} "
                            f"req {amb.get('request_id')} rank {amb.get('rank')} bound {amb.get('bindings_n')} x at {amb.get('bound_at')})")
-        miss = (cov.get("missing") or [{}])[0]
-        return False, (f"identity coverage: {cov.get('missing_n')} of {cov.get('expected_n')} required identities have no binding "
+        miss = cov.missing[0] if cov.missing else {}
+        return False, (f"identity coverage: {cov.missing_n} of {cov.expected_n} required identities have no binding "
                        f"(first: step {miss.get('step')} {miss.get('op_path')}/{miss.get('output_member')} inv {miss.get('invocation')} req {miss.get('request_id')} rank {miss.get('rank')})")
-    po = bnd.get("openings_population") or {}
+    po = b.entry.get("openings_population") or {}
     if int(po.get("unbound_n") or 0) > 0:
         return False, f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
     if not po.get("skipped"):
@@ -100,7 +108,7 @@ def binding_check(bnd: dict, *, min_openings: int = 64) -> tuple[bool, str]:
         if int(po.get("verified") or 0) != int(po.get("opened") or 0):
             return False, f"population openings verified {po.get('verified')} != opened {po.get('opened')}"
     elif int(po.get("verified") or 0) != int(po.get("opened") or 0):
-        # [R17 fp8] retain=host + exclude: the host share opened here must verify; the deferred share is opened by replay (openings_after_release)
+        # retain=host + exclude: the host share opened here must verify; the deferred share is opened by replay (openings_after_release)
         return False, f"population openings (host share) verified {po.get('verified')} != opened {po.get('opened')}"
     return True, "PASS"
 
@@ -188,6 +196,12 @@ def _is_row_procedure(commit: dict) -> bool:
     return isinstance(bnd, dict) and bool(bnd.get("population") or bnd.get("coverage"))
 
 
+def _binding_of(commit: dict) -> CommitBinding | None:
+    """The run's binding map as `records.commit_binding` types it; None when the run has none."""
+    b = commit.get("binding")
+    return None if b is None else CommitBinding.of(b, BINDING)
+
+
 def _base_inputs(commit: dict, ctx: dict) -> dict[str, Any]:
     out = {"program_digest": ctx.get("program_digest") or _d(commit.get("binding")).get("program_digest"),
            "manifest_digest": ctx.get("manifest_digest") or _d(commit.get("coverage")).get("manifest_digest"), "run_root": commit.get("run_root")}
@@ -236,7 +250,7 @@ def rule_reference_integrity(commit: dict, ctx: dict) -> CheckResult:
             f"expected_tensors {n_exp} != committed_tensors {n_com} (refused/lost acquisitions -> incomplete root)"
     else:
         out, diffs, reason = PASS, [], None
-    return _mk("runtime_match/reference_integrity", "X-03 (R12) counters",
+    return _mk("runtime_match/reference_integrity", "X-03 counters",
                "Every value acquisition the collector attempted was bound (attempted == committed, both > 0).",
                ["extra.expected_tensors", "extra.committed_tensors"], commit, ctx, outcome=out, differences=diffs, reason=reason,
                scope={"attempted": n_exp, "committed": n_com})
@@ -250,7 +264,7 @@ def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckResult:
         out, diffs, reason = FAIL, [{"name": "fa2_zero_rows", "rows": _int(z)}], f"{z} FA2 hidden rows bound as all-zero bytes (tap staged after it was zeroed: ordering fault)"
     else:
         out, diffs, reason = PASS, [], None
-    return _mk("runtime_match/fa2_zero_rows", "R13 p0b tap ordering", "No attention hidden-value row was bound as all-zero bytes (the tap was staged before it was zeroed).",
+    return _mk("runtime_match/fa2_zero_rows", "FA2 tap ordering", "No attention hidden-value row was bound as all-zero bytes (the tap was staged before it was zeroed).",
                ["fa2_zero_rows"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"rows_checked": z is not None})
 
 
@@ -276,18 +290,18 @@ def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
 def rule_bounded_staging(commit: dict, ctx: dict) -> CheckResult:
     bs = _d(commit.get("extra")).get("bounded_staging")
     if not isinstance(bs, dict):
-        return _mk("runtime_match/bounded_staging", "R17 fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
+        return _mk("runtime_match/bounded_staging", "fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
                    ["extra.bounded_staging"], commit, ctx, outcome=NOT_RUN)
     if bs.get("learned_only_steps"):
         steps = list(bs["learned_only_steps"])
-        return _mk("runtime_match/bounded_staging", "R17 fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
+        return _mk("runtime_match/bounded_staging", "fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
                    ["extra.bounded_staging"], commit, ctx, outcome=FAIL, differences=[{"name": "learned_only_steps", "n": len(steps), "first": steps[:8]}],
                    reason=f"bounded staging: {len(steps)} learned-only step(s) {steps[:8]} on a record run (no root)")
     if bs.get("learn_only"):
-        return _mk("runtime_match/bounded_staging", "R17 fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
+        return _mk("runtime_match/bounded_staging", "fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
                    ["extra.bounded_staging"], commit, ctx, outcome=FAIL, differences=[{"name": "learn_only", "value": True}],
                    reason="bounded staging: the record run was finalized in learn-only mode")
-    return _mk("runtime_match/bounded_staging", "R17 fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
+    return _mk("runtime_match/bounded_staging", "fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
                ["extra.bounded_staging"], commit, ctx, outcome=PASS, scope={k: bs.get(k) for k in ("learn_only", "learned_only_steps", "mode") if k in bs})
 
 
@@ -329,7 +343,7 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
              "verified against the ORIGINAL roots, the replay reproduced the run root, and no raw byte stayed on the device.")
     compat = ["openings_after_release.n", "openings_after_release.verified", "openings_after_release.source", "openings_after_release.replay_root_equal",
               "openings_after_release.replay_errors_n", "openings_after_release.retained_device_after", "openings_after_release.deferred_received_positions"]
-    name, rule = "runtime_match/openings_after_release", "R13 P0 / R17-5 openings after release"
+    name, rule = "runtime_match/openings_after_release", "openings after release"
     def_a, def_b = _int(ops.get("deferred_replay_n")), _int(po.get("deferred_replay_n"))
     if oar is None:
         if def_a or def_b:
@@ -387,7 +401,7 @@ def rule_oracle_compare(commit: dict, ctx: dict) -> CheckResult:
     claim = ("No committed value differs from the Match oracle's (form (B): the Match capture's instance-output snapshots and sampled ids of "
              "the same attempt) where the oracle looked; scope states how much it looked at.")
     compat = ["oracle_compare.result", "oracle_compare.mismatch_n", "value_correspondence.result", "value_correspondence.components"]
-    name, rule = "runtime_match/oracle_compare", "C2 form (B) / R15 COORD M-0111 (2)"
+    name, rule = "runtime_match/oracle_compare", "C2 form (B)"
     _oc = _oracle_of(commit) or {}
     att = _d(_oc.get("attribution"))
     scope = {"compared": _oc.get("compared"), "mismatch_n": _oc.get("mismatch_n"), "complete": _oc.get("complete"), "grade": _oc.get("grade"),
@@ -423,13 +437,13 @@ def rule_oracle_compare(commit: dict, ctx: dict) -> CheckResult:
 
 
 def rule_compiled_check(commit: dict, ctx: dict) -> CheckResult:
-    """commit_delta's two post-verdict compiled conditions (R15 compiled S3): kernel replay exact; ring refused nothing."""
+    """commit_delta's two post-verdict compiled conditions (S3): kernel replay exact; ring refused nothing."""
     vc = _d(commit.get("value_correspondence"))
     ckc = vc.get("compiled_check")
     cs = _d(_d(commit.get("compiled_source")).get("stats"))
     claim = "Under compiled acquisition every kernel launch replays exactly and the compiled ring refused / mis-shaped no acquisition (S3)."
     compat = ["value_correspondence.compiled_check", "compiled_source.stats"]
-    name, rule = "runtime_match/compiled_check", "R15 compiled S3"
+    name, rule = "runtime_match/compiled_check", "compiled kernel check"
     if not isinstance(ckc, dict) and not cs:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
     if isinstance(ckc, dict) and not ckc.get("ok"):
@@ -445,77 +459,78 @@ def rule_compiled_check(commit: dict, ctx: dict) -> CheckResult:
 
 def rule_binding_context(commit: dict, ctx: dict) -> CheckResult:
     """binding_check (1): the map was built (no error) and its context (roots, layout) is the run's."""
-    bnd = commit.get("binding")
+    b = _binding_of(commit)
     claim = "The binding map was built for this run: its Program digest, layout and roots are the run's own (BIND-01 (1))."
     compat = ["binding.error", "binding.context.ok", "binding.context.why", "binding.program_digest", "binding.map_digest"]
-    name, rule = "program_source_identity/binding_context", "R14 BIND-01 (1)"
-    if not isinstance(bnd, dict):
+    name, rule = "program_source_identity/binding_context", "BIND-01 (1)"
+    if b is None:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
+    bnd = b.entry
     scope = {"map_digest": bnd.get("map_digest"), "map_entries_n": bnd.get("map_entries_n"), "program_digest_source": bnd.get("program_digest_source"),
              "layout": bnd.get("layout"), "rules_version": bnd.get("rules_version")}
-    inputs = {"binding_program_digest": bnd.get("program_digest"), "root_program_digest": bnd.get("root_program_digest"), "map_digest": bnd.get("map_digest")}
-    if bnd.get("error"):
-        return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, differences=[{"name": "binding_map_not_built", "error": str(bnd["error"])[:300]}],
-                   reason=f"binding map not built: {bnd['error']}")
-    c = _d(bnd.get("context"))
-    if not c.get("ok"):
-        return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, differences=[{"name": "binding_context_mismatch", "why": c.get("why")}],
-                   reason=f"binding-map context: {c.get('why')}")
+    inputs = {"binding_program_digest": b.program_digest, "root_program_digest": bnd.get("root_program_digest"), "map_digest": bnd.get("map_digest")}
+    if b.error:
+        return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, differences=[{"name": "binding_map_not_built", "error": b.error[:300]}],
+                   reason=f"binding map not built: {b.error}")
+    if not b.context_ok:
+        return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, differences=[{"name": "binding_context_mismatch", "why": b.context_why}],
+                   reason=f"binding-map context: {b.context_why}")
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, inputs=inputs)
 
 
 def rule_identity_coverage(commit: dict, ctx: dict) -> CheckResult:
-    """binding_check (2): identity coverage of the expected population (error -> MAN-02 refusal; missing; ambiguous)."""
-    bnd = commit.get("binding")
-    claim = "Every identity of the required-value population has exactly one committed binding (a duplicate never covers a missing one; BIND-01 (2) / MAN-02)."
+    """binding_check (2): identity coverage of the expected population (error -> refusal; missing; ambiguous)."""
+    b = _binding_of(commit)
+    claim = "Every identity of the required-value population has exactly one committed binding (a duplicate never covers a missing one)."
     compat = ["binding.coverage.ok", "binding.coverage.error", "binding.coverage.missing_n", "binding.coverage.ambiguous_n", "binding.coverage.expected_n", "binding.coverage.bound_n"]
-    name, rule = "required_value_coverage/identity_coverage", "R14 BIND-01 (2) / MAN-02"
-    if not isinstance(bnd, dict) or not isinstance(bnd.get("coverage"), dict):
+    name, rule = "required_value_coverage/identity_coverage", "BIND-01 (2) / MAN-02"
+    if b is None or b.coverage is None:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
-    cov = bnd["coverage"]
-    pop = _d(bnd.get("population"))
-    scope = {"expected_n": cov.get("expected_n"), "bound_n": cov.get("bound_n"), "requests": pop.get("requests"), "steps": pop.get("steps"),
-             "population_source": str(pop.get("source") or "")[:120], "extra_n": cov.get("extra_n"), "physical_copies_n": cov.get("physical_copies_n")}
+    cov = b.coverage
+    pop = {} if b.population is None else b.population.entry
+    scope = {"expected_n": cov.expected_n, "bound_n": cov.bound_n, "requests": pop.get("requests"), "steps": pop.get("steps"),
+             "population_source": str(pop.get("source") or "")[:120], "extra_n": cov.entry.get("extra_n"), "physical_copies_n": cov.entry.get("physical_copies_n")}
     notes = []
     if "required-manifest" not in str(pop.get("source") or ""):
         notes.append(_leak("binding.MEMBER_RULES", "the expected population's members come from a module-class table, not the Program"))
-    if bnd.get("error"):                     # already FAIL under binding_context; the coverage was never computed
+    if b.error:                              # already FAIL under binding_context; the coverage was never computed
         return _mk(name, rule, claim, compat, commit, ctx, outcome=INSUFFICIENT, scope=scope, notes=notes,
-                   differences=[{"name": "binding_map_not_built", "error": str(bnd["error"])[:300]}], reason=f"binding map not built: {bnd['error']}")
-    if cov.get("error"):
-        err = str(cov["error"])
-        diffs = [{"name": "manifest_incomplete", "error": err[:400], "unmodelled": dict(list(_d(cov.get("unmodelled")).items())[:8]) if cov.get("unmodelled") else None}]
+                   differences=[{"name": "binding_map_not_built", "error": b.error[:300]}], reason=f"binding map not built: {b.error}")
+    if cov.error:
+        err = cov.error
+        unm = cov.entry.get("unmodelled")
+        diffs = [{"name": "manifest_incomplete", "error": err[:400], "unmodelled": dict(list(_d(unm).items())[:8]) if unm else None}]
         if "unmodelled" in err:
-            notes.append(_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name, F-r19-int-20"))
+            notes.append(_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name"))
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, notes=notes, differences=diffs, reason=f"identity coverage: {err}")
-    if not cov.get("ok"):
-        if _int(cov.get("missing_n")) == 0 and _int(cov.get("ambiguous_n")) > 0:
-            amb = _d(_first(cov.get("ambiguous")))
+    if not cov.ok:
+        if cov.missing_n == 0 and (cov.ambiguous_n or 0) > 0:
+            amb = cov.ambiguous[0] if cov.ambiguous else {}
             return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, notes=notes,
-                       differences=[{"name": "identities_ambiguous", "n": _int(cov.get("ambiguous_n")), "expected_n": cov.get("expected_n"), "first": amb}],
-                       reason=(f"identity coverage: {cov.get('ambiguous_n')} of {cov.get('expected_n')} required identities have more than one binding "
+                       differences=[{"name": "identities_ambiguous", "n": cov.ambiguous_n, "expected_n": cov.expected_n, "first": amb}],
+                       reason=(f"identity coverage: {cov.ambiguous_n} of {cov.expected_n} required identities have more than one binding "
                                f"(C1 requires one unambiguous binding; first: step {amb.get('step')} {amb.get('op_path')}/{amb.get('output_member')} inv {amb.get('invocation')} "
                                f"req {amb.get('request_id')} rank {amb.get('rank')} bound {amb.get('bindings_n')} x at {amb.get('bound_at')})"))
-        miss = _d(_first(cov.get("missing")))
+        miss = cov.missing[0] if cov.missing else {}
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, notes=notes,
-                   differences=[{"name": "identities_unbound", "n": _int(cov.get("missing_n")), "expected_n": cov.get("expected_n"), "first": miss}],
-                   reason=(f"identity coverage: {cov.get('missing_n')} of {cov.get('expected_n')} required identities have no binding "
+                   differences=[{"name": "identities_unbound", "n": cov.missing_n, "expected_n": cov.expected_n, "first": miss}],
+                   reason=(f"identity coverage: {cov.missing_n} of {cov.expected_n} required identities have no binding "
                            f"(first: step {miss.get('step')} {miss.get('op_path')}/{miss.get('output_member')} inv {miss.get('invocation')} req {miss.get('request_id')} rank {miss.get('rank')})"))
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, notes=notes)
 
 
 def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     """binding_check (3): openings drawn from the EXPECTED population all had a binding and all verified."""
-    bnd = commit.get("binding")
+    b = _binding_of(commit)
     claim = "Every opening drawn from the required-value population had a binding and verified (BIND-01 (3); retain=none: the deferred share opens by replay)."
     compat = ["binding.openings_population.n", "binding.openings_population.unbound_n", "binding.openings_population.opened", "binding.openings_population.verified", "binding.openings_population.skipped"]
-    name, rule = "runtime_match/openings_population", "R14 BIND-01 (3)"
-    if not isinstance(bnd, dict):
+    name, rule = "runtime_match/openings_population", "BIND-01 (3)"
+    if b is None:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
-    if bnd.get("error") or not _d(bnd.get("context")).get("ok") or _d(bnd.get("coverage")).get("error") or not _d(bnd.get("coverage")).get("ok", True):
+    if b.error or not b.context_ok or (b.coverage is not None and (b.coverage.error or not b.coverage.ok)):
         # v1 returned from binding_check before reaching (3): the population openings were not graded on this run
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN, notes=["not graded: binding_context / identity_coverage failed first (v1 binding_check returns at the first failing part)"])
-    po = _d(bnd.get("openings_population"))
+    po = _d(b.entry.get("openings_population"))
     scope = {"sample_size": po.get("n"), "bound": po.get("bound"), "opened": po.get("opened"), "verified": po.get("verified"), "skipped": po.get("skipped"),
              "families": po.get("families"), "deferred_replay_n": po.get("deferred_replay_n"), "late_step_in_sample": po.get("late_step_in_sample")}
     if _int(po.get("unbound_n")) > 0:
@@ -539,12 +554,12 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
 
 
 def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL` (R14 MAN-01)."""
+    """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL`."""
     ex = _d(commit.get("extra"))
     cov = ex.get("coverage") or commit.get("coverage")
-    claim = "Every identity the required-value manifest names (Program x query, per request / step / member / element range) was committed with its full extent (MAN-01)."
+    claim = "Every identity the required-value manifest names (Program x query, per request / step / member / element range) was committed with its full extent."
     compat = ["coverage.ok", "coverage.missing_n", "coverage.missing_by_family", "coverage.families_missing_entirely", "coverage.error", "coverage.manifest_digest", "commit_summary.coverage"]
-    name, rule = "required_value_coverage/manifest_coverage", "R14 MAN-01"
+    name, rule = "required_value_coverage/manifest_coverage", "MAN-01"
     if not isinstance(cov, dict):
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
     scope = {"checked": cov.get("checked"), "checked_by_family": cov.get("checked_by_family"), "steps_committed_n": len(cov.get("steps_committed") or []),
@@ -555,7 +570,7 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
     if mor:
         scope["manifest_of_record"] = {k: mor.get(k) for k in ("identities_n", "required_n", "not_executed_n", "edited")}
     # the manifest this grades against was built by required_manifest.members_for: a Program family with no vocabulary member is INTERIOR by name
-    notes = [_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name, F-r19-int-20")]
+    notes = [_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name")]
     if not cov.get("ok", False):
         fam = cov.get("families_missing_entirely") or []
         first = _d(_first(cov.get("missing")))
@@ -572,13 +587,13 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
 
 
 def rule_identity_layout(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `idc = ex.identity_check; if idc is not None and not idc.ok: FAIL` (X-03 on identities, R13).  The rule body is native_host's
-    (`NativeHostCommitter.identity_check`, owned by lane/vllm-x03); this only names its findings."""
+    """v1: `idc = ex.identity_check; if idc is not None and not idc.ok: FAIL` (X-03 on identities).  The rule body is native_host's
+    (`NativeHostCommitter.identity_check`); this only names its findings."""
     idc = _d(commit.get("extra")).get("identity_check")
     claim = ("Every committed step's identity set is the expected manifest's: every expected module produced >= 1 tensor and none came from outside it, "
              "every attention layer carries the same positive count of hidden rows, exactly one sampled-ids tensor, the same name multiset as step 0 (X-03).")
     compat = ["extra.identity_check.ok", "extra.identity_check.violations", "extra.identity_check.violations_n", "extra.identity_check.steps_checked"]
-    name, rule = "program_source_identity/identity_layout", "X-03 (R13) identities"
+    name, rule = "program_source_identity/identity_layout", "X-03 identities"
     notes = [_leak("native_host.ACQUIRE_CLASSES", "the expected module set is selected by module class name, not by the Program")]
     if not isinstance(idc, dict):
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN, notes=notes)
@@ -631,11 +646,11 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
 
 
 def rule_manifest_verified(commit: dict, ctx: dict) -> CheckResult:
-    """row_pod.sh EXEC-05 / MAN-05: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
+    """row_pod.sh: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
     mv = ctx.get("manifest_verify")
-    claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload (EXEC-05 / MAN-05)."
+    claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload."
     compat = ["manifest_verify.ok", "manifest_verify.used_digest", "manifest_verify.rebuilt_digest", "stages.txt manifest_verify="]
-    name, rule = "required_value_coverage/manifest_of_record_verified", "R15 EXEC-05 / MAN-05"
+    name, rule = "required_value_coverage/manifest_of_record_verified", "EXEC-05 / MAN-05"
     if not isinstance(mv, dict):
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
     scope = {k: mv.get(k) for k in ("rebuilt_engine", "rebuilt_identities", "used_identities", "rebuilt_complete") if k in mv}

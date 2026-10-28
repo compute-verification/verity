@@ -1,0 +1,109 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "verity/block-record/v1",
+ "title": "The block record (verity_e2e_demo.block_record)",
+ "description": "What each leg writes for one server-time block and what the composed verdict reads; extends verity/all-protocols-period/v1 (and -window/v1). Fractions are exact strings (\"1/100\", \"0\").",
+ "type": "object",
+ "required": ["format", "extends", "run", "server", "server_time", "legs", "composed", "monitoring_period"],
+ "additionalProperties": false,
+ "$defs": {
+  "frac": {"type": "string", "pattern": "^-?[0-9]+(/[0-9]+)?$"},
+  "nat": {"type": "integer", "minimum": 0},
+  "verdict": {"enum": ["accept", "reject", "undecided", "error"]},
+  "at": {
+   "oneOf": [
+    {"type": "object", "required": ["holds", "value", "epsilon", "by"], "additionalProperties": false,
+     "properties": {"holds": {"const": true}, "value": {"$ref": "#/$defs/nat"}, "epsilon": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/frac"}]},
+                    "by": {"enum": ["run", "draw"]}}},
+    {"type": "object", "required": ["holds", "why"], "additionalProperties": false,
+     "properties": {"holds": {"const": false}, "why": {"type": "string"}}}
+   ]
+  },
+  "leg": {
+   "oneOf": [
+    {"type": "null"},
+    {"type": "object",
+     "required": ["protocol", "owner", "server", "source", "answer", "quantity", "error", "error_from", "at", "runs"],
+     "additionalProperties": false,
+     "properties": {
+      "protocol": {"type": "string"},
+      "owner": {"type": ["string", "null"]},
+      "server": {"type": "string"},
+      "source": {"enum": ["real", "fixture"]},
+      "answer": {"type": "object", "required": ["verdict", "reason", "commitment", "public"],
+                 "properties": {"verdict": {"$ref": "#/$defs/verdict"}, "reason": {"type": ["string", "null"]},
+                                "commitment": {"type": ["string", "null"]}, "public": {}}},
+      "quantity": {"type": "object", "required": ["symbol", "value", "unit"],
+                   "properties": {"symbol": {"enum": ["integrity bound", "W_cert", "S_cert", "Q_cert", "K", "foreign_bits"]},
+                                  "value": {"$ref": "#/$defs/nat"}, "unit": {"type": "string"}}},
+      "error": {"$ref": "#/$defs/frac"},
+      "error_from": {"type": "string"},
+      "at": {"type": "object", "required": ["1/100", "1/1000000"], "additionalProperties": false,
+             "properties": {"1/100": {"$ref": "#/$defs/at"}, "1/1000000": {"$ref": "#/$defs/at"}}},
+      "runs": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+     }}
+   ]
+  }
+ },
+ "properties": {
+  "format": {"const": "verity/block-record/v1"},
+  "extends": {"enum": ["verity/all-protocols-period/v1", "verity/all-protocols-window/v1"]},
+  "run": {"type": "string"},
+  "period": {"$ref": "#/$defs/nat"},
+  "window": {"$ref": "#/$defs/nat"},
+  "server": {"type": "string"},
+  "server_time": {"type": "array", "minItems": 1, "items": {
+   "type": "object", "required": ["server", "steps"], "additionalProperties": false,
+   "properties": {"server": {"type": "string"},
+                  "steps": {"type": "array", "prefixItems": [{"$ref": "#/$defs/nat"}, {"$ref": "#/$defs/nat"}], "items": false, "minItems": 2}}
+  }},
+  "legs": {
+   "type": "object", "additionalProperties": false,
+   "required": ["integrity", "pouw", "pous", "bandwidth", "certifier", "wipe"],
+   "properties": {"integrity": {"$ref": "#/$defs/leg"}, "pouw": {"$ref": "#/$defs/leg"}, "pous": {"$ref": "#/$defs/leg"},
+                  "bandwidth": {"$ref": "#/$defs/leg"}, "certifier": {"$ref": "#/$defs/leg"}, "wipe": {"$ref": "#/$defs/leg"}}
+  },
+  "composed": {
+   "type": "object", "required": ["verdict", "legs", "missing", "elsewhere", "joint_horizon", "onsite"], "additionalProperties": false,
+   "properties": {
+    "verdict": {"enum": ["accept", "reject", "pending"]},
+    "legs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/verdict"}},
+    "missing": {"type": "array", "items": {"type": "string"}},
+    "elsewhere": {"type": "array", "items": {"type": "string"}},
+    "onsite": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["protocol", "verdict", "reason"]}]},
+    "joint_horizon": {
+     "type": "object", "required": ["statement", "terms", "error_sum", "outside_statement", "at"], "additionalProperties": false,
+     "properties": {
+      "statement": {"type": "object", "required": ["name", "proved", "file", "audits"]},
+      "terms": {"type": "object", "additionalProperties": {"$ref": "#/$defs/frac"}},
+      "error_sum": {"$ref": "#/$defs/frac"},
+      "outside_statement": {"type": "array", "items": {"type": "string"}},
+      "at": {"type": "object", "additionalProperties": {
+       "type": "object", "required": ["error_sum", "not_established"],
+       "properties": {"error_sum": {"$ref": "#/$defs/frac"}, "not_established": {"type": "array", "items": {"type": "string"}}}
+      }}
+     }
+    }
+   }
+  },
+  "monitoring_period": {
+   "type": "object", "required": ["deployment", "deltas", "periods"], "additionalProperties": false,
+   "properties": {
+    "deployment": {"type": "object", "required": ["id", "machines", "window_s"],
+                   "properties": {"id": {"type": "string"}, "machines": {"$ref": "#/$defs/nat"}, "window_s": {"type": "integer", "minimum": 1}}},
+    "deltas": {"type": "array", "items": {"$ref": "#/$defs/frac"}},
+    "periods": {"type": "object", "required": ["week", "month", "year"], "additionalProperties": {
+     "type": "object", "required": ["seconds", "blocks_per_machine", "blocks", "joint_horizon", "per_block_error_for"],
+     "additionalProperties": false,
+     "properties": {
+      "seconds": {"$ref": "#/$defs/nat"}, "blocks_per_machine": {"$ref": "#/$defs/nat"}, "blocks": {"$ref": "#/$defs/nat"},
+      "joint_horizon": {"type": "object", "required": ["error_sum", "vacuous"],
+                        "properties": {"error_sum": {"$ref": "#/$defs/frac"}, "vacuous": {"type": "boolean"}}},
+      "per_block_error_for": {"type": "object", "additionalProperties": {"$ref": "#/$defs/frac"}}
+     }
+    }}
+   }
+  }
+ },
+ "oneOf": [{"required": ["period"]}, {"required": ["window"]}]
+}

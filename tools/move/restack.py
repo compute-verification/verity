@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S [--script-arg ARG]...] [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S [--script-arg ARG]...] [--onto REF] [--main REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
@@ -18,10 +18,15 @@ same script rather than by rename detection:
 4. run the result's own `tools/verity/check/pins.py --regen` at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
-A branch that already contains M skips to step 3. The branch, its ref and the caller's checkout are never changed: the
+A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
+(default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
+report clean (duplicate imports and lock entries, TOP-90 row 18). Its owner merges main instead (`git merge origin/main`); the
+restack is for branches based at or before B. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
 id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
-output) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
+output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
+and its owner regenerates them with `check.py --update`; `--push-to` pushes it; a pinned `TRUSTED.sha256` in
+conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when
 every branch is clean or up to date, 1 otherwise.
 """
@@ -47,6 +52,11 @@ SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: the result's own list of pins, whose `--regen` runs every stale pin's command
 PINS = "tools/verity/check/pins.py"
+#: a Lean package's lock: where both sides changed it, the result takes `--onto`'s and its owner regenerates it
+LOCK = "lean-audit.json"
+#: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
+#: `--onto`'s too
+PINNED = "TRUSTED.sha256"
 
 
 class ScriptFailed(Exception):
@@ -78,6 +88,18 @@ def merge_trees(ours: str, theirs: str, cwd: str | None, base: str | None = None
     p = git("merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", *pin, ours, theirs, cwd=cwd, ok=(0, 1))
     fields = [s.decode() for s in p.stdout.split(b"\0") if s]
     return fields[0], sorted(set(fields[1:])) if p.returncode else []
+
+
+def with_blobs_of(tree: str, commit: str, files: list[str], cwd: str | None) -> str:
+    """``tree`` with each of ``files`` as ``commit`` has it, in a scratch index."""
+    with tempfile.TemporaryDirectory() as d:
+        env = {**os.environ, "GIT_INDEX_FILE": os.path.join(d, "index")}
+        subprocess.run(["git", "read-tree", tree], cwd=cwd, env=env, check=True)
+        for f in files:
+            mode, _, oid = out("ls-tree", commit, "--", f, cwd=cwd).split("\t", 1)[0].split(" ")
+            subprocess.run(["git", "update-index", "--cacheinfo", f"{mode},{oid},{f}"], cwd=cwd, env=env, check=True)
+        return subprocess.run(["git", "write-tree"], cwd=cwd, env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
 
 
 def commit_tree(tree: str, parents: list[str], message: str, cwd: str | None) -> str:
@@ -214,8 +236,18 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                          "generated, and a later commit on the move's branch as --onto")
 
 
+def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str | None:
+    """A commit ``head`` shares with one of ``refs`` that ``base`` doesn't contain, or None: the branch was based (or merged
+    main) after the move's base, so the last merge, with the move as its base, would bring those commits in a second time."""
+    for ref in refs:
+        mbs = git("merge-base", "--all", head, ref, cwd=cwd, ok=(0, 1)).stdout.decode().split()
+        if late := next((mb for mb in mbs if not contains(mb, base, cwd)), None):
+            return late
+    return None
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
-            cwd: str | None = None, pins: bool = True) -> dict:
+            cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
     base = rev(base, cwd) if base else move_base(move, cwd)
     onto = rev(onto, cwd) if onto else move
@@ -228,6 +260,13 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
 
     if contains(onto, head, cwd):
         return {**r, "status": "up-to-date", "result": head}
+    main_sha = git("rev-parse", "--verify", "-q", f"{main}^{{commit}}", cwd=cwd, ok=(0, 1)).stdout.decode().strip() if main else ""
+    if not contains(move, head, cwd) and (late := based_after(head, base, [onto, *([main_sha] if main_sha else [])], cwd)):
+        return {**r, "status": "based-after", "error": (
+            f"{branch} has {late[:12]}, which came after the move's base {base[:12]}: restacking it would bring main's commits "
+            f"since then in a second time, and report clean (duplicate imports and lock entries, TOP-90 row 18). Merge instead: "
+            f"`git merge {main or onto[:12]}` once the move has landed, and resolve what that leaves; restack.py is only for "
+            f"branches based at or before {base[:12]}")}
     tip, ran = head, False
     if not contains(move, head, cwd):
         if not contains(base, head, cwd):
@@ -250,11 +289,24 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     if contains(onto, tip, cwd):
         return with_pins(r, tip, python, cwd, pins)
     tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
-    if conflicts:
+    locks = [f for f in conflicts if f.rsplit("/", 1)[-1] == LOCK]
+    pinned = [f for f in conflicts if f.rsplit("/", 1)[-1] == PINNED]
+    if len(locks) + len(pinned) < len(conflicts):
         return {**r, "status": "conflicted", "step": "moved", "files": conflicts}
-    result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n", cwd)
+    if conflicts:
+        tree = with_blobs_of(tree, onto, conflicts, cwd)
+    result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n"
+                         + (f"\nThe Lean locks take {onto[:12]}'s side, to be regenerated (`check.py --update`): "
+                            f"{', '.join(locks)}\n" if locks else "")
+                         + (f"\nThe pinned digests take {onto[:12]}'s side, regenerated by the pins step: "
+                            f"{', '.join(pinned)}\n" if pinned else ""), cwd)
     r["steps"].append({"step": "moved", "commit": result})
-    return with_pins(r, result, python, cwd, pins)
+    r = with_pins(r, result, python, cwd, pins)
+    if locks and r["status"] == "clean":
+        return {**r, "status": "locks-stale", "files": locks,
+                "error": f"the Lean locks {', '.join(locks)} take {onto[:12]}'s side: regenerate them on the result "
+                         "(tools/verity/lean/check.py --update) before marking it"}
+    return r
 
 
 def push(result: str, new: str, remote: str, cwd: str | None) -> None:
@@ -267,8 +319,8 @@ def line(r: dict) -> str:
     plain = f"plain merge {r['plain']['status']}" + (f" ({len(r['plain']['files'])})" if r["plain"]["files"] else "")
     if r["status"] in ("clean", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
-    if r["status"] in ("script-failed", "pins-stale"):
-        at = f" {r['result'][:12]}" if r["status"] == "pins-stale" else ""
+    if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after"):
+        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after") else ""
         return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
     return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
 
@@ -280,6 +332,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
     ap.add_argument("--onto", metavar="REF", help="what to merge last: the moved main (default: the move commit)")
     ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
+    ap.add_argument("--main", default="origin/main", metavar="REF",
+                    help="main, when it resolves: a branch that shares a commit after the move's base with it or --onto is "
+                         "refused (default origin/main)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
     ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
                                                     "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
@@ -299,13 +354,13 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--push-to takes one branch")
     results = []
     for b in a.branches:
-        r = restack(b, a.move_commit, a.onto, a.base, a.python, pins=not a.no_pins)
+        r = restack(b, a.move_commit, a.onto, a.base, a.python, pins=not a.no_pins, main=a.main)
         results.append(r)
         if not a.json:
             print(line(r), flush=True)
     if a.push_to and not a.dry_run:
         r = results[0]
-        if r["status"] != "clean":
+        if r["status"] not in ("clean", "locks-stale"):
             print(f"--push-to {a.push_to}: {r['branch']} is {r['status']}; nothing pushed", file=sys.stderr)
         else:
             push(r["result"], a.push_to, a.remote, None)

@@ -14,8 +14,10 @@ server window of whole wipe periods (``tiers.windows_bound``'s windows):
 * F2, state: a window of L seconds reads at most S = R_wipe + lambda_in L bits, lambda_in = sigma + tau + alpha F
   (``tiers.ingress``): the residual at the wipe that opens it and its intake. What crosses a later wipe inside it isn't
   novel; what crosses the one that opens it is, so a token carried across a wipe in the residual pays like one carried in.
-* F3, loss (empirical): every sequence's computation in a model that reaches the target loss L* depends on at least N*
-  updated weights beyond the registered models; ``n_star`` reads N* off a loss law, at no data limit unless given one.
+* F3, loss (empirical): every token's computation in a dense model that reaches the target loss L* depends on at least
+  N* updated weights beyond the registered models (``ReachSlots`` at token threads, which the policy adopts for dense
+  recipes; false for a token-routed MoE, whose tokens use fewer); ``n_star`` reads N* off a loss law, at no data limit
+  unless given one. Each server's first window, which builds its weights from a seed, is charged (``left_out``).
 * F4, boundary (empirical): one window starts each token, from its id; any other window that does work on it reads at
   least w_e bits of its values: its hidden state crossing in and its gradient crossing back, or its context's keys and
   values, which cost more. An ensemble, whose members each start the token, is outside it.
@@ -42,8 +44,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
+from pathlib import Path
 
 import tiers as T
+
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
+from rho.theorem import multiple_bound
 
 #: loss laws L(N, D) = E + A / N^alpha + B / D^beta in nats per token: Besiroglu et al.'s refit of Chinchilla's Approach 3
 #: (besiroglu-2024-chinchilla-replication/2) and Hoffmann et al.'s original Approach 3 fit, which the refit refutes and
@@ -165,6 +172,23 @@ def share(p: dict, rate: float) -> float:
     return rate * 2 / p["kappa"] / p["node_flops"]
 
 
+def left_out(p: dict, periods: int) -> float:
+    """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
+    over the horizon. That window builds its weights from a seed, so F1's weight half fails there, and
+    ``Nci.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
+    it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
+    first windows, of the threads started later, which do no work in a first window when every server starts with the
+    run. A server that joins later, or a recipe that seeds weights after a server's first window (progressive growth),
+    is outside it."""
+    return p["mfu"] * periods * p["wipe_s"] / (p["years"] * T.YEAR)
+
+
+def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
+    """The fit bound's cap on monitored efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
+    return share(p, rate) + left_out(p, periods)
+
+
 def closed_form(p: dict, wipe_bits: float) -> float:
     return 4 * wipe_bits * intake(p) / (p["kappa"] * p["d"] * p["b_w"] * p["b_a"] * p["node_flops"])
 
@@ -174,20 +198,24 @@ def residual_with_lag(p: dict) -> float:
 
 
 def dampener(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``: 1/D = (min(r + declared, m mu) + cheat) / mfu, as in ``tiers.evaluate``."""
-    return max(1.0, p["mfu"] / (min(residual_with_lag(p) + declared, p["m"] * mu) + cheat))
+    """D under a memory cap ``mu``, with nothing unmonitored: ``multiple_bound`` in Lean's form at
+    x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
+    multiplications."""
+    x = min(p["mfu"] * residual_with_lag(p) + declared, p["m"] * mu) + cheat
+    return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
 
 
 def attack_dampener(p: dict, efficiency: float) -> float:
     """D of a developer whose only route to the target is an attack of this efficiency; ``inf`` when it never gets there."""
-    return max(1.0, p["mfu"] / efficiency) if efficiency > 0 else math.inf
+    return multiple_bound(p["mfu"], 0.0, efficiency, reference_efficiency=False)
 
 
 def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu", gain: float = 1.0,
             multiplier: float = DILOCO, b_sync: float = 4.0) -> dict:
     """The replica attack: each server trains the largest model it holds at ``b_train`` bits per weight (worth ``gain``
     dense weights each, for a path composition) and syncs a pseudo-gradient of ``b_sync`` bits per weight through
-    intake. Between syncs a replica trains r F b_sync / (6 lambda_in) tokens, whatever its size."""
+    intake, its residual capacity at MFU_0 (reference efficiency). Between syncs a replica trains
+    MFU_0 r F b_sync / (6 lambda_in) tokens, whatever its size."""
     N = S / b_train
     lam = intake(p)
     r = residual_with_lag(p)
@@ -195,8 +223,8 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
     sync_s = N * b_sync / lam
     return {
         "params": N, "dense_params": gain * N, "tokens": tokens_to_reach(fit, gain * N, L), "m": m,
-        "sync_s": sync_s, "tokens_per_sync": r * p["node_flops"] * b_sync / (6 * lam),
-        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "efficiency": r * m,
+        "sync_s": sync_s, "tokens_per_sync": p["mfu"] * r * p["node_flops"] * b_sync / (6 * lam),
+        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "efficiency": p["mfu"] * r * m,
     }
 
 
@@ -207,19 +235,20 @@ def bite_gb(p: dict, N: float, b: float) -> float:
 
 def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     p = params(wipe_gb)
-    closed = T.evaluate(p, T.TIERS["T4"])
+    closed = T.evaluate(p, T.TIERS["T4"], p["mfu"])
     R = closed["wipe_state_bits"]
     S = state(p, R)
     declared = closed["declared"]
     fits = {k: fit_rate(p, R, N, w) for k, w in BOUNDARY.items()}
-    mu = {k: share(p, rate) for k, (rate, _) in fits.items()}
+    mu = {k: share(p, rate) + left_out(p, periods) for k, (rate, periods) in fits.items()}
     rate_train, periods_train = fit_rate(p, R, N, BOUNDARY["central"], B_TRAIN["central"])
-    mu_train = share(p, rate_train)
+    mu_train = share(p, rate_train) + left_out(p, periods_train)
     rep = replica(p, S, L, B_TRAIN["central"], fit)
     path = replica(p, S, L, B_TRAIN["central"], fit, PATH_GAIN["smalltalk"], PATH_MULTIPLIER["smalltalk"], 0.0)
     return {
         "wipe_gb": wipe_gb, "state_gb": S / T.GB, "visits": visits(S, N, p["b_w"]), "periods": fits["central"][1],
-        "mu_closed": closed_form(p, R), "D_closed": closed["dampener"],
+        "mu_closed": closed_form(p, R),
+        "D_closed": multiple_bound(p["mfu"], *T.remote_terms(p, closed), reference_efficiency=False),
         "mu_fit": mu["central"], "D_fit": dampener(p, mu["central"], declared),
         "D_fit_low": dampener(p, mu["low"], declared), "D_fit_high": dampener(p, mu["high"], declared),
         "fit_over_closed": mu["central"] / closed_form(p, R),

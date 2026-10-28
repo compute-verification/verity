@@ -1,6 +1,6 @@
 """Input sets (``bench.input_sets``), the template catalogue (``bench.templates``) and the IR generator (``bench.generate``).
 
-Captured and synthetic sets are interchangeable: the eight captured #101 manifests (``data/captured-101/manifests``, PR #42's
+Captured and synthetic sets are interchangeable: the eight captured #101 manifests (``data/captured-101/manifests``, the
 export ``art:b5bb0ca9``) identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
 seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the IR evaluator; a synthetic
 set of each template has the captured layout and provenance fields and verifies the same way."""
@@ -29,7 +29,9 @@ SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1
          "rmsnorm-cuda-vec8": dict(N=64, EPS=1e-5, BLOCK=4), "gumbel-top-p-token-select": dict(V=16), "token-select-greedy": dict(V=64),
          "moe-router-topk": dict(E=16, TOPK=4, VPT=8), "moe-router-topk-norm": dict(E=16, TOPK=4, VPT=8), "moe-sum": dict(TOPK=4, H=16), "bias-add": dict(N=16),
          "bf16-mul-scalar": dict(N=16), "embedding-row": dict(V=50, H=8), "moe-expert-coordinate": dict(E=4, K=64),
-         "moe-expert-coordinate-weighted": dict(E=4, K=64), "scaled-mm-fp8-block-coordinate": dict(K=256, G=128)}
+         "moe-expert-coordinate-weighted": dict(E=4, K=64), "scaled-mm-fp8-block-coordinate": dict(K=256, G=128),
+         "ingress-prompt": dict(MODEL="m", LP=3, V=1000), "token-select-chunk": dict(C=64), "token-select-combine": dict(V=200, C=64),
+         "rmsnorm-triton-v5": dict(N=64, EPS=1e-6), "attention-head-v18": dict(D=16, BN=16, T="1:40")}
 
 
 def test_catalogue_covers_the_101_templates():
@@ -161,7 +163,7 @@ def test_evaluation_targets_equal_the_definitions():
     sub = TM.subcircuit("gemm-coordinate", K=64)
     draws = [sub.draw(key, j) for j in range(64)]
     x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
-    from verity_vllm.program.registry import prims as VP
+    from verity.ml.definitions.registry import prims as VP
     assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
     ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
     assert np.array_equal(ref, evaluate_batch(sub.target(), x, w))

@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "SiluMulBf16_v3": {
+   "and": 1372,
+   "type": "7a1074354fceaa60c0b449fa5a799c30867766cab8017904092e7125a082c4d527137fcc2d045b3f3bb2e0d65dcd0aa05fd7d360157d257e58afa55f868a55b9"
+  },
+  "SiluMulBf16_v4": {
+   "and": 1380,
+   "type": "e37c82831d93fadb44233f8cca602000af6e05939824bb659540f0bceb49254654db687a8748f44e277fb3391a7a2c66fed99b65d4c128046e4afb071bf45d79"
+  },
+  "SiluMul_v3{I=8}": {
+   "and": 10976,
+   "type": "067effc261bdf138e2aed8f36edfe6cf84206ce0ef2fa0ec3ff7fa6f56c2661c685aad2accc92f63b0eb81d958d5397f0818818221a40c55577fbc56b894193b"
+  },
+  "SiluMul_v4{I=8}": {
+   "and": 11040,
+   "type": "b789522907c68b32e762c171991f3b32f333015f85df83ca611ee4c6536f7e56fd01e63c9d2b2fd409a63c9d18f49e52c74c8a9900ae254a3b75c8f2bd1e1a4f"
+  }
+ }
+}

@@ -4,7 +4,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 `manifest_digest`; this module holds that encoding and the readers built on it, and nothing that DECIDES which Values are required:
 
 * identity encoding  -- `SCHEMA`, `IDENTITY_KEY`, `FAMILIES`, the TP member spellings, `row_key` / `canonical_identity` / `manifest_digest`,
-                        `components_fold_digest` (a B>=2 manifest's program digest before GP-01's), `request_label` (`r<k>`)
+                        `components_fold_digest` (a B>=2 manifest's program digest before the workload Program's), `request_label` (`r<k>`)
 * Program names      -- `split_name` / `spec_family` / `spec_statics` over an `instances.json.gz` row, `collector_path` / `wrapper_prefix_of`
                         (Program module path -> the implementation's `named_modules()` path), `segment_steps` at the sampling events
 * stream geometry    -- the FA2 / FA3 M1 launch geometry and word count, what a batch-level row's committed stream must hold
@@ -16,7 +16,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its TP-04 policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
+too, with its rank policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
@@ -30,15 +30,15 @@ SCHEMA = "verity-sweep/required-manifest/v1"
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
-#: [R15 tp TP-04] `tp_rank_partials`: the rank-LOCAL input of every tensor-parallel collective of a rank Program (`derive_step --tp W --rank r`):
+#: `tp_rank_partials`: the rank-LOCAL input of every tensor-parallel collective of a rank Program (`derive_step --tp W --rank r`):
 #: the row-parallel Gemm partial before its all-reduce (`part_rank<r>`), the masked embedding shard (`part_rank<r>`), the lm_head logits
 #: shard before its all-gather (`shard_rank<r>`).  Required IN ADDITION to the collective's output (the module's bound member): the output
 #: is `AllReduce2/AllGather2(part_rank0, part_rank1)`, a value both ranks receive, while the partial is the rank's own computation --
-#: conservative reading (both required) until a DECISION says the collective output may be a validated derived value.
+#: conservative reading (both required) while the collective output is not a validated derived value.
 FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights", "fa2_hidden_m1_stream", "fa3_hidden_m1_stream", "moe_block_stream",
-            "tp_rank_partials",                 # [R15 tp TP-04]
-            "sampler_seed",                     # [R15 stoch] additive: only Programs with a stochastic selector emit it  [rel int-3: union, manbind M-0247 T3]
-            "sampler_splits",                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
+            "tp_rank_partials",
+            "sampler_seed",                     # additive: only Programs with a stochastic selector emit it
+            "sampler_splits",                   # additive: only a Program whose `splits` Input a stochastic selector reads
             "norm_scales",                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
             "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
             "vocab_range",                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
@@ -48,6 +48,11 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
 TP_SHARD_MEMBER = "shard_rank{rank}"
+
+#: the rows of an fx node's output at a step that the Program computes narrower than its widest rows (`program.prune.narrowed`: the last
+#: layer's fused qkv on the prompt rows before the last, of which only the keys and values are read), `width` elements a row: their own
+#: member beside the widest rows' `member` (`query.required.Population.narrowed`), so neither stands for the other
+NARROWED_MEMBER = "{member}@{width}"
 
 #: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
 #: sampled ids; and the one family of its identities (every value of every engine step).
@@ -124,7 +129,7 @@ def wrapper_prefix_of(rows: Iterable[dict], attention_paths: Iterable[str]) -> s
             return "model." if mod.startswith("model.model.") else ""
     return "model."
 
-#: [revb F-r17b-52 (iii)] the padded slot units are LIFTED words of the construction (MOE-PAD-SPEC; moe's materialisation: "one machine word per
+#: the padded slot units are LIFTED words of the construction (the padded construction's materialisation: "one machine word per
 #: lifted word: Value<17> -> u32, Value<33> -> u64; tag not split from payload"; pad's enc_bot(w) = 1 << w, Active(x) = x): the manifest names
 #: the lifted dtype so the store is read at the plane's word width and the compare knows the tag.  `l17` = Value<17> (bf16 payload, u32
 #: word, bot 0x1_0000); `l33` = Value<33> (f32 / i32 payload, u64 word, bot 0x1_0000_0000).
@@ -163,7 +168,7 @@ class RegistryUnavailable(ImportError):
     """The core `verity` package (verity.ml.circuits.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
     (infra / precondition: PYTHONPATH, the shipped tree's root, an incomplete venv), never a semantic result: without the
     registry no Definition's signature can be derived, so a manifest built here would misreport every promoted family as `unmodelled`
-    (complete: false) -- the wire lane saw exactly that on #57 (163052 rows complete:false vs 163484 complete:true).  Raised instead of
+    (complete: false).  Raised instead of
     building; the CLI exits REGISTRY_UNAVAILABLE_EXIT naming REGISTRY_UNAVAILABLE_FAIL_CLASS."""
 
     fail_class = REGISTRY_UNAVAILABLE_FAIL_CLASS
@@ -175,7 +180,7 @@ class RegistryUnavailable(ImportError):
                          f"(sys.path lacks the tree's root? an incomplete venv?) -- an environment fault, not a manifest result")
         self.cause = cause
 
-#: [R19 int-20, F-r19-int-20] the bytes per element of a promoted member's manifest dtype (PROMOTED_DTYPES)
+#: the bytes per element of a promoted member's manifest dtype (PROMOTED_DTYPES)
 PROMOTED_DTYPE_BYTES = {"bf16": 2, "f32": 4}
 
 PROMOTED_OBSERVATION_RULE = ("a PROMOTED manifest row (`promoted: true`: an interior Program row whose output another module reads; identity (producer "
@@ -190,7 +195,7 @@ PROMOTED_OBSERVATION_RULE = ("a PROMOTED manifest row (`promoted: true`: an inte
 
 
 def promoted_observation(manifest: dict[str, Any]) -> dict[str, Any]:
-    """[R19 int-20] From the required manifest's promoted rows: the committed names the collector must acquire and the identities they bind
+    """From the required manifest's promoted rows: the committed names the collector must acquire and the identities they bind
     (PROMOTED_OBSERVATION_RULE).  Returns {"names": {"<consumer>/in": [producer op_path, member]}, "consumers": {consumer op_path: bytes per
     token of the acquired input}, "producers": {producer: {"consumer", "width", "dtype", "spec", "rows_n", "member"}}, "problems": [text]} --
     `problems` non-empty = the table is not usable (the caller refuses by name).  The one definition the collector's arming
@@ -265,9 +270,9 @@ def _group_static(g: dict[str, Any], st: dict[str, Any]) -> None:
 
 
 def moe_geometry(seg_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
-    """[R14 moe] per MoE module of one step: M (tokens routed = router instances), TOPK, H, I, N_up from the Program's MoE instances.
+    """Per MoE module of one step: M (tokens routed = router instances), TOPK, H, I, N_up from the Program's MoE instances.
     The block's values are produced INSIDE one module forward (`MoERunner`), so they are not module outputs: the query opens on them through
-    the `moe_block_stream` family (MOE-03 source, names `moe/L<k>/<plane>`), one set of planes per MoE layer per step whatever the routing
+    the `moe_block_stream` family (names `moe/L<k>/<plane>`), one set of planes per MoE layer per step whatever the routing
     chose (pair-major rows p = t*TOPK + k -- the sorted block schedule never enters the values).  Expert GEMMs with a group `G` static
     (block FP8) set `fp8` and `G`; the runner's group-quant rows are counted by their row width: K = H the input's (`in_quant_rows`), else
     the activation's (`act_quant_rows`, with the fused SiLU quant's), and its SiluMul rows as `act_rows`."""
@@ -310,7 +315,7 @@ def moe_geometry(seg_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
 
 
 def moe_plane_kind(family: str, module: str) -> str | None:
-    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: pair-major
+    """The fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (pair-major
     planes per MoE layer per step) rather than as module outputs (`MOE_PLANE_FAMILIES`): `router` (router_w + router_ids per token),
     `up` (the w13 launch per pair), `down` (the w2 launch per pair), `sum` (per token) and, under the MoE runner module `...experts`
     only, `act` (the SiluMul per pair), `quant` (a group quant: the input's per token or the activation's per pair -- `ProgramIndex`
@@ -345,7 +350,7 @@ def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
 
 def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, windowed: bool = False) -> tuple[int, int, int, int, str]:
     """(HB, M, NB, BN, name) of the FA2 launch the step's attention rows imply (mirror of `native_host.launch_words`).
-    [R15 capacity/dense] `windowed`: the layer's attention has a sliding window (vLLM passes `window_size=(W-1, 0)` to FA2 whatever the
+    `windowed`: the layer's attention has a sliding window (vLLM passes `window_size=(W-1, 0)` to FA2 whatever the
     request length) -> the pinned FA2 does NOT apply the GQA decode `seqlenq_ngroups_swapped` fold (flash_api.cpp:646; mirror of
     `hidden_source.fa2_swapped`): the decode launch is b*H slabs of one row (`g8x1x..` on Gemma-2's even layers), not `g4x2x..`."""
     from_words = None  # noqa: F841 (documentation: identical rule to hidden_source.stream_name / native_host.launch_words)
@@ -492,18 +497,18 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
 #: every one of them samples ONE id per sequence per step (`sampled_token_ids`); the chain's interior values are the sampler's, not module outputs.
 TOKEN_SELECT_FAMILIES = ("TokenSelect", "GumbelTokenSelect", "ArgmaxTokenSelect", "GumbelTopPTokenSelect")
 
-#: [R15 stoch M-0107] the stochastic selectors (`Gumbel*TokenSelect_v1`: temperature -> top-p mask -> Gumbel noise from Philox(seed, pos) ->
+#: the stochastic selectors (`Gumbel*TokenSelect_v1`: temperature -> top-p mask -> Gumbel noise from Philox(seed, pos) ->
 #: argmax) consume ONE registered runtime input the greedy chain has not: the per-request SEED.  It is a required value of the sampling
 #: event (identity `runner.sampler/seed`, one i64 per sequence per step, family `sampler_seed`): without it the committed sampled id is not
 #: reproducible from the committed logits, so the population REQUIRES it and a collector that does not bind it fails coverage (named).
 STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 
-#: [R16 reqval REQ-03, stoch M-0254 derived S] the derived-S Program has a second request-owned runtime input beside the seed: `splits`
+#: the derived-S Program has a second request-owned runtime input beside the seed: `splits`
 #: (`Array<T+1,Value<32>>`, one i32 per sampling event = the split count S the top-p mask kernel launched with, `SplitsFor_v1(n_live, num_SMs)`),
 #: read by every `GumbelTopPTokenSelect_v1{V}` row as its 6th operand.  It is a required value of the sampling event exactly as the seed is
 #: (identity `runner.sampler/splits`, one i32 per sequence per step, family `sampler_splits`): the committed sampled id is reproducible from
-#: the committed logits only with the seed AND the S the mask used (F-stoch-01 is a wrong S).  Emitted iff the Program HAS the `splits`
-#: parameter (R15 static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
+#: the committed logits only with the seed AND the S the mask used.  Emitted iff the Program HAS the `splits`
+#: parameter (static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
 
 #: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
@@ -547,16 +552,16 @@ def layer_of(module: str) -> int:
 
 def alias_family(member: str) -> str:
     """The manifest family of a member emitted through an alias: a rank-local partial member is `tp_rank_partials`, anything else an
-    instance output (TP-04; the shared-RoPE members are `0` / `1`)."""
+    instance output (the shared-RoPE members are `0` / `1`)."""
     return "tp_rank_partials" if member.startswith(("part_rank", "shard_rank")) else "instance_outputs"
 
 REQ_RE = re.compile(r"^r(\d+)$")
 
 
 def request_label(rid: Any, workload: dict[str, Any] | None = None, *, position: int | None = None) -> str:
-    """[R15 COORD ruling 2] the identity key's `request_id` is `r<k>`, k = the request's position (`index`) in the workload manifest --
-    the convention BIND-01's map and the run header use.  A UUID is a WORKLOAD id (`requests[i].request_id`), never a request id:
-    MAN-01 c41cae46a emitting it broke the rc2 canary (F-rel-01: coverage 303/12943, only the request-less weights matched).
+    """The identity key's `request_id` is `r<k>`, k = the request's position (`index`) in the workload manifest --
+    the convention the binding's map and the run header use.  A UUID is a WORKLOAD id (`requests[i].request_id`), never a request id:
+    a manifest keyed by it matches only the request-less weights.
     Accepts `r<k>`, an int / digit string k, or a workload id resolvable through `workload["requests"]`; anything else is an error
     (fail closed -- a manifest keyed by an id no map can carry is a manifest that covers nothing)."""
     reqs = (workload or {}).get("requests") or []
@@ -578,7 +583,7 @@ def request_label(rid: Any, workload: dict[str, Any] | None = None, *, position:
     for i, r in enumerate(reqs):
         if isinstance(r, dict) and str(r.get("request_id")) == s:
             return f"r{int(r.get('index', i))}"
-    raise ValueError(f"request id {s!r} is not `r<k>` and is not a request of the workload manifest (a workload UUID is not a request id: COORD R15 ruling 2)")
+    raise ValueError(f"request id {s!r} is not `r<k>` and is not a request of the workload manifest (a workload UUID is not a request id)")
 
 
 def row_key(r: dict[str, Any]):
@@ -600,8 +605,8 @@ def components_fold_digest(component_digests: Iterable[str]) -> str:
 
 
 def tp_ranks_fold_digest(rank_digests: Iterable[str]) -> str:
-    """[R15 tp TP-04, rev-cb M-0108] A merged TP manifest's header `program_digest`: the labelled fold of the per-rank Program digests
-    (`program_digest_kind: tp-ranks-fold`) -- one string for manbind's loader; every identity row keeps its own rank's digest."""
+    """A merged TP manifest's header `program_digest`: the labelled fold of the per-rank Program digests
+    (`program_digest_kind: tp-ranks-fold`) -- one string for the manifest's loader; every identity row keeps its own rank's digest."""
     return hashlib.sha256(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
 
 
@@ -611,7 +616,7 @@ TP_PEER_BINDING_RULE = ("a rank Program's collective row (AllReduce2 / AllGather
                         "identity in both directions: a collective output without the peer's partial, or a partial without the peer's collective "
                         "output, is named and the merge is not complete; the element RANGE binds too (an all_reduce partial is the output's full "
                         "width, an all_gather shard is 1/world of it; `width_checked` counts the pairs both sides sized) -- the identity level; "
-                        "the committed BYTES are bound at Commit by D90 rank_match.peer_binding / TP-12, not here.  [revb F-r17b-17] `invocation` "
+                        "the committed BYTES are bound at Commit by rank_match.peer_binding, not here.  `invocation` "
                         "is 0 for every (module, member, step) on both engines (the shared-RoPE alias is the one exception: layer order): a module "
                         "path issued TWICE in one step is ONE identity whose element_range is both calls' rows, not two identities -- the binding "
                         "here sees one pair per (step, module) and says bound; the second issue fails one stage later at `coverage_check`, whose "
@@ -619,7 +624,7 @@ TP_PEER_BINDING_RULE = ("a rank Program's collective row (AllReduce2 / AllGather
 
 
 def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str], str | None]) -> dict[str, Any]:
-    """[R17 reqval finding 7] The TP merge's identity-level cross-rank check (see `TP_PEER_BINDING_RULE`).  `parts` are the rank manifests
+    """The TP merge's identity-level cross-rank check (see `TP_PEER_BINDING_RULE`).  `parts` are the rank manifests
     (one per rank); `collective_kind` classifies a row's `spec` ("all_reduce" / "all_gather" / None: the registry's, passed in so this module
     stays dependency-free).  Returns {world, collective_outputs, peer_partials, bound, n_unbound, unbound: [first 16 by name], rule}."""
     world = max(int(p.get("ranks") or 1) for p in parts)
@@ -650,7 +655,7 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
             if key not in partials:
                 unbound.append(f"rank {rk} {op} step {s} {kind} output: no {member.format(rank=peer)} identity on rank {peer} (request {rq})")
                 continue
-            # [revb M-0143 (a)] the RANGE binds too: an all_reduce partial is the output's full width; an all_gather shard is 1/world of it
+            # the RANGE binds too: an all_reduce partial is the output's full width; an all_gather shard is 1/world of it
             w_part = partials[key]
             if w_out is not None and w_part is not None:
                 width_checked += 1
@@ -693,7 +698,7 @@ def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
 def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under programs_root, else any
     build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
-    request's Program for a warm one (`prefix_plan.request_shape`).  [R16 reqval] the traversal engine streams these (rows never all in
+    request's Program for a warm one (`prefix_plan.request_shape`).  The traversal engine streams these (rows never all in
     memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
     from verity_vllm.program import prefix_plan as PP

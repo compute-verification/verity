@@ -14,10 +14,12 @@ with, not what the tile's Definition computes. This layer states that, on words,
   tile counterpart of `Accounting.TS.Lanes.LaneOk`'s cells;
 * `TileRel`: `CheckedRel`, and every drawn unit's decoded view meets `TileOk`, or the `ok` tie collides (`OkColl`);
 * `tileLayer`: proof `i` of round `w` is accepted where flock-verify `--zk --registered` accepts its session at the
-  registered file's known content (`Registered.checkKnownAll`), opens the committed rows at the registered reads
-  (`openedReg`), and its relation is `TileRel`.
+  registered file's known content (`Registered.checkKnownAll`) and the file names every port of the circuit
+  (`Registered.checkComplete`), opens the committed rows at the registered reads (`openedReg`), and its relation is
+  `TileRel`.
 
-What ties the circuit to the Definition is the premise `Accounting.Assumptions.TS.TileChecks`.
+What ties the circuit to the Definition is the premise `Accounting.TS.Tile.TileComputes`, from which
+`tileChecks_of_computes` gives `Accounting.Assumptions.TS.TileChecks`.
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Held`'s do.
@@ -53,8 +55,9 @@ def TileRel {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String) (dq : List
 
 /-- **The tile layer through its C-Flock sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
-`Registered.checkKnownAll`), opens the committed rows at the registered reads (`openedReg`), and its relation is
-`TileRel` at the decode `dec x w i`. -/
+`Registered.checkKnownAll`) and under its complete check (`Registered.checkComplete`, run when the `--registered` file
+sets `complete`: every port of the circuit is a port of `own`), opens the committed rows at the registered reads
+(`openedReg`), and its relation is `TileRel` at the decode `dec x w i`. -/
 noncomputable def tileLayer {Ω : Type} {S nπ R C K : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)
     (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray))) (dq : List ℤ → ℤ)
@@ -62,7 +65,8 @@ noncomputable def tileLayer {Ω : Type} {S nπ R C K : ℕ} (sess : Paths Ω S �
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) :
     ProofLayer Ω S nπ (ℕ → ℕ → Option Bool) where
   accepted x w i := LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
-    Flock.Registered.checkKnownAll (sess x w i).own (known x w i) = .ok ()
+    Flock.Registered.checkKnownAll (sess x w i).own (known x w i) = .ok () ∧
+    Flock.Registered.checkComplete (sess x w i).c (sess x w i).own = .ok ()
   opened x w i := openedReg (sess x w i)
   rel x w i v := TileRel (sess x w i) (out x w i) ok dq (dec x w i) (known x w i) v
   right := right

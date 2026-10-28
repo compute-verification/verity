@@ -256,8 +256,8 @@ theorem HRuns.powQ (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
       (fun _ => True) (fun _ => True) J fun _ => J := by
   refine ⟨PRuns.powQ nonce c tm, ?_⟩
   intro st t l b st' t' l' hl h _ _ _ _ hJ
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with qn := st.qn.push (nonce 0 st.qn.size) }),
-    ap (pN (nonce 0 st.qn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with qn := st.qn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   exact hJ
 
 theorem HRuns.powC (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) (J : TW → Prop) :
@@ -265,8 +265,8 @@ theorem HRuns.powC (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
       (fun _ => True) (fun _ => True) J fun _ => J := by
   refine ⟨PRuns.powC nonce c tm, ?_⟩
   intro st t l b st' t' l' hl h _ _ _ _ hJ
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cn := st.cn.push (nonce 1 st.cn.size) }),
-    ap (pN (nonce 1 st.cn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cn := st.cn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   exact hJ
 
 theorem HRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) (J : TW → Prop) :
@@ -274,8 +274,8 @@ theorem HRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
       (fun _ => True) (fun _ => True) J fun _ => J := by
   refine ⟨PRuns.powB nonce c tm, ?_⟩
   intro st t l b st' t' l' hl h _ _ _ _ hJ
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push (nonce 2 st.cbn.size) }),
-    ap (pN (nonce 2 st.cbn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   exact hJ
 
 /-- **A vector of coins**: the model's, at its transcript's position. -/

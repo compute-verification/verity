@@ -364,61 +364,6 @@ theorem zkTau_dist {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {spec :
   rw [hp]
   omega
 
-/-- **`ZkTauAlign` holds at every message**: the `τ` fork round is the tables in front's coins, rep 0's if `r = 1`,
-the link coin and `zkPre + zkLig + 2` (`zkTau_dist`); the simulated strategy follows `SchedC` at `r · repRounds` and
-that count short of `DeadTZ` (`schedC_simAtJZ_dead` on `zkStreams`, as `zkPadsAlign`), so it reaches the `τ` node
-there (`slotTauZ_of_batch`), and `advTauSZ_le_forkC` gives the alignment, table `j`'s position in the session being
-`j` (`take_gamesZC_length`). -/
-theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r u
-  have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
-  have ht : zkTbl sts j = j := by unfold zkTbl; exact ite_eq_left hjS
-  have hv : (zkRd hset h0 L hz hk hlay j (.inl (.inr (.inr r)))).val =
-      zkFront spec sts j + (r.val * repRounds true spec sts[zkTbl sts j]! +
-        (zkPre spec sts[zkTbl sts j]! + zkLig (zkSchT sts j).k0 (zkSchT sts j).levels.size + 2)) + 1 := by
-    show zkB2 (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r +
-      zkPre spec sts[zkTbl sts j]! + zkLig (zkSchT sts j).k0 (zkSchT sts j).levels.size + 2 = _
-    rcases zkB2_cases (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r with
-      ⟨a, e⟩ | ⟨a, e⟩ <;> rw [e, a] <;> unfold zkBase zkFront <;> omega
-  obtain ⟨-, hR, -, -⟩ := zkRd_facts h0 L hz hk hlay j
-  have hkR : r.val * repRounds true spec sts[zkTbl sts j]! +
-      (zkPre spec sts[zkTbl sts j]! + zkLig (zkSchT sts j).k0 (zkSchT sts j).levels.size + 2) <
-      repRounds true spec sts[zkTbl sts j]! + repRounds true spec sts[zkTbl sts j]! := by
-    have := Nat.mul_le_mul_right (repRounds true spec sts[zkTbl sts j]!) (show r.val ≤ 1 by omega)
-    omega
-  have hsched : SchedC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot (zkRoot P x ω)[j]!)
-      (DeadTZ j) (r.val * repRounds true spec sts[zkTbl sts j]! +
-        (zkPre spec sts[zkTbl sts j]! + zkLig (zkSchT sts j).k0 (zkSchT sts j).levels.size + 2))
-      (repRounds true spec sts[zkTbl sts j]!) (zkFront spec sts j)
-      (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u) := by
-    rw [ht] at hkR ⊢
-    rw [zkFront_eq hjS]
-    have hJ : sts.size ≤ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
-      rw [tabsJ_length, zk_tables_length hset]
-    refine schedC_simAtJZ_dead execArith ZkExec.hs512 _ _ _ _ spec.dg _ _ _
-      (capOf := fun rs j => Exec.capOfRoot rs[j.val]!) (zkN x) _ (fun _ _ _ => rfl) (zkRoot P x ω) _ _ _ _
-      (fun _ h => Or.inl h) (deadTZ_depAt _) (fun t => repRounds true spec sts[t]!) _ _ hkR
-      (fromS (fun t => repRounds true spec sts[t]!) (j + 1) (sts.size - (j + 1))) (fun p hp => ?_) fun pts => ?_
-    · have := mem_fromS _ _ _ p hp
-      dsimp only [finJ]
-      omega
-    · have h := zkLive_sched hJ h0 (zk_mPts_le hs hin hset) P ω u pts (zkStreams_length hz hset)
-      rw [zkStreams_split hz hjS] at h
-      exact h
-  have ha := advTauSZ_le_forkC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ _ r.val _ _
-    (slotTauZ_of_batch _ _ _ _ _ _ r.val r.isLt _ _ _ (DeadTZ j)
-      (fun e b b' hb hb' => by
-        rw [take_gamesZC_length]
-        exact ind_conflictTau_deadT _ _ _ _ hb hb')
-      (fun l hl => Or.inr (by rw [take_gamesZC_length] at hl; exact hl))
-      (fun pts => zkTau_dist h0 L hz hk hlay (zk_points hs hin hset) j _ _ r.val r.isLt _ pts)
-      _ (schedZ_of_schedC _ _ _ _ _ _ _ _ _ _ _ hsched))
-  rw [take_gamesZC_length] at ha
-  unfold ZkTauAlignQ
-  rw [hv]
-  exact ha
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -478,6 +423,14 @@ theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x := by
   exact ha
 
 end Gen
+
+/-- **`ZkTauAlign` holds at every message**: the `τ` fork round is the tables in front's coins, rep 0's if `r = 1`,
+the link coin and `zkPre + zkLig + 2` (`zkTau_dist`); the simulated strategy follows `SchedC` at `r · repRounds` and
+that count short of `DeadTZ` (`schedC_simAtJZ_dead` on `zkStreams`, as `zkPadsAlign`), so it reaches the `τ` node
+there (`slotTauZ_of_batch`), and `advTauSZ_le_forkC` gives the alignment, table `j`'s position in the session being
+`j` (`take_gamesZC_length`). -/
+theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x :=
+  Gen.zkTauAlign (S := S₀) (x := x)
 
 namespace Gen
 

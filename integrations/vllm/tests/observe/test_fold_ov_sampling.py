@@ -1,4 +1,4 @@
-"""[ov-sampling] SHARED-CODE tests for fold.py: (1) n>1 child request ids (`{index}_{parent}`, header `workload.children`)
+"""Tests for fold.py: (1) n>1 child request ids (`{index}_{parent}`, header `workload.children`)
 bind to the parent's prompt parameter and the served sequences are per child; (2) the sampled-row fallback matches the
 step's instance by its output element (family-agnostic), not only `TokenSelect_v*` by row."""
 
@@ -12,7 +12,7 @@ import pytest
 from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.observe.events import RunHeader, StepLink, StepStart, ViewDesc
 from verity_vllm.observe.fold.fold import FoldError, fold
-from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # noqa: F401  (memory fixture lives there)
+from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # memory fixture lives there
 from tests.observe.test_fold_synthetic import memory  # noqa: F401
 from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Array, Value

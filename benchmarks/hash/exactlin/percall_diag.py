@@ -290,7 +290,8 @@ def compare_records(pa: Path, pb: Path) -> dict:
         if inputs:
             out["calls_inputs_differ"] += 1
             if out["first_inputs"] is None:
-                f32 = lambda v: float(np.array([v], np.int64).astype(np.int32).view(np.float32)[0])
+                def f32(v):
+                    return float(np.array([v], np.int64).astype(np.int32).view(np.float32)[0])
                 out["first_inputs"] = {**where(i), "m": m, "rows_s_a": sa.tolist()[:32], "rows_xq": xq.tolist()[:32],
                                        "s_a": [[f32(da[r]), f32(db[r])] for r in sa.tolist()[:4]]}
         if len(yy):

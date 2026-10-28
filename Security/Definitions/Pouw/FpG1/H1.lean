@@ -3,7 +3,7 @@ import Definitions.Pouw.FpG1.Encoding
 /-!
 # FP8-g1 and W4A8-g1 on sm_120's record H1: the grids and a round's operand leaves (trusted)
 
-What a g1 window on H1 (co32c-u16-cohalf, decision 82) commits, for `Models.Accounting.Guarantees.FpG1`'s statements.
+What a g1 window on H1 (co32c-u16-cohalf, decision 82) commits, for `Definitions.Accounting.Guarantees.FpG1`'s statements.
 H1 commits activations `V` with `|V| ≤ 126`, served `X = V + b` in `[−126, 127]`, and weights `W` with `|W| ≤ 110`,
 served `W′ = W + c + U` with H1's noise `U ∈ [−16, 16]` in `[−126, 127]`; the coins `b` and `c` are drawn after the
 round's leaves are committed.

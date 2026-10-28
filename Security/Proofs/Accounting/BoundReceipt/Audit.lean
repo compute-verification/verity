@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.BoundReceipt
+import Definitions.Accounting.Guarantees.BoundReceipt
 import Proofs.Accounting.RateAudit.Audit
 
 /-!

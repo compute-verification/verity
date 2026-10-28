@@ -1,4 +1,4 @@
-"""R15 compiled — C2 of record for `Execution=compiled` rows (DECISIONS-2 (1): stratified sampled EXACT VU replay + ordered boundary linkage),
+"""C2 of record for `Execution=compiled` rows (stratified sampled EXACT VU replay + ordered boundary linkage),
 from the committed bytes alone.
 
 VU = one Inductor kernel launch of P_compiled (compiled_relations.relation); its input boundaries are committed under
@@ -21,7 +21,7 @@ import torch
 
 from verity_vllm.check import compiled_autotune
 from verity_vllm.commit import challenge as CH
-from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of, warm_vml
+from verity_vllm.program.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of, warm_vml
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
        "uint8": torch.uint8, "int8": torch.int8}
@@ -89,7 +89,7 @@ def check_edges(dataflow: dict[str, Any], committed, n_rows: int) -> dict[str, A
 
 class CompiledKernelCheck:
     def __init__(self, committer: Any, model: torch.nn.Module, tokens: list[int] | dict[str, list[int]] | None = None, *, seed: int,
-                 seed_source: str | None = None,
+                 seed_source: str | None,
                  n_random: int = 4, pieces: int | None = None, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                  arrivals: dict[str, int] | None = None, prompts: dict[str, list[int]] | None = None) -> None:
         warm_vml()
@@ -109,7 +109,7 @@ class CompiledKernelCheck:
         self.arrivals = {str(k): int(v) for k, v in (arrivals or {}).items()}
         self.prompts = {str(k): list(v) for k, v in (prompts or {}).items()}
         self.seed = seed
-        # [coord ruling 41, rev F-r16-23] the seed's provenance as a FACT the finalizer recomputes from this record's own run root
+        # the seed's provenance as a FACT the finalizer recomputes from this record's own run root
         self.seed_source = seed_source
         self.n_random = n_random
         self.device = next(model.parameters()).device
@@ -219,7 +219,7 @@ class CompiledKernelCheck:
         if manifest:
             lt = manifest["program"]["launch_table"]
             launch_table = [lt["first"]] + [lt["middle"]] * (self.pieces - 2) + [lt["last"]]
-            # [R16 compiled, Qwen row] the manifest's resolved role maps (by piece kind x launch site, from the generated kernels' signatures)
+            # the manifest's resolved role maps (by piece kind x launch site, from the generated kernels' signatures)
             # take precedence over the name-keyed table: a kernel name shared by two argument lists (Llama RoPE / Qwen RoPE+bias) is not re-roled
             rm = manifest["program"].get("role_maps")
             if rm:
@@ -241,109 +241,9 @@ class CompiledKernelCheck:
                 for L in launches:
                     kernel = L["kernel"]
                     roles, wargs = _roles_for(piece, kernel)
-                    if not roles:
-                        continue
-                    kind = None
-                    weights = self._weights(piece, kernel, wargs)
-                    in_idx = set(wargs) | {i for i, r in roles.items() if r not in OUTPUT_ROLES} | set(weights)
-                    ins: list = [None] * (max(in_idx) + 1)                   # relation() takes the launch's INPUT arguments in signature order
-                    for i, t in weights.items():
-                        ins[i] = t
-                    missing = []
-                    outs: dict[str, torch.Tensor] = {}
-                    for i, role in roles.items():
-                        if i in wargs:
-                            continue                                          # a weight argument is registered, never committed: _weights() supplies it (Qwen 'bias')
-                        t = self.committed(s, metas, f"c{piece:02d}.{kernel}/{role}")
-                        if t is None:
-                            missing.append(role)
-                            continue
-                        if role in OUTPUT_ROLES:
-                            outs[role] = t
-                        else:
-                            ins[i] = t
-                    if missing:
-                        res["launches_missing"] += 1
-                        if len(res["missing"]) < 12:
-                            res["missing"].append({"step": s, "piece": piece, "kernel": kernel, "roles": missing})
-                        continue
-                    out_roles = [r for _i, r in sorted(roles.items()) if r in OUTPUT_ROLES]
-                    outs_meta = [{"shape": list(outs[r].shape), "role": r} for r in out_roles]
-                    try:
-                        # [R16 Qwen] the norm reduction order is learned per (kernel, row width) from the first launch checked (every
-                        # candidate order of the source structure is tried) and then pinned for the rest: Llama's 2048-wide rows keep
-                        # the S1-S2.md labels as the first guess; any other width starts from the full candidate set.
-                        width = next((int(t.shape[1]) for t in ins if t is not None and t.dim() == 2), None)
-                        lkey = (kernel, width)
-                        if "rms_norm" in kernel:
-                            labels = self._norm_labels.get(lkey) or NORM_LABELS          # R0_BLOCK 2048 x 8 warps along the row for any row <= 2048 (Llama 2048, Qwen 1536: masked tail); a miss -> full search
-                        else:
-                            labels = None
-                        rel = relation(kernel, [x for x in ins], outs_meta, eps=self.eps, labels=labels)
-                        if "rms_norm" in kernel and labels is not None and not any(
-                                all(c is not None and j < len(c) and c[j].shape == outs[r].reshape(c[j].shape).shape and torch.equal(c[j].to(outs[r].dtype), outs[r].reshape(c[j].shape))
-                                    for j, r in enumerate([rr for _i, rr in sorted(roles.items()) if rr in OUTPUT_ROLES])) for c in rel.get("variants", {}).values()):
-                            rel = relation(kernel, [x for x in ins], outs_meta, eps=self.eps, labels=None)     # the pinned/guessed orders miss: full search, once
-                        kind = rel["kind"]
-                        labelled = list(rel["variants"].items()) if "variants" in rel else [("single", rel["outputs"])]
-                        labelled = [(lb, c) for lb, c in labelled if c is not None]
-                        cands = [c for _lb, c in labelled]
-                        exact_any = False
-                        per_out_ok = [False] * len(out_roles)
-                        matched_labels = []
-                        for lb, cand in labelled:
-                            ok = []
-                            for j, r in enumerate(out_roles):
-                                pred = cand[j] if j < len(cand) else None
-                                got = outs[r]
-                                o = pred is not None and pred.shape == got.reshape(pred.shape).shape and torch.equal(pred.to(got.dtype), got.reshape(pred.shape))
-                                ok.append(bool(o))
-                            per_out_ok = [a or b for a, b in zip(per_out_ok, ok)]
-                            if all(ok):
-                                exact_any = True
-                                matched_labels.append(lb)
-                        bk = res["by_kind"].setdefault(kind, {"launches": 0, "exact": 0, "outputs": 0, "outputs_exact": 0, "variants_exact": {}})
-                        for lb in matched_labels:
-                            bk.setdefault("variants_exact", {})[lb] = bk["variants_exact"].get(lb, 0) + 1
-                        if "rms_norm" in kernel and matched_labels and lkey not in self._norm_labels:
-                            self._norm_labels[lkey] = tuple(matched_labels)
-                            res.setdefault("norm_orders", {})[f"{kernel}@{width}"] = list(matched_labels)
-                        bk["launches"] += 1
-                        bk["outputs"] += len(out_roles)
-                        bk["outputs_exact"] += sum(per_out_ok)
-                        res["outputs_checked"] += len(out_roles)
-                        res["outputs_exact"] += sum(per_out_ok)
-                        res["launches_checked"] += 1
-                        # [R16 compiled, Daniel DECISIONS-3 autotune rule] the kernel's own compiled source under EVERY candidate launch config
-                        # on these committed inputs == the committed outputs (bit for bit), the executed config included -- shown per kernel
-                        # on up to MAX_LAUNCHES_PER_KERNEL sampled launches; the merge lifts a cross-arm config difference only for kernels shown
-                        self._autotune_equivalence(kernel, ins, outs, roles, res)
-                        if exact_any:
-                            res["launches_exact"] += 1
-                            bk["exact"] += 1
-                        elif len(res["mismatch"]) < 12:
-                            # diagnostics: WHERE the committed output differs from the relation (late read / overwritten buffer = whole
-                            # rows differ; numerics = scattered elements) -- against the first candidate
-                            diag = []
-                            for j, r in enumerate(out_roles):
-                                pred = cands[0][j] if cands and j < len(cands[0]) else None
-                                got = outs[r]
-                                if pred is None or pred.numel() != got.numel():
-                                    diag.append({"role": r, "shape_pred": None if pred is None else list(pred.shape), "shape_got": list(got.shape)})
-                                    continue
-                                g = got.reshape(pred.shape); d = pred.to(g.dtype) != g
-                                rows_bad = d.reshape(d.shape[0], -1).any(dim=1).nonzero().flatten().tolist() if d.dim() >= 1 else []
-                                fd = (pred.float() - g.float()).abs()
-                                diag.append({"role": r, "shape": list(pred.shape), "n_diff": int(d.sum()), "rows_diff": len(rows_bad),
-                                             "rows_first_last": [rows_bad[0], rows_bad[-1]] if rows_bad else [],
-                                             "max_abs_diff": float(fd.max()), "got_finite": bool(torch.isfinite(g.float()).all())})
-                            res["mismatch"].append({"step": s, "piece": piece, "kernel": kernel, "kind": kind, "outputs_ok": per_out_ok,
-                                                    "n_rows": int(next(t.shape[0] for t in ins if t is not None and t.dim() >= 1)) if any(t is not None for t in ins) else None, "diag": diag})
-                    except Exception as e:  # noqa: BLE001
-                        res["launches_checked"] += 1
-                        if len(res["errors"]) < 12:
-                            res["errors"].append(f"step {s} piece {piece} {kernel}: {e!r}"[:300])
-            # dataflow linkage (rev-pm M-0589): the committed copies along every declared edge of P_compiled are equal at this step
+                    if roles:
+                        self._check_launch(s, piece, metas, kernel, roles, wargs, res)
+            # dataflow linkage: the committed copies along every declared edge of P_compiled are equal at this step
             if dataflow is not None:
                 memo: dict[tuple, Any] = {}
 
@@ -365,7 +265,7 @@ class CompiledKernelCheck:
             # ordered boundary linkage (per request row range of the step's batched buffers)
             if self.tokens_by_req is not None and lm_head is not None:
                 self._link_step(s, metas, lm_head, res)
-        # [R16 compiled, F-cb-23 / rev M-0243] the linkage runs over EVERY committed step, not only the sampled ones: at B>=2 an equal-shape
+        # the linkage runs over EVERY committed step, not only the sampled ones: at B>=2 an equal-shape
         # request swap relabels a whole step's rows together and the sampled replay passes by construction, so the per-(step, request)
         # attribution must be exhaustive -- every request's rows at every step tied to ITS tokens (ids in, argmax of the final hidden out).
         if self.tokens_by_req is not None and lm_head is not None:
@@ -393,7 +293,7 @@ class CompiledKernelCheck:
                              "method": "every committed engine step x every request row range of the step (engine row order): ids(s) == token(k-1) / declared prompt at prefill, "
                                        "argmax lm_head(final_norm_out(s)) == token(k); positions(s)[rows] == prompt_len + k - 1 (decode) / 0..len-1 (prefill); "
                                        "tokens = the engine's own per-request outputs (== control arm's); coincident_pairs = rows of one step with equal "
-                                       "(token(k-1), token(k), position) -- told apart by no gate (rev M-0330), must be 0; coincident_pairs_tokens = the token-only count"}
+                                       "(token(k-1), token(k), position) -- told apart by no gate, must be 0; coincident_pairs_tokens = the token-only count"}
         eg = res["edges"]
         eg["ok"] = (not eg["declared"]) or (eg["checked"] > 0 and eg["equal"] == eg["checked"] and eg["missing"] == 0 and not eg["mismatch"])
         res["ok"] = (res["launches_checked"] > 0 and res["launches_exact"] == res["launches_checked"] and res["launches_missing"] == 0
@@ -403,8 +303,113 @@ class CompiledKernelCheck:
         res["seconds"] = round(time.perf_counter() - t0, 3)
         return res
 
+    def _check_launch(self, s: int, piece: int, metas: dict[str, Any], kernel: str, roles: dict[int, str], wargs: set[int],
+                      res: dict[str, Any]) -> None:
+        """One launch of a sampled step: its relation over the committed inputs and registered weights against the committed
+        outputs, bit for bit.  A missing role, a mismatch (with where it differs) or an error is counted in `res`."""
+        kind = None
+        weights = self._weights(piece, kernel, wargs)
+        in_idx = set(wargs) | {i for i, r in roles.items() if r not in OUTPUT_ROLES} | set(weights)
+        ins: list = [None] * (max(in_idx) + 1)                   # relation() takes the launch's INPUT arguments in signature order
+        for i, t in weights.items():
+            ins[i] = t
+        missing = []
+        outs: dict[str, torch.Tensor] = {}
+        for i, role in roles.items():
+            if i in wargs:
+                continue                                          # a weight argument is registered, never committed: _weights() supplies it (Qwen 'bias')
+            t = self.committed(s, metas, f"c{piece:02d}.{kernel}/{role}")
+            if t is None:
+                missing.append(role)
+                continue
+            if role in OUTPUT_ROLES:
+                outs[role] = t
+            else:
+                ins[i] = t
+        if missing:
+            res["launches_missing"] += 1
+            if len(res["missing"]) < 12:
+                res["missing"].append({"step": s, "piece": piece, "kernel": kernel, "roles": missing})
+            return
+        out_roles = [r for _i, r in sorted(roles.items()) if r in OUTPUT_ROLES]
+        outs_meta = [{"shape": list(outs[r].shape), "role": r} for r in out_roles]
+        try:
+            # the norm reduction order is learned per (kernel, row width) from the first launch checked (every
+            # candidate order of the source structure is tried) and then pinned for the rest: Llama's 2048-wide rows keep
+            # the S1-S2.md labels as the first guess; any other width starts from the full candidate set.
+            width = next((int(t.shape[1]) for t in ins if t is not None and t.dim() == 2), None)
+            lkey = (kernel, width)
+            if "rms_norm" in kernel:
+                labels = self._norm_labels.get(lkey) or NORM_LABELS          # R0_BLOCK 2048 x 8 warps along the row for any row <= 2048 (Llama 2048, Qwen 1536: masked tail); a miss -> full search
+            else:
+                labels = None
+            rel = relation(kernel, [x for x in ins], outs_meta, eps=self.eps, labels=labels)
+            if "rms_norm" in kernel and labels is not None and not any(
+                    all(c is not None and j < len(c) and c[j].shape == outs[r].reshape(c[j].shape).shape and torch.equal(c[j].to(outs[r].dtype), outs[r].reshape(c[j].shape))
+                        for j, r in enumerate([rr for _i, rr in sorted(roles.items()) if rr in OUTPUT_ROLES])) for c in rel.get("variants", {}).values()):
+                rel = relation(kernel, [x for x in ins], outs_meta, eps=self.eps, labels=None)     # the pinned/guessed orders miss: full search, once
+            kind = rel["kind"]
+            labelled = list(rel["variants"].items()) if "variants" in rel else [("single", rel["outputs"])]
+            labelled = [(lb, c) for lb, c in labelled if c is not None]
+            cands = [c for _lb, c in labelled]
+            exact_any = False
+            per_out_ok = [False] * len(out_roles)
+            matched_labels = []
+            for lb, cand in labelled:
+                ok = []
+                for j, r in enumerate(out_roles):
+                    pred = cand[j] if j < len(cand) else None
+                    got = outs[r]
+                    o = pred is not None and pred.shape == got.reshape(pred.shape).shape and torch.equal(pred.to(got.dtype), got.reshape(pred.shape))
+                    ok.append(bool(o))
+                per_out_ok = [a or b for a, b in zip(per_out_ok, ok)]
+                if all(ok):
+                    exact_any = True
+                    matched_labels.append(lb)
+            bk = res["by_kind"].setdefault(kind, {"launches": 0, "exact": 0, "outputs": 0, "outputs_exact": 0, "variants_exact": {}})
+            for lb in matched_labels:
+                bk.setdefault("variants_exact", {})[lb] = bk["variants_exact"].get(lb, 0) + 1
+            if "rms_norm" in kernel and matched_labels and lkey not in self._norm_labels:
+                self._norm_labels[lkey] = tuple(matched_labels)
+                res.setdefault("norm_orders", {})[f"{kernel}@{width}"] = list(matched_labels)
+            bk["launches"] += 1
+            bk["outputs"] += len(out_roles)
+            bk["outputs_exact"] += sum(per_out_ok)
+            res["outputs_checked"] += len(out_roles)
+            res["outputs_exact"] += sum(per_out_ok)
+            res["launches_checked"] += 1
+            # [the compiled-kernel autotune rule] the kernel's own compiled source under EVERY candidate launch config
+            # on these committed inputs == the committed outputs (bit for bit), the executed config included -- shown per kernel
+            # on up to MAX_LAUNCHES_PER_KERNEL sampled launches; the merge lifts a cross-arm config difference only for kernels shown
+            self._autotune_equivalence(kernel, ins, outs, roles, res)
+            if exact_any:
+                res["launches_exact"] += 1
+                bk["exact"] += 1
+            elif len(res["mismatch"]) < 12:
+                # diagnostics: WHERE the committed output differs from the relation (late read / overwritten buffer = whole
+                # rows differ; numerics = scattered elements) -- against the first candidate
+                diag = []
+                for j, r in enumerate(out_roles):
+                    pred = cands[0][j] if cands and j < len(cands[0]) else None
+                    got = outs[r]
+                    if pred is None or pred.numel() != got.numel():
+                        diag.append({"role": r, "shape_pred": None if pred is None else list(pred.shape), "shape_got": list(got.shape)})
+                        continue
+                    g = got.reshape(pred.shape); d = pred.to(g.dtype) != g
+                    rows_bad = d.reshape(d.shape[0], -1).any(dim=1).nonzero().flatten().tolist() if d.dim() >= 1 else []
+                    fd = (pred.float() - g.float()).abs()
+                    diag.append({"role": r, "shape": list(pred.shape), "n_diff": int(d.sum()), "rows_diff": len(rows_bad),
+                                 "rows_first_last": [rows_bad[0], rows_bad[-1]] if rows_bad else [],
+                                 "max_abs_diff": float(fd.max()), "got_finite": bool(torch.isfinite(g.float()).all())})
+                res["mismatch"].append({"step": s, "piece": piece, "kernel": kernel, "kind": kind, "outputs_ok": per_out_ok,
+                                        "n_rows": int(next(t.shape[0] for t in ins if t is not None and t.dim() >= 1)) if any(t is not None for t in ins) else None, "diag": diag})
+        except Exception as e:  # noqa: BLE001
+            res["launches_checked"] += 1
+            if len(res["errors"]) < 12:
+                res["errors"].append(f"step {s} piece {piece} {kernel}: {e!r}"[:300])
+
     def _link_step(self, s: int, metas: dict[str, Any], lm_head: Any, res: dict[str, Any]) -> None:
-        """Ordered boundary linkage of ONE engine step, per request row range of the step's batched buffers (F-cb-23 / rev M-0243: the
+        """Ordered boundary linkage of ONE engine step, per request row range of the step's batched buffers (the
         per-(step, request) attribution of the committed rows).  ids(s)[rows of r] == r's token(k-1) (its prefill rows == the DECLARED prompt);
         argmax lm_head(final_norm_out(s)[last row of r]) == r's token(k); the tokens are the engine's own per-request outputs (equal to the
         uninstrumented control arm's).  Runs over EVERY committed step (attribution), the sampled steps included."""
@@ -412,7 +417,7 @@ class CompiledKernelCheck:
         ids = self.committed(s, metas, f"c00.{self._embed_kernel(metas)}/ids") if self._embed_kernel(metas) else None
         fk = self._final_kernel(metas)
         hid = self.committed(s, metas, f"c{self.pieces - 1:02d}.{fk}/out") if fk else None
-        # [R16 compiled, rev M-0330 residual] third gate: the committed POSITIONS buffer (the RoPE launches' `pos` input, one int64 per row,
+        # third gate: the committed POSITIONS buffer (the RoPE launches' `pos` input, one int64 per row,
         # in the required population at every step) -- a request's decode row sits at position prompt_len + k - 1, its prefill rows at
         # 0..prompt_len-1.  Two rows of one step with equal (token(k-1), token(k)) are still told apart when their positions differ, so the
         # coincidence key is (prev, next, position); rows with equal tokens AND equal positions remain coincident (named).
@@ -421,8 +426,8 @@ class CompiledKernelCheck:
         pos = pos.reshape(-1) if pos is not None else None
         rows = (self.request_rows or {}).get(s)
         n_checked = 0                                                 # request rows of this step tied by at least one gate (ids or argmax)
-        gate_keys: list[tuple] = []                                   # (prev id, next id, position) per tied row: rows with the same key are NOT told apart by the gates (rev M-0330)
-        token_keys: list[tuple] = []                                  # (prev id, next id) -- rev M-0330's token-only coincidence, kept in the record
+        gate_keys: list[tuple] = []                                   # (prev id, next id, position) per tied row: rows with the same key are NOT told apart by the gates
+        token_keys: list[tuple] = []                                  # (prev id, next id) -- the token-only coincidence, kept in the record
         if rows is not None and lk.get("rows_sample") is None:
             lk["rows_sample"] = {"step": s, "rows": [(str(r)[:24], lo, hi) for r, lo, hi in rows[:4]]}
         if rows is not None and len(self.tokens_by_req) == 1 and not any(r in self.tokens_by_req for r, _lo, _hi in rows):
@@ -486,9 +491,9 @@ class CompiledKernelCheck:
             if k >= 1 and (k - 1) < len(toks) and k < len(toks):
                 token_keys.append((int(toks[k - 1]), int(toks[k])))
                 gate_keys.append((int(toks[k - 1]), int(toks[k]), row_pos))
-        # [rev M-0330] the named residual: two request rows of the SAME step that no gate tells apart pass under an equal-shape swap --
+        # the named residual: two request rows of the SAME step that no gate tells apart pass under an equal-shape swap --
         # counted per step (pairs); attribution.complete requires 0.  Keys: (token(k-1), token(k), committed position) -- the token-only
-        # count (M-0330's original definition) is kept beside it; when the positions buffer is not committed the key degrades to tokens.
+        # count (the original definition) is kept beside it; when the positions buffer is not committed the key degrades to tokens.
         def _pairs(keys: list[tuple]) -> tuple[int, dict[tuple, int]]:
             seen: dict[tuple, int] = {}
             for gk in keys:
@@ -539,10 +544,10 @@ class CompiledKernelCheck:
             if x.get("error") and len(k.setdefault("errors", [])) < 3:
                 k["errors"].append(x["error"])
         k["all_shown"] = bool(k["launches"] > 0 and k["not_shown"] == 0 and k.get("executed_in_candidates"))
-        # [rev F-r16-22] a lift needs a structural (pointwise) kernel: for a reduction the sampled equality is recorded but does not lift
+        # a lift needs a structural (pointwise) kernel: for a reduction the sampled equality is recorded but does not lift
         k["lift_eligible"] = bool(k["all_shown"] and k.get("structural"))
         if k["all_shown"] and not k.get("structural"):
-            k["why"] = "F-r16-22: non-pointwise heuristic -- the config sets the reduction order; sampled equality is not a property of the kernel (not lifted)"
+            k["why"] = "non-pointwise heuristic -- the config sets the reduction order; sampled equality is not a property of the kernel (not lifted)"
 
     def _pos_name(self, metas: dict[str, Any]) -> str | None:
         """The committed positions buffer of a step: the first piece's RoPE launch `pos` input (`c01.<rope kernel>/pos`), else any `/pos`."""

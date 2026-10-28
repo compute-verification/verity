@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # the tiny model's tensors are too small for threads to pay off
 torch.set_num_threads(1)
 
-ST_DTYPES = {torch.bfloat16: "BF16", torch.float32: "F32"}
+ST_DTYPES = {torch.bfloat16: "BF16", torch.float32: "F32", torch.float8_e4m3fn: "F8_E4M3"}
 
 
 def write_safetensors(path: Path, tensors: dict) -> None:

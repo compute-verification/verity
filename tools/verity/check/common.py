@@ -9,6 +9,10 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+#: the store's attempts (an SQL condition on its index) that are recorded checks: `check.py --record`'s own, whose tool is
+#: `check`, and every check launched under `slot.py` (drive's trains, Lean checks and after-landing runs), whose tool is
+#: `python3`
+RECORDED_CHECKS = "(tool = 'check' OR (tool = 'python3' AND manifest_json LIKE '%tools/verity/check/check.py%'))"
 
 
 def cache_dir() -> Path:

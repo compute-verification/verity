@@ -1,4 +1,4 @@
-"""L3 gate G2: the M1 log (`data/logs/m1.jsonl.gz`, produced by L1 on the pod) resolves with 0 Unsupported under
+"""Gate G2: the M1 log (`data/logs/m1.jsonl.gz`, produced on the pod) resolves with 0 Unsupported under
 the pinned profile, with the expected instance counts per step.  Skipped when the log is absent."""
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.observe.fold.resolve_log import resolve_log
-from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import C, PROFILE, check_header
+from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import C, PROFILE, check_header
 
 LOG = Path(__file__).resolve().parents[2] / "data" / "logs" / "m1.jsonl.gz"
 
@@ -21,12 +21,14 @@ def resolved():
     return header, results, roots
 
 
+@pytest.mark.slow
 def test_header_matches_profile(resolved):
     header, results, roots = resolved
     assert header is not None
     assert check_header(header) == []
 
 
+@pytest.mark.slow
 def test_zero_unsupported_over_all_steps(resolved):
     _, results, _ = resolved
     assert len(results) == 16, [r.step for r in results]
@@ -73,7 +75,7 @@ def test_prefill_then_decode(resolved):
 
 
 def test_weight_roots_are_classified(resolved):
-    from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import root_class
+    from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import root_class
     _, _, roots = resolved
     names = [rt.name for rs in roots.values() for rt in rs if rt.role in ("weight", "buffer")]
     assert names, "no weight roots in the preamble"

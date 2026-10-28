@@ -1,19 +1,21 @@
-"""[R17-43 / LIFTING-SPEC v0.7 A9.3 B8 B9; PADDED-TABLE #3 / #4] padding steps: the inactive rows of a padded Commit are SYNTHESIZED by
+"""Padding steps: the inactive rows of a padded Commit are SYNTHESIZED by
 enablement at finalize -- every identity the manifest requires of a request past its executed prefix of record is the canonical ⊥ of its
 lifted width, chunked / folded / bound with the production step rule -- and the padded map binds RequiredValues(Lift(P)) completely.
 One rule, two consumers (pod finalize, laptop conversion over a pulled record); this test drives the conversion over a synthetic record
-laid out exactly like exec's pulled smollm2 records (manifest.json.gz, commit/binding_map_p0.json.gz, build_workload/workload_program.json,
+laid out exactly like a pulled smollm2 record (manifest.json.gz, commit/binding_map_p0.json.gz, build_workload/workload_program.json,
 match/capture/tokens.json).  Torch-free."""
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from verity_vllm.check import executed_prefix as EP
+from verity_vllm.commit import executed_prefix as EP
 from verity_vllm.commit import padding_steps as PS
 from verity_vllm.commit import scheme
 from verity_vllm.commit.merkle import fold_path
@@ -130,17 +132,17 @@ def test_b1_early_stop_the_padding_steps_are_the_cap_suffix_every_word_bot_one_r
             roots.setdefault(e["identity"]["step"], set()).add(e["step_root"])
     assert sorted(roots) == list(range(CAP)) and all(len(v) == 1 for v in roots.values())
     assert pm["run_root"] == scheme.run_root(bytes.fromhex(PD), geo, [bytes.fromhex(next(iter(roots[s]))) for s in range(CAP)]).hex()
-    # [revb M-1335 CORRECTION 2 / R17-42] a CONVERSION never re-labels the record's Program: program_rules_version stays the record's (None
+    # a CONVERSION never re-labels the record's Program: program_rules_version stays the record's (None
     # for an ordinary Program); the padding rule is named beside it (`conversion`, `padding_rules_version`)
     assert pm["schema"] == "padded-binding-map/1" and pm["program_rules_version"] is None and pm["padding_rules_version"] == "padded-v1"
     assert pm["conversion"].startswith("padding-steps/1")
     acts = {e["activity"] for e in pm["entries"]}
     assert acts == {"active", "bot-by-enablement", "registered-input"}
-    # [revb S-r17b-59 (i)] the block's domain is READ from the entry (block_kind / NB), never inferred from the activity label
+    # the block's domain is READ from the entry (block_kind / NB), never inferred from the activity label
     assert all((e["block_kind"], e["nb"]) == ("padding", 1) for e in pm["entries"] if e["activity"] == "bot-by-enablement")
     assert all((e["block_kind"], e["nb"]) == ("executed", 0) for e in pm["entries"] if e["activity"] == "active")
     assert sum(1 for e in pm["entries"] if e["activity"] == "bot-by-enablement") == (CAP - n_exec) * len(OPS)
-    # [reqval M-1318] the ONE fact the three consumers of the executed prefix read (rows_past_the_stop, coverage, sampled_replay's inactive
+    # the ONE fact the three consumers of the executed prefix read (rows_past_the_stop, coverage, sampled_replay's inactive
     # stratum): `activity` on EVERY entry; `encoding.committed_dtype` + `encoding.bot_word_hex` on every padding entry, and the hex IS the word
     assert all("activity" in e for e in pm["entries"])
     for e in pm["entries"]:
@@ -221,3 +223,107 @@ def test_the_rule_refuses_what_it_cannot_place_and_never_infers_the_lag(tmp_path
     assert res["ok"] is False and "disagree" in res["why"]
     with pytest.raises(ValueError, match="no lifted container"):
         PS.padding_layout([dict(ids[0], dtype="complex128")])
+
+
+#: sha256 of the conversion's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=_plain)`, the run directory replaced),
+#: messages included: a change to what the conversion decides or says changes it
+OUTCOMES_SHA256 = "6f16a33b80b40734410c77c44e253efa9feea2718d5602512d81466673595688"
+RECORDS = Path(__file__).parents[1] / "records" / "data"
+B1 = {"served": {"r0": [5, 6, EOS]}, "lag": 1, "executed_steps": {"r0": [0, 1, 2, 3]}}
+CAP_STOP = {"served": {"r0": [1, 2, 3, 4, 5, 6]}, "lag": 2, "executed_steps": {"r0": list(range(CAP))}}
+
+
+def _edit(p: Path, change) -> None:
+    d = json.loads(p.read_text())
+    change(d)
+    p.write_text(json.dumps(d))
+
+
+def _lag_in_the_stop_rule_only(wp: dict) -> None:
+    del wp["lag"]
+    wp["stop_rule"].update(lag=1, eos_lag_rows=1)
+
+
+def _one_process_capture(t: dict) -> None:
+    t["requests"][0].update(arrive_step_realized=0, first_step=0, finish_step=3, finish_reason="stop", served_output_len=3, executed_prefix_len=4)
+    t["lag"] = {"value": 1, "async_scheduling": True}
+
+
+#: name -> (the record, a change to its workload Program, a change to its tokens.json (None: the record's; "absent": no file))
+CASES = {
+    "b1_lag0": (dict(B1, lag=0, executed_steps={"r0": [0, 1, 2]}), None, None),
+    "b1_lag1": (B1, None, None),
+    "b2_mixed": ({"served": {"r0": [5, EOS], "r1": [1, 2, 3, 4, 5, 6]}, "lag": 1, "executed_steps": {"r0": [0, 1, 2], "r1": list(range(CAP))}},
+                 None, None),
+    "lag_disagrees": (dict(B1, lag=0), None, None),
+    "cap_stop": (CAP_STOP, None, None),
+    "cap_stop_no_lag_block": (CAP_STOP, lambda wp: wp.pop("lag"), None),
+    "no_lag_block": (B1, lambda wp: wp.pop("lag"), None),
+    "lag_in_the_stop_rule_only": (B1, _lag_in_the_stop_rule_only, None),
+    "lag_source": (B1, lambda wp: wp["lag"].update(source="manifest"), None),
+    "no_stop_rule": (B1, lambda wp: wp.pop("stop_rule"), None),
+    "eos_null": (B1, lambda wp: wp["stop_rule"].update(eos_token_ids=None), None),
+    "ignore_eos": (B1, lambda wp: wp["stop_rule"].update(eos_token_ids=[], ignore_eos=True), None),
+    "no_tokens_json": (B1, None, "absent"),
+    "no_served_requests": (B1, None, lambda t: t.update(requests=[])),
+    "unknown_request_id": (B1, None, lambda t: t["requests"][0].update(request_id="uuid-zz")),
+    "one_process_capture": (B1, None, _one_process_capture),
+}
+
+
+def _plain(x: Any) -> Any:
+    return x.hex() if isinstance(x, bytes) else dataclasses.asdict(x) if dataclasses.is_dataclass(x) else str(x)
+
+
+def _corpus(tmp: Path) -> dict[str, Any]:
+    geo = hashlib.sha256(b"geo").digest()
+    out = {}
+    for name, (kw, program, tokens) in CASES.items():
+        rd = _record(tmp / name, geo=geo, **kw)
+        if program is not None:
+            _edit(rd / "build_workload" / "workload_program.json", program)
+        if tokens == "absent":
+            (rd / "match" / "capture" / "tokens.json").unlink()
+        elif tokens is not None:
+            _edit(rd / "match" / "capture" / "tokens.json", tokens)
+        out[name] = PS.padded_map_of_record(rd, run_id="test-run", geo_digest=geo)
+    return out
+
+
+def test_the_conversion_reads_the_records_to_the_same_outcomes(tmp_path):
+    blob = json.dumps(_corpus(tmp_path), sort_keys=True, default=_plain).replace(str(tmp_path), "<run>")
+    assert hashlib.sha256(blob.encode()).hexdigest() == OUTCOMES_SHA256
+
+
+def test_a_lag_declared_only_in_the_stop_rule_converts_as_one_in_the_lag_block(tmp_path):
+    """G6 takes the LAG from the stop rule when the Program has no `lag` block (`DeclaredStop.declared_lag`), and so does the conversion."""
+    got = _corpus(tmp_path)
+    assert got["lag_in_the_stop_rule_only"]["ok"] and got["lag_in_the_stop_rule_only"]["report"]["lag"] == 1
+    b1, stop_rule_only = (json.dumps(got[k], sort_keys=True, default=_plain) for k in ("b1_lag1", "lag_in_the_stop_rule_only"))
+    assert stop_rule_only == b1
+
+
+@pytest.mark.parametrize("record,field,change", [
+    ("match/capture/tokens.json", "requests", lambda t: t.pop("requests")),
+    ("match/capture/tokens.json", "requests[0].request_id", lambda t: t["requests"][0].pop("request_id")),
+    ("match/capture/tokens.json", "requests[0].generated_token_ids", lambda t: t["requests"][0].pop("generated_token_ids")),
+    ("build_workload/workload_program.json", "stop_rule.eos_token_ids", lambda wp: wp["stop_rule"].pop("eos_token_ids")),
+    ("build_workload/workload_program.json", "lag.value", lambda wp: wp["lag"].pop("value")),
+])
+def test_a_record_missing_a_required_field_is_refused_by_name(tmp_path, record, field, change):
+    geo = hashlib.sha256(b"geo").digest()
+    rd = _record(tmp_path, geo=geo, **B1)
+    _edit(rd / record, change)
+    res = PS.padded_map_of_record(rd, run_id="test-run", geo_digest=geo)
+    assert res["ok"] is False and res["why"] == (f"executed prefix of record not placeable: {rd / record}: field {field!r} is missing: "
+                                                 "every writer of the record writes it")
+
+
+def test_the_real_records_load_through_the_conversion(tmp_path):
+    """The real served tokens and Program of `tests/records/data`, with the Program's request-id table built from its requests."""
+    tokens, gp = (json.loads((RECORDS / n).read_text()) for n in ("served_tokens.json", "global_program.json"))
+    (tmp_path / "match" / "capture").mkdir(parents=True)
+    (tmp_path / "match" / "capture" / "tokens.json").write_bytes((RECORDS / "served_tokens.json").read_bytes())
+    wp = dict(gp, request_ids={"workload_request_ids": {r["request_id"]: r["workload_request_id"] for r in gp["requests"]}})
+    assert PS._served_tokens_of_record(tmp_path, wp) == {"r0": tokens["requests"][0]["generated_token_ids"]}
+    assert len(tokens["requests"][0]["generated_token_ids"]) == 32

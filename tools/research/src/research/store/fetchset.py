@@ -4,17 +4,20 @@
 bytes must hash to the id.  `fetch_blobs(store, blobs)` makes each `(sha256, bytes)` local in `objects/`, `jobs` at a time, from
 the first source that holds it; a copy whose sha256 or size differs is refused and the next source tried.  `fetch_set` is both,
 for every payload blob of the ids.  Sources (`sources(store)`, in order): the store's private remote when this machine can reach
-it, then the public export (`public_url()`).  Nothing a source returns is trusted, so a public mirror is transport only.
+it, then the public export (`public_url()`).  Nothing a source returns is trusted, so a public mirror is transport only.  Each
+key is fetched under its own `lock`, so concurrent fetches of one key download it once and every one of them gets it.
 
 Callers: `research data fetch-fixtures` (the registry, `fixtures.py`), `research data export --verify-url`, and anything else
 holding a set of ids, such as a snapshot's members.
 """
 from __future__ import annotations
 
+import fcntl
 import os
 import threading
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +53,17 @@ def sources(store: LocalStore, *, public: str | None = None, private: bool = Tru
 
 def _tmp(dst: Path) -> Path:
     return dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
+
+
+@contextmanager
+def lock(store: LocalStore, name: str) -> Iterator[None]:
+    """An exclusive flock on `<store>/locks/<name>.lock`, held for the block: concurrent fetches of one key (threads or processes)
+    take turns, and the later one finds the first one's result in place.  The lock file stays; it holds no data."""
+    d = store.root / "locks"
+    d.mkdir(exist_ok=True)
+    with open(d / f"{name}.lock", "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
 
 
 def _first(srcs: Sequence[Remote], key: str, dst: Path, check) -> tuple[str | None, list[str]]:
@@ -107,7 +121,10 @@ def fetch_manifests(store: LocalStore, art_ids: Iterable[str], srcs: Sequence[Re
         def check(p: Path) -> None:
             if canon.sha256_bytes(p.read_bytes()) != hex_:
                 raise IntegrityError(f"{manifest_key(hex_)} does not hash to {art}")
-        return art, *_first(srcs, manifest_key(hex_), dst, check)
+        with lock(store, f"manifest-{hex_}"):
+            if dst.exists():
+                return art, "local", []
+            return art, *_first(srcs, manifest_key(hex_), dst, check)
 
     out: dict[str, ArtifactManifest] = {}
     for art, src, why in _pool(one, want, jobs):
@@ -139,11 +156,17 @@ def fetch_blobs(store: LocalStore, blobs: Iterable[tuple[str, int]], srcs: Seque
             got, size = sha256_file(p)
             if got != h or size != n:
                 raise IntegrityError(f"{object_key(h)} arrived as {size} bytes hashing to {got}, not {n} bytes hashing to {h}")
-        return h, n, *_first(srcs, object_key(h), store.object_path(h), check)
+        with lock(store, f"blob-{h}"):
+            if store.object_path(h).exists():
+                return h, n, "local", []
+            return h, n, *_first(srcs, object_key(h), store.object_path(h), check)
 
     for h, n, src, why in _pool(one, todo, jobs):
         if src is None:
             rep["missing"].append({"sha256": h, "bytes": n, "what": "blob", "tried": why or ["no source configured"]})
+            continue
+        if src == "local":
+            rep["blobs"]["local"] += 1
             continue
         rep["blobs"]["fetched"] += 1
         rep["blobs"]["bytes"] += n

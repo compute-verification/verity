@@ -26,7 +26,8 @@ the outputs as hidden rows like the inputs (one ``out`` row per instance, its ``
 are committed values whose row a reading unit can open.  Every class is one plain
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
-record carries the class's table reads and its unit's matrix entries.  `distinct_calls` builds a served row's workload from its program graph:
+record carries the class's table reads and its unit's matrix entries. `UnitStager`'s ``reads="slots"`` instead puts a unit's
+MUFU reads in C-Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -63,6 +64,7 @@ from . import class_sweep
 from . import gf2
 from . import ir_lower as IL
 from . import partition_units as PU
+from . import read_slots as RS
 from . import struct_lower as SL
 from . import tmpl as TM
 
@@ -93,7 +95,7 @@ CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
 PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
 LEAF_SCHEME = FC.LEAF_SCHEME_PLAIN if PLAIN_LEAVES else None
 #: FLOCK_OWN_ROWS=1: an unwired class is staged with every instance's own rows (`stage`'s ``share_rows=False``), the public
-#: file the verifier covers outside a registered ZK session (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
+#: file a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
 #: once per instance rather than once
 OWN_ROWS = os.environ.get("FLOCK_OWN_ROWS") == "1"
 #: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
@@ -452,7 +454,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
-    from verity_vllm.pipeline.program_graph import _encoded, definition_digest
+    from verity.ml.definitions.encoding import encode_specialization, definition_digest
 
     TG.load_registries()
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
@@ -469,7 +471,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
         if descriptor_id(fn) != fid:
             raise ValueError(f"{fid}: the registry binds {descriptor_id(fn)}")
         want = index.get(fid)
-        got = definition_digest(_encoded(fn)[1][fid]) if want else None
+        got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
         if want and got != want:
             raise ValueError(f"{fid}: v0 digest {got} is not the row's {want}")
         fns.append(fn)
@@ -854,7 +856,8 @@ def _leaf_bits(t) -> list[int]:
 
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
-                  public: Sequence[str] = (), structural: bool = False) -> tuple[IL.Lowering, list[int]]:
+                  public: Sequence[str] = (), structural: bool = False, reads: str = "inline",
+                  stage_ands: int | str | None = "auto") -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
     it), of exactly its words (its bits a multiple of 16); output
@@ -863,7 +866,12 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words. ``structural``:
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
-    (`unit_circuit`)."""
+    (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each
+    table read laid out as rows of the unit (`ir_lower._Read`), or ``slots``, its reads of the pinned MUFU tables split out to
+    lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, its nets' ANDs capped by ``stage_ands``, by default the caps
+    whose nets take the fewest cells; the flat unit's own when it reads none)."""
+    if reads not in ("inline", "slots") or (structural and reads != "inline"):
+        raise ValueError(f"{name}: reads is inline or slots, and a structural unit's are inline")
     ports, out_words, row_words = unit_ports(definition, name, in_rows, public)
     n_words, W = len(ports.ins), len(ports.outs)
     units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
@@ -874,9 +882,12 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     if structural:
         t, _lw, _top = SL.lower(definition, name=name, ports=ports)
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
-    C = unit_circuit(definition, ports)
-    lay = IL.layout(C, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)])
-    return IL.Lowering(name, unit, units, C, lay), out_words
+    C = unit_circuit(definition, ports, _UnitCircuit)
+    in_names, out_names = [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)]
+    if reads == "slots" and (low := RS.split(C, in_names, out_names, name, unit, units, stage_ands=stage_ands)) is not None:
+        return low, out_words
+    lay = IL.layout(C, in_names, out_names)
+    return IL.Lowering(name, unit, units, None, lay), out_words
 
 
 def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
@@ -930,10 +941,11 @@ def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]
     return SL.Ports((16,) * n_words, tuple(flat_in), (16,) * W, tuple(out_bits)), out_words, row_words
 
 
-def unit_circuit(definition, ports: SL.Ports) -> gf2.Circuit:
+def unit_circuit(definition, ports: SL.Ports, cls: type[gf2.Circuit] = gf2.Circuit) -> gf2.Circuit:
     """The flat unit on ``ports`` (`unit_ports`), never laid out: ``definition`` lowered by `ir_lower.lower` on input ports
-    ``in{j}``, its returned bits on output ports ``out{j}`` and the ports' other bits zero."""
-    C = gf2.Circuit()
+    ``in{j}``, its returned bits on output ports ``out{j}`` and the ports' other bits zero. ``cls``: the circuit's class
+    (`unit_lowering`'s `_UnitCircuit`)."""
+    C = cls()
     in_bits = [b for j, w in enumerate(ports.ins) for b in C.input(f"in{j}", w)]
     outs = [b for w in IL.lower(C, definition, [[in_bits[i] for i in lf] for lf in ports.leaves]) for b in w]
     bits = [gf2.ZERO if i is None else outs[i] for i in ports.bits]
@@ -942,6 +954,17 @@ def unit_circuit(definition, ports: SL.Ports) -> gf2.Circuit:
         C.output(f"out{j}", bits[at:at + w])
         at += w
     return C
+
+
+class _UnitCircuit(gf2.Circuit):
+    """`unit_lowering`'s circuit: an AND keeps its operands' bits as a tuple, all `ir_lower.layout` reads of them (a frozenset of
+    a dozen bits is four times the size: a GLM-5.3 norm unit's operand sets were most of its 51 GiB)."""
+
+    def _new(self, kind, data):
+        if kind == "and":
+            a, b = data
+            data = (gf2.L(tuple(a.s), a.c), gf2.L(tuple(b.s), b.c))
+        return super()._new(kind, data)
 
 
 @dataclass
@@ -1031,11 +1054,15 @@ class UnitStager:
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
     (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement. ``structural`` (with ``layout``):
     that template `struct_lower`'s (`unit_lowering`'s ``structural``), the flat unit never built, the outputs the template's
-    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit."""
+    (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
+    `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
+    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
+    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
-                 bind: dict | None = None, layout: str | None = None, structural: bool = False):
+                 bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline",
+                 stage_ands: int | str | None = "auto"):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
@@ -1045,8 +1072,10 @@ class UnitStager:
         self.definition, self.name, self.in_rows, self.public_inputs = definition, name, list(in_rows), public_inputs
         if structural and layout is None:
             raise ValueError(f"{name}: a structural unit is written as its template: name its layout")
+        if layout is not None and reads != "inline":
+            raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
         self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
-                                                 structural)
+                                                 structural, reads, stage_ands)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
             raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
@@ -1065,7 +1094,8 @@ class UnitStager:
         self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
                                seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout)
+                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                               tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
         self.meta = FC.meta_of(self.text)
         self.ports = FC._meta_ports(self.meta)
@@ -1149,7 +1179,7 @@ class UnitStager:
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
                  share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
-        counts = self.low.layout.counts
+        counts = getattr(self.low, "counts", None) or self.low.layout.counts
         return {"meta": FC.meta_of(self.text), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 

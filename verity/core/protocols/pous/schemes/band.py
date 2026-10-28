@@ -40,7 +40,7 @@ SHAKE256 (its round functions random oracles, the composition a named heuristic,
 (`perfect-isolation`, the earlier model's id: what the audited location held plus the help it received); SHA-256
 collision resistance for the commitment to `W` and for `vk`; and a live, designated verifier.  At the reference
 Feistel-SHAKE256 `Π₂` the certificates do not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, about
-24 µs, with no chain call (red team, 4 Oct 2026, art:7617c8017e80)."""
+24 µs, with no chain call (the red team's resume attack)."""
 
 POINT = (512, 524_288)
 """`B` and `ℓ` (bits) of the certified point: 32 MiB segments of 64 KiB blocks."""

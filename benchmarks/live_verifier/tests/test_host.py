@@ -2,12 +2,14 @@
 `verifier.json` with a dummy challenger ssh: a run is held to the whitelist, written as its request and started as its
 one unit, and its command line is one verifier.py's own parser reads as the request; the gate refuses any other verb,
 any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
-stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved doesn't
-run. The slow test runs a run through the stub verifier (`stub_verifier.py`, a real paced session): its out/ is
-verifier.py's, which `auditor_line.py` reads, `fetch` ships it and `replay` replays it through both verifiers."""
+stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved, or on a
+host with no first-parent list of main, doesn't run. The slow test runs a run through the stub verifier
+(`stub_verifier.py`, a real paced session): its out/ is verifier.py's, which `auditor_line.py` reads, `fetch` ships it
+and `replay` replays it through both verifiers."""
 from __future__ import annotations
 
 import argparse
+import fcntl
 import gzip
 import hashlib
 import io
@@ -42,11 +44,11 @@ KEY = "ab" * 64
 LANE = "memory-accounting"
 RUN = "v20261021T130000Z-ab12"
 SSH = "-i /nonexistent/test-gate-key -o IdentitiesOnly=yes research@192.0.2.1"
-BASE = ["run", "--peer", "vy-nebius-2", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
+BASE = ["run", "--peer", "gpu-node", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
 PACED = [*BASE, "--paced", "2:8000:40:2", "4:16000:40:2"]
-SESSIONS = ["run", "--peer", "vy-nebius-2", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
+SESSIONS = ["run", "--peer", "gpu-node", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
             "--sessions", "3", "--windows", "7", "--window-ms", "1000", "--samples", "2773", "--minutes", "30",
-            "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4", "--verdict", "both"]
+            "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4"]
 ROLE = "SYNTHETIC_BF16"
 BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 
@@ -54,11 +56,14 @@ BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 @pytest.fixture
 def svc(tmp_path) -> H.Host:
     settings = json.loads((PACKAGING / "verifier.json").read_text())
-    settings["challenger"]["ssh"] = SSH
+    settings["challenger"].update(ssh=SSH, peer="auditor-host")
+    settings["peers"] = {"gpu-node": next(iter(settings["peers"].values()))}
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
-    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl")
+    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
+                  main=tmp_path / "main-first-parent.txt")
     H.record_pin(host.pins, PIN, T0, seal=lambda p: None)
+    host.main.write_text(f"{PIN}\n{'e' * 40}\n")
     return host
 
 
@@ -111,25 +116,38 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     doc = json.loads(out)
     assert rc == 0, doc
     assert (doc["run"], doc["by"], doc["pinned"], doc["peer"], doc["listen"]) == (
-        RUN, LANE, PIN, "vy-nebius-2", "127.0.0.1:7951")
+        RUN, LANE, PIN, "gpu-node", "127.0.0.1:7951")
     assert units.started == [f"vy-verifier@{RUN}.service"]
     req = json.loads((svc.runs / RUN / "request.json").read_text())
     assert {k: v for k, v in req.items() if k != "argv"} == {
         "run": RUN, "by": LANE, "requested_utc": "2026-10-21T13:00:00Z", "pinned": PIN,
-        "pin_log": {"line": 0, "utc": "2026-10-21T13:00:00Z"}, "peer": "vy-nebius-2", "port": 7951,
-        "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean"}
+        "pin_log": {"line": 0, "utc": "2026-10-21T13:00:00Z"}, "peer": "gpu-node", "port": 7951,
+        "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"]}
     argv = req["argv"]
     assert argv == doc["argv"]
     assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
-        "--transcript": str(svc.scratch / RUN / "transcripts"), "--verdict": "lean", "--challenger": "gate",
-        "--challenger-ssh": SSH, "--challenger-peer": "vy-auditor-1", "--challenger-pin": KEY,
-        "--challenger-period": "memory-line-1", "--host-bytes": "1843153879040", "--ingress-bytes-per-s": "4400000000.0"}
+        "--transcript": str(svc.scratch / RUN / "transcripts"), "--challenger": "gate",
+        "--challenger-ssh": SSH, "--challenger-peer": "auditor-host", "--challenger-pin": KEY,
+        "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--host-bytes": "1843153879040",
+        "--ingress-bytes-per-s": "4400000000.0"}
     assert argv[i:] == ["--paced", "2:8000:40:2", "4:16000:40:2"]
     assert "run" in refused(call(svc, PACED, units, token="cd34")) and units.started == [f"vy-verifier@{RUN}.service"]
     assert [p.name for p in svc.runs.iterdir()] == [RUN]
+
+
+def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_parent_list_of_main(svc):
+    """The verifier refuses every gate session whose challenger pin isn't on main's first-parent line, read from the
+    list infra writes at `Host.main`; without that list no run starts, so none ends with every session refused."""
+    units = Units()
+    svc.main.unlink()
+    assert refused(call(svc, PACED, units)) == (
+        f"this host has no {svc.main}, main's first-parent history (infra writes `git rev-list --first-parent "
+        "origin/main` there, root's, 0644): the verifier refuses every gate session whose challenger pin it can't find "
+        "on it, so no run starts without it")
+    assert units.started == [] and list(svc.runs.iterdir()) == []
 
 
 def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
@@ -159,8 +177,8 @@ def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
 
 
 @pytest.mark.parametrize("words, want", [
-    (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean", "port": 7951, "challenger_minutes": 120}),
-    (SESSIONS, {"paced": None, "verdict": "both", "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
+    (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "port": 7951, "challenger_minutes": 120}),
+    (SESSIONS, {"paced": None, "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
                 "samples": 2773, "challenger_minutes": 30, "jitter_ms": 2.5, "quantile": "p99", "lifetime": 4}),
 ])
 def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_hosts_paths_and_capacities(
@@ -172,8 +190,8 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
     assert {k: getattr(a, k) for k in want} == want
     assert (a.model, a.checkpoint, a.pin, a.arena_blocks) == (None, None, None, None)
     assert (a.out, a.registry, a.transcript) == (svc.runs / RUN / "out", svc.registry, svc.scratch / RUN / "transcripts")
-    assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period) == (
-        "gate", SSH, "vy-auditor-1", KEY, "memory-line-1")
+    assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period,
+            a.challenger_main) == ("gate", SSH, "auditor-host", KEY, "memory-line-1", svc.main)
     assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
         1843153879040, 4.4e9, V.HBM_BYTES, None, "127.0.0.1")
     for spec in a.paced or []:
@@ -223,7 +241,7 @@ def test_a_bound_runs_command_line_names_its_roles_checkpoint_and_cores_pin_whic
     assert (a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks, a.challenger_pin, a.layout_workers) == (
         ROLE, svc.root / "models" / ROLE, tree / H.MODEL_PINS, 2, 7, KEY, 1)
     pinned = json.loads((tree / H.MODEL_PINS).read_text())[ROLE]["checkpoint_sha512"]
-    assert f"store_layout: {ROLE} pinned ({pinned[:16]}...), " in capsys.readouterr().out
+    assert f"store: {ROLE} pinned ({pinned[:16]}...), " in capsys.readouterr().out
 
 
 def test_a_bound_run_is_refused_before_anything_starts_without_its_roles_checkpoint_or_cores_pin(svc, tree, tmp_path):
@@ -269,7 +287,8 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
     *[([*PACED, flag, value], f"unrecognized arguments: {flag}") for flag, value in [
         ("--host-bytes", "1"), ("--ingress-bytes-per-s", "1"), ("--hbm-bytes", "1"), ("--disk-bytes-per-s", "1"),
         ("--link-bytes-per-s", "1"), ("--challenger", "serve"), ("--challenger-ssh", "research@198.51.100.1"),
-        ("--challenger-peer", "vy-nebius-2"), ("--challenger-key", "/tmp/k"), ("--challenger-params", "4,4"),
+        ("--challenger-peer", "gpu-node"), ("--challenger-key", "/tmp/k"), ("--challenger-params", "4,4"),
+        ("--challenger-main", "/tmp/main"),
         ("--out", "/tmp/out"), ("--registry", "/tmp/r.json"), ("--transcript", "/tmp/t"), ("--lean-exe", "/bin/sh"),
         ("--host", "0.0.0.0"), ("--check-workers", "1"), ("--delta-log2", "-1"), ("--pings", "1"),
         ("--appends", "9"), ("--memory-of", "/tmp/v.json"), ("--close", "ab"), ("--disk-burst-bytes", "1"),
@@ -282,7 +301,7 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
     ([*BASE, "--sessions", "2", "--window", "1"], "unrecognized arguments: --window"),
     (PACED[:1] + PACED[3:], "required: --peer"),
     # the peer, the port, the period and the pin
-    (["run", "--peer", "vy-nebius-1", *PACED[3:]], "--peer 'vy-nebius-1'"),
+    (["run", "--peer", "cpu-node", *PACED[3:]], "--peer 'cpu-node'"),
     (["run", "--peer", "../etc", *PACED[3:]], "--peer '../etc'"),
     *[([*PACED[:3], "--port", port, *PACED[5:]], f"--port '{port}'")
       for port in ("7811", "7899", "7950", "7959", "07951", "7951.0", "0x1f0f", "22")],
@@ -308,7 +327,7 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
       for ms in ("1e3", "nan", "inf", "-1", "0.0001", "600001", "0")],
     ([*PACED, "--jitter-ms", "1001"], "--jitter-ms '1001'"),
     ([*PACED, "--pace-pass-ms", "1e1"], "--pace-pass-ms '1e1'"),
-    ([*PACED, "--verdict", "python"], "--verdict 'python'"),
+    ([*PACED, "--verdict", "lean"], "unrecognized arguments: --verdict"),
     ([*PACED, "--quantile", "p90"], "--quantile 'p90'"),
     # a bound run's role and its store's shape; its checkpoint and pin are the host's
     *[([*PACED, "--model", role, "--arena-blocks", "7"], f"--model {role!r}: a role of core's pin")
@@ -414,7 +433,7 @@ def test_a_run_whose_pin_moved_before_its_unit_started_does_not_run(svc):
 
 
 def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_last(svc, tmp_path):
-    """RT4-INT-40: pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
+    """pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
     sealed append-only before its first line, and a run starts only from the log's last pin and names that line."""
     log, sealed = tmp_path / "log" / "pins.jsonl", []
     log.parent.mkdir()
@@ -448,7 +467,7 @@ def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_las
 
 
 def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it():
-    """Infra's review of #3062: elan is a release, its archive checked against a pinned sha256 before it runs (never a
+    """Infra's review: elan is a release, its archive checked against a pinned sha256 before it runs (never a
     script fetched from a branch), and the pin is logged (`host.py pinned`) before `current` moves to it."""
     code = "\n".join(ln for ln in (PACKAGING / "pin.sh").read_text().splitlines() if not ln.lstrip().startswith("#"))
     assert "raw.githubusercontent.com" not in code and not re.search(r"\|\s*(ba)?sh\b", code)
@@ -487,7 +506,7 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     assert argv[:2] == ["put", "--kind"] and argv[2] == "verifier-run/v1" and argv[-3:] == [
         "--tree", str(svc.runs / RUN), "--preserve"]
     assert json.loads(argv[argv.index("--meta") + 1]) == {
-        "run": RUN, "by": LANE, "pinned": PIN, "peer": "vy-nebius-2", "period": "memory-line-1",
+        "run": RUN, "by": LANE, "pinned": PIN, "peer": "gpu-node", "period": "memory-line-1",
         "requested_utc": "2026-10-21T13:00:00Z", "end": {"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}, "replay": None}
 
 
@@ -546,7 +565,7 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     assert rc == 0 and st["listening"] and not st["active"] and st["end"]["rc"] == 0 and st["replay"] is None
 
     import auditor_line
-    line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="vy-auditor-1")
+    line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
     assert line["registration"] == v["registration"]["digest"]
     assert [(r["k"], r["accepted"], r["skipped"]) for r in line["sessions"]] == [
         (0, True, "no challenger log: coins drawn in the verifier's process")]
@@ -577,3 +596,121 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     gz.write_bytes(gzip.compress(raw.replace(b'"events"', b'"events" ', 1)))
     tampered = H.replay_run(svc, RUN, now=lambda: T1)
     assert tampered["rc"] == 1 and tampered["gz_sums"] == {f"{name}.gz": False} and not tampered["sums_match"]
+
+
+def party(svc, words, units: Units | None = None, *, key=LANE, out=b'{"listening": 47611}\n{"signed": "x"}\n', rc=0):
+    """`words` sent by `key`; the party's run is recorded, and prints `out` and exits `rc`."""
+    ran: list[list[str]] = []
+
+    def run(argv, sink, log, minutes):
+        ran.append([*argv, f"minutes={minutes}"])
+        sink.write(out)
+        log.write_bytes(out)
+        return rc
+    got = call(svc, words, units, key=key, party=run)
+    return got, ran
+
+
+def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_device_and_port(svc):
+    (rc, out), ran = party(svc, ["wipe_party", "--reads", "1024", "--native", "--threads", "16"])
+    assert rc == 0 and out == b'{"listening": 47611}\n{"signed": "x"}\n'
+    assert ran == [["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1",
+                    "HOME=/var/lib/vy-verifier", "PATH=/usr/bin:/bin", "/usr/bin/python3", "-s", "-E",
+                    "-m", "verity.core.protocols.pous.wipe_party", "--device", str(svc.parties / "wipe"),
+                    "--listen", "0.0.0.0:47611", "--reads", "1024", "--streamer", "build", "--threads", "16", "minutes=60"]]
+    reqs = [json.loads(ln) for ln in (svc.parties / "wipe" / "requests.jsonl").read_text().splitlines()]
+    assert [(r["verb"], r["by"], r.get("rc")) for r in reqs] == [("wipe_party", LANE, None), ("wipe_party", LANE, 0)]
+    assert (svc.parties / "wipe" / "log" / reqs[0]["log"]).read_bytes() == out
+    (rc, _), ran = party(svc, ["challenger_party", "--minutes", "5"])
+    assert rc == 0 and ran[0][-7:] == ["-m", H.PARTIES["challenger_party"][1], "--device",
+                                       str(svc.parties / "pous"), "--listen", "0.0.0.0:47610", "minutes=5"]
+
+
+@pytest.mark.parametrize("words, why", [
+    (["wipe_party", "--egress-bits", "8"], "got '--egress-bits'"),
+    (["wipe_party", "--device", "/tmp/x"], "got '--device'"),
+    (["wipe_party", "--listen", "0.0.0.0:1"], "got '--listen'"),
+    (["wipe_party", "--reads", "0"], "--reads takes an integer"),
+    (["wipe_party", "--reads", "2152", "--reads", "8"], "got '--reads'"),
+    (["wipe_party", "--threads", "8"], "give --native too"),
+    (["wipe_party", "--streamer", "/tmp/s"], "got '--streamer'"),
+    (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
+    (["challenger_party", "--minutes", "181"], "--minutes takes one integer"),
+    (["wipe_party", "--minutes"], "--minutes takes one integer"),
+])
+def test_a_party_is_refused_any_flag_its_whitelist_lacks_before_it_starts(svc, words, why):
+    got, ran = party(svc, words)
+    assert why in refused(got) and ran == []
+
+
+def test_a_read_only_key_starts_no_party_and_a_party_waits_for_every_unit_and_its_own_last_session(svc):
+    for verb in ("wipe_party", "challenger_party"):
+        got, ran = party(svc, [verb], key="-")
+        assert "this key reads only" in refused(got) and ran == []
+    units = Units()
+    assert call(svc, PACED, units)[0] == 0
+    got, ran = party(svc, ["wipe_party"], units)
+    assert "a party session waits for no unit" in refused(got) and ran == []
+    svc.parties.mkdir(exist_ok=True)
+    with open(svc.parties / "wipe.lock", "a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        got, ran = party(svc, ["wipe_party"])
+        assert "serving another session" in refused(got) and ran == []
+        assert party(svc, ["challenger_party"])[0][0] == 0
+
+
+def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
+    asked: list[list[str]] = []
+
+    def keygen(argv):
+        asked.append(argv)
+        return "ab" * 32
+    rc, out = call(svc, ["party_key", "pous"], key="-", keygen=keygen)
+    assert rc == 0 and json.loads(out) == {"party": "pous", "verb": "challenger_party", "public_key": "ab" * 32}
+    assert asked[0][-3:] == ["-c", H.KEYGEN, str(svc.parties / "pous")] and asked[0][:3] == ["runuser", "-u", "auditor"]
+    assert "party_key" in refused(call(svc, ["party_key", "/etc"], key="-", keygen=keygen))
+    assert "not a public key" in refused(call(svc, ["party_key", "wipe"], key="-", keygen=lambda a: "Traceback"))
+
+
+def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
+    """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
+    code = "import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period; print('ok')"
+    p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
+    assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
+
+
+def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
+    """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
+    why. Killing the parent alone (runuser, on an auditor host) left the party listening and holding the pipe."""
+    armed: list[float] = []
+
+    class Timer:
+        """Runs out the moment it starts: the party is killed whatever it was doing."""
+
+        def __init__(self, seconds, fn):
+            armed.append(seconds)
+            self.fn = fn
+
+        def start(self):
+            self.fn()
+
+        def cancel(self):
+            pass
+    monkeypatch.setattr(H.threading, "Timer", Timer)
+    monkeypatch.setattr(H, "TREE", tmp_path)
+    sink, log = io.BytesIO(), tmp_path / "log.jsonl"
+    child = "import subprocess, sys; subprocess.run([sys.executable, '-c', 'import sys; sys.stdin.read()'])"
+    rc = H.exec_party([sys.executable, "-c", child], sink, log, 2)     # a party under a parent, as under runuser
+    assert armed == [120] and rc == -9
+    assert json.loads(log.read_bytes().splitlines()[-1]) == {"killed": "the session's 2 min ran out"}
+
+
+def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_for_any_key(svc):
+    (rc, _), _ = party(svc, ["wipe_party", "--reads", "64"], out=b'{"listening": 47611}\n{"window": {"t0": "a", "t1": "b"}}\n')
+    rc, out = call(svc, ["party_log", "wipe"], key="-")
+    sessions = json.loads(out)["sessions"]
+    assert rc == 0 and [s.get("rc") for s in sessions] == [None, 0]
+    rc, out = call(svc, ["party_log", "wipe", sessions[0]["log"]], key="-")
+    assert rc == 0 and json.loads(out)["lines"] == [{"listening": 47611}, {"window": {"t0": "a", "t1": "b"}}]
+    assert "party_log" in refused(call(svc, ["party_log", "wipe", "../../etc/passwd"], key="-"))
+    assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))

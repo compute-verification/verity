@@ -30,6 +30,7 @@ CIRCUIT = "9f" * 64
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("vy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -258,7 +259,7 @@ def test_an_end_after_its_periods_close_leaves_the_close_and_the_ledger_standing
 
 
 def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_window_past_the_cap(host, signer):
-    """compute-accounting's CircuitWorkPeriod (#2722) reads both, committed before window 0's first coin; a reserve
+    """`CircuitWorkPeriod` reads both, committed before window 0's first coin; a reserve
     counts toward the cap from its entry on, opened or not."""
     opened = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 2 --circuit {'ab' * 64}"))
     assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "ab" * 64)
@@ -288,6 +289,21 @@ def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, si
     lines = A.read_ledger(host.ledger)
     assert [json.loads(e)["body"].get("draw_k") for e in lines if json.loads(e)["kind"] == "period-open"] == [27713, None,
                                                                                                               2 ** 24]
+    assert set(checked(host)) == {"p1", "k1", "v1"}
+
+
+def test_a_period_open_commits_its_table_rows_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit bounds every step's served rows m_s by the table rows T its period's open commits (`rows`, credit's
+    `committed_rows`), signed before window 0's first coin beside its draw K or alone."""
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --rows 12", "hash"))
+    assert (opened["body"]["draw_k"], opened["body"]["rows"]) == (27, 12)
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} --rows {2 ** 24}"))[
+        "body"]
+    assert body["rows"] == 2 ** 24 and "draw_k" not in body
+    assert "rows" not in ok(admin(host, signer, f"period-open --name v1 --lane vllm --cap 1 --circuit {CIRCUIT}"))["body"]
+    lines = [json.loads(e) for e in A.read_ledger(host.ledger)]
+    assert [e["body"].get("rows") for e in lines if e["kind"] == "period-open"] == [12, 2 ** 24, None]
     assert set(checked(host)) == {"p1", "k1", "v1"}
 
 
@@ -333,7 +349,7 @@ def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwis
 
 @pytest.mark.parametrize("files", [
     "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
-    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}',
+    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}', '{"lives": "' + "2b" * 64 + '"}',
     '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
 ])
 def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
@@ -342,8 +358,35 @@ def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
     assert rc == 3 and "--circuit-files" in out["refused"]
     assert A.read_ledger(host.ledger) == []
     assert len(A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 65)}))) == 64
+    assert A.circuit_files_of(json.dumps({"k64": "2b" * 64, "live": "1a" * 64})) == {"k64": "2b" * 64, "live": "1a" * 64}
     with pytest.raises(A.Refused, match="1 to 64 distinct K"):
         A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 66)}))
+
+
+def test_a_period_open_commits_its_fixed_length_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit holds each window's served rows to the fixed length its period's open committed (`length`,
+    ``{max_tokens, stop}``, credit's `committed_length`), signed before window 0's first coin."""
+    length = {"max_tokens": [3, 1, 2], "stop": "fixed"}
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
+                                  f"--length {shlex.quote(json.dumps(length, indent=1))}", "hash"))
+    assert opened["body"]["length"] == length and opened["body"]["draw_k"] == 27
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    assert "length" not in ok(admin(host, signer, f"period-open --name v1 --lane vllm --cap 1 --circuit {CIRCUIT}"))[
+        "body"]
+    assert set(checked(host)) == {"p1", "v1"}
+
+
+@pytest.mark.parametrize("length", [
+    "{}", "[]", "nope", '{"max_tokens": []}', '{"max_tokens": [], "stop": "fixed"}',
+    '{"max_tokens": [0], "stop": "fixed"}', '{"max_tokens": [true], "stop": "fixed"}',
+    '{"max_tokens": [1.0], "stop": "fixed"}', '{"max_tokens": [4], "stop": "eos"}',
+    '{"max_tokens": [4], "stop": "fixed", "served": [4]}', '{"max_tokens": [16777217], "stop": "fixed"}',
+])
+def test_a_period_open_refuses_a_length_it_cant_check(host, signer, length):
+    rc, out = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --length {shlex.quote(length)}",
+                  "hash")
+    assert rc == 3 and "--length" in out["refused"]
+    assert A.read_ledger(host.ledger) == []
 
 
 @pytest.mark.parametrize("args", [
@@ -370,6 +413,9 @@ def test_a_period_open_with_a_field_twice_or_unknown_is_refused(host, signer, ar
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 07", "--draw-k '07'"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k {2 ** 24 + 1}", f"--draw-k '{2 ** 24 + 1}'"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k many", "--draw-k 'many'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --rows 0", "--rows '0'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --rows 012", "--rows '012'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --rows {2 ** 24 + 1}", f"--rows '{2 ** 24 + 1}'"),
     (f"--name p1 --circuit {CIRCUIT}", "required: --cap"),
     ("--name p1 --cap 2", "required: --circuit"),
     (f"--name p1 --cap 0 --circuit {CIRCUIT}", "--cap '0'"),

@@ -1,9 +1,9 @@
 """memory-map/v1 under deferred residency against the map that writes each block at the step that completed it: vllm's
 rules for moving one to the other (`deferred`, its compare.py in run r20261018-070848-81e2, the Store's map against
-circuits' oracle) under the coordinator's rulings of 18 Oct, on hand histories and on seeded ones.  The moved map is
+circuits' oracle), on hand histories and on seeded ones.  The moved map is
 one `Replay` accepts, every index the oracle wrote is written once or withdrawn once, a block is withdrawn exactly
-when its last read is at or before the line its encode landed in, each written block is in the plans of the passes
-after that line through its last read, and a session the moved map drives is accepted."""
+when its last structural reader is at or before the line its encode landed in, each written block is in the plans of
+the passes after that line through its last structural reader, and a session the moved map drives is accepted."""
 
 from __future__ import annotations
 
@@ -24,15 +24,15 @@ STEPS = 24
 
 def deferred(osteps: list[Step], encodes: list[list], first: int, n: int) -> list[Step]:
     """`osteps`, a map that records each write at the step w that completed its block and each free at its values' last
-    read f, moved to deferred residency by the session's public `encodes` ([step made, step landed or None, first,
-    count] per append, steps from `first`), as compare.py moves it, with rulings 1 and 3:
+    structural reader f, moved to deferred residency by the session's public `encodes` ([step made, step landed or
+    None, first, count] per append, steps from `first`), as compare.py moves it except where noted:
 
     - a write at w moves to the line r(w) its append's encode landed in, its index unchanged, and is in no line if the
       encode never landed;
     - the filler a completed block's slot held (a slot below `n` not touched before) is freed at its reach, w;
-    - a re-key, a write over a slot whose block is live, frees the old index at the re-key's step (ruling 3);
+    - a re-key, a write over a slot whose block is live, frees the old index at the re-key's step;
     - a written block's free at f stays at f if f > r(w); otherwise the block is withdrawn at r(w), with no write and
-      no free (ruling 1, where compare.py moved the free to r(w) + 1);
+      no free (where compare.py moved the free to r(w) + 1);
     - a free is dropped where its line writes the slot: the write releases what the slot held.
 
     compare.py's last rule, moving a line's second write of a slot to the next line, is left nothing to move: a slot's
@@ -125,8 +125,8 @@ def drive(run: Run, dm: list[Step], appends: dict[int, list[bytes]], steps: int,
 
 def test_a_block_freed_before_its_encode_lands_is_withdrawn_in_the_line_its_write_would_be_in() -> None:
     """Step 0 completes blocks in slots 4, 5 (filler, freed at their reach) and 100, one append landing in step 2's
-    line; slot 5's values are read last at step 1, so step 2 writes 8 and 10 and withdraws 9, in no plan.  Step 3's
-    block lands at once, at 11; 8 and 10 are read last at step 4."""
+    line; slot 5's values' last structural reader is step 1, so step 2 writes 8 and 10 and withdraws 9, in no plan.
+    Step 3's block lands at once, at 11; step 4 is 8's and 10's last structural reader."""
     oracle = [Step(0, (), (Written(4, N, d(4, 0)), Written(5, N + 1, d(5, 0)), Written(100, N + 2, d(100, 0)))),
               Step(1, (5,), ()), Step(3, (), (Written(5, N + 3, d(5, 3)),)), Step(4, (4, 100), ())]
     dm = deferred(oracle, [[0, 2, N, 3], [3, 3, N + 3, 1]], 0, N)
@@ -143,10 +143,10 @@ def test_a_block_freed_before_its_encode_lands_is_withdrawn_in_the_line_its_writ
 ], ids=["read-after-landing", "read-before-landing"])
 def test_a_re_key_frees_its_old_index_at_its_step_and_writes_the_new_one_when_its_encode_lands(last_read, line,
                                                                                               held) -> None:
-    """Ruling 3: block 8 in slot 4 is re-keyed at step 5 (its payload appended again, at 9) and the re-key's encode
-    lands in step 7's line.  Step 5 frees the slot, an exception to a free at the last read, so 8 is in the passes
-    through step 5, neither is in those at 6 and 7, and 9 is from step 8 through its last read; read last before the
-    re-key landed, 9 is withdrawn."""
+    """Block 8 in slot 4 is re-keyed at step 5 (its payload appended again, at 9) and the re-key's encode
+    lands in step 7's line.  Step 5 frees the slot, an exception to a free at the last structural reader, so 8 is in
+    the passes through step 5, neither is in those at 6 and 7, and 9 is from step 8 through its last structural reader;
+    with that reader before the re-key landed, 9 is withdrawn."""
     oracle = [Step(0, (), (Written(4, N, d(4, 0)),)), Step(5, (), (Written(4, N + 1, d(4, 0)),)),
               Step(last_read, (4,), ())]
     dm = deferred(oracle, [[0, 0, N, 1], [5, 7, N + 1, 1]], 0, N)
@@ -157,7 +157,7 @@ def test_a_re_key_frees_its_old_index_at_its_step_and_writes_the_new_one_when_it
 
 
 def test_deferred_a_re_key_falls_at_age_l_minus_one_so_a_lifetime_of_one_credits_nothing() -> None:
-    """Ruling 2, L = 2 over three windows of three passes: block 8, appended after step 1 (window 0, which it joins),
+    """L = 2 over three windows of three passes: block 8, appended after step 1 (window 0, which it joins),
     lands in step 3's line, so it is resident from window 1, and is re-keyed at step 5, window 1's last, at age
     L − 1 = 1; the re-key (9) joins window 2 and is resident from step 7.  The session is accepted.  At L = 1 the block
     is stale in the window it becomes resident in (`lifetime`), so a session that defers residency is refused at
@@ -222,10 +222,10 @@ def history(seed: int, steps: int = STEPS):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_a_moved_map_writes_or_withdraws_each_landed_block_once_resident_from_its_line_to_its_last_read(seed) -> None:
-    """Withdrawn exactly when its free (last read or re-key) is at or before its line; written, in the plans of the
-    passes after its line through its free; a block whose encode never landed in none; a filler slot in the plans
-    through the step that reached it.  `Replay` accepts every line."""
+def test_a_moved_map_writes_or_withdraws_each_landed_block_once_resident_from_its_line_to_its_last_reader(seed) -> None:
+    """Withdrawn exactly when its free (last structural reader or re-key) is at or before its line; written, in the
+    plans of the passes after its line through its free; a block whose encode never landed in none; a filler slot in
+    the plans through the step that reached it.  `Replay` accepts every line."""
     oracle, encodes, _, life = history(seed)
     dm = deferred(oracle, encodes, 0, N)
     held = plans(dm, STEPS)

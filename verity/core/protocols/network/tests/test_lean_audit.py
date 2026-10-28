@@ -47,22 +47,22 @@ def _decoded(case):
         return None
 
 
-def _run(a, u, recs, e, prefixes, keyless):
+def _run(a, u, recs, e, prefixes, keyless, grid=True):
     out = []
     for (link, (frames, syncs)), k in zip(zip(u.egress, e), prefixes):
         if keyless:
-            out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid)
+            out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid, grid=grid)
         else:
-            out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid, u.key, u.session)
+            out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid, u.key, u.session, grid)
     for link in u.ingress:
         out += (a.check_ingress_link(link, recs, u.windows) if keyless
                 else a.check_ingress_link(link, recs, u.windows, u.key, u.ingress_grid, u.session))
     return out
 
 
-def _same(lean, u, recs, e, prefixes, keyless=False):
+def _same(lean, u, recs, e, prefixes, keyless=False, grid=True):
     ref, port = audit.Audit(), lean_audit.Audit(server=lean)
-    assert _run(port, u, recs, e, prefixes, keyless) == _run(ref, u, recs, e, prefixes, keyless)
+    assert _run(port, u, recs, e, prefixes, keyless, grid) == _run(ref, u, recs, e, prefixes, keyless, grid)
     assert (port.verdicts, port.syncs, port.accepted, port.violations) == \
         (ref.verdicts, ref.syncs, ref.accepted, ref.violations)
     assert port.lean == port.reference == ref.verdicts
@@ -73,8 +73,10 @@ def _same(lean, u, recs, e, prefixes, keyless=False):
 def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     """On generated units of every kind and change: identical verdict lists, with each egress link checked over a window
     prefix of its own and, when no record is certified, with no key and no ingress parameters (`active_replay.py`'s
-    calls); and a `ValueError` where the Lean check refuses the evidence (a frame of other than B bytes)."""
-    kinds = {}
+    calls); and a `ValueError` where the Lean check refuses the evidence (a frame of other than B bytes). With `grid`
+    False, the same on units whose egress records are all certified, with no egress `mismatch` (an ingress one stays),
+    and a `ValueError` from both where a raw or committed record names an egress link."""
+    kinds, no_grid = {}, {}
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=600)
     @given(R.record_cases(), st.data())
@@ -96,11 +98,20 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
             _same(lean, u, recs, e, prefixes, keyless=True)
         for v in vs:
             kinds[v.violation or "accept"] = kinds.get(v.violation or "accept", 0) + 1
+        if any(not isinstance(r, CertifiedRecord) and r.link in u.egress for r in recs):
+            for a in (audit.Audit(), lean_audit.Audit(server=lean)):
+                with pytest.raises(ValueError, match="only a certified record's grid is held by its head check"):
+                    _run(a, u, recs, e, prefixes, False, grid=False)
+            no_grid["refused"] = no_grid.get("refused", 0) + 1
+            return
+        for v in _same(lean, u, recs, e, prefixes, grid=False)[:sum(prefixes)]:
+            no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     same()
-    print(kinds)
+    print(kinds, no_grid)
     assert {"accept", "no-verdict", "duplicate", "signature", "advice", "mismatch"} <= set(kinds), kinds
     assert any(k.startswith("status:") for k in kinds), kinds
+    assert {"refused", "accept", "no-verdict", "signature"} <= set(no_grid) and "mismatch" not in no_grid, no_grid
 
 
 def test_the_clock_is_the_first_link_checked_in_each_window(lean):
@@ -159,34 +170,34 @@ def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e
 
 
 def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatch):
-    """`LinkWindows.verify`, with `service.Audit` the adapter, gives `audit.Audit`'s verdict of record on six link-windows
+    """`LinkWindows.clear`, with `service.Audit` the adapter, gives `audit.Audit`'s verdict on six link-windows
     in order: honest ones, a forged signature, a grid whose frame differs from the Program's at its counts (accepted:
-    the frames are N3's), a grid with a frame more than the profile's, and an unset deadline bit; the adapter's says
+    N2 holds counts only), a grid with a frame more than the profile's, and an unset deadline bit; the adapter's says
     `by: lean` and carries the reference's accept bit."""
     def other_grid(w, r):
         return dataclasses.replace(r, grid=((bytes([9, 9]), None),) + r.grid[1:]) if w % 3 == 2 else r
 
     def forged(w, e):
-        return CertifiedRecord(e.head, dataclasses.replace(e.certificate, signature=b"")) if w % 3 == 1 else e
+        return CertifiedRecord(e.head, e.salt, dataclasses.replace(e.certificate, signature=b"")) if w % 3 == 1 else e
 
     accepted = []
     for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 6, other_grid, forged):
         got = {}
         for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
             monkeypatch.setattr(service, "Audit", impl)
-            got[name] = lw.verify(opening, draw, syncs)
+            got[name] = lw.clear(opening, draw, syncs)
         assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
         accepted.append(got["python"]["accepted"])
-        assert lw.outcome(stream, draw, opening, syncs).accepted == accepted[-1]
+        assert lw.unproved_outcome(stream, draw, opening, syncs).accepted == accepted[-1]
     assert accepted == [True, False, True, False, False, False]
 
 
 def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
-    """`LinkWindows.verify` compares no egress grid, under the adapter as under `audit.Audit`: a window whose frames
+    """`LinkWindows.clear` compares no egress grid, under the adapter as under `audit.Audit`: a window whose frames
     differ from the Program's in content alone, at the profile's counts, is accepted by both, where the in-the-clear
-    oracle rejects it, and a forged signature is rejected. The adapter's `check_link(grid=False)` maps only the Lean's
-    `mismatch` to an accept, with the Program's frames or with none, as N2 gives it, and refuses a record that isn't
-    certified, whose grid no head check holds."""
+    oracle rejects it, and a forged signature is rejected. The adapter's `check_link(grid=False)` is the Lean's
+    `verdicts-no-grid`: it accepts that window where `verdicts` gives `mismatch`, with the Program's frames or with none,
+    as N2 gives it, and refuses a record that isn't certified, whose grid no head check holds."""
     def content(w, r):
         if w != 1:
             return r
@@ -196,18 +207,18 @@ def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
         return dataclasses.replace(r, grid=tuple(tuple(row) for row in slots))
 
     def forged(w, e):
-        return CertifiedRecord(e.head, dataclasses.replace(e.certificate, signature=b"")) if w == 2 else e
+        return CertifiedRecord(e.head, e.salt, dataclasses.replace(e.certificate, signature=b"")) if w == 2 else e
 
     accepted, stood = [], []
     for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 3, content, forged):
         got = {}
         for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
             monkeypatch.setattr(service, "Audit", impl)
-            got[name] = lw.verify(opening, draw, syncs)
+            got[name] = lw.clear(opening, draw, syncs)
         assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
         accepted.append(got["python"]["accepted"])
         stood.append(lw.stand_in(opening, draw, SERVICE_FRAMES, syncs))
-        assert lw.outcome(stream, draw, opening, syncs).accepted == accepted[-1]
+        assert lw.unproved_outcome(stream, draw, opening, syncs).accepted == accepted[-1]
         if opening.window == 1:
             egress, args = [opening.records[0]], (SERVICE_FRAMES, syncs[:2], lw.sync_set, lw.params, lw.key, SESSION)
             assert [v.violation for v in lean_audit.Audit(server=lean).check_link("responses", egress, *args)] == \
@@ -227,7 +238,7 @@ def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
 def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     """With the Python reference made to reject one link-window the Lean check accepts (and, on ingress, the reverse
     direction of the same flip), that link-window is a `disagreement`: the audit rejects, `lean` keeps the Lean's
-    verdicts and `reference` the Python's, and `service.py`'s verdict of record rejects an honest link-window while
+    verdicts and `reference` the Python's, and `service.py`'s in-the-clear check rejects an honest link-window while
     carrying the reference's bit beside `by: lean`. A reference that raises where the Lean answers raises."""
     real_egress, real_ingress = audit.Audit.check_link, audit.Audit.check_ingress_link
 
@@ -242,10 +253,10 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
                      session=lw.certifier_session)
     assert vs == [audit.Verdict("responses", 0, "disagreement")] and not a.accepted and a.violations == vs
     assert a.lean == [audit.Verdict("responses", 0, None)] and a.reference == [audit.Verdict("responses", 0, "mismatch")]
-    verdict = lw.verify(opening, draw, syncs)
+    verdict = lw.clear(opening, draw, syncs)
     assert verdict["accepted"] is False and verdict["public"]["verdict"] == 0
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
-    assert not lw.outcome(stream, draw, opening, syncs).accepted
+    assert not lw.unproved_outcome(stream, draw, opening, syncs).accepted
 
     monkeypatch.setattr(audit.Audit, "check_link", real_egress)
     monkeypatch.setattr(audit.Audit, "check_ingress_link", lambda self, *a, **k: flip(real_ingress(self, *a, **k), 0))

@@ -46,8 +46,9 @@ use sha2::{Digest, Sha512};
 const TABLE: &str = "circuit";
 /// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
 const MAX_TABLES: usize = 64;
-const BERNOULLI_TABLES: &str = "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables \
-                                could not split it evenly)";
+/// The Lean verifier's `Draw.TABLES_LAW`: several tables split one draw of fixed count, a subset or a stratified one.
+const TABLES_LAW: &str = "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli \
+                          draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -200,10 +201,13 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 /// Under the Lean session loop (`plan.lean_frames`), a firewalled table's level-0 hiding and salts are the loop's: it draws
 /// them for the host's packed witness `z` and commits level 0 on them (`Flock.Firewall.Level0`). They replace `l0`'s and
 /// the table's level-0 salts, so the prover commits the codeword the loop did, and the loop's root is returned: the root of
-/// record. The loop keeps it for the session whose `Hello` was answered `coins`, until that session ends. Without the loop,
-/// nothing changes and nothing is returned.
+/// record. The loop keeps it for table `j` of the session whose `Hello` was answered `coins`, until that session ends, and
+/// draws a table's level 0 once. Without the loop, nothing changes and nothing is returned. Under `FC_LEVEL0_TAMPER=MODE`
+/// (the selftest's `zk_worker_level0`), table 0 asks the loop for one more level 0 after its own: `second` for table 0
+/// again, `past` for a table the session does not have (index [`LEVEL0_PAST`]); the loop's refusal goes to
+/// [`LEVEL0_REFUSED`] (a draw it answers goes there as `drawn again`), and the session goes on on the first draw.
 #[cfg(feature = "sha512")]
-fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], z: &[F128],
+fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: usize, z: &[F128],
                l0: &mut flock_core::pcs::ligerito::zk::Level0Zk, salts: &Mutex<flock_live::zk_hooks::LeafSalts>)
                -> Result<Option<Vec<u8>>, String> {
     use flock_core::pcs::ligerito::zk::EXTRA_LANES;
@@ -213,16 +217,35 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], z: 
     }
     let pcs = pcs_of(st, lig);
     let lc = pcs.ligerito_prover_config().expect("Ligerito config");
-    let got = flock_live::firewall::lean_level0(addr, &flock_live::firewall::level0_session(coins), st.m, z, 1 << lc.initial_log_msg_cols, (1 << lc.initial_k) + EXTRA_LANES,
-                                                l0.t_pad, pcs.n_leaves())?;
+    let (session, t_pad) = (flock_live::firewall::level0_session(coins), l0.t_pad);
+    let draw = |table: usize| flock_live::firewall::lean_level0(addr, &session, table, st.m, z, 1 << lc.initial_log_msg_cols,
+                                                                (1 << lc.initial_k) + EXTRA_LANES, t_pad, pcs.n_leaves());
+    let got = draw(j)?;
+    let tamper = std::env::var("FC_LEVEL0_TAMPER").unwrap_or_default();
+    if j == 0 && !tamper.is_empty() {
+        let again = match tamper.as_str() {
+            "second" => draw(0),
+            "past" => draw(LEVEL0_PAST),
+            m => panic!("FC_LEVEL0_TAMPER={m}: second or past"),
+        };
+        *LEVEL0_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(match again {
+            Ok(_) => "drawn again".to_string(),
+            Err(e) => e,
+        });
+    }
     l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
     l0.pads = got.pads;
     salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
     Ok(Some(got.root))
 }
 
+/// The table index `FC_LEVEL0_TAMPER=past` asks the loop's level 0 for: one past any session's tables.
+const LEVEL0_PAST: usize = 1_000_000;
+/// What the loop answered `FC_LEVEL0_TAMPER`'s extra level-0 request: its refusal, or `drawn again`.
+static LEVEL0_REFUSED: Mutex<Option<String>> = Mutex::new(None);
+
 #[cfg(not(feature = "sha512"))]
-fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
+fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: usize, _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
                _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
     Ok(None)
 }
@@ -293,6 +316,9 @@ fn identity(c: &Composite) -> Value {
         // a run committed as a v2 row names both leaves; runs of segmented rows alone keep their digest
         let v2_run = c.out_rows().iter().enumerate().any(|(j, p)| p.segs.is_none() && c.out_group(j).1 > 1);
         id["outputs"] = json!(if v2_run { OUT_ROWS_V2_IDENTITY } else { OUT_ROWS_SEG_IDENTITY });
+    }
+    if c.pinned > 0 {
+        id["outputs"] = json!(PINNED_IDENTITY);
     }
     id
 }
@@ -379,7 +405,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
     }
     let units = match draw {
         Some(d) if d["population"].as_u64() != Some(inst.n as u64) => return Err("U: the draw's population is not this registered population".into()),
-        Some(d) if d["law"] != "subset" => return Err(BERNOULLI_TABLES.into()),
+        Some(d) if d["law"] != "subset" && d["law"] != "stratified" => return Err(TABLES_LAW.into()),
         Some(d) => flock_live::unit_draw::check(d)?,
         None => (0..inst.n).collect(),
     };
@@ -563,11 +589,11 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 }
 
 /// M2's committed coin schedule: the session's stream (the link points), then every table's two reps, in table order (a
-/// subtree per table and rep); 256 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
+/// subtree per table and rep); 512 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
 fn coin_spec_of(tables: &[String]) -> flock_live::coin_tree::Spec {
     use flock_live::coin_tree::{SESSION, Spec};
     let streams = std::iter::once(SESSION.to_string()).chain(tables.iter().flat_map(|t| [rep_stream(t, 0), rep_stream(t, 1)])).collect();
-    Spec { streams, rounds_log: 8, block: 512 }
+    Spec { streams, rounds_log: 9, block: 512 }
 }
 
 /// A test harness's fixed verifier coins: M0's step-0 seed, or under M2 the committed schedule's random tape.
@@ -733,7 +759,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     if count > 1 {
         let probe = match (&given, &law) {
             (Some(d), _) => Some(d.clone()),
-            (None, Some(Law::Bernoulli { .. })) => refuse(BERNOULLI_TABLES.into()),
+            (None, Some(Law::Bernoulli { .. })) => refuse(TABLES_LAW.into()),
             (None, Some(l)) => l.first(inst.n as u64),
             (None, None) => None,
         };
@@ -1912,10 +1938,49 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
         return (Vec::new(), bk);
     }
     let t = Instant::now();
-    let lean = fin.lock().unwrap_or_else(PoisonError::into_inner).rep(req.table, req.rep, &body).unwrap_or_else(|e| panic!("{e}"));
+    let tamper = std::env::var("FC_FINISH_TAMPER").unwrap_or_default();
+    let lean = {
+        let mut f = fin.lock().unwrap_or_else(PoisonError::into_inner);
+        let last = FINISH_SENT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 == FINISH_REPS.load(std::sync::atomic::Ordering::SeqCst);
+        let body = if !tamper.is_empty() && last { finish_tampered(&req, &zk.pads, &zk.ic.salts, &zk.lay, &tamper) } else { body };
+        f.rep(req.table, req.rep, &body)
+    };
+    let lean = match lean {
+        Ok(l) => l,
+        Err(e) if !tamper.is_empty() => {
+            *FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(e);
+            return (Vec::new(), bk);
+        }
+        Err(e) => panic!("{e}"),
+    };
     req.dump_lean(&lean);
     bk.as_object_mut().expect("buckets").insert("t.lean_finish".into(), json!(t.elapsed().as_secs_f64()));
     (lean, bk)
+}
+
+/// `FC_FINISH_TAMPER=MODE` (the selftest's `zk_worker_finish`): the session's last rep request to the Lean finish in time
+/// (the [`FINISH_REPS`]-th, counted under the finish's lock, so every other rep's requests went before it) doctored in one
+/// named way: `pads-zero` (the pads `h` all zero), `vals-chosen` (the first passed value plus one), `coins` (the first
+/// round's first coin plus one) or `final-c` (`final_c` plus one). The loop's finish refuses each (`Flock.Firewall.Finish.RepIn.differs`, and
+/// for `final_c`, which no live inner proof answers, its live-only rule: a rep's file is only the one its `inner` request
+/// computed), and the refusal goes to [`FINISH_REFUSED`].
+static FINISH_REPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FINISH_SENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FINISH_REFUSED: Mutex<Option<String>> = Mutex::new(None);
+
+/// The rep request `req` on the draws `pads` and the pads tree's `salts`, doctored per `FC_FINISH_TAMPER`'s `mode`.
+fn finish_tampered(req: &RepReq, pads: &zkv::Pads, salts: &[u8], lay: &Layout, mode: &str) -> Vec<u8> {
+    let mut p = zkv::Pads { h: pads.h.clone(), mu: pads.mu.clone(), pad_h: pads.pad_h.clone(), pad_mu: pads.pad_mu.clone(),
+                            tau_salt: pads.tau_salt.clone() };
+    let (mut vals, mut rounds, one) = (req.vals.clone(), req.rounds.clone(), F128::new(1, 0));
+    match mode {
+        "pads-zero" => p.h.iter_mut().for_each(|h| *h = F128::ZERO),
+        "vals-chosen" => vals[0] = vals[0] + one,
+        "coins" => rounds[0][0] = rounds[0][0] + one,
+        "final-c" => vals[lay.fc()] = vals[lay.fc()] + one,
+        m => panic!("FC_FINISH_TAMPER={m}: pads-zero, vals-chosen, coins or final-c"),
+    }
+    flock_live::firewall::rep_body(&p, salts, &vals, &req.extras, &rounds)
 }
 
 /// The shift of `final_c'` that zeroes the inner proof's batched constraint on the committed pads, from its coins (`ε`, then
@@ -2035,6 +2100,12 @@ fn eq256(r: &[flock_field::F256]) -> Vec<flock_field::F256> {
 /// each rep's pair of extra lanes (`[0, 1]`; `[0, 0]` reads a session whose reps share rep 0's pair).
 fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
     -> Result<[Vec<F128>; 2], String> {
+    session_relations_q(st, inst, proofs, coins, points, pairs).map(|(r, _)| r)
+}
+
+/// `session_relations`, with the level-1 positions each rep opened and the number both opened.
+fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
+    -> Result<([Vec<F128>; 2], [usize; 3]), String> {
     use flock_core::pcs::ligerito::zk::{lane_codeword, pad_codeword};
     use flock_field::F256;
     let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config()?;
@@ -2113,7 +2184,7 @@ fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[V
             .flat_map(|j| (app(n, F256::new(r0[2 * j], r0[2 * j + 1])) + F256::new(r1[2 * j], r1[2 * j + 1])).coordinates())
             .collect::<Vec<_>>()
     }).collect();
-    Ok([level0, level1])
+    Ok(([level0, level1], [q1[0].len(), q1[1].len(), common.len()]))
 }
 
 /// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
@@ -3272,7 +3343,7 @@ struct Prebuilt {
 /// previous session's device work).
 fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed) -> std::thread::JoinHandle<Prebuilt> {
     let (st, inst, plan) = (st.clone(), inst.clone(), plan.clone());
-    std::thread::spawn(move || {
+    flock_live::spawn(move || {
         let mode = witness_mode(&st, &plan);
         let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
         let (wt0, built_s) = witness_uploaded(&st, &w0, mode);
@@ -3409,7 +3480,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
     let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
@@ -3479,7 +3550,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
             // under the firewall the root is the Lean session loop's
             let lean = match (firewall_on(&tb.st), l0.as_mut(), wits[j].1.as_ref()) {
-                (true, Some(l), Some(WitData::Host((z, ..)))) => Some(lean_level0(plan, &tb.st, lig, &commit, z, l, &salts_t[j])?
+                (true, Some(l), Some(WitData::Host((z, ..)))) => Some(lean_level0(plan, &tb.st, lig, &commit, j, z, l, &salts_t[j])?
                     .ok_or_else(|| flock_live::firewall::refused("a firewalled table without the Lean session loop's level 0"))?),
                 _ => None,
             };
@@ -3512,7 +3583,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let tl0 = Instant::now();
             let mut zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
             let lean_root0 = match (j, firewalled, zk_level0.as_mut(), wt0.as_ref()) {
-                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, &commit, z, l0, salts)?,
+                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, &commit, 0, z, l0, salts)?,
                 _ => None,
             };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
@@ -3681,12 +3752,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     Some(g) => {
                                         let (bk, end) = firewalled_end(g, &mut mch, &mut hook, dev)?;
                                         let (t_up, g) = (tp.elapsed().as_secs_f64(), g.clone());
-                                        std::thread::spawn(move || zk_finish_fw(&z, mch, tp, t_up, bk, &g, end))
+                                        flock_live::spawn(move || zk_finish_fw(&z, mch, tp, t_up, bk, &g, end))
                                     }
                                     None => {
                                         let (proof, cm, bk) = dev?;
                                         let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
-                                        std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk))
+                                        flock_live::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk))
                                     }
                                 });
                                 Ok((Vec::new(), Value::Null))
@@ -3839,8 +3910,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
-    (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
+    let mut live = json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": c.statement(), "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": st.n * c.upv, "rows_per_vu": rows_per_vu,
                "ands_per_vu": ands_per_vu, "k_log": c.k_log, "nbl": st.nbl,
@@ -3851,9 +3921,10 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || seed_coins())}),
-        proofs,
-    )
+               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || seed_coins())});
+    // past json!'s recursion limit in the literal above
+    live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
+    (live, proofs)
 }
 
 /// (case, expect accept, both reps must reject)
@@ -3930,6 +4001,9 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_cut_silent", false, false),
     ("zk_worker_cut_decode", false, false),
     ("zk_worker_cut_tree", false, false),
+    ("zk_worker_wire", false, false),
+    ("zk_worker_finish", false, false),
+    ("zk_worker_level0", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -3998,8 +4072,11 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
     }
 }
 
+/// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `tests/lean/TmplUnit.lean`).
 fn load_composite(path: &str) -> Composite {
-    Composite::parse(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
+    let unit = Some(arg("--tmpl-unit", "")).filter(|p| !p.is_empty()).map(|p| std::fs::read_to_string(p).expect("--tmpl-unit"));
+    Composite::parse_with(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables")), unit.as_deref())
+        .unwrap_or_else(|e| refuse(e))
 }
 
 /// A row's `b || c` under its salt (the commitment scheme's own function: `b = x XOR M(key) y`, `c = SHA-512(salt_prefix || y)`).
@@ -4137,6 +4214,15 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if let Some(mode) = name.strip_prefix("zk_worker_cut_") {
         return worker_cut_case(name, mode, gpu);
+    }
+    if name == "zk_worker_wire" {
+        return worker_wire_case(gpu);
+    }
+    if name == "zk_worker_finish" {
+        return worker_finish_case(gpu);
+    }
+    if name == "zk_worker_level0" {
+        return worker_level0_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -4293,8 +4379,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "zk_session_relations_vary_with_the_seed" {
         // red-team-m1-zk F1: under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
         // when the reps share level 0's extra lanes and their padding (a prover folding rep 0's pair in both reps, which the
-        // verifier rejects); with a pair per rep they differ in every word
-        let rel = |shared_pair: bool| -> Result<[Vec<F128>; 2], String> {
+        // verifier rejects); with a pair per rep they differ in every word. The level-1 functional exists only at the
+        // positions both reps open at level 1, which the coins draw for each rep independently: on some statements
+        // (RMSNormTriton_v5 at N 2048, under each of 16 tapes) the reps share none, and there is no level-1 relation to leak.
+        // So level 1 is checked at every shared position, and each rep must have opened level-1 positions: an empty level-1
+        // functional is then a disjoint draw, never a record that lost its queries
+        let rel = |shared_pair: bool| -> Result<([Vec<F128>; 2], [usize; 3]), String> {
             let s0 = Arc::new(Mutex::new(server(st, inst)));
             fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
             let plan = Plan { gpu, zk_shared_pair: shared_pair, ..Plan::default() };
@@ -4304,20 +4394,31 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             }
             let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
             let coins: Vec<Vec<F128>> = (0..2).map(|r| record_coins(&rec, &rep_stream(TABLE, r))).collect();
-            session_relations(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
+            session_relations_q(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
         };
-        let equal = |shared_pair: bool| -> Result<(Vec<usize>, Vec<usize>), String> {
-            let (a, b) = (rel(shared_pair)?, rel(shared_pair)?);
-            Ok(((0..2).map(|k| a[k].iter().zip(&b[k]).filter(|(x, y)| x == y).count()).collect(), a.iter().map(|x| x.len()).collect()))
-        };
-        return match (equal(false), equal(true)) {
-            (Ok((eq, len)), Ok((eq_shared, len_shared))) => {
-                let pass = (0..2).all(|k| len[k] > 0 && eq[k] == 0 && eq_shared[k] == len_shared[k]);
-                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair",
+        let sessions = (|| Ok::<_, String>([rel(false)?, rel(false)?, rel(true)?, rel(true)?]))();
+        return match sessions {
+            Ok([(a, qa), (b, qb), (sa, qsa), (sb, qsb)]) => {
+                let words_equal = |x: &[Vec<F128>; 2], y: &[Vec<F128>; 2]| -> Vec<usize> {
+                    (0..2).map(|k| x[k].iter().zip(&y[k]).filter(|(u, w)| u == w).count()).collect()
+                };
+                let (eq, eq_shared) = (words_equal(&a, &b), words_equal(&sa, &sb));
+                let (len, len_shared): (Vec<usize>, Vec<usize>) = ((0..2).map(|k| a[k].len()).collect(), (0..2).map(|k| sa[k].len()).collect());
+                let lengths_agree = (0..2).all(|k| b[k].len() == len[k] && sb[k].len() == len_shared[k]);
+                // the coins alone draw the positions: one tape, the same positions in both sessions of each kind
+                let same_draws = qa == qb && qsa == qsb;
+                let level1_read = [(&a, qa), (&b, qb), (&sa, qsa), (&sb, qsb)].iter()
+                    .all(|(r, q)| q[0] > 0 && q[1] > 0 && (q[2] == 0 || !r[1].is_empty()));
+                let pass = lengths_agree && same_draws && level1_read
+                    && len[0] > 0 && eq[0] == 0 && len_shared[0] > 0 && eq_shared[0] == len_shared[0]
+                    && eq[1] == 0 && eq_shared[1] == len_shared[1];
+                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair; level 1 at every level-1 position both reps opened",
                        "pass": pass, "f256_values": [len[0] / 2, len[1] / 2], "f128_words_equal": eq, "shared_pair_words_equal": eq_shared,
-                       "shared_pair_words": len_shared})
+                       "shared_pair_words": len_shared, "level1_positions": [qa[0], qa[1]], "level1_shared_positions": qa[2],
+                       "shared_pair_level1_shared_positions": qsa[2], "lengths_agree": lengths_agree, "same_draws": same_draws,
+                       "level1_read": level1_read})
             }
-            (Err(e), _) | (_, Err(e)) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
+            Err(e) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
         };
     }
     if name.starts_with("tables_") || name == "zk_tables_share_no_randomness" {
@@ -4333,16 +4434,21 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         if name == "tables_unsplittable_draw_refused" {
             // both sides refuse, before Hello, a draw two tables cannot split: a Bernoulli law's (its count is random), and an
-            // odd count; the server also refuses them at configuration (`server_tables`)
+            // odd count, subset or stratified; the server also refuses them at configuration (`server_tables`)
             let n = inst.n as u64;
             let units = |k: u64| (0..k).collect::<Vec<_>>();
+            let strat = |k: u64| json!({"law": "stratified", "population": n, "k": k,
+                                        "strata": [{"template": "t", "units": [[0, n]], "k": k}], "units": units(k)});
             let bern = session_tables(st, inst, Some(&json!({"law": "bernoulli", "p": "1/1", "population": n, "units": units(n)})), 2).err();
             let odd = (n >= 3).then(|| session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": 3, "units": units(3)})), 2).err());
+            let odd_strat = (n >= 3).then(|| session_tables(st, inst, Some(&strat(3)), 2).err());
             let every = session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": n, "units": units(n)})), 2).err();
-            let pass = bern.as_deref() == Some(BERNOULLI_TABLES) && odd.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")))
-                && every.is_none();
-            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit splits", "bernoulli": bern,
-                          "odd": odd, "every_unit": every, "pass": pass});
+            let stratified = (n >= 2).then(|| session_tables(st, inst, Some(&strat(2)), 2).err());
+            let splits_not = |e: &Option<Option<String>>| e.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")));
+            let pass = bern.as_deref() == Some(TABLES_LAW) && splits_not(&odd) && splits_not(&odd_strat) && every.is_none()
+                && stratified.as_ref().is_none_or(|e| e.is_none());
+            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit and an even stratified draw split",
+                          "bernoulli": bern, "odd": odd, "odd_stratified": odd_strat, "every_unit": every, "stratified": stratified, "pass": pass});
         }
         // the public-circuit ZK proof's J = 2: both tables' roots in one Commit, a coin subtree per table and rep, and every
         // proof after the session's last coin. A prover without the barrier sends table 0's proofs before table 1's coins: the
@@ -4658,7 +4764,10 @@ fn with_tail(text: &str) -> (String, String) {
 /// honest session's record and proofs re-verified offline under each, then with rep 0's lincheck `z_partial` or first round
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
-/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept.
+/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under
+/// `--zk` the lincheck is the zk replay's (`zk_veil::replay` folds its own comb; `FC_LINCHECK` is not read), so there is one
+/// mode: the proofs are re-encoded with their `InnerProof`, and each alteration must be refused by the inner proof's batched
+/// constraint.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -4666,11 +4775,18 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     if !verified(&v) || proofs.len() != 2 {
         return json!({"case": "lincheck_modes_agree", "accepted": v["accepted"], "pass": false, "why": v["why"]});
     }
+    let zk = is_zk(st);
     let alter = |f: &dyn Fn(&mut R1csProofLigerito)| -> Vec<Vec<u8>> {
         let mut ps = proofs.clone();
-        let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
-        f(&mut p);
-        ps[0] = bincode::serialize(&(c, p)).unwrap();
+        if zk {
+            let (c, mut p, i): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p, i)).unwrap();
+        } else {
+            let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p)).unwrap();
+        }
         ps
     };
     let reencoded = alter(&|_| {}) == proofs;
@@ -4687,7 +4803,9 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         }
         r
     };
-    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let modes: &[sverify::Lincheck] =
+        if zk { &[sverify::Lincheck::Partial] } else { &[sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both] };
+    let name = |m: sverify::Lincheck| if zk { "zk replay".to_string() } else { format!("{m:?}") };
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
@@ -4695,18 +4813,24 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
             Ok(mut s) => {
                 let f = s.finish();
                 let reps = f["reps"].as_array().cloned().unwrap_or_default();
-                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
+                json!({"mode": name(m), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
                        "verify_s": f["verify_s"], "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
             }
-            Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
+            Err(e) => json!({"mode": name(m), "accepted": false, "why": e}),
         }
     }).collect())).collect();
     let all = |what: &str, ok: &dyn Fn(&Value) -> bool| runs.iter().filter(|r| r.0 == what).all(|r| r.1.iter().all(ok));
     let same_why = runs.iter().all(|r| r.1.iter().all(|x| in_scope(x)["why"] == in_scope(&r.1[0])["why"]));
-    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
+    let refusal = if zk { "zk inner: the batched constraint fails" } else { "sumcheck-final" };
+    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains(refusal));
     let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
-    json!({"case": "lincheck_modes_agree", "expect": "flat, partial and both: the same verdict on honest and altered lincheck proofs",
+    let expect = if zk {
+        "the zk replay: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
+    } else {
+        "flat, partial and both: the same verdict on honest and altered lincheck proofs"
+    };
+    json!({"case": "lincheck_modes_agree", "expect": expect,
            "gpu": gpu, "accepted": v["accepted"], "reencoded_identical": reencoded, "same_why": same_why,
            "runs": runs.iter().map(|(w, r)| json!({"proofs": w, "modes": r})).collect::<Vec<_>>(), "pass": pass})
 }
@@ -4788,10 +4912,51 @@ fn seen(req: &Req) -> Value {
     }
 }
 
+/// `FC_WIRE_TAMPER=MODE`: the prover's frames to the firewall's session loop doctored on the wire in one named way, each of
+/// which the loop drops or refuses (live PROTOCOL.md §10.4): `round-trailing` puts bytes after every `Round`'s count,
+/// `commit-doctored` sends the `Commit` with a `root_F` that is not Σ, a public word and bytes after it, `proof-worker`
+/// sends each `Proof` as one byte of junk, and `unknown` sends a frame of tag 99 before `Finish` (its answer kept in
+/// `refused`).
+struct Wire {
+    inner: TcpTransport,
+    mode: String,
+    refused: Arc<Mutex<Option<String>>>,
+}
+
+impl Transport for Wire {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let mut b = match (&req, self.mode.as_str()) {
+            (Req::Commit { roots, .. }, "commit-doctored") => {
+                let mut b = Req::Commit { root_f: vec![0xab; 63], roots: roots.clone(), publics: vec![("x".into(), vec![1; 16])] }.encode();
+                b.extend_from_slice(b"trailing");
+                b
+            }
+            (Req::Proof { table, rep, .. }, "proof-worker") => Req::Proof { table: table.clone(), rep: *rep, bytes: vec![0x5a] }.encode(),
+            _ => req.encode(),
+        };
+        if self.mode == "round-trailing" && matches!(req, Req::Round { .. }) {
+            b.extend_from_slice(b"trailing");
+        }
+        if self.mode == "unknown" && matches!(req, Req::Finish) {
+            let r = self.inner.call_raw(&[99, 1, 2, 3]);
+            *self.refused.lock().unwrap_or_else(PoisonError::into_inner) = Some(format!("{r:?}"));
+        }
+        self.inner.call_raw(&b)
+    }
+    fn stats(&self) -> (u64, u64, u64) {
+        self.inner.stats()
+    }
+    fn wait_s(&self) -> f64 {
+        self.inner.wait_s()
+    }
+}
+
 /// The selftest's own process for one firewalled session (`--only zk_worker_session`), its controls from this process's
-/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`): the session goes through the Lean session loop as
-/// `prove`'s does ([`session_addr`]), to a verifier of this process's on loopback, and the record is the session's outcome
-/// and every request that reached the verifier, behind the loop ([`seen`]).
+/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
+/// Lean session loop as `prove`'s does ([`session_addr`]), to a verifier of this process's on loopback, and the record is the
+/// session's outcome and every request that reached the verifier, behind the loop ([`seen`]; a frame that is not its
+/// request's own encoding as `["noncanonical", …]`, one that does not decode as `["undecodable", LEN]`, and a refusal of the
+/// verifier's after its request as `["refused", WHY]`).
 const WORKER_SESSION: &str = "zk_worker_session";
 
 fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
@@ -4802,18 +4967,25 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (mut s, at) = (server(st, inst), log.clone());
     // the verifier logs each request before it answers it, so every request of the session is logged by the time the
     // session's last answer reaches the prover
-    std::thread::spawn(move || {
+    flock_live::spawn(move || {
         let Ok((conn, _)) = l.accept() else { return };
         conn.set_nodelay(true).unwrap();
         let (mut r, mut w) = (BufReader::new(conn.try_clone().unwrap()), BufWriter::new(conn));
         while let Ok(b) = read_frame(&mut r) {
             let resp = match Req::decode(&b) {
                 Ok(req) => {
-                    at.lock().unwrap_or_else(PoisonError::into_inner).push(seen(&req));
+                    let x = if req.encode() == b { seen(&req) } else { json!(["noncanonical", seen(&req), b.len()]) };
+                    at.lock().unwrap_or_else(PoisonError::into_inner).push(x);
                     s.handle(req)
                 }
-                Err(e) => Resp::Refused(e),
+                Err(e) => {
+                    at.lock().unwrap_or_else(PoisonError::into_inner).push(json!(["undecodable", b.len()]));
+                    Resp::Refused(e)
+                }
             };
+            if let Resp::Refused(why) = &resp {
+                at.lock().unwrap_or_else(PoisonError::into_inner).push(json!(["refused", why.chars().take(3000).collect::<String>()]));
+            }
             let done = matches!(resp, Resp::Verdict(_));
             if write_frame(&mut w, &resp.encode()).is_err() || done {
                 break;
@@ -4821,13 +4993,159 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         }
     });
     let plan = Plan::default();
+    FINISH_REPS.store(2 * table_names(plan.tables).len(), std::sync::atomic::Ordering::SeqCst);
     let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, None).unwrap_or_else(|e| refuse(e));
     let plan = Plan { lean_session: frames.is_some(), lean_frames: frames, ..plan };
     let tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
-    let (v, _) = session(st, inst, shared(tcp), &plan, ProverSeed::from_os());
+    let wire = std::env::var("FC_WIRE_TAMPER").unwrap_or_default();
+    let refused = Arc::new(Mutex::new(None));
+    let t = if wire.is_empty() { shared(tcp) } else { shared(Wire { inner: tcp, mode: wire, refused: refused.clone() }) };
+    let (v, _) = session(st, inst, t, &plan, ProverSeed::from_os());
     let seen = std::mem::take(&mut *log.lock().unwrap_or_else(PoisonError::into_inner));
     let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
-    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen})
+    let refused = refused.lock().unwrap_or_else(PoisonError::into_inner).clone();
+    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
+           "wire_refused": refused, "finish_refused": FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+           "level0_refused": LEVEL0_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone()})
+}
+
+/// One firewalled CPU session in a process of its own ([`WORKER_SESSION`]), its controls `env` and none other: its record.
+fn worker_subsession(env: &[(&str, String)]) -> Value {
+    let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+    cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
+        .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
+               "--only", WORKER_SESSION])
+        .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
+        .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER")
+        .env_remove("FC_LEVEL0_TAMPER");
+    // the verifier's draw, as this process's server has it ([`serving`])
+    for flag in ["--draw", "--draw-law", "--draw-file"] {
+        let v = arg(flag, "");
+        if !v.is_empty() {
+            cmd.args([flag, &v]);
+        }
+    }
+    cmd.envs(env.iter().map(|(k, v)| (*k, v.as_str())));
+    let out = cmd.output().expect("spawn a firewalled session");
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines().find_map(|l| l.strip_prefix("NEG\t")).and_then(|l| serde_json::from_str(l).ok()).unwrap_or_else(|| {
+        let err = String::from_utf8_lossy(&out.stderr);
+        json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | "))})
+    })
+}
+
+/// `zk_worker_wire` (live PROTOCOL.md §10.4): every frame that reaches the verifier through the firewall's session loop is
+/// the loop's own encoding, whatever bytes the prover put on the wire. Beside an honest firewalled CPU session, one session
+/// per `FC_WIRE_TAMPER` mode, each in a process of its own: bytes after every `Round`, a doctored `Commit` (`root_F` not Σ, a
+/// public word, bytes after it) and the worker's own `Proof`s (junk) are dropped, the session accepted and the verifier's
+/// every request the honest session's, canonical and at its sizes; a frame of an unknown tag is refused, and the verifier
+/// gets the honest session's requests up to its proofs, then nothing.
+fn worker_wire_case(gpu: bool) -> Value {
+    let name = "zk_worker_wire";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the wire's controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0
+        && h.iter().all(|x| kind(x) != "noncanonical" && kind(x) != "undecodable");
+    let before_proofs: Vec<Value> = h.iter().take_while(|x| kind(x) != "proof").cloned().collect();
+    let modes: Vec<Value> = ["round-trailing", "commit-doctored", "proof-worker", "unknown"].iter().map(|&m| {
+        let v = worker_subsession(&[("FC_WIRE_TAMPER", m.to_string())]);
+        let s = seen(&v);
+        let (want, refused) = if m == "unknown" {
+            (&before_proofs, v["wire_refused"].as_str().is_some_and(|r| r.contains("a request the session loop does not serve")))
+        } else {
+            (&h, v["wire_refused"].is_null())
+        };
+        let accepted_ok = if m == "unknown" { v["accepted"] != true } else { v["accepted"] == true };
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && accepted_ok && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "wire_refused": v["wire_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "wire": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each doctored frame dropped (the honest session's requests, accepted) or refused (unknown)",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+}
+
+/// `zk_worker_finish` (live PROTOCOL.md §10.4): the proof files that leave are the loop's finish's on its own frames' state,
+/// whatever the host's rep requests carry. Beside an honest firewalled CPU session, one session per `FC_FINISH_TAMPER` mode,
+/// each in a process of its own, whose last rep request to the Lean finish carries zero pads, a chosen passed value, a
+/// chosen coin or a chosen `final_c`: the finish refuses it (the request is not the frame's, or no live inner proof answers
+/// it), no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish`
+/// included, and does not accept.
+fn worker_finish_case(gpu: bool) -> Value {
+    let name = "zk_worker_finish";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the finish's controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["finish_refused"].is_null();
+    let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
+    let modes: Vec<Value> = [("pads-zero", "its pads are not the frame's draws"), ("vals-chosen", "its passed values are not the ones the frame took"),
+                             ("coins", "its coins are not the ones the stream answered"), ("final-c", "computed live")].iter().map(|&(m, why)| {
+        let v = worker_subsession(&[("FC_FINISH_TAMPER", m.to_string())]);
+        let s: Vec<Value> = seen(&v).into_iter().filter(|x| kind(x) != "refused").collect();
+        let refused = v["finish_refused"].as_str().is_some_and(|r| r.contains(why));
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && v["accepted"] != true && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "finish_refused": v["finish_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+}
+
+/// `zk_worker_level0` (live PROTOCOL.md §10.4): the level 0 a session binds is the loop's one draw for each table, never one
+/// the prover picks among several. Beside an honest firewalled CPU session, one session per `FC_LEVEL0_TAMPER` mode, each in
+/// a process of its own, whose table 0 asks the loop's level 0 for one more after its own: for table 0 again (`second`), or
+/// for a table the session does not have (`past`). The loop refuses it, nothing more is drawn, and the session goes on on the
+/// first draw: the verifier gets the honest session's every request, at its sizes, and accepts.
+fn worker_level0_case(gpu: bool) -> Value {
+    let name = "zk_worker_level0";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the level-0 controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["level0_refused"].is_null();
+    let past = format!("a level-0 request for table {LEVEL0_PAST} of a session with ");
+    let modes: Vec<Value> = [("second", "a second level-0 request for table 0 of this session"), ("past", past.as_str())].iter().map(|&(m, why)| {
+        let v = worker_subsession(&[("FC_LEVEL0_TAMPER", m.to_string())]);
+        let s = seen(&v);
+        let refused = v["level0_refused"].as_str().is_some_and(|r| r.contains(why));
+        let first_miss = (0..h.len().max(s.len())).find(|&i| h.get(i) != s.get(i));
+        json!({"mode": m, "ok": honest_ok && v["accepted"] == true && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(), "level0_refused": v["level0_refused"],
+               "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": h.get(i), "tampered": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "each extra level-0 request refused by the loop, the session on its one draw: the honest session's requests, accepted",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
 
 /// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_FIREWALL_TAMPER=cut-MODE`) at its table's device
@@ -4846,21 +5164,8 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
         return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
     }
     let run = |tamper: Option<(usize, &str)>| -> Value {
-        let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-        cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
-            .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
-                   "--only", WORKER_SESSION])
-            .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
-            .env_remove("FC_FIREWALL_DEADLINE_S");
-        if let Some((k, t)) = tamper {
-            cmd.env("FC_FIREWALL_TAMPER", format!("cut-{t}")).env("FC_FIREWALL_CUT_AT", k.to_string());
-        }
-        let out = cmd.output().expect("spawn a firewalled session");
-        let text = String::from_utf8_lossy(&out.stdout);
-        text.lines().find_map(|l| l.strip_prefix("NEG\t")).and_then(|l| serde_json::from_str(l).ok()).unwrap_or_else(|| {
-            let err = String::from_utf8_lossy(&out.stderr);
-            json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | "))})
-        })
+        let env = tamper.map(|(k, t)| vec![("FC_FIREWALL_TAMPER", format!("cut-{t}")), ("FC_FIREWALL_CUT_AT", k.to_string())]);
+        worker_subsession(&env.unwrap_or_default())
     };
     let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
     let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
@@ -5065,7 +5370,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         let ts = Instant::now();
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
-                sc.spawn(move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
+                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
                     let mut s = server(st, inst);
                     fix_verifier_coins(&mut s, [9; 32]);
                     s
@@ -5213,7 +5518,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                         flock_live::gpu_circuit::HostBuf::prepin(h.zab.len(), depth);
                     }
                 }
-                ahead.push_back((0, std::thread::spawn(move || p)));
+                ahead.push_back((0, flock_live::spawn(move || p)));
             }
             if ahead.front().is_some_and(|(r, _)| *r == run) {
                 let (_, h) = ahead.pop_front().expect("this run's witness");
@@ -5256,7 +5561,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
             emit_one(run, finish(), rtt);
             continue;
         }
-        verdicts.push_back((run, rtt, std::thread::spawn(finish)));
+        verdicts.push_back((run, rtt, flock_live::spawn(finish)));
         while verdicts.len() > verify_ahead {
             let (r, rtt, h) = verdicts.pop_front().expect("a session awaiting its verdict");
             emit_one(r, join(h), rtt);
@@ -5362,7 +5667,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }
@@ -5394,7 +5699,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             let (conn, _) = l.accept().unwrap();
             let s = make();
             let (one, free) = (&one, &free);
-            sc.spawn(move || {
+            flock_live::spawn_scoped(sc, move || {
                 // a session's panic stops the server
                 if catch_unwind(AssertUnwindSafe(|| one(i, conn, s))).is_err() {
                     std::process::exit(101);
@@ -5538,6 +5843,7 @@ fn stacked() {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     if cmd == "replay-coins" {
         let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
@@ -5596,6 +5902,9 @@ fn main() {
     // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
     if flag("--gpu") && st.circuit.types.len() > 12 {
         refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
+    if flag("--gpu") {
+        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
     }
     // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
     if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {

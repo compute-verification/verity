@@ -49,8 +49,10 @@ the module that registers a kernel is imported with the registries, and no check
 package an enumerator listed (`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``,
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
-pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
+pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``), unless it is
+the checker's own: those, like the checker code that ran, are held by the checker's version alone.  The checker's
+own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
+comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
 peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
 `cli.heavy`) and the known failures (`KNOWN`, which decide only the run's summary).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
@@ -105,8 +107,9 @@ outside the tree (another tree's copy, which no recorded read covers).
 
 The task list of ``--all`` (each target and its key) is an entry too, of the request ``task-list``: it holds what any target
 could (every binding's recording, every Definition the catalog reached with what its build read, `task_list_reads`), every in-tree
-module the process imported and every binding file whole, and counts only when each is unchanged where it was, never through a
-move; a run reuses it only when every target it lists is reused that way too, and then builds no Definition.
+module the process imported but the checker's own (its version) and every binding file whole, and counts only when each is
+unchanged where it was, never through a move; a run reuses it only when every target it lists is reused that way too, and then
+builds no Definition.
 
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
@@ -129,6 +132,9 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): a remote run
+#: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
+_LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 _UNTRACED: list[str] = []
@@ -136,7 +142,8 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
+#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
+#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
 #: which, and a target whose process the OOM killer took is never stored
 HEAVY = _HERE / "heavy.json"
 #: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
@@ -196,6 +203,8 @@ class Frame:
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
 _FRAMES: list[Frame] = [Frame()]
+#: bumped each time a recording opens or closes: a specialization whose body was last read at another count is noted again
+_EPOCH = [0]
 #: what was read and run while each module was first imported (after `trace`), by module name
 _MODULES: dict[str, Frame] = {}
 #: what each binding unit read and ran while it made its roots
@@ -256,13 +265,36 @@ def _rel(path: Any) -> str | None:
         return None
     try:
         p = Path(os.fsdecode(path))
-        p = p if p.is_absolute() else Path.cwd() / p
-        rel = os.path.relpath(os.path.normpath(p), _ROOT[0])
+        p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
+        rel = os.path.relpath(p, _ROOT[0])
+        if rel.startswith("..") and _LINKS:            # a file through a link into the tree is the tree's (`_LINKS`)
+            rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
+                        if p == k or p.startswith(k + os.sep)), rel)
     except (TypeError, ValueError):
         return None
     if rel.startswith("..") or "__pycache__" in rel.split(os.sep) or rel.split(os.sep)[0] == ".venv":
         return None
     return rel
+
+
+def _links(root: Path) -> dict[str, str]:
+    """`_LINKS`: the links in the import path's directories outside ``root`` that lead into it, each with where it leads.  Read
+    once, when tracing starts: neither its listings nor its ``lstat``s are a check's reads, and `_rel`, which every ``stat``
+    calls, resolves no path itself."""
+    out: dict[str, str] = {}
+    for e in sys.path:
+        d = os.path.abspath(e or os.getcwd())
+        if not os.path.relpath(d, root).startswith(".."):
+            continue
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for n in names:
+            p = os.path.join(d, n)
+            if os.path.islink(p) and not os.path.relpath(t := os.path.realpath(p), root).startswith(".."):
+                out[p] = t
+    return out
 
 
 _TARGETS_REL: list[str | None] = [None]
@@ -288,8 +320,8 @@ _HOOKS = ("__import__", "import_module", "exec_module")
 
 
 #: the read `importlib.metadata` makes of every `sys.path` entry, held by what it yields: each installed distribution's
-#: name and version (`_distributions`), not each directory's listing (17 Oct: since every workspace member is installed,
-#: every member's root was in every target's reads, and a file added to one made every target miss)
+#: name and version (`_distributions`), not each directory's listing (every workspace member is installed, so
+#: a listing would put every member's root in every target's reads, and a file added to one would make every target miss)
 DISTRIBUTIONS = "<distributions>"
 _METADATA: list[str] = []
 
@@ -331,7 +363,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity_vllm.program.registry.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity.ml.definitions.registry.catalog", "load"), ("verity.ml.definitions.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:
@@ -485,12 +517,14 @@ def recording(merge: bool = True) -> Iterator[Frame]:
         yield fr
         return
     _FRAMES.append(fr)
+    _EPOCH[0] += 1
     if _TOOL:
         sys.monitoring.restart_events()
     try:
         yield fr
     finally:
         _FRAMES.pop()
+        _EPOCH[0] += 1
         if merge and len(_FRAMES) > 1:
             _FRAMES[-1].merge(fr)
 
@@ -613,11 +647,17 @@ def _instrument() -> None:
     for cls in (D.PrimitiveDefinition, D.CompositeDefinition, D.SpecializedDefinition):
         marking(cls)
     get = D.SpecializedDefinition.body.fget
+    D.SpecializedDefinition._circuit_check_read = -1
 
     def body(self):
+        # the layout's walks read a body millions of times a check: noted once under each innermost recording
+        if self._circuit_check_read == _EPOCH[0] and (b := self._body) is not None:
+            return b
         if len(_FRAMES) > 1:
             _FRAMES[-1].defs.setdefault(id(self), self)
-        return get(self)
+        b = get(self)
+        self._circuit_check_read = _EPOCH[0]
+        return b
 
     D.SpecializedDefinition.body = property(body)
     sig = D.SpecializedDefinition.signature
@@ -636,6 +676,7 @@ def trace(root: Path) -> None:
     the code that runs through `sys.monitoring`, and the Definitions' builds and reads (`_instrument`)."""
     if not _ROOT:
         _ROOT.append(Path(root).resolve())
+        _LINKS.update(_links(_ROOT[0]))
         _TARGETS_REL[0] = _rel(TARGETS)
         unit_files(())
         sys.addaudithook(_hook)
@@ -1419,7 +1460,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             by_file.setdefault(os.path.abspath(f), name)
     acc = Frame()
     acc.merge(fr)
-    if not roots:                                      # a template, or a target named on the command line: its whole bindings
+    if not roots:                                      # a template, or a named target that doesn't resolve: its whole bindings
         for u in units:
             if u in _PRODUCED:
                 acc.merge(_PRODUCED[u], defs=False)
@@ -1548,6 +1589,8 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     for rel in acc.sources:                            # a loaded module's source looked for, by the module's name
         f = os.path.abspath(os.path.join(root, rel))
         name = by_file.get(f)
+        if f.startswith(os.path.join(str(_HERE), "")):
+            continue                                   # the checker's version, and `targets.py` by its units
         if name is not None and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f):
             present.add(name)
         elif name is not None and (m := _side(name)) is not None and (r := _sidecar(root, m, ".py")) is not None \
@@ -1601,16 +1644,40 @@ def _dist(root: Path, top: str) -> str | None:
         return None
 
 
+class _Prose(ast.NodeTransformer):
+    """A module's AST without its statements that are a string alone (its docstrings among them)."""
+
+    def visit_Expr(self, node: ast.Expr) -> ast.AST | None:
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            return None
+        return self.generic_visit(node)
+
+
+_CODE: dict[bytes, bytes] = {}
+
+
+def _code(p: Path) -> bytes:
+    """A file of the checker as its version holds it: a module by the digest of its AST with every string-alone statement cut
+    (`_Prose`; the AST holds no comment, formatting or line number), so an edit to its prose keeps the version; any other file
+    by its bytes.  Memoized by the bytes, since `key` reads every file again for each entry."""
+    data = p.read_bytes()
+    if p.suffix != ".py":
+        return data
+    if data not in _CODE:
+        _CODE[data] = b"ast:" + hashlib.sha512(ast.dump(_Prose().visit(ast.parse(data))).encode()).digest()
+    return _CODE[data]
+
+
 def version() -> str:
-    """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
+    """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
+    ``pins/`` (each target holds its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
             if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0])
                     and PINS not in p.parents and KNOWN[1] not in p.parents):
-                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
     finally:
         _INTERNAL.pop()
     return h.hexdigest()
@@ -1642,9 +1709,13 @@ _OWN: dict[int, tuple[Any, str]] = {}
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
     descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`): what the target is, whatever module or
-    path it was written in.  A body that cannot be built gives the error's type, so no stored entry matches."""
+    path it was written in.  A by-calls root (`targets.is_by_calls`) is its own entry (`by_calls.entry`), without what its body
+    calls.  A body that cannot be built gives the error's type, so no stored entry matches."""
     from verity.ml.circuits import codec as C
     from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    from . import by_calls as BC
+    from . import targets as TG
 
     def statics(v: Any) -> Iterator[Any]:
         if isinstance(v, FunctionDefinition):
@@ -1663,13 +1734,16 @@ def descriptor(fn: Any) -> str:
                 if id(f) in seen:
                     continue
                 seen.add(id(f))
+                by_calls = TG.is_by_calls(f)
                 if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
                     e = _OWN.get(id(f))
                     if e is None or e[0] is not f:
-                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest())
+                        own = BC.entry(f) if by_calls else C.definition_entry(f)
+                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
                 if isinstance(f, SpecializedDefinition):
-                    stack.extend(n.fn for n in f.body.nodes)
+                    if not by_calls:
+                        stack.extend(n.fn for n in f.body.nodes)
                     stack.extend(statics(f.bindings))
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"
@@ -2007,9 +2081,9 @@ def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str
 
 def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
-    every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
-    reads: a new binding entry, a new Definition in a registry module or a new module an enumerated package lists changes the
-    list without changing what any target read."""
+    every root), every in-tree module this process imported but the checker's own (its key's `version`), and every binding file
+    whole.  More than the union of the targets' reads: a new binding entry, a new Definition in a registry module or a new module
+    an enumerated package lists changes the list without changing what any target read."""
     fr = Frame()
     for f in _PRODUCED.values():
         fr.merge(f)
@@ -2021,8 +2095,8 @@ def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
         for name, m in list(sys.modules.items()):
             if isinstance(f := getattr(m, "__file__", None), str):
                 by_file.setdefault(os.path.abspath(f), name)
-        mods = {name for f, name in by_file.items() if _rel(f) is not None and (p := _resolve(root, name)) is not None
-                and os.path.realpath(p) == os.path.realpath(f)}
+        mods = {name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(os.path.join(str(_HERE), ""))
+                and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}
         units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
     finally:
         _INTERNAL.pop()

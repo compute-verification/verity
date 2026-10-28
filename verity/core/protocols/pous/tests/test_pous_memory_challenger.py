@@ -1,9 +1,10 @@
 """The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
-and the session log that refuses a used id.  Every clock is injected."""
+no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
 
 import dataclasses
+import gc
 import hashlib
 import os
 import tempfile
@@ -199,6 +200,18 @@ def test_a_late_round_ends_the_session_with_no_retry():
     assert judge(*on_time).accepted
 
 
+def test_no_collection_runs_inside_the_rounds() -> None:
+    seen: list[bool] = []
+    c, signed, signer = session(respond=lambda i: (seen.append(gc.isenabled()), block(i))[1])
+    assert len(seen) == K and not any(seen) and gc.isenabled() and judge(c, signed, signer).accepted
+    gc.disable()
+    try:
+        session()
+        assert not gc.isenabled()
+    finally:
+        gc.enable()
+
+
 def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges_it():
     c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
     assert signed.ended == mc.LATE and len(signed.rounds) == 3 and signed.rounds[-1].elapsed_ns == -1
@@ -314,9 +327,9 @@ def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monke
     signer.sign(SESSION, b"a")
     log.claim(SESSION)
     assert list(tmp.iterdir()) == []
-    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state.path, log.path))
+    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state, log.path))
     own = tmp_path_factory.mktemp("own")
-    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.path.parent.parent == own
+    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.parent.parent == own
     monkeypatch.setattr(ts, "DIR", None)
     for make in (lambda: ts.TestSigner(b"k", height=1), ts.session_log):
         with pytest.raises(RuntimeError, match="in a directory the caller owns"):
@@ -355,7 +368,7 @@ def deployed_signer(tmp_path) -> mc.LmsSigner:
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):

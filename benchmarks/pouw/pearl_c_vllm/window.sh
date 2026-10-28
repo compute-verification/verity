@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The e2e's timed window on node 2 (research store docs/pouw/mvp-e2e.md, "RTX PRO 6000"), from the run tree's root, with
-# GPU 1's build.sh output tarred as pearl-c-sm120-ship.tar:
+# The e2e's timed window on node 2, from the run tree's root, with GPU 1's build.sh output tarred as
+# pearl-c-sm120-ship.tar:
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
-#     --env GPU_LEASE_WHO=bc-dd22acf8 --send pearl-c-sm120-ship.tar -- \
+#     --env GPU_LEASE_WHO=<you> --send pearl-c-sm120-ship.tar -- \
 #     gpu-lease 8 --wait --timed --max-min 20 -- timeout 1140 bash benchmarks/pouw/pearl_c_vllm/window.sh
 # It times on the first leased GPU only.  In order, the first failure ends the window:
 #  1. identity: the device name and cc 12.0, with the UUID and clocks recorded;
@@ -28,7 +28,8 @@
 # run (a fill job).  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C scheme, and so its hashing format)
 # pass to e2e.py and profile_decode.py; the quality run names its own schemes.  GRAPHS=1 passes --graphs to e2e.py, FP8_GRAPHS=1 --fp8-graphs.
 # WHOLE_STEP=1 passes --whole-step: the arm's decode forwards as vLLM's FULL graphs with Pearl-C's calls inside; with it,
-# WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call.  BATCH passes --batch.
+# WHOLE_DEFER=1 passes --whole-defer: each call's tile hashing captured beside the next call; CAPTURE (sizes, comma-separated)
+# passes --capture: the arm's vLLM graph sizes, the decode batch's alone by default.  BATCH passes --batch.
 # STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
 # /usr/local/cuda-13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 set -euo pipefail
@@ -38,7 +39,7 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
 mkdir -p "$OUT"
 MODE=${MODE:-window}
 SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs}
-          ${WHOLE_STEP:+--whole-step} ${WHOLE_DEFER:+--whole-defer} ${BATCH:+--batch "$BATCH"})
+          ${WHOLE_STEP:+--whole-step} ${WHOLE_DEFER:+--whole-defer} ${CAPTURE:+--capture "$CAPTURE"} ${BATCH:+--batch "$BATCH"})
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
@@ -50,7 +51,7 @@ p = json.load(open(sys.argv[1]))["flashinfer"]["prebuilt"]["sampling"]
 sys.exit(not (p.startswith(os.environ["FLASHINFER_WORKSPACE_BASE"] + "/") and os.path.exists(p)))' "$WORK/ready.json" \
   || fail SETUP "ready.json's FlashInfer sampling library is not in this build's cache $FLASHINFER_WORKSPACE_BASE: run setup.sh"
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 # NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}

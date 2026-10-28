@@ -12,11 +12,14 @@ import hashlib
 import pytest
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
 from verity.core.protocols.remote_bandwidth.audit import Params, Session
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 N = 8
+CAP = 256
+"""The cap on its schedule's bits that a test session commits before its coins (`Params.schedule_cap`): above
+`HONEST_SCHEDULE`'s 200, so a ledger crediting the schedule's own bits instead would show."""
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
@@ -77,14 +80,16 @@ class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
-    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
+    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
+    parameters commit `schedule_cap` (`CAP` by default) on its schedule's bits."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None,
-                 deferred: bool = False, appends: int = coins.APPENDS) -> None:
+                 samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
+                 deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = CAP) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
-                        window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred)
+                        window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred,
+                        schedule_cap=schedule_cap)
         self.clock = Clock()
         if registry is None:
             self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
@@ -151,11 +156,11 @@ class Run:
         return out
 
 
-def honest_session() -> Run:
+def honest_session(schedule_cap: int | None = CAP) -> Run:
     """Window 0: a pass over the registered store; 4 pages appended (8 … 11) and read; one of them and a registered
     block released and dropped from the plan.  Window 1: 2 more pages (12, 13) read with the rest, then a pass sent
     whole."""
-    r = Run(store())
+    r = Run(store(), schedule_cap=schedule_cap)
     assert r.run() is None
     r.append(4)
     assert r.run(change=(((N, 4),), ())) is None
@@ -167,6 +172,12 @@ def honest_session() -> Run:
     assert r.run(Plan(((0, 2), (3, 6), (10, 4)), r.store.extent)) is None
     r.boundary()
     return r
+
+
+HONEST_SCHEDULE = schedule.Schedule(((2, 1, 1),), (((0, None), (0, 1), (0, None), (0, None)), ((2, None), (2, None))),
+                                    (0, 1, 2, 3, 4))
+"""`honest_session`'s schedule: registered block 2 freed at step 1; pages 8 … 11 written at step 0, page 9 freed at step
+1; pages 12 and 13 written at step 2; passes at steps 0 … 4."""
 
 
 @pytest.fixture(scope="module")
@@ -212,15 +223,20 @@ class Verdict:
 def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(honest) -> None:
     """Without a verdict (None), the session's 17 post-seed receipts are certified but not credited: μ_timing counts
     only the registered blocks' 37.  On a verdict that holds, all 54 are credited, and μ_carrier charges each pass the
-    least of the verdict's carrier bytes and its post-seed bytes.  A verdict that fails is refused."""
+    least of the verdict's carrier bytes and its post-seed bytes, with the session's schedule check beside it, whose
+    cap it reports as the steering: the one committed before the coins, not the 200 bits of the schedule published
+    after them.  A verdict that fails is refused."""
     rec = honest[0].s.record()
+    scheduled = honest[0].s.scheduled(HONEST_SCHEDULE)
     capacity = 4096 * 10**9 / 10
     common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
     whole = capacity * rec.span_ns / 1e9
     none = audit.ledger(rec, **common)
     assert none.timing == pytest.approx(1 - 37 * 4096 / whole) and none.carrier == 0
     assert set(none.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "carrier" in audit.LEDGER_SOURCES
-    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096))
+    assert none.steering is None and none.to_json()["steering_bits"] is None
+    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096), schedule=scheduled)
+    assert HONEST_SCHEDULE.bits == 200 and held.steering == scheduled.cap == CAP == held.to_json()["steering_bits"]
     assert held.timing == pytest.approx(1 - 54 * 4096 / whole)
     assert held.carrier == pytest.approx((0 + 3 + 3 + 3 + 3) * 4096 / whole)
     assert held.sample == none.sample and held.counting == none.counting
@@ -229,9 +245,9 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
     assert none.windows[0].timing - held.windows[0].timing == pytest.approx(7 * 4096 / whole_0)
     assert held.gamma == pytest.approx(none.gamma - 17 * 4096 / whole + 12 * 4096 / whole)
     with pytest.raises(ValueError, match="fails"):
-        audit.ledger(rec, **common, credit_post_seed=Verdict(False, 0.0))
+        audit.ledger(rec, **common, credit_post_seed=Verdict(False, 0.0), schedule=scheduled)
     with pytest.raises(ValueError, match="finite nonnegative"):
-        audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
+        audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")), schedule=scheduled)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -324,12 +340,13 @@ def test_on_a_requirement_link_a_pass_is_credited_the_circuit_s_reads_at_its_ste
     4 nothing.  A link that doesn't hold, reads past its plan's blocks or that aren't a count, or a record whose passes
     name no step are refused."""
     rec = honest[0].s.record()
+    scheduled = honest[0].s.scheduled(HONEST_SCHEDULE)
     assert [w.steps for w in rec.windows] == [(0, 1, 2), (3, 4)]
     assert [w.lengths for w in rec.windows] == [(8, 12, 10), (12, 12)]
     capacity, B = 4096 * 10**9 / 10, 8 * 4096
     common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
     whole, whole_0 = capacity * rec.span_ns / 1e9, capacity * rec.windows[0].span_ns / 1e9
-    for verdict in ({}, {"credit_post_seed": Verdict(True)}):
+    for verdict in ({}, {"credit_post_seed": Verdict(True), "schedule": scheduled}):
         store_ = audit.ledger(rec, **common, **verdict)
         full = audit.ledger(rec, **common, **verdict, requirement=Link(True, planned(rec)))
         assert full.timing == pytest.approx(store_.timing) and full.linked and not store_.linked
@@ -338,7 +355,7 @@ def test_on_a_requirement_link_a_pass_is_credited_the_circuit_s_reads_at_its_ste
     assert [audit.linked_bits(w, sparse, 4096, False) for w in rec.windows] == [(3 * B + 100, B, 0), (0, 0)]
     assert [audit.linked_bits(w, sparse, 4096, True) for w in rec.windows] == [(3 * B + 100, 5 * B, 20_000), (0, 0)]
     bare = audit.ledger(rec, **common, requirement=sparse)
-    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True), requirement=sparse)
+    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True), requirement=sparse, schedule=scheduled)
     assert bare.timing == pytest.approx(1 - (4 * B + 100) / 8 / whole)
     assert held.timing == pytest.approx(1 - (8 * B + 20_100) / 8 / whole)
     assert held.windows[0].timing == pytest.approx(1 - (8 * B + 20_100) / 8 / whole_0)
@@ -355,7 +372,7 @@ def test_on_a_requirement_link_a_pass_is_credited_the_circuit_s_reads_at_its_ste
 
 
 def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_reads() -> None:
-    """VLLM-24's shape, the link covering the weights while KV isn't registered.  The store's 8 registered blocks are
+    """A session whose link covers the weights while KV isn't registered.  The store's 8 registered blocks are
     4 of weights (the last half full), an embedding table of 16 rows in 2, and 2 of filler, and every pass plans the
     whole store (PlanShard at GAPS = 0).  Each of the 5 steps reads every weight, the table row its token selects and
     the KV its earlier steps wrote, which no registered block holds and which is never complete here.  So each plan
@@ -428,7 +445,7 @@ def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_re
 def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
     """Each pass's head is the chain over the appends received before its root, which its seed binds: none before
     pages 8 … 11, then theirs through window 0, then theirs and 12 … 13's through window 1.  Its stale bound is N
-    throughout, since no block reaches L = 60, and the received appends give the same.  The public record lists the
+    throughout, since no block reaches L (30 s of 10 ns windows), and the received appends give the same.  The public record lists the
     heads per window (hiding commitments), the verifier's profile heads and bounds both, and the honest session's
     map, step 0 appending 8 … 11 and step 2 12 … 13, is the units' at every pass.  A link reads the heads, not the
     bounds, which its unit recomputes: a record without heads is refused one, and one without bounds is not."""
@@ -683,6 +700,21 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
     assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
 
 
+@pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
+def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
+    """No session draws nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
+    doesn't decode, read as no openings, is refused on every window."""
+    r = Run(store(), windows=1)
+    assert r.run() is None
+    r.boundary()
+    r.clock.now = r.s.deadline(0) + 1
+    draws = r.s.close(0)
+    openings = [r.prover.open(r.passes[0, i], q) for i, q in draws][:opened]
+    r.s.windows[0].draws = ()
+    assert r.s.verify(0, openings) == audit.Verdict(0, False, "malformed") == r.s.failed
+
+
 def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     """A prover that commits its append's tree one index past the one the verifier assigns, and opens its pages with
     that tree's paths (the same shape), fails the payload path."""
@@ -777,6 +809,36 @@ def test_a_session_that_defers_residency_has_a_lifetime_of_at_least_two() -> Non
     for bad in (1, "yes", None):
         with pytest.raises(ValueError, match="deferred is a bool"):
             Params(blocks=N, deadline_ns=1, windows=1, deferred=bad)
+
+
+def test_a_session_s_schedule_cap_is_none_or_bits() -> None:
+    """The cap a session commits on its schedule's bits is None (the default: none, so no appended block is credited)
+    or a nonnegative integer."""
+    assert Params(blocks=N, deadline_ns=1, windows=1).schedule_cap is None
+    assert Params(blocks=N, deadline_ns=1, windows=1, schedule_cap=0).schedule_cap == 0
+    for bad in (-1, True, 8.0, "200"):
+        with pytest.raises(ValueError, match="schedule's cap"):
+            Params(blocks=N, deadline_ns=1, windows=1, schedule_cap=bad)
+
+
+def test_the_lifetime_cap_is_the_whole_windows_of_t_in_30_seconds() -> None:
+    """L is a duration's (`LIFETIME_NS`, 30 s) whole windows, at least 1, or 2 deferred: a carrier's life stays about
+    30 s whatever T is, where a count of windows was an hour at 60 s and a minute at 1 s.  A paced session's default
+    counts its groups as stated windows, the fewest the life allows (the verifier states the groups of their nominal
+    length); a stated L stays."""
+    assert audit.LIFETIME_NS == 30 * 10**9
+    assert [audit.lifetime_windows(t * 10**9) for t in (60, 30, 20, 7, 1)] == [1, 1, 1, 4, 30]
+    assert [audit.lifetime_windows(t * 10**9, deferred=True) for t in (60, 20, 15, 1)] == [2, 2, 2, 30]
+    assert audit.lifetime_windows(85 * 10**6) == 352 and audit.lifetime_windows(10**9, life_ns=120 * 10**9) == 120
+    assert Params(blocks=N, deadline_ns=1, windows=1).lifetime == 1
+    assert Params(blocks=N, deadline_ns=1, windows=1, deferred=True).lifetime == 2
+    assert Params(blocks=N, deadline_ns=1, windows=1, window_ns=10**9).lifetime == 30
+    assert Params(blocks=N, deadline_ns=1, windows=1, window_ns=10**9, lifetime=7).lifetime == 7
+    assert Params(blocks=N, deadline_ns=1, windows=2, window_ns=1, pace=audit.Pace(1)).lifetime == 1
+    assert Params(blocks=N, deadline_ns=1, windows=2, window_ns=1, pace=audit.Pace(1, 10**9)).lifetime == 30
+    for bad in (0, -1, 1.0, None):
+        with pytest.raises(ValueError, match="lifetime's window_ns"):
+            audit.lifetime_windows(bad)
 
 
 def withdrawing() -> Run:

@@ -1,9 +1,9 @@
-"""`verity_vllm.program.kernels.derived_rows` — vectorized derived-boundary evaluators equal the registered gate
+"""`verity.ml.definitions.numerics.derived_rows` — vectorized derived-boundary evaluators equal the registered gate
 semantics, gate for gate: the scalar kernels match the primitives on random + adversarial words, and the
-row evaluators match `evaluate_call` transcripts of the composites on small shapes, **including the interior
+row evaluators match `evaluate_call` traces of the composites on small shapes, **including the interior
 gates** a derived boundary would select (norm `inv`/`s`, per-block attention (m, l, o), silu `mid`).
 
-Needs the numerics lane's MUFU tables (`verity_vllm.program.kernels`, prebuilt .so probes not required —
+Needs the numerics MUFU tables (`verity.ml.definitions.numerics`, prebuilt .so probes not required —
 tables load from the committed sweep artifacts); skipped when unavailable."""
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 
 def _derived():
-    from verity_vllm.program.kernels import derived_rows as D
+    from verity.ml.definitions.numerics import derived_rows as D
     try:
         D._fa2_tables()
         D._rms_tables()
@@ -63,7 +63,7 @@ def _rand_bf16(rng, shape, scale=1.0):
 
 def test_fma_rn_matches_exact_rational_fma():
     D = _derived()
-    from verity_vllm.program.registry.prims import f32_fma_bits
+    from verity.ml.definitions.registry.prims import f32_fma_bits
     rng = np.random.default_rng(11)
     n = 20000
     a = np.concatenate([_rand_words(rng, n), np.tile(ADVERSARIAL_F32, 40)])
@@ -81,7 +81,7 @@ def test_fma_rn_matches_exact_rational_fma():
 ])
 def test_unary_kernels_match_prims(fn_np, prim):
     D = _derived()
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     rng = np.random.default_rng(hash(prim) % 2 ** 31)
     xs = np.concatenate([_rand_words(rng, 50000), ADVERSARIAL_F32])
     got = getattr(D, fn_np)(xs)
@@ -115,13 +115,13 @@ def _ex2_exact(w: int, T: np.ndarray) -> int:
 
 def test_ex2_every_exponent_class_equals_the_exact_rule():
     """`MufuEx2Ftz` on every exponent class of both signs (edge and seeded mantissas; NaN and inf at 255): the compiled rule
-    (`fa2_model.mufu_ex2`), the IR reference (`verity.ml.circuits.evaluation.evaluate`) and the numpy twin equal the rule evaluated
+    (`fa2_model.mufu_ex2`), the reference evaluator (`verity.ml.circuits.evaluation.evaluate`) and the numpy twin equal the rule evaluated
     exactly, and every 0 < |x| < 2^-23 gives T[0] = 1.0.  That includes |x| < 2^-63, where the C shift count reached 64 or
     more (undefined; x86-64 took it mod 64: ex2(6.5e-22) was 1.0083, ex2(2^-64) 2.0 and ex2(-2^-64) 0.5)."""
     D = _derived()
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels import fa2_model as FA
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.numerics import fa2_model as FA
+    from verity.ml.definitions.registry import prims as P
     tabs = D._fa2_tables()
     mants = np.concatenate([[0, 1, 2, 0x3FFFFF, 0x400000, 0x400001, 0x7FFFFE, 0x7FFFFF],
                             np.random.default_rng(64).integers(0, 1 << 23, 8)]).astype(np.uint32)
@@ -144,7 +144,7 @@ def test_binary_kernels_match_prims():
     (x86 SIMD, arm64 and CUDA all differ); no committed B0/B1 row carries a NaN operand, and the
     tc/f2fp/fma/MUFU rules — where the registry does pin NaN words — are compared with NaNs kept."""
     D = _derived()
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     rng = np.random.default_rng(23)
     a = np.concatenate([_rand_words(rng, 30000), np.tile(ADVERSARIAL_F32, ADVERSARIAL_F32.size)])
     b = np.concatenate([_rand_words(rng, 30000), np.repeat(ADVERSARIAL_F32, ADVERSARIAL_F32.size)])
@@ -164,7 +164,7 @@ def test_binary_kernels_match_prims():
 
 def test_tc_dot16_matches_prim():
     D = _derived()
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     rng = np.random.default_rng(37)
     n = 1500
     w = rng.integers(0, 2 ** 16, (2 * n, 16), dtype=np.int64).astype(np.uint16)
@@ -186,8 +186,7 @@ def test_tc_dot16_matches_prim():
 
 def _veritor_silicon():
     """`(verity.ml.circuits.silicon.silicon, verity.ml.circuits.silicon.total)` -- veritor's `core.silicon` / `core.silicon_total` promoted verbatim into Verity's
-    core; the registered tensor-core primitives are held to them word for word on every encoding.  (Until R19 the reference was
-    `src/veritor`, importable only on 3.12; the Verity runtime is 3.12 everywhere, so the oracle always imports.)"""
+    core; the registered tensor-core primitives are held to them word for word on every encoding."""
     from verity.ml.circuits.silicon import silicon, total
     return silicon, total
 
@@ -198,14 +197,14 @@ def _bf16_words_every_encoding(rng, shape):
 
 
 def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
-    """[R17 dense, rel M-0227] `hopper.hopper_wgmma_dot16_total` (the pure-Python 3.11 port that evaluates the registered
+    """`hopper.hopper_wgmma_dot16_total` (the pure-Python 3.11 port that evaluates the registered
     HopperBF16WgmmaDot16 on the pods) == `silicon_total.tc_dot_total(HOPPER_BF16_WGMMA_K16)` word for word on EVERY encoding:
     uniform 16-bit operands and 32-bit accumulators (NaN / inf / inf*0 / mixed-sign infinities / subnormals / zeros), realistic
     N(0,1) lanes over 40 binades, overflow to the sticky infinity, exact cancellation to +0, all-subnormal lanes."""
     ref = _veritor_silicon()
     if ref is None:
         pytest.skip("veritor.core.silicon_total (Python 3.12 syntax) is not importable on this interpreter: oracle comparison skipped BY NAME")
-    from verity_vllm.program.registry import hopper as H
+    from verity.ml.definitions.registry import hopper as H
     ST = ref[1]
     rng = np.random.default_rng(2027)
 
@@ -246,7 +245,7 @@ def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
     follows the total rules of the step by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
     of both signs -> NaN, of one sign -> that infinity (finite terms ignored); finite overflow -> the sticky infinity; an all-zero
     group -> +0 (never -0); a subnormal result is encoded as a subnormal; the 26-bit adder rounds by truncation."""
-    from verity_vllm.program.registry import hopper as H
+    from verity.ml.definitions.registry import hopper as H
     one, two, z, nz, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
     saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon_total", "numpy")}
@@ -291,18 +290,18 @@ def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
 
 
 def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_every_encoding():
-    """[R17 dense, rev M-0287 / revb M-0290, int-3; re-key] `prims.AmpereBF16TcDot16` (core's `_v2`) evaluates through `tc_total.tc_dot_total(AMPERE_BF16_M16N8K16)`
+    """`prims.AmpereBF16TcDot16` (core's `_v2`) evaluates through `tc_total.tc_dot_total(AMPERE_BF16_M16N8K16)`
     (pure Python, 3.11): == `silicon_total.tc_dot_total(AMPERE_BF16_DOT16_TOTAL)` word for word on EVERY encoding, and on finite lanes
-    == `verity_vllm.program.kernels.mma.tc_dot(AMPERE_BF16)` == `silicon.tc_dot(AMPERE_BF16_M16N8K16)` (the R15/R16 relation, unchanged).
+    == `verity.ml.definitions.numerics.mma.tc_dot(AMPERE_BF16)` == `silicon.tc_dot(AMPERE_BF16_M16N8K16)`.
     The two documented differences from the retired mma-based extension path are STATED here as facts about non-finite outcomes only:
     NaN word 0x7FFFFFFF (was 0x7FC00000) and a group's finite overflow counting as its infinity beside an infinite operand of the
     other sign (-> NaN; was that infinity)."""
     ref = _veritor_silicon()
     if ref is None:
         pytest.skip("veritor.core.silicon(_total) (Python 3.12 syntax) is not importable on this interpreter: oracle comparison skipped BY NAME")
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     S, ST = ref
-    from verity_vllm.program.kernels import mma
+    from verity.ml.definitions.numerics import mma
     rng = np.random.default_rng(1848)
 
     def check(acc, a, b):
@@ -342,13 +341,13 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
 
 def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
     """Runs on every interpreter (the pods' 3.11 included): the registered AmpereBF16TcDot16 evaluates without `veritor` or
-    `verity_vllm.program.kernels.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
+    `verity.ml.definitions.numerics.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
     mixed infinities -> 0x7FFFFFFF; a one-signed infinity -> that infinity; group overflow is a sticky infinity; +0; subnormals."""
     import sys
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     one, two, z, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity_vllm.program.kernels", "verity_vllm.program.kernels.mma")}
+    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity.ml.definitions.numerics", "verity.ml.definitions.numerics.mma")}
     try:
         for k in saved:
             sys.modules[k] = None
@@ -384,13 +383,13 @@ def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
 
 
 def test_tc_dot16_hopper_matches_the_registered_wgmma_prim_and_differs_from_ampere():
-    """[R17 dense, F-r16-20b / ruling R17-3] the vectorised Hopper k16 twin == `hopper.HopperBF16WgmmaDot16` (the scalar registered primitive,
+    """The vectorised Hopper k16 twin == `hopper.HopperBF16WgmmaDot16` (the scalar registered primitive,
     pinned on the H100: silicon_total.HOPPER_BF16_WGMMA_K16 16:26:-133) == silicon.tc_dot(HOPPER_BF16_M16N8K16) == silicon_total.tc_dot_total,
     word for word on random finite lanes (subnormals kept) and on realistic N(0,1) operands; and it DIFFERS from the Ampere twin on a
     measurable fraction of lanes, so a wrong dispatch of the Gemm_v2 evaluator cannot pass this test.  The refactor that parameterised
     the pipeline leaves the Ampere twin byte-identical (test_tc_dot16_matches_prim)."""
-    from verity_vllm.program.kernels import derived_rows as D
-    from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
+    from verity.ml.definitions.numerics import derived_rows as D
+    from verity.ml.definitions.registry.hopper import HopperBF16WgmmaDot16
     ref = _veritor_silicon()                                                      # None on a 3.11 interpreter (the pods): the port IS the prim there
     rng = np.random.default_rng(90)
     n = 1500
@@ -448,11 +447,11 @@ def test_tc_dot16_hopper_matches_the_registered_wgmma_prim_and_differs_from_ampe
 
 
 def test_rope_rows_matches_the_registered_prims_word_for_word():
-    """[R17 dense, ruling R17-9] `rope_rows` (RoPE_v1{NHEADS,D} vectorised) == prims.RopeOut / RopeOutAdd per coordinate on random
+    """`rope_rows` (RoPE_v1{NHEADS,D} vectorised) == prims.RopeOut / RopeOutAdd per coordinate on random
     wide-exponent bf16 words (subnormals, zeros, signed zero cache words included) and on realistic magnitudes; the head axis
     broadcasts one cache row; a perturbed input word moves exactly the two output words that read it (lo and hi of its pair)."""
-    from verity_vllm.program.kernels import derived_rows as D
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.numerics import derived_rows as D
+    from verity.ml.definitions.registry import prims as P
     rng = np.random.default_rng(3)
 
     def words(shape, emin, emax):
@@ -493,12 +492,12 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
 
 @pytest.mark.parametrize("T", [1, 5, 130])
 def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
-    """[R17 dense, BRIEF §4] `attention_rows` (FA2 defaults) == `Attention_v3{T, NH, KVH, D, BN}` evaluated gate for gate: GQA (head h reads
+    """`attention_rows` (FA2 defaults) == `Attention_v3{T, NH, KVH, D, BN}` evaluated gate for gate: GQA (head h reads
     KV head h // (NH/KVH)), one query over T keys, ceil(T/BN) blocks last -> first, Fa2InvSum epilogue -- on random N(0,1) words."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
-    from verity_vllm.program.kernels import derived_rows as D
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
+    from verity.ml.definitions.numerics import derived_rows as D
     NH, KVH, Dh, BN = 4, 2, 64, 128
     rng = np.random.default_rng(7000 + T)
     q = _rand_bf16(rng, (NH, Dh))
@@ -514,18 +513,18 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
 
 @pytest.mark.parametrize("T,geometry", [(1, "qwen"), (7, "qwen"), (129, "qwen"), (19, "llama"), (193, "llama")])
 def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition_and_the_cpp_fa3_model(T, geometry):
-    """[R17 dense, BRIEF §4] `attention_rows(dot_prim=HopperBF16WgmmaDot16_v1, inv_prim=Fa3InvSum_v1)` == `Attention_v2{T, NH, KVH, D,
+    """`attention_rows(dot_prim=HopperBF16WgmmaDot16_v1, inv_prim=Fa3InvSum_v1)` == `Attention_v2{T, NH, KVH, D,
     BN, DOT=Hopper, INV=Fa3InvSum}` gate for gate (the sm_90 FA3 chain: wgmma 16:26:-133 step, the Program's kBlockN, `? 0 : rcp`) AND ==
-    the independent C++ model `verity_vllm.program.kernels.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
+    the independent C++ model `verity.ml.definitions.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
     capture, hopper-profile.md) on Qwen2.5-1.5B geometry (NH=12, KVH=2, D=128, BN=128) and Llama-3.2-1B's (NH=32, KVH=8, D=64, BN=192
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
-    from verity_vllm.program.kernels import fa2_relation, fa3_model
+    from verity.ml.definitions.numerics import fa2_relation, fa3_model
 
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1, hopper
-    from verity_vllm.program.kernels import derived_rows as D
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1, hopper
+    from verity.ml.definitions.numerics import derived_rows as D
+    from verity.ml.definitions.registry import prims as P
     NH, KVH, Dh, BN = (12, 2, 128, 128) if geometry == "qwen" else (32, 8, 64, 192)
     rng = np.random.default_rng(9000 + T)
     q = _rand_bf16(rng, (NH, Dh))
@@ -559,12 +558,12 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
 
 
 def test_fa3_tile_bn_192_vs_128_differs_exactly_where_the_key_partition_differs():
-    """[R17 dense, coord M-0994 (1) / STAGE4-AUDIT row 21 / rev's BN negative, M-1154] The two admitted FA3 bodies at D <= 64 -- `BN=192`
+    """The two admitted FA3 bodies at D <= 64 -- `BN=192`
     (one-MMA-warpgroup 64x192 tile, launch max_seqlen_q x qh <= 64) and `BN=128` (192x128) -- are DIFFERENT relations only where the two
     partitions of the T keys differ (ceil(T/BN) >= 2 under at least one of them: the online-softmax rescale points move).  For T <= 128 both
     are ONE block whose masked lanes are exact zeros, so the bodies are bit-identical there: a 'wrong BN' on such a row is not a
     distinguishable fault, and a negative that swaps BN must pick T > 128 (on the llama H100 B8 record: the LP >= 155 requests' rows)."""
-    from verity_vllm.program.kernels import derived_rows as D
+    from verity.ml.definitions.numerics import derived_rows as D
     NH, KVH, Dh = 4, 2, 64
     same, differ = [], []
     for T in (1, 33, 100, 128):
@@ -593,7 +592,7 @@ def test_silu_mid_factorises_the_prim():
     """`SiluMulBf16(g, u) == bf16_rn(f32(mid[g]) * f32(u))` for the derived mid table — every gate word g,
     random u; and `silu_mul_rows` reproduces the prim's output rows."""
     D = _derived()
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     mid = D.silu_mid_table()
     rng = np.random.default_rng(41)
     g = np.arange(65536, dtype=np.uint16)
@@ -616,8 +615,8 @@ def test_silu_mid_factorises_the_prim():
 def test_rmsnorm_triton_rows_vs_gates(N, eps):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     prog, call = _standalone(bind(b1.RMSNormTriton, N=N, EPS=eps))
     sqrt = _prim_calls(call, "MufuSqrtFtz")[0]
     fma = next(c for c in _prim_calls(call, "F32Fma") if c.lo == sqrt.args[0])
@@ -640,8 +639,8 @@ def test_rmsnorm_triton_rows_vs_gates(N, eps):
 def test_rmsnorm_fused_v2_rows_vs_gates():
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     N, eps = 576, 1e-5
     prog, call = _standalone(bind(b1.RMSNormFusedCuda, N=N, EPS=eps))
     rsq = _prim_calls(call, "RsqrtApprox")[0]
@@ -664,8 +663,8 @@ def test_rmsnorm_fused_v2_rows_vs_gates():
 def test_attn_block_vs_gates(D_, NVIS, FIRST):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     BN = b1.BN
     prog, call = _standalone(bind(b1.AttnBlock, D=D_, NVIS=NVIS, FIRST=FIRST))
     rng = np.random.default_rng(1000 * D_ + NVIS + FIRST)
@@ -692,8 +691,8 @@ def test_attn_block_vs_gates(D_, NVIS, FIRST):
 def test_attention_head_states_vs_gates(T, D_):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     prog, call = _standalone(bind(b1.AttentionHead, T=T, D=D_))
     blocks = [c for c in call.children() if not c.is_primitive and c.name == "AttnBlock"]
     inv_call = _prim_calls(call, "Fa2InvSum")[0]
@@ -720,7 +719,7 @@ def test_attention_head_states_vs_gates(T, D_):
 
 
 # =====================================================================================================================
-# [E7 D54/D57 2026-09-13] the declared-geometry chain: AttnBlock_v3 / AttentionHead_v3 bound with BN = 128 (the FA2 split-KV
+# the declared-geometry chain: AttnBlock_v3 / AttentionHead_v3 bound with BN = 128 (the FA2 split-KV
 # kBlockN at head dim 64, `b1.fa2_kblock_n(64)`); E1's row arithmetic with that block size is gate-for-gate the v3 bodies,
 # including the two-block rows (T = 129, 130, 190) that the 128×64 record reaches and Serve_v1 got wrong.
 # =====================================================================================================================
@@ -730,8 +729,8 @@ def test_attention_head_states_vs_gates(T, D_):
 def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)  # the geometry E6 pins for this head dim; here bound explicitly as the declared static
     assert BN == (128 if D_ <= 64 else 64)
     prog, call = _standalone(bind(b1.AttnBlockV3, D=D_, NVIS=NVIS, FIRST=FIRST, BN=BN))
@@ -759,8 +758,8 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
 def test_attention_head_v3_states_vs_gates(T, D_):
     D = _derived()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)
     prog, call = _standalone(bind(b1.AttentionHeadV3, T=T, D=D_, BN=BN))
     blocks = [c for c in call.children() if not c.is_primitive and c.name == "AttnBlock"]
@@ -790,9 +789,9 @@ def test_attention_head_v3_states_vs_gates(T, D_):
 
 def test_v1_and_v3_heads_agree_only_within_one_64_key_block():
     """At head dim 64: the v1 (64-key blocks) and v3 (128-key blocks) heads compute the same words for T <= 64 (one block in
-    both, masked columns exact zeros) and generally different words from T = 65 on (two blocks vs one) -- the D54 signature."""
+    both, masked columns exact zeros) and generally different words from T = 65 on (two blocks vs one)."""
     D = _derived()
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     rng = np.random.default_rng(54)
     same, differ = 0, 0
     for T in (1, 17, 63, 64, 65, 100, 128, 129):
@@ -812,15 +811,15 @@ def test_v1_and_v3_heads_agree_only_within_one_64_key_block():
 
 @pytest.mark.parametrize("T", [1, 33, 47, 48, 63])
 def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
-    """The D54 byte-identity claim for the 4×9 / 32×16 programs (T <= 48 keys): `AttentionHead_v1{T, 64}` and
+    """The byte-identity claim for the 4×9 / 32×16 programs (T <= 48 keys): `AttentionHead_v1{T, 64}` and
     `AttentionHead_v3{T, 64}` have the same number of gates and, on the same inputs, every gate in program order carries the
     same word (the 63 vs 127 zero pads are references to ONE zero gate, not gates).  Every other definition of Serve_v1 /
     Serve_v4 is the same object, so their rows are byte-identical up to T = 63 keys (at T = 64 the v3 head still pads --
-    one `Const16[0]` gate more, same output word -- so the 128×64 record's positions 0..63 agree in VALUE, as D54 saw, while
+    one `Const16[0]` gate more, same output word -- so the 128×64 record's positions 0..63 agree in VALUE, while
     the gate layout already shifts by one)."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     rng = np.random.default_rng(6400 + T)
     q = _rand_bf16(rng, 64)
     k = _rand_bf16(rng, (T, 64))
@@ -839,10 +838,10 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
 
 def test_attention_head_v3_at_bn_64_is_attention_head_v1_gate_for_gate():
     """The legacy geometry as a declared static: `AttentionHead_v3{T, D, BN=64}` == `AttentionHead_v1{T, D}` on every gate, at a
-    two-block T -- the D57 default relation (`Serve_v4{..., BN=64}` is `Serve_v1`'s arithmetic under a new identity)."""
+    two-block T -- the default relation (`Serve_v4{..., BN=64}` is `Serve_v1`'s arithmetic under a new identity)."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.evaluation import evaluate_call
+    from verity.ml.definitions.registry import b1
     T = 100
     rng = np.random.default_rng(64100)
     q = _rand_bf16(rng, 64)

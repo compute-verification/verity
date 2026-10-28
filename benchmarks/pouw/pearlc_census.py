@@ -226,6 +226,12 @@ ACTIVATION_FAMILIES = ("zero-row", "zero-slices", "sparse10", "rank1", "saturate
 OUTLIER_FAMILIES = ("outliers-first", "outliers-groupstart")
 FREEZE_FAMILIES = ("aligned-spikes-r64", "aligned-spikes-r160", "aligned-spikes-r220", "aligned-spikes-r300",
                    "aligned-spikes-pm1-r64", "aligned-spikes-pm1-r220", "aligned-spikes-pm1-r300", "aligned-spikes-pm1-r444")
+#: Whole-word cross-group cancellation (ASK-91): the second half of k mirrors the first with B negated, so at k = 256 the two
+#: promotion groups of every word cancel (`xcancel-mirror`, with spikes `xcancel-spikes-rR`); or the second half is scaled
+#: down by 2^-F so its atoms sit near the ulp of the first group's word (`xcancel-tail-fF`).
+XCANCEL_FAMILIES = ("xcancel-mirror", "xcancel-mirror-pm1", "xcancel-spikes-r16", "xcancel-spikes-r64", "xcancel-spikes-r160",
+                    "xcancel-spikes-r444", "xcancel-spikes-pm1-r64", "xcancel-spikes-pm1-r444", "xcancel-tail-f4",
+                    "xcancel-tail-f8", "xcancel-tail-f12", "xcancel-tail-f16")
 
 
 def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.random.Generator):
@@ -287,6 +293,20 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
         A[:, pos] = R
         B[:, pos] = R
         return A, B
+    if name.startswith("xcancel-"):
+        h, spec = k // 2, name.removeprefix("xcancel-")
+        pm1 = "pm1" in spec
+        draw = (lambda shape: rng.choice([-1.0, 1.0], shape)) if pm1 else rng.standard_normal
+        if spec.startswith("tail-f"):
+            A, B = draw((rows, k)), draw((cols, k))
+            A[:, h:] *= 2.0 ** -float(spec.removeprefix("tail-f"))
+            return A, B
+        a, b = draw((rows, h)), draw((cols, h))
+        if spec.startswith("spikes-"):
+            R = float(spec.rsplit("-r", 1)[1])
+            pos = np.concatenate([np.arange(0, h, 128) + 1, np.arange(0, h, 128) + 9])
+            a[:, pos], b[:, pos] = R, R
+        return np.concatenate([a, a], 1), np.concatenate([b, -b], 1)
     pos = {"spike1-first": np.arange(1), "spikes-first": np.arange(L),
            "spikes-permuted": rng.permutation(k)[:L],
            "spikes-groupstart": np.arange(0, k, 128)[:L]}[name]

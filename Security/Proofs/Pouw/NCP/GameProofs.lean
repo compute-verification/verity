@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.NCP.GamePinned
+import Definitions.Pouw.Assumptions.NCP.GamePinned
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Barrier.Proofs
 import Proofs.Pouw.Reduction
@@ -8,7 +8,7 @@ import Proofs.Pouw.Sanity
 /-!
 # NCP's game instance: proofs
 
-* `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]` (red-team N4), a sanity
+* `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]`, a sanity
   bound; `lastChecked`, `leadComplete` (checked values mod `2^32`, NA2).
 * `gammaFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
 * `oneSegment`: the zero-input adversary of class (c), in `Pouw.Barrier.gemmModel`.
@@ -138,8 +138,8 @@ theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
 
 /-- **`G_γ` from TT_NCP.** -/
 theorem gammaFromTTNCP : GamePinned.GammaFromTTNCP := by
-  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA
-  refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
+  intro Q R S _ _ _ _ CM P d D γ₀ Ωmax ε hγ₀ hΩ hW hside hTT U hU T hT q hq A hA
+  refine le_trans (pr_mono ?_) ((hTT hside).2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ hwin
   exact wins_imp_ttncp P U H s _ hΩ (hW U hU) hwin
 
@@ -204,10 +204,10 @@ theorem checked_le_outputPriced3_cost (P : Protocol Q R S) (prog : (outputPriced
   obtain ⟨hu, c, hc, -⟩ := hu
   exact ⟨hu, by rw [hc]; rfl⟩
 
-theorem ttncp_outputPriced3 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
+theorem ttncp_outputPriced3 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (d : ℕ)
     (D : Layout → Prop) {γ₀ : ℝ} (h0 : 0 ≤ γ₀) (h1 : γ₀ < 1) :
-    Assumptions.TTNCP (outputPriced3 Q R S) P D γ₀ (fun _ _ => 0) := by
-  refine ⟨outputPriced3_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
+    Assumptions.TTNCP (outputPriced3 Q R S) P d D γ₀ (fun _ _ => 0) := by
+  refine fun _ => ⟨outputPriced3_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
   have e1 := checked_le_outputPriced3_cost P A.online x.1 U A.act (A.pre.eval x.1) x.2
   have e2 := (hA x.1 x.2).1
   have e3 : T ≤ T / (1 - γ₀) := by
@@ -218,7 +218,7 @@ theorem ttncp_outputPriced3 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] 
 /-- **TT_NCP's satisfiability witness.** -/
 theorem ttncpWitness : GamePinned.TTNCPWitness := by
   intro Q R _ _ _ P c γ₀ h0 h1 hc hW
-  refine ⟨ttncp_outputPriced3 _ _ h0 h1, fun U act _ s => honestProg P U act s, fun U hU act _ H s =>
+  refine ⟨ttncp_outputPriced3 _ _ _ h0 h1, fun U act _ s => honestProg P U act s, fun U hU act _ H s =>
     ⟨eval_honestProg P H U act s, ?_, calls_honestProg P H U act s hc⟩⟩
   refine (outputPriced3_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
   exact_mod_cast hW U hU u (Finset.mem_range.1 hu)
@@ -471,7 +471,7 @@ theorem shiftR_not_admissible {k : ℕ} (hk : 16 ≤ k) : ¬ Admissible k 16 (sh
 /-- The involution swapping `j` and `j + 24` in every period of `48`. -/
 def swap24 (j : ℕ) : ℕ := if j % 48 < 24 then j + 24 else j - 24
 
-/-- Sanity (red-team P2-1): the unsigned `swap24` is a signed permutation for `48 ∣ k` that passes the first two
+/-- Sanity: the unsigned `swap24` is a signed permutation for `48 ∣ k` that passes the first two
 clauses of the rejection rule (step `t`'s image is `24` away and straddles two steps), but `R² = I`, so the third
 clause rejects it. -/
 theorem swap24_not_admissible {k : ℕ} (h48 : 48 ∣ k) :
@@ -510,7 +510,7 @@ def stepSwap (j : ℕ) : ℕ := if j / 16 % 2 = 0 then j + 16 else j - 16
 /-- The sign `−1` on step `0` and `+1` elsewhere, so that the signed step swap has `R² ≠ ±I`. -/
 def stepSign (j : ℕ) : ℤ := if j < 16 then -1 else 1
 
-/-- Sanity (red-team P2-4): the step swap with signs `stepSign` is a signed permutation for `32 ∣ k`, `k ≥ 64`, that
+/-- Sanity: the step swap with signs `stepSign` is a signed permutation for `32 ∣ k`, `k ≥ 64`, that
 passes the first clause (no step meets its image) and the third (`R²` is `−1` at `(0, 0)` and `1` at `(32, 32)`), but
 maps step `0` onto step `1`, so the second clause rejects it. -/
 theorem stepSwap_not_admissible {k : ℕ} (hk : 64 ≤ k) (h32 : 32 ∣ k) :

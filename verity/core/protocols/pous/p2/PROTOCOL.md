@@ -1,17 +1,15 @@
 # P2 specification v4
 
-> v4 is v1.1 with one hash: SHA-512, with its whole 64-byte output, everywhere (§13), as Daniel ruled on 2026-10-06 at
-> 15:07Z. v1.1 is frozen v1 (`art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`, relayed in
-> `note:20261004T1836Z-report-relay-p2-spec-v1-frozen` from `store:pous/docs/efficient-crypto/p2-spec-draft.md`,
-> sha256 `3f49c34bb065af9c11b92935d1460e6f3caf7b12caf6d89560d5c8a7e2725267`) with the RTT allowance capped at
-> 354 µs, as Daniel ruled on 2026-10-04 (§12). Relative and `/cursor/stores/…` links point into that store, which is
-> also in `art:8bd64630bc06c23d5095996d2f198ce4bd557413722ad94bd3ca3c1a949e42e9`. v4 supersedes v1.1 and the package's
-> `p2-16448/v3`; nothing in it is optional, and no hash in it is a parameter.
+> v4 is v1.1 with one hash: SHA-512, with its whole 64-byte output, everywhere (§13). v1.1 is frozen v1 (the POUS
+> store's `docs/efficient-crypto/p2-spec-draft.md`, sha256
+> `3f49c34bb065af9c11b92935d1460e6f3caf7b12caf6d89560d5c8a7e2725267`) with the RTT allowance capped at 354 µs (§12).
+> Relative links point into that store. v4 supersedes v1.1 and the package's `p2-16448/v3`; nothing in it is optional,
+> and no hash in it is a parameter.
 
-Status: specification v4, 2026-10-06. It keeps v1.1's mathematics, sizes, k, Δ, RTT cap and framing, and changes only
+Status: specification v4. It keeps v1.1's mathematics, sizes, k, Δ, RTT cap and framing, and changes only
 the hash (§13). This is not deployment approval: P2 remains experimental because the P2–M1-SGI instantiation assumption is
-not accepted (default, Daniel deferred, 2026-09-29). Its challenge derivation is `verity.ml.randomness` v2
-(Appendix A), and the vectors in §7 are generated under it. The errata of 2026-10-07 (§14) clarify v4 as they do v1.1, without changing meaning.
+not accepted. Its challenge derivation is `verity.ml.randomness` v2
+(Appendix A), and the vectors in §7 are generated under it. The errata (§14) clarify v4 as they do v1.1, without changing meaning.
 
 ## 1. Parameter set
 
@@ -32,7 +30,7 @@ The frozen deployment parameter set is:
 
 The congruence certificate is direct integer arithmetic: 2^16448 is 0 mod 8 and 21065 is 1 mod 8, so p is 7 mod 8.
 
-The prime is certified by a 339-step Atkin–Morain/FastECPP certificate produced by Andreas Enge's CM 0.4.4 `ecpp-mpi`, completed 28 Sep 2026 at 22:01Z. The PARI/GP certificate is `internal/efficient-crypto/p2-prime/cm-cert-p16448-c21065`, SHA-256 `6a3f6f1170295adcf73a49733da02e42ff6d96e73bacce666855cc9a5ef1d3c5`. Its Primo-format copy is `cm-cert-p16448-c21065.primo`, SHA-256 `a759215b2ecb294b8516b4069c72bc1f031cd8409c1ceed4833b6dcd9c762244`.
+The prime is certified by a 339-step Atkin–Morain/FastECPP certificate produced by Andreas Enge's CM 0.4.4 `ecpp-mpi`. The PARI/GP certificate is `internal/efficient-crypto/p2-prime/cm-cert-p16448-c21065`, SHA-256 `6a3f6f1170295adcf73a49733da02e42ff6d96e73bacce666855cc9a5ef1d3c5`. Its Primo-format copy is `cm-cert-p16448-c21065.primo`, SHA-256 `a759215b2ecb294b8516b4069c72bc1f031cd8409c1ceed4833b6dcd9c762244`.
 
 Three independent verifications pass: PARI/GP 2.15.4 `primecertisvalid` returned 1 and confirmed the certificate's first N is exactly `2^16448 − 21065`; CM's `ecpp-check` accepted it; and the campaign's standard-Python-plus-gmpy2 `ecpp_verify.py`, sharing no PARI or CM code, accepted all 339 steps against that target. Logs are `pari-verify-cm.log`, `cm-ecpp.log` and `mine-verify-cm.log` under `internal/efficient-crypto/p2-prime/`. The maintained certificate record is `docs/efficient-crypto/p2-prime-certificate.md`. V1 keeps p without requiring a Lean-checked primality proof; the alternative p′ is unnecessary.
 
@@ -42,13 +40,13 @@ Reduced-width bounty parameters use the same deterministic rule: choose the leas
 
 All field values are canonical integers in `[0,p)`. A w-bit integer is encoded as exactly `w/8` bytes, unsigned, big-endian, including leading zero bytes. Bit number 0 is the least significant bit of that integer. XOR acts on the w-bit binary representations, bit by bit; it is not byte-string concatenation or field addition.
 
-The sole normative deployment profile is `p2-2054B`, with b = 16,432 = 2,054 bytes (default, Daniel deferred, 2026-09-29). Profile names are case-sensitive. The former `p2-16447b` continuous-bit profile is non-normative research material and is not accepted by a deployment manifest.
+The sole normative deployment profile is `p2-2054B`, with b = 16,432 = 2,054 bytes. Profile names are case-sensitive. The former `p2-16447b` continuous-bit profile is non-normative research material and is not accepted by a deployment manifest.
 
 For `p2-2054B`, `0 ≤ m < 2^16432 < 2^16447 < p`. No sentinel is embedded in m. For a manifest declaring B blocks, W is the concatenation of the exactly 2,054-byte, leading-zero-padded big-endian encodings of `m_0,…,m_(B−1)`, in segment-major then local-block order. Thus W has exactly `2,054·B` bytes. This is both continuous most-significant-bit-first packing and one byte-aligned payload per block; there are no w-bit codeword slots in W.
 
 The manifest commits the profile and B, so the W byte length is determined without a sentinel or padding convention. The field/codeword wire encoding remains the fixed-width format above; implementations reject noncanonical field encodings, wrong widths and decoded values outside the declared payload width.
 
-The exact-domain Lean model `m1p B w p b` treats b as a parameter. The store's `lean/pous` trusted layer pins `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond` and `P2MeetsM1pW8192Uncond` for every `20·16448 ≤ 21·b` and `b ≤ 16447`, including b = 16,432. Their repository sync follows PRs #162/#183.
+The exact-domain Lean model `m1p B w p b` treats b as a parameter. The store's `lean/pous` trusted layer pins `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond` and `P2MeetsM1pW8192Uncond` for every `20·16448 ≤ 21·b` and `b ≤ 16447`, including b = 16,432. Syncing them into the repository is open (§11).
 
 The retained-state threshold is measured against the code, not the payload:
 
@@ -124,7 +122,7 @@ The four derivation domains name P2 (`p2-…`) so that they never collide with t
 
 ### Setup
 
-The normative setup assumption is **P2-EXP-IO** (default, Daniel deferred, 2026-09-29): after W is committed, setup supplies fresh XOF streams independently for every `(segment, block, purpose)`, independently of the complete pre-setup transcript. Purpose is K or t. Under this idealization, masks are mutually independent uniform w-bit strings and rejection-sampled tweaks are mutually independent uniform elements of `Z_p`; its expander error is zero by definition.
+The normative setup assumption is **P2-EXP-IO**: after W is committed, setup supplies fresh XOF streams independently for every `(segment, block, purpose)`, independently of the complete pre-setup transcript. Purpose is K or t. Under this idealization, masks are mutually independent uniform w-bit strings and rejection-sampled tweaks are mutually independent uniform elements of `Z_p`; its expander error is zero by definition.
 
 Concrete counter-mode SHA-512 replacing P2-EXP-IO is a separate named assumption: **SHA-512-CTR/P2-EXP-IO**. A deterministic globally fixed SHA-512 function does not become a fresh independent-output oracle merely because its input contains a post-commitment salt.
 
@@ -400,7 +398,7 @@ The on-time condition is:
 elapsed_ns ≤ delta_ns + rtt_allowance_ns
 ```
 
-Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms, with the verifier at the responder's site on a machine the prover doesn't control (§6), and permits a measured RTT allowance of at most 354 µs (354,000 ns), so `Δ + RTT ≤ 854 µs`, under the hardware/cooperation class in §6 (v1.1, Daniel's ruling, §12; v1: at most 1 ms). Δ and `rtt_allowance_ns` in `AUDIT_OPEN` are the verifier's own: a verifier never opens an audit with Δ ≠ 500,000 ns or an RTT allowance above 354,000 ns. The wire format carries them and assigns no failure code to them. `elapsed_ns` is the verifier's own measurement, recorded as u64; a measurement outside `[0, 2^64)` is the verifier's fault, and the session ends without a `FINAL`. A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
+Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms, with the verifier at the responder's site on a machine the prover doesn't control (§6), and permits a measured RTT allowance of at most 354 µs (354,000 ns), so `Δ + RTT ≤ 854 µs`, under the hardware/cooperation class in §6 (v1.1, §12; v1: at most 1 ms). Δ and `rtt_allowance_ns` in `AUDIT_OPEN` are the verifier's own: a verifier never opens an audit with Δ ≠ 500,000 ns or an RTT allowance above 354,000 ns. The wire format carries them and assigns no failure code to them. `elapsed_ns` is the verifier's own measurement, recorded as u64; a measurement outside `[0, 2^64)` is the verifier's fault, and the session ends without a `FINAL`. A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
 
 Only a frame reported as delivered at a transport frame boundary enters the exact frame sequence. A delivered frame whose header declares more or fewer bytes than that delivered frame contains is malformed code 1; its exact delivered bytes are hashed, including the `truncated-response` vector. If the transport ends or reports loss after a challenge without reporting any complete response-frame delivery event, that round fails with transport code 6; unframed partial bytes are not hashed.
 
@@ -511,7 +509,7 @@ Cross-answer decoded-block, root, lattice, table or key caches count whenever th
 
 #### Help accounting and evidence
 
-No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026). The deployment therefore asks for no attestation of the responder's image, host or devices and no isolation that the prover enforces: nothing the prover runs or hosts is trusted, so its own record of how it isolated the responder would certify nothing. Help is accounted instead. The model a P2 certificate cites under the id `perfect-isolation` (kept because P2's pinned scheme vectors carry it) is the help-accounted row of console's actual-circuit model: on PoUS's challenge schedule, some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X` received during the audit. It is proved at `e = 0` for a location that does no arithmetic modulo p, for challenges on a fixed schedule (PR #1860); the `2^e` table for other locations is open, and so is the bridge to PoUS's schedule, which sends each challenge when the last answer arrives (Daniel ruled on 12 Oct that the bridge covers it).
+No guarantee assumes trusted prover hardware. The deployment therefore asks for no attestation of the responder's image, host or devices and no isolation that the prover enforces: nothing the prover runs or hosts is trusted, so its own record of how it isolated the responder would certify nothing. Help is accounted instead. The model a P2 certificate cites under the id `perfect-isolation` (kept because P2's pinned scheme vectors carry it) is the help-accounted row of console's actual-circuit model: on PoUS's challenge schedule, some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X` received during the audit. It is proved at `e = 0` for a location that does no arithmetic modulo p, for challenges on a fixed schedule; the `2^e` table for other locations is open, and so is the bridge to PoUS's schedule, which sends each challenge when the last answer arrives: the bridge is to cover that schedule too.
 
 During an audit, `X`'s retained state is what the rules above charge, and every other bit that reaches `X` is help, counted in `h`: another network, storage service, process or device, DMA or a peer device, a shared kernel or page cache, a covert channel. Only the authenticated verifier transport and the exact-W channel are neither. A deployment claim names `X` and states how `h` is bounded; an accepted audit bounds `mem_X + 2^e·h`, never `X`'s memory alone.
 
@@ -544,11 +542,11 @@ This harness makes the file/process boundary executable for the included toy Pyt
 - `P2SlackFamilyUncond` certifies that k = 105 absorbs 128 bits per block of bounded, reusable structural leakage for every B from 2^8 through 2^23.
 - Partial, batched, cross-block and expander work is in scope. “No inverse” means no modular root, nor another computation with the same effect on the challenged target, finishes within the answer window.
 
-These values are the frozen F2 and F6 defaults (default, Daniel deferred, 2026-09-29), with F2's RTT allowance as Daniel ruled for v1.1 (2026-10-04, §12). The audit remains conditional on P2–M1-SGI, SeqRoot, the help-accounted row, the exact `[0,p)` model and the allowed hardware.
+These values are the frozen F2 and F6 defaults, with F2's RTT allowance as v1.1 sets it (§12). The audit remains conditional on P2–M1-SGI, SeqRoot, the help-accounted row, the exact `[0,p)` model and the allowed hardware.
 
 ### Normative error total
 
-The frozen F3 error allocation is (default, Daniel deferred, 2026-09-29):
+The frozen F3 error allocation is:
 
 > A prover that retains at most ⌊(18/19)·|C|⌋ bits beyond W and the public setup between challenges passes an audit
 > with probability at most 1% + 2^-128. The 1% is the audit's sampling term, exact in the model. The 2^-128 is a sum of
@@ -569,13 +567,13 @@ The frozen F3 error allocation is (default, Daniel deferred, 2026-09-29):
 
 ### Trusted-layer pins
 
-The frozen F5 decision pins `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond` in the store's `lean/pous` trusted layer (default, Daniel deferred, 2026-09-29), together with the exact-domain pins `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond` and `P2MeetsM1pW8192Uncond`. Repository synchronization follows PRs #162/#183.
+The frozen F5 decision pins `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond` in the store's `lean/pous` trusted layer, together with the exact-domain pins `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond` and `P2MeetsM1pW8192Uncond`. Synchronizing them into the repository is open (§11).
 
 ## 6. Operating point and allowed hardware
 
-The frozen operating point is B = 2^19 blocks, Q = 2^20, w = 16,448, Δ = 0.5 ms, and a measured RTT allowance of at most 354 µs, so Δ + RTT ≤ 854 µs (default, Daniel deferred, 2026-09-29; the 354 µs cap is v1.1's, Daniel's ruling of 2026-10-04, §12). The adversary may use a CPU or GPU core with cooperation within one chiplet. ASICs and FPGAs are excluded. The responder is pinned to one chiplet. The verifier is the memory challenger, the auditor's hardware: it runs at the responder's site on a machine the prover doesn't control (the auditor's own VM or box, under the auditor's account), never as a process on the responder's node (Daniel, 12 Oct 2026). Where it runs changes no bound, since the RTT allowance stays capped at 354 µs wherever it is measured; it changes completeness only, and the honest RTT in §12 was measured with the verifier on the responder's node, so an off-node measurement is open. The verifier records the CPU/GPU model, clocks, topology, cooperating cores and measured RTT.
+The frozen operating point is B = 2^19 blocks, Q = 2^20, w = 16,448, Δ = 0.5 ms, and a measured RTT allowance of at most 354 µs, so Δ + RTT ≤ 854 µs (the 354 µs cap is v1.1's, §12). The adversary may use a CPU or GPU core with cooperation within one chiplet. ASICs and FPGAs are excluded. The responder is pinned to one chiplet. The verifier is the memory challenger, the auditor's hardware: it runs at the responder's site on a machine the prover doesn't control (the auditor's own VM or box, under the auditor's account), never as a process on the responder's node. Where it runs changes no bound, since the RTT allowance stays capped at 354 µs wherever it is measured; it changes completeness only, and the honest RTT in §12 was measured with the verifier on the responder's node, so an off-node measurement is open. The verifier records the CPU/GPU model, clocks, topology, cooperating cores and measured RTT.
 
-SeqRoot evidence is artifact `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed`, run `r20260929-060834-0ec4`. The fastest measured 16,448-bit root took 12.8 ms with eight cooperating cores. The on-node RTT p99.9 was 10–22 µs. Against the architectural floor with eight cores of one chiplet cooperating, 5,960.5 µs ÷ 3.490 = 1,708.1 µs (*est.*, §12), the 2× margin holds while `Δ + RTT` stays under 854,029 ns, which v1.1's RTT allowance of at most 354 µs keeps. v1's "through approximately 1.9 ms" used a floor about 2.2× too slow (§12). These estimates do not admit cross-chiplet, multi-GPU, FPGA or ASIC cooperation.
+SeqRoot evidence: the fastest measured 16,448-bit root took 12.8 ms with eight cooperating cores. The on-node RTT p99.9 was 10–22 µs. Against the architectural floor with eight cores of one chiplet cooperating, 5,960.5 µs ÷ 3.490 = 1,708.1 µs (*est.*, §12), the 2× margin holds while `Δ + RTT` stays under 854,029 ns, which v1.1's RTT allowance of at most 354 µs keeps. v1's "through approximately 1.9 ms" used a floor about 2.2× too slow (§12). These estimates do not admit cross-chiplet, multi-GPU, FPGA or ASIC cooperation.
 
 ## 7. Test vectors
 
@@ -647,37 +645,35 @@ Every item below is normative. A policy choice is not a substitute for the corre
 - [x] Specify and test state isolation: the normative subsection above maps the Lean state and boundaries to deployment, and `internal/efficient-crypto/p2-bounty-kit/isolation_harness.py` with `test_isolation_harness.py` passes its full-C, 18/19 raw-storage, over-cap, side-file, environment and network controls. Native-code/OS isolation, GPU/DMA and cache wiping, aggregate resource measurement, attestation and verifier evidence collection remain procedural deployment controls.
 - [x] Specify deadline clock boundaries, strict failure behavior, RTT allowance input and transcript evidence, including the frozen numerical Δ/RTT/hardware choice and SeqRoot evidence.
 - [x] Generate §7's vectors under `verity.ml.randomness` v2 (one command, §7).
-- [x] Obtain byte-for-byte interoperability results from two independent implementations of `p2-audit-wire/v4`: the reference verifier `benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`verity/core/protocols/pous/check`, `PousCheck.Wire` and `PousCheck.Audit.check`) agree byte for byte on every vector of §7, `uv run python verity/core/protocols/pous/check/interop.py --all`: 40 transcripts (the 31 of `audit-negative-vectors.json`, `audit-vectors.json`'s end-to-end audit and its full-width response under a public and a private setup, and `vectors.json`'s 4 vectors and 2 σ cases, the verifier holding its own root of the private setup), 0 mismatches in each setup's outputs (its failure code among them), `FINAL` frame, verdict, code, record count and transcript hash, or fault code and message (run `r20261008-174759-2f4d`, `art:6e51b5bb3d65ea9bf034a704c5c810717db5fc24dbff20222f34c4b8dd818bf2`). The Lean is a verifier only: the setup and response frames both read are the vectors', which Python's prover wrote. v1's results (`internal/efficient-crypto/p2-audit-wire-interop.md`) do not carry over.
+- [x] Obtain byte-for-byte interoperability results from two independent implementations of `p2-audit-wire/v4`: the reference verifier `benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`verity/core/protocols/pous/check`, `PousCheck.Wire` and `PousCheck.Audit.check`) agree byte for byte on every vector of §7, `uv run python verity/core/protocols/pous/check/interop.py --all`: 40 transcripts (the 31 of `audit-negative-vectors.json`, `audit-vectors.json`'s end-to-end audit and its full-width response under a public and a private setup, and `vectors.json`'s 4 vectors and 2 σ cases, the verifier holding its own root of the private setup), 0 mismatches in each setup's outputs (its failure code among them), `FINAL` frame, verdict, code, record count and transcript hash, or fault code and message. The Lean is a verifier only: the setup and response frames both read are the vectors', which Python's prover wrote. v1's results (`internal/efficient-crypto/p2-audit-wire-interop.md`) do not carry over.
 - [x] Add negative conformance cases for malformed encodings, setup failures, replayed challenges, wrong domains, failed authentication paths and late answers: 31 complete transcripts in `audit-negative-vectors.json`; its hash is listed in §7.
 - [ ] Migrate the MVP implementation and evidence path to every requirement in §8's table.
 
 ## 10. Decisions (frozen)
 
-1. F1: `p2-2054B` is the sole deployment payload profile (default, Daniel deferred, 2026-09-29).
-2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 354 µs, and same-chiplet cooperation and pinning as §6, the verifier off the responder's node since 12 Oct 2026 (default, Daniel deferred, 2026-09-29; the RTT cap, at most 1 ms in v1, is v1.1's, Daniel's ruling of 2026-10-04, §12).
-3. F3: the normative error total and allocation in §5 (default, Daniel deferred, 2026-09-29).
-4. F4: accept P2-EXP-IO, realized by counter-mode SHA-512 with v4 framing; ChaCha8 is nonconforming (default, Daniel deferred, 2026-09-29; SHA-512 in place of SHAKE256 by Daniel's ruling of 2026-10-06, §13).
-5. F5: pin `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond` (default, Daniel deferred, 2026-09-29).
-6. F6: k = 105, absorbing 128 bits per block of structural leakage over B = 2^8 through 2^23 (default, Daniel deferred, 2026-09-29).
-7. Keep p = 2^16448 − 21065 under its ECPP certificate, without requiring a Lean-checked primality proof (default, Daniel deferred, 2026-09-29).
-8. Do not accept P2–M1-SGI; P2 remains experimental despite this frozen specification (default, Daniel deferred, 2026-09-29).
-9. One hash: SHA-512 with its whole output for every digest, and SHA-256 retired from P2 (Daniel's ruling of 2026-10-06, 15:07Z, §13).
+1. F1: `p2-2054B` is the sole deployment payload profile.
+2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 354 µs, and same-chiplet cooperation and pinning as §6, the verifier off the responder's node (the RTT cap, at most 1 ms in v1, is v1.1's, §12).
+3. F3: the normative error total and allocation in §5.
+4. F4: accept P2-EXP-IO, realized by counter-mode SHA-512 with v4 framing; ChaCha8 is nonconforming (SHA-512 in place of SHAKE256, §13).
+5. F5: pin `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond`.
+6. F6: k = 105, absorbing 128 bits per block of structural leakage over B = 2^8 through 2^23.
+7. Keep p = 2^16448 − 21065 under its ECPP certificate, without requiring a Lean-checked primality proof.
+8. Do not accept P2–M1-SGI; P2 remains experimental despite this frozen specification.
+9. One hash: SHA-512 with its whole output for every digest, and SHA-256 retired from P2 (§13).
 
 ## 11. Remaining before deployment
 
 - Migrate the MVP to v4 as listed in §8.
-- Counter-mode SHA-512 key derivation on the deployment device, measured: on an NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120, vy-nebius-1 GPU 3), `p2-2054B` (n = 2,056) at B = 2^19, with `p2keys4.cuh` (`-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA`), every block's `K` and `t` are derived at 1.136 × 10^8 blocks/s (4.62 ms per store, the median of 10), and the setup's first derivation for the whole store takes 5.39 ms of wall time. All 2^19 blocks' `K` and `t` equal hashlib's, as do the 59 reference blocks and the pinned `p2-v4-keys.json` entry (`p2-v4/w16448/0`). Run r20261008-152508-ff34, art:07d65cea4534caaa8f92e364455fd4b998632b4e020302ce6f38525a50617dfa (`decode_bench.py --keys-all`).
+- Counter-mode SHA-512 key derivation on the deployment device, measured: on an NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120), `p2-2054B` (n = 2,056) at B = 2^19, with `p2keys4.cuh` (`-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA`), every block's `K` and `t` are derived at 1.136 × 10^8 blocks/s (4.62 ms per store, the median of 10), and the setup's first derivation for the whole store takes 5.39 ms of wall time. All 2^19 blocks' `K` and `t` equal hashlib's, as do the 59 reference blocks and the pinned `p2-v4-keys.json` entry (`p2-v4/w16448/0`). Measured with `decode_bench.py --keys-all`.
 - Accept P2–M1-SGI.
-- Synchronize the trusted-layer pins into the repository after PRs #162/#183.
+- Synchronize the trusted-layer pins into the repository.
 
-## 12. Amendment v1.1 (2026-10-04)
+## 12. Amendment v1.1
 
 *As written for v1.1. v4 (§13) changed the hashes, the byte formats and the vectors; it kept the cap.*
 
-**v1.1 is Daniel's ruling of 4 Oct 2026, 2:21 PM PDT (21:21Z),** relayed as ruling 3 of the migration-kickoff
-announcement (Slack thread 1791150333.889129): "*P2:* cap the RTT allowance near 0.35 ms (Δ + RTT ≤ about 0.85 ms) and
-keep w = 16,448. @memory-accounting, please write it into the spec and `ROOT_CALL_NS`, with the exact cap that keeps 2×
-on the Zen 5 floor."
+**v1.1 caps the RTT allowance near 0.35 ms** (Δ + RTT ≤ about 0.85 ms) and keeps w = 16,448. The exact cap, in the
+spec and in `ROOT_CALL_NS`, is the one that keeps 2× on the Zen 5 floor.
 
 **What changed.** F2's RTT allowance, from at most 1 ms to at most **354 µs (354,000 ns)**, so `Δ + RTT ≤ 854 µs`
 ("Sequential reveal and deadlines" and §§5, 6, 8 and 10). Nothing else changed: w, p, B, Q, k, the hardware class, the
@@ -690,7 +686,7 @@ it. 13.2 ms appears to be the measured Zen 4 root (44.68 ms) divided by 3.38, th
 at 5,504 bits (this source is inferred: 44.68 ÷ 3.38 = 13.2, ÷ 3.49 = 3.79 ms, ÷ 2 = 1.89 ms). At 16,448 bits, the
 timing red team's own floor is 5.96 ms, 7.5× below the measured kernel rather than 3.38×. Against it, v1's
 `Δ + RTT = 1.5 ms` kept only 1.14× (1,708.1 ÷ 1,500). The P2 assumption review found the frozen cap unsafe on the same
-grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`, §4).
+grounds (its §4).
 
 **The cap, derived.**
 - The single-core floor is the timing red team's best case for the adversary (`regate.py`): a Zen 5 desktop core at
@@ -715,7 +711,7 @@ grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`,
   `RTT_ALLOWANCE_CAP_NS = 354_000`, and `benchmarks/pous/p2_v1/reference.py`'s `MAX_RTT_ALLOWANCE_NS = 354_000`.
 
 **What the cap rests on.**
-- **The floor is a model, not a measurement.** No kernel reaches it: the campaign's best measured kernel is 3.38× slower
+- **The floor is a model, not a measurement.** No kernel reaches it: the best measured kernel is 3.38× slower
   at 5,504 bits. A core with twice the IFMA throughput halves the root, and so the cap.
 - **The cap has no slack above 3.490×.** Rounding the speedup up to 3.5× leaves 1.994× at the cap; at 3.5× the cap would
   be 351 µs.
@@ -729,11 +725,11 @@ grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`,
   exchange inside one chiplet is a 33 ns core-to-core round trip. The cap rests on the measured speedup, not on this
   model.
 - **Only 8-core cooperation is measured.** A 16-core Zen 5c CCD, or a larger die counted as "one chiplet", is not.
-- **Honest answers fit.** The measured on-node RTT (the verifier on the responder's node, before the 12 Oct ruling; §6) is 6.8–16 µs at the median and 10–22 µs at p99.9. Honest timed
+- **Honest answers fit.** The measured on-node RTT (the verifier on the responder's node; §6) is 6.8–16 µs at the median and 10–22 µs at p99.9. Honest timed
   answers reached at most 161–256 µs (review §4). Both sit inside `Δ + RTT = 854 µs`.
 
 **Alternatives not taken.** Margins are the cooperating root ÷ `(Δ + RTT)` at the measured 3.490×.
-- **An RTT cap of 0.1 ms** (the review's suggestion, `art:f33b450f…`, "What must change", item 4a), `Δ + RTT ≤ 0.6 ms`:
+- **An RTT cap of 0.1 ms** (the review's suggestion, its "What must change", item 4a), `Δ + RTT ≤ 0.6 ms`:
   2.85×, and 2.34× and 1.79× under the modelled 4.24× and 5.55×.
 - **v1's 1 ms kept, with w widened to 20,992,** the smallest multiple of 64 that keeps 2× at `Δ + RTT = 1.5 ms`: root
   10,476.7 µs, 2.001×, and 1.43× and 1.15× under the same model at that width (4.87× and 6.06×). It would cost about
@@ -742,19 +738,14 @@ grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`,
   pins: every P2 pin and its row lemmas are stated at w = 16,448, and k = 105 would have to be re-derived.
 
 **Sources.**
-- The timing red team: `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs (`regate.py`,
-  `regate.log`, `coop.log`, `decode.py`, `find_primes.py`) in
-  `art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57`.
-- The SeqRoot and RTT measurement: run `r20260929-060834-0ec4`,
-  `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed`.
-- F2's 1.9 ms derivation: `note:20261004T2102Z-report-relay-p2-deployment-decisions`.
-- The review: `art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`.
-- Frozen v1: `art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`.
+- The timing red team's scripts and logs: `regate.py`, `regate.log`, `coop.log`, `decode.py` and `find_primes.py`.
+- The SeqRoot and RTT measurement of §6, and its `results.jsonl`.
+- The P2 assumption review, for the frozen cap's grounds and the 0.1 ms alternative.
+- Frozen v1, by its sha256 in the header.
 
-## 13. Amendment v4 (2026-10-06)
+## 13. Amendment v4
 
-**v4 is Daniel's ruling of 6 Oct 2026, 15:07Z,** relayed by memory-accounting: one hash, SHA-512, with its whole output,
-everywhere; SHA-256 retires.
+**v4 is one hash:** SHA-512, with its whole output, everywhere; SHA-256 retires.
 
 **What changed.** Only the hash, and what its output size moves:
 
@@ -787,15 +778,15 @@ everywhere; SHA-256 retires.
 the frame types and their field order, the failure codes and their precedence, and the state-isolation rules.
 
 **What v4 assumes in place of v1.** `cr/sha-512` (collision resistance of SHA-512) for the commitment and the tree, and
-SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM, the auditor's on a machine the prover doesn't control, runs on Nebius, which
-offers no attesting hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.core.claims`; Lean
-`Verity.Assumptions.TrustedNebiusHost`, Daniel's answer of 2026-10-06). The help-accounted row ("Help accounting and
+SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM, the auditor's on a machine the prover doesn't control, runs on a host that
+offers no attesting hardware, so the deployment cites core's `trusted-host` assumption (`verity.core.claims`; Lean
+`Verity.Assumptions.TrustedHost`). The help-accounted row ("Help accounting and
 evidence") is about the prover; this is about the verifier's host, the auditor's hardware on a machine the prover
 doesn't control.
 
-## 14. Errata (2026-10-07)
+## 14. Errata
 
-Daniel accepted four clarifications on 7 Oct 2026 (21:39Z). They change no rule, value, vector or pin; the reference verifier already behaved this way. They hold for v1.1 and v4 alike. They came from the Lean port of the timed-audit check, which found the prose silent where the code had to choose.
+These are four clarifications. They change no rule, value, vector or pin; the reference verifier already behaved this way. They hold for v1.1 and v4 alike. They came from the Lean port of the timed-audit check, which found the prose silent where the code had to choose.
 
 1. Δ and the RTT allowance in `AUDIT_OPEN` are the verifier's own, and no failure code covers them (§ Sequential reveal and deadlines).
 2. A setup transcript that ends early is transport code 6 unless a frame already read gave code 1 or 2 (§ Setup commitment, salt and verification root).

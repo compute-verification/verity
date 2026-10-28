@@ -15,22 +15,30 @@ plain record's numbers).
 **`lamLin2_deployed_ge`**: `λ₂(x) ≥ 100` at every statement `x` whose inner statement is in the plain scope
 (`FlockDeploy.PlainIn`: up to `200` tables, each at an `m` the plain verifier serves and of a planned shape) and each of
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
-(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions; the deployed
-caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at them with no width premise. Each of
-`λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that are exact rational and real inequalities:
+(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions and at most
+`2^56` calls in the inner statement's plain setup (`|S(x_I)|`, `innerSetupIns`; 390 at the honest rec-coins
+statement), at a count `n ≤ 2^55` of the inner verifier's calls on one draw's inner messages at its coins
+(`Deploy.innerCalls`, which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a draw's V\*
+statements (`setupCalls`, which `BitsLin2` bounds `v` by: at the deployed shapes at most 15,829 a table, check 5's row
+commitments among them); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep`
+states it at them with no width premise. Each of `λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that
+are exact rational and real inequalities:
 
 * the inner Flock: `κ_I ≤ 200·2^{−202.98}` (`FlockDeploy.κ_plain_le`), `k_I ≤ 2^32`, `m′ = 210`, rounds `≤ 2^20`;
 * each part: `κ_O ≤ 200·2^{−202.98}` (`numsOf_κ_le`, `Flock.Numbers.κ_le_mul` at `Nums`), `k_O ≤ 2^32`, rounds
   `≤ 880002` and `γ_O ≤ 2^68` (`numsOf_γ_le`);
-* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
+* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `c_S = c_Be + |S(x_I)| + 2(n + v) ≤ 2^59`,
+  `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
 
-The bound is crude (`λ₂` there is about 165.8, `κ` binding); it is what the parameters give at every such statement.
+The bound is crude (`λ₂` there is about 165.8, `κ` binding: the compiled verifier's evaluations lower each collision
+term by `log₂(1 + 2v/c_S)`, at most about 0.006 bits at the deployed shapes, and the nearest, `Fdev`'s, sits near 178.9);
+it is what the parameters give at every such statement.
 It bounds a number and establishes no security level: `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`DenseAt`) only follows from premises still open (`PartChecksB`, `PartOpensB`, `DecompB`, the readers'
-three facts and the coin server's transcript reading back, `ReadsBack`; `ksLin2_deployed_open`), Holo statements being
+`DenseAt`) only follows from premises still open (`PartChecksBV`, `PartOpensB` and `DecompB` at the
+coin server's record, which reads back; `ksLin2_deployed_full`), Holo statements being
 candidate 3's own model, and `BitsLin2` there, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it
 (`bitsLin2On_of_ksLin2On`). The proved level at the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below
-the 100-bit floor (ASK-73).
+the 100-bit floor.
 -/
 
 namespace RecDeploy
@@ -79,18 +87,18 @@ theorem two_rpow_neg_le : (2 : ℝ) ^ (-(202.98 : ℝ)) ≤ ((2 : ℝ) ^ 202)⁻
 /-- **`λ₂ ≥ 100` from its numbers**: `lamLin2`'s six terms, written over the numbers they read (the inner verifier's
 rounds `VI`, the inner `E^rep`'s accepted reruns `kI` per wait and its waits `wI`, the inner caps' positions `W`, the
 compiled verifier's rounds `kx`, each part's `κ`, `γ`, waits and reruns), each at least `103`. -/
-theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe : ℕ} {κI : ℝ} {κs γs : Fin nS → ℝ} {ws ks : Fin nS → ℕ}
-    (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s)
+theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ} {κs γs : Fin nS → ℝ} {ws ks : Fin nS → ℕ}
+    (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s) (hSet : nSet + 2 * nU ≤ 2 ^ 58)
     (hVI : VI ≤ 2 ^ 20) (hkI : kI ≤ 2 ^ 32) (hwI : wI = 210) (hW : W ≤ 2 ^ 64) (hnS : nS ≤ 2 ^ 16)
     (hkx : kx ≤ 2 ^ 37) (hκI0 : 0 < κI) (hκI : κI ≤ 200 * 2 ^ (-(202.98 : ℝ)))
     (hκs0 : ∀ s, 0 ≤ κs s) (hκs : ∀ s, κs s ≤ 200 * 2 ^ (-(202.98 : ℝ))) (hγs : ∀ s, γs s ≤ 2 ^ 68)
     (hws : ∀ s, ws s = 210) (hks : ∀ s, ks s ≤ 2 ^ 32) :
     100 ≤ min (min (min (min (min (Real.logb 2 (1 / (κI + NI * ∑ s, κs s)))
       (255.5 - Real.logb 2 ((NI * ∑ s, Real.sqrt (γs s * kx)) ^ 2) / 2))
-      (256 - Real.logb 2 ((4 * VI + 1) * cBe)))
-      (255 - Real.logb 2 (4 * W * cBe)))
-      (256 - Real.logb 2 (4 * ((kI : ℝ) + 1) * cBe)))
-      (255 - Real.logb 2 ((NI + 8 * W + 4 * ((kI : ℝ) + 1)) * VI * cBe)) - Real.logb 2 6 := by
+      (256 - Real.logb 2 ((4 * VI + 1) * ((cBe : ℝ) + nSet + 2 * nU))))
+      (255 - Real.logb 2 (4 * W * ((cBe : ℝ) + nSet + 2 * nU))))
+      (256 - Real.logb 2 (4 * ((kI : ℝ) + 1) * ((cBe : ℝ) + nSet + 2 * nU))))
+      (255 - Real.logb 2 ((NI + 8 * W + 4 * ((kI : ℝ) + 1)) * VI * ((cBe : ℝ) + nSet + 2 * nU))) - Real.logb 2 6 := by
   have hNI' : NI ≤ 2 ^ 40 := by
     rw [hNI, hwI]
     calc 1 + 210 * kI ≤ 1 + 210 * 2 ^ 32 := by gcongr
@@ -103,6 +111,7 @@ theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe : ℕ} {κI : ℝ} {κs γ
           gcongr
           exact hsum.trans (Nat.mul_le_mul_right _ hnS)
       _ ≤ 2 ^ 57 := by norm_num
+  have hcS : cBe + nSet + 2 * nU ≤ 2 ^ 59 := by omega
   have hNIR : (NI : ℝ) ≤ 2 ^ 40 := by exact_mod_cast hNI'
   have hnR : (nS : ℝ) ≤ 2 ^ 16 := by exact_mod_cast hnS
   have hkxR : (kx : ℝ) ≤ 2 ^ 37 := by exact_mod_cast hkx
@@ -143,44 +152,48 @@ theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe : ℕ} {κI : ℝ} {κs γ
     push_cast at this
     linarith
   · refine sub_logb_ge (n := 153) (by positivity) ?_ (by norm_num)
-    have : (4 * VI + 1) * cBe ≤ 2 ^ 153 :=
-      calc (4 * VI + 1) * cBe ≤ (4 * 2 ^ 20 + 1) * 2 ^ 57 := by gcongr
+    have : (4 * VI + 1) * (cBe + nSet + 2 * nU) ≤ 2 ^ 153 :=
+      calc (4 * VI + 1) * (cBe + nSet + 2 * nU) ≤ (4 * 2 ^ 20 + 1) * 2 ^ 59 := by gcongr
         _ ≤ 2 ^ 153 := by norm_num
     exact_mod_cast this
   · refine sub_logb_ge (n := 152) (by positivity) ?_ (by norm_num)
-    have : 4 * W * cBe ≤ 2 ^ 152 :=
-      calc 4 * W * cBe ≤ 4 * 2 ^ 64 * 2 ^ 57 := by gcongr
+    have : 4 * W * (cBe + nSet + 2 * nU) ≤ 2 ^ 152 :=
+      calc 4 * W * (cBe + nSet + 2 * nU) ≤ 4 * 2 ^ 64 * 2 ^ 59 := by gcongr
         _ ≤ 2 ^ 152 := by norm_num
     exact_mod_cast this
   · refine sub_logb_ge (n := 153) (by positivity) ?_ (by norm_num)
-    have : 4 * (kI + 1) * cBe ≤ 2 ^ 153 :=
-      calc 4 * (kI + 1) * cBe ≤ 4 * (2 ^ 32 + 1) * 2 ^ 57 := by gcongr
+    have : 4 * (kI + 1) * (cBe + nSet + 2 * nU) ≤ 2 ^ 153 :=
+      calc 4 * (kI + 1) * (cBe + nSet + 2 * nU) ≤ 4 * (2 ^ 32 + 1) * 2 ^ 59 := by gcongr
         _ ≤ 2 ^ 153 := by norm_num
     exact_mod_cast this
   · refine sub_logb_ge (n := 152) (by positivity) ?_ (by norm_num)
-    have : (NI + 8 * W + 4 * (kI + 1)) * VI * cBe ≤ 2 ^ 152 :=
-      calc (NI + 8 * W + 4 * (kI + 1)) * VI * cBe ≤ (2 ^ 40 + 8 * 2 ^ 64 + 4 * (2 ^ 32 + 1)) * 2 ^ 20 * 2 ^ 57 := by
+    have : (NI + 8 * W + 4 * (kI + 1)) * VI * (cBe + nSet + 2 * nU) ≤ 2 ^ 152 :=
+      calc (NI + 8 * W + 4 * (kI + 1)) * VI * (cBe + nSet + 2 * nU) ≤
+          (2 ^ 40 + 8 * 2 ^ 64 + 4 * (2 ^ 32 + 1)) * 2 ^ 20 * 2 ^ 59 := by
             gcongr
         _ ≤ 2 ^ 152 := by norm_num
     exact_mod_cast this
 
 /-- **`λ₂ ≥ 100` at a compiled record and an inner protocol**, from bounds on the numbers `lamLin2` reads. -/
 theorem lamLin2_ge_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : Claims.Recursion.Deploy C)
-    (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg)
+    (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg) (n v : ℕ)
     (hVI : I.V.k (Claims.Recursion.xI D x) ≤ 2 ^ 20) (hkI : I.k (Claims.Recursion.xI D x) ≤ 2 ^ 32)
     (hwI : I.waits (Claims.Recursion.xI D x) = 210) (hW : Cp.width (Claims.Recursion.xI D x) ≤ 2 ^ 64)
-    (hnS : D.nS x ≤ 2 ^ 16) (hkx : D.V.k x ≤ 2 ^ 37) (hκI0 : 0 < I.κ (Claims.Recursion.xI D x))
+    (hnS : D.nS x ≤ 2 ^ 16) (hSet : Claims.Recursion.setupLen D x ≤ 2 ^ 56) (hU : n ≤ 2 ^ 55) (hV : v ≤ 2 ^ 55)
+    (hkx : D.V.k x ≤ 2 ^ 37)
+    (hκI0 : 0 < I.κ (Claims.Recursion.xI D x))
     (hκI : I.κ (Claims.Recursion.xI D x) ≤ 200 * 2 ^ (-(202.98 : ℝ)))
     (hκs0 : ∀ s : Fin (D.nS x), 0 ≤ (D.nums x s).κ)
     (hκs : ∀ s : Fin (D.nS x), (D.nums x s).κ ≤ 200 * 2 ^ (-(202.98 : ℝ)))
     (hγs : ∀ s : Fin (D.nS x), (D.nums x s).γ ≤ 2 ^ 68) (hws : ∀ s : Fin (D.nS x), (D.nums x s).waits = 210)
     (hks : ∀ s : Fin (D.nS x), (D.nums x s).k ≤ 2 ^ 32) :
-    100 ≤ Claims.Recursion.lamLin2 D I Cp x :=
+    100 ≤ Claims.Recursion.lamLin2 D I Cp x n v :=
   lamLin2_core (nS := D.nS x) (VI := I.V.k (Claims.Recursion.xI D x)) (kI := I.k (Claims.Recursion.xI D x))
     (wI := I.waits (Claims.Recursion.xI D x)) (W := Cp.width (Claims.Recursion.xI D x)) (kx := D.V.k x)
-    (NI := Claims.Recursion.NI D I x) (cBe := Claims.Recursion.cBe D x) (κI := I.κ (Claims.Recursion.xI D x))
-    (κs := fun s => (D.nums x s).κ) (γs := fun s => (D.nums x s).γ) (ws := fun s => (D.nums x s).waits)
-    (ks := fun s => (D.nums x s).k) rfl rfl hVI hkI hwI hW hnS hkx hκI0 hκI hκs0 hκs hγs hws hks
+    (NI := Claims.Recursion.NI D I x) (cBe := Claims.Recursion.cBe D x) (nSet := Claims.Recursion.setupLen D x)
+    (nU := n + v) (κI := I.κ (Claims.Recursion.xI D x)) (κs := fun s => (D.nums x s).κ)
+    (γs := fun s => (D.nums x s).γ) (ws := fun s => (D.nums x s).waits) (ks := fun s => (D.nums x s).k) rfl rfl
+    (by omega) hVI hkI hwI hW hnS hkx hκI0 hκI hκs0 hκs hγs hws hks
 
 /-! ## An outer session's numbers -/
 
@@ -224,7 +237,17 @@ theorem numsκ_nonneg (m : Claims.Recursion.Nums) (h : 0 ≤ m.εtable) : 0 ≤ 
 
 /-- **A V\* part in scope**: its statement sets up at the recursive setup (`setupO`) with `1 ≤ n ≤ 200` tables at two
 link points, each at an `m` the masked verifier serves and of a shape in `InRange`, as `FlockDeploy.ZkIn` at Flock's
-setup. -/
+setup.
+
+Assumption record. No claim: a scope condition on the statement, the parts' counterpart of `FlockDeploy.PlainIn`.
+`lamLin2_deployed_ge` and `lamLin2_deployed_ge_dep` take it at each staged V\* part (`hO`), at the inner rounds `pick`
+reads the part at. It assumes that each part's statement, run through the verifier's own setup (`setupO`), has 1 to 200
+tables at at most two link points, each at `25 ≤ m ≤ 35` and of a shape in `InRange`. That is a deterministic
+computation on public data and says nothing about the prover or the world. It is reasonable because these are the
+shapes the masked verifier is parametrized for, the scope `ZkIn` states for a masked session: `λ₂`'s numbers are
+stated there and not claimed outside it. It is no hash premise. It reduces to evaluating `setupO` on the staged
+statements, and a refusal of out-of-scope parts in the compiled verifier's scope check (`scopeCheck`) would discharge
+it, as an input condition should be. -/
 structure PartIn (xO : Msg) (s : RecIns) (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) : Prop where
   setup : setupO xO = some (s, spec, sts)
   size_pos : 0 < sts.size
@@ -343,10 +366,11 @@ theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts')
-    (hn : nS x ≤ 2 ^ 16) (hW : Cp.width (xIOf x) ≤ 2 ^ 64) :
+    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {n : ℕ} (hU : n ≤ 2 ^ 55) {v : ℕ}
+    (hV : v ≤ 2 ^ 55) (hW : Cp.width (xIOf x) ≤ 2 ^ 64) :
     100 ≤ Claims.Recursion.lamLin2
       ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x := by
+      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x n v := by
   have hsz : (sts.size : ℝ) ≤ 200 := by exact_mod_cast hin.size_le
   have hVI : (FlockDeploy.deployPlain rel).V.k (xIOf x) ≤ 2 ^ 20 :=
     (FlockDeploy.Vk_plain_le rel hin).trans <|
@@ -374,8 +398,8 @@ theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock
   have hκI : Claims.Flock.κ (FlockDeploy.deployPlain rel) (xIOf x) ≤ 200 * 2 ^ (-(202.98 : ℝ)) :=
     (FlockDeploy.κ_plain_le rel hin).trans (mul_le_mul_of_nonneg_right hsz (by positivity))
   refine lamLin2_ge_of ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-    (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x
-    hVI hkI rfl hW hn hkx hκI0 hκI
+    (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x n v
+    hVI hkI rfl hW hn hS hU hV hkx hκI0 hκI
     (fun j => numsκ_nonneg _ (εtableO_nonneg (staged b.st x (pick b.st x j) j))) (fun j => ?_) (fun j => ?_)
     (fun _ => rfl) (fun j => ?_)
   · obtain ⟨i, spec', sts', hp⟩ := hO j j.isLt
@@ -449,7 +473,13 @@ theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
 /-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the
 caps `ksLin2_deployed_plain` states `KSLin2` at from its premises, whose width bound is `CpDep_width_le`. This bounds a
 number: `KSLin2` at the deployment's dense statements only follows from premises still open (`ksLin2_deployed_open`),
-and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`). -/
+and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`).
+
+`hn`, `hS` and `hO` are deployment-size conditions on public data, and none is a hash premise or says anything about
+the prover's behaviour: `hn` says `x` stages at most `2^16` V\* parts and `hS` that the inner setup `x` names has at
+most `2^56` hm96 inputs, both numbers read off `x`; `hO` is the scope condition `PartIn` at each staged V\* part (1–200
+tables, at most two link points, `25 ≤ m ≤ 35`), which the verifier's own setup `setupO` evaluates on the staged
+public statement. -/
 theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -458,12 +488,13 @@ theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.F
     {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts')
-    (hn : nS x ≤ 2 ^ 16) :
+    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {n : ℕ} (hU : n ≤ 2 ^ 55) {v : ℕ}
+    (hV : v ≤ 2 ^ 55) :
     100 ≤ Claims.Recursion.lamLin2
       ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
       (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
-      FlockDeploy.KS.CpDep x :=
-  lamLin2_deployed_ge rel b L nextE colsE wE join rowIn final w decI FlockDeploy.KS.CpDep hin hO hn
+      FlockDeploy.KS.CpDep x n v :=
+  lamLin2_deployed_ge rel b L nextE colsE wE join rowIn final w decI FlockDeploy.KS.CpDep hin hO hn hS hU hV
     (CpDep_width_le (xIOf x))
 
 end RecDeploy

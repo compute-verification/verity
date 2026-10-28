@@ -15,7 +15,7 @@ It is the one test in `check` that hands the Lean verifier a proof of a false st
 whose transcript is consistent and whose witness is false, which those can't.
 
 The sessions are a fetched fixture (`fixtures/artifacts.json`), written by `benchmarks/one_stage/forged_proofs.sh` (run
-r20261019-070603-7331), which `suites.py` fetches before the suite runs, so a missing fixture fails these tests rather than
+r20261027-022307-6c8f), which `suites.py` fetches before the suite runs, so a missing fixture fails these tests rather than
 skipping them."""
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-4.bin`` and ``<case>/session/``, and
-#: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation): `art:b7762244`
+#: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation): `art:31c671f6`
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "forged-proofs"
 STATEMENT = "verity/flock-circuit"
 N = 4
@@ -45,11 +45,14 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 @pytest.fixture(scope="module")
-def store():
+def store(tmp_path_factory):
     assert (FIXTURE / "cases.json").is_file(), (
         f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/forged-proofs`")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    return FIXTURE
+    sys.path.insert(0, str(VERIFIER))
+    import ci
+
+    return ci.canonical_tree(FIXTURE, tmp_path_factory.mktemp("store") / "forged-proofs")
 
 
 def _verify(root: Path, case: str, session: Path | None = None) -> dict:

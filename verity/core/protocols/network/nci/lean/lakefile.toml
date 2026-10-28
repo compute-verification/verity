@@ -5,7 +5,8 @@
 # `nci-check` runs `NciCheck.Desc`, the check at the size of the description, then θ's provenance (`NciCheck.Baseline`),
 # and `nci-check --unrolled` the reference.
 name = "nci_check"
-defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-baseline-difftest", "nci-check"]
+defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
+  "nci-check"]
 
 [leanOptions]
 autoImplicit = false
@@ -25,6 +26,14 @@ root = "NciCheck.DifftestMain"
 [[lean_exe]]
 name = "nci-desc-difftest"
 root = "NciCheck.DescDifftestMain"
+
+[[lean_exe]]
+name = "nci-desc-liveness"
+root = "NciCheck.DescLivenessMain"
+
+[[lean_exe]]
+name = "nci-desc-fuzz"
+root = "NciCheck.DescFuzzMain"
 
 [[lean_exe]]
 name = "nci-baseline-difftest"

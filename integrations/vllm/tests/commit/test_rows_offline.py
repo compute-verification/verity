@@ -12,10 +12,10 @@ import pytest
 
 pytest.importorskip("torch")
 
-from tests.check import opened as O  # noqa: E402
-from verity_vllm.commit import step_rows as R  # noqa: E402
-from verity_vllm.commit.committer.native_host import NativeHostCommitter  # noqa: E402
-from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified  # noqa: E402
+from tests.check import opened as O
+from verity_vllm.commit import step_rows as R
+from verity_vllm.commit.committer.native_host import NativeHostCommitter
+from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 
 RNG = random.Random(63)
 K = R.ROW_BYTES // 256                   # sizes in 256-byte units, so every step but the first spans several rows

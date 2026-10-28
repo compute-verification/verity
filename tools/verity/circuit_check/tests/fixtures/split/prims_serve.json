@@ -239,7 +239,6 @@
   "GeluRef_v1{N=16,DT='bf16',APPROX='tanh'}": "a2564dfc43c044d82a113dceef19c511f724fe3ebf74665921abc9839501f9ea703bed8557127d225a181b38316185d259dbc166ab9c028d529f2ba6d91dd0e3",
   "GeluRef_v1{N=16,DT='f32',APPROX='tanh'}": "750bf73f9a4e810ceb4f7d6f104977d6249b736c537ea8365e47450a32c04a79d1ac8fa0b2582c8d7b359977ba473262664a090c75908417729a0e77d0439e95",
   "GeluTanhMulBf16_v3": "0e5fd9d97d18f47999867ad7cfe1a442991f1825986b35dcd762dfec26e590b2eff613a389eec0dd670f8b95f72e9a07bebb2b45df0003f8d8d35cf87123e4ff",
-  "GeluTanhMul_v3{I=16}": "2736b9eac60826407b46149732cbf10ea8644dcec5248e3f14f8a2767647f08be676ae4aa5c1704ecbf3059637255b9c744ad07fc91afe8e8fc3e1bbd384aca6",
   "GemmCoordinate_v1{K=16}": "120b62328295e90f0cd615f648c35106082f4175efca59ab925a370ba85bd9905bee65d31f19d745755e22cd2246c258d4e3505d1301cca329747c27d1a51ea2",
   "GemmCoordinate_v1{K=32}": "7377cc5a556c8bfabdf11add4ef67d43f5cdaeceb828317f005c8ab3089adf2e07d0d1e5a37cf2b2d12b64d3441c807dc96244252812d2f2aa6d2ab0443d9b31",
   "GemmCoordinate_v1{K=48}": "90c567134107eaab9ce6cc155abc6d40e7cf5af77662e1401eeac29e3a9695e27a4c8bfcd958af1c5cd094f53bc57340e41c88efd7eb0b4e057b8e73155ec40d",
@@ -375,6 +374,9 @@
   "SoftmaxRef_v1{N=5,DT='f32'}": "11ba3fbcd4f90de9b07fc6921a842cd1e431c01563ae9a067081c975d5b678004efa7e562eff1744254bbf896eb182d3e71858bcabd65b6a8f661ac241d914bc",
   "StepBody_v1{C={e2f2f43eb046},T=4,GEMM={4130e3ca726d},ATTENTION={35db6738c571},NORM={4d524c30089f}}": "cf29721874ccbccc7e27ad4804c1a52ca7cd6be95cbe91907ce559d6258b93d3609cc8bbc59e5b7399465f4300ef960a3eb8ad60bda5ab13ca3beccd32166998",
   "TanhF32Rn_v2": "d5625a7c525bd6e93e1ea15962b07c5d37b2e2a02369589c0bdf06d0911ceda8e92cbc4c688d9804ae82a8c0159d6f6bffc142f4866e71db1bbd45cb5fd66c23",
+  "TokenSelectChunkStep_v1": "41777e0a30bf5d96eb734334c964026421bb9b3e9216b147bc8a22fd0a314dec13a7e577405be07be25d00638756c0000dc4cc0eeae5c5c40aecca61aeda47db",
+  "TokenSelectChunk_v1{C=64}": "192fa317001aa65e13ca476526edff69d3d3e68ad1a93369a8903002d55411ee84adeab4aecf8f6a9603862fcefc3607275ab91605c28e4c923c7dfd32650e99",
+  "TokenSelectCombine_v1{V=200,C=64}": "6976dca02b6d8e35d0fafb8aa1d1d412a2723982a682a7cce8053106c22ab78e0b44b4b79260370cd676c93a1221764111eef611686d9c7c32c4875a1d6b1f67",
   "TokenSelect_v1{V=142}": "cd69e30b9f1b5b8372ae8d32b31043f109c05dc845c50c0c66daa9b8d6852967d3a558a970e43d042e42ed7bba3b4bc57db61f4ddc5c408a861d0db3970562b9",
   "TokenSelect_v1{V=16}": "1904558de695f457724056b12b95b6ce7d68f9b251dcc0cf6cadc809bcf20158db5aab09aff2c26c23657940c46d824a42cfd13bff2d0177402a54fa8fd2f124",
   "TokenSelect_v1{V=48}": "8281bbb5ff29cea0b89f1c43385cd776dee1fb05d020d19ecc16644414188ace43ab07da243d325e8d393e578739d927faace52c3d43582bd119db0382bb3cb1",
@@ -459,7 +461,6 @@
   "GeluRefElem_v1": "ref_prims",
   "GeluRef_v1": "ref_prims",
   "GeluTanhMulBf16_v3": "tables",
-  "GeluTanhMul_v3": "tables",
   "GemmCoordinate_v1": "b1",
   "Gemm_v1": "b1",
   "I64ToI32_v1": "ref_prims",
@@ -516,32 +517,43 @@
   "SoftmaxRef_v1": "ref_prims",
   "StepBody_v1": "lifted",
   "TanhF32Rn_v2": "tables",
+  "TokenSelectChunkStep_v1": "b1",
+  "TokenSelectChunk_v1": "b1",
+  "TokenSelectCombine_v1": "b1",
   "TokenSelect_v1": "b1",
   "VerifyBranch_v1": "spec"
  },
  "pins": {
   "definitions": {},
+  "digests": {},
   "pieces": {
    "DivFullScaleA_v2": {
-    "and": 1542
+    "and": 1542,
+    "type": "7237a173c3537996123e9d64fec6477b2e3be824bf686bc5d531479c8516b69d39b8adaf578941224933549fcfa6e8d149d60292a3647838e8ef0986220adf14"
    },
    "F32GtStrict_v1": {
-    "and": 191
+    "and": 191,
+    "type": "d6aa4eba3e002e9160c290d9557f4b744e3349584de716fafbd11c24f0dee2a285a362dc74a7ecd3ea4f5f61edf8a0d493443abb8af82d99eab43b99ca76a933"
    },
    "F32Sub_v1": {
-    "and": 823
+    "and": 823,
+    "type": "c765a3d490ab9bb2557a4372a22c6d103bac8fe65ef561b9e44a85915390749774cf21884f81d18c4261ad85269dc4004a1edb15bc0c0521393f90e9a6c8298f"
    },
    "F32Sub_v2": {
-    "and": 823
+    "and": 823,
+    "type": "e8ade1930353104d13477b46a319e50103defbf50ccb413d0e3e626b6987fbfaac9a49f6f6ed473831d479806e68af0ad42cf89ca2aa41ecec7f8cf0b0dd6ea6"
    },
    "RopeOutAdd_v1": {
-    "and": 2998
+    "and": 2998,
+    "type": "d74dcb4594de14abb971b475283597ad6112dbaffc39d6dd1e711a7dadbb4413c1a85eeb00f3c1804694620a0c2c047b1d9868df95811964d22c7a1cda0ca34e"
    },
    "RopeOut_v1": {
-    "and": 2998
+    "and": 2998,
+    "type": "d0214a5ced4a04d2ae5c0f51a92093b82e869a1e1e5f841247c2904a252736dd70316cc60c4bfb91a58f1dc75577c7e26df064c7e10f1fda7f6c5c3716b28040"
    },
    "SiluMulBf16_v1": {
-    "and": 2699
+    "and": 2699,
+    "type": "8e2e6cce9b6d6ae53b8a87c5014777b7c77045053fc4d0004a8c1d40ac6c700b74a194404b5736370859bff62e4d3d8c22f9f8ba15ed2fbaaa4774de9c7ce0ec"
    }
   },
   "units": {}
@@ -622,7 +634,6 @@
   "GeluRefElem_v1",
   "GeluRef_v1",
   "GeluTanhMulBf16_v3",
-  "GeluTanhMul_v3",
   "GemmCoordinate_v1",
   "Gemm_v1",
   "I64ToI32_v1",
@@ -678,6 +689,9 @@
   "SoftmaxRef_v1",
   "StepBody_v1",
   "TanhF32Rn_v2",
+  "TokenSelectChunkStep_v1",
+  "TokenSelectChunk_v1",
+  "TokenSelectCombine_v1",
   "TokenSelect_v1",
   "VerifyBranch_v1"
  ],
@@ -1640,10 +1654,6 @@
   ],
   [
    "definition",
-   "GeluTanhMul_v3{I=16}"
-  ],
-  [
-   "definition",
    "GemmCoordinate_v1{K=16}"
   ],
   [
@@ -2181,6 +2191,18 @@
   [
    "definition",
    "TanhF32Rn_v2"
+  ],
+  [
+   "definition",
+   "TokenSelectChunkStep_v1"
+  ],
+  [
+   "definition",
+   "TokenSelectChunk_v1{C=64}"
+  ],
+  [
+   "definition",
+   "TokenSelectCombine_v1{V=200,C=64}"
   ],
   [
    "definition",

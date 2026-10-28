@@ -1,12 +1,13 @@
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Definitions.Pouw.PearlC.DevicePrices
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
-# The unpromoted record, the cap, and γ at sm_120's prices (the TT_OUT restatements lane's file)
+# The unpromoted record, the cap, and γ at sm_120's prices
 
 Staged; nothing pinned.
-* **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 1 × 128` layout in `pearlCDomainDev d`
+* **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 64 × 128` layout in `pearlCDomainDev d`
   at any record with `G = 0`. Before the domain's group condition became `G = 0 ∨ 32·G ∣ k`, `32·0 ∣ k` forced `k = 0`,
   so every statement at `devSm120v2` was vacuous.
 * **A stricter cap asserts less, per unit:** `ttOutPearlCDev_cap_anti` gives TT_OUT at `ρ'` from TT_OUT at `ρ` for
@@ -25,9 +26,9 @@ namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- A record without promotion admits a `1 × 1 × 128` unit. -/
+/-- A record without promotion admits a `1 × 64 × 128` unit (`m n k`). -/
 theorem pearlCDomainDev_unpromoted (d : PearlCDevice) (hG : d.G = 0) :
-    pearlCDomainDev d ⟨1, fun _ => ⟨1, 1, 128⟩, fun _ => 0⟩ := by
+    pearlCDomainDev d ⟨1, fun _ => ⟨1, 64, 128⟩, fun _ => 0⟩ := by
   intro u _
   exact ⟨by norm_num, by norm_num, by norm_num, by norm_num, Or.inl hG, by norm_num⟩
 
@@ -151,4 +152,7 @@ theorem pearlCSampledSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedCap1000_8192 := @Pouw.PearlC.pearlCGammaUnpromotedCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedCap1000_8192 :=
+  fun sha fetch salt d sem hG hp hTT =>
+    @Pouw.PearlC.pearlCGammaUnpromotedCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)

@@ -13,7 +13,8 @@ Layout (two levels; a Call's record is the join): `occurrences[o]` is one lowere
 collective); `calls[k]` is Call k (= node k of the program function's body, the same index `instances.json.gz` rows carry)
 with its occurrence, return slots and argument slots.  `load_correspondence(descriptor)` joins them into `CallCorrespondence`
 records and answers `owning_module(call_id)`, `return_slot(call_id, port)`, `arg_slot(call_id, input_index)`, and the
-module-body partition `calls_of_module(path)` the query lane consumes.  Pure `verity.ml.circuits`-free stdlib: imports without torch.
+module-body partition `calls_of_module(path)` that `verity_vllm.query` consumes.  Stdlib plus `verity.ml.circuits.codec`'s `canonical_json`:
+imports without torch.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Any, Iterator
+
+from verity.ml.circuits.codec import canonical_json
 
 SCHEMA = "runtime-correspondence/v1"
 NAMESPACE = "correspondence"   # the one annotation key the frontend writes the record under
@@ -326,10 +329,6 @@ class RuntimeCorrespondence:
 # ---------------------------------------------------------------------------------------------------------------------------
 
 
-def canonical_json(obj: Any) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
-
-
 def correspondence_digest(doc_or_desc_or_program: Any) -> str | None:
     """sha256 of the canonical JSON of the `runtime-correspondence/v1` document.  Accepts the document itself, a descriptor dict
     (reads `annotations["correspondence"]`) or a `Program` / `DecodedProgram` (reads `.annotations`).  None when absent."""
@@ -568,4 +567,4 @@ def validate_document(doc: dict) -> list[str]:
 
 __all__ = ["SCHEMA", "NAMESPACE", "JSON_SCHEMA", "TensorView", "ReturnSlot", "ArgSlot", "ArgSpan", "RankOccurrence", "CollectiveOccurrence",
            "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "read_program_document",
-           "read_descriptor_annotation", "validate_document", "canonical_json"]
+           "read_descriptor_annotation", "validate_document"]

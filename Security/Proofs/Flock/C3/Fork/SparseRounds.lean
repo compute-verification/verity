@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.RepSound
-import Proofs.Flock.Soundness.Model.Holo
+import Definitions.Flock.Holo
 import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Push
 

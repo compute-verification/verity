@@ -78,7 +78,7 @@ def _load(run: Path, rel: str):
         return None
     try:
         return json.loads(p.read_text())
-    except Exception:  # noqa: BLE001 - an unreadable report is reported as absent
+    except (OSError, ValueError):  # an unreadable report is reported as absent
         return None
 
 
@@ -88,17 +88,18 @@ def code_version(repo: Path) -> dict:
     if exp.exists():
         try:
             d = json.loads(exp.read_text())
+        except (OSError, ValueError):
+            d = None
+        if isinstance(d, dict):
             return {"source": "EXPORT.json", "commit": d.get("commit"), "dirty_patch_sha256": d.get("patch_sha256") or d.get("dirty_patch"),
                     "untracked": d.get("untracked"), "fallback": d.get("fallback")}
-        except Exception:  # noqa: BLE001
-            pass
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
         code = [f":/{d}" for d in research_tools.CODE_DIRS]
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, subprocess.SubprocessError):
         return {"source": "unknown"}
 
 
@@ -132,7 +133,7 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
             "engine_args": dict(engine_args),         # the LLM(**kw) overrides the harness will pass (workload-required + CLI)
             "max_num_seqs": max_num_seqs,
             # the served dtype: the driver's explicit value, else the engine-argument override the harness passes to LLM(**kw)
-            # (a workload's `engine.args.dtype`, e.g. float16 -- fp16 column, 2026-09-17), else the checkpoint's torch_dtype
+            # (a workload's `engine.args.dtype`, e.g. float16 -- the fp16 column), else the checkpoint's torch_dtype
             "dtype": dtype or (engine_args or {}).get("dtype") or (hf_config or {}).get("torch_dtype"),
             "tensor_parallel": tp,
             "snapshot_steps_requested": snapshot_steps, "snapshot_max_bytes": snapshot_max_bytes,
@@ -162,7 +163,7 @@ def write_spec(run: Path, spec: dict) -> dict:
     if p.exists():
         try:
             old = json.loads(p.read_text())
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError):
             old = {}
         same = old.get("digest") == spec.get("digest")
         return {"written": False, "existing_digest": old.get("digest"), "would_be_digest": spec.get("digest"), "same": same}
@@ -343,7 +344,7 @@ def build_experiment(run: Path, *, repo: Path | None = None, spec_note: dict | N
                         "compare": _ref(run, "compare.json", sha=False), "census_reconcile": _ref(run, "census_reconcile.json", sha=False),
                         "golden": _ref(run, "golden.json"), "quarantine": _ref(run, "quarantine.json"), "holdouts": _ref(run, "holdouts.json"),
                         "query_use": _ref(run, "query_use.json"), "query": _ref(run, "query.json")},
-            # G8 (window 2026-09-17): the VU-partition use document (`verity-ir/query-use/v1`) and what the gate said about it
+            # G8: the VU-partition use document (`verity-ir/query-use/v1`) and what the gate said about it
             "vu_partition": vu_partition_index(qu, gates),
             "costs": {"stages": [{"stage": r.get("stage"), "status": r.get("status"), "seconds": r.get("seconds")} for r in stages if isinstance(r, dict)],
                       "total_seconds": round(sum(float(r.get("seconds") or 0) for r in stages if isinstance(r, dict)), 1)},

@@ -2,7 +2,7 @@
 
     verity-vllm match --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
         --phase gpu|cpu|all [--python-gpu PY] [--python-cpu PY] [--snapshot-steps 0,1,2,3] [--max-num-seqs 8] \\
-        [--laptop] [--dry-run] [--tier-c] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
+        [--laptop] [--dry-run] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
         [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
 
 GPU phase (the pod's torch venv, Python 3.11):
@@ -21,13 +21,9 @@ CPU phase (Python 3.12, torch-free; pod or laptop):
     compare           verity_vllm.check.fold_compare -> RUN_DIR/compare.json (tokens, boundary, subcircuits, structure)
     fold, fold_2      this module's fold worker in two separate processes -> RUN_DIR/fold_summary.json, fold_summary_2.json
     fold_other        (with --other-log) a second capture's digest -> RUN_DIR/fold_summary_other.json (G6 detail only)
-    root_policy       verity_vllm.check.root_policy -> RUN_DIR/root_policy.json
     golden            verity_vllm.properties.golden --check -> RUN_DIR/golden.json
-    wiring            verity_vllm.check.operand_provenance -> RUN_DIR/wiring.json (G5: exhaustive operand provenance, D82)
-    replay_a          verity_vllm.check.replay.replay --tier a --k 10 [--jobs N] -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
-    replay_chain      verity_vllm.check.replay.replay --tier chain -> RUN_DIR/replay_chain.json (G5 chaining smoke test)
-    replay_b_step<N>  (with --full-replay) verity_vllm.check.replay.replay --tier b --step N -> replay_b_step<N>.json (diagnostic only)
-    replay_c          (with --tier-c) verity_vllm.check.replay.replay --tier c -> RUN_DIR/replay_c.json (diagnostic only)
+    root_policy, wiring, replay_a, replay_chain
+                      no command: stage names a `--skip` still gives (the row's does), recorded as skipped; unskipped they run nothing
     gates             in-process: gates.evaluate_gates -> RUN_DIR/gates.json; card -> RUN_DIR/card.json, RUN_DIR/CARD.md,
                       <cards-dir>/<config_id>.json
 
@@ -36,7 +32,7 @@ log, cmd, reason} in RUN_DIR/stages.json; a failed stage never aborts later inde
 skipped with the log as evidence).  `--dry-run` prints the exact command lines and runs nothing.  `--skip a,b` skips
 stages or groups (`replay`, `census`, `nonint`, `fold`, `compare`, `resolve`, `root_policy`, `golden`, `capture`,
 `control`, `gates`).  `--laptop`: every stage is watched (RSS above --max-rss-gb, default 1.5, or wall above
---stage-timeout, default 180 s, kills it), replay gets `--max-arg-leaves 4000000`.
+--stage-timeout, default 180 s, kills it).
 
 Internal: `--worker fold --log LOG --profile NAME --out fold_summary.json [--no-program]` folds a log in this process
 and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
@@ -59,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check import gates as G
-from verity_vllm.config import RowEngine, UsageError, option
+from verity_vllm.config import RowEngine, UsageError, option, workload_arg
 from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
@@ -68,30 +64,25 @@ from verity_vllm.program.sampling_event import program_sampler_construction
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
 DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
-DEFAULT_K = 10                         # tier a: instances per (specialization, regime) stratum (D82; gate minimum TIER_A_K)
+DEFAULT_K = 10                         # tier a: instances per (specialization, regime) stratum (gate minimum TIER_A_K)
 DEFAULT_CHAINS = 3                     # tier chain: connected slices replayed with computed intermediate values
-DEFAULT_PARALLEL_REPLAY = 4            # replay stages are independent processes; the pod has the cores, the laptop runs them serially
+DEFAULT_PARALLEL_REPLAY = 4            # run.json's `parallel_replay` (1 with --laptop)
 DEFAULT_CHECKPOINTS = "manifests/checkpoints.json"
-SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's per-tensor snapshot cap of record until R16 (D87)
+SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's fixed per-tensor snapshot cap, the floor of the derived one
 SNAPSHOT_ROW_BYTES_FALLBACK = 64 << 10  # per-token activation row bound when no HF config is readable: 2 x I x bf16 for I <= 16384
-LAPTOP_MAX_ARG_LEAVES = 4_000_000
 LAPTOP_MAX_RSS_GB = 1.5
 LAPTOP_STAGE_TIMEOUT_S = 180.0
 
 GPU_STAGES = ("capture", "control", "census", "nonint")
-CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "fold_other", "root_policy", "golden",
-              "wiring", "replay_a", "replay_chain", "replay_b", "replay_c", "gates")
 SKIP_GROUPS = {
     "replay": {"replay_a", "replay_chain", "replay_b", "replay_c"},
     "census": {"census", "census_reconcile"},
     "nonint": {"nonint", "nonint_compare"},
     "fold": {"fold", "fold_2", "fold_other"},
 }
-#: Stages whose module may be missing in a worktree (a sibling lane's / the integrator's); a missing module is recorded
+#: Stages whose module may be missing in a worktree; a missing module is recorded
 #: as `missing_module`, not run.
-OPTIONAL_MODULES = {"root_policy": "verity_vllm.check.root_policy", "golden": "verity_vllm.properties.golden", "replay_a": "verity_vllm.check.replay.replay",
-                    "replay_chain": "verity_vllm.check.replay.replay", "replay_b": "verity_vllm.check.replay.replay", "replay_c": "verity_vllm.check.replay.replay",
-                    "wiring": "verity_vllm.check.operand_provenance"}
+OPTIONAL_MODULES = {"golden": "verity_vllm.properties.golden"}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -108,7 +99,7 @@ class Plan:
         self.py_gpu = a.python_gpu or sys.executable
         self.py_cpu = a.python_cpu or sys.executable
         if str(a.snapshot_steps).strip().lower() == "all":
-            # every step of the workload: its declared `expected_engine_steps` (D87: arrivals / chunking make the step count
+            # every step of the workload: its declared `expected_engine_steps` (arrivals / chunking make the step count
             # exceed max(max_tokens)), else max(max_tokens); a listed step that never happens costs nothing
             n = a.max_tokens if a.max_tokens is not None else _workload_expected_steps(a.workload)
             if not n:
@@ -119,7 +110,7 @@ class Plan:
             self.steps = [int(x) for x in str(a.snapshot_steps).split(",") if x.strip() != ""]
         if not self.steps or self.steps[0] != 0 or self.steps != list(range(len(self.steps))):
             raise SystemExit(f"--snapshot-steps must be contiguous from 0 (got {a.snapshot_steps}): replay of step N needs every earlier KV producer")
-        # --full-replay (diagnostic, D82): tier b replays step 0 and these decode steps; every one must be a snapshot step
+        # --full-replay (diagnostic): tier b replays step 0 and these decode steps; every one must be a snapshot step
         tb = [int(x) for x in str(a.tier_b_steps).split(",") if x.strip() != ""] if a.tier_b_steps else list(self.steps)
         self.tier_b_steps = sorted({0, *tb} & set(self.steps)) if getattr(a, "full_replay", False) else []
         self.verify_weights = not a.no_verify_weights
@@ -145,8 +136,7 @@ class Plan:
         return out
 
     def skipped(self, stage: str) -> bool:
-        base = "replay_b" if stage.startswith("replay_b_step") else stage
-        return stage in self.skip or base in self.skip
+        return stage in self.skip
 
     # paths ---------------------------------------------------------------------------------------------
 
@@ -195,7 +185,7 @@ class Plan:
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.capture_dir),
                     "--snapshot-steps", ",".join(map(str, self.steps))] + (["--verify-weights"] if self.verify_weights else []) + \
                    (["--snapshot-max-bytes", str(a.snapshot_max_bytes)] if a.snapshot_max_bytes is not None else []) + \
-                   (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])   # D87
+                   (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])
         if stage == "control":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
         if stage == "census":
@@ -218,69 +208,28 @@ class Plan:
             if g:
                 c += ["--safetensors", g]
             return c
-        # [R17-42 route A (4)] the fold folds the MoE scope under the workload's DECLARED construction (manifest target.moe_construction) and the top-p
-        # select under the one the Build's Programs declare (--program-dir: a single-request select has no shared-greedy form); never off the trace
-        mc, sc, rv = _workload_moe_construction(a.workload), program_sampler_construction(a.program_dir or ()), program_registered_values(a.program_dir or ())
-        MC = (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
-        if stage in ("fold", "fold_2"):   # D85: --persist-dir writes program.json / instances.jsonl / accesses.jsonl.gz
+        MC = fold_construction_args(a.workload, a.program_dir or ())
+        if stage in ("fold", "fold_2"):   # --persist-dir writes program.json / instances.jsonl / accesses.jsonl.gz
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + (["--persist-dir", str(run)] if stage == "fold" else [])
         if stage == "fold_other":
             if not a.other_log:
                 return None
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile, "--out", str(self.p("fold_summary_other"))] + MC
-        if stage == "root_policy":
-            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "root-policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
-                 "--out", str(self.p("root_policy"))]
-            g = self.safetensors_glob()
-            if g:
-                c += ["--safetensors", g]
-            cs = self.snapshots / "cos_sin_cache.npy"
-            return c + (["--cos-sin", str(cs)] if cs.exists() else [])
         if stage == "golden":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
-        if stage == "wiring":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "operand-provenance", "--log", str(self.log), "--profile", a.profile, "--out", str(self.p("wiring"))]
-        if stage == "replay_a":
-            return self._replay(["--tier", "a", "--k", str(a.k), "--seed", str(a.seed), "--jobs", str(a.replay_a_jobs)], self.p("replay_a"))
-        if stage == "replay_chain":
-            return self._replay(["--tier", "chain", "--chains", str(a.chains), "--seed", str(a.seed)], self.p("replay_chain"))
-        if stage.startswith("replay_b_step"):
-            n = int(stage[len("replay_b_step"):])
-            return self._replay(["--tier", "b", "--step", str(n)], run / G.replay_b_rel(n))
-        if stage == "replay_c":
-            return self._replay(["--tier", "c", *(["--seed", str(a.seed)] if a.seed is not None else [])], self.p("replay_c")) if a.tier_c else None
         return None
-
-    def _replay(self, tier: list[str], out: Path) -> list[str]:
-        c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "replay", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", self.a.profile, *tier]
-        budget = self.a.replay_budget_leaves if self.a.replay_budget_leaves is not None else (LAPTOP_MAX_ARG_LEAVES if self.laptop else None)
-        if budget is not None:
-            c += ["--max-arg-leaves", str(budget)]
-        return c + ["--out", str(out)]
-
-    def _hf_snapshot_dir(self) -> str:
-        """The HF cache snapshot directory (or glob) of the profile's model when no --checkpoint-dir is given."""
-        repo = (profile_config(self.a.profile) or {}).get("model")
-        home = Path(os.environ.get("HF_HOME") or (Path.home() / ".cache" / "huggingface"))
-        base = home / "hub" / f"models--{str(repo or 'unknown').replace('/', '--')}" / "snapshots"
-        try:
-            snaps = sorted(p for p in base.iterdir() if p.is_dir()) if base.exists() else []
-        except OSError:
-            snaps = []
-        return str(snaps[-1]) if len(snaps) == 1 else str(base / "*")
 
     def stage_list(self, phase: str) -> list[str]:
         gpu = list(GPU_STAGES) if phase in ("gpu", "all") else []
         cpu: list[str] = []
         if phase in ("cpu", "all"):
+            # root_policy, wiring, replay_a and replay_chain have no command: they stay so that a `--skip` naming them
+            # records the skip it always has in stages.json (the row's does)
             cpu = ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2"]
             if self.a.other_log:
                 cpu.append("fold_other")
-            cpu += ["root_policy", "golden", "wiring", "replay_a", "replay_chain"] + [f"replay_b_step{n}" for n in self.tier_b_steps]
-            if self.a.tier_c:
-                cpu.append("replay_c")
-            cpu.append("gates")
+            cpu += ["root_policy", "golden", "wiring", "replay_a", "replay_chain", "gates"]
         return gpu + cpu
 
 
@@ -320,8 +269,8 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     t0 = time.time()
     rec: dict[str, Any] = {"stage": stage, "cmd": shlex.join(cmd), "log": str(log_path), "status": "ok", "returncode": None, "reason": None}
     peak = 0.0
-    # [R16 sys, BRIEF §5] the Match stage's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
-    # process each (`work.*`), the CPU stages (fold, resolve, ...) are validation
+    # the Match phase's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
+    # process each (`work.*`), the CPU phases (fold, resolve, ...) are validation
     try:
         from verity_vllm.pipeline.timeline import Timeline
         _tl = Timeline.from_env("run_config", hot=False)
@@ -393,7 +342,7 @@ def _hf_config_of(a: Options, C: dict | None) -> dict | None:
     if cfg is None or not cfg.exists():
         return None
     try:
-        hf_C, _prov = an.config_of(str(cfg))      # (C, provenance) — `dict()` of the pair raised, so every card field read "hand" (llama lane, D84)
+        hf_C, _prov = an.config_of(str(cfg))      # (C, provenance) — `dict()` of the pair raised, so every card field read "hand"
         return dict(hf_C)
     except Exception:  # noqa: BLE001 - provenance falls back to "hand"
         return None
@@ -421,11 +370,11 @@ def write_manifest(plan: Plan, a: Options) -> dict:
         "verify_weights": plan.verify_weights, "parallel_replay": plan.parallel, "phase": a.phase,
         "sampling": {"seed": a.seed, "k": a.k, "chains": a.chains, "full_replay": bool(getattr(a, "full_replay", False))},
         "python_gpu": plan.py_gpu, "python_cpu": plan.py_cpu,
-        "engine_args_requested": {"max_num_seqs": a.max_num_seqs, "enforce_eager": _workload_enforce_eager(a.workload), **_engine_arg_dict(plan.engine_args())},   # [R15 EXEC-02] from the row's execution
+        "engine_args_requested": {"max_num_seqs": a.max_num_seqs, "enforce_eager": _workload_enforce_eager(a.workload), **_engine_arg_dict(plan.engine_args())},   # from the workload's execution
         "declared_execution": _workload_execution(a.workload),
-        "engine_args_required_by_workload": _workload_engine_args(a.workload),     # D87 (merged into engine_args_requested)
+        "engine_args_required_by_workload": _workload_engine_args(a.workload),     # merged into engine_args_requested
         "snapshot_max_bytes": a.snapshot_max_bytes if a.snapshot_max_bytes is not None else 32 << 20,
-        "snapshot_cap_derivation": getattr(a, "snapshot_cap_derivation", None),   # [R16 global F-global-SNAP] None = an explicit CLI cap
+        "snapshot_cap_derivation": getattr(a, "snapshot_cap_derivation", None),   # None = an explicit CLI cap
         "snapshot_max_bytes_op": a.snapshot_max_bytes_op,       # cov-moe: lower cap at dispatcher-call events (None = the cap above)
         "checkpoints": a.checkpoints, "checkpoint_dir": a.checkpoint_dir, "artifacts": plan.artifacts_override(),
         "skip": sorted(plan.skip), "argv": sys.argv[1:], "family": a.family, "mechanism_notes": [], "notes": [],
@@ -443,7 +392,7 @@ def write_manifest(plan: Plan, a: Options) -> dict:
 
 
 def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
-    """[D88] spec.json -- the specification (configuration / workload / initial state) as known before execution, from the workload
+    """spec.json -- the specification (configuration / workload / initial state) as known before execution, from the workload
     file, the driver's arguments, the checkpoint manifest entry and the HF config.  Written once; a later phase never rewrites it (a
     mismatch is returned and lands in experiment.json).  For `--phase cpu` over an old capture with no spec.json the file is written
     from the same pre-execution sources and flagged `reconstructed_after_execution`."""
@@ -463,7 +412,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
                               engine_args=_engine_arg_dict(plan.engine_args()), max_num_seqs=a.max_num_seqs,
                               sampling={}, tp=int(getattr(a, "tp", 1) or 1), dtype=None, snapshot_steps=plan.steps,
                               snapshot_max_bytes=a.snapshot_max_bytes,
-                              harness={"enforce_eager": _workload_enforce_eager(a.workload), "execution": _workload_execution(a.workload),   # [R15 EXEC-02]
+                              harness={"enforce_eager": _workload_enforce_eager(a.workload), "execution": _workload_execution(a.workload),
                                        "driver": "verity_vllm.pipeline.match", "python_gpu": a.python_gpu,
                                        "family": getattr(a, "family", None)})
         if a.phase == "cpu" and not (plan.run / "spec.json").exists():
@@ -479,7 +428,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
 
 
 def write_realized(plan: Plan) -> dict | None:
-    """[D87] After the GPU phase: the realized shape of the run into run.json["realized"] -- per request the prompt length, the
+    """After the GPU phase: the realized shape of the run into run.json["realized"] -- per request the prompt length, the
     generated length, the arrival / first / finish engine steps and finish reason (from capture/tokens.json), the engine-step
     count of the observed and the control run, and the snapshot steps that actually happened.  "Record the exact realized
     input/output lengths in every run artifact": run.json is the artifact every gate and the card read first."""
@@ -540,7 +489,7 @@ def load_stages(run: Path) -> list[dict]:
     try:
         d = json.loads(text)
     except json.JSONDecodeError as e:
-        # [F-r19-int-17] an interrupted save (ENOSPC mid-write left a 0-byte stages.json on l40s4 #69) must not block `--phase cpu`
+        # an interrupted save (ENOSPC mid-write leaves a 0-byte stages.json) must not block `--phase cpu`
         # over the preserved capture: set the unreadable record aside under a stamped name and start the stage list empty.
         aside = p.with_name(p.name + f".unreadable-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
         p.replace(aside)
@@ -581,7 +530,7 @@ class Options:
     worker: str | None = option("--worker", choices=["fold"], default=None, help="(internal) run one worker in this process")
     config_id: str | None = option("--config-id", default=None)
     profile: str | None = option("--profile", default=None)
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, QWEN05, ... any role in checkpoints.json with a profile module)")
     out: str | None = option("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
     run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json " "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
@@ -589,42 +538,39 @@ class Options:
     python_gpu: str | None = option("--python-gpu", default=None, help="the pod's torch venv python (default: sys.executable)")
     python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
     snapshot_steps: str = option("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS, help="contiguous from 0, or `all` = every step of the workload (default all)")
-    full_replay: bool = option("--full-replay", default=False, action="store_true", help="also run the tier-b full-step replays (diagnostic only since D82; never gating)")
-    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: steps replayed by tier b (default 0,1,2,3; must be snapshot steps)")
-    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS, help="tier chain: connected slices replayed with computed intermediates (G5)")
+    full_replay: bool = option("--full-replay", default=False, action="store_true", help="run.json's sampling.full_replay (no stage reads it)")
+    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: run.json's tier_b_steps (default 0,1,2,3; must be snapshot steps)")
+    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS, help="run.json's sampling.chains (no stage reads it)")
     no_verify_weights: bool = option("--no-verify-weights", default=False, action="store_true", help="skip the checkpoint sha verification at engine build (root policy weight identity then fails)")
-    parallel: int | None = option("--parallel", type=int, default=None, help="concurrent replay stages (default 4; 1 with --laptop)")
-    replay_budget_leaves: int | None = option("--replay-budget-leaves", type=int, default=None, help="replay --max-arg-leaves (tier a/chain evaluate oversize instances at a child unit or skip them). Default: none on the pod, 4e6 with --laptop")
+    parallel: int | None = option("--parallel", type=int, default=None, help="run.json's parallel_replay (default 4; 1 with --laptop)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a " "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a " "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton " "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a " "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (root_policy, compare --safetensors)")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (compare --safetensors)")
     hf_config: str | None = option("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
     family: str | None = option("--family", default=None, help="hand-authored family reference name (default Serve_v4 in the card)")
     log: str | None = option("--log", default=None, help="reuse an existing raw log instead of RUN_DIR/capture/log.jsonl.gz")
     snapshots: str | None = option("--snapshots", default=None, help="its snapshots dir (default: the log's directory)")
     other_log: str | None = option("--other-log", default=None, help="a second capture of the same workload (G6 detail: cross-capture digest)")
     control_tokens: str | None = option("--control-tokens", default=None, help="reuse an existing control run's tokens.json instead of RUN_DIR/control/tokens.json")
-    laptop: bool = option("--laptop", default=False, action="store_true", help="laptop budget: RSS/wall watchdog, replay --max-arg-leaves")
+    laptop: bool = option("--laptop", default=False, action="store_true", help="laptop budget: RSS/wall watchdog")
     max_rss_gb: float | None = option("--max-rss-gb", type=float, default=None, help="kill a stage above this RSS (default 1.5 with --laptop)")
     stage_timeout: float | None = option("--stage-timeout", type=float, default=None, help="kill a stage above this wall time in s (default 180 with --laptop)")
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
-    tier_c: bool = option("--tier-c", default=False, action="store_true", help="also run the tier-c replay")
     skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
     keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="census: keep the per-step Chrome traces")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
-    k: int = option("--k", type=int, default=DEFAULT_K, help="tier a instances per (specialization, regime) stratum (gate minimum TIER_A_K)")
-    replay_a_jobs: int = option("--replay-a-jobs", type=int, default=1, help="replay_a's forked workers (replay --jobs): the same seed gives the same sample and report")
-    seed: int | None = option("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
+    k: int = option("--k", type=int, default=DEFAULT_K, help="run.json's sampling.k (no stage reads it)")
+    seed: int | None = option("--seed", type=int, default=None, help="run.json's sampling.seed (no stage reads it)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
-    persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
+    persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here")
     program_dir: list[str] | None = option("--program-dir", action="append", default=None, help="the Build's Program dir(s) the Match compares against; the fold binds the top-p select under the construction they declare (sampling_event.program_sampler_construction)")
     sampler_construction: str | None = option("--sampler-construction", default=None, help="(--worker fold) the Programs' sampler construction (the driver passes it from --program-dir)")
     registered_values: bool = option("--registered-values", default=False, action="store_true", help="(--worker fold) the program's values are inputs (Profile.registered_values); the driver passes what the --program-dir Programs register")
-    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
+    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
 
 
 def main(a: Options) -> int:
@@ -634,7 +580,7 @@ def main(a: Options) -> int:
         _defaults_from_run_dir(a)
     if a.profile is None and a.case:
         try:
-            from verity_vllm.engine.profiles import profile_module_for_case
+            from verity_vllm.observe.fold.profiles import profile_module_for_case
             a.profile = profile_module_for_case(a.case)
         except Exception as e:  # noqa: BLE001
             raise UsageError(f"--profile not given and no profile module declares case {a.case!r}: {e}")
@@ -643,9 +589,9 @@ def main(a: Options) -> int:
     for req in ("config_id", "profile", "workload", "case", "out"):
         if getattr(a, req) is None:
             raise UsageError(f"--{req.replace('_', '-')} is required")
-    # [R16 global, F-global-SNAP] no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's
-    # widths (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which left the prefill MLP rows of every 1024-class row without
-    # snapshot evidence (D87).  An explicit value still wins; the run.json records the derivation either way.
+    # no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's widths
+    # (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
+    # snapshot evidence.  An explicit value still wins; the run.json records the derivation either way.
     if not hasattr(a, "snapshot_cap_derivation"):
         a.snapshot_cap_derivation = None          # an explicit CLI cap (or --run-dir already carried the capture's)
     if a.snapshot_max_bytes is None:
@@ -654,12 +600,10 @@ def main(a: Options) -> int:
         a.snapshot_max_bytes, a.snapshot_cap_derivation = cap, why
         if why["raised"]:
             print(f"[plan] --snapshot-max-bytes derived: {cap} B ({why['rows']} rows [{why['rows_source']}] x {why['row_bytes']} B "
-                  f"[{why['row_bytes_source']}]; the 32 MiB cap of record skipped the prefill MLP rows of 1024-class rows, D87)", file=sys.stderr)
+                  f"[{why['row_bytes_source']}]; the 32 MiB cap of record skips the prefill MLP rows of 1024-class workloads)", file=sys.stderr)
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
-    if a.seed is None and (sampled := [st for st in stages if st in ("replay_a", "replay_chain") and not plan.skipped(st)]):
-        raise UsageError(f"--seed is required to run {' and '.join(sampled)} (the replay sample is drawn from it)")
     max_rss = a.max_rss_gb if a.max_rss_gb is not None else (LAPTOP_MAX_RSS_GB if plan.laptop else None)
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 
@@ -682,43 +626,25 @@ def main(a: Options) -> int:
         return 0
 
     man = write_manifest(plan, a)
-    spec_note = write_spec_for(plan, a, man)          # D88: spec.json (known before execution) -- written once, before any GPU stage
+    spec_note = write_spec_for(plan, a, man)          # spec.json (known before execution) -- written once, before any GPU phase
     recs = load_stages(plan.run)
     logs = plan.run / "logs"
     if a.phase in ("gpu", "all"):
         GL.acquire()                 # a leased row's GPU phase: its GPU from here to the exit (`row_stages.SingleRow.match`); nothing reads the device before
     t_phase = time.time()
-    stages = _batch_replays(stages, plan.parallel)
     if a.phase == "cpu":
         try:
-            write_realized(plan)             # D87: an existing capture's realized shape is in run.json before the gates / card read it
+            write_realized(plan)             # an existing capture's realized shape is in run.json before the gates / card read it
         except Exception as e:  # noqa: BLE001
             print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
     for st in stages:
-        if isinstance(st, list):
-            # a batch of independent replay stages run concurrently (pod: many cores; each process ~1 GB)
-            import concurrent.futures as cf
-            todo = [x for x in st if not plan.skipped(x) and plan.cmd(x) is not None]
-            for x in st:
-                if plan.skipped(x):
-                    recs.append({"stage": x, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
-            print(f"[replay] running {len(todo)} replay stages with parallel={plan.parallel}: {todo}", file=sys.stderr)
-            with cf.ThreadPoolExecutor(max_workers=plan.parallel) as ex:
-                futs = {ex.submit(run_stage, x, plan.cmd(x), logs / f"{x}.log", max_rss_gb=max_rss, timeout_s=timeout): x for x in todo}
-                for fut in cf.as_completed(futs):
-                    rec = fut.result()
-                    print(f"[{rec['stage']}] {rec['status']} in {rec['seconds']} s", file=sys.stderr)
-                    recs.append(rec)
-                    save_stages(plan.run, recs)
-            save_stages(plan.run, recs)
-            continue
         if plan.skipped(st):
             recs.append({"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
             save_stages(plan.run, recs)
             continue
         if st == "gates":
             try:
-                write_realized(plan)         # D87: realized shape into run.json before the card is built
+                write_realized(plan)         # realized shape into run.json before the card is built
             except Exception as e:  # noqa: BLE001
                 print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
             try:
@@ -731,8 +657,7 @@ def main(a: Options) -> int:
         cmd = plan.cmd(st)
         if cmd is None:
             continue
-        base = "replay_b" if st.startswith("replay_b_step") else st
-        mod = OPTIONAL_MODULES.get(base)
+        mod = OPTIONAL_MODULES.get(st)
         py = cmd[0]
         if mod and module_available(py, mod) is False:
             recs.append({"stage": st, "status": "missing_module", "returncode": None, "seconds": 0.0, "log": None, "cmd": shlex.join(cmd),
@@ -750,18 +675,17 @@ def main(a: Options) -> int:
               "stages": {r["stage"]: {"status": r["status"], "seconds": r.get("seconds")} for r in recs if r["stage"] in GPU_STAGES}}
         plan.p("gpu_done").write_text(json.dumps(gd, indent=1) + "\n")
     try:
-        real = write_realized(plan)          # D87: realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)
+        real = write_realized(plan)          # realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)
         if real:
             print(f"[realized] prompt_lens={real['prompt_lens']} n_generated={real['n_generated']} steps capture/control="
                   f"{real['engine_steps_capture']}/{real['engine_steps_control']} max_concurrent={real['max_concurrent_requests']}", file=sys.stderr)
     except Exception as e:  # noqa: BLE001 - informational
         print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        EXP.write_experiment(plan.run, repo=Path.cwd(), spec_note=spec_note)   # D88: the Experiment index over the run directory
+        EXP.write_experiment(plan.run, repo=Path.cwd(), spec_note=spec_note)   # the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational
         print(f"[experiment] not written: {type(e).__name__}: {e}", file=sys.stderr)
-    flat = [x for st in stages for x in (st if isinstance(st, list) else [st])]
-    bad = [r for r in recs if r["stage"] in flat and r["status"] not in ("ok", "skipped")]
+    bad = [r for r in recs if r["stage"] in stages and r["status"] not in ("ok", "skipped")]
     return 1 if bad else 0
 
 
@@ -782,7 +706,7 @@ def _defaults_from_run_dir(a: Options) -> None:
     if a.tier_b_steps == DEFAULT_TIER_B_STEPS and man.get("tier_b_steps"):
         a.tier_b_steps = ",".join(map(str, man["tier_b_steps"]))
     if a.snapshot_max_bytes is None and man.get("snapshot_max_bytes"):
-        # [R16 global F-global-SNAP] a CPU-phase re-run keeps the cap the capture RAN with (and its derivation), never a re-derived one
+        # a CPU-phase re-run keeps the cap the capture RAN with (and its derivation), never a re-derived one
         a.snapshot_max_bytes = int(man["snapshot_max_bytes"])
         a.snapshot_cap_derivation = man.get("snapshot_cap_derivation")
     if a.max_num_seqs == 8 and man.get("engine_args_requested", {}).get("max_num_seqs"):
@@ -794,25 +718,6 @@ def _defaults_from_run_dir(a: Options) -> None:
         rel = Path(a.workload)
         if not rel.is_absolute() and not rel.exists():
             raise UsageError(f"workload {a.workload} not found in this checkout")
-
-
-def _batch_replays(stages: list[str], parallel: int) -> list:
-    """Group consecutive replay stages into one list when parallel > 1 (they are independent processes)."""
-    if parallel <= 1:
-        return list(stages)
-    out: list = []
-    batch: list[str] = []
-    for st in stages:
-        if st.startswith("replay_"):
-            batch.append(st)
-        else:
-            if batch:
-                out.append(batch if len(batch) > 1 else batch[0])
-                batch = []
-            out.append(st)
-    if batch:
-        out.append(batch if len(batch) > 1 else batch[0])
-    return out
 
 
 def _workload_doc(path: str | None) -> dict | None:
@@ -833,7 +738,7 @@ def _workload_max_tokens(path: str | None) -> int | None:
 
 
 def _workload_expected_steps(path: str | None) -> int | None:
-    """[D87] The workload's declared `expected_engine_steps` (an upper bound: every request runs to max_tokens under the declared
+    """The workload's declared `expected_engine_steps` (an upper bound: every request runs to max_tokens under the declared
     arrivals), else max(max_tokens)."""
     doc = _workload_doc(path)
     if doc and doc.get("expected_engine_steps"):
@@ -846,14 +751,14 @@ def _workload_engine_args(path: str | None) -> dict:
 
 
 def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | None = None) -> tuple[int, dict]:
-    """[R16 global, F-global-SNAP (D87 made automatic)] The per-tensor snapshot cap a Match capture needs so that EVERY per-token
+    """The per-tensor snapshot cap a Match capture needs so that EVERY per-token
     activation of the largest forward the workload can schedule has snapshot evidence: rows x widest row x 2 bytes, never below the
     32 MiB cap of record.  Rows = the engine's `max_num_batched_tokens` (the workload's `engine.args`, then the CLI's engine
     args), else the longest prompt plus one decode row per request; the widest row = max(gate_up 2I, qkv (NH+2KVH)D, hidden H) from
     the checkpoint's config (analytic.config_of keys GU/QKV/H), else 64 KiB.  Why: at 1024/128 the prefill's gate_up output is
     [1024+B, 2I] bf16 = 33.7 MB for Llama-3.2-1B (I 8192) and 36.7 MB for Qwen2.5-1.5B (I 8960) -- over the 32 MiB cap, listed in
     snapshots.json as skipped -- so the Commit's form (B) oracle-compare had 'no snapshot of alloc ... (0 entries of that alloc)' for the
-    prefill-step MLP rows of every 1024-class row (exec M-0545 llama B4, M-0655 qwen H100 B1 -- FAIL by name where Gemm_v2 has no
+    prefill-step MLP rows of every 1024-class row (llama B4, qwen H100 B1 -- FAIL by name where Gemm_v2 has no
     evaluator; global int-2 B16 mixed-arrivals: 16 layers x 5 rows at engine step 36, the [1028, 16384] gate_up of a 1024-token
     arrival); 256/32 rows ([256+B, 2I] = 8.6 MB) never hit it.  MoE routed intermediates are not in the width (cov-moe's
     --snapshot-max-bytes-op contract is unchanged; OLMoE stays at the 32 MiB floor).  Returns (cap, derivation) -- the derivation
@@ -888,14 +793,14 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
                  "floor_bytes": SNAPSHOT_CAP_FLOOR, "cap_bytes": cap, "raised": cap > SNAPSHOT_CAP_FLOOR}
 
 
-# [R15 EXEC-02 / COORD M-0063 (2)] torch-free mirror of vllm_adapter.execution_of_workload (this driver runs on the laptop): the row's
+# torch-free mirror of vllm_adapter.execution_of_workload (this driver runs on the laptop): the workload's
 # declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager it implies
-# (`engine.served.ENFORCE_EAGER`).  The GPU stages derive the same from the workload themselves and refuse a contradicting engine arg
+# (`engine.served.ENFORCE_EAGER`).  The GPU phases derive the same from the workload themselves and refuse a contradicting engine arg
 # (build_engine).
 
 
 def _workload_moe_construction(path: str | None) -> str | None:
-    """[R17-42 route A (4)] The workload's DECLARED MoE construction (`engine.target.moe_construction`; None = undeclared = the default),
+    """The workload's DECLARED MoE construction (`engine.target.moe_construction`; None = undeclared = the default),
     validated by the frontend's own table so a misspelling fails here by name and is never folded as MOE-01 silently."""
     mc = (RowEngine.of(_workload_doc(path) or {}).target or {}).get("moe_construction")
     if mc is None:
@@ -904,6 +809,15 @@ def _workload_moe_construction(path: str | None) -> str | None:
     if mc not in TargetProfile.MOE_CONSTRUCTIONS:
         raise SystemExit(f"workload engine.target.moe_construction {mc!r} is not one of {sorted(TargetProfile.MOE_CONSTRUCTIONS)}")
     return str(mc)
+
+
+def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
+    """The fold worker's construction flags: the MoE scope under the workload's DECLARED construction (manifest
+    target.moe_construction), the top-p select under the one the Build's Programs declare (a single-request select has no shared-greedy
+    form) and the values they register; never off the trace.  The single-rank driver passes them from --program-dir, the TP fold Match
+    (`tp.fold_match`) from each rank's Build dirs; a fold without them binds the profile's default select."""
+    mc, sc, rv = _workload_moe_construction(workload), program_sampler_construction(program_dirs), program_registered_values(program_dirs)
+    return (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
 
 
 def _workload_execution(path: str | None) -> str | None:
@@ -937,11 +851,11 @@ def _max_rss_gb() -> float:
 
 
 def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None, sampler_construction: str | None = None, registered_values: bool = False) -> tuple[dict, Any]:
-    """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction` [R17-42 route A (4)]: the workload's
+    """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction`: the workload's
     DECLARED construction, which a profile without a `with_moe_construction` hook cannot fold (FAILS by name); `sampler_construction` and `registered_values`: the Programs' (`--program-dir`)."""
-    from verity_vllm.check.fold_compare import load_profile, summarize
+    from verity_vllm.check.fold_compare import load_profile
     from verity_vllm.observe.events import Root, RunHeader
-    from verity_vllm.observe.fold.fold import fold
+    from verity_vllm.observe.fold.fold import fold, summarize
     from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.fold.patterns.sampling import with_sampler_construction
     from verity_vllm.observe.log import read_log
@@ -949,7 +863,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
 
     t0 = time.time()
     profile = load_profile(profile_name)
-    prof_mod = importlib.import_module(f"verity_vllm.engine.profiles.{profile_name}")
+    prof_mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{profile_name}")
     if moe_construction not in (None, TargetProfile.DEFAULT_MOE_CONSTRUCTION):
         hook = getattr(prof_mod, "with_moe_construction", None)
         if hook is None:
@@ -1004,7 +918,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     return {
         "schema": G.FOLD_SUMMARY_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
         "profile": profile_name, "profile_id": profile.id, "with_program": with_program, "digest": result.digest, "spec": summ.get("spec"),
-        # [R17-42 route A (4)] the DECLARED construction the scope folded under (None = undeclared = indexed-read) and the pattern that did
+        # the DECLARED construction the scope folded under (None = undeclared = indexed-read) and the pattern that did
         "moe_construction": moe_construction, "moe_scope_pattern": scope_pattern, "sampler_construction": sampler_construction, "registered_values": registered_values,
         "n_instances": len(result.instances), "n_steps": len(per_step), "unsupported": result.report.unsupported,
         "unresolved": result.unresolved, "opaque_fallbacks": opaque, "errors": len(result.errors), "error_classes": summ.get("error_classes"),
@@ -1017,17 +931,17 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
 
 PROGRAM_SCHEMA = "verity-gen/program/v1"
 INSTANCES_SCHEMA = "verity-gen/instances/v1"
-INSTANCES_SCHEMA_V2 = "verity-gen/instances/v2"   # [R17 mfast F2] operand_refs: "p" runs + node-space PROGRESSIONS ["N", idx, lo, hi, dI, dL, dH, count]
+INSTANCES_SCHEMA_V2 = "verity-gen/instances/v2"   # operand_refs: "p" runs + node-space PROGRESSIONS ["N", idx, lo, hi, dI, dL, dH, count]
 INSTANCES_FORM_ENV = "VERITY_INSTANCES_FORM"      # runs (default, v1) | progressions (v2); every reader accepts both (cb_a.compact.runs_from_file_items)
 
 
 def instances_form() -> str:
-    """[R17 mfast F2, COORD R17-34 (2) / M-0496] The STORED form of `instances.jsonl` operand references.  `runs` = the record form
+    """The STORED form of `instances.jsonl` operand references.  `runs` = the record form
     (every maximal run one item, the node-space K/V gathers listed run by run: 54 M items / 1.63 GB on a B8 1024/128 row); `progressions`
     = the same references with the node space as compact progressions built from the fold's own Refs objects in O(1) per part (no
     `runs()` expansion at write; ~3 % of the text), parameter-space runs unchanged.  Lossless either way.  The LIBRARY default stays `runs`
-    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match stage (COORD R17-34 (2)
-    "compact refs stay compact end to end", M-0496, rev M-0500 conditions met at S-r17-33: readers accept both forms)."""
+    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match phase ("compact
+    refs stay compact end to end": readers accept both forms)."""
     v = (os.environ.get(INSTANCES_FORM_ENV) or "runs").strip().lower()
     if v not in ("runs", "progressions"):
         raise SystemExit(f"{INSTANCES_FORM_ENV}={v!r}: expected runs | progressions")
@@ -1035,11 +949,11 @@ def instances_form() -> str:
 
 
 def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path) -> dict:
-    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.ml.circuits.codec`,
+    """Freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.ml.circuits.codec`,
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
     the operand `Refs` as runs) -- and `accesses.jsonl.gz` the full memory-access journal (alloc / root / read / write /
-    move / token with event ids) that `provenance.py` checks.  With these three files a checker can locate every
+    move / token with event ids).  With these three files a checker can locate every
     operand and result of every instance in the trusted record without importing the profile's patterns."""
     import dataclasses
     import gzip
@@ -1048,7 +962,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     from verity.ml.circuits import codec
     from verity.ml.circuits.refs import runs
 
-    # [R17 mfast, COORD R17-39 (a) fold/persist] the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
+    # the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
     # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already
     # (runs() / cb_a.compact.file_items_from_refs_json), so neither goes through _jsonable's per-element recursion (6.5 M calls on a 32k-instance
     # fold, ~40 % of the writer; at B8 1024/128 the refs alone were 54 M runs x 4 elements).  Output bytes are unchanged (test_compact:
@@ -1070,13 +984,13 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
             digest = codec.program_digest(desc)
             if result.digest and digest != result.digest:
                 raise SystemExit(f"program.json digest {digest[:16]} != fold digest {result.digest[:16]}")
-        else:                 # [R17-28 F3] the descriptor `_finish` digested: one encoding, program.json's digest is the fold's by construction
+        else:                 # the descriptor `_finish` digested: one encoding, program.json's digest is the fold's by construction
             digest = result.digest or codec.program_digest(desc)
         n_root_nodes = len(result.program.root.body.nodes)
         n_input_nodes = n_root_nodes - len(result.body.nodes)
         doc = {"schema": PROGRAM_SCHEMA, "profile": profile_name, "log": str(log_path), "digest": digest,
                "n_input_nodes": n_input_nodes, "n_instances": len(result.body.nodes), "program": desc,
-               # [R17 D90] the fold's root-parameter layout by NAME (prompt_<i> / seed_<i> / peers_<i> / weights, in parameter order = Input
+               # the fold's root-parameter layout by NAME (prompt_<i> / seed_<i> / peers_<i> / weights, in parameter order = Input
                # node order for homogeneous parameters) and, on a tensor-parallel rank fold, rank/world + the `peers_<i>` field tables
                # (step, k, kind, site, rows, N, leaf offset) -- cb_a.compare locates every peer leaf range from these, never by guessing
                "params": [[n, repr(t)] for n, t in (getattr(result, "params", None) or ())],
@@ -1089,7 +1003,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
         written["program"] = {"path": str(p), "bytes": p.stat().st_size, "digest": digest, "n_input_nodes": n_input_nodes}
         del _ptext
     p = run_dir / "instances.jsonl"
-    # [X-09 / MB-01 R13] the header carries the request table (fold order = prompt parameter order `prompt_<i>` of program.json) with each
+    # the header carries the request table (fold order = prompt parameter order `prompt_<i>` of program.json) with each
     # request's prompt length and number of SERVED samples, and every instance line its `request`/`position` attribution
     # (`fold._attribution`; X-09's `meta` channel reads exactly these keys -- without them here the record never carried them and the
     # decomposition always fell through to the data-flow / row-count channels).
@@ -1106,7 +1020,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
         line = json.dumps({"schema": INSTANCES_SCHEMA_V2 if _form == "progressions" else INSTANCES_SCHEMA, "profile": profile_name,
                            "digest": result.digest, "n_instances": len(result.instances),
                            "note": "root-circuit node of instance k = n_input_nodes + k (program.json)", "requests": reqs_tab,
-                           # [R17 mfast F2] how operand_refs items are stored: "runs" = every maximal run ["space", idx, lo, hi]; "progressions" =
+                           # how operand_refs items are stored: "runs" = every maximal run ["space", idx, lo, hi]; "progressions" =
                            # node- and parameter-space progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count] (cb_a.compact.runs_from_file_items)
                            "operand_refs_form": _form}) + "\n"
         f.write(line)
@@ -1115,26 +1029,26 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
             node = result.body.nodes[m["node"]] if result.body is not None and m.get("node") is not None else None
             rec = {k: m.get(k) for k in ("node", "step", "event", "resolution", "pattern", "spec", "row", "rows", "name", "hint", "request", "position")}
             if m.get("operand_roots"):
-                rec["operand_roots"] = m["operand_roots"]     # [R15 fp8] per-operand weight names (multi-weight Computes)
+                rec["operand_roots"] = m["operand_roots"]     # per-operand weight names (multi-weight Computes)
             if m.get("collective"):
-                rec["collective"] = m["collective"]           # [R17 D90] kind/step/k/site/rank/world + the peers field the row reads
+                rec["collective"] = m["collective"]           # kind/step/k/site/rank/world + the peers field the row reads
             rec = _jsonable(rec)                              # the meta fields only (small; may carry tuples / numpy scalars / objects)
             rec["operand_views"] = [view(v) for v in m.get("operand_views") or []]
             rec["output_views"] = [view(v) for v in m.get("output_views") or []]
             if node is not None:
-                if _form == "progressions":   # [R17 mfast F2] from the fold's own Refs objects: no runs() expansion, no to_json() tree
+                if _form == "progressions":   # from the fold's own Refs objects: no runs() expansion, no to_json() tree
                     rec["operand_refs"] = [_file_items(arg.refs) for arg in node.args]   # (== file_items_from_refs_json(refs.to_json()))
                 else:
                     rec["operand_refs"] = [run_items(runs(arg.refs)) for arg in node.args]
             f.write(_dumps(rec, separators=(",", ":")) + "\n")
-    # [R17 mfast, rev F-r17-12] no compact sidecar is written beside the files of record (unit 7 withdrawn): a producer-written copy in the
-    # record's own directory is prover input the checker cannot authenticate; the compact STORED form above (F2) is the file of record itself.
+    # no compact sidecar is written beside the files of record: a producer-written copy in the record's own directory is prover input
+    # the checker cannot authenticate; the compact STORED form above is the file of record itself.
     written["instances"] = {"path": str(p), "bytes": p.stat().st_size, "n": len(result.instances), "operand_refs_form": _form}
     acc = getattr(result, "accesses", None) or []
     if acc:
         p = run_dir / "accesses.jsonl.gz"
-        # [COORD R17-28 F1, mprof] the journal is 22 % of the fold stage at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
-        # Match-pipeline stage reads it (provenance.py / verify_lane.sh / gen_adversarial do, offline).  Under row_pod's MATCH_PIPELINE=shared
+        # the journal is 22 % of the fold phase at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
+        # Match-pipeline stage reads it (the regression fixtures pin it).  Under row_pod's MATCH_PIPELINE=shared
         # it is compressed at level 1 (same lines, ~4x less compressor time, a larger file); unset = level 9 as before.
         level = 1 if os.environ.get("MATCH_PIPELINE", "") == "shared" else 9
         with gzip.open(p, "wt", compresslevel=level) as f:

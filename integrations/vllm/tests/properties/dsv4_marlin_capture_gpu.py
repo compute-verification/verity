@@ -66,7 +66,7 @@ mismatched words (the moved pairs' among them), every reference evaluation equal
 back from the driver's cache.  The forced cases are at a moe block of 8: forcing one at 922 tokens would compare about 4.6e10
 coordinate-k steps per candidate config (its w13 and w2 launches), against about 2.2e8 a second on 14 workers.
 
-Replay determinism (run r20261014-065141-a1ec, schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
+Replay determinism (schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
 NO-GO on that comparison alone, while every one of run1's 242,460,672 words matched the twin at run1's recorded assignment.  The
 launch is a function of its call: the k-slice fold is lock-serialized in slice order (marlin_template.h:2162-2170 at the pin,
 `barrier_acquire(&locks[locks_off], slice_idx)` before each `global_reduce_fp32`), and `replay` now checks that directly.  What
@@ -129,7 +129,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
@@ -882,8 +882,8 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-    from verity_vllm.program.registry import marlin_moe as MM
+    from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+    from verity.ml.definitions.registry import marlin_moe as MM
 
     TK, TN, GRID = job["statics"]
     K, N, E, P, par = job["K"], job["N"], job["E"], job["pairs"], job["par"]
@@ -963,8 +963,8 @@ def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
-    from verity_vllm.program.boolean import boolean_version
-    from verity_vllm.program.registry import marlin_moe as MM
+    from verity.ml.definitions.boolean import boolean_version
+    from verity.ml.definitions.registry import marlin_moe as MM
 
     out: dict[str, Any] = {}
     for kind, TK, TN, GRID in sorted(served):

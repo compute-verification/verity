@@ -18,7 +18,7 @@ from circuit_check import cli
 from circuit_check import targets as TG
 
 FIXTURE = Path(__file__).parent / "fixtures" / "split" / "prims_serve.json"
-REG = "verity_vllm.program.registry"
+REG = "verity.ml.definitions.registry"
 #: the family's Definition modules (`FAMILY` of integrations/vllm `tests/program/test_prims_serve_boundaries.py`)
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")

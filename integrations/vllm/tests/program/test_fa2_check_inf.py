@@ -9,12 +9,12 @@ import pytest
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import attention_vocab
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import b1, hopper
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import attention_vocab
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
@@ -67,7 +67,7 @@ def test_an_unguarded_block_leaves_only_the_rescale_unguarded():
     on = evaluate(_block(True), q, k, v, NEG_INF, [0] * 4, [0] * D)
     v2 = evaluate(bind(b1.AttnBlockV2, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=hopper.HopperBF16WgmmaDot16), q, k, v, NEG_INF, [0] * 4, [0] * D)
     assert off[0] == on[0] == NEG_INF and all(_is_nan(w) for w in off[1:]) and set(on[1:]) == {0} and on == v2
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     p = {name: int(evaluate(P.MufuEx2Ftz, int(evaluate(P.F32FmaSubFtz, NEG_INF, scale, max_scaled)[0]))[0])
          for name, max_scaled in (("fa2", int(evaluate(P.F32MulFtz, int(evaluate(P.GuardNegInfZero, NEG_INF)[0]), scale)[0])),
                                   ("fa3", int(evaluate(P.F32MulFtz, NEG_INF, scale)[0])))}
@@ -140,7 +140,7 @@ def test_the_builder_kind_binds_v5_only_with_fa2_masked_from():
 
 
 def test_the_partition_rule():
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"}, "INV": {"fn": "Fa2InvSum_v1"}}
     for mf, guards in ((2, 0), (0, 4)):

@@ -1,34 +1,37 @@
-"""One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand blocks, its
-openings proved in zero knowledge through the proof service in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
-deploys them), so that the verifier receives no block bytes; and the prover's cost per opening.
+"""One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand chunks, its
+openings proved in zero knowledge through the proof system in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
+deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
 
     python benchmarks/one_stage/a8.py --bin flock-circuit --lean flock-verify --out DIR [--blocks 4096] [--plan 64]
       [--samples 16] [--points 1,4,16] [--arms nofw,fw] [--cold 1] [--gpu [--lease CMD]] [--no-audit]
 
 * **Store and window.** ``--blocks`` N seeded payloads (each 64-byte word's top byte zero, p512's words) registered under
-  p512/k2 (`a7.P512`: the opening unit at the default p1024/k3/masked is past C-Flock's K_MAX), sketch-sha512 receipts.
-  One window of N / ``--plan`` passes, pass i a stripe of P blocks from P i, so the window's U is N receipts, of which its
-  openings coin draws ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the receipt
-  leaves', every row's) comes from its own secret, drawn per run from the OS.
-* **Each opening a unit.** Draw (pass i, position p, block j) is one `BlockOpeningCheck_v1` (`block_check`) at P, DR (the
-  pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended block), its witness `opening.witness`: the
-  block, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's units are one statement of
-  the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified law, every unit drawn by
-  the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean `verify --zk --partition --program`.
-* **What the verifier opens.** Of each unit its public rows (``pub`` and ``signs``, which it derives itself:
+  p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past C-Flock's K_MAX), sketch-sha512
+  receipts. One window of N / ``--plan`` passes, pass i a stripe of P chunks from P i, so the window's U is N receipts, of
+  which its openings coin draws ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the
+  receipt leaves', every row's) comes from its own secret, drawn per run from the OS.
+* **Each opening a proof block.** Draw (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
+  DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:
+  the chunk, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's proof blocks are one
+  statement of the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified sampling
+  design, every proof block drawn by the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean
+  `verify --zk --partition --program`.
+* **What the verifier opens.** Of each proof block its public rows (``pub`` and ``signs``, which it derives itself:
   `opening.public`) and its verdict row ``o0``, under the salts the prover sends for those three rows. It holds the
-  unit's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear (§8, "What the plan
-  shows"), so the prover sends the plan row's salt with the plan. It decides the window on the verdicts
+  proof block's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear (§8, "What the
+  plan shows"), so the prover sends the plan row's salt with the plan. It decides the window on the verdicts
   (`opening.Session.decide`).
-* **Rounds.** ``honest``, and ``tampered``: the same session (the same coins, so the same draws), the store's block at the
-  first draw replaced by other bytes before the passes (a prover that lost the block and receipts what it holds in its
-  place). Its unit's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on one
-  stager, so the circuit is lowered once.
-* **What the verifier received** (`received`): every file the verifier side holds (the registration, partition, program,
+* **Rounds.** ``honest``, and ``tampered``: the same session (the same coins, so the same draws), the store's chunk at the
+  first draw replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its
+  place). Its proof block's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on
+  one stager, so the circuit is lowered once.
+* **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
   circuit, public file, the session's record and proofs, the draw, the openings it was sent and v0's messages), scanned
-  for every 16-byte piece of every drawn block and payload at every offset, raw and as hex. The prover's instance file is
-  the positive control.
-* **Cost** (``--points``): sessions on the honest statement whose verifier draws its first k units, cold (one prover
+  at every offset, raw and as hex, for each drawn chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
+  tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on
+  a piece the zero-knowledge drivers' one rule reads ``leaked`` (`leak_scan.scan`). The prover's input file
+  (``inst-*.bin``) is the positive control.
+* **Cost** (``--points``): sessions on the honest statement whose verifier draws its first k proof blocks, cold (one prover
   process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the firewall's send check, `FC_FIREWALL=1`, the design's
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
@@ -56,9 +59,11 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "network_traces"))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
+import leak_scan as LS  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -92,7 +97,7 @@ def store_of(blocks: int, seed: int, secret: bytes) -> C3.Store:
 
 
 def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, seed: int) -> SimpleNamespace:
-    """One window over ``store``: N / L passes, pass i the stripe of L blocks from L i, each received as the prover sends
+    """One window over ``store``: N / L passes, pass i the stripe of L chunks from L i, each received as the prover sends
     it (its root, its plan, its step i), then the window closed and drawn. Returns the session, the passes and v0's
     messages, as the verifier received them."""
     reg, N = store.registration, store.registration.blocks
@@ -120,7 +125,7 @@ def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, s
 
 
 def tampered(store: C3.Store, j: int) -> C3.Store:
-    """``store`` with block j replaced by other bytes (every word still below p): a prover that lost it."""
+    """``store`` with chunk j replaced by other bytes (every word still below p): a prover that lost it."""
     out = copy.copy(store)
     out.blocks = list(store.blocks)
     out.blocks[j] = hashlib.shake_256(b"a8 tampered block %d" % j).digest(codec.BLOCK_BYTES)
@@ -128,8 +133,9 @@ def tampered(store: C3.Store, j: int) -> C3.Store:
 
 
 def inputs(rs: SimpleNamespace, L: int, secret: bytes) -> SimpleNamespace:
-    """What the units read beside the session: each pass's plan row (its L blocks) under the prover's plan salt, and the
-    ``b || c`` the verifier computes from its own copy of the plan under the salt the prover sends with it; the statics."""
+    """What the proof blocks read beside the session: each pass's plan row (its L chunks) under the prover's plan salt,
+    and the ``b || c`` the verifier computes from its own copy of the plan under the salt the prover sends with it; the
+    statics."""
     N = rs.store.registration.blocks
     salt = a7.Entropy(secret + b"plan salts")
     rows = {i: list(range(L * i, L * (i + 1))) for i in range(N // L)}
@@ -142,7 +148,7 @@ def inputs(rs: SimpleNamespace, L: int, secret: bytes) -> SimpleNamespace:
 # --- staging and the audit ----------------------------------------------------------------------------------------------------
 
 def stager(S, n: int, out: Path) -> SimpleNamespace:
-    """The statement's program and partition (one template, n units) and its one stager (the circuit lowered once)."""
+    """The statement's program and partition (one template, n proof blocks) and its one stager (the circuit lowered once)."""
     defn = bind(BC.BlockOpeningCheck, **vars(S))
     rows = BC.opening_rows(S)
     program = P.mixed_population_program([(defn, n)])
@@ -165,7 +171,7 @@ def stager(S, n: int, out: Path) -> SimpleNamespace:
 
 
 def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[bytes], salt_key: bytes) -> dict:
-    """One round's statement on the stager: instance i's plan row under ``plan_salts[i]``, every other row under a salt
+    """One round's statement on the stager: proof block i's plan row under ``plan_salts[i]``, every other row under a salt
     from the prover's ``salt_key``."""
     t0 = time.time()
     st, n, out = sg.st, len(args), sg.out / f"stage-{name}"
@@ -237,9 +243,9 @@ TIMING = ("e2e_s", "wait_s", "wait_e2e_s", "witness_s", "prove_total_s", "tp_s",
 
 
 def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
-    """Member m registered, drawn by the verifier's Lean (every unit), proved --zk and held by Lean; then the verifier's
-    side: each unit's public rows opened to its own copy, its verdict row read, its plan row linked to the pass's plan by
-    ``b || c``, and the window decided on the verdicts. Writes what the verifier received under ``out / "verifier"``."""
+    """Member m registered, drawn by the verifier's Lean (every proof block), proved --zk and held by Lean; then the
+    verifier's side: each proof block's public rows opened to its own copy, its verdict row read, its plan row linked to
+    the pass's plan by ``b || c``, and the window decided on the verdicts. Writes what the verifier received under ``out / "verifier"``."""
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
     want, roots = {}, []
@@ -250,7 +256,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
     leaf_layer = hashlib.sha512(canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = D.parse_law(f"stratified:{n}")
     win = {"kind": "stand-in", "of": "the openings of one window of a remote bandwidth session (a8.py), on a "
-                                      f"{rs.store.registration.blocks}-block registered store",
+                                      f"{rs.store.registration.blocks}-chunk registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
@@ -320,14 +326,14 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
 
 # --- what the verifier received -----------------------------------------------------------------------------------------------
 
-def needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
-    """Every aligned 16-byte piece of each named blob, raw and as hex (both cases), to the blob's name."""
+def needles(pieces: dict[str, bytes]) -> dict[bytes, str]:
+    """Each named piece (`leak_scan.cut`'s), raw and as hex (both cases), to its name."""
+    if bad := {k: len(x) for k, x in pieces.items() if len(x) != PIECE}:
+        raise ValueError(f"pieces {bad} (their bytes) aren't {PIECE} bytes: cut each row whole (`leak_scan.public_pieces`)")
     out: dict[bytes, str] = {}
-    for name, b in blobs.items():
-        for o in range(0, len(b) - PIECE + 1, PIECE):
-            x = b[o:o + PIECE]
-            for nd in (x, x.hex().encode(), x.hex().upper().encode()):
-                out.setdefault(nd, name)
+    for name, x in pieces.items():
+        for nd in (x, x.hex().encode(), x.hex().upper().encode()):
+            out.setdefault(nd, name)
     return out
 
 
@@ -353,26 +359,37 @@ def find(data: bytes, table: dict[bytes, str]) -> dict[str, int]:
     return {x: len(v) for x, v in hits.items()}
 
 
-def received(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str]) -> dict:
-    """Every file under ``vdir`` (what the verifier received) and the prover's ``control`` file, scanned for ``blobs``'
-    pieces: each file's size and the blobs found in it; the control is to hold every blob in ``held``."""
-    table = needles(blobs)
+def received(vdir: Path, control: Path, pieces: dict[str, bytes], held: set[str]) -> dict:
+    """Every file under ``vdir`` (what the verifier received) and the prover's ``control`` file, scanned for ``pieces``
+    (`needles`): each file's size and the pieces found in it; the control is to hold every piece in ``held``."""
+    table = needles(pieces)
     files = {}
     for f in sorted(vdir.iterdir()):
         files[f.name] = {"bytes": f.stat().st_size, "found": find(f.read_bytes(), table)}
     ctl = find(control.read_bytes(), table)
-    return {"needles": len(table), "blobs": len(blobs), "files": files,
+    return {"needles": len(table), "blobs": len(pieces), "files": files,
             "verifier_bytes": sum(x["bytes"] for x in files.values()),
             "verifier_found": sorted({b for x in files.values() for b in x["found"]}),
-            "control": {"file": control.name, "bytes": control.stat().st_size, "blobs_found": len(ctl), "of": len(blobs),
+            "control": {"file": control.name, "bytes": control.stat().st_size, "blobs_found": len(ctl), "of": len(pieces),
                         "holds_all": held <= set(ctl), "missing": sorted(held - set(ctl))}}
+
+
+def scan(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes) -> dict:
+    """What the verifier received (`received`) scanned for ``blobs``, each cut whole by the zero-knowledge drivers' one
+    cutter less the pieces the public circuit ``public`` holds (`leak_scan.public_pieces`, listed as ``public_pieces``),
+    and the found pieces judged by their one rule (`leak_scan.scan`: ``leaked``, ``structured``, ``placed``). A blob
+    shorter than a piece is refused (`leak_scan.cut`). ``public`` is the staged circuit, which the stager writes from the
+    Definition before any input, so what it holds the verifier has whatever the witness."""
+    pieces, held, left_out = LS.public_pieces(sys.modules[__name__], blobs, held, public)
+    got = {**received(vdir, control, pieces, held), "public_pieces": left_out}
+    return {**got, **LS.scan(got, pieces, vdir)}
 
 
 # --- cost points --------------------------------------------------------------------------------------------------------------
 
 def cost(a, m: dict, out: Path, port: int) -> list[dict]:
-    """Sessions on member m's statement whose verifier draws its first k units, ``a.cold`` prover processes a point in each
-    arm; Lean verifies each arm's first session at the largest k."""
+    """Sessions on member m's statement whose verifier draws its first k proof blocks, ``a.cold`` prover processes a
+    point in each arm; Lean verifies each arm's first session at the largest k."""
     rows = []
     ks = sorted({k for k in a.points if 1 <= k <= m["n"]})
     for arm in a.arms:
@@ -404,11 +421,11 @@ def main() -> int:
     ap.add_argument("--lean", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--blocks", type=int, default=4096)
-    ap.add_argument("--plan", type=int, default=64, help="each pass's blocks, P: a stripe of the store")
-    ap.add_argument("--samples", type=int, default=16, help="the window's openings, each one unit")
+    ap.add_argument("--plan", type=int, default=64, help="each pass's chunks, P: a stripe of the store")
+    ap.add_argument("--samples", type=int, default=16, help="the window's openings, each one proof block")
     ap.add_argument("--seed", type=int, default=8)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
-    ap.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
+    ap.add_argument("--points", default="", help="cost points: the k drawn proof blocks of each session, comma-separated")
     ap.add_argument("--arms", default="nofw", help="nofw, fw or both, comma-separated")
     ap.add_argument("--cold", type=int, default=1)
     ap.add_argument("--gpu", action="store_true")
@@ -436,7 +453,7 @@ def main() -> int:
     summary["session_s"] = round(time.time() - t, 1)
     summary["statics"] = vars(S)
     summary["draws"] = [{"pass": d.index, "position": d.position, "block": d.block} for d in draws]
-    log(f"session: {a.blocks} blocks, {a.blocks // a.plan} passes of {a.plan}, {len(draws)} draws, statics {vars(S)}, "
+    log(f"session: {a.blocks} chunks, {a.blocks // a.plan} passes of {a.plan}, {len(draws)} draws, statics {vars(S)}, "
         f"{summary['session_s']} s")
 
     rounds = {"honest": (rs, store)}
@@ -456,10 +473,10 @@ def main() -> int:
         ref = [C3.check(d, w, st_.registration.codec_seed, S, c3.values, c3.plan_salts[d.step], c3.plan_bcs[d.step])
                for d, w in zip(ds, wits)]
         if ref != ([None] * len(ds) if name == "honest" else ["codec"] + [None] * (len(ds) - 1)):
-            raise SystemExit(f"{name}: the unit's reference on the prover's witness is {ref}")
+            raise SystemExit(f"{name}: the proof block's reference on the prover's witness is {ref}")
         BC.row_words(BC.opening_rows(S), wits[0])
         prepared[name] = (r, st_, ds, wits, ref)
-        log(f"{name}: the unit's reference on the prover's witness: {ref}")
+        log(f"{name}: the proof block's reference on the prover's witness: {ref}")
     if a.dry:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         log("dry: done")
@@ -477,8 +494,8 @@ def main() -> int:
         members[name] = (m, r, ds, ref)
         summary[name] = {"reference": ref, "verdict_words": m["oks"], "stage_s": m["stage_s"], "ands": m["ands"],
                          "unit_nnz": m["unit_nnz"], "k_log": m["meta"]["k_log"], "pin": m["pin"]}
-        log(f"staged {name}: {m['n']} units, {m['ands']} ANDs, k_log {m['meta']['k_log']}, verdicts {m['oks']}, reference {ref}, "
-            f"{m['stage_s']} s")
+        log(f"staged {name}: {m['n']} proof blocks, {m['ands']} ANDs, k_log {m['meta']['k_log']}, verdicts {m['oks']}, "
+            f"reference {ref}, {m['stage_s']} s")
 
     ok = True
     if not a.no_audit:
@@ -486,23 +503,24 @@ def main() -> int:
             res = audit_round(a, sg, m, r, c3, ds, out / name, a.port + j)
             blobs = {}
             for d in ds:
-                blobs[f"block {d.block}"] = r.store.blocks[d.block]
+                blobs[f"chunk {d.block}"] = r.store.blocks[d.block]
                 blobs[f"payload {d.block}"] = r.store.payload(d.block)
             held = set(blobs)
             if name == "tampered":
-                blobs[f"registered block {summary['tampered_block']}"] = store.blocks[summary["tampered_block"]]
-            res["received"] = received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held)
+                blobs[f"registered chunk {summary['tampered_block']}"] = store.blocks[summary["tampered_block"]]
+            res["received"] = scan(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held,
+                                   (m["dir"] / "circuit.txt").read_bytes())
             summary[name].update(res)
             want = name == "honest"
+            got = res["received"]
             good = (res["accepted"] is want and res["audit"]["accepted"] is True and all(res["verdicts"].values())
-                    and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]
-                    and (want or res["failure"] == "codec"))
+                    and not got["leaked"] and got["control"]["holds_all"] and (want or res["failure"] == "codec"))
             ok &= good
             log(f"round {name}: window {'accepted' if res['accepted'] else 'rejected (' + str(res['failure']) + ')'}, proofs "
-                f"{res['verdicts']}, failures {res['failures']}, verifier received {res['received']['verifier_bytes']} bytes in "
-                f"{len(res['received']['files'])} files, block pieces found there: {res['received']['verifier_found'] or 'none'}, "
-                f"control found {res['received']['control']['blobs_found']}/{len(blobs)} (holds all it should: "
-                f"{res['received']['control']['holds_all']}); {'as expected' if good else 'UNEXPECTED'}")
+                f"{res['verdicts']}, failures {res['failures']}, verifier received {got['verifier_bytes']} bytes in "
+                f"{len(got['files'])} files, chunk pieces leaked there: {got['leaked'] or 'none'} (structured: "
+                f"{got['structured'] or 'none'}), control found {got['control']['blobs_found']}/{got['blobs']} pieces (holds "
+                f"all it should: {got['control']['holds_all']}); {'as expected' if good else 'UNEXPECTED'}")
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     if a.points:

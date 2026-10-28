@@ -10,7 +10,7 @@ import Mathlib.NumberTheory.LegendreSymbol.Basic
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.NormNum.Basic
 import Mathlib.Tactic.Ring
-import Models.Accounting.Guarantees.Gates
+import Definitions.Accounting.Guarantees.Gates
 
 /-!
 # The circuit model's window and lower bounds, proved
@@ -25,8 +25,10 @@ at `j = 1` on the sparse family, whose squares have no carries between bytes; `S
 budgeted gate's value and each dynamic index's two classes, `idxCls b v` (`min(v, 2^b − 1)`, and `2^b − 1` for a
 negative `v`, which reads the fill as an index past the column does) at the most index bits `b` its gathers read and
 `v mod 2^b'` at the most `b'` its table reads read, which the fresh index bits of each kind pay for; `SquaringUnits`
-from it on the nibble family; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census's
-units, and each window's run-input bound, over the windows and classes; `RhoPairs` from Fermat's little theorem
+from it on the nibble family; `FoolingCap` by injecting the family into its outputs' residues mod `2^j`;
+`EncodeBudget` and `EncodeCost` from `SquaringFloor` and `ChainSum` (the encode bound at `k · S · e`, so at any
+`E` below it) by summing the census's units and data products, and each window's run-input bound, over the windows and
+classes; `RhoPairs` from Fermat's little theorem
 (`s² = x · x^((p−1)/2) = ±x`). `DeclaredWindow` by `ProvenWindow`'s induction, each gate's declared bound earned from
 the earlier gates' intervals; `Int8LinearWindow` and `LutPvWindow` from `dotChain_ok`, which proves any s8 dot chain
 over declared operands whose `32·S` products fit s32. `Bf16ToF32Affine` by the registry's entry and, on a 16-bit
@@ -463,6 +465,25 @@ theorem Fooling : Accounting.Guarantees.Gates.Fooling := by
       unfold Gate.charge Gate.size
       split_ifs <;> simp [Int.card_Icc]
 
+/-! ## The fooling bound's information cap -/
+
+theorem FoolingCap : Accounting.Guarantees.Gates.FoolingCap := by
+  intro ι κ C F x j out hsep
+  classical
+  let f : κ → (Fin out.length → ZMod (2 ^ j)) := fun s i => (val C (x s) out[i] : ZMod (2 ^ j))
+  have hinj : Set.InjOn f F := by
+    intro s hs s' hs' hf
+    by_contra hne
+    obtain ⟨o, ho, hno⟩ := hsep s hs s' hs' hne
+    obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.mp ho
+    apply hno
+    have h := congrFun hf ⟨i, hi⟩
+    have h' := (ZMod.intCast_eq_intCast_iff (a := val C (x s) out[i]) (b := val C (x s') out[i]) (c := 2 ^ j)).mp h
+    exact_mod_cast h'
+  calc F.card ≤ (Finset.univ : Finset (Fin out.length → ZMod (2 ^ j))).card :=
+        Finset.card_le_card_of_injOn f (fun _ _ => Finset.mem_coe.mpr (Finset.mem_univ _)) hinj
+    _ = 2 ^ (j * out.length) := by simp [Finset.card_univ, ZMod.card, ← pow_mul]
+
 /-! ## The carry bound -/
 
 /-- Byte `l` of a base-256 numeral whose digits are `f`. -/
@@ -852,37 +873,155 @@ lemma budgeted_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.wi
   · simp [units_of_budget_none C i C[i] hg hb]
   · cases b <;> simp [Finset.sum_ite_eq, hw]
 
+/-- Summing the data products over the windows: each gate's products are in its window's count. -/
+lemma products_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
+    products C = ∑ v ∈ Finset.range A.windows, productsAt C fun t => A.win t = v := by
+  simp only [products, productsAt]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i hi => ?_
+  have hi' : i < C.length := Finset.mem_range.mp hi
+  have hg : C[i]? = some C[i] := List.getElem?_eq_getElem hi'
+  have hw := h C[i] (List.getElem_mem hi')
+  simp [hg, Finset.sum_ite_eq, hw]
+
+/-- The encode bound at a price holds at any lower one. -/
+lemma EncodeBound.mono {F : Field} {k B E E' εnum εden : ℕ} (h : EncodeBound F k B E' εnum εden) (hE : E ≤ E') :
+    EncodeBound F k B E εnum εden := by
+  intro ι C m x words out hR hci hnd hlt hcw
+  have h' := h C m x words out hR hci hnd hlt hcw
+  generalize words.length = q at h' ⊢
+  generalize nonlinear C = c at h' ⊢
+  generalize runBits C = r at h' ⊢
+  generalize F.n - 1 = N at h' ⊢
+  rcases Nat.lt_or_ge r (q * N) with hqr | hqr
+  swap
+  · calc q * E * N = q * N * E := by ring
+      _ ≤ r * E := Nat.mul_le_mul_right E hqr
+      _ ≤ c * N + r * E := Nat.le_add_left _ _
+  · obtain ⟨t, ht⟩ : ∃ t, q * N = r + t := ⟨q * N - r, by omega⟩
+    have h1 : q * E' * N = r * E' + t * E' := by rw [show q * E' * N = q * N * E' by ring, ht]; ring
+    have h3 : t * E ≤ t * E' := Nat.mul_le_mul_left t hE
+    calc q * E * N = r * E + t * E := by rw [show q * E * N = q * N * E by ring, ht]; ring
+      _ ≤ c * N + r * E := by omega
+
+/-- The encode bound at `E ≤ k · S · e`, from `SquaringFloor` at `e` and `ChainSum`, inside their floor. -/
+theorem encodeBound_of {F : Field} {k B E e εnum εden : ℕ} (hS : SquaringFloor F e εnum εden)
+    (hC : ChainSum F k B e εnum εden) (hE : E ≤ k * F.squarings * e) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
+    (hp : 2 ^ 66 ≤ F.p) (hp4 : F.p % 4 = 3) : EncodeBound F k B E εnum εden :=
+  EncodeBound.mono (hC hε hk hp hp4 hS) hE
+
 theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
-  intro F k B E εnum εden ι W caps A m x words out H hP hR hci hnd hlt hcw
-  have h := H W m x words out hR hci hnd hlt hcw
+  intro F k B E e εnum εden ι W caps A m x words out hS hC hE hε hk hp hp4 hP hR hci hnd hlt hcw
+  have h := encodeBound_of hS hC hE hε hk hp hp4 W m x words out hR hci hnd hlt hcw
   obtain ⟨hwin, hcap, -⟩ := hP
-  have hb : (budgeted W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
-    rw [budgeted_eq W A hwin]
+  have hb : (nonlinear W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
+    rw [nonlinear, budgeted_eq W A hwin, products_eq W A hwin, ← Finset.sum_add_distrib]
     push_cast
     rw [Finset.mul_sum]
     apply Finset.sum_le_sum
     intro v hv
-    obtain ⟨h1, h2, h3, h4, h5, -⟩ := hcap v (Finset.mem_range.mp hv)
+    obtain ⟨h1, h2, h3, h4, h5, -, h7⟩ := hcap v (Finset.mem_range.mp hv)
     simp only [Census.budgeted, Caps.total, h5]
     push_cast
     linarith
   have hr : runBits W ≤ 8 * ∑ v ∈ Finset.range A.windows, caps.runBytes v := by
     rw [runBits, ← sum_countAt W A.win A.windows _ hwin, Finset.mul_sum]
-    exact Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2
-  have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (budgeted W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
+    exact Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2.1
+  have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (nonlinear W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
     exact_mod_cast h
   have hr' : ((runBits W * E : ℕ) : ℚ) ≤ (8 * (∑ v ∈ Finset.range A.windows, caps.runBytes v) * E : ℕ) := by
     exact_mod_cast Nat.mul_le_mul_right E hr
   exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
-theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
-  intro F k B E εnum εden q H hn
+/-- The encode bound at `E` prices `q` distinct words at `q · E` nonlinear units, for `n ≥ 2`. -/
+theorem encodeCost_ge {F : Field} {k B E εnum εden : ℕ} (H : EncodeBound F k B E εnum εden) (hn : 2 ≤ F.n)
+    (q : ℕ) : ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q := by
   unfold encodeCost
   refine le_iInf₂ fun c hc => ?_
   obtain ⟨ι, C, m, x, words, out, hlen, hnd, hlt, hR, hrb, hci, hcw, rfl⟩ := hc
   have h := H C m x words out hR hci hnd hlt hcw
   rw [hrb, zero_mul, add_zero, hlen] at h
   exact_mod_cast Nat.le_of_mul_le_mul_right h (by omega)
+
+theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
+  intro F k B E e εnum εden q hS hC hE hε hk hp hp4 hn
+  exact encodeCost_ge (encodeBound_of hS hC hE hε hk hp hp4) hn q
+
+set_option exponentiation.threshold 1100 in
+/-- A root's squarings at p1024: `⌊log₂((p + 1)/4)⌋ = 1021`. -/
+theorem p1024_squarings : p1024.squarings = 1021 := by
+  have h8 : (2 : ℕ) ^ 1024 = 2 ^ 1021 * 8 := by rw [show (8 : ℕ) = 2 ^ 3 by norm_num, ← pow_add]
+  have hN : 1021 < (2 : ℕ) ^ 1021 := Nat.lt_two_pow_self
+  unfold Field.squarings Field.p
+  rw [Nat.log_eq_iff (by norm_num), show (2 : ℕ) ^ (1021 + 1) = 2 ^ 1021 * 2 from pow_succ 2 1021]
+  simp only [p1024]
+  rw [h8]
+  generalize (2 : ℕ) ^ 1021 = N at hN ⊢
+  omega
+
+/-! ## The premises' floor
+
+`SquaringFloor` and `ChainSum` keep the falsified `EncodeChainHardness`'s floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`,
+`p ≡ 3 mod 4`). `2^n − c` with `n ≥ 68` and `c ≡ 1 mod 4`, `c ≤ 2^66`, is inside it, p1024 among them. Outside it the
+premises claim nothing, so the counterexamples outside it don't refute them: at `ε = 0`, at `k = 0` and at a field
+narrower than a byte `ChainSum` holds, and the one-draw circuit behind the `ε = 0` counterexample is right on more than
+`ε` of the draws at no `ε` and field the floor admits. -/
+
+/-- A field `2^n − c` with `n ≥ 68`, `c ≡ 1 mod 4` and `c ≤ 2^66` is inside the premises' floor on `p`. -/
+theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c ≤ 2 ^ 66) :
+    2 ^ 66 ≤ 2 ^ n - c ∧ (2 ^ n - c) % 4 = 3 := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
+  have hM : (2 : ℕ) ^ 66 ≤ 2 ^ m := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have h4 : (2 : ℕ) ^ 2 = 4 := by norm_num
+  rw [pow_add 2 m 2, h4]
+  obtain ⟨N, hNe⟩ : ∃ N, (2 : ℕ) ^ m = N := ⟨_, rfl⟩
+  obtain ⟨M, hMe⟩ : ∃ M, (2 : ℕ) ^ 66 = M := ⟨_, rfl⟩
+  rw [hNe, hMe] at hM ⊢
+  rw [hMe] at hc'
+  omega
+
+/-- p1024 is inside the premises' floor on `p`: `2^66 ≤ p` and `p ≡ 3 mod 4`. -/
+theorem p1024_floor : 2 ^ 66 ≤ p1024.p ∧ p1024.p % 4 = 3 := by
+  unfold Field.p
+  exact floor_of_pow_sub p1024.n p1024.c (by show 68 ≤ 1024; norm_num) (by show 105 % 4 = 1; norm_num)
+    (by show 105 ≤ 2 ^ 66; norm_num)
+
+/-- At `ε = 0` it holds: the floor excludes `encodeChainHardness_false_eps0`. -/
+example (F : Field) (k B e εden : ℕ) (hden : 0 < εden) : ChainSum F k B e 0 εden := by
+  intro hε
+  rw [Nat.mul_zero] at hε
+  exact absurd hden (by omega)
+
+/-- At a field narrower than a byte it holds: the floor excludes `encodeChainHardness_false_toy`. -/
+example (k B e εnum εden : ℕ) : ChainSum ⟨2, 0⟩ k B e εnum εden := by
+  intro _ _ hp
+  exact absurd hp (by norm_num [Field.p])
+
+/-- At `k = 0`, where the encoding is the registered payload word, it holds. -/
+example (F : Field) (B e εnum εden : ℕ) : ChainSum F 0 B e εnum εden := by
+  intro _ hk
+  exact absurd hk (lt_irrefl 0)
+
+/-- Inside the floor one draw is never more than `ε` of the draws, so the circuit behind
+`encodeChainHardness_false_eps0`, right on one draw, computes no word at any `ε` and field the floor admits. -/
+example (F : Field) (k εnum εden : ℕ) (d : Draw k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
+    (hp : 2 ^ 66 ≤ F.p) : ¬ MoreThan (draws F k) {d} εnum εden := by
+  intro h
+  unfold MoreThan at h
+  rw [Finset.card_singleton, Nat.mul_one] at h
+  have hp2 : 2 ≤ F.p := le_trans (by norm_num) hp
+  have hc : F.p ≤ (draws F k).card := by
+    simp only [draws, Finset.card_product, Fintype.card_piFinset, Finset.card_range, Finset.prod_const,
+      Finset.card_univ, Fintype.card_fin, Nat.card_Ico]
+    have h1 : 1 ≤ 2 ^ F.n * (F.p - 1) := Nat.mul_pos (Nat.two_pow_pos _) (by omega)
+    calc F.p ≤ F.p ^ k := Nat.le_self_pow hk.ne' _
+      _ = F.p ^ k * 1 := (Nat.mul_one _).symm
+      _ ≤ _ := Nat.mul_le_mul_left _ h1
+  have h3 : 2 ^ 64 * εnum ≤ εnum * (draws F k).card :=
+    calc 2 ^ 64 * εnum ≤ 2 ^ 66 * εnum := Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by norm_num))
+      _ ≤ (draws F k).card * εnum := Nat.mul_le_mul_right _ (hp.trans hc)
+      _ = εnum * (draws F k).card := Nat.mul_comm _ _
+  exact lt_irrefl _ (h.trans_le (hε.trans h3))
 
 /-! ## The fooling bound in units -/
 

@@ -1,28 +1,49 @@
-# The Security/ move's renames: what `tools/move/rename.py --map tools/move/security_map.toml` renames, after
-# `layout.py` has moved `verity/Security/` to `Security/` (the Notion hub's Security page, draft of 7 Oct 2026).
+# The Security/ layout move's renames: what `tools/move/rename.py --map tools/move/security_map.toml` renames.
 #
-# `Specs/` becomes `Models/`: proofs' sort (note:20261007T0350Z-draft-specs-sort) puts 68 of its 77 modules in Models/
-# (Lean models of verifiers that still run as Python), and the other 9 (Core's and NCI's, no code, and PoUW's HonestCap,
-# out) have no other home yet. Definitions/ and Proofs/ keep their names. Properties/ starts with C-Flock's claims, lifted
-# out of Proofs/ by `audit.py --lift` after the move, as are the two declaration-level splits. Declarations keep their
-# names, so no guarantee changes: `audit.py --update --moved` on the result prints each as the same statement.
+# Daniel's ruling of 23 Oct 2026 (10:54 PM PDT): `Security/` is three trees, `Definitions/`, `Properties/` and `Proofs/`.
+# - `Models/<Area>/{Assumptions,Guarantees}` folds into `Definitions/<Area>/{Assumptions,Guarantees}`: module `Models.<Area>.X`
+#   becomes `Definitions.<Area>.X`. The aggregator `Models.lean` keeps its name and imports them until the follow-up folds
+#   it into `Definitions.lean`.
+# - The property proofs leave `Properties/Proofs/` for `Proofs/Properties/`, roots of `security_proofs`: module
+#   `Properties.Proofs.X` becomes `Proofs.Properties.X`. `Properties/` keeps the statements.
+# Declarations and namespaces keep their names, so no guarantee changes.
 #
-# `Specs` is renamed as a whole word (`Specs.Pouw`, `Specs/`, `"Specs"`, `import Specs`), never inside an identifier.
+# The 7 Oct move this file held before (`Specs` -> `Models`, commit 9fb0a83a0c) is done; its map is in git history.
 
 [words]
-
-[[words_in]]
-files = ["**"]
-[words_in.words]
-"Specs" = "Models"
+"Models.Accounting" = "Definitions.Accounting"
+"Models.Core" = "Definitions.Core"
+"Models.Flock" = "Definitions.Flock"
+"Models.Hash" = "Definitions.Hash"
+"Models.Nci" = "Definitions.Nci"
+"Models.NetworkCertifier" = "Definitions.NetworkCertifier"
+"Models.Pous" = "Definitions.Pous"
+"Models.Pouw" = "Definitions.Pouw"
+"Models/Accounting" = "Definitions/Accounting"
+"Models/Core" = "Definitions/Core"
+"Models/Flock" = "Definitions/Flock"
+"Models/Hash" = "Definitions/Hash"
+"Models/Nci" = "Definitions/Nci"
+"Models/NetworkCertifier" = "Definitions/NetworkCertifier"
+"Models/Pous" = "Definitions/Pous"
+"Models/Pouw" = "Definitions/Pouw"
+"Properties.Proofs" = "Proofs.Properties"
+"Properties/Proofs" = "Proofs/Properties"
+"Security/Models/" = "Security/Definitions/"
+# The same renames as tests spell them: pathlib chains and a regex.
+'"Models" / "Accounting"' = '"Definitions" / "Accounting"'
+'"Models" / "Flock"' = '"Definitions" / "Flock"'
+'"Models" / "Nci"' = '"Definitions" / "Nci"'
+'"Models" / "Pous"' = '"Definitions" / "Pous"'
+'"Models" / "Pouw"' = '"Definitions" / "Pouw"'
+'Models\.Flock' = 'Definitions\.Flock'
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps and tests, changelogs, the rulings), the frozen
 # backends, files whose bytes a digest pins, and the research harness's recorded moves.
 exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
-           "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py",
-           "benchmarks/numerical/python/verity_numerical/redteam/z3_babybear.py"]
+           "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']

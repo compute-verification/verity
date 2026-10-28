@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 # What `Stmt.setupHidden` checked and produced (`Spec`)
 
 `setupHidden_spec` walks `Stmt.setupHidden` as `setupH_spec` walks `Stmt.setupH`: every return is the statement its
-checks built. `Facts.lean` reads off it what [wave2-hidden-exec] reads.
+checks built. `Facts.lean` reads off it what `Discharge/HiddenExec` reads.
 -/
 
 open Flock FlockLevel3
@@ -32,11 +32,17 @@ theorem checkOwn_none {pi : HmIn.Ports} {pop : Public} (h : HmIn.checkOwn pi pop
   · simp only [he] at h; cases h
   · rfl
 
+theorem checkReads_noPorts {c : Circuit} {pi : HmIn.Ports} {n : ℕ} {t : Option Tables}
+    (he : pi.ports.isEmpty = true) : HmIn.checkReads c pi n t = .ok () := by
+  unfold HmIn.checkReads
+  simp only [he, ↓reduceIte]
+  rfl
+
 theorem loadPublic_noPorts {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
     (he : pi.ports.isEmpty = true) (h : HmIn.loadPublic tags c pi f = .ok pop) : HmOut.loadPublic tags c f = .ok pop := by
   unfold HmIn.loadPublic at h
   unfold HmOut.loadPublic
-  simp only [he, ↓reduceIte] at h
+  simp only [he, ↓reduceIte, checkReads_noPorts he] at h
   cases hL : HmRow.loadPublic tags { c with outPorts := #[] } f with
   | error e => rw [hL] at h; cases h
   | ok pub =>

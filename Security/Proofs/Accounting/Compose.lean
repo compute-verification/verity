@@ -1,5 +1,5 @@
 import Proofs.Accounting.Compose.ServiceCovers
-import Models.Accounting.Guarantees.Compose
+import Definitions.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.SplitRateMerged
@@ -15,13 +15,11 @@ import Proofs.Pouw.RelativeSecurity
 Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork`, `CircuitWorkSeeded`,
 `BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under
 `Proofs/Accounting/Compose/`), and `CreditOfWork` (step 7), `CircuitCredit` (step 8) and `CircuitCreditSeeded`
-(step 10) below; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order. What the window's proofs'
-layer meets is proved: its static half is defined from the IR (`Declared.layer`), so `StageCuts` (at every value
-committed by its IR cut, which every one is at `Declared.atIR`), `StageCoins` (under `Declared.Wf`), `StageSlots`,
-`WriterReads` and
-`StageComplete` (under `Declared.Wf` and `units ≤ N_p`) are lemmas below, not premises, as are the draw cut of
-`Declared.atDraw`'s layer and `serviceGame`, `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint
-run.
+(step 10) below. What the window's proofs' layer meets is proved: its static half is defined from the IR
+(`Declared.layer`), so `StageCuts` (at every value committed by its IR cut, which every one is at `Declared.atIR`),
+`StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
+`units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
+`tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
 
 1. `SplitRateClosed` (proved, `Compose/SplitRateClosed.lean`), from step 2. A larger rate keeps `SplitRateAt` at the
    same `ν, ν₀`, and each closed branch is at least the sharp one: at `c = Kρw_max` and `q = p + (1 − p)e^{−c}`,
@@ -61,9 +59,9 @@ run.
    first reader's coin. Then
    `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw the layer's, `drawOf`) gives one event of
    probability at most `δ_bind + δ_ks` off which every accepted drawn tile is right at its committed slots, so `Of`
-   gives the share game's pass (RT-I8's `compose_sampled` shape); `ServiceBudget` on `serviceGame` at `a`, `b` and
-   `shareCone` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by
-   `δ_s`, `S_F`, `S_0` the folded and whole shares at `shareCone`. Off both,
+   gives the share game's pass; `ServiceBudget` on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass)
+   and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole
+   shares at `shareCone`. Off both,
    `UnitFixed` (its `WriterReads` by `layer_writerReads`) at `tileMode` and step 5's `Covers` give the good tiles' words
    at least `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped
    whole at least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone` (a tile's cone holds

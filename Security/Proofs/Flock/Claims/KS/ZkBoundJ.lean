@@ -440,35 +440,6 @@ theorem good_of_close_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Cla
   Gen.good_of_close_zkJ (S := S₀) (rel := rel) (x := x) (j := j) (s := s) (hs := hs) (i := i) (hN := hN) (C := C)
     (hw := hw) (R := R) (hclose := hclose) (hrel := hrel)
 
-/-- **A committed table extracts table `j`** (`good_of_committed_zk` at table `j`): a table of witness-lane columns
-whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding, when a satisfying
-old witness of `S` reads as a witness of table `j`'s statement. -/
-theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
-    (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) (i : ZkIdx)
-    (hN : wordLenJ true x j = 2 ^ zkLen i) (C : Fin (wordLenJ true x j) → List 𝔽)
-    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
-    (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
-      S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
-        Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
-    (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
-    GoodTableAt (deployZk rel) (wordLenJ true) x j C := by
-  have key : ∀ (k0 : ℕ) (l : FlockSoundness.Accounting.Level), k0 = zkLanes i → l = levelOf (zkLevel0 i.m) →
-      ∀ R ∈ padList execArith l (zkPad i) k0 0 0 (oracleOf C),
-        S.Satisfies (witnessOf execArith S.m k0 l.logCols (padWit padC R)) →
-      GoodTableAt (deployZk rel) (wordLenJ true) x j C := by
-    intro k0 l hk hl R hR hsat
-    subst hk hl
-    simp only [padList, Finset.mem_filter, Finset.mem_univ, true_and] at hR
-    refine good_of_close_zkJ rel x j s hs i hN C hw R ?_ (hwit _ hsat)
-    rw [logLen_zk, ← radius_zk ⟨i, zkOfRows padC R⟩] at hR
-    unfold CloseRows at hR ⊢
-    convert hR using 5 with q
-    simp only [padRows, padLane_zero]
-    exact Iff.rfl
-  obtain ⟨P, ⟨R, hR, rfl⟩, hsat⟩ := hc
-  exact key _ _ (zkLevel_table i).2 (zkLevel_table i).1 R hR hsat
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -502,6 +473,21 @@ theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x :
   exact key _ _ (zkLevel_table i).2 (zkLevel_table i).1 R hR hsat
 
 end Gen
+
+/-- **A committed table extracts table `j`** (`good_of_committed_zk` at table `j`): a table of witness-lane columns
+whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding, when a satisfying
+old witness of `S` reads as a witness of table `j`'s statement. -/
+theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
+    (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) (i : ZkIdx)
+    (hN : wordLenJ true x j = 2 ^ zkLen i) (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
+    (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
+      S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
+        Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
+    (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
+    GoodTableAt (deployZk rel) (wordLenJ true) x j C :=
+  letI : ZkSetup := S₀
+  Gen.good_of_committed_zkJ rel x j s hs i hN C hw S hwit hc
 
 namespace Gen
 
@@ -585,45 +571,6 @@ theorem zk_scopeJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
   Gen.zk_scopeJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
     (hset := hset) (j := j) (hj := hj)
 
-/-- **At table `j`, a message satisfying its model statement reads as a witness of table `j`'s own statement**
-(`relS_of_table0` at table `j`): table `j`'s statement is the parsed one with table `j` alone (`Parsed.only`), whose
-relation is table `j`'s model statement at its one table's share (`relS_relation`). -/
-theorem relS_tableJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ} (hj : j < sts.size) {t : Claims.Flock.Stmt}
-    (ht : table true Readable.relation x j = some t) (L : Layout sts[j]) {m lanes cols : ℕ} (hm : m = sts[j].m)
-    (M : Model.Message 𝔽 lanes cols)
-    (hsat : (L.model (Refine.regionsOf sts[j])).Satisfies
-      (Model.witnessOf execArith (L.model (Refine.regionsOf sts[j])).m lanes cols M)) :
-    Claims.Flock.RelS t (Claims.Flock.readTrace execArith m lanes cols M) := by
-  obtain ⟨p, hp, rfl, hP, -, htab⟩ := parsed_of_parse hs
-  obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
-  subst hpst
-  rw [htab j, Option.some.injEq] at ht
-  subst ht
-  obtain ⟨-, -, -, -, -, htg, -, -, -, hpi, -⟩ := hin
-  simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at htg hpi
-  have hpi' : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hpi])
-  have hfit := Readable.tables_fit (Readable.tablesOf_of_parses hP) htg hpi' hj
-  have hj' : (p.only j).sts = #[p.sts[j]] := by
-    show #[p.sts[j]!] = _
-    rw [getElem!_pos p.sts j hj]
-  have hm1 : (Readable.toReadable Readable.relation (p.only j)).m = p.sts[j].m := by
-    simp [Readable.toReadable, hj']
-  have hk1 : (Readable.toReadable Readable.relation (p.only j)).kLog = p.sts[j].c.kLog := by
-    simp [Readable.toReadable, hj']
-  have h00 : (p.only j).sts[0]! = p.sts[j] := by rw [hj']; rfl
-  have hsz : (p.only j).sts.size = 1 := by rw [hj']; rfl
-  rw [Readable.relS_relation]
-  intro c hc
-  obtain rfl : c = 0 := by omega
-  rw [hsz, h00, hm1, hk1]
-  refine ⟨⟨rfl, rfl, hfit.2.2⟩, ?_⟩
-  subst hm
-  rw [zOf_readTrace rfl]
-  exact hsat
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -668,32 +615,20 @@ theorem relS_tableJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Re
 
 end Gen
 
-/-- **At the masked record, a table that does not extract table `j` is not committed** to table `j`'s model
-statement, at the old padded theorems' schedule and padding (`zk_not_committed` at table `j`, at `relS_tableJ`): at a
-statement in scope that the deployed masked parser reads at the deployed relation and the verifier sets up, for every
-table of witness-lane columns at table `j`. -/
-theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
-    (hs : (deployZk Readable.relation).parse x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
-    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ}
-    (hj : j < sts.size) (L : Layout sts[j]) (C : Fin (wordLenJ true x j) → List 𝔽)
-    (hw : ∀ q, wideJ true x j (C q))
-    (hg : ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C) :
-    ¬ CommittedPad execArith (L.model (Refine.regionsOf sts[j]))
-      (Refine.schedOf (Claims.Flock.zkSched sts[j].m).1) (Claims.Flock.zkSched sts[j].m).2 padC
-      (Claims.Flock.oracleOf C) := by
-  obtain ⟨h25, h35, -, -⟩ := zk_scopeJ hs hin hset hj
-  have hi : Claims.Flock.ZkIdx.m ⟨sts[j].m - 25, by omega⟩ = sts[j].m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
-  obtain ⟨t, ht⟩ : ∃ t, table true Readable.relation x j = some t := by
-    obtain ⟨p, -, -, -, -, htab⟩ := parsed_of_parse hs
-    exact ⟨_, htab j⟩
-  have := not_committed_zkJ Readable.relation x j t ht (tables_getElem? hset (Array.getElem?_eq_getElem hj))
-    ⟨sts[j].m - 25, by omega⟩ hi C hw (L.model (Refine.regionsOf sts[j]))
-    (fun P hsat => relS_tableJ hs hin hset hj ht L hi P hsat) hg
-  unfold Claims.Flock.zkPad at this
-  rwa [hi] at this
-
+/-- **At table `j`, a message satisfying its model statement reads as a witness of table `j`'s own statement**
+(`relS_of_table0` at table `j`): table `j`'s statement is the parsed one with table `j` alone (`Parsed.only`), whose
+relation is table `j`'s model statement at its one table's share (`relS_relation`). -/
+theorem relS_tableJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ} (hj : j < sts.size) {t : Claims.Flock.Stmt}
+    (ht : table true Readable.relation x j = some t) (L : Layout sts[j]) {m lanes cols : ℕ} (hm : m = sts[j].m)
+    (M : Model.Message 𝔽 lanes cols)
+    (hsat : (L.model (Refine.regionsOf sts[j])).Satisfies
+      (Model.witnessOf execArith (L.model (Refine.regionsOf sts[j])).m lanes cols M)) :
+    Claims.Flock.RelS t (Claims.Flock.readTrace execArith m lanes cols M) :=
+  Gen.relS_tableJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (j := j) (hj := hj) (t := t) (ht := ht) (L := L) (m := m) (lanes := lanes) (cols := cols) (hm := hm)
+    (M := M) (hsat := hsat)
 
 namespace Gen
 
@@ -726,6 +661,22 @@ theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
   rwa [hi] at this
 
 end Gen
+
+/-- **At the masked record, a table that does not extract table `j` is not committed** to table `j`'s model
+statement, at the old padded theorems' schedule and padding (`zk_not_committed` at table `j`, at `relS_tableJ`): at a
+statement in scope that the deployed masked parser reads at the deployed relation and the verifier sets up, for every
+table of witness-lane columns at table `j`. -/
+theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : (deployZk Readable.relation).parse x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ}
+    (hj : j < sts.size) (L : Layout sts[j]) (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hw : ∀ q, wideJ true x j (C q))
+    (hg : ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C) :
+    ¬ CommittedPad execArith (L.model (Refine.regionsOf sts[j]))
+      (Refine.schedOf (Claims.Flock.zkSched sts[j].m).1) (Claims.Flock.zkSched sts[j].m).2 padC
+      (Claims.Flock.oracleOf C) :=
+  Gen.zk_not_committedJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (j := j) (hj := hj) (L := L) (C := C) (hw := hw) (hg := hg)
 
 end FlockDeploy.KS
 

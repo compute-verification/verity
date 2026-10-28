@@ -1,18 +1,18 @@
-import Models.Pous.Guarantees
+import Definitions.Pous.Guarantees
 
 /-!
 # PoUS's lemmas, stated
 
 The statements of PoUS's analysis that are math rather than claims: reductions over any scheme or ideal model, counting,
 pebbling and number theory, numeric certificates, the continuous audit's completeness (`ContinuousComplete`), and the
-refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation. Each is proved as `Pous.SecurityProofs.X`
-(`Security/Proofs/Pous.lean`) except `A2LemmaAM1`, `A5RabinGcd` and `A7Params`, which are open
-(`Security/Proofs/Pous/Targets.lean`), and `InvExPostFactoTwoLayer`, which is false. They keep their names in
-`Pous.Guarantees`, beside the frozen statements of `Security/Models/Pous/Guarantees.lean`. "Pinned as drafted" means
-the binders and conclusion are the draft's, verbatim.
+refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation, and Track A's `M1Meets`, a `Meets` in model M1 that
+is no claim about PoUS's scheme. Each is proved as `Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except
+`A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open, and `InvExPostFactoTwoLayer`, which is false.
+They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Definitions/Pous/Guarantees.lean`.
+"Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 
 This module states and proves nothing else, and imports no proof: `grade.sh` grades `KFloor` and `Theorem1ii` (its
-controls) and the three open statements against it, and a submission may import it.
+controls) and the four open statements against it, and a submission may import it.
 -/
 
 namespace Pous.Guarantees
@@ -184,6 +184,20 @@ def A7Params : Prop :=
     A7Row logHistGammaM1 (2 ^ 28) ⌊(18 / 19 : ℚ) * (2056 * 2 ^ 28)⌋₊ (2 ^ 34) 142 ∧
     A7Row logHistGammaM2 (2 ^ 28) ⌊(18 / 19 : ℚ) * (2056 * 2 ^ 28)⌋₊ (2 ^ 20) 175 ∧
     A7Row logHistGammaM2 (2 ^ 28) ⌊(18 / 19 : ℚ) * (2056 * 2 ^ 28)⌋₊ (2 ^ 34) 238
+
+/-- **`m1_meets`, conditional on Conjecture B1′** (sms5 review; red team). In the ideal permutation model M1, the
+scheme with `2^28` blocks of 2048 bits meets the requirement: 117 sequential challenges, `2^20` queries per answer,
+any depth, `ε = 2^-128`. It follows from A2, A3′ and A7′'s first row. B1′ is a hypothesis so that the claim cannot
+be read as one about RW–SMS; in M1 it follows from A2 and A3′.
+
+**It does not transfer to the real RW–SMS scheme at `λ = 128`** (sms5 F1): a 2048-bit `N` factors in about
+`2^112 < 2^128` preprocessing, after which two root extractions answer any challenge within the deadline.
+
+Open, and not a claim: Track A's scheme is not PoUS's, whose `Meets` is the band's (`BandMultiMeetsFamily`). -/
+def M1Meets : Prop :=
+  ∀ D : ℕ,
+    Assumptions.B1Prime (m1 (2 ^ 28) 2048) (2 ^ 2048) ((m1 (2 ^ 28) 2048).stateBound Params.ρ) D (2 ^ 20) 117 →
+    Meets (m1 (2 ^ 28) 2048) .sequential D (2 ^ 20) 117 Params.εMax
 
 /-! ## Track B -/
 
@@ -470,12 +484,12 @@ def StackedAuditOnePercent : Prop :=
 
 /-! ## The continuous audit (`Definitions.Pous.Model.Continuous`)
 
-Added on 3 Oct 2026. Red team: needed. The memory challenger enforces the three timing
+Red team: needed. The memory challenger enforces the three timing
 rules: it reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts
 every answer past `Δ` as a miss, with every rejected or wrong one. `PerAnswer` takes no hypothesis about them, and
 holds at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
 (`Security/Definitions/Pous/Model/Continuous.lean`); `ContinuousAudit`, the frozen statement it gives, is in
-`Security/Models/Pous/Guarantees.lean`.
+`Security/Definitions/Pous/Guarantees.lean`.
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -496,7 +510,7 @@ def PerAnswer : Prop :=
 
 /-! ## Completeness of the continuous audit
 
-Added on 3 Oct 2026. Red team: needed. `ContinuousAudit` bounds what the memory challenger
+Red team: needed. `ContinuousAudit` bounds what the memory challenger
 of `Security/Definitions/Pous/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same memory
 challenger rejects, for a responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q`
 is a parameter.
@@ -548,7 +562,7 @@ def ContinuousComplete : Prop :=
 
 /-! ## The continuous audit, time-averaged, with arrivals drawn by the memory challenger
 
-Added on 3 Oct 2026. Red team: needed. The memory challenger of `ContinuousAudit`,
+Red team: needed. The memory challenger of `ContinuousAudit`,
 unchanged, run on arrivals it draws itself: one coin per slot of one unit
 (`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
 behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
@@ -562,11 +576,11 @@ the slot's): the memory challenger, run on these arrivals, accepts with toleranc
 `βe + T·(β + 1)·π`. Here `ε_t` is the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at every
 idle slot (`contIdle`: every earlier arrival has closed) whether or not a challenge arrives there, and a busy slot
 counts as `0`. Dividing by `pT`, the expected number of challenges (`λ·T` in seconds):
-`Pr[accept(f₀) ∧ (1/T)·Σ_{t idle} max(ε_t − ε_proof, 0) > g(f₀)] ≤ βe + T·(β + 1)·π` with `g = G/(pT)`, the explorer's
-`g` at `n = λT`. In an accepted run off that event, the idle slots with `ε_t > X` are at most a `g/(X − ε_proof)`
-fraction of the `T` slots (Markov).
+`Pr[accept(f₀) ∧ (1/T)·Σ_{t idle} max(ε_t − ε_proof, 0) > g(f₀)] ≤ βe + T·(β + 1)·π` with `g = G/(pT)`,
+`ContinuousAudit`'s `g = G/n` at `n = λT`. In an accepted run off that event, the idle slots with `ε_t > X` are at
+most a `g/(X − ε_proof)` fraction of the `T` slots (Markov).
 
-This is an average over the idle slots, not over the whole period: it does not bound the explorer's
+This is an average over the idle slots, not over the whole period: it does not bound the whole period's
 `ε̄ = (1/T)·Σ_t ε_t`. The memory is not read at a busy slot, and the responder chooses which slots are busy
 (`Security/Definitions/Pous/Model/Continuous.lean`, "The responder chooses the busy slots"). In an accepted run
 off the event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/T` whatever the memory at a busy slot,
@@ -576,8 +590,8 @@ and `0 < b` makes the draw space nonempty. The
 scope is the model's: the arrival coins are the memory challenger's own randomness, independent of the setup and the
 answers; memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which
 the step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
-answers from 1.53% of `C` in 481 Keccak-f, under one call: red team, 4 Oct 2026, art:7617c8017e80). Proof:
-`PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
+answers from 1.53% of `C` in 481 Keccak-f, under one call: the state attack, `primitives.pi2_keccak_f`).
+Proof: `PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
 def ContinuousTimeAverage : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β T a b : ℕ) (π : ℝ≥0∞), 0 < b → a ≤ b →
     TimedINC sch D Q β π →
@@ -597,7 +611,7 @@ def ContinuousTimeAverage : Prop :=
 /-! ## Proved results cited outside the package
 
 The types of seven theorems that the protocol's documents and code cite, written out so that each citation names a
-statement (three more, about schemes, are frozen in `Security/Models/Pous/Guarantees.lean`). Each is proved in
+statement (three more, about schemes, are frozen in `Security/Definitions/Pous/Guarantees.lean`). Each is proved in
 `Pous.SecurityProofs` under its own name, from the theorem its docstring names. -/
 
 open DRG Labelling in
@@ -672,7 +686,7 @@ open ColumnGame in
 def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
-/-! ## Secure erasure (`Security/Models/Pous/Guarantees/SecureErasure.lean`'s game) -/
+/-! ## Secure erasure (`Security/Definitions/Pous/Guarantees/SecureErasure.lean`'s game) -/
 
 open Pous.Digest in
 /-- **The digest is almost universal.** Two different lists of `R` blocks of `W` words over a finite field `F` have the
@@ -680,8 +694,7 @@ same digest at a uniform key `(g, z)` with probability at most `((W − 1) + (R 
 differs, and the digests agree at at most `R − 1` points `z`, or every block hash agrees, which a block that differs
 allows at at most `W − 1` points `g`. A word enters as an element of `F`: two `uint32` words that agree mod `p` count as
 equal. Unconditional. This is what makes the fill check's digest catch a region that differs from the fill; the
-secure-erasure bounds below hold for every digest and do not use it. Ported from PR #1010, unchanged but for the
-namespace. Proof: `PousDigest.digestAU`. -/
+secure-erasure bounds below hold for every digest and do not use it. Proof: `PousDigest.digestAU`. -/
 def DigestAU : Prop :=
   ∀ (R W : ℕ) (F : Type) [Field F] [Fintype F] (xs ys : Fin R → Blk W F), xs ≠ ys →
     pr (fun k : Key F => digest k.1 k.2 xs = digest k.1 k.2 ys) ≤
@@ -701,7 +714,7 @@ the audit's bound covers.
 
 It rests on what `AuditSecure` rests on for the scheme (for the band: the ideal-primitive model, the keyed fill's
 incompressibility and the `(D, Q)` game), and on nothing else: no named assumption and no bandwidth-separation premise
-(`TwoTierBandwidth`, dropped on 3 Oct 2026, is not used). The memory is bounded at every spot read's arrival; the fill
+(`TwoTierBandwidth`, which is dropped, is not used). The memory is bounded at every spot read's arrival; the fill
 and the digest are unbounded. Proof: `PousErase.secure_erasure_meets`. -/
 def SecureErasureMeets : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (K V : Type) [Fintype K] [Nonempty K] (dig : K → sch.Code → V)

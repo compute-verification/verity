@@ -1,6 +1,7 @@
 import Proofs.Accounting.TS.Session.Lanes.KnownFields
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+import Proofs.Flock.Soundness.TmplReads
 import Proofs.Flock.VBridge.Unit
 import Proofs.Flock.Verifier.Registered
 import Flock.KnownRead
@@ -12,7 +13,8 @@ import Flock.KnownRead
 has no port of a name the known content names (`Flock.KnownRead.namesOk`), and one of whose ports `F` names at known
 content is not a `sha512/row/v2` row of the known rows' words, or has a row bit that no computed row of the unit reads
 (an input row) or no copy returns (an output row) (`Flock.KnownRead.readsOk`; `check` is both, run on every statement
-beside the complete check). What that refusal establishes, from the verifier's code:
+beside the complete check). `readsOk` checks the input bits at columns every one of which the unit's computed rows read
+(`FlockSoundness.TmplFold.readsAt_of_readsOk`). What that refusal establishes, from the verifier's code:
 
 * `names_of_check`: the circuit names each port once, and has a port of each known name;
 
@@ -163,8 +165,8 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
         (_root_.Flock.ProvedScope.portMask c.unit.inGroups (c.unit.inWords * _root_.Flock.WORD))
         (_root_.Flock.portCols c.unit.inGroups) u y = some (q, k / 8, k % 8) := by
   have hqs : q < c.ports.size := by unfold _root_.Flock.HmOut.nIn at hq; omega
-  replace h := (parts_of_check h).2
-  unfold _root_.Flock.KnownRead.readsOk at h
+  obtain ⟨rd, h, hrd⟩ := FlockSoundness.TmplFold.readsAt_of_readsOk (parts_of_check h).2
+  unfold _root_.Flock.KnownRead.readsOkAt at h
   dsimp only at h
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
@@ -184,7 +186,7 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
       obtain ⟨⟨u, p⟩, -, hb⟩ := List.any_eq_true.1 hb
       dsimp only at hb
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hb
-      exact ⟨u, _, hb.1.1, hb.1.2, hb.2⟩
+      exact ⟨u, _, hb.1.1, hrd _ hb.1.2, hb.2⟩
 
 /-- **What the check accepted of a known output port**: at each bit `k < 16 · words` of an output port `q` the known
 content names, the bit's word is word `k / 16` of output port `q - nIn` (`outAt`), and some copy `u` of the unit returns
@@ -199,8 +201,8 @@ theorem out_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known =
         c.unit.inWords * _root_.Flock.WORD ≤
           (c.unit.outGroups.getD 0 default).col * _root_.Flock.WORD + (16 * j + k % 16) ∧
         (c.unit.outGroups.getD 0 default).col * _root_.Flock.WORD + (16 * j + k % 16) < c.unit.constPos := by
-  replace h := (parts_of_check h).2
-  unfold _root_.Flock.KnownRead.readsOk at h
+  obtain ⟨rd, h, hrd⟩ := FlockSoundness.TmplFold.readsAt_of_readsOk (parts_of_check h).2
+  unfold _root_.Flock.KnownRead.readsOkAt at h
   dsimp only at h
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
@@ -232,8 +234,8 @@ theorem shape_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : ℕ} (hqs : q < c.ports.size)
     (hn : c.ports[q]!.name = nm) :
     c.ports[q]!.v2 = true ∧ c.ports[q]!.segs = none ∧ ∀ i (hi : i < ks.size), ks[i].1.size = c.ports[q]!.words := by
-  replace h := (parts_of_check h).2
-  unfold _root_.Flock.KnownRead.readsOk at h
+  obtain ⟨rd, h, hrd⟩ := FlockSoundness.TmplFold.readsAt_of_readsOk (parts_of_check h).2
+  unfold _root_.Flock.KnownRead.readsOkAt at h
   dsimp only at h
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
@@ -431,21 +433,22 @@ theorem size_rowWords (bs : List Bool) : (rowWords bs).size = (bs.length + 15) /
   simp [rowWords]
 
 /-- **Lane `l`'s known fields hold at the opened rows, from flock-verify's check**: `laneKnownHolds` where the check
-accepts the session's circuit at `knownOf P salts (some l)`, which makes the circuit name each port once, and each of
+accepts the session's circuit at `knownOf P salts (some l)` and any rows after it (`more`, the ports read in full), which
+makes the circuit name each port once, and each of
 `admit`, `pub` and `o0` a port of it, a known value's row of its known row's words (32, 1616 and 16 bits) whose every
 bit is on a wire of unit 0. -/
 theorem laneKnownHolds_of_check (T : Tile)
     {P : LanePub} {salts : String → ByteArray} {l : Fin 32} (hK : KnownHeld s (knownOf P salts (some l)))
     {u : Fin s.n} (hu : u.val = 0) (hS : s.ServedRegistered u)
-    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ())
-    (hread : _root_.Flock.KnownRead.check s.c (knownOf P salts (some l)) = .ok ()) :
+    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {more : Known}
+    (hread : _root_.Flock.KnownRead.check s.c (knownOf P salts (some l) ++ more) = .ok ()) :
     LaneKnownHolds T (portBit s (openedReg s)) P l := by
-  have hma : ("admit", #[(admitRow (List.ofFn P.admit), salts "admit")]) ∈ knownOf P salts (some l) := by
-    simp [knownOf, knownRows]
-  have hmp : ("pub", #[(pubRow P.salt P.position P.roots l.val, salts "pub")]) ∈ knownOf P salts (some l) := by
-    simp [knownOf, knownRows]
-  have hmo : ("o0", #[(okRow, salts "o0")]) ∈ knownOf P salts (some l) := by
-    simp [knownOf, knownRows]
+  have hma : ("admit", #[(admitRow (List.ofFn P.admit), salts "admit")]) ∈ knownOf P salts (some l) ++ more :=
+    Array.mem_append.2 (Or.inl (by simp [knownOf, knownRows]))
+  have hmp : ("pub", #[(pubRow P.salt P.position P.roots l.val, salts "pub")]) ∈ knownOf P salts (some l) ++ more :=
+    Array.mem_append.2 (Or.inl (by simp [knownOf, knownRows]))
+  have hmo : ("o0", #[(okRow, salts "o0")]) ∈ knownOf P salts (some l) ++ more :=
+    Array.mem_append.2 (Or.inl (by simp [knownOf, knownRows]))
   obtain ⟨hN, hex⟩ := names_of_check hread hma
   obtain ⟨qa, ha⟩ := hex _ _ hma
   obtain ⟨qp, hp⟩ := hex _ _ hmp
@@ -471,15 +474,15 @@ theorem laneKnownHolds_of_check (T : Tile)
     (rowBitRead_of_check u hread hmo ho (by omega))
 
 /-- **The combine reads `ok = 1`, from flock-verify's check**: `combKnownOk` where the check accepts the session's
-circuit at `knownOf P salts none`, which makes the circuit name each port once, and `o0` a port of it, a known value's
+circuit at `knownOf P salts none` and any rows after it (`more`), which makes the circuit name each port once, and `o0` a port of it, a known value's
 row of one word whose bits are on wires of unit 0. -/
 theorem combKnownOk_of_check
     {P : LanePub} {salts : String → ByteArray} (hK : KnownHeld s (knownOf P salts none)) {u : Fin s.n}
     (hu : u.val = 0) (hS : s.ServedRegistered u) (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ())
-    (hread : _root_.Flock.KnownRead.check s.c (knownOf P salts none) = .ok ()) :
+    {more : Known} (hread : _root_.Flock.KnownRead.check s.c (knownOf P salts none ++ more) = .ok ()) :
     portBit s (openedReg s) "o0" 0 = some true := by
-  have hmo : ("o0", #[(okRow, salts "o0")]) ∈ knownOf P salts none := by
-    simp [knownOf, knownRows]
+  have hmo : ("o0", #[(okRow, salts "o0")]) ∈ knownOf P salts none ++ more :=
+    Array.mem_append.2 (Or.inl (by simp [knownOf, knownRows]))
   obtain ⟨hN, hex⟩ := names_of_check hread hmo
   obtain ⟨qo, ho⟩ := hex _ _ hmo
   obtain ⟨hPo, hwo⟩ := knownPort_of_check hread hmo ho

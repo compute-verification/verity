@@ -5,7 +5,7 @@ finalize has fixed every rank's root and taken off its hooks, and before any che
 
 1. every rank says what still needs its device after its root (``rank_kept``); a reason on any rank keeps the lease to the exit;
 2. every rank leaves its device (``rank_off``): its committer's worker stopped, the model's parameters and buffers copied to host
-   memory (the sampled replay, its weights self-check and the cross-rank embedding leg read them there) but for those its weights view
+   memory (the sampled replay, its weights self-check and the cross-rank embedding check read them there) but for those its weights view
    already holds on the host (`acquire.as_loaded`), which are emptied, its NCCL groups destroyed;
 3. every rank resets its CUDA context (``rank_reset``); from then on it sees no device, ends at once if a context reappears, and
    exits without vLLM's worker teardown, which would open one;
@@ -149,49 +149,63 @@ def rank_reset(worker: Any, started: str) -> dict[str, Any]:
 
 class _Driver:
     """The driver process's CUDA driver (`gpu_lease.DRIVER`), read only once the process has initialised CUDA: before that it has no
-    context (its ranks hold the model), and the watch after the release looks again each time."""
+    context (its ranks hold the model), and the watch after the release looks again each time.  Its reset resets an active context
+    only."""
 
     def active(self) -> list[int]:
         return GL.DRIVER().active() if GL.cuda_initialised() else []
 
     def reset(self) -> None:
-        if GL.cuda_initialised():
+        if self.active():
             GL.DRIVER().reset()
 
 
+class _Ranks:
+    """A TP Commit's holders (`gpu_lease.give_back`): its ranks, each on its own leased GPU, over ``llm``'s `collective_rpc`."""
+
+    failed = "the ranks could not give their GPUs back"
+    fails: tuple[type[BaseException], ...] = (Exception,)
+
+    def __init__(self, llm: Any, rpc_timeout: float, started: str) -> None:
+        self.llm, self.rpc_timeout, self.started = llm, rpc_timeout, started
+        self.ranks: dict[int, dict[str, Any]] = {}
+
+    def kept(self) -> str | None:
+        kept = [k for k in self.llm.collective_rpc(rank_kept, timeout=self.rpc_timeout) if k.get("why")]
+        return "; ".join(f"rank {k['rank']}: {k['why']}" for k in kept) or None
+
+    def off(self) -> str | None:
+        _OFF.set()
+        try:
+            self.ranks = {int(o["rank"]): o for o in self.llm.collective_rpc(rank_off, timeout=self.rpc_timeout)}
+        except Exception as e:  # noqa: BLE001 -- a rank that could not leave its device keeps the lease to the exit, named
+            return f"{self.failed}: {e!r}"[:300]
+        return None
+
+    def reset(self) -> str | None:
+        for o in self.llm.collective_rpc(rank_reset, timeout=self.rpc_timeout, args=(self.started,)):
+            self.ranks[int(o["rank"])].update(o)
+        return next((f"rank {r}: {o['why']}" for r, o in sorted(self.ranks.items()) if o.get("why")), None)
+
+    def driver(self) -> _Driver:
+        return _Driver()
+
+    def error(self) -> str | None:
+        return "; ".join(f"rank {r}: {o['teardown_error']}" for r, o in sorted(self.ranks.items()) if o.get("teardown_error")) or None
+
+    def record(self) -> dict[str, Any]:
+        return {"ranks": [self.ranks[r] for r in sorted(self.ranks)]}
+
+    def done(self) -> str:
+        moved, dropped = (sum(int(o.get(k) or 0) for o in self.ranks.values()) for k in ("moved_bytes", "dropped_bytes"))
+        return (f"{len(self.ranks)} ranks off their GPUs ({moved >> 20} MiB of weights to host memory, {dropped >> 20} MiB their weights "
+                f"view holds on the host emptied, NCCL groups destroyed), every CUDA context reset")
+
+
 def release(llm: Any, rpc_timeout: float, after: str, *, wait: Callable[[float], Any] = time.sleep) -> bool:
-    """Every rank's GPU back, and the driver's, then the lease let go (``gpu_lease.let_go``); or, when a rank keeps or a step fails, the
-    lease kept to the exit (``gpu_lease.keep``).  ``after``: the run whose finalize was the Commit's last device work."""
-    started, environ = GL._HELD[0][3:5]
-    kept = [k for k in llm.collective_rpc(rank_kept, timeout=rpc_timeout) if k.get("why")]
-    if kept:
-        return GL.keep(_TL, "; ".join(f"rank {k['rank']}: {k['why']}" for k in kept), after=after)
-    _OFF.set()
-    ranks: dict[int, dict[str, Any]] = {}
-    drv, t0 = None, time.perf_counter()
-    t1 = t0
-    try:
-        ranks = {int(o["rank"]): o for o in llm.collective_rpc(rank_off, timeout=rpc_timeout)}
-        t1 = time.perf_counter()
-        for o in llm.collective_rpc(rank_reset, timeout=rpc_timeout, args=(started,)):
-            ranks[int(o["rank"])].update(o)
-        why = next((f"rank {r}: {o['why']}" for r, o in sorted(ranks.items()) if o.get("why")), None)
-        if why is None:
-            drv = _Driver()
-            if drv.active():
-                drv.reset()
-            why = GL._gone(drv, GL.uuids(environ), wait)
-    except Exception as e:  # noqa: BLE001 -- a rank that could not leave its device keeps the lease to the exit, named
-        why = f"the ranks could not give their GPUs back: {e!r}"[:300]
-    err = "; ".join(f"rank {r}: {o['teardown_error']}" for r, o in sorted(ranks.items()) if o.get("teardown_error")) or None
-    spans = {"shutdown_s": round(t1 - t0, 3), "reset_s": round(time.perf_counter() - t1, 3), "ranks": [ranks[r] for r in sorted(ranks)]}
-    if why is not None:
-        return GL.keep(_TL, why, after=after, shutdown_error=err, ranks=spans["ranks"])
-    moved, dropped = (sum(int(o.get(k) or 0) for o in ranks.values()) for k in ("moved_bytes", "dropped_bytes"))
-    GL.let_go(_TL, drv, after=after, shutdown_error=err, spans=spans,
-              done=f"{len(ranks)} ranks off their GPUs ({moved >> 20} MiB of weights to host memory, {dropped >> 20} MiB their weights view "
-                   f"holds on the host emptied, NCCL groups destroyed), every CUDA context reset")
-    return True
+    """Every rank's GPU back, and the driver's, then the lease let go; or, when a rank keeps or a step fails, the lease kept to the
+    exit (`gpu_lease.give_back` over the ranks).  ``after``: the run whose finalize was the Commit's last device work."""
+    return GL.give_back(_TL, _Ranks(llm, rpc_timeout, GL._HELD[0][3]), after=after, wait=wait)
 
 
 def finalize(llm: Any, rpc_timeout: float, after: str, *, last: bool, wait: Callable[[float], Any] = time.sleep,

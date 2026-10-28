@@ -10,7 +10,7 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
-           store `store_layout` lays out), its tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store
+           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store
            salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j), key the verifier's (`set_payload_key`) or else the store's own;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
@@ -68,12 +68,12 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
 from verity.ml import randomness  # noqa: E402
 
 import sketch_receipt as skr  # noqa: E402
 import reader as rdr  # noqa: E402
-from store_layout import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
 
 BLOCK = rcodec.BLOCK_BYTES
 PER_LEAF = rb.PER_LEAF
@@ -88,7 +88,8 @@ OPEN_BATCH = 128
 
 def stream_head(seed: bytes) -> bytes:
     """The head of row 0's stream of a pass's signs (`skr.sign_bits`), its last byte the row: `rs_signs16`'s input."""
-    key = randomness.derive(rb._digest(seed, "a pass seed"), skr.SIGN_DOMAIN, {"tag": skr.KIND, "k": skr.ROWS, "n": BLOCK})
+    key = randomness.derive(rb._digest(seed, "a pass seed"), rb.SIGN_DOMAIN,
+                            {"tag": rb.SKETCH_SHA512, "k": skr.ROWS, "n": BLOCK})
     return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
@@ -668,7 +669,7 @@ class DeviceStore:
         dom = rb.domain(seed, self.plan)
         lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * PER_LEAF, dom.domain_id,
                      SALT_DOMAIN + self.key + seed, self.blocks)
-        lib.call("rb_sketch_set", skr.prefix(seed))
+        lib.call("rb_sketch_set", rb.sketch_prefix(seed))
 
     def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,

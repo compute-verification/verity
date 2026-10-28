@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.Embed
+import Definitions.Pouw.Assumptions.Dimension.Embed
 import Proofs.Pouw.Dimension.OpenPipeProofs
 
 /-!
@@ -16,7 +16,7 @@ import Proofs.Pouw.Dimension.OpenPipeProofs
 * **The converse** (`fp_back`, for `a1fpIff`): an FP32-pipe program maps into `M4090` at no greater cost. The inputs
   become `operand` instructions, a big instruction becomes `int`, and an FP32 step `fpSem κ x y z` becomes one
   `operand` (for a free operand) or `move` (for an earlier value) per operand, then `fp32 κ` on those registers.
-* **The range gap** (`a1fpOnRangeGap`, red team Phase 14): a checked word that takes a value `fpSem` never outputs
+* **The range gap** (`a1fpOnRangeGap`): a checked word that takes a value `fpSem` never outputs
   cannot be an FP32 step, so each is a distinct instruction at 16 (`count16`); `perWordM4090Gap` composes it with
   `embedFp`.
 -/
@@ -554,7 +554,7 @@ theorem m4090ChainConsistent : M4090ChainConsistent := by
   · exact mem_regs_of_int faddSem P _ _
       (List.mem_map.2 ⟨(u, p), mem_toList.2 (mem_product.2 ⟨hu, mem_range.2 hp⟩), rfl⟩)
 
-/-! ## The range gap (red team Phase 14, R14-1) -/
+/-! ## The range gap -/
 
 /-- **`CanonicalNaN` is satisfiable.** -/
 theorem canonicalNaNSat : CanonicalNaNSat := by
@@ -582,7 +582,7 @@ theorem gok_mem {G : Type} (C : List (G → ℚ) → ℕ → (G → ℚ) → Pro
 
 open Classical in
 /-- If every `w ∈ W` is the value of a priced instruction of `P`, and every priced instruction whose value is in `W`
-costs at least 16, then `16·|W| ≤ cost P` (red team Phase 14). -/
+costs at least 16, then `16·|W| ≤ cost P`. -/
 theorem count16 {G : Type} : ∀ (P : List (Instr G)) (W : Finset (G → ℚ)),
     (∀ w ∈ W, ∃ p, Instr.priced p w ∈ P) → (∀ p f, Instr.priced p f ∈ P → f ∈ W → 16 ≤ p) →
     16 * W.card ≤ cost P := by
@@ -633,7 +633,7 @@ theorem count16 {G : Type} : ∀ (P : List (Instr G)) (W : Finset (G → ℚ)),
         simp only [cost, List.map_cons, List.sum_cons] at h ⊢
         omega
 
-/-- **`A1_fp` at `γ = 0` from a range gap** (red team Phase 14, `a1fpOn_of_rangeGap`). -/
+/-- **`A1_fp` at `γ = 0` from a range gap** (`a1fpOn_of_rangeGap`). -/
 theorem a1fpOnRangeGap : A1fpOnRangeGap := by
   intro fpSem k m n N R A B U hind hU hgap L P hL hP S hS hSw
   classical

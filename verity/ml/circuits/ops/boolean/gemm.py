@@ -6,6 +6,11 @@
     HopperBF16WgmmaDot16_v2     the same signature                                                    word view: HopperBF16WgmmaDot16_v1
     DotBf16_v3{K, DOT}          (x, w: Array<K, Array<16, Value<1>>>) -> Array<32, Value<1>>          word view: DotBf16_v2{K, DOT'}
     GemmCoordinate_v3{K, DOT}   (x, wrow: Array<K, Array<16, Value<1>>>) -> Array<16, Value<1>>       word view: GemmCoordinate_v2{K, DOT'}
+    GemmCoordinatePad_v2{T, K, DOT}  (x, wrow: Array<T, Array<16, Value<1>>>) -> Array<16, Value<1>>  word view: GemmCoordinatePad_v1{T, K, DOT'}
+    PvRow_v2{T, K, D, DOT}      (p: Array<T, bf16 bits>, v0..v{T-1}: Array<D, bf16 bits>) -> Array<D, Array<16, Value<1>>>
+                                                                                                      word view: PvRow_v1{T, K, D, DOT'}
+    PvRowPad_v2{T, K, D, DOT}   (p, v0..v{T-1} as PvRow_v2's, n: Array<16, Value<1>>) -> as PvRow_v2's
+                                                                                                      word view: PvRowPad_v1{T, K, D, DOT'}
     Gemm_v3{K, N, DOT}          (x: Array<K, bf16 bits>, w: Array<N, Array<K, bf16 bits>>)
                                 -> Array<N, Array<16, Value<1>>>                                      word view: Gemm_v2{K, N, DOT'}
     HopperE4m3QgmmaDot32_v2     (acc: Array<32, Value<1>>, a, b: Array<32, Array<8, Value<1>>>)
@@ -23,18 +28,29 @@
     S32ToF32Rn_v2               (a: Array<32, Value<1>>) -> Array<32, Value<1>>                       word view: S32ToF32Rn_v1
     GemmAccumulatorS8_v2{K, DOT}    (x, wrow: Array<K, Array<8, Value<1>>>) -> Array<32, Value<1>>   word view: GemmAccumulatorS8_v1{K, DOT'}
     ScaledMmS8Coordinate_v2{K, DOT} (x, sx, wrow, sw) -> Array<16, Value<1>>                          word view: ScaledMmS8Coordinate_v1{K, DOT'}
+    ScaledMmS8CoordinateRows_v2{K, R, DOT}  (x0..x{R-1}, sx, wrow0..wrow{R-1}, sw) -> Array<16, Value<1>>
+                                                                                                      word view: ScaledMmS8CoordinateRows_v1{K, R, DOT'}
+    ScaledMmS8ResidualCoordinateRows_v2{K, R, DOT}  (ScaledMmS8CoordinateRows_v2's ports, r: Array<16, Value<1>>)
+                                -> Array<16, Value<1>>                                    word view: ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT'}
     ScaledMmS8_v2{K, N, DOT}    (x: Array<K, s8 bits>, sx, w: Array<N, Array<K, s8 bits>>, sw: Array<N, f32 bits>)
                                 -> Array<N, Array<16, Value<1>>>                                      word view: ScaledMmS8_v1{K, N, DOT'}
 
 The steps and the cast are traced from `fp`'s builders (`trace.definition`): their bodies are And/Xor/Not gates, with exactly
 the builders' live ANDs. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
 accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same steps without the cast, and `Gemm_v3` is
-`Gemm_v2`'s: the coordinate batched over W's N rows. The E4M3 steps are `fp.tc_dot_e4m3` at each step's groups, adder width and floor
+`Gemm_v2`'s: the coordinate batched over W's N rows. `GemmCoordinatePad_v2` is `GemmCoordinate_v3` on its T-word operands
+followed by K - T words of constant-0 bits, and `PvRow_v2` is that coordinate batched over the D columns of V's T key rows;
+`PvRowPad_v2` is `PvRow_v2` on its operands with key t's words replaced by constant-0 bits unless t < n, n unsigned
+(`PvRowPad_v1`'s compare on bits: `Bf16ToF32_v2`, `I32Add_v2`, `I32Le_v2`; then `SelectBf16_v2`).
+The E4M3 steps are `fp.tc_dot_e4m3` at each step's groups, adder width and floor
 (`HopperE4m3MmaV2Dot32_v2` on the operands in `MMAV2_E4M3_K_ORDER`; the E5M2 step `fp.tc_dot_e5m2`),
 and `GemmCoordinateE4m3_v2` is K/32 of them, then the cast; the FP4 steps are `fp4.step_total` and their coordinates K/64 of
 them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save reduction modulo 2^33, the clamp at D), the
 int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`;
-`ScaledMmS8_v2` is that coordinate batched over W's N rows and their scales. Each names its word
+`ScaledMmS8CoordinateRows_v2` is that coordinate on its operands' R parts concatenated, and
+`ScaledMmS8ResidualCoordinateRows_v2` adds its word to r with `Bf16AddF2fp_v2`; `ScaledMmS8_v2` is that coordinate
+batched over W's N rows and their scales; `GEMM_SM90_S8` binds them on the H200 with the
+same step (`s8_gemm`, `G.s8_gemm`'s check on bits). Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
 hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`). Each step is bound to its
 word step's silicon model (`census.silicon_step`), so the census counts its gates as `tc:<precision>`, and `GemmAccumulatorS8_v2`
@@ -45,23 +61,25 @@ from __future__ import annotations
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
 from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, broadcast
+from verity.ml.circuits.refs import Coll, broadcast, concat
 from verity.ml.circuits.types import Array
 
 from .. import gemm as G
 from .. import prims as P
 from . import elementwise as EW
+from . import scalar as SC
 from verity.ml.circuits.silicon import fp, fp4
-from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, step_s8_bits
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, step_s8_bits
 from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 from verity.ml.circuits.boolean.trace import definition, word_of
 
 __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64",
            "BlackwellS8ImmaDot32", "DotBf16", "F2fpBf16",
            "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4",
-           "GEMM_SM120_S8", "Gemm", "GemmAccumulatorS8",
-           "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "HopperBF16WgmmaDot16",
-           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "ScaledMmS8", "ScaledMmS8Coordinate"]
+           "GEMM_SM120_S8", "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8",
+           "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "GemmCoordinatePad",
+           "HopperBF16WgmmaDot16", "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "PvRow", "PvRowPad", "S32ToF32Rn", "ScaledMmS8",
+           "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "ScaledMmS8ResidualCoordinateRows", "s8_gemm"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -161,6 +179,47 @@ def GemmCoordinate(B, S, x, wrow):
     return B.call(F2fpBf16, _steps(B, S, x, wrow))
 
 
+@composite("GemmCoordinatePad", 2, ["T", "K", "DOT"], lambda S: ((("x", Array(S.T, BF16)), ("wrow", Array(S.T, BF16))), BF16),
+           conformance="exact-model-tested", refuse=G.GemmCoordinatePad.refuse)
+def GemmCoordinatePad(B, S, x, wrow):
+    """`GemmCoordinate_v3{K, DOT}` on T words of x and of W's row, each followed by K - T words of constant-0 bits."""
+    if S.T == S.K:
+        return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, wrow)
+    space, idx, leaf = B.call(BL.constant(0)).refs[0]
+    zeros = broadcast(space, idx, leaf, 16 * (S.K - S.T))
+
+    def pad(a):
+        return Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+
+    return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
+
+
+@composite("PvRow", 2, ["T", "K", "D", "DOT"],
+           lambda S: ((("p", Array(S.T, BF16)), *((f"v{t}", Array(S.D, BF16)) for t in range(S.T))), Array(S.D, BF16)),
+           conformance="exact-model-tested", refuse=G.PvRow.refuse)
+def PvRow(B, S, p, *vs):
+    """`GemmCoordinatePad_v2{T, K, DOT}` of p and each of the D columns of V's key rows v0..v{T-1}, on bits."""
+    v = Coll(Array(S.T, Array(S.D, BF16)), concat([r.refs for r in vs]))
+    return B.batch(bind(GemmCoordinatePad, T=S.T, K=S.K, DOT=S.DOT), p, v, axes=(None, 1))
+
+
+@composite("PvRowPad", 2, ["T", "K", "D", "DOT"],
+           lambda S: ((("p", Array(S.T, BF16)), *((f"v{t}", Array(S.D, BF16)) for t in range(S.T)), ("n", Array(16, BIT))),
+                      Array(S.D, BF16)),
+           conformance="exact-model-tested", refuse=G.PvRowPad.refuse, ports=G.KEY_COUNT)
+def PvRowPad(B, S, p, *rest):
+    """`PvRow_v2{T, K, D, DOT}` on bits with key t's p word and V row kept when t < n, unsigned (`PvRowPad_v1`'s
+    compare), and constant-0 bits otherwise (`SelectBf16_v2`)."""
+    *vs, n = rest
+    space, idx, leaf = B.call(BL.constant(0)).refs[0]
+    zero = Coll(BF16, broadcast(space, idx, leaf, 16))
+    count = B.call(EW.I32Add, B.call(SC.Bf16ToF32, n), B.call(SC.const_word(32, 1 << 31)))
+    keep = [B.call(SC.I32Le, B.call(SC.const_word(32, ((t + 1) << 16) ^ (1 << 31))), count) for t in range(S.T)]
+    ps = Coll(Array(S.T, BF16), concat([B.call(SC.SelectBf16, keep[t], p[t], zero).refs for t in range(S.T)]))
+    rows = [B.batch(SC.SelectBf16, keep[t], v, zero, axes=(None, 0, None)) for t, v in enumerate(vs)]
+    return B.call(bind(PvRow, T=S.T, K=S.K, D=S.D, DOT=S.DOT), ps, *rows)
+
+
 @composite("Gemm", 3, ["K", "N", "DOT"],
            lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
            conformance="exact-model-tested", refuse=G.Gemm.refuse)
@@ -223,6 +282,30 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     return B.call(F2fpBf16, B.call(EW.F32MulV4, B.call(EW.F32MulV4, acc, sx), sw))
 
 
+@composite("ScaledMmS8CoordinateRows", 2, ["K", "R", "DOT"],
+           lambda S: ((*((f"x{r}", Array(S.K // S.R, E4M3)) for r in range(S.R)), ("sx", F32),
+                       *((f"wrow{r}", Array(S.K // S.R, E4M3)) for r in range(S.R)), ("sw", F32)), BF16),
+           conformance=G.ScaledMmS8CoordinateRows.conformance, refuse=G.ScaledMmS8CoordinateRows.refuse)
+def ScaledMmS8CoordinateRows(B, S, *ports):
+    """`ScaledMmS8Coordinate_v2{K, DOT}` on bits, on the concatenations of x's and W's row's R parts."""
+    R = S.R
+
+    def cat(parts):
+        return Coll(Array(S.K, E4M3), concat([p.refs for p in parts]))
+
+    x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
+    return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
+
+
+@composite("ScaledMmS8ResidualCoordinateRows", 2, ["K", "R", "DOT"],
+           lambda S: ((*ScaledMmS8CoordinateRows.signature(S)[0], ("r", BF16)), BF16),
+           conformance=G.ScaledMmS8ResidualCoordinateRows.conformance, refuse=G.ScaledMmS8ResidualCoordinateRows.refuse)
+def ScaledMmS8ResidualCoordinateRows(B, S, *ports):
+    """`ScaledMmS8ResidualCoordinateRows_v1`'s body on bits: `Bf16AddF2fp_v2(r, ScaledMmS8CoordinateRows_v2{K, R, DOT})`."""
+    y = B.call(bind(ScaledMmS8CoordinateRows, K=S.K, R=S.R, DOT=S.DOT), *ports[:-1])
+    return B.call(EW.Bf16AddF2fp, ports[-1], y)
+
+
 @composite("ScaledMmS8", 2, ["K", "N", "DOT"],
            lambda S: ((("x", Array(S.K, E4M3)), ("sx", F32), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", Array(S.N, F32))),
                       Array(S.N, BF16)),
@@ -234,12 +317,18 @@ def ScaledMmS8(B, S, x, sx, w, sw):
 
 DotBf16.word = lambda b: bind(G.DotBf16, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinate.word = lambda b: bind(G.GemmCoordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+GemmCoordinatePad.word = lambda b: bind(G.GemmCoordinatePad, T=b["T"], K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+PvRow.word = lambda b: bind(G.PvRow, T=b["T"], K=b["K"], D=b["D"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+PvRowPad.word = lambda b: bind(G.PvRowPad, T=b["T"], K=b["K"], D=b["D"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 Gemm.word = lambda b: bind(G.Gemm, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateE4m3.word = lambda b: bind(G.GemmCoordinateE4m3, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateNvf4.word = lambda b: bind(G.GemmCoordinateNvf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateMxf4.word = lambda b: bind(G.GemmCoordinateMxf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmAccumulatorS8.word = lambda b: bind(G.GemmAccumulatorS8, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 ScaledMmS8Coordinate.word = lambda b: bind(G.ScaledMmS8Coordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+ScaledMmS8CoordinateRows.word = lambda b: bind(G.ScaledMmS8CoordinateRows, K=b["K"], R=b["R"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+ScaledMmS8ResidualCoordinateRows.word = lambda b: bind(G.ScaledMmS8ResidualCoordinateRows, K=b["K"], R=b["R"],  # type: ignore[attr-defined]
+                                                       DOT=word_of(b["DOT"]))
 ScaledMmS8.word = lambda b: bind(G.ScaledMmS8, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 
 GEMM_AMPERE: dict = {"DOT": AmpereBF16TcDot16}
@@ -250,3 +339,14 @@ GEMM_SM120_E4M3: dict = {"DOT": BlackwellE4m3QmmaDot32}
 GEMM_SM120_NVF4: dict = {"DOT": BlackwellNvf4OmmaDot64}
 GEMM_SM120_MXF4: dict = {"DOT": BlackwellMxf4OmmaDot64}
 GEMM_SM120_S8: dict = {"DOT": BlackwellS8ImmaDot32}
+
+
+def s8_gemm(model) -> dict:
+    """`G.s8_gemm` on bits: `GEMM_SM120_S8`'s step on bits for a card whose s8 step is ``model``, refused as `G.s8_gemm`
+    refuses."""
+    G.s8_gemm(model)
+    return dict(GEMM_SM120_S8)
+
+
+#: sm_90's on bits (`G.GEMM_SM90_S8`)
+GEMM_SM90_S8: dict = s8_gemm(HOPPER_SM90_S8_K32)

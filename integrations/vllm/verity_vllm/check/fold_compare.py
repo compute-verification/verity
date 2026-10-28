@@ -48,7 +48,7 @@ from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import Refs, runs
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 from verity.ml.circuits.types import Array, Tuple as TupleT, Type
 
 from verity_vllm.observe.events import ViewDesc
@@ -65,8 +65,8 @@ def hf_safetensors_glob(repo: str | None) -> str:
     default when no repo is known."""
     if not repo:
         return HF_GLOB
-    import os
-    home = Path(os.environ.get("HF_HOME") or (Path.home() / ".cache" / "huggingface"))
+    from verity_vllm import settings
+    home = Path(settings.HF_HOME or (Path.home() / ".cache" / "huggingface"))
     return str(home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / "*" / "model*.safetensors")
 
 _NP = {"bfloat16": np.uint16, "float16": np.uint16, "float32": np.uint32, "int32": np.uint32, "uint32": np.uint32,
@@ -76,9 +76,9 @@ _NP = {"bfloat16": np.uint16, "float16": np.uint16, "float32": np.uint32, "int32
 # --- loaders ----------------------------------------------------------------------------------------------
 
 def load_profile(name: str) -> Profile:
-    """`verity_vllm.engine.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
+    """`verity_vllm.observe.fold.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
     import importlib
-    mod = importlib.import_module(f"verity_vllm.engine.profiles.{name}")
+    mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{name}")
     for attr in ("PROFILE", "profile"):
         p = getattr(mod, attr, None)
         if isinstance(p, Profile):
@@ -87,7 +87,7 @@ def load_profile(name: str) -> Profile:
         f = getattr(mod, attr, None)
         if callable(f):
             return f()
-    raise ImportError(f"verity_vllm.engine.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
+    raise ImportError(f"verity_vllm.observe.fold.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
 
 
 def fold_log(log_path: str | Path, profile: Profile, *, strict: bool | None = None, with_program: bool = True) -> FoldResult:
@@ -148,7 +148,7 @@ class SnapshotStore:
         # `skipped` entries (a tensor over the capture's snapshot cap, D87 / `snapshot_max_bytes_op`) describe a view that was
         # NOT dumped: no `file`.  They must not become Snapshots (the empty file path resolved to the capture root and
         # `_raw` raised IsADirectoryError the first time a boundary value lived in a skipped alloc — OLMoE B8-static's
-        # 1300-token step 0, coverage lane cov-moe 2026-09-17); they are kept aside for the report.
+        # 1300-token step 0); they are kept aside for the report.
         self.skipped: list[dict] = [e for e in entries if isinstance(e, dict) and e.get("skipped")]
         self.entries: list[Snapshot] = [self._entry(e, default_layout) for e in entries if not (isinstance(e, dict) and e.get("skipped"))]
         self.by_event: dict[int, list[Snapshot]] = defaultdict(list)
@@ -261,7 +261,7 @@ def _extent(v: ViewDesc) -> tuple[int, int]:
 # --- weights (parameter words by leaf interval of the weights Record) ----------------------------------------
 
 def _moe_layer_fields(weights_type: Type) -> dict[str, tuple[str, list[str]]]:
-    """PROPOSED (lane moe, OLMoE): checkpoint sources of the fused-MoE / qk-norm layer fields that
+    """Checkpoint sources of the fused-MoE / qk-norm layer fields that
     `analytic.moe_layer_weights_type` adds, read off the weights Record itself (E = the expert axis of `w13`).  vLLM
     d9105ea80 stacks `experts.{e}.gate_proj` | `up_proj` into `w13[e]` ([2I][H], gate rows first) and `experts.{e}.down_proj`
     into `w2[e]`; the router is `mlp.gate.weight`, the qk-norms `self_attn.{q,k}_norm.weight`.  Dense Records add nothing."""
@@ -283,7 +283,7 @@ def _moe_layer_fields(weights_type: Type) -> dict[str, tuple[str, list[str]]]:
 
 
 def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
-    """[SHARED-CODE lane cov-ln] the bf16 word vLLM's loader produces from an fp16 checkpoint word: `param.data.copy_(loaded)`
+    """The bf16 word vLLM's loader produces from an fp16 checkpoint word: `param.data.copy_(loaded)`
     into a bf16 parameter on the GPU is `__float2bfloat16((float)half)` — fp16 -> f32 exact, f32 -> bf16 round-to-nearest-even
     (`analytic.f32_to_bf16_words`; NaN payloads are not preserved by the CUDA convert, but a checkpoint has no NaN words)."""
     from verity_vllm.program.model import f32_to_bf16_words
@@ -291,7 +291,7 @@ def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
 
 
 def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[str]]], dict[str, tuple[str, list[str]]]] | None:
-    """[SHARED-CODE lane cov-ln] checkpoint sources of the `analytic.layernorm_layer_weights_type` fields (GPT-NeoX / Pythia,
+    """Checkpoint sources of the `analytic.layernorm_layer_weights_type` fields (GPT-NeoX / Pythia,
     `C["NORM"] == "layernorm"`): `(top_fields, layer_fields)` in the `_WEIGHT_FIELDS` / `_LAYER_FIELDS` shape, with vLLM's
     GPT-NeoX parameter names (= the HF checkpoint names: `gpt_neox.layers.{L}.attention.query_key_value.weight`, ...).  The fused
     QKV tensor is stored `[NH, 3, D]`-major in the checkpoint and `[3, NH, D]`-major in vLLM's parameter (`GPTNeoXForCausalLM.
@@ -314,11 +314,11 @@ def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[
 
 
 def _qkv_neox_permute(w: np.ndarray, NH: int, D: int) -> np.ndarray:
-    """[SHARED-CODE lane cov-ln] vLLM `GPTNeoXForCausalLM.load_weights`: the checkpoint's `query_key_value` output dim is
+    """vLLM `GPTNeoXForCausalLM.load_weights`: the checkpoint's `query_key_value` output dim is
     `(NH, 3, D)`; the parameter's is `(3, NH, D)` (`loaded_weight.view(NH, 3, D, *rest).transpose(0, 1).reshape(shape)`)."""
     rest = w.shape[1:]
     return np.ascontiguousarray(w.reshape(NH, 3, D, *rest).transpose(1, 0, 2, *range(3, 3 + len(rest))).reshape(w.shape))
-#: [ADAPTER lane cov-dense 2026-09-17] checkpoint sources of the extra per-layer RMSNorm fields `analytic.weights_type` adds
+#: checkpoint sources of the extra per-layer RMSNorm fields `analytic.weights_type` adds
 #: from `C["extra_layer_norms"]` (Gemma-2: `pre_feedforward_layernorm` before the MLP, `post_feedforward_layernorm` after it;
 #: `_LAYER_FIELDS` already has `ln1` / `ln2`).  Read off the Record like `_moe_layer_fields`; Llama/Qwen/Phi Records add nothing.
 _EXTRA_NORM_SOURCES = {"ln_pre_mlp": "pre_feedforward_layernorm.weight", "ln_post_mlp": "post_feedforward_layernorm.weight"}
@@ -346,14 +346,13 @@ class WeightSource:
         self.weights_type = weights_type
         self.intervals = _field_intervals(weights_type, "")
         self.config = dict(config or {})
-        self._layer_fields = {**_LAYER_FIELDS, **_moe_layer_fields(weights_type)}   # PROPOSED (lane moe): + MoE / qk-norm fields
-        self._layer_fields = {**_LAYER_FIELDS, **_moe_layer_fields(weights_type),   # PROPOSED (lane moe): + MoE / qk-norm fields
-                              **_extra_norm_layer_fields(weights_type)}             # [ADAPTER cov-dense]: + Gemma-2's pre/post-MLP norms
+        self._layer_fields = {**_LAYER_FIELDS, **_moe_layer_fields(weights_type),   # + MoE / qk-norm fields
+                              **_extra_norm_layer_fields(weights_type)}             # + Gemma-2's pre/post-MLP norms
         self._weight_fields = {**_WEIGHT_FIELDS, "lm_head": ("w=lm_head.weight", ["lm_head.weight"])}   # untied checkpoints
-        fam = _layernorm_family_fields(self.config)                                   # [SHARED-CODE lane cov-ln] GPT-NeoX names
+        fam = _layernorm_family_fields(self.config)                                   # GPT-NeoX names
         if fam is not None:
             self._weight_fields, self._layer_fields = dict(fam[0]), dict(fam[1])
-        self._mla = mla_moe_sources(weights_type)                                     # [ADAPTER lane glm47-flash] dense_layers + layers
+        self._mla = mla_moe_sources(weights_type)                                     # dense_layers + layers
         self._cache: dict[str, np.ndarray] = {}
 
     def available(self) -> bool:
@@ -361,7 +360,7 @@ class WeightSource:
 
     def _tensor_words(self, name: str, field: str) -> np.ndarray:
         """Runtime (bf16) words of checkpoint tensor `name` for Record field `field`: F16 tensors converted as vLLM's loader
-        does ([SHARED-CODE lane cov-ln]); the GPT-NeoX fused QKV permuted into the parameter's `[3, NH, D]` order."""
+        does (); the GPT-NeoX fused QKV permuted into the parameter's `[3, NH, D]` order."""
         t = self.tensors[name]
         if self.tensor_dtypes.get(name) == "F16":
             t = _f16_words_to_bf16(t).reshape(t.shape)
@@ -378,7 +377,7 @@ class WeightSource:
                 raise ValueError(f"{self.cos_sin_path}: expected uint16 bf16 bit patterns, got {w.dtype}")
             w = w.reshape(-1)
         elif name == "normalizer":
-            # [ADAPTER lane cov-dense] Gemma-2's `model.normalizer` (analytic-table root, `analytic.weights_type`): one bf16 word,
+            # Gemma-2's `model.normalizer` (analytic-table root, `analytic.weights_type`): one bf16 word,
             # bf16(sqrt(H)); H is the Record's own hidden width (the `norm` field's length), so no configuration is needed here.
             from verity_vllm.program import model as analytic
             H = self.weights_type.fields[self.weights_type.index("norm")][1].n
@@ -877,7 +876,7 @@ def main(a: Options) -> int:
         store = SnapshotStore(snaps)
         cos_sin = Path(a.cos_sin) if a.cos_sin else ((snaps / "cos_sin_cache.npy") if (snaps / "cos_sin_cache.npy").exists() else None)
         weights = WeightSource(result.params[-1][1], [Path(p) for p in sorted(glob.glob(a.safetensors))] if a.safetensors else None,
-                               cos_sin, repo=repo, config=dict(profile.config or {}))   # [SHARED-CODE lane cov-ln] family / dtype facts
+                               cos_sin, repo=repo, config=dict(profile.config or {}))   # family / dtype facts
         report["weights_available"] = weights.available()
         report["weights_source"] = {"safetensors": [str(p) for p in weights.paths], "cos_sin": str(weights.cos_sin_path)}
         report["boundary"] = compare_boundary(result, store, weights)

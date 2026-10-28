@@ -1,8 +1,10 @@
 # The network certifier's program: the executable forms of the certifier's definitions that the difftest runs, and the
-# difftest against the Python audit. It imports only Lean. What it computes is `Security`'s trusted text
-# (`Definitions/NetworkCertifier/`), and `security_proofs` (`Proofs/NetworkCertifier/Code.lean`) proves the two agree.
+# difftests against the Python audit and against advice v1's charge references (`arith_encode.reference_charge`, and
+# `window_charge.reference_window` for the whole window). It imports only Lean. What it computes is `Security`'s
+# trusted text (`Definitions/NetworkCertifier/`), and `security_proofs` (`Proofs/NetworkCertifier/Code.lean`) proves the
+# two agree.
 name = "certifier_program"
-defaultTargets = ["NetworkCertifier", "certifier-difftest"]
+defaultTargets = ["NetworkCertifier", "certifier-difftest", "certifier-charge-difftest", "certifier-window-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -14,3 +16,11 @@ name = "NetworkCertifier"
 [[lean_exe]]
 name = "certifier-difftest"
 root = "NetworkCertifier.DifftestMain"
+
+[[lean_exe]]
+name = "certifier-charge-difftest"
+root = "NetworkCertifier.ChargeDifftestMain"
+
+[[lean_exe]]
+name = "certifier-window-difftest"
+root = "NetworkCertifier.WindowDifftestMain"

@@ -16,10 +16,10 @@ import pytest
 import torch
 
 from tests.properties import dsv4_flashmla_capture_gpu as X
-from verity_vllm.program.kernels import flashmla_prefill_twin as PT
-from verity_vllm.program.kernels import flashmla_twin as T
-from verity_vllm.program.registry import flashmla as F
-from verity_vllm.program.registry import flashmla_prefill as P
+from verity.ml.definitions.numerics import flashmla_prefill_twin as PT
+from verity.ml.definitions.numerics import flashmla_twin as T
+from verity.ml.definitions.registry import flashmla as F
+from verity.ml.definitions.registry import flashmla_prefill as P
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 
@@ -130,6 +130,7 @@ def _dequantised(cache: np.ndarray, table: np.ndarray, r: int, positions: np.nda
     return np.concatenate([(x * s).view(torch.int16).numpy().view(np.uint16), rope], axis=-1)
 
 
+@pytest.mark.slow
 def test_the_workspace_is_each_requests_rows_dequantised() -> None:
     """`workspace`, the two gathers' rows, restated in torch: request r's compressed positions 0.. and its last gather_len window
     positions through their block tables, each e4m3 byte as bf16 times its tile's UE8M0 byte shifted into a bf16's exponent, then
@@ -190,7 +191,7 @@ def test_the_rows_quantize_as_quant_py() -> None:
 
 
 @pytest.mark.parametrize("case,quick", [(c, False) for c in DECODE if c not in X.BATCHES] + [(c, True) for c in X.BATCHES]
-                         + [pytest.param(c, False, marks=pytest.mark.slow) for c in X.BATCHES])
+                         + [(c, False) for c in X.BATCHES])
 def test_every_case_plans_and_hands_each_token_its_rows(case: str, quick: bool) -> None:
     """Every case's tokens through the planner port and `token_inputs`: the window's NW rows from the SWA cache then
     ceil64(extra_len) compressed rows, the indices -1 past each length, the lengths, and SPLITS tiling the token's blocks; no
@@ -309,6 +310,7 @@ def test_the_edge_words_land_where_they_are_meant_to(tmp_path) -> None:
     assert not X.twin_out(a, 5, metas, nsl)[1][:X.NH].any()
 
 
+@pytest.mark.slow
 def test_the_twin_jobs_take_the_kernel_words(swa) -> None:
     ns, good, bad = swa
     jobs = [j for j in X.case_jobs("swa", good, ns, quick=True) if j["kind"] == "twin"]
@@ -319,6 +321,7 @@ def test_the_twin_jobs_take_the_kernel_words(swa) -> None:
     assert r["mismatch"] == 1 and [r["first_mismatch"][k] for k in ("token", "head", "word")] == list(FLIP)
 
 
+@pytest.mark.slow
 def test_the_reference_job_is_the_registered_definition(swa) -> None:
     """`FlashMlaDecode_v1{NH=16,...}` itself on a window token of one block (its 16 heads) against the twin."""
     ns, good, _ = swa
@@ -343,6 +346,7 @@ def test_a_bad_planner_word_is_an_error_of_its_case(tmp_path) -> None:
     assert "do not tile" in r["error"]
 
 
+@pytest.mark.slow
 def test_the_prefill_jobs_take_the_gpus_words(pswa) -> None:
     """The workspace job over every word of the four requests' 144 rows and six `FlashMlaGatherRow_v1` references, the twin jobs
     over every output word; a flipped workspace word and a flipped output word each found where they are."""

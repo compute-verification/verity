@@ -1,8 +1,7 @@
-"""served_commit's noretain arm with NVTX ranges for nsys: one per run, per engine step (exec:<tokens>), per drain and per
+"""served_commit's arm (`arm.py`) with NVTX ranges for nsys: one per run, per engine step (exec:<tokens>), per drain and per
 committer step end. Measurement only."""
 from __future__ import annotations
 
-import time
 from typing import Any, ClassVar
 
 import torch
@@ -68,10 +67,15 @@ class ProfArm(ServedCommitArm):
 
 
 class RootsArm(ProfArm):
-    """Each finished run's root, bounded-staging record and per-step (plan key, predicted length, bytes) appended to
+    """Each finished run's root, bounded-staging record, per-step (plan key, predicted length, bytes) and per-thread CPU appended to
     $RESEARCH_RUN_DIR/out/roots.jsonl, and each distinct run layout (every step's (name, dtype, shape, bytes), once per process) to
     out/layouts.jsonl. Every RootsArm commits under one run id, so their roots compare across arms. ``retain_levels`` None is the
-    committer's default (no levels under retain=none)."""
+    committer's default (no levels under retain=none).
+
+    The records are written after the run's timed period, where `ServedCommitArm` checks a run (the next ``begin_run``, before its
+    clock, or the harness reading ``extras`` or ``gate``): building and hashing a run's layout costs tens of milliseconds at 26k
+    tensors (and its garbage collections), which a run's time must not hold. A run's thread CPU runs from its ``begin_run`` to its
+    record, so it includes the finalize."""
 
     retain_levels: bool | None = None
     dumped: ClassVar[set[str]] = set()
@@ -94,18 +98,22 @@ class RootsArm(ProfArm):
         com._begin_step = begin_step
 
     def begin_run(self, target: Any) -> None:
+        self._check()
         self.plan_log = []
         super().begin_run(target)
         self.cpu0 = _thread_cpu()
 
-    def end_run(self, target: Any) -> None:
-        cpu = _cpu_delta(self.cpu0, _thread_cpu())
-        super().end_run(target)
+    def _check(self) -> None:
+        if self.pending is not None:
+            self._record(self.pending)
+        super()._check()
+
+    def _record(self, rc: Any) -> None:
         import hashlib
         import json
         import os
 
-        rc = self.pending
+        cpu = _cpu_delta(self.cpu0, _thread_cpu())
         bs = dict((rc.extra or {}).get("bounded_staging") or {})
         w = dict((rc.extra or {}).get("windows") or {})
         st = dict(self.committer._nc.stats()) if hasattr(self.committer._nc, "stats") else {}
@@ -136,7 +144,8 @@ class RootsArm(ProfArm):
 
 
 class StockProfArm:
-    """The stock engine with ProfArm's exec/sample and run ranges and nothing else: the control's own per-step times."""
+    """The stock engine with ProfArm's exec/sample and run ranges and nothing else: the control's own per-step times. Its
+    per-thread CPU line in out/roots.jsonl is written after the run's timed period, as `RootsArm`'s records are."""
 
     protocols: tuple[str, ...] = ()
     precision = "bfloat16"
@@ -145,46 +154,46 @@ class StockProfArm:
 
     def __init__(self, id: str) -> None:
         self.id = id
+        self.cpu0: dict[str, float] | None = None
 
     def install(self, target: Any) -> StockProfArm:
         return self
 
     def ready(self, target: Any) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
 
-        runner = get_model_runner(target.engine.vllm)
+        runner = handle.model_runner(target.engine.vllm)
         _ranged(runner, "execute_model",
                 lambda a, k: f"exec:{getattr(a[0] if a else k.get('scheduler_output'), 'total_num_scheduled_tokens', -1)}")
         if hasattr(runner, "sample"):
             _ranged(runner, "sample", "sample")
 
     def begin_run(self, target: Any) -> None:
+        self._record()
         self.cpu0 = _thread_cpu()
         torch.cuda.nvtx.range_push(f"run:{self.id}")
 
     def end_run(self, target: Any) -> None:
+        torch.cuda.nvtx.range_pop()
+
+    def extras(self, target: Any) -> dict[str, Any]:
+        self._record()
+        return {}
+
+    def _record(self) -> None:
         import json
         import os
 
-        torch.cuda.nvtx.range_pop()
+        if self.cpu0 is None:
+            return
+        cpu, self.cpu0 = _cpu_delta(self.cpu0, _thread_cpu()), None
         out = os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out", "roots.jsonl")
         with open(out, "a") as f:
-            f.write(json.dumps({"arm": self.id, "thread_cpu_s": _cpu_delta(self.cpu0, _thread_cpu())}) + "\n")
-
-
-class SwitchArm(RootsArm):
-    """The prof arm with a 0.5 ms GIL switch interval (default 5 ms) in its engine's process: if the serving thread waits for the
-    worker's Python, its step time falls."""
-
-    def ready(self, target: Any) -> None:
-        import sys
-
-        sys.setswitchinterval(0.0005)
-        super().ready(target)
+            f.write(json.dumps({"arm": self.id, "thread_cpu_s": cpu}) + "\n")
 
 
 class NativeDrainArm(RootsArm):
-    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
+    """`RootsArm` whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
     ``host_fast`` False puts the committer's step back as it was before its host-cost changes (slots staged as views, the step end in
     several calls, the row order expanded on the serving thread); ``batch_copies`` False, the source's captured copies one by one.
     ``window`` (MiB, slots) sizes the staging ring in place of the collector's default (256 MiB x 8)."""
@@ -208,16 +217,8 @@ class NativeDrainArm(RootsArm):
         com._nc.slot_fast = com.native_end = com.rows_off_thread = self.host_fast
 
 
-class NativeDrainBaseArm(NativeDrainArm):
-    batch_copies = host_fast = False
-
-
-class NativeDrainBatchArm(NativeDrainArm):
-    host_fast = False
-
-
 class RowsArm(NativeDrainArm):
-    """The nativedrain arm committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
+    """`NativeDrainArm` committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
     commit_scheme = "rows-sha512"
 
@@ -230,10 +231,6 @@ class RowsBatchArm(RowsArm):
     host_fast = False
 
 
-class NativeDrainRing8Arm(NativeDrainArm):
-    window = (256, 32)
-
-
 class RowsRing8Arm(RowsArm):
     window = (256, 32)
 
@@ -243,7 +240,7 @@ class RowsW64Arm(RowsArm):
 
 
 class RowsCapArm(RowsArm):
-    """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) blocks while two ring slots are free (the
+    """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) CTAs while two ring slots are free (the
     committer's rows_cap_blocks policy): the same bytes, with the other SMs left to serving."""
 
     def ready(self, target: Any) -> None:
@@ -273,8 +270,8 @@ class Rows4kArm(RowsArm):
 
 
 def _layer_source(**kw: Any) -> Any:
-    """A served compiled source acquiring only what a per-layer unit commits: per compiled piece its first convert_element_type (the
-    fused add-norm's residual, one hidden vector per token: the layer-folded unit's) and the embedding's first output, the keys and
+    """A served compiled source acquiring only what a per-layer proof block commits: per compiled piece its first convert_element_type (the
+    fused add-norm's residual, one hidden vector per token: the layer-folded proof block's) and the embedding's first output, the keys and
     values each attention layer is given (post-RoPE K, and V), the token inputs and the logits. Measurement only: not the step's
     values, so not a Commit of the step."""
     from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
@@ -313,7 +310,7 @@ def _layer_source(**kw: Any) -> Any:
 
 
 class RowsLayerArm(RowsArm):
-    """The rows arm acquiring only the per-layer unit's values (`_layer_source`)."""
+    """The rows arm acquiring only the per-layer proof block's values (`_layer_source`)."""
 
     def install(self, target: Any) -> RowsLayerArm:
         self.source = _layer_source(into=target.hooks, batch_copies=self.batch_copies)
@@ -334,8 +331,8 @@ class RowsLayerCapArm(RowsCapArm, RowsLayerArm):
 
 
 class HiPrioArm(NativeDrainArm):
-    """The nativedrain arm with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
-    on its side stream at the default priority (CUDA's lowest), gets a block slot only when no serving block waits for one."""
+    """`NativeDrainArm` with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
+    on its side stream at the default priority (CUDA's lowest), gets a CTA slot only when no serving CTA waits for one."""
 
     def ready(self, target: Any) -> None:
         import os
@@ -348,78 +345,14 @@ class HiPrioArm(NativeDrainArm):
 
 
 class RowsHiPrioArm(HiPrioArm):
-    """The hiprio arm committing under rows-sha512."""
+    """`HiPrioArm` committing under rows-sha512."""
 
     commit_scheme = "rows-sha512"
 
 
-class FinalizeProfArm(NativeDrainArm):
-    """The nativedrain arm with the committer's finalize under cProfile: the top functions by cumulative time of each run's finalize
-    (inside the timed window) appended to $RESEARCH_RUN_DIR/out/finalize_prof.txt."""
-
-    def ready(self, target: Any) -> None:
-        import cProfile
-        import io
-        import os
-        import pstats
-
-        super().ready(target)
-        com, orig = self.committer, self.committer.finalize
-        out = os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out", "finalize_prof.txt")
-
-        def finalize():
-            pr = cProfile.Profile()
-            t0 = time.perf_counter()
-            pr.enable()
-            try:
-                return orig()
-            finally:
-                pr.disable()
-                buf = io.StringIO()
-                buf.write(f"== {self.id} run {len(self.runs)} finalize wall {1e3 * (time.perf_counter() - t0):.2f} ms\n")
-                pstats.Stats(pr, stream=buf).sort_stats("cumulative").print_stats(30)
-                with open(out, "a") as f:
-                    f.write(buf.getvalue())
-
-        com.finalize = finalize
-
-
-class _PassThroughBoundaries:
-    """A call-boundary source that takes every name as it is: the identity check's verdict is unchanged, but it judges every step."""
-
-    short_name = "pass_through"
-
-    def split_step_names(self, names: Any, step: int, padding_only: bool) -> tuple[Any, dict]:  # noqa: ARG002
-        return names, {}
-
-
-class NoMemoArm(NativeDrainArm):
-    """The nativedrain arm whose finalize checks identities step by step, as before the per-tuple verdicts."""
-
-    def ready(self, target: Any) -> None:
-        super().ready(target)
-        com, orig = self.committer, self.committer.finalize
-
-        def finalize():
-            src = _PassThroughBoundaries()
-            com.sources.append(src)
-            try:
-                return orig()
-            finally:
-                com.sources.remove(src)
-
-        com.finalize = finalize
-
-
-SERVED_COMMIT_PROF = RootsArm("served-commit-prof", retain="none")
-SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
-SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
-SERVED_COMMIT_NATIVEDRAIN_BASE = NativeDrainBaseArm("served-commit-nativedrain-base", retain="none")
-SERVED_COMMIT_NATIVEDRAIN_BATCH = NativeDrainBatchArm("served-commit-nativedrain-batch", retain="none")
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
 SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
 SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
-SERVED_COMMIT_NATIVEDRAIN_RING8 = NativeDrainRing8Arm("served-commit-nativedrain-ring8", retain="none")
 SERVED_COMMIT_ROWS_RING8 = RowsRing8Arm("served-commit-rows-ring8", retain="none")
 SERVED_COMMIT_ROWS_W64 = RowsW64Arm("served-commit-rows-w64", retain="none")
 SERVED_COMMIT_ROWS_CAP = RowsCapArm("served-commit-rows-cap", retain="none")
@@ -429,8 +362,5 @@ SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none
 SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
 SERVED_COMMIT_ROWS_4K_CAP = Rows4kCapArm("served-commit-rows-4k-cap", retain="none")
 SERVED_COMMIT_ROWS_LAYER_CAP = RowsLayerCapArm("served-commit-rows-layer-cap", retain="none")
-SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
-SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")
-SERVED_COMMIT_NOMEMO = NoMemoArm("served-commit-nomemo", retain="none")
 STOCK_PROF = StockProfArm("stock-prof")

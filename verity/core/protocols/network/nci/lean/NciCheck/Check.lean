@@ -36,13 +36,14 @@ An instance is one JSON object:
   is checked as `novelReads R · den ≤ num · size R` in ℕ.
 
 `evaluate` refuses a malformed instance with the first failing code, in the order checked: `instance` (a field missing
-or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it), then gate by gate `program` or
+or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it, or a reference reads a leaf at
+another width than it was committed with, `E_REINTERPRET`: `decodeProgram`, with a `message`), then gate by gate `program` or
 `not-topological`, then θ entry by
 entry (`theta-unknown`: not a gate id, `theta-not-input`, `theta-not-registered`: an input bound per run,
 `theta-duplicate`), then the owners (`owner-length`: not one per gate, so an id outside the circuit or a gate left out;
 then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`, `gate-in-no-iu`), then `empty-iu`.
 `check` writes a refusal as `{"error": code}`, with a `message` giving the fix where one is the declaration's to make
-(`fixOf`).
+(`fixOf`), or for a `program` refusal of a reinterpretation, where (`refusalOf`).
 -/
 
 namespace NciCheck
@@ -200,12 +201,294 @@ def verdict (gates : Nat) (r : Array (Nat × Nat)) (f : Option (Nat × String)) 
       | none => Json.null
       | some (u, rule) => Json.arr #[toJson u, Json.str rule])]
 
+/-! ## A leaf read at the width it was committed with
+
+`E_REINTERPRET` (`verity/ml/circuits/PROTOCOL.md` §4.4, `defs.Builder.finish`): a node's argument or a body's return that
+names a leaf of a parameter or of an earlier node (any node, for the return) of another width than its own type gives
+that position is a silent reinterpretation, which the Python codec refuses as it decodes and C-Flock's decoder doesn't
+look for. A reference to the node itself or a later one is not this check's: `not-topological` names it. -/
+
+namespace Widths
+
+open Flock.Program
+
+private theorem lt_of_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  omega
+
+private theorem snd_lt_of_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) : sizeOf f.2 < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  obtain ⟨k, t⟩ := f
+  simp only [Prod.mk.sizeOf_spec] at this ⊢
+  omega
+
+/-- The widths of `t`'s leaves `lo … hi - 1`, each once (`types.range_widths`), from the type's structure. -/
+def rangeWidths (t : Ty) (lo hi : Nat) : List Nat :=
+  match t with
+  | .value w => if lo == 0 && 0 < hi then [w] else []
+  | .array n e =>
+    let L := e.leaves
+    let hi := min hi (n * L)
+    if L == 0 || hi ≤ lo then [] else
+      let a := lo / L
+      let b := (hi - 1) / L
+      if a == b then rangeWidths e (lo - a * L) (hi - a * L)
+      else (rangeWidths e (lo - a * L) L ++ (if a + 1 < b then rangeWidths e 0 L else []) ++
+        rangeWidths e 0 (hi - b * L)).eraseDups
+  | .tuple fs => (fs.foldl (fun (acc : List Nat × Nat) f =>
+      let o := acc.2
+      let m := f.leaves
+      (if o + m ≤ lo || hi ≤ o then acc.1 else acc.1 ++ rangeWidths f (lo - o) (min hi (o + m) - o), o + m)) ([], 0)).1.eraseDups
+  | .record fs => (fs.foldl (fun (acc : List Nat × Nat) f =>
+      let o := acc.2
+      let m := f.2.leaves
+      (if o + m ≤ lo || hi ≤ o then acc.1 else acc.1 ++ rangeWidths f.2 (lo - o) (min hi (o + m) - o), o + m)) ([], 0)).1.eraseDups
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; exact lt_of_mem ‹_›)
+    | (simp only [Ty.record.sizeOf_spec]; exact snd_lt_of_mem ‹_›)
+
+/-- The width of leaf `j` of `t`. -/
+def wAt (t : Ty) (j : Nat) : Nat :=
+  match t with
+  | .value w => w
+  | .array _ e => let L := e.leaves; if L == 0 then 0 else wAt e (j % L)
+  | .tuple fs => (fs.foldl (fun (acc : Option Nat × Nat) f => match acc.1 with
+      | some _ => acc
+      | none => let m := f.leaves; (if j < acc.2 + m then some (wAt f (j - acc.2)) else none, acc.2 + m)) (none, 0)).1.getD 0
+  | .record fs => (fs.foldl (fun (acc : Option Nat × Nat) f => match acc.1 with
+      | some _ => acc
+      | none => let m := f.2.leaves; (if j < acc.2 + m then some (wAt f.2 (j - acc.2)) else none, acc.2 + m)) (none, 0)).1.getD 0
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; exact lt_of_mem ‹_›)
+    | (simp only [Ty.record.sizeOf_spec]; exact snd_lt_of_mem ‹_›)
+
+/-- The smallest part of `t` holding its leaves `lo … hi - 1` (`hi > lo`), and the leaf of `t` it starts at. -/
+def cover (t : Ty) (lo hi : Nat) : Ty × Nat :=
+  match t with
+  | .value _ => (t, 0)
+  | .array _ e =>
+    let L := e.leaves
+    let a := lo / L
+    if L == 0 || a != (hi - 1) / L then (t, 0) else
+      let (c, o) := cover e (lo - a * L) (hi - a * L)
+      (c, o + a * L)
+  | .tuple fs => (fs.foldl (fun (acc : Option (Ty × Nat) × Nat) f => match acc.1 with
+      | some _ => acc
+      | none =>
+        let m := f.leaves
+        (if acc.2 ≤ lo && hi ≤ acc.2 + m then
+          let (c, o) := cover f (lo - acc.2) (hi - acc.2)
+          some (c, o + acc.2) else none, acc.2 + m)) (none, 0)).1.getD (t, 0)
+  | .record fs => (fs.foldl (fun (acc : Option (Ty × Nat) × Nat) f => match acc.1 with
+      | some _ => acc
+      | none =>
+        let m := f.2.leaves
+        (if acc.2 ≤ lo && hi ≤ acc.2 + m then
+          let (c, o) := cover f.2 (lo - acc.2) (hi - acc.2)
+          some (c, o + acc.2) else none, acc.2 + m)) (none, 0)).1.getD (t, 0)
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; exact lt_of_mem ‹_›)
+    | (simp only [Ty.record.sizeOf_spec]; exact snd_lt_of_mem ‹_›)
+
+/-- The leaf counts of `t`'s children where it has more than one (an Array's elements, a Tuple's or Record's fields). -/
+def childLeaves : Ty → Array Nat
+  | .value _ => #[]
+  | .array n e => Array.replicate (min n 2) e.leaves
+  | .tuple fs => fs.map (·.leaves)
+  | .record fs => fs.map (·.2.leaves)
+
+/-- `t`'s one width, where all its leaves have one. -/
+def homo (t : Ty) : Option Nat :=
+  match rangeWidths t 0 t.leaves with
+  | [w] => some w
+  | _ => none
+
+/-- Leaves walked one by one, past which a Program is refused: references this irregular are not read in closed form. -/
+def WALK : Nat := 2 ^ 20
+
+/-- How deep two types are taken apart. -/
+def DEPTH : Nat := 256
+
+abbrev M := EStateM String Nat
+
+def UNCHECKED : String :=
+  s!"its references are read leaf by leaf past {WALK} leaves to compare their widths, past which this verifier refuses them"
+
+def step : M Unit := do
+  let s ← get
+  if s ≥ WALK then throw UNCHECKED
+  set (s + 1)
+
+/-- `{k · stride mod L : k < count}`, where it has at most `cap` members. -/
+def residues (stride : Int) (count L cap : Nat) : Option (List Nat) :=
+  let s := (stride % (L : Int)).toNat
+  let g := Nat.gcd s L
+  if count ≥ L / g then (if L / g ≤ cap then some ((List.range (L / g)).map (· * g)) else none)
+  else if count ≤ cap then some ((List.range count).map fun k => k * s % L).eraseDups else none
+
+/-- Whether `t`'s leaves `a … a + n - 1` have the widths of `S`'s leaves `b … b + n - 1`. -/
+def eqRange : Nat → Ty → Nat → Ty → Nat → Nat → M Bool
+  | 0, _, _, _, _, _ => throw UNCHECKED
+  | fuel + 1, t, a, S, b, n => do
+    if n == 0 then return true
+    match rangeWidths t a (a + n), rangeWidths S b (b + n) with
+    | [x], [y] => return x == y
+    | [_], _ | _, [_] => return false
+    | _, _ =>
+      let (ct, ot) := cover t a (a + n)
+      let (cs, os) := cover S b (b + n)
+      if a - ot == b - os && ct == cs then return true
+      if let (.array _ e, .array _ f) := (ct, cs) then
+        let L := e.leaves
+        let L' := f.leaves
+        if L > 0 && L' > 0 then
+          if L == L' && n ≥ L then
+            -- every residue mod `L` is met: `e`'s leaf `r` is read as `f`'s leaf `(r + d) % L`
+            let d := ((b - os) + L - (a - ot) % L) % L
+            return (← eqRange fuel e 0 f d (L - d)) && (← eqRange fuel e (L - d) f 0 d)
+          let P := Nat.lcm L L'
+          -- both sides repeat every `P` leaves: one window of `P` decides the rest
+          if n > P then return ← eqRange fuel t a S b P
+      -- a Tuple's or Record's fields are the description's, an Array's elements are walked: split by the side with fields
+      let byS := match cs with | .array _ _ | .value _ => false | _ => true
+      let (c, oc, base) := if byS then (cs, os, b) else (ct, ot, a)
+      let pieces : Array (Nat × Nat) := match c with
+        | .array _ e =>
+          let L := e.leaves
+          if L == 0 then #[] else
+            let first := (base - oc) / L
+            let last := (base + n - 1 - oc) / L
+            (Array.range (min (last + 1 - first) (WALK + 1))).map fun k => (oc + (first + k) * L, L)
+        | _ => (childLeaves c).foldl (fun (acc : Array (Nat × Nat) × Nat) m => (acc.1.push (acc.2, m), acc.2 + m)) (#[], oc) |>.1
+      if pieces.isEmpty then return false
+      for (o, m) in pieces do
+        let lo := max base o
+        let hi := min (base + n) (o + m)
+        if lo < hi then
+          step
+          let k := lo - base
+          if !(← eqRange fuel t (a + k) S (b + k) (hi - lo)) then return false
+      if let some (o, m) := pieces.back? then
+        if o + m < base + n then throw UNCHECKED
+      return true
+
+/-- A body's leaf sources: its parameters' types, and its nodes' outputs below `below`. -/
+structure Src where
+  params : Array Ty
+  nodes : Array Ty
+  hp : Array (Option Nat)
+  hn : Array (Option Nat)
+  below : Nat
+
+def Src.ty? (s : Src) (p : Bool) (i : Nat) : Option Ty :=
+  if p then s.params[i]? else if i < s.below then s.nodes[i]? else none
+
+def Src.homo? (s : Src) (p : Bool) (i : Nat) : Option Nat :=
+  if p then (s.hp[i]?).join else (s.hn[i]?).join
+
+/-- Whether the references of part `q`, read as `t`'s leaves `a …` (`t`'s one width `ht`, if it has one), name leaves of
+the widths `t` gives them. -/
+def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool := do
+  match q with
+  | .explicit items =>
+    return (List.range items.size).all fun k =>
+      let r := items[k]!
+      match s.ty? r.p r.i with
+      | some S => wAt S r.j == wAt t (a + k)
+      | none => true
+  | .affine p i base n =>
+    let some S := s.ty? p i | return true
+    if ht.isSome && ht == s.homo? p i then return true
+    eqRange DEPTH t a S base n
+  | .strided p i base inner os is n =>
+    let some S := s.ty? p i | return true
+    if n == 0 || (ht.isSome && ht == s.homo? p i) then return true
+    let at_ := fun (k : Nat) => (base + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat
+    if let some w := ht then
+      let q' := (n - 1) / inner
+      let corners : List (Nat × Nat) := [(0, 0), (0, min inner n - 1), (q', 0), (q', (n - 1) % inner)] ++
+        (if q' > 0 then [(q' - 1, inner - 1)] else [])
+      let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
+      let lo := vals.foldl min vals.head!
+      let hi := vals.foldl max vals.head!
+      if rangeWidths S lo (hi + 1) == [w] then return true
+      let (cs, off) := cover S lo (hi + 1)
+      if let .array _ f := cs then
+        let L := f.leaves
+        if L > 0 then
+          if let (some A, some B) := (residues os ((n + inner - 1) / inner) L 4096, residues is inner L 4096) then
+            if A.length * B.length ≤ 4096 then
+              let r0 := (base - (off : Int)) % (L : Int)
+              if A.all fun x => B.all fun y => wAt f ((r0 + x + y) % (L : Int)).toNat == w then return true
+    for k in [0:n] do
+      step
+      if wAt S (at_ k) != wAt t (a + k) then return false
+    return true
+
+/-- The first leaf of the references `seq`, read as a `t`, from which a part names leaves of another width. -/
+def seqBad (s : Src) (t : Ty) (seq : Seq) : M (Option Nat) := do
+  let ht := homo t
+  for q in seq.parts, a in seq.starts do
+    if !(← partOk s t ht a q) then return some a
+  return none
+
+/-- Where the body of composite `d` reads a leaf at another width, as a message. -/
+def bodyBad (P : Prog) (d : Defn) : M (Option String) := do
+  let B := d.body
+  let outs := B.nodes.map (·.out)
+  let s : Src := { params := B.params.map (·.2), nodes := outs, hp := B.params.map (homo ·.2), hn := outs.map homo,
+                   below := 0 }
+  let what := fun (pos : Nat) (t : Ty) (w : String) =>
+    s!"E_REINTERPRET: definition '{d.key}' {w}: the references from its leaf {pos} name leaves of other widths than " ++
+    s!"its type {t.render} gives them: a silent reinterpretation. A word is read only at the width it was committed with"
+  for k in [0:B.nodes.size] do
+    let node := B.nodes[k]!
+    let callee := P.defs[node.fn]!
+    for i in [0:node.args.size] do
+      let a := node.args[i]!
+      if let some pos ← seqBad { s with below := k } a.ty a.seq then
+        let pn := (callee.params[i]?.map (·.1)).getD s!"{i}"
+        return some (what pos a.ty s!"node {k} ({node.form.name} {callee.key}) argument '{pn}'")
+  if let some pos ← seqBad { s with below := B.nodes.size } B.retType B.ret then
+    return some (what pos B.retType "the body's return")
+  return none
+
+/-- Where some composite of `P` reads a leaf at another width than it was committed with, as a message. -/
+def reinterpretation (P : Prog) : Option String :=
+  let go : M (Option String) := do
+    for d in P.defs do
+      if d.prim then continue
+      if let some m ← bodyBad P d then return some m
+    return none
+  match go.run 0 with
+  | .ok r _ => r
+  | .error e _ => some s!"E_REINTERPRET unchecked: {e}"
+
+end Widths
+
+/-- The instance's Program as C-Flock's decoder reads it, refused (`program`) where the decoder refuses it, and where a
+reference reads a leaf at another width than it was committed with (`Widths.reinterpretation`; `refusalOf` gives its
+message). -/
+def decodeProgram (text : String) : Except String Flock.Program.Prog :=
+  match Flock.Program.decode text.toUTF8 with
+  | .ok P => match Widths.reinterpretation P with
+    | some _ => .error "program"
+    | none => .ok P
+  | .error _ => .error "program"
+
 /-- The check on one instance: its verdict, or the first failing code of a malformed instance. -/
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
-  let P ← match Flock.Program.decode i.program.toUTF8 with
-    | .ok P => pure P
-    | .error _ => throw "program"
+  let P ← decodeProgram i.program
   let c ← circuitOf P
   let d ← divisionOf c i.theta i.owner
   let r := ius c d
@@ -218,16 +501,35 @@ def fixOf : String → Option String
       "`registered`) or drop it from theta")
   | _ => none
 
-/-- A refusal as JSON: `{"error": code}`, with its `message` where `fixOf` has one. -/
-def refusal (code : String) : Json :=
-  Json.mkObj (("error", Json.str code) :: match fixOf code with
+/-- A refusal as JSON: `{"error": code}`, with `message` where there is one. -/
+def refusalWith (code : String) (message : Option String) : Json :=
+  Json.mkObj (("error", Json.str code) :: match message with
     | some m => [("message", Json.str m)]
     | none => [])
 
-/-- `evaluate`, with a refusal as `refusal` writes it. -/
+/-- A refusal as JSON, with its `message` where `fixOf` has one. -/
+def refusal (code : String) : Json :=
+  refusalWith code (fixOf code)
+
+/-- Where `j`'s Program decodes and a reference of it reads a leaf at another width, `Widths.reinterpretation`'s
+message. -/
+def reinterpretationOf (j : Json) : Option String :=
+  match parse j with
+  | .ok i => match Flock.Program.decode i.program.toUTF8 with
+    | .ok P => Widths.reinterpretation P
+    | .error _ => none
+  | .error _ => none
+
+/-- `refusal`, a `program` refusal of `j` with the reinterpretation that `decodeProgram` refused as its `message`. -/
+def refusalOf (j : Json) (code : String) : Json :=
+  match (if code == "program" then reinterpretationOf j else none) with
+  | some m => refusalWith code (some m)
+  | none => refusal code
+
+/-- `evaluate`, with a refusal as `refusalOf` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusalOf j code
 
 end NciCheck

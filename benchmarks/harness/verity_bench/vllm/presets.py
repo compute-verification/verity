@@ -39,16 +39,26 @@ class Preset:
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
     model_digest: str | None = None
-    unavailable_reason: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
 
 
-#: Engine precisions an arm may name (`runner.engine_args`)
-PRECISIONS = ("bfloat16", "fp8")
+#: Engine precisions an arm may name (`runner.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
+#: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
+PRECISIONS = ("bfloat16", "fp8", "int8_exact")
+#: The keys a preset's `engine_settings` may set: those `runner.engine_args` reads, and the two `served` sets from the
+#: spec's `eager` (``cuda_graphs``, ``enforce_eager``), which a spec's own value doesn't change
+ENGINE_SETTINGS = (
+    "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
+    "block_gpu_memory_utilization", "resident_kv_cache_memory_bytes", "block_kv_cache_memory_bytes", "capture_sizes",
+    "serving_defaults", "attention_backend", "attention_config", "cuda_graphs", "enforce_eager",
+)
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"
+#: The executions a served variant of a built-in arm (`BUILTIN@LABEL`, `arms.served_variant`) builds its engine in: vLLM's
+#: serving defaults, eager or compiled (`verity_vllm.engine.served.EXECUTIONS`)
+SERVED_EXECUTIONS = ("eager", "compiled")
 
 
 @dataclass(frozen=True)
@@ -56,11 +66,16 @@ class ArmSettings:
     """A protocol arm's own engine (`[arm_settings."pouw:SCHEME"]`): the precision its engine loads, its control (an arm
     the spec names, or `NO_CONTROL`; default stock FP8), and the protocols config handed to `verity_vllm.LLM`
     (``{protocol: {...}}``), where a string value ``"$NAME"`` is the point's environment variable NAME, which the spec's
-    setup exports. All of it is in the point's identity."""
+    setup exports. A served variant (`[arm_settings."stock-fp8@compiled"]`) takes only its control (default its
+    built-in) and its own checkpoint, `model` at `revision` (default the preset's), for a preset whose checkpoint its
+    precision can't load (stock FP8 against the int8 pin, from the pin's BF16 base). All of it is in the point's
+    identity."""
 
     precision: str | None = None
     control: str | None = None
     protocols_config: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    model: str | None = None
+    revision: str | None = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +154,9 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         raise ConfigError(f"{path}: unknown GPU id {doc.preset.gpu_id!r}")
     if doc.preset.gpu_count < 1 or doc.preset.gpu_count > GPUS[doc.preset.gpu_id].count_per_node:
         raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
+    unknown = sorted(set(doc.preset.engine_settings) - set(ENGINE_SETTINGS))
+    if unknown:
+        raise ConfigError(f"{path}: unknown engine_settings {unknown}; known: {list(ENGINE_SETTINGS)}")
     if doc.reps < 1 or doc.warmups < 1 or not doc.arms:
         raise ConfigError(f"{path}: arms must be nonempty and reps and warmups must be positive")
     if doc.max_warmups is not None and doc.max_warmups < doc.warmups:
@@ -151,8 +169,16 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         if setup.is_absolute() or ".." in setup.parts or not (SOURCE_ROOT / setup).is_file():
             raise ConfigError(f"{path}: setup {doc.setup!r} must name a script in the source tree, relative to its root")
     for name, arm in doc.arm_settings.items():
-        if name not in doc.arms or ":" not in name:
-            raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) in arms")
+        variant = name.partition("@")[2] in SERVED_EXECUTIONS
+        if name not in doc.arms or not (":" in name or variant):
+            raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
+                              f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
+        if variant and (arm.precision is not None or arm.protocols_config):
+            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control and checkpoint")
+        if not variant and (arm.model is not None or arm.revision is not None):
+            raise ConfigError(f"{path}: arm_settings {name!r}: only a served variant names its own checkpoint")
+        if (arm.model is None) != (arm.revision is None):
+            raise ConfigError(f"{path}: arm_settings {name!r}: a checkpoint is a model at a pinned revision: set both")
         if arm.precision is not None and arm.precision not in PRECISIONS:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
         if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
@@ -198,19 +224,27 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
 
 
 def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
-    """The preset as its engines are built, and whether they run eagerly: when asked, or when the preset requires it
-    (`enforce_eager`), and with CUDA graphs exactly when not."""
+    """The preset as its engines are built, and whether they run eagerly: when asked, and with CUDA graphs exactly when
+    not."""
 
-    eager = bool(eager or preset.engine_settings.get("enforce_eager", False))
+    eager = bool(eager)
     settings = {**preset.engine_settings, "cuda_graphs": not eager, "enforce_eager": eager}
     return replace(preset, engine_settings=settings), eager
 
 
+def checkpoint_files(root: Path) -> list[Path]:
+    """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
+    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
+
+    return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
+
+
 def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
-    """Bind a machine-local checkpoint to a preset by hashing all of its files."""
+    """Bind a machine-local checkpoint to a preset by hashing its files (`checkpoint_files`)."""
 
     root = Path(path)
-    files = sorted(p for p in root.iterdir() if p.is_file())
+    files = checkpoint_files(root)
     if not files:
         raise ValueError(f"benchmark checkpoint {root} has no files")
     digest = hashlib.sha256()
@@ -230,7 +264,6 @@ def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
         revision=None,
         case=None,
         model_digest=digest.hexdigest(),
-        unavailable_reason=None,
     )
 
 

@@ -59,6 +59,7 @@ sys.setrecursionlimit(100000)
 import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
@@ -539,7 +540,7 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
-    from verity_vllm.program.boolean import boolean_version
+    from verity.ml.definitions.boolean import boolean_version
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:
@@ -667,10 +668,10 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 
 #: Definitions built on first use, outside the registry's catalog: name -> (module, builder) of its one static. Building one
 #: also registers its Boolean form for M0's lowering (`ir_lower._boolean_build`), which finds no other in a fresh process.
-# TODO(#2656): once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
+# TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
-LAZY = {r"GatherE4m3x(\d+)_v2": ("verity_vllm.program.registry.boolean_fp8_moe", "gather_e4m3"),
-        r"GatherF32x(\d+)_v2": ("verity_vllm.program.registry.boolean_fp8_moe", "gather_f32")}
+LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
+        r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_f32")}
 
 
 def live(fn, registry):
@@ -700,7 +701,7 @@ def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
     again from the registry, refused unless it encodes as the decoded one."""
     from verity.ml.circuits.codec import decode_program
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
     defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
@@ -751,7 +752,7 @@ def main() -> int:
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
     # M0 lowers a word primitive by the Boolean Definition registered for it (`ir_lower._boolean_build`), some of which only
     # the integration's registry modules register (U32And_v1's); a11_kinds' decode loads them all the same way
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     summary["registry_errors"] = load_registry()[1]
 
     table = json.loads(Path(a.kinds).read_text())
@@ -933,11 +934,9 @@ def main() -> int:
 
     # negatives: a6's, each re-deciding one input altered
     neg: dict[str, dict] = {}
-    big = max(range(len(ns)), key=lambda i: ns[i])
-    if ns[big] > 1:
-        fewer = P.mixed_population_program([(d, n - (i == big)) for i, (d, n) in enumerate(zip(defs, ns))])
-        v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
-        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    fewer = R2.program(list(zip(defs, ns)), mixed=True)
+    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}

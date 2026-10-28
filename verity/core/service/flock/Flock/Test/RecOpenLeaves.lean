@@ -95,7 +95,7 @@ def innerR : RecVStar.Inner := { inner with stacked := some { m := 22, claims :=
 
 def accPort (name : String) (reads : Array (Option Nat)) : Registered.Port :=
   { name, value := "rec-acc", root := ByteArray.empty, leaves := 897, words := some 64, wordBits := 16,
-    domain := ByteArray.empty, reads }
+    domain := ByteArray.empty, readsRel := reads }
 
 def level3 : VStar.Stmt := .recOpen 3 16 4 106
 
@@ -140,5 +140,35 @@ def namesRefusal (ports : Array Registered.Port) : Option String :=
 #guard namesRefusal twiceAcc == some "rec-open/l16-h4: the registered reads name two ports acc, and each check reads a name's first"
 #guard namesRefusal (#[accPort "acc_out" #[]] ++ honestAcc) ==
   some "rec-open/l16-h4: the registered reads name two ports acc_out, and each check reads a name's first"
+
+/-! `checkAccReads` at a part (`checkEndReads`): a part of the table's algebra reads `acc0` at rows `0` and `448` and
+`acc1` at `448` and `896`, the two reps' ends; a part of R's opening reads `acc0` at `896` and `acc1` at
+`896 + 377` (R's 218, 106 and 53 openings). Reads swapped, one rep's shifted, or short are refused; a part with no
+`acc0` or `acc1` reads none. -/
+
+def algPart (ports : List (String × Nat)) : VStar.Stmt :=
+  .inner 0 "rec-residuals/m25-k16-c8-p0" { (default : VStar.Part) with S := { gf := default, ports } }
+
+def openPart : VStar.Stmt := .opening 22 2 0 { ops := [], res := [] } [("m0", 8), ("acc0", 8), ("acc1", 8)] 1
+
+def endsOk (i : RecVStar.Inner) (s : VStar.Stmt) (a0 a1 : Array (Option Nat)) : Bool :=
+  (RecVStar.checkAccReads i s #[accPort "acc0" a0, accPort "acc1" a1]) matches .ok _
+
+def accs : List (String × Nat) := [("m0", 8), ("acc0", 2), ("acc1", 2)]
+
+#guard RecVStar.endReads inner (algPart accs) matches .ok (some (#[some 0, some 448], #[some 448, some 896]))
+#guard endsOk inner (algPart accs) #[some 0, some 448] #[some 448, some 896]
+#guard !endsOk inner (algPart accs) #[some 448, some 896] #[some 0, some 448]
+#guard !endsOk inner (algPart accs) #[some 0, some 447] #[some 448, some 896]
+#guard !endsOk inner (algPart accs) #[some 0, some 448] #[some 448]
+#guard !endsOk inner (algPart [("m0", 8), ("acc1", 2)]) #[] #[some 448, some 897]
+#guard endsOk inner (algPart [("m0", 8), ("acc1", 2)]) #[] #[some 448, some 896]
+#guard (RecVStar.checkAccReads { inner with m := 3 } (algPart [("m0", 8)]) #[]) matches .ok _
+#guard (RecVStar.checkAccReads inner (algPart accs) #[accPort "acc0" #[some 0, some 448]]) matches .error _
+
+#guard endsOk innerR openPart #[some 896] #[some 1273]
+#guard !endsOk innerR openPart #[some 896] #[some 1272]
+#guard !endsOk innerR openPart #[some 0] #[some 1273]
+#guard !endsOk inner openPart #[some 896] #[some 1273]
 
 end Flock.Test.RecOpenLeaves

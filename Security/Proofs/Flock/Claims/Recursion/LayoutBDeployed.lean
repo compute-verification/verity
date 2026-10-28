@@ -38,8 +38,8 @@ What holds of the route's layout premises here:
   depend on the coins, so no coin-independent layout holds it in the shipped V*. The same holds at each stream round
   that commits tops (a Ligerito level's first round, `cap (i + 1)` nodes) or copies level 0's top, and at the last
   round until a `final` fixes its pieces.
-* `LayoutB.WholeBeforeLast` holds (`wholeBeforeLast_layoutBDeployed`), so READERS1's route
-  (`ksBoundRoute_wholeBeforeLast`) applies at this layout.
+* `LayoutB.WholeBeforeLast` holds (`wholeBeforeLast_layoutBDeployed`), so `HeldWhole` does and READERS1's route
+  (`ksBoundRoute_heldWhole`) applies at this layout.
 * `PartChecksB`, `PartOpensB`, `DecompB`, `ReadersTrue` and `ReadersLogColl` are statements about these forms now.
   `ReadersTrue` asks the hm96 slots' calls to be true evaluations, which is the hm96 slot's and the row chain's
   semantics at `Flock.check` (`Discharge/Hm/{Compress,Hm96,Row}`): it no longer needs a change of representation.
@@ -152,7 +152,7 @@ theorem layoutBDeployed_fixedAt_zero (x : Msg) : layoutBDeployed.fixedAt x 0 = n
 
 theorem layoutBDeployed_pieceAt (x : Msg) (i : ℕ) : layoutBDeployed.pieceAt x i = [] := rfl
 
-/-- **Only the last round could be assembled** (READERS1's `WholeBeforeLast`): the layout has no pieces. -/
+/-- **Only the last round could be assembled** (`WholeBeforeLast`): the layout has no pieces. -/
 theorem wholeBeforeLast_layoutBDeployed : layoutBDeployed.WholeBeforeLast := fun _ _ _ => rfl
 
 /-- **A held round reads the hm96 slot's output columns**: the forms `hmCommit` reads are one wire each, so the held

@@ -134,7 +134,7 @@ theorem selRounds_selOf (n₀ : ℕ) (kc : ℕ → ℕ) : VStarFamily.SelRounds 
 `skOf` and U4 do not read are the empty file's). -/
 def mPort (name : String) (k : ℕ) : Registered.Port :=
   { name, value := s!"rec-c{k}", root := ByteArray.empty, leaves := 2, words := none, wordBits := 16,
-    domain := ByteArray.empty, reads := #[some 0, some 1] }
+    domain := ByteArray.empty, readsRel := #[some 0, some 1] }
 
 /-- `m<k>`'s `k`. -/
 def mIndex (nm : String) : Option ℕ := if nm.startsWith "m" then (nm.drop 1).toString.toNat? else none
@@ -275,7 +275,7 @@ def bc (cOf : Cm → List UInt8) (j : Fin F.stmts.size) (e : Cm) (_ : PosK (F.Vs
 
 theorem selRounds_sel : SelRounds F.sel := selRounds_selOf F.n₀ F.kc
 
-/-- Obligation: discharged by the verifier's check 7 (`cursor/rec-vstar-checks-741b`): the registered reads'
+/-- Obligation: discharged by the verifier's check 7: the registered reads'
 message-round ports are the statement's.
 **The verifier's reads files are V*'s**: at every history, the reads file the verifier reads for session `j`
 (`ZkOuter.own`, `registeredInput`, `FlockVerify.lean:228-242`) has `own j`'s message-round ports (`SameMsg`). V*'s

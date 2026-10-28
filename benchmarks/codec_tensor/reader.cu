@@ -1,5 +1,5 @@
 // The remote bandwidth driver's receipts and receipt tree on the device: a device reader of the vLLM store
-// (integrations/vllm/verity_vllm/store/), `reader.py` its wrapper and gate, and the driver's
+// (integrations/vllm/verity_vllm/protocols/remote_bandwidth/), `reader.py` its wrapper and gate, and the driver's
 // verity/core/protocols/remote_bandwidth/receipts.py the reference. A reader receipts a segment of 4 KiB blocks,
 // commits its leaves, builds its subtree and keeps all three for the openings; end_pass takes the subtree's root.
 //
@@ -183,7 +183,7 @@ void launch_receipts(int mode, const uint4 *data, const uint4 *zs, u64 j0, u64 n
   }
 }
 
-// --- sketch-sha512 receipts (`sketch_receipt.py`) ----------------------------------------------------------------
+// --- sketch-sha512 receipts (`receipts.SketchReceipter`) ---------------------------------------------------------
 //
 // sketch_kernel: a CTA of 256 threads a block at a time, SK_BATCH blocks a step, thread t holding bytes 16 t … 16 t + 15
 // of each and their 16 rows of signs (int8 ±1, 64 registers, loaded once); 64 dp4a a block, then the warp's 16 sums

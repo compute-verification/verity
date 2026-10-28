@@ -1,7 +1,8 @@
 {
  "definitions": {
   "RecCap_v1": {
-   "and": 0
+   "and": 0,
+   "type": "743124a04b483fa801c6ae6c7c4f6733485fbed2d5710f80bf715630b1be5e280330843e6c896ca3e040e7413fdf2f9d395ddda7fe1b65a10384e501bd8589a5"
   }
  }
 }

@@ -4,7 +4,6 @@
     build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD | -] [--jobs N] --out manifest.json
                   TP row: --programs-root <rank r dir> --rank r [--workload-digest WD_r], once per rank, --ranks W
                   `-`: WD is read from stdin once the components are built, so they build while the workload Program composes
-    compare       --v1 manifest.json --v2 manifest.json [--out report.json]
 
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
@@ -18,7 +17,7 @@ Four tap policies are on by default, each with a `--no-...` for A/B only: `--nor
 (`query.guarded_max`: the query header states it, and every attention hidden-stream identity gains the MS class), `--router-softmax` and
 `--vocab-range` (`query.router_softmax`, `query.vocab_range`); the scale-products policy (`query.scale_products`) applies to every manifest
 and adds nothing to a Program without a shared-scale FP8 GEMM.  `--cross-call-check` (opt-in) fails the Build when a value is computed in
-two Calls (`query.cross_call`).  `compare` classifies every identity difference (`compare.summarize`).
+two Calls (`query.cross_call`).
 """
 
 from __future__ import annotations
@@ -33,20 +32,19 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.program_view import from_instances, iter_instance_rows
 from verity_vllm.query.compose import compose_global, merge_ranks
 from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
-from verity_vllm.query import cross_call
+from verity.ml.definitions import cross_call
 from verity_vllm.query import guarded_max as GM
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity_vllm.query import word as word_query
+from verity.ml.definitions import word as word_query
 
 __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
            "build_global_ranks", "cross_call_check", "main"]
@@ -126,7 +124,8 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
 def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict[str, Any]:
     """Cross-Call recomputes (`cross_call.check_program`) over the Build's instance sequence; `strict` raises
     `cross_call.RecomputeViolation` naming every one.  The manifest is not touched."""
-    return cross_call.check_program(os.path.join(program_dir, "instances.json.gz"), strict=strict, log=log)
+    path = os.path.join(program_dir, "instances.json.gz")
+    return cross_call.check_program(lambda: iter_instance_rows(path), strict=strict, log=log)
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
@@ -252,9 +251,15 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     import multiprocessing
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
-        return _build_in_turn(tasks, after)
+        return _build_in_turn(tasks, after, log)
     with _pool_headroom(budget_gb, "components", log) as head:
-        return _build_in_turn(tasks, after) if head is None else _build_forked(tasks, jobs, after, head, log)
+        return _build_in_turn(tasks, after, log) if head is None else _build_forked(tasks, jobs, after, head, log)
+
+
+def _progress(log, done: int, total: int, t0: float, running: int = 0) -> None:
+    """The line each component's end adds to the manifest's log: a limit of none (`row_tp --manifest-timeout 0`) leaves only these."""
+    if log:
+        log(f"  components: {done}/{total} built in {time.time() - t0:.0f}s" + (f", {running} running" if running else ""))
 
 
 @contextmanager
@@ -293,11 +298,12 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
     return head if lim.isdigit() and int(lim) < total else None
 
 
-def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
-    out = []
+def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:
+    out, t0 = [], time.time()
     for i, (d, kw) in enumerate(tasks):
         out.append(build(d, **kw))
         after(i, out[-1])
+        _progress(log, i + 1, len(tasks), t0)
     return out
 
 
@@ -370,7 +376,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
     pending = sorted(range(len(tasks)), key=lambda i: (-need[i], i))
     results: dict[int, tuple[str, Any]] = {}
     running: dict[Any, tuple[int, Any]] = {}
-    used, first_bad = 0, len(tasks)
+    used, first_bad, t0 = 0, len(tasks), time.time()
     if log:
         log(f"  components: {len(tasks)} builds, {jobs} processes, memory budget {budget / 2**30:.1f} GiB")
     while pending or running:
@@ -396,6 +402,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
             if p.exitcode not in (0, None) and results[i][0] == "ok":
                 results[i] = ("error", RuntimeError(f"{os.path.basename(tasks[i][0])}: the build process exited {p.exitcode}"))
             used -= need[i]
+            _progress(log, len(results), len(tasks), t0, len(running))
             if results[i][0] == "error" and i < first_bad:
                 first_bad = i
                 pending = [j for j in pending if j < i]
@@ -509,54 +516,6 @@ def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[in
     return merge_ranks(parts) if world > 1 else parts[0]
 
 
-def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, manifest: bool = True, log=None) -> dict[str, Any]:
-    """`Q_module_body_v1` under the record vs under the v1-annotation fallback on ONE Build dir that carries the record: the owning
-    module per Call, the Call names the bridge reads, the partition (unit ids), the boundary Values and -- `manifest` -- the bridge's
-    manifest digest, each equal or listed.  A Build without the record has nothing to check against (`applicable: False`)."""
-    from verity_vllm.query.module_body import Q_module_body_v1, literal_calls, module_body_boundary
-    t0 = time.time()
-    P = from_instances(os.path.join(program_dir, "instances.json.gz"))
-    res = _load_json(os.path.join(program_dir, "result.json"))
-    impl = Correspondence.implementation_paths_of(res)
-    canon = Correspondence.of(P, program_dir, implementation_paths=impl)
-    out: dict[str, Any] = {"schema": "vllm-v2/query-correspondence-check/v1", "program_dir": program_dir, "wrapper": res.get("wrapper"), "calls": len(P.calls),
-                           "program_digest": (res.get("program") or {}).get("digest"), "correspondence_digest": canon.digest, "source": canon.source, "problem": canon.problem}
-    if canon.source != "correspondence":
-        out.update(applicable=False, why="the Build carries no runtime-correspondence/v1 record: only the fallback reads it")
-        return out
-    fallback = Correspondence(P, implementation_paths=impl)
-    module_diffs = [{"call": c.id, "record": canon.module_of(c.id), "v1_annotations": fallback.module_of(c.id), "name": c.name} for c in P.calls if canon.module_of(c.id) != fallback.module_of(c.id)]
-    name_diffs = [{"call": c.id, "record": str(canon.name(c.id)), "v1_annotations": str(fallback.name(c.id)), "name": c.name} for c in P.calls if canon.name(c.id) != fallback.name(c.id)]
-    Qa, Qb = Q_module_body_v1(P, canon), Q_module_body_v1(P, fallback)
-    units_a = {u.id: u.calls for u in Qa(P)}
-    units_b = {u.id: u.calls for u in Qb(P)}
-    literals = literal_calls(P)
-    sa, sb = set(module_body_boundary(P, canon, literals).values), set(module_body_boundary(P, fallback, literals).values)
-    out.update(applicable=True, module_paths={"record": len(canon.modules), "v1_annotations": len(fallback.modules)}, implementation_prefix={"record": canon.prefix, "v1_annotations": fallback.prefix},
-               module_diffs_n=len(module_diffs), module_diffs=module_diffs[:50], name_diffs_n=len(name_diffs), name_diffs=name_diffs[:50],
-               partition_equal=(units_a == units_b), units={"record": len(units_a), "v1_annotations": len(units_b)},
-               boundary_values={"record": len(sa), "v1_annotations": len(sb), "equal": sa == sb, "only_record": len(sa - sb), "only_v1_annotations": len(sb - sa)})
-    if manifest:
-        try:
-            art_p = os.path.join(program_dir, "artifact.json")
-            art = _load_json(art_p) if os.path.exists(art_p) else None
-            tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
-            rk = dict(rank=int(tp.get("rank") or 0), ranks=int(tp.get("world") or 1))          # a rank Program's manifest is its rank's
-            ma = request_manifest(P, canon, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, **rk).manifest
-            mb = request_manifest(P, fallback, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, **rk).manifest
-            out["manifest"] = {"record": {"digest": ma["manifest_digest"], "identities": ma["populations"]["identities"], "complete": ma["complete"], "correspondence": ma["correspondence"]},
-                               "v1_annotations": {"digest": mb["manifest_digest"], "identities": mb["populations"]["identities"], "complete": mb["complete"], "correspondence": mb["correspondence"]},
-                               "digest_equal": ma["manifest_digest"] == mb["manifest_digest"], "wrapper_prefix": [ma["wrapper_prefix"], mb["wrapper_prefix"]]}
-        except Exception as e:  # noqa: BLE001  -- a step wrapper is not a request Program; the partition comparison above still stands
-            out["manifest"] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
-    out["identical"] = not module_diffs and not name_diffs and out["partition_equal"] and out["boundary_values"]["equal"] and (out.get("manifest", {}).get("digest_equal", True) is True)
-    out["seconds"] = round(time.time() - t0, 1)
-    if log:
-        log(f"  {os.path.basename(program_dir)} ({res.get('wrapper')}): {len(P.calls)} calls, module diffs {len(module_diffs)}, name diffs {len(name_diffs)}, partition_equal {out['partition_equal']}, "
-            f"boundary equal {out['boundary_values']['equal']}, manifest {out.get('manifest', {}).get('digest_equal', out.get('manifest'))} in {out['seconds']}s")
-    return out
-
-
 def _write(man: dict[str, Any], out: str) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w") as f:
@@ -573,8 +532,8 @@ NORM_SCALES_HELP = ("on by default, --no-norm-scales for A/B only: the norm-scal
 WORD_CHECK_HELP = ("the partition of record's check: Q_word_v1{X,W} (\"16/32[+extras]\", the default) over the Program -- widths, recomputes, "
                    "every Call boundary committed; fails the Build naming every violation.  \"off\" skips it (A/B only)")
 QUERY_HELP = f"the query the manifest is built under: {QUERY_OF_RECORD} (the record) or Q_module_body_v1 (A/B only; pair it with --word-check off)"
-CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
-WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_limits): a Definition over its limit is a too-large violation, "
+CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.ml.definitions.cross_call); fail the Build naming every recompute"
+WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.ml.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
                        "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
                        "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
@@ -589,7 +548,7 @@ JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-
 @dataclass(frozen=True, kw_only=True)
 class BuildOptions:
     program: str = option("--program")
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     request_id: str | None = option("--request-id", default=None)
     profile: str | None = option("--profile", default=None)
     rank: int = option("--rank", type=int, default=0)
@@ -611,7 +570,7 @@ class BuildOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class BuildGlobalOptions:
-    fixture: str = option("--fixture")
+    fixture: str = option("--fixture", type=workload_arg)
     programs_root: list[str] = option("--programs-root", action="append",
                                       help="TP row: repeat per rank, with --rank r at the same position")
     workload_digest: list[str] | None = option("--workload-digest", action="append", default=None,
@@ -639,27 +598,6 @@ class BuildGlobalOptions:
     cmd: str = field(default="build-global", init=False)
 
 
-@dataclass(frozen=True, kw_only=True)
-class CompareOptions:
-    v1: str = option("--v1")
-    v2: str = option("--v2")
-    ignore_program_digest: bool = option("--ignore-program-digest", default=False, action="store_true")
-    out: str | None = option("--out", default=None)
-    cmd: str = field(default="compare", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class CheckCorrespondenceOptions:
-    """Q_module_body_v1 under the runtime-correspondence/v1 record vs under the v1-annotation fallback on one Build dir"""
-
-    program: str = option("--program")
-    workload: str | None = option("--workload", default=None)
-    request_id: str | None = option("--request-id", default=None)
-    no_manifest: bool = option("--no-manifest", default=False, action="store_true")
-    out: str | None = option("--out", default=None)
-    cmd: str = field(default="check-correspondence", init=False)
-
-
 def incomplete_rc(man: dict[str, Any]) -> int:
     """0 for a complete manifest; 4 for an incomplete one, named on stderr (the file is still written, for diagnosis): the Commit refuses
     an incomplete manifest, so the row's Build fails here instead of passing with it."""
@@ -671,19 +609,11 @@ def incomplete_rc(man: dict[str, Any]) -> int:
     return 4
 
 
-COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions, "compare": CompareOptions, "check-correspondence": CheckCorrespondenceOptions}
+COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
 
 
 def main(a: Any) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
-    if a.cmd == "check-correspondence":
-        wl = _load_json(a.workload) if a.workload else None
-        r = check_correspondence(a.program, workload=wl, request_id=a.request_id, manifest=not a.no_manifest, log=log)
-        if a.out:
-            _write(r, a.out)
-        print(json.dumps({kk: r.get(kk) for kk in ("wrapper", "calls", "source", "applicable", "module_diffs_n", "name_diffs_n", "partition_equal", "boundary_values", "identical", "correspondence_digest")}
-                         | {"manifest_digest_equal": (r.get("manifest") or {}).get("digest_equal"), "manifest_digests": [(r.get("manifest") or {}).get(s, {}).get("digest") for s in ("record", "v1_annotations")]}))
-        return 0 if (r.get("identical") or not r.get("applicable")) else 1
     if a.cmd in ("build", "build-global"):
         from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
         _gc_tune()
@@ -708,19 +638,4 @@ def main(a: Any) -> int:
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
                           "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
         return incomplete_rc(man)
-    if a.cmd == "compare":
-        m1, m2 = _load_json(a.v1), _load_json(a.v2)
-        cmp = compare(m1["identities"], m2["identities"], ignore_program_digest=a.ignore_program_digest)
-        s = summarize(cmp)
-        s["v1_manifest_digest"], s["v2_manifest_digest"] = m1.get("manifest_digest"), m2.get("manifest_digest")
-        s["v1_program_digest"], s["v2_program_digest"] = m1.get("program_digest"), m2.get("program_digest")
-        if a.out:
-            _write(s, a.out)
-        print(json.dumps({k: s[k] for k in ("v1_identities", "v2_identities", "common", "v1_rows", "v2_rows", "multiplicity_diff_n", "only_v1_n", "only_v2_n")}))
-        for k in ("member_rename", "range", "only_v1", "only_v2"):
-            for line in s[k]:
-                print(f"  {k:14s} n={line['n']:6d} {line.get('op_path')}/{line.get('member')} spec={line.get('spec')} :: {line['reason'][:120]}")
-        for m in s["multiplicity"][:10]:
-            print(f"  multiplicity   v1_rows={m['v1_rows']} v2_rows={m['v2_rows']} {m['key'][:160]}")
-        return 0
     return 2

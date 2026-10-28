@@ -11,8 +11,8 @@ import pytest
 
 from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.kernels import fp8_twins
+from verity.ml.definitions.registry import fp8
+from verity.ml.definitions.numerics import fp8_twins
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
 
@@ -43,7 +43,7 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
     from verity.ml.circuits.evaluation.reference import standalone_call
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
 
     K, N, G = 256, 320, 128
     nb, kb = SP.blocks({"K": K, "N": N, "G": G})
@@ -61,7 +61,7 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
 
 def test_a_ragged_n_site_is_named_with_its_partial_block():
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 320, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=320,G=128}}", "calls": 3, "where": DN}
@@ -113,7 +113,7 @@ def test_the_family_is_in_every_vocabulary():
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
     from verity_vllm.pipeline import manifest as M
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     assert M.DEFAULT_TAPS == (SP.POLICY,)

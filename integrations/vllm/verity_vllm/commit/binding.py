@@ -1,10 +1,10 @@
-"""R14 BIND-01 — the collector binding map and the required-value coverage check (`coverage`; brief §4, TABLE-RULES r14-v1 Commit column).
+"""The collector binding map and the required-value coverage check (`coverage`; rules `RULES_VERSION`).
 
-Glossary (Draft 3 §12): `op_path` / `output_member` / `invocation` together are the occurrence key -- the serialization of a runtime
+`op_path` / `output_member` / `invocation` together are the occurrence key -- the serialization of a runtime
 occurrence; the `member` field names a Value of the Call at that occurrence (the field name stays); the binding map is the record of
 value acquisition (which committed bytes each required Value was taken from) and 'the manifest' is the required-value manifest.
 
-Identity key (agreed with lane manifest, TABLE-RULES v1):
+Identity key (the required-value manifest's):
     (program_digest, request_id, step, invocation, op_path, output_member, element_range, rank)
 
 * `op_path`        producing module path in the implementation (`model.layers.3.self_attn.qkv_proj`), the sampler `runner.sampler`, a
@@ -17,10 +17,10 @@ Identity key (agreed with lane manifest, TABLE-RULES v1):
 The BINDING MAP is built from the committer's published per-step layouts (`_layouts`: name, dtype, shape, byte offset, leaf range) + the
 run's step roots at `finalize()` -- i.e. it is fixed BEFORE the challenge exists (the challenge is derived from the run root AND the map
 digest).  The EXPECTED POPULATION is independent of the collector: model structure (module set + a fixed per-class Value rule -- config,
-not observation) x the workload (requests, engine steps, TP ranks).  Lane manifest's Program/query-derived required-value manifest has the
+not observation) x the workload (requests, engine steps, TP ranks).  The Program/query-derived required-value manifest has the
 same key and replaces `expected_population` when delivered (`coverage_check(pop, bmap)` takes any iterable of identities).
 
-Two separate verdicts (brief §4): `coverage_check` = required-value coverage (every required Value has >= 1 binding; duplicates/aliases/extra
+Two separate verdicts: `coverage_check` = required-value coverage (every required Value has >= 1 binding; duplicates/aliases/extra
 bytes cannot hide a missing one) and `value_correspondence` (the opened bytes under an identity are the producer's bytes -- the late-read / relabel negatives;
 openings that verify against the root do NOT imply correspondence).
 """
@@ -29,19 +29,19 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from typing import Any, Iterable, Iterator
+from typing import Any, Collection, Iterable, Iterator
 
-from verity_vllm.commit import challenge as CH
-from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
+from verity_vllm.commit import challenge as CH, json_chunks as JC
+from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
-from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
+from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 RULES_VERSION = "r14-v1"
 MAP_SCHEMA = "binding-map/1"
-MOE_FAMILY = "moe/"                 # [R15 moe] block-stream planes: per-token (pair-major) members, split by request rows at B>1 (not per-launch)
+MOE_FAMILY = "moe/"                 # block-stream planes: per-token (pair-major) members, split by request rows at B>1 (not per-launch)
 
 # Fixed per-module-class output-member rule (pre-execution structural knowledge of the vLLM Llama-family forward, NOT observation).
 # A module class -> the members its forward materialises.  RMSNorm: vLLM's `RMSNorm.forward(x, residual)` returns a (out, residual) tuple
@@ -54,7 +54,7 @@ MEMBER_RULES: dict[str, tuple[str, ...]] = {
 }
 FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
-#: [R19 int-20] a promoted member's observation point: the manifest module owns the rule (format.PROMOTED_OBSERVATION_RULE), re-exported above.
+#: a promoted member's observation point: the manifest module owns the rule (format.PROMOTED_OBSERVATION_RULE), re-exported above.
 
 
 # ---------------------------------------------------------------------- names -> identity parts
@@ -106,16 +106,16 @@ def _numel(shape: Iterable[int]) -> int:
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int | None = None,
                       weight_registration: dict | None = None, collector: dict | None = None,
-                      binder: Any = None) -> dict[str, Any]:
+                      binder: Any = None, padded: Collection[str] = ()) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
-    `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
-    requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
+    `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the requests of that step
+    (the scheduler's row order, recorded by the engine wrapper; a `padded` member, the step-input port's, has rows past the step's tokens); else the whole member binds `request_id`.
     A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
-    own spelling (`Binder.spellings`), and how if not by label or slot (`observation`); without one a name is its identity (`split_name`).
+    own spelling (`Binder.spellings`), how if not by label or slot (`observation`), its first row (`runtime_place`); else its name (`split_name`).
     A leaf index counts each meta's own leaves, its `chunk` (256 B under vllm-v1, rows-sha512's 4 KiB rows); a differing `chunk` is refused."""
     entries: list[dict[str, Any]] = []
     for step in sorted(layouts):
@@ -142,14 +142,14 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 rows = int(m.shape[0])
                 per_row = numel // max(rows, 1)
                 tokens = max(hi for _r, _lo, hi in rr)
-                if rows == tokens:                                                    # per-token member: the request's token rows
+                if rows == tokens or (m.name in padded and rows >= tokens):           # per-token member: the request's token rows
                     splits = [(rid, 0, (hi - lo) * per_row, lo * per_row) for rid, lo, hi in rr]
                 elif rows == len(rr):                                                 # per-request member (logits, sampled ids): the request's row
                     splits = [(rid, 0, per_row, i * per_row) for i, (rid, _lo, _hi) in enumerate(rr)]
                 else:                                                                 # shared by every request of the step (whole member each)
                     splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
             elif rr and m.shape and numel > 0 and op.startswith(MOE_FAMILY):
-                # [R15 moe / MOE-B2] the fused-MoE block-stream planes are PER-TOKEN members in pair-major order (MOE-03 source; the Program
+                # the fused-MoE block-stream planes are PER-TOKEN members in pair-major order (the MoE block source; the Program
                 # addresses pair p = t*TOPK + k): router_w/router_ids [M, TOPK], up/down [M, TOPK, N], sum [M, H] have rows == tokens, act
                 # [M*TOPK, I] has rows == tokens*TOPK.  Request r's rows are ITS token rows (x TOPK for act) -- the required set is
                 # routing-independent (M_r*TOPK pairs whatever the experts chose) and its position comes from the step's request->row map,
@@ -169,7 +169,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 splits = [(request_id, 0, numel, 0)]
             spelt = binder.spellings(step, (op, member, k)) if binder is not None and how == "port" else {}
             for rid, lo, hi, goff in splits:
-                op_r, member_r, k_r = spelt.get(rid, (op, member, k))
+                (op_r, member_r, k_r), hi, goff, why = runtime_place(binder, step, spelt.get(rid, (op, member, k)), rid, lo, hi, goff, m)
                 entries.append({
                     "identity": identity_dict(identity(program_digest, rid, step, k_r, op_r, member_r, lo, hi, rank)),
                     "kind": "leaf", "step_root": step_root, "layout": layout_version, "chunk": int(m.chunk),
@@ -177,14 +177,14 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
                     **({"observation": how} if how not in ("label", "slot") else {}),
-                    **({"refused": refused} if refused else {}),
+                    **({"refused": refused or why} if refused or why else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
                         "digest": weight_registration.get("root") or weight_registration.get("digest") or json.dumps(weight_registration, sort_keys=True, default=str)[:128]})
-    canon = json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()
+    digest = JC.sha256_hex(JC.list_pieces(entries, sort_keys=True, separators=(",", ":"), default=str))   # sha256 of json.dumps(entries, <same>)
     return {"schema": MAP_SCHEMA, "rules_version": RULES_VERSION, "program_digest": program_digest, "run_root": run_root.hex(), "rank": rank,
-            "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": hashlib.sha256(canon).hexdigest(), "entries": entries}
+            "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": digest, "entries": entries}
 
 
 def member_matches(required: str, got: str) -> bool:
@@ -205,10 +205,10 @@ def map_index(bmap: dict[str, Any]) -> dict[tuple, list[dict[str, Any]]]:
 
 
 def _op_key_index(idx: dict[tuple, Any]) -> dict[tuple, list[tuple]]:
-    """(request, step, invocation, op_path, rank) -> the map keys of every member of that op, in map order.  [R18 tap, F-r18-tap-2] the
+    """(request, step, invocation, op_path, rank) -> the map keys of every member of that op, in map order.  The
     member-`*` identities (one per request x step x attention layer for the hidden family) used to scan the WHOLE index each: O(|*| x |map|)
-    = 132,096 x ~890k at B64 llama32-1b 1024/128 -- the serving thread sat hours at 100% CPU in coverage_check AFTER the run (attempt 2/3 of
-    the #23 device diagnostic, cp-r18-l40u 22:2xZ; B8: 16,512 x 111k, a few minutes, unnoticed).  Same keys, same order, built once."""
+    = 132,096 x ~890k at B64 llama32-1b 1024/128 -- the serving thread sat hours at 100% CPU in coverage_check AFTER the run (B8:
+    16,512 x 111k, a few minutes, unnoticed).  Same keys, same order, built once."""
     out: dict[tuple, list[tuple]] = {}
     for k in idx:
         out.setdefault((k[0], k[1], k[2], k[3], k[5]), []).append(k)
@@ -237,7 +237,7 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
     but the member rule comes from MEMBER_RULES, not from what was emitted).  Serialisable, so a fixture can be stored and diffed.
     `stochastic` (the workload's DECLARED sampling policy, temperature > 0 with per-request seeds): the sampler additionally materialises
     the consumed per-sequence seed (`runner.sampler/seed`, the stochastic Program's registered runtime input; manifest family `sampler_seed`).
-    `derived_splits` [R16 stoch REQ-03] (the workload DECLARES `sampling.splits == "derived"`): the sampler also materialises the top-p
+    `derived_splits` (the workload DECLARES `sampling.splits == "derived"`): the sampler also materialises the top-p
     split count its kernels ran with (`runner.sampler/splits`, the derived-S Program's `splits` input; manifest family `sampler_splits`)."""
     mods = []
     rope_calls = 0
@@ -262,11 +262,11 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
                 members.append("1")
         if d["class"] in ("RMSNorm", "GemmaRMSNorm") and d["op_path"].endswith(FIRST_NORM_SUFFIX):
             members = ["out"]
-        # [R14 moe] a norm INSIDE the attention module (OLMoE / Qwen3 `self_attn.q_norm` / `k_norm`) is called without a residual and
-        # returns ONE tensor: expecting ("0", "1") over-required 2048 identities on OLMoE b1 256/32 (16 layers x 2 norms x 2 members x 32
-        # steps) while the collector bound `out` (coverage FAIL, first `model.layers.0.self_attn.q_norm/0`).  Residual-stream norms
+        # a norm INSIDE the attention module (OLMoE / Qwen3 `self_attn.q_norm` / `k_norm`) is called without a residual and
+        # returns ONE tensor: expecting ("0", "1") would over-require 2048 identities on OLMoE b1 256/32 (16 layers x 2 norms x 2 members x 32
+        # steps) where the collector binds `out`.  Residual-stream norms
         # (input_layernorm after layer 0, post_attention_layernorm, model.norm) keep the fused (hidden, residual) pair.  The member
-        # rule is a stand-in for the Program's output arity (lane manifest's Program-derived manifest replaces this table).
+        # rule is a stand-in for the Program's output arity (the Program-derived manifest replaces this table).
         if d["class"] in ("RMSNorm", "GemmaRMSNorm") and ".self_attn." in d["op_path"]:
             members = ["out"]
         d["members"] = members
@@ -275,8 +275,8 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
     runner = getattr(committer, "runner", None)
     if runner is not None and hasattr(runner, "sample") and not any(d["op_path"] == "runner.sampler" for d in mods):
         mods.append({"op_path": "runner.sampler", "class": "Sampler", "invocations": 1,
-                     "members": ["sampled_token_ids"] + (["seed"] if stochastic else [])       # [R15 stoch] the consumed seed, stochastic rows only
-                     + (["splits"] if (stochastic and derived_splits) else [])})               # [R16 stoch REQ-03] the kernels' split count, derived-S rows
+                     "members": ["sampled_token_ids"] + (["seed"] if stochastic else [])       # the consumed seed, stochastic workloads only
+                     + (["splits"] if (stochastic and derived_splits) else [])})               # the kernels' split count, derived-S workloads
     hidden = None
     for s in committer.sources:
         sn = getattr(s, "short_name", "") or type(s).__name__
@@ -319,21 +319,21 @@ def expected_population(structure: dict[str, Any], workload: dict[str, Any]) -> 
 
 def load_required_manifest(path: str, program_digest: str, *, requests: list[str] | None = None, steps: int | None = None, ranks: list[int] | None = None,
                            arrivals: dict[str, int] | None = None, request_steps: dict[str, Any] | None = None) -> tuple[list[tuple], dict[str, Any]]:
-    """Lane manifest's `manifest.json` (Program x canonical VU query; TABLE-RULES key + family label per row) -> identity tuples.
+    """The required-value manifest's `manifest.json` (Program x canonical VU query; identity key + family label per row) -> identity tuples.
     Row fields: request_id / step / invocation / rank may be an int|str, `"*"` (every one of the workload's), or a `[lo, hi]` range;
     `element_range` `[lo, hi)` (absent = whole member).  Registered weights rows (`op_path` `weights`, step `*`) map onto the single
     registered-input identity.  Returns (identities, header) where header carries the manifest's own digest for the record.
-    [R17-1 / F-moe-r17-03] `request_steps` = {r<i>: engine steps the request EXECUTED (its executed prefix of record: arrival .. arrival +
+    `request_steps` = {r<i>: engine steps the request EXECUTED (its executed prefix of record: arrival .. arrival +
     executed_prefix_len)}: an identity of a listed request at an engine step outside its prefix is programmed-but-unexecuted -- NOT required
     (counted in header `programmed_not_executed_n`).  The manifest itself stays the Program's (cap shape); only the requirement is placed."""
     doc = json.loads(open(path).read())
     rows = doc.get("entries") or doc.get("rows") or doc.get("identities") or []
     hdr = {"path": path, "manifest_digest": doc.get("manifest_digest") or doc.get("digest"), "program_digest": doc.get("program_digest"),
-           "complete": doc.get("complete", True), "unmodelled": doc.get("unmodelled") or {},   # [MAN-02] incomplete manifest -> fail closed (commit_delta)
+           "complete": doc.get("complete", True), "unmodelled": doc.get("unmodelled") or {},   # incomplete manifest -> fail closed (commit_delta)
            "rows_n": len(rows), "version": doc.get("version") or doc.get("schema"), "query": doc.get("query") or doc.get("vu_query")}
-    # [R15 manbind, rev-cb M-0108] the manifest is an INPUT the consumer must not trust blindly: (F-cb-07) its `manifest_digest` is recomputed
-    # over the rows it carries (a manifest edited after digesting is refused); (F-cb-10/09) a zero-width identity is refused, never
-    # "vacuously covered"; (F-cb-13) a request id that is not `r<k>` / `*` (nor resolvable through requests_declared) is refused.
+    # the manifest is an INPUT the consumer must not trust blindly: its `manifest_digest` is recomputed
+    # over the rows it carries (a manifest edited after digesting is refused); a zero-width identity is refused, never
+    # "vacuously covered"; a request id that is not `r<k>` / `*` (nor resolvable through requests_declared) is refused.
     from verity_vllm.query.manifest import format as MF
 
     if doc.get("schema") != MF.SCHEMA:
@@ -351,9 +351,9 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
         er = ident.get("element_range")
         if er is None or len(er) != 2 or er[0] is None or (er[1] is not None and er[1] != -1 and int(er[1]) <= int(er[0])):
             raise ValueError(f"required manifest {path}: zero-width / malformed identity element_range {er} at step {ident.get('step')} "
-                             f"{ident.get('op_path')}/{ident.get('output_member')} req {ident.get('request_id')}: refused (MAN-02)")
+                             f"{ident.get('op_path')}/{ident.get('output_member')} req {ident.get('request_id')}: refused")
     df = ((doc.get("program") or {}).get("dataflow") or {}) if isinstance(doc.get("program"), dict) else {}
-    if df:                                                                    # [R15 compiled, rev-pm M-0589] P_compiled: the dataflow is in the digest
+    if df:                                                                    # P_compiled: the dataflow is in the digest
         hdr["dataflow_in_digest"] = True
         hdr["dataflow"] = {k: df.get(k) for k in ("n_edges", "n_launch_edges", "n_undefined", "wiring_declared", "split_graph")}
     all_req = list(requests or [])
@@ -363,10 +363,10 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     declared = {str(d.get("request_id")): f"r{int(d.get('index', i))}" for i, d in enumerate(doc.get("requests_declared") or []) if d.get("request_id") is not None}
     hdr["requests_declared_n"] = len(declared)
     hdr["global"] = bool(doc.get("global", False))
-    # [R15 manbind B8] the declared per-engine-step composition (which requests, how many rows each) and the members the map's partition is
+    # the declared per-engine-step composition (which requests, how many rows each) and the members the map's partition is
     # read from -- `composition_check` holds the map to it; request ids normalised to r<i>
     # A B=1 `build` manifest writes engine_steps as the request's engine-step NUMBERS (ints: arrival + s, rc3 schema); only `build-global`
-    # declares the dict composition.  [rel M-0245 / r15-int-2 canary #2] the numbers are kept as `engine_step_numbers`, the composition is
+    # declares the dict composition.  The numbers are kept as `engine_step_numbers`, the composition is
     # declared only from dict entries (composition_check then skips, named) -- never subscript an int.
     raw_es = list(doc.get("engine_steps") or [])
     if raw_es and all(isinstance(es, dict) for es in raw_es):
@@ -399,10 +399,10 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     executed = None if request_steps is None else {str(k): {int(s) for s in v} for k, v in request_steps.items()}
     hdr["request_steps_of_record"] = None if executed is None else {k: [min(v), max(v)] if v else [] for k, v in sorted(executed.items())}
     hdr["programmed_not_executed_n"] = 0
-    # [COORD R17-26/27; rel M-0410 (a)] the classification is ON THE RECORD by family / request / kind so the population's third bucket
+    # the classification is ON THE RECORD by family / request / kind so the population's third bucket
     # (sampled_replay.population.not_executed_by_rule) reconciles against it identity-count by identity-count (executed_prefix.reconcile_not_executed);
     # the manifest of record is not edited: rows_n / manifest_digest above are the file's
-    from verity_vllm.check import executed_prefix as _EPX
+    from verity_vllm.commit import executed_prefix as _EPX
 
     hdr["not_executed_by_rule"] = None if executed is None else _EPX.new_classification()
     for r in rows:
@@ -427,7 +427,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
                 launch_row, geometry = True, ident.get("geometry", r.get("geometry"))
                 hdr["hidden_batch_rows_op_level"] = hdr.get("hidden_batch_rows_op_level", 0) + 1
         engine_step = ident.get("engine_step", r.get("engine_step"))       # absolute engine step (batch-level rows) beats request-relative `step` ...
-        # [R16 compiled, H100 B8] ... unless the caller passes the request schedule of record (`arrivals`) and the row carries a request-
+        # ... unless the caller passes the request schedule of record (`arrivals`) and the row carries a request-
         # relative `step`: then engine step = step + arrival (the compiled manifest's declared step_basis; its `engine_step` annotation is the
         # step the row was DERIVED for under the declared arrive_steps, which drift from the committed-step axis on a workload with gaps)
         if arrivals is not None and ident.get("step") is not None and ident.get("request_id") not in (None, "*"):
@@ -436,13 +436,13 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
             engine_step = None
         for rid in (req_field if isinstance(req_field, list) and not (len(req_field) == 2 and all(isinstance(x, int) for x in req_field)) else expand(req_field, all_req, "r0")):
             rid = declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))   # workload id | index -> r<i>
-            if not MF.REQ_RE.match(rid):                                   # (F-cb-13) a request the workload does not declare (e.g. a bare UUID)
-                raise ValueError(f"required manifest {path}: request id {rid!r} is not r<k> and not declared in requests_declared: refused (COORD R15 ruling 2)")
+            if not MF.REQ_RE.match(rid):                                   # a request the workload does not declare (e.g. a bare UUID)
+                raise ValueError(f"required manifest {path}: request id {rid!r} is not r<k> and not declared in requests_declared: refused")
             arrive = int((arrivals or {}).get(rid, 0))                     # gprog reading: manifest step is request-relative; map step = engine step
             for st in ([int(engine_step)] if engine_step is not None else expand(ident.get("step"), all_steps, 0)):
                 st = int(st) if engine_step is not None else int(st) + arrive
                 if executed is not None and rid in executed and st not in executed[rid]:
-                    hdr["programmed_not_executed_n"] += 1                    # [R17-1] past the request's executed prefix of record: the named class
+                    hdr["programmed_not_executed_n"] += 1                    # past the request's executed prefix of record: the named class
                     _EPX._classify(hdr["not_executed_by_rule"], dict(ident, family=r.get("family"), requests=r.get("requests"),
                                                                         request_id=ident.get("request_id")), rid)
                     continue
@@ -500,11 +500,11 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
     """Every required identity has EXACTLY ONE map entry with the same (request, step, invocation, op_path, member, rank) whose element_range
     contains the required one (member `*` = any member of that op_path/invocation).  Duplicated copies of ANOTHER identity do not count;
     the map's request/step/rank must match exactly, so a missing request, step or TP rank is a missing identity.  Extra entries are
-    reported, allowed.  [R16 rev F-r16-08 / M-0077; BRIEF §3 C1 'one UNAMBIGUOUS binding'] a required identity bound by MORE THAN ONE leaf
+    reported, allowed.  One UNAMBIGUOUS binding: a required identity bound by MORE THAN ONE leaf
     entry (two names / two stream ranges under one identity key, both covering the required range) is AMBIGUOUS: the replay would read
     one copy and the other would carry an unchecked value under a required identity -- `ok` requires `ambiguous_n == 0`; the first
     `max_report` are named with where each copy lives.  `physical_copies_n` (every duplicate in the map, required or not) stays reported.
-    [red-team claim 3] A batch-level hidden identity (`LaunchIdentity`) is covered when its request is bound to every tensor of the op at the
+    A batch-level hidden identity (`LaunchIdentity`) is covered when its request is bound to every tensor of the op at the
     step and they carry the whole stream of the requests executing there (`_launch_shortfalls`); a request bound only to its ⊥ plane (a padded
     map) is inactive there.  An entry `build_binding_map` refused (`refused`) is named, and `ok` requires none."""
     population = list(population)
@@ -550,7 +550,7 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
                 off = int(e.get("element_offset", 0) or 0)                 # B>1: the entry's request-local range sits at `element_offset`
                 if hi == -1 or (elo <= lo and ehi >= hi) or (elo + off <= lo and ehi + off >= hi):   # of the batched member (manifest: global)
                     ok = True
-                    covering.append(e)                                      # keep counting: >1 covering entry = ambiguous (F-r16-08)
+                    covering.append(e)                                      # keep counting: >1 covering entry = ambiguous
             if ok:
                 used.add(key_used)
         if ok:
@@ -578,21 +578,21 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
             "bound_n": bound_n, "missing_n": expected_n - bound_n, "address_mismatch_n": address_mismatch, "missing": missing, "extra_n": len(extra),
             "refused_n": len(refused), "refused": [e["refused"] for e in refused[:max_report]],
             "extra": [list(k) for k in extra[:max_report]], "physical_copies_n": copies,
-            "ambiguous_n": ambiguous_n, "unambiguous": ambiguous_n == 0, "ambiguous": ambiguous,       # [F-r16-08] C1 'one unambiguous binding'
+            "ambiguous_n": ambiguous_n, "unambiguous": ambiguous_n == 0, "ambiguous": ambiguous,       # one unambiguous binding
             "map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"]}
 
 
 def require_build_program_digest(required_manifest: str | None, program_digest: str | None) -> None:
-    """[COORD M-0205 (C1) / rev-cb F-cb-06] a manifest accepted on its own program_digest is a wrong-Program hole: the digest of record comes
+    """A manifest accepted on its own program_digest is a wrong-Program hole: the digest of record comes
     from the BUILD (row_pod reads build_summary.json / workload_program.json), never from the manifest.  `--required-manifest` without
     `--program-digest` is refused by name before any engine is built (SystemExit -> the row's Commit is FAIL rc!=0, the reason in the log)."""
     if required_manifest and not (isinstance(program_digest, str) and program_digest.strip()):
         raise SystemExit("[delta] REFUSED: --required-manifest requires --program-digest <the Build's Program digest of record> "
-                         "(B=1: build_request program_digest; B>=2: the workload digest) -- a manifest cannot vouch for its own Program (COORD M-0205 C1)")
+                         "(B=1: build_request program_digest; B>=2: the workload digest) -- a manifest cannot vouch for its own Program")
 
 
 def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_report: int = 8, request_steps: dict[str, Any] | None = None) -> dict[str, Any]:
-    """[R15 manbind B8] B>1: the map's per-engine-step request->rows PARTITION of the packed reference members must be exactly the manifest's
+    """B>1: the map's per-engine-step request->rows PARTITION of the packed reference members must be exactly the manifest's
     declared composition (`engine_steps[e].members`: request id x rows, from Program x workload -- never from the collector).  Read from the
     per-token ids member (`composition_reference.input_token_ids`) and the per-sequence sampled-ids member: (1) the multiset {(request, rows)}
     equals the declared one -- an omitted request is `missing`, a relabelled one `missing` + `unexpected`/duplicated; (2) the blocks
@@ -600,27 +600,27 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     slot `overlaps`; (3) every sampled-ids slot is bound once per declared request.  Request-local identity ranges are otherwise blind to
     WHICH block a request was bound to, so this check is what makes relabel / duplicate-into-slot fail named.  B=1 manifests declare no
     composition: skipped, recorded.
-    [R17-1 / F-moe-r17-03] `request_steps` = {r<i>: executed engine steps}: the declared composition (the Program's cap shape) is read
+    `request_steps` = {r<i>: executed engine steps}: the declared composition (the Program's cap shape) is read
     over each request's executed prefix of record -- a request that stopped (EOS + LAG rows) is dropped from the later steps' expectation,
     so a row of it committed there is `unexpected` (execution past the stop) and its absence is not `missing`; a step no request executes
     is skipped (recorded as `steps_not_executed`).
-    [B9.1 / revb F-r17b-66] a PADDED map (`activity: bot-by-enablement` entries, `padded-binding-map/1`): the declared composition is the
+    [B9.1] a PADDED map (`activity: bot-by-enablement` entries, `padded-binding-map/1`): the declared composition is the
     Program's CAP shape and is read UNRESTRICTED; the EXECUTED packed member is tiled by the ACTIVE members only, in the record's row
     order, cursor == its live rows (the record composition unchanged); a bot-by-enablement entry is its OWN row space -- a tensor of its
     own, exactly one per (absent request, declared rows) per step, `element_offset` never read into the tiling -- and the UNION multiset
     {(request, rows)} over executed + padding must equal the declared cap composition; a request with BOTH an executed block and a
     padding entry at one step FAILS (double binding); a padding entry for a request the executed prefix of record places AT that step
-    FAILS (padding inside the prefix, moe 7eff2a558); sampled-ids slots are checked over the executed member, the padding counted beside."""
+    FAILS (padding inside the prefix); sampled-ids slots are checked over the executed member, the padding counted beside."""
     steps = man_hdr.get("engine_steps") or []
     if not steps or not isinstance(steps[0], dict):
         # a B=1 (`build`) manifest's engine_steps are the request's engine-step NUMBERS (rc3 schema, ints); only `build-global` declares
-        # the dict composition {engine_step, members, rows, n_seq}.  [rel M-0213 (1): the int list must skip, never es["engine_step"]]
+        # the dict composition {engine_step, members, rows, n_seq}: the int list skips, never es["engine_step"]
         return {"ok": True, "checked_steps": 0, "skipped": "manifest declares no engine-step composition (B=1 / non-global manifest)"}
     padded = any(e.get("activity") == "bot-by-enablement" for e in bmap.get("entries", []))
     executed_of = None if request_steps is None else {str(k): {int(x) for x in v} for k, v in request_steps.items()}
     restricted = None
     if request_steps is not None and not padded:
-        from verity_vllm.check.executed_prefix import restrict_engine_steps
+        from verity_vllm.commit.executed_prefix import restrict_engine_steps
         steps, restricted = restrict_engine_steps(steps, request_steps)
     ref = man_hdr.get("composition_reference") or {}
     tok, samp = ref.get("input_token_ids"), ref.get("sampled_token_ids")
@@ -683,7 +683,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
             if executed_of is not None:
                 inside = sorted(r for r in pad_reqs if r in executed_of and e in executed_of[r])
                 if inside:
-                    pad_problems.append(f"padding inside the executed prefix (the inactive fallback, R17-42) for {inside[:3]}")
+                    pad_problems.append(f"padding inside the executed prefix (the inactive fallback) for {inside[:3]}")
                 past = sorted({rid for _lo, _hi, rid, _w in blocks if rid in executed_of and e not in executed_of[rid]})
                 if past:
                     pad_problems.append(f"executed block past the stop for {past[:3]}")
@@ -728,7 +728,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     return {"ok": ok, "checked_steps": checked, "problem_steps_n": len(problems), "problems": problems[:max_report], "error": err,
             "reference": {"input_token_ids": tok, "sampled_token_ids": samp},
             **({"executed_prefix_restriction": restricted, "steps_not_executed": restricted["steps_dropped"]} if restricted is not None else {}),
-            **({"padded": {"rule": "B9.1 / F-r17b-66: executed member tiled by the active members (cursor == live rows); a bot-by-enablement entry "
+            **({"padded": {"rule": "executed member tiled by the active members (cursor == live rows); a bot-by-enablement entry "
                                    "is its own row space, one per (absent request, declared rows); executed + padding == the declared cap composition",
                            "steps_with_padding": padding_steps_n, "padding_blocks": padding_blocks_n, "declared_composition_unrestricted": True}} if padded else {})}
 

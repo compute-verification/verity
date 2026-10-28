@@ -1,8 +1,8 @@
 import Proofs.Pouw.PearlC.TileGamma
-import Models.Pouw.Assumptions.PearlC.TTOutFp4
+import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 
 /-!
-# γ at an FP4 record, and Pearl-C4's headline on sm_120 (the FP8 Lean lane's file; staged, nothing pinned)
+# γ at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)
 
 * **γ at any FP4 record,** on the one-shape domain at `sem` (D-SK included, `Fp4Sem.SaltKeyedB`) where
   `wrefFp4 = ω·(1 − ρ)·creditFp4`: `G_γ` from TT_OUT
@@ -16,13 +16,13 @@ import Models.Pouw.Assumptions.PearlC.TTOutFp4
 * **The sub-grid flags read the ticket's chain:** on rows `cTilde` accepts, the firings they replay fold to `cTilde`'s
   chain (`fires_fold_eq_cTilde`).
 * **Sanity checks**, by the kernel: the forming's E2M1 cast (`e2m1Mag_ties`, `e2m1Mag_grid`, `e2m1Word_examples`), the
-  sub-grid test (`subgridAt_examples`), D-24's pair rule on #556's vector (`rowWin24_groups`), F2's three readings
-  (`int8Saving_readings`), D-NF on β's sign and byte (`dnf_rejects`, `dnf_admits`, `rowRules4_admit`), the headline
-  shapes inside the domain (`pearlCShapeFp4_headline`), and F2's pinned `c_L` table: 0.6612, 0.5790,
+  sub-grid test (`subgridAt_examples`), D-24's pair rule on the reference's vector (`rowWin24_groups`), F2's three
+  readings (`int8Saving_readings`), D-NF on β's sign and byte (`dnf_rejects`, `dnf_admits`, `rowRules4_admit`), the
+  headline shapes inside the domain (`pearlCShapeFp4_headline`), and F2's pinned `c_L` table: 0.6612, 0.5790,
   0.5069 and 0.4083 at the four cubes (`cL_8192` to `cL_65536`), F2's threshold at 8,192³ (`cL_f2_threshold`), the
   corner, rectangular shapes, shapes between and past the table's points (`cL_corner`, `cL_rectangular`, `cL_between`,
   `cL_beyond`), and the table's shape and fall in each dimension (`cLTable_dims`, `cLTable_falls`).
-* **Neither the base-split fix nor its restage to #556 moves γ.** F1′, F2 and R1 are debit terms
+* **Neither the base-split fix nor its restage moves γ.** F1′, F2 and R1 are debit terms
   (`Fp4Sem.tileDebit`), and the γ statements hold at any debit within the cap. They take TT_OUT on the domain
   `pearlCDomainFp4`, now bounded to the grant's shapes, and read only its one-shape clause, so the instances are
   unchanged.
@@ -200,10 +200,10 @@ theorem subgridAt_examples :
       [1, 0x38, 0x38, 0x38]) 1 = false := by
   decide +kernel
 
-/-- D-24's window test is the hardware's pair rule. #556's vector (`two_four_windows([0x1, 0x9, 0, 0] * 32 +
+/-- D-24's window test is the hardware's pair rule. The reference's vector (`two_four_windows([0x1, 0x9, 0, 0] * 32 +
 [0x1] * 128)`) reads `[True, False]` under both rules: `0x9` is `−0.5`, nonzero. The rules differ on the other two:
-`[2, 2, 2, 2, 0, 0, 0, 0]` repeated passes (each 8-chunk has two nonzero pairs), though #556's 4-group rule fails it;
-`[2, 0, 2, 0, 2, 0, 0, 0]` repeated fails (three nonzero pairs), though the 4-group rule passes it. -/
+`[2, 2, 2, 2, 0, 0, 0, 0]` repeated passes (each 8-chunk has two nonzero pairs), though the reference's 4-group rule
+fails it; `[2, 0, 2, 0, 2, 0, 0, 0]` repeated fails (three nonzero pairs), though the 4-group rule passes it. -/
 theorem rowWin24_groups :
     let r := (some ((List.replicate 32 ([1, 9, 0, 0] : List Fp4.Nib)).flatten ++ List.replicate 128 1, []) : Option Row4)
     (rowWin24 r 0 = true ∧ rowWin24 r 1 = false) ∧
@@ -212,7 +212,7 @@ theorem rowWin24_groups :
   dsimp only
   decide +kernel
 
-/-- F2's three readings (#556's `test_f2_reads_flatness_per_row_and_per_block_column_class`, at 16 blocks and 4 rows a
+/-- F2's three readings (`test_f2_reads_flatness_per_row_and_per_block_column_class`, at 16 blocks and 4 rows a
 side, in a unit of `2^24 × 2^18`). At one byte the route saves its whole `1 − c_L(256) = 0.2627`. With row factors
 (alternate rows 8 bytes up) only the per-row reading sees it, and saves the same. Two classes a byte apart, each a
 sub-GEMM over half of `k`, save `1 − c_L(128) = 0.0734` by the class split, where the tile's and the rows' modal shares
@@ -289,7 +289,7 @@ theorem cL_between : cL 3000 5000 700 = cL 8192 8192 1024 ∧ cL 20000 9000 100 
     cL 64 128 16 = cL 128 128 128 := by
   decide +kernel
 
-/-- Past the table `c_L` is `0`, where #556's `int8_depth_cost` raises. -/
+/-- Past the table `c_L` is `0`, where `pearl_c4.int8_depth_cost` raises. -/
 theorem cL_beyond : cL (2 ^ 25) 8192 8192 = 0 ∧ cL 8192 8192 (2 ^ 19) = 0 ∧ cL 8192 (2 ^ 17) 8192 = 0 := by
   decide +kernel
 

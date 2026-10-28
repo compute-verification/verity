@@ -12,7 +12,7 @@ from tests.check.test_commit_verdict_hopper_no_evaluator_gap import (
     SR_HOPPER,
     _bnd,
 )
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED, _ = RB.deferred_records(RB.path("/o", 1))
@@ -153,6 +153,25 @@ def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_fu
     com, rc = commit_steps(STEPS)
     args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", **kw})
     assert RB.start("/nonexistent", 1, com, rc, args, None) is None
+
+
+def test_serving_rows_defer_in_full_and_a_slim_bundle_with_them_is_refused_by_name():
+    """A full deferral takes ``--serving-rows`` (its C2 site commits the window, `c2_replay.serving_rows`), and the bundle's CPU
+    replay commits none over it; a slim one, whose plan would commit the window and seal every unit it reads, is refused."""
+    from verity_vllm.pipeline import cpu_replay as CPU
+
+    def args(**kw):
+        return SimpleNamespace(**{"replay_deferred": "full", "program_dir": "/p", "programs_root": None, "arms": None, "only_arm": None,
+                                  "padded_finalize": False, "compiled_taps": "off", "vu_export_dir": None,
+                                  "serving_rows": "/r/request.json", **kw})
+
+    RB.refuse(args())
+    RB.refuse(args(replay_deferred=None))
+    RB.refuse(args(replay_deferred="slim", serving_rows=None))
+    with pytest.raises(SystemExit, match=r"--replay-deferred: slim with --serving-rows: .*c2_replay\.serving_rows"):
+        RB.refuse(args(replay_deferred="slim"))
+    ctx = {"args": {k: getattr(args(), k, None) for k in RB.ARGS}}
+    assert CPU.replay_args(SimpleNamespace(row_dir="/row", replay_workers=None), ctx).serving_rows is None
 
 
 def test_a_discarded_bundle_leaves_nothing(tmp_path):

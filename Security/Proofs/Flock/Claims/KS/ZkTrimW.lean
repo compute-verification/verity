@@ -135,24 +135,6 @@ theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ 
     Claims.Flock.OkThroughJ trimCol (wideJ zk) x j [] :=
   Gen.okThroughJ_nil (S := S₀) (zk := zk) (x := x) (j := j) (h := h)
 
-/-- **Every masked table's bound counted per round at the trimmed record**, at its trimmed columns or `0`, from the
-bound at full-width tables at the untrimmed record: `0` is a trimmed full-width column at a position of table `j`'s
-word. -/
-theorem zk_tableBoundJR_trim (rel : Readable.Parsed → Readable.Relation)
-    (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
-    Claims.Flock.TableBoundJR sha512 (deployZkTrim rel) (wordLenJ true)
-      (Claims.Flock.orZeroJ (Claims.Flock.OkThroughJ trimCol (wideJ true))) := by
-  have h := Claims.Flock.tableBoundJR_mapCols sha512 (deployZk rel) (wordLenJ true) trimCol rfl (wideJ true)
-    (zk_colsOkJ sha512 rel) (wideJ_trimCol_inj true) htab
-  intro x Ω _ _ P
-  obtain ⟨e, hfit, hb⟩ := h x Ω P
-  refine ⟨e, hfit, fun ω j hj C hC hg => hb ω j hj C (fun p => ?_) hg⟩
-  rcases hC p with h0 | hp
-  · rw [h0]
-    exact okThroughJ_nil true x j (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt)
-  · exact hp
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -175,6 +157,15 @@ theorem zk_tableBoundJR_trim (rel : Readable.Parsed → Readable.Relation)
   · exact hp
 
 end Gen
+
+/-- **Every masked table's bound counted per round at the trimmed record**, at its trimmed columns or `0`, from the
+bound at full-width tables at the untrimmed record: `0` is a trimmed full-width column at a position of table `j`'s
+word. -/
+theorem zk_tableBoundJR_trim (rel : Readable.Parsed → Readable.Relation)
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.TableBoundJR sha512 (deployZkTrim rel) (wordLenJ true)
+      (Claims.Flock.orZeroJ (Claims.Flock.OkThroughJ trimCol (wideJ true))) :=
+  Gen.zk_tableBoundJR_trim (S := S₀) (rel := rel) (htab := htab)
 
 namespace Gen
 
@@ -250,7 +241,6 @@ the live sessions' bound at the deployed decoders off the table on a witness lan
 theorem zk_KS_trim_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_trim_of_liveAccWJ fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)
-
 
 namespace Gen
 

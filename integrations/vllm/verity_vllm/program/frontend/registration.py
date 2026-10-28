@@ -8,7 +8,7 @@ from __future__ import annotations
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Record, Type, Value
 
-from verity_vllm.program.registry.tables import table_type
+from verity.ml.definitions.registry.tables import table_type
 
 
 class Registration:

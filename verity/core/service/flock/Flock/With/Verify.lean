@@ -287,6 +287,41 @@ def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sched
   if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
   return cap
 
+/-- The shape `verifyRepWith` decodes a rep's proof file at, with `n` extra claims. -/
+def repFileShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
+  let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
+  { m := st.m, kLog := st.kLog, claims := 2 + n, sched := sch, hashLen := st.merkle.digestLen, saltLen }
+
+/-- **`verifyRepWith` at the decoded proof `p`**: everything after the decode, on the rep's stream with the statement's
+extra claims: the pinned PCS parameters (R7/F2), §9–§14, every recorded round consumed (S15/R2) and the cap the committed
+`root_B` (S16/R1). -/
+def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
+    (stream : StreamRec) (extras : Array Claim) (p : Proof) : M ByteArray := do
+  let t := spec.tables[i]!
+  let name := s!"{t}/rep{r}"
+  if p.params != pcsParams st.merkle sch then throw "R7/F2: the proof's PCS parameters are not the pinned fast100 parameters"
+  let prog : TMW M Unit := do
+    let zc ← bindAndZerocheckWith hs st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck
+    let lc ← lincheckWith hs st.fold zc p.lincheck
+    let (T, sws) ← ringSwitchWith hs st.m (abcClaims st.m st.kLog zc lc ++ extras) p.ringSwitches
+    ligeritoWith hs st.merkle sch T p.cap p.ligerito (basis sws)
+  let ((), tr) ← prog.run (Transcript.init stream.rounds (spec.domain t r).toUTF8)
+  if tr.k != stream.rounds.size then throw s!"S15/R2: {name}: {stream.rounds.size - tr.k} recorded rounds were never consumed"
+  let cap := p.cap.foldl (· ++ ·) ByteArray.empty
+  if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
+  return cap
+
+/-- **`verifyRepWith` splits at the decode**: the rep's stream (S11) and the extra claims, the proof file decoded at
+`repFileShape`, then `verifyRepPWith` at the decoded proof. -/
+theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+    (i r : Nat) (bytes : ByteArray) :
+    verifyRepWith hs spec st sch sess i r bytes = (do
+      let name := s!"{spec.tables[i]!}/rep{r}"
+      let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
+      let extras ← st.extra sess.points
+      let p ← decodeProof (repFileShape st sch extras.size) bytes
+      verifyRepPWith hs spec st sch sess i r stream extras p) := rfl
+
 /-- `verify` with every hash call the oracle's: `.ok ()` is Accept. -/
 def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) :
     M Unit := do
@@ -308,6 +343,34 @@ def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (recor
     let c0 ← verifyRepWith hs spec st sch sess i 0 proofs[2 * i]!
     let c1 ← verifyRepWith hs spec st sch sess i 1 proofs[2 * i + 1]!
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+/-- `verifyWithM` at the record's parsed value `j` (`Record.decodeJWith`); at a record that parses to `j` it is
+`verifyWithM` (`verifyWithM_of_parse`). -/
+def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json) (proofs : Array ByteArray) :
+    M Unit := do
+  if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
+  let sess ← Record.decodeJWith hs spec j
+  for (st, p) in tabs.zip sess.publics do st.publics p
+  let schs ← tabs.mapM fun st => match fast100 st.m with
+    | some sch => pure sch
+    | none => throw s!"m = {st.m}: no fast100 schedule"
+  let want := spec.repStreams
+  if proofs.size != want.size then throw s!"{want.size} proofs expected"
+  if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
+    throw s!"S17: proof_{spec.dk} does not list exactly the tables' rep streams"
+  for ((_, _, w), b) in want.zip proofs do
+    if (sess.proofSha.find? (·.1 == w)).map (·.2) != some (hexOf (← spec.dgWith hs b)) then
+      throw s!"S17: {w}: the proof is not the one the server received"
+  for i in [0:tabs.size] do
+    let (st, sch) := (tabs[i]!, schs[i]!)
+    let c0 ← verifyRepWith hs spec st sch sess i 0 proofs[2 * i]!
+    let c1 ← verifyRepWith hs spec st sch sess i 1 proofs[2 * i + 1]!
+    if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
+  simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 
 /-- The verifier with SHA-512 replaced by `h`, every other hash the deployed one; `verifyWith Sha512.hash` is `verify`
 (`Flock.verify_eq_verifyWith`). -/

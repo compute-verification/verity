@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Coverage campaign 2026-09-17 (D87) — pod-side runner.  One configuration = one cell of out/gen/COVERAGE-20260917.md:
+# The coverage campaign's pod-side runner.  One configuration = one cell of the coverage table:
 # GPU phase (capture / control / census / nonint) then the CPU phase (resolve … tier A k=3 … gates + card) of
-# verity_vllm.pipeline.match, all on the pod's container disk (/workspace; /vol was over quota all through the last wave and the
-# laptop must stay a thin client), then a SMALL bundle (json reports, cards, logs, tokens -- no snapshots, no instances.jsonl) at
+# verity_vllm.pipeline.match, all on the pod's container disk (/workspace: /vol can be over quota, and the laptop stays a thin
+# client), then a SMALL bundle (json reports, cards, logs, tokens -- no snapshots, no instances.jsonl) at
 # /workspace/cp/cov/bundles/<run>.small.tgz for the laptop to pull.  The frozen candidate (program.json / instances.jsonl /
 # accesses.jsonl.gz) stays in the run dir on the pod (and is copied to /vol/cp/cov/<run>/ when the volume takes it).
 #
@@ -28,9 +28,8 @@ PY312=/workspace/venv-py312/bin/python; PY311=/workspace/venv-cu129/bin/python
 BASE=/workspace/cp/cov; OUT=$BASE/runs; CARDS=$BASE/cards; LOGS=$BASE/logs; BUNDLES=$BASE/bundles
 mkdir -p "$OUT" "$CARDS" "$LOGS" "$BUNDLES"
 K=${COV_K:-3}; PAR=${COV_PAR:-8}; SNAP_MB=${COV_SNAP_MB:-256}; SNAP_MB_MOE=${COV_SNAP_MB_MOE:-24}; CPU_PAR=${COV_CPU_PAR:-2}
-# [r8 lane E-cleanup 2026-09-18] COV_VOL: the durable copy of the small bundle.  Default = the campaign's canonical /vol/cp/cov; a lane
-# re-running gates / holdouts over a copy of a canonical record sets COV_VOL=/vol/cp/<lane> so the canonical bundle is never overwritten
-# (evidence rule from the 2026-09-17 window: a recheck of a copy must not publish over the original).
+# COV_VOL: the durable copy of the small bundle.  Default = the campaign's canonical /vol/cp/cov; a rerun of gates / holdouts over a copy
+# of a canonical record sets COV_VOL=/vol/cp/<name>, so a recheck of a copy never publishes over the canonical bundle.
 VOL=${COV_VOL:-/vol/cp/cov}
 say() { echo "[cov_pod] $(date -u +%FT%TZ) $*"; }
 drv() { "${PY312%/*}/verity-vllm" match --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
@@ -61,7 +60,7 @@ snap_args() {  # <workload-name>: raise the snapshot cap for batched / long pref
   # cgroup: SIGKILLed twice (once at a flat 48 MiB cap, which those ~42 MB buffers pass).  MoE runs therefore keep the full
   # cap at Triton launch events (each expert-GEMM output is copied once, at the launch whose snapshot tier A reads) and apply
   # the lower COV_SNAP_MB_MOE cap (24 MiB) at dispatcher-call events (--snapshot-max-bytes-op): cache2 [T*TOPK, I] = 21 MB and
-  # qkv [T, 6144] = 16 MB at T=1300 still pass; only the ~42 MB MoE buffers and their views are dropped there.  cov-moe, 2026-09-17.
+  # qkv [T, 6144] = 16 MB at T=1300 still pass; only the ~42 MB MoE buffers and their views are dropped there.
   case "$1" in
     *olmoe*b8-*|*olmoe*c1024*) echo "--snapshot-max-bytes $((SNAP_MB << 20)) --snapshot-max-bytes-op $((SNAP_MB_MOE << 20))" ;;
     *b8-*|*c1024*) echo "--snapshot-max-bytes $((SNAP_MB << 20))" ;;
@@ -70,9 +69,8 @@ snap_args() {  # <workload-name>: raise the snapshot cap for batched / long pref
 }
 
 bundle() {  # <run-name>: json reports + cards + logs + tokens (no values/, traces/, program.json, instances.jsonl, accesses)
-  # [r8 lane E-cleanup 2026-09-18] wiring.json (≈ 5 KB, G5's operand-read evidence) is IN the bundle: the campaign's compact records
-  # excluded it, so a G7 holdouts regate over a compact primary re-derives G5 as `skipped: wiring.json missing` (Qwen B8-static,
-  # 10:08Z) -- the recorded G5 pass was then not reproducible from the retained artefacts.
+  # wiring.json (≈ 5 KB, G5's operand-read evidence) is in the bundle: without it a G7 holdouts regate over a compact primary re-derives
+  # G5 as `skipped: wiring.json missing`, and the recorded G5 pass is not reproducible from the retained artefacts.
   local n=$1
   [ -d "$OUT/$n" ] || { say "bundle $n: no run dir"; return 1; }
   (cd "$OUT" && tar czf "$BUNDLES/$n.small.tgz" \
@@ -80,11 +78,10 @@ bundle() {  # <run-name>: json reports + cards + logs + tokens (no values/, trac
       --exclude="$n/program.json" --exclude="$n/instances.jsonl" --exclude="$n/accesses.jsonl.gz" --exclude="$n/capture/*.npy" \
       --exclude="$n/*/cos_sin_cache.npy" --exclude="$n/capture/snapshots.json" "$n") \
     && say "bundle: $BUNDLES/$n.small.tgz ($(du -h "$BUNDLES/$n.small.tgz" | cut -f1))" || say "bundle $n FAILED"
-  # [runner 2026-09-17] the /vol copy is optional spill space, but a failed copy is an infrastructure WARNING on record, never silent:
-  # the volume was over quota (EDQUOT) all day and every copy "succeeded" -- the small bundle then existed on the worker only.
+  # The /vol copy is optional spill space, but a failed copy is an infrastructure WARNING on record, never silent.  Over quota (EDQUOT)
+  # the volume accepts the cp and drops the bytes (0-byte file, cp rc=0), so the copy is verified by size before it counts; a short copy
+  # is removed and recorded like a failed one.
   local verr
-  # [window 2026-09-17, evidence owner] over quota the volume ACCEPTS the cp and drops the bytes (0-byte file, cp rc=0), so the copy is
-  # verified by size before it counts; a short copy is removed and recorded like a failed one.
   if verr=$( (mkdir -p "$VOL" && cp "$BUNDLES/$n.small.tgz" "$VOL/.$n.small.tgz.part" \
               && [ "$(stat -c %s "$VOL/.$n.small.tgz.part" 2>/dev/null || echo -1)" = "$(stat -c %s "$BUNDLES/$n.small.tgz")" ] \
               && mv "$VOL/.$n.small.tgz.part" "$VOL/$n.small.tgz") 2>&1 ); then
@@ -98,11 +95,11 @@ bundle() {  # <run-name>: json reports + cards + logs + tokens (no values/, trac
 }
 
 inherit_quarantine() {  # <run-name>: a run dir without quarantine.json inherits the CASE's registered per-Definition admission record
-  # [window 2026-09-17, lead] G4 needs `quarantine.json` whenever the run resolves to quarantine Definitions (Pythia: GeluErf_v1,
-  # LayerNormAten_v1).  That record is per-Definition (difftest check + verify_lane rule 2a), written once by the lane and copied into
-  # the PRIMARY run dir only -- so replicates / runs on other workers were REJECTED at G4 for a missing file, not for numerics.  The
-  # admitted record is tracked at verity_vllm/engine/profiles/quarantine/<CASE>.json (with `admitted_by`); it is copied in here, stamped
-  # `inherited`, and G4 still re-runs tier-a replay on THIS run's own instances.  Cases without a record (no quarantine specs) skip.
+  # G4 needs `quarantine.json` whenever the run resolves to quarantine Definitions (Pythia: GeluErf_v1, LayerNormAten_v1).  That record
+  # is per-Definition (difftest check + verify_lane rule 2a), so a replicate or a run on another worker would otherwise be rejected at G4
+  # for a missing file, not for numerics.  The admitted record is tracked at verity_vllm/engine/profiles/quarantine/<CASE>.json (with
+  # `admitted_by`); it is copied in here, stamped `inherited`, and G4 still re-runs tier-a replay on THIS run's own instances.  Cases
+  # without a record (no quarantine specs) skip.
   local n=$1 rec="$PWD/verity_vllm/engine/profiles/quarantine/${1%%-*}.json"   # cwd = the code snapshot (cd above)
   [ -f "$OUT/$n/quarantine.json" ] && return 0
   [ -f "$rec" ] || return 0
@@ -159,8 +156,8 @@ regate() {  # <run-name> [--census]: re-run the cheap check stages (+ the census
 }
 
 holdouts() {  # <primary-run> <holdout-run>...: the replicate runs' gates.json assembled into the primary's holdouts.json (G7), then gates again.
-  # Campaign holdouts = the lead's replicate workloads (same seeded length draws, other prompts / request ids; generated by the lead,
-  # never by a lane).  They cover fresh token values, not fresh lengths -- the card says so (holdouts.json lists the runs).
+  # Campaign holdouts = the campaign's replicate workloads (same seeded length draws, other prompts / request ids; generated apart from
+  # the runs they hold out).  They cover fresh token values, not fresh lengths -- the card says so (holdouts.json lists the runs).
   local n=$1; shift
   local hd="$OUT/$n/holdouts"; mkdir -p "$hd"
   for h in "$@"; do

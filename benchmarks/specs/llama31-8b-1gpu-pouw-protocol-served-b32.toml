@@ -1,0 +1,49 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-1gpu-pouw-protocol-served-b32"
+# `llama31-8b-1gpu-pouw-protocol-served` at b32 only, with 6 reps: there, at 3 reps, Pearl-C's eager arm drifted with
+# host load from rep to rep, and an odd rep count doesn't
+# cancel drift in the means. Arms, arm settings, setup and preset are that spec's (see its comment for what each arm
+# shares and what differs).
+arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]
+sweep = "b32"
+reps = 6
+eager = true
+setup = "benchmarks/harness/setup/pearl_c.sh"
+
+[arm_settings."pouw:pearl-c-sm120-v1-h3"]
+precision = "bfloat16"
+control = "none"
+
+[arm_settings."pouw:pearl-c-sm120-v1-h3".protocols_config.pouw]
+device = "cuda"
+kernel = "benchmarks/pouw/pearl_c_sm120"
+cubin = "$PEARLC_CUBIN"
+schedule = "deferred"
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama31-8b-1gpu-pouw-protocol-served-b32"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+case = "LLAMA31_8B"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.40
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 4096
+max_num_seqs = 128
+resident_kv_cache_memory_bytes = 8589934592
+block_kv_cache_memory_bytes = 8589934592
+
+[admission]
+max_minutes = 120

@@ -1,4 +1,4 @@
-"""ISA-ESCAPE-FP: ISA-ESCAPE's menu for FP words, per device, mechanically (note:20261019T0457Z-draft-fpx-machine).
+"""ISA-ESCAPE-FP: ISA-ESCAPE's menu for FP words, per device, mechanically.
 
 Three committed words, each credited at its device's row of the data sheet (A3):
   (i)   an FP8 word: a sum of products of FP8-grid operands (an integer grid such as int5 or the E4M3 integers, or every
@@ -19,18 +19,18 @@ It needs only A7 (an MMA's output is a function of its operand registers) and th
 section 5.2.3). The value-level bound (the word depends on codes only through their values: PTX's `D = A*B + C`) is
 reported beside it as strictness; no verdict reads it.
 
-Outcomes: CLOSED (rho / D < 1), TIE (= 1: a menu form when every alphabet value has a code, which decision 81's LP must
+Outcomes: CLOSED (rho / D < 1), TIE (= 1: a menu form when every alphabet value has a code, which the menu's LP must
 list; else a counting-only tie, with no construction known and no proof that it closes), WATCH (closed with
 data-independent 2:4 metadata, open by counting with data-dependent metadata: its gain is the data's zero patterns, an
 epsilon_skip), OPEN. A JOINT route (elements spread across shared slots) is bounded by counting alone only at
 log2 |S| / (bits a position), without rounding up; `joint_gap` is rho over that bound, and every form where it exceeds 1
 is listed. The rank floor (`rank_lower`: exact products and sums on every input) closes those at rho <= 1 on the integer
 kinds, where mma and wgmma state it; on FP kinds nothing does (premise (a) covers the small grid only), so its closures
-there stay open (RT-FP-6), as do the pairs at rho >= 2 everywhere, until a lemma bounds a joint route's passes. The units with no tensor form (vector, uniform, tables, reductions, movers, side units) keep
+there stay open, as do the pairs at rho >= 2 everywhere, until a lemma bounds a joint route's passes. The units with no tensor form (vector, uniform, tables, reductions, movers, side units) keep
 isa_escape.py's classes, re-read for FP words.
 
 It also replays premise (a), the small-grid exactness `Accounting.Assumptions.TS.Fp8GridExact` and `Fp4GridExact`
-(Security/Models/Accounting/Assumptions/FpMma.lean): on the bit-exact models of record transcribed from Lean
+(Security/Definitions/Accounting/Assumptions/FpMma.lean): on the bit-exact models of record transcribed from Lean
 (`Pouw.Fp8Atom.groupSum` at sm_120's 26-bit and Hopper's 14-bit adder, `Pouw.PearlC.Fp4.Fp4Atom.step`), a step whose
 accumulator and products are multiples of 2^g (g >= -126) with magnitudes summing below 2^(g+p) writes the exact sum, at
 p = 24 (26-bit adder, FP4 align-add) and p = 14 (Hopper), and controls just outside it don't. The models are not the
@@ -124,7 +124,7 @@ ALPHABETS = {  # the design's operand values (S); each holds 0 and 1, which the 
 # sm_120: RTX PRO 6000 Blackwell sheet (kind::f8f6f4 at the FP8 rate, block-scaled FP4 at twice it; FP16/BF16 with FP32
 # accumulate at half; TF32 a quarter). sm_90a: H200 sheet (= H100 SXM: INT8 = FP8, FP16 half, TF32 a quarter, FP64
 # tensor 67 TF). sm_100a: B200 sheet (INT8 = FP8 = FP6 4.5 P dense, FP4 9 P, FP16 2.25 P, TF32 1.1 P, FP64 37 T). DMMA
-# rows are generous upper bounds (no FP64 tensor on sm_120). MM-SHEETS grades the sheets; only these ratios are read.
+# rows are generous upper bounds (no FP64 tensor on sm_120). Only these ratios are read.
 RATES = {
     "sm_120": {"s8": 1024, "e4m3": 1024, "e5m2": 1024, "e3m2": 1024, "e2m3": 1024, "e2m1": 1024, "nvf4": 2048,
                "mxf4": 2048, "f16": 512, "bf16": 512, "tf32": 256, "f64": 0},
@@ -264,8 +264,8 @@ OTHER = [
     ("uniform datapath (UFFMA, UFMUL, UFADD, UIMAD)", "PRICED",
      "one word an instruction on an issue slot (A2u, measured); UFFMA/UFMUL/UFADD appear in the sm_120 census"),
     ("product tables (LDS/LDG/LDSM/TEX lookups of x*y)", "PRICED",
-     "a table-headed word is priced by the bytes it reads (decision 80) and at most two words a lane (A6); a 4-word TEX "
-     "or an LDS.128 writes more than 64 bits a lane, which A6's docstring must bound (finding for RT-MACHINE)"),
+     "a table-headed word is priced by the bytes it reads and at most two words a lane (A6); a 4-word TEX "
+     "or an LDS.128 writes more than 64 bits a lane, which A6's docstring must bound"),
     ("texture filtering (bilinear/trilinear)", "PRICED",
      "multiplies by 9-bit fixed-point weights (CUDA Programming Guide, texture fetching): a side unit at TEXBIL's pi32 "
      "floor (SideUnits); not an exact FP32 sum of FP8 products"),
@@ -275,7 +275,7 @@ OTHER = [
      "add/min/max/select/logic only: no fresh product"),
     ("red.add.f32 / atom.add.f32, red.async, cp.reduce.async.bulk .add, tcgen05.ld.red", "NO-MULTIPLY",
      "reducers add or compare existing words; RED32/REDV/TMAred512 priced at the pi32 floor"),
-    ("multimem.ld_reduce / NVLink SHARP", "NO-MULTIPLY", "an in-switch add of existing words, off the SM (RT-SCOPE)"),
+    ("multimem.ld_reduce / NVLink SHARP", "NO-MULTIPLY", "an in-switch add of existing words, off the SM"),
     ("cvt to e4m3x2/e5m2x2/e2m1x2 (F2FP), spdecompress/spcompress, ldmatrix, cp.async, TMA", "MOVER",
      "conversion or movement: the output is an existing value, rounded or copied"),
     ("tcgen05.mma scale-input-d (D = A*B + D * 2^-n)", "MOVER",
@@ -637,7 +637,7 @@ def main() -> int:
                  planes_lower(256, "nvf4", True, False) == planes_lower(256, "mxf4", True, False) == 4)
     checks.check("int8 on 2:4 FP4, data-dependent metadata: 3 passes (+ log2(6)/4 bits): the WATCH",
                  planes_lower(256, "nvf4", True, True) == 3)
-    checks.check("int8 on 2:4 int8 (IMMA.SP): 2 passes either way (decision 60's tie)",
+    checks.check("int8 on 2:4 int8 (IMMA.SP): 2 passes either way (2:4 ties the dense form)",
                  planes_lower(256, "s8", True, False) == planes_lower(256, "s8", True, True) == 2)
     checks.check("E4M3 values (FP-native word) on E2M1: 2 planes by codes, 3 by values (225 < 253)",
                  planes_lower(253, "e2m1", False, False) == 2 and planes_lower(253, "e2m1", False, False, True) == 3)

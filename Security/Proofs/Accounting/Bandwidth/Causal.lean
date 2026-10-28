@@ -1,15 +1,15 @@
 import Mathlib
 import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Actual.Transducer
-import Definitions.Accounting.Actual.Source
-import Models.Accounting.Guarantees.Bandwidth.Causal
+import Proofs.Accounting.Defs.Actual.Source
+import Definitions.Accounting.Guarantees.Bandwidth.Causal
 
 /-!
 # B3 on a strategy causal from every tick: the chip as a `Ticked.Chip`
 
-What remained of B3 in v2.4 of `note:console/20261012T0645Z-draft-actual-circuit-model`: the chip of a run causal from
-every tick as the tick transducer `Ticked.Chip`, so that `Ticked.audit_reads` bounds it. A strategy here is a run for each
-store and oracle, `S : Store × Oracle → Actual.Run L`; the chip is the location `X`, and the window is `[t₀, t₀ + T)`.
+What remained of the actual-circuit model's B3: the chip of a run causal from every tick as the tick transducer
+`Ticked.Chip`, so that `Ticked.audit_reads` bounds it. A strategy here is a run for each store and oracle,
+`S : Store × Oracle → Actual.Run L`; the chip is the location `X`, and the window is `[t₀, t₀ + T)`.
 
 What the model doesn't state yet is one hypothesis, `Splits`: at each tick of the window, what crosses into the chip is a
 fixed function (`Interface.cross`) of what the chip has done since `t₀` and of three replies, each read through its link:
@@ -39,7 +39,7 @@ and the other two from the chip's ports' constraints (`Security/Definitions/Acco
 with only `HearsChip` (HBM's ports deliver a function of the store and of what the chip did) in place of
 `PassiveMemory`: with HBM's links alphabets it gives passive memory at `βm` bits a tick (`passiveMemory_of_hearsChip`),
 and the bound holds at `βm T` in place of `∑ wd`. The four are the guarantees `Bandwidth.Guarantees.B3`, `B3RO`,
-`B3Capacity` and `B3CapacityRO` (`Security/Models/Accounting/Guarantees/Bandwidth/Causal.lean`).
+`B3Capacity` and `B3CapacityRO` (`Security/Definitions/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
 
 namespace Bandwidth

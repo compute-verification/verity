@@ -1009,8 +1009,8 @@ bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecD
 (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) : KSBoundRoute rel relO b L :=
-  ksBoundRoute_of_bridge rel relO b L fun nextE colsE wE join rowIn final w =>
+    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRoute rel relO b L :=
+  ksBoundRoute_of_bridge rel relO b L hRows fun nextE colsE wE join rowIn final w =>
     bridge_bdDeployed rel nextE colsE wE join rowIn final w
 
 end RecDeploy

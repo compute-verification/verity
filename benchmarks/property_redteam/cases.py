@@ -1,5 +1,5 @@
-"""The property red team's refusal suite: Programs a stacking property (property/v1, the closed free set of PROGRAM.md's 19:15Z
-ruling, with 19:10Z's family and limb rules) must refuse or fully budget, and the honest steps.py shapes it must pass.
+"""The property red team's refusal suite: Programs a stacking property (property/v1, a closed free set with its family and
+limb rules) must refuse or fully budget, and the honest steps.py shapes it must pass.
 
 A check is any function from a `verity.ml.circuits.program.Program` to a verdict, a mapping ``{"refused": bool, "charged":
 {class: units}}`` over `CLASSES`: ``roundings`` (casts, special functions, FP arithmetic, integer floors, mods and wraps, carries
@@ -8,7 +8,7 @@ and limb splits), ``compare_select`` (comparisons, clamps, selects), ``gathers``
 `CASES` are the cases, each built at full size by `Case.build()`; `run.py` grades a check against them, and `cases.json` is
 their metadata as data (`run.py --json`).
 
-An attack case's ``verdict`` is the ruling's, ``refuse`` or ``budget``, and its ``charge`` the least charge under which
+An attack case's ``verdict`` is property/v1's, ``refuse`` or ``budget``, and its ``charge`` the least charge under which
 accepting it is still sound (``{class or "any": units}``, "any" the sum over the classes), or None when no charge is (a type
 pun). Refusing an attack is always sound. An honest case's ``allow`` is the most a check may charge it and still pass it.
 
@@ -16,7 +16,7 @@ Primitives are main's registry, with two steps registered under their ids only w
 silicon model of the branch that defines it: `BlackwellS8ImmaDot32_v1` (the census branch's exact s8 IMMA step) and
 `BlackwellU8S8ImmaDot32_v1` (the s8 family's u8·s8 step without .satfinite). A case that binds the s8 family
 (`verity.ml.circuits.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs`` and is skipped where the
-family is absent. Every honest case does, since the ruling refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
+family is absent. Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
 registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`benchmarks/pouw/edited_gemm/receipt_folds_r9.py`) as a
 Definition of its own.
 """
@@ -37,8 +37,8 @@ from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, Int
 from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 
 import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PouwNoiseByte)
-from verity_vllm.program.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
-from verity_vllm.program.registry.ref_prims import gather_f32
+from verity.ml.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
+from verity.ml.definitions.registry.ref_prims import gather_f32
 
 try:
     FAMILY: Any = importlib.import_module("verity.ml.circuits.ops.s8")
@@ -599,16 +599,16 @@ def _pv_splitk_samples() -> list[tuple[dict, tuple, tuple]]:
 # ---- the cases ------------------------------------------------------------------------------------------------------------
 
 _FAM = (NEEDS_FAMILY,)
-_BARE = "a bare IMMA outside the s8 family is refused (19:15Z)"
-_RULES = "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z)"
+_BARE = "a bare IMMA outside the s8 family is refused"
+_RULES = "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte)"
 
 CASES: tuple[Case, ...] = (
     Case("carry-idiv", "attack", "budget", "a carry: (t mod 256, t div 256) of a run word, by I32Rem and I32Div",
-         "integer floors and mods are budgeted, one unit an output (19:15Z)", carry_idiv, charge={"roundings": 2},
+         "integer floors and mods are budgeted, one unit an output", carry_idiv, charge={"roundings": 2},
          samples=lambda: [({}, (t,), (t % 256, t // 256)) for t in (0, 255, 256, 1000, 65_535, S32_MAX)]),
     Case("carry-cmp", "attack", "budget",
          f"a carry from comparisons: t mod 256 and t div 256 for t < {256 << CMP_ROUNDS}, by {CMP_ROUNDS} rounds of U32Ge "
-         "and two SelectI32", "compares and selects are budgeted, one unit an output (19:15Z)", carry_cmp,
+         "and two SelectI32", "compares and selects are budgeted, one unit an output", carry_cmp,
          charge={"compare_select": 3 * CMP_ROUNDS},
          samples=lambda: [({}, (t,), (t % 256, t // 256)) for t in (0, 255, 256, 1000, (256 << CMP_ROUNDS) - 1)]),
     Case("imma-clamp-bare", "attack", "refuse",
@@ -622,56 +622,56 @@ CASES: tuple[Case, ...] = (
     Case("imma-bound-bare", "attack", "refuse",
          f"a K = {DITHER_K:,} chain over run s8 inputs that clamps at S32_MAX from step 4,096 on (33 steps), under a "
          "declared operand bound of +-127 the inputs exceed at -128",
-         _BARE + "; operand ranges come from the producer, never from a declaration (19:15Z)", imma_bound_bare,
+         _BARE + "; operand ranges come from the producer, never from a declaration", imma_bound_bare,
          charge={"compare_select": 33}, samples=_dither_samples),
     Case("pun-s32-as-e4m3", "attack", "refuse", "a computed s32 word's leaf read where an 8-bit E4M3 code is typed",
-         "an implicit reinterpretation of a runtime word is refused (19:10Z); one type per committed word", pun_s32_as_e4m3,
+         "an implicit reinterpretation of a runtime word is refused; one type per committed word", pun_s32_as_e4m3,
          samples=lambda: [({}, (0x38,), (_f32(1.0),)), ({}, (0x40,), (_f32(2.0),))]),
     Case("noise-runtime", "attack", "refuse",
          "six bits of a run word at a run-chosen byte offset, by PouwNoiseByte over a value that is not the coin",
-         "the noise derivation's inputs are the coin and statics only (19:15Z); else PouwNoiseByte is budgeted",
+         "the noise derivation's inputs are the coin and statics only; else PouwNoiseByte is budgeted",
          noise_runtime, charge={"roundings": 1},
          samples=lambda: [({}, (w, c), ((((w >> (8 * (c & 3))) & 63) - 31) & 0xFF,))
                           for w, c in ((0xDEADBEEF, 0), (0xDEADBEEF, 3), (0x01020304, 6))]),
     Case("fold-reused", "attack", "budget",
          "the receipt fold's mixer, y' = (y ^ d0 ^ k0) * a0 + d1 mod 2^32, its output added into a second output",
-         "the receipt fold's output is a sink (19:15Z); the fold is unregistered, so its four gates are budgeted",
+         "the receipt fold's output is a sink; the fold is unregistered, so its four gates are budgeted",
          fold_reused, charge={"any": 4},
          samples=lambda: [({}, (d0, d1, x), (fold(FOLD_SEED, d0, d1), (fold(FOLD_SEED, d0, d1) + x) & M32))
                           for d0, d1, x in ((1, 2, 3), (0xFFFFFFFF, 0x80000000, 0x7FFFFFFF))]),
     Case("gather-table", "attack", "budget", "any function of a 7-bit run index, (i^2 + 7i) mod 251, by GatherF32x128",
-         "gathers are budgeted by fresh runtime index bits (19:15Z)", gather_table, charge={"gathers": 7},
+         "gathers are budgeted by fresh runtime index bits", gather_table, charge={"gathers": 7},
          samples=lambda: [({}, (i,), (table(i),)) for i in (0, 1, 100, 127)] + [({}, (128,), (0x7FC00000,))]),
     Case("fam-bound-dither", "attack", "refuse",
          f"S8Dot{{K = {DITHER_K:,}, A = B = (-127, 127)}} binds (its no_wrap holds for the declared bounds) and clamps "
-         "at S32_MAX on run inputs at -128", "operand ranges come from the producing Definition, never declared (19:15Z)",
+         "at S32_MAX on run inputs at -128", "operand ranges come from the producing Definition, never declared",
          fam_bound_dither, charge={"compare_select": 33}, needs=_FAM, samples=_dither_samples),
     Case("fam-acc-clamp", "attack", "refuse",
          f"[r < {THRESHOLD}] from two S8Dot{{T0 = input, C = (0, 2^18)}} instances whose accumulator is r + S32_MAX - 2^18",
-         "T_0's interval is derived from its producer, not declared (19:15Z)", fam_acc_clamp, charge={"compare_select": 2},
+         "T_0's interval is derived from its producer, not declared", fam_acc_clamp, charge={"compare_select": 2},
          needs=_FAM, samples=_clamp_samples),
     Case("fam-acc-wrap", "attack", "refuse",
          f"a word whose s32 sign is [r >= {THRESHOLD}], from S8Dot{{T0 = input, C = (0, 2^18), DOT = u8 x s8}} at "
-         "T_0 = r + 2^31 - 2^18", "T_0's interval is derived from its producer, not declared (19:15Z)", fam_acc_wrap,
+         "T_0 = r + 2^31 - 2^18", "T_0's interval is derived from its producer, not declared", fam_acc_wrap,
          charge={"roundings": 1}, needs=_FAM, samples=_wrap_samples),
     Case("fam-splitk", "attack", "budget",
          f"two S8Dot{{K = {SPLIT_HALF:,}}} halves over run s8 inputs, each within s32, whose I32Add combine wraps",
-         "a split-K combine is inside the interval analysis; one that may wrap is not free-affine (19:15Z)", fam_splitk,
+         "a split-K combine is inside the interval analysis; one that may wrap is not free-affine", fam_splitk,
          charge={"roundings": 1}, needs=_FAM, samples=_splitk_samples),
     Case("limb-split", "attack", "budget", "a runtime S8Dot word as three s8 limbs by LimbSplit_v1{bytes, N = 3}",
-         "a LimbSplit of a runtime word is budgeted, a carry a limb beyond the first (19:10Z)", limb_split,
+         "a LimbSplit of a runtime word is budgeted, a carry a limb beyond the first", limb_split,
          charge={"roundings": 2}, needs=_FAM, samples=_limb_samples(3)),
     Case("limb-split-bare", "attack", "budget",
          "the same three limbs from S32LowByte and S32ByteCarry called outside LimbSplit_v1",
-         "every registered primitive outside the free set is budgeted, one unit an output (19:15Z)", limb_split_bare,
+         "every registered primitive outside the free set is budgeted, one unit an output", limb_split_bare,
          charge={"roundings": 2}, needs=_FAM, samples=_limb_samples(3)),
     Case("fam-limb-y", "attack", "refuse",
          "LimbSplit_v1{bytes, N = 2, Y = (-32640, 32639)} on a word in [-520192, 524288]: its last limb truncates a second "
-         "carry", "a split's Y is its producer's interval (19:10Z), not declared", fam_limb_y, charge={"roundings": 2},
+         "carry", "a split's Y is its producer's interval, not declared", fam_limb_y, charge={"roundings": 2},
          needs=_FAM, samples=_limb_samples(2)),
     Case("pun-s32-as-s8", "attack", "refuse",
          "a runtime S8Dot word read back as the s8 operand codes of a second S8Dot, without a split",
-         "an implicit reinterpretation (an s32 word read back as s8 limbs) is refused (19:10Z)", pun_s32_as_s8,
+         "an implicit reinterpretation (an s32 word read back as s8 limbs) is refused", pun_s32_as_s8,
          needs=_FAM, samples=lambda: [({}, ([1] * 32, [2] * 32, [1] * 32), (64 * 32,))]),
     Case("linear-28672", "honest", "pass", "one int8 linear coordinate at K = 28,672 (s8 by s8, from T_0 = 0)",
          "free-family: the window is proven from the operands' type range", linear, allow={}, needs=_FAM,
@@ -692,7 +692,7 @@ CASES: tuple[Case, ...] = (
     Case("pv-132128", "attack", "refuse",
          f"P·V at {PV_LIMIT + 32:,} keys over PQUANT's P in [0, 127], bound with A = (0, 126): from runs at -128 the "
          "last step clamps at S32_MIN, one comparison a channel",
-         "operand ranges come from the producer, never declared (19:15Z); " + _RULES + " prove the window to 132,104 "
+         "operand ranges come from the producer, never declared; " + _RULES + " prove the window to 132,104 "
          "keys only", pv_past, charge={"any": 3 * (PV_LIMIT + 32) + 128}, needs=_FAM,
          samples=_pv_variant_samples(0.0, 127.0, 6)),
     Case("pv-no-fmaxf-132096", "honest", "pass",

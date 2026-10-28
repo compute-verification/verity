@@ -1,23 +1,27 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
-vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case) and mirrors of the stub components.
+of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
+`Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
+(`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
+mirror over the certifier's certificates and one-stage's answers,
+`verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit
+(`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
+(`verity/core/service/sampled_proofs/tests/test_difftest.py`), and for space (`verity/pous/p2/v4/run`) and bandwidth
+(`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
+`periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
-The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
-`cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
+The trial's rule, onsite's and remote's over their components' statements:
 
-* `trial/verity/protocols/onsite.py` and `remote.py`: a product's fields are its components, and its verifier is the list
-  of their verifiers' actors;
-* `trial/verity/run.py`: an actor that raises records `Raised`, and what it would have established is missing: "whatever
-  reads it waits for it forever: a missing statement fails closed";
-* `trial/verity/primitives/events.py` `gather`, which `Reconcile.verifier` (`accounting/reconcile.py`) uses to wait for
-  each resource's statement and `Nci.verifier` (`compliance/nci.py`) for the stream and the balance: a statement with
-  reasons explains nothing, and the epoch complies only with no reasons.
+* a product's fields are its components, and its verifier is the list of their verifiers' actors;
+* an actor that raises records `Raised`, and what it would have established is missing: whatever reads it waits for it
+  forever, so a missing statement fails closed;
+* the product waits for each component's statement (`gather`): a statement with reasons explains nothing, and the epoch
+  complies only with no reasons.
 
 Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
 reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
 every component's reasons fail the product. Of the components' statements the trial's NCI fails the epoch on work's
 reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
-in the balance. The port follows top's rule (Oct 7, binding), `verdict`, which changes the reduction in one place more:
+in the balance. The port follows the composition's rule, `verdict`, which changes the reduction in one place more:
 
 * **reject dominates**: in the trial a missing statement leaves the product with no verdict even when another component's
   statement has failed (`gather` waits on), so a prover could hide a rejection by leaving another component undecided;
@@ -27,14 +31,45 @@ in the balance. The port follows top's rule (Oct 7, binding), `verdict`, which c
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
-from dataclasses import dataclass
-from typing import Any
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from types import ModuleType
+from typing import Any, Callable
 
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
+from verity.core.protocols.pouw import core_check
+
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
+
+CORE = Path(__file__).resolve().parents[3]
+
+
+def module(name: str, path: Path) -> ModuleType:
+    """Another suite's test module, loaded from its file under `name`, with its directory on the path for the siblings it
+    imports."""
+    if name in sys.modules:
+        return sys.modules[name]
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[name] = m
+    spec.loader.exec_module(m)
+    return m
+
+
+#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
+#: draw audits.
+ONE_STAGE = module("one_stage_difftest", CORE / "service/sampled_proofs/tests/test_difftest.py")
+#: PoUW's check difftest's cases: honest windows and one mutation each.
+POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
+#: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
+#: period with one change.
+PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -45,46 +80,47 @@ def trial_verdict(verdicts: list[str]) -> str:
 
 
 def verdict(verdicts: list[str]) -> str:
-    """Top's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
+    """The composition's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
     if REJECT in verdicts:
         return REJECT
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
 @dataclass(frozen=True)
-class Stub:
-    """`Core.Example.protocol` under the id `id` (`Core.Composition.Stub.stub`): params `{"k": k}`, a 32-byte root that is
-    its own digest, evidence `{"drawn": n, "passed": m}`; rejects when a drawn unit failed, is undecided when fewer than k
-    were drawn, and accepts with `{"passed": m}` and an integrity profile otherwise."""
+class Ported:
+    """A component whose port has replaced its stub: its id and its Python's answer to a `serve` case."""
 
     id: str
+    answer: Callable[[Any], dict]
 
-    @staticmethod
-    def _root(b: bytes) -> bytes:
-        if len(b) != 32:
-            raise Reject(f"a root is 32 bytes, not {len(b)}")
-        return b
 
-    @staticmethod
-    def _evidence(b: bytes) -> tuple[int, int]:
-        j = P.canonical_json(b)
-        return P.nat(j, "drawn"), P.nat(j, "passed")
+@dataclass(frozen=True)
+class Recorded:
+    """A component on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
+    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was drawn,
+    or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded components refuse with no
+    digest, as they do params that don't decode; any other case is a difference."""
 
-    @staticmethod
-    def _check(k: int, root: bytes, e: tuple[int, int]) -> tuple:
-        drawn, passed = e
-        if passed < drawn:
-            return REJECT, f"{drawn - passed} of {drawn} drawn units failed"
-        if drawn < k:
-            return UNDECIDED, f"{drawn} of the {k} units drawn"
-        profile = {"covered": [], "delta": "1/1000000", "drawn": {"unit": drawn},
-                   "levels": [{"draw": {"subset": k}, "name": "unit", "query": None, "size": drawn}], "linked": True,
-                   "prescribed": [], "programs": [root.hex()]}
-        return ACCEPT, {"passed": passed}, profile
+    id: str
+    cases: dict[str, tuple[dict, dict]] = field(default_factory=dict, compare=False, hash=False)
 
     def answer(self, case: Any) -> dict:
-        return P.answer(self.id, case, params=lambda j: P.nat(j, "k"), commitment=self._root, evidence=self._evidence,
-                        check=self._check)
+        for c, a in self.cases.values():
+            if canonical(c) == canonical(case):
+                return a
+        try:
+            P.canonical_json(P.unhex(case["commitment"]))
+        except Reject as e:
+            return P.outcome(self.id, REJECT, f"commitment: {e}")
+        raise KeyError(f"{self.id}: no answer recorded for this case")
+
+
+CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+POUW = Ported("verity/pouw/v1", core_check.case)
+SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
+POUS = Recorded("verity/pous/p2/v4/run")
+BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -188,10 +224,6 @@ class Product:
         return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
-def stub_ids(*names: str) -> tuple[Stub, ...]:
-    return tuple(Stub(f"verity/stub/{n}/v0") for n in names)
-
-
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over the stubs that stand in for their components.
-REMOTE = Product("verity/remote/v0", stub_ids("pouw", "sampled-proofs"))
-ONSITE = Product("verity/onsite/v0", stub_ids("certifier", "pous", "pouw", "sampled-proofs"))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
+REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))

@@ -1,6 +1,6 @@
 """The cuBLAS route pin of a Program against the process that served it, one rule for every engine: each TP rank's
 (`pipeline.tp.c2.replay_gates`) and a TP1 run's, which `stamp` puts on the Commit record as `cublas_route_pin` for its verdict
-(`check.verdict.commit_verdict` and `check.c2_rules.rule_route_pin` read that block, as they read `weights_pin`).
+(`check.commit_pass.commit_verdict` and `check.c2_rules.rule_route_pin` read that block, as they read `weights_pin`).
 
 A Program that binds a Definition only the pin binds (`bf16_gemm_check.ROUTE_DEFINITIONS`, in the replay's population or its
 unreplayable families) computes cuBLAS's routes as the pin's scan saw them, which hold only under the scan's conditions
@@ -8,7 +8,7 @@ unreplayable families) computes cuBLAS's routes as the pin's scan saw them, whic
 departure, an unrecorded fact one too."""
 from __future__ import annotations
 
-from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 
 
 def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | None]:

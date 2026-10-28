@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Model.Sparse
+import Definitions.Flock.Sparse
 
 /-!
 # The stages' shapes that the guarantee's coin types read

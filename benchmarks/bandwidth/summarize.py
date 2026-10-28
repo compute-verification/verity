@@ -24,7 +24,7 @@ SM_OTHER_BYTES = 160 * 1024
 """Each SM's other stores a resident kernel can hold data in across `σ`, at their raw capacity: the instruction caches
 (about 4 KB of L0 per SMSP and 64 KB of L1 per SM, measured on an RTX PRO 5000, GB202 like the RTX PRO 6000:
 zartbot.github.io/micro_arch/nvidia/sm_120, chapter 7), the constant caches, the uniform registers (256 bytes a warp)
-and the TLB.  The allowance is the red team's (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6);
+and the TLB.  The allowance is the red team's;
 sm_120 has no Tensor Memory (chapter 14), so there is no term for it."""
 CHIP_OTHER_BYTES = 1 << 20
 """The chip's stores outside the SMs and L2: copy-engine, PCIe and memory-controller buffers and the video engines."""

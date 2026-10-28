@@ -1,5 +1,5 @@
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Models.Accounting.Guarantees.RequirementPouw
+import Definitions.Accounting.Guarantees.RequirementPouw
 
 /-!
 # PoUW's credits and help when a node runs a declared circuit as placed
@@ -9,8 +9,7 @@ execution produces but the registered ones and the run's inputs, each at its dev
 a region are operands its gates use (`Placement.mem_into_of_actual`), all of them in a topological wiring the execution
 follows (`Placement.ingress_actual`). PoUW's credits and help are `Placed.work` and `Placed.ingress` of the run at each
 coin, so `RequirementCredits`, `RequirementHelp` and `RequirementHelpBound` follow. `RequirementStepsInner` and
-`RequirementStepsOuter` order a paced device's steps as their ticks (compute accounting's review of #2399, with its
-proofs).
+`RequirementStepsOuter` order a paced device's steps as their ticks.
 -/
 
 namespace Accounting.Requirement

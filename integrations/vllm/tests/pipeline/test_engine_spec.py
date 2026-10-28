@@ -17,8 +17,8 @@ from types import SimpleNamespace
 import pytest
 import verity_config
 
-from verity_vllm.pipeline import engine_spec as ES
-from verity_vllm.pipeline import llm as L
+from verity_vllm.engine import spec as ES
+from verity_vllm import llm as L
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 

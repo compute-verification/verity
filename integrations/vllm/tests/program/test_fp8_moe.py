@@ -34,15 +34,15 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.ops.prims import F32ToE4m3Sat
 from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fp8_moe_rows as MR
-from verity_vllm.program.registry import act as A
-from verity_vllm.program.registry import boolean_fp8 as BF
-from verity_vllm.program.registry import boolean_fp8_moe as BM
-from verity_vllm.program.registry import fp8 as F
-from verity_vllm.program.registry import fp8_moe as M
-from verity_vllm.program.kernels.moe_twins import nv_expf_bits
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fp8_moe_rows as MR
+from verity.ml.definitions.registry import act as A
+from verity.ml.definitions.registry import boolean_fp8 as BF
+from verity.ml.definitions.registry import boolean_fp8_moe as BM
+from verity.ml.definitions.registry import fp8 as F
+from verity.ml.definitions.registry import fp8_moe as M
+from verity.ml.definitions.numerics.moe_twins import nv_expf_bits
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
 VECTORS = Path(__file__).resolve().parents[4] / "verity" / "ml" / "circuits" / "silicon" / "captures" / "vectors"
@@ -408,7 +408,7 @@ def test_act_statics_the_kernel_cannot_launch_are_refused() -> None:
         MR.silu_mul_fp8_block_quant_rows(np.zeros((1, 400), np.uint16), G=128)
 
 
-@pytest.mark.parametrize("I,G,specials", [(64, 16, False), (64, 16, True), (256, 128, True)])
+@pytest.mark.parametrize("I,G,specials", [pytest.param(64, 16, False, marks=pytest.mark.slow), (64, 16, True), (256, 128, True)])
 def test_the_act_twin_is_the_definition(I: int, G: int, specials: bool) -> None:
     """`fp8_moe_rows.silu_mul_fp8_block_quant_rows` against `SiluMulFp8BlockQuant_v1` row by row, on rows with the bf16 special words
     (zeros, subnormals, infinities, NaNs) planted at random places when `specials`."""

@@ -110,7 +110,7 @@ def _step(dot: str):
 
         return lambda acc, a, b: np.asarray(K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32)
     if dot == "hopper":
-        from verity_vllm.program.kernels.derived_rows import tc_dot32_e4m3
+        from verity.ml.definitions.numerics.derived_rows import tc_dot32_e4m3
 
         return lambda acc, a, b: tc_dot32_e4m3(acc, a, b)[0]
     raise ValueError(f"unknown k32 step {dot!r}")
@@ -133,7 +133,7 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
         mul_add       acc = FADD(FMUL(d, FMUL(a, b)), acc), unfused (no kernel computes it: a discriminator)
 
     from acc = +0; then acc = FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
-    from verity_vllm.program.kernels.derived_rows import add_rn, f2fp_bf16, fma_rn, mul_rn
+    from verity.ml.definitions.numerics.derived_rows import add_rn, f2fp_bf16, fma_rn, mul_rn
 
     if form not in FORMS:
         raise ValueError(f"unknown scale form {form!r}")
@@ -216,8 +216,8 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import fp8 as F
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import fp8 as F
 
     a = H._load(job["paths"])
     K, N, Gs, KB, form = job["K"], job["N"], job["G"], job["KB"], job["form"]
@@ -260,8 +260,8 @@ def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import fp8 as F
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import fp8 as F
 
     a = H._load(job["paths"])
     K, Gq = job["K"], job["G"]

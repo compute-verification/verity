@@ -32,10 +32,12 @@ circuit of the model (`Model.lean`) computing its words is:
   function on such pairs with that sign rule, not a random permutation of `[0, p)`.
 * **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates but gathers hold
   their declared intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates
-  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted units (`budgeted`) of any circuit
-  of the model, with its window proven, at most `B` operand bits a budgeted gate (`Restricted`) and no run input, that
-  computes `q` distinct words on more than `ε` of the draws, and `⊤` when there is none: the cost 6a's
-  `encodeBitsCost` reads.
+  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest nonlinear units (`nonlinear`: budgeted
+  units and data products) of any circuit of the model, with its window proven, at most `B` operand bits a budgeted gate
+  (`Restricted`) and no run input, that computes `q` distinct words on more than `ε` of the draws, and `⊤` when there
+  is none: the cost 6a's `encodeBitsCost` reads.
+* **The encode bound** (`EncodeBound F k B E ε`): every such circuit, run inputs allowed, pays `E` nonlinear units a
+  word, or `n − 1` run-input bits. A root is `Field.squarings` sequential squarings (1,021 at p1024).
 -/
 
 namespace Accounting.Gates
@@ -131,18 +133,36 @@ def ComputesWords (F : Field) (k : ℕ) (C : Dag ι) (x : Draw k → ι → ℤ)
 /-- A circuit of the chain's restricted class: its window proven, and at most `B` operand bits a budgeted gate. -/
 def Restricted (B : ℕ) (C : Dag ι) : Prop := Proven C ∧ OperandBits B C
 
-/-- The budgeted units of the restricted circuits with no run-input bits that compute `q` distinct words (each below
-`p`) of the codec's encoding, less parity, on more than `ε` of the draws, from the payload and whatever they
-registered before the draw. -/
+/-- The nonlinear units (`nonlinear`: budgeted units and data products) of the restricted circuits with no run-input
+bits that compute `q` distinct words (each below `p`) of the codec's encoding, less parity, on more than `ε` of the
+draws, from the payload and whatever they registered before the draw. -/
 def encodeCosts (F : Field) (k B εnum εden q : ℕ) : Set ℕ :=
   {c | ∃ (ι : Type) (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted B C ∧ runBits C = 0 ∧
-      CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ budgeted C = c}
+      CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ nonlinear C = c}
 
-/-- **The encode cost**: the fewest budgeted units of any circuit of `encodeCosts`, and `⊤` when there is none (6a's
+/-- **The encode cost**: the fewest nonlinear units of any circuit of `encodeCosts`, and `⊤` when there is none (6a's
 `encodeBitsCost` at the words its bits fill). -/
 noncomputable def encodeCost (F : Field) (k B εnum εden q : ℕ) : ℕ∞ :=
   ⨅ c ∈ encodeCosts F k B εnum εden q, (c : ℕ∞)
+
+/-- **A root's squarings**: `ρ` raises to `(p + 1)/4`, `bitlen((p + 1)/4) − 1` sequential squarings mod `p` (and a
+multiply for each other set bit), 1,021 at p1024. -/
+def Field.squarings (F : Field) : ℕ := Nat.log 2 ((F.p + 1) / 4)
+
+/-- **The encode bound at `E`**: every restricted circuit (`Restricted B`) whose inputs are the codec's (`CodecInputs`)
+and that computes the `q` distinct words `words` (each below `p`) of the masked `k`-round codec over `F`, byte for byte
+less their parity, on more than `ε = εnum/εden` of the draws (`ComputesWords`), has
+
+  `q · E · (n − 1) ≤ nonlinear C · (n − 1) + runBits C · E`,
+
+that is `q ≤ nonlinear C / E + runBits C / (n − 1)`: each word costs `E` nonlinear units, or `n − 1` bits of run
+input (the word itself, sent after the draw). What the encode budget reads; `Assumptions.ChainSum` concludes it. -/
+def EncodeBound (F : Field) (k B E εnum εden : ℕ) : Prop :=
+  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+    Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
+    ComputesWords F k C x m words out εnum εden →
+    words.length * E * (F.n - 1) ≤ nonlinear C * (F.n - 1) + runBits C * E
 
 /-- The carry bound's fooling family: `a_S = 16 · Σ_{i ∈ S} 256^i`, bit 4 of byte `i` set for `i ∈ S`, so every byte
 of `a_S` is even and byte `2i + 1` of `a_S²` is odd exactly when `i ∈ S`. -/

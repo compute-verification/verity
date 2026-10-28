@@ -1,0 +1,59 @@
+{
+ "definitions": {
+  "ArithCountFinish_v1{CW=20}": {
+   "and": 41,
+   "type": "de314a43fee6a4b6dd03b16e16b47432e0b089bdafeb6581735ccaa55f8951c7dae589543869d4d06dacd368f88d81c351c080f1ac84b7331a092da89c6b4f36"
+  },
+  "ArithCountStep_v1{K=18,BIN=0,CW=20}": {
+   "and": 3963,
+   "type": "1a17917d5ae9d65b27165e60eeca5ffe59eeb02e6f997cc49536882dd47541465ba56f6a3fd3aab4f53d6e9cc8b4b49d7e0e586b80d3a07e2f848f342f0a8540"
+  },
+  "ArithCountStep_v1{K=18,BIN=1,CW=20}": {
+   "and": 2243,
+   "type": "2af8fa49643ab28c34f1cc5b7afa2d4a39cbcc511db20c32744516c44b2461c6abc3a0d166a0ac425b209468a4a06a676d2a0049e2d2437e0287d9f06e724665"
+  },
+  "ArithCountStep_v1{K=3,BIN=1,CW=4}": {
+   "and": 1996,
+   "type": "909084e6cebe57668eeb6ce897a8068459037ef7a6f45a4c7801347049660b9d1382a308619cbf5b69cf7f2f430a0881da3771eff15c1b36a948ec12f1433ef6"
+  },
+  "ArithEncodeFinish_v1": {
+   "and": 6,
+   "type": "759d332a74e359f12cbf8aa2861df99bedcb50f2f6dc91964d2a4f185b9ae089600a687439cc57c7614575b72ae76ed8b1e5c5e5d10fe2f3832048918a361602"
+  },
+  "ArithEncodeStep_v1{K=18,BIN=0}": {
+   "and": 4964,
+   "type": "e089defeeeddd76eca6c7b7603d11474d67f5e7e445c6148497cad09028b2559e9b683d082c6ad352ba65d9fa337f95f28dcfc0caf8a09e0bfca99f4bff7e47f"
+  },
+  "ArithEncodeStep_v1{K=18,BIN=1}": {
+   "and": 3244,
+   "type": "5b2eae69c79266c60ed26c5e22be59fa1de158dbb49a9fbfc5429549666f93b4a0b4691f3fb8f8b76d9f3314b92af7657193a25398acd3c982fb95ac0aab687b"
+  },
+  "ArithEncodeStep_v1{K=3,BIN=1}": {
+   "and": 2089,
+   "type": "da3d8eac309f07237da17ac516dbe9e74a25848936c6a3bded6abf43d72b4cf0a99b3a6e9f7026b2d3b1cf3fdc1b0d0f6496be9dc23786d5815237e94a93d71f"
+  },
+  "BookKT_v1{C=1}": {
+   "and": 210,
+   "type": "90cfaaf988d8df058583b93dfe6083ab043975e980cf5bf4f3303c1fb9e423b70bf696db80cbe983006f40b93d260506c49a2a4d6ecfcaff3a28f6cbe1c3cb39"
+  },
+  "BookKT_v1{C=3}": {
+   "and": 337,
+   "type": "5a05c9842d81cd3cc1e56d5d63ad2fe318cca53b5bc456883d878a58d4208ae92b2a9d5396bb245ce6b63e450688188e6481dddc6954e18a9d0cdf5249c6999b"
+  },
+  "ChargeCount_v1{N=14}": {
+   "and": 50664
+  },
+  "ChargeCount_v1{N=2}": {
+   "and": 19861,
+   "type": "6cf4f5812ffa277dfeed096b64d95352db5d07068d851a48d6a9009e5e8da3616ffbc18e4dcc6e58a73c6c329f43d9e4976e3146d12b1f2a4e73b4216865a414"
+  },
+  "KTContext_v1{C=1,NW=15}": {
+   "and": 274,
+   "type": "34df3a3503112da5be9b6bf37687184230b09b98419a78d2930dfd7accea49be2d7aba3efed216c4ccf8478720aa6d1d05701265a8eaa6d06a8055a081399dfc"
+  },
+  "KTContext_v1{C=3,NW=24}": {
+   "and": 1202,
+   "type": "6ed8bf9ccf92a5a1eace5afe628f0ebd597e8afc2d99f151d99d4d1a3b94686bc8f0497047c5bc93e4326fb572680e2e5b3d6d10afad7335bb986a882d8f0692"
+  }
+ }
+}

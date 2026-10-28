@@ -710,7 +710,7 @@ def _live():
 
 
 def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monkeypatch):
-    """A verdict that fails after the sessions signed (r20261009-034919-c88c: `judge` could not import the Lean's server)
+    """A verdict that fails after the sessions signed (as when `judge` could not import the Lean's server)
     takes nothing with it: every signed session is in `sessions_out` first, whole, and still verifies under its signer."""
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous import schemes
@@ -739,8 +739,8 @@ def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monke
 
 def test_a_test_signed_audit_leaves_nothing_in_tmpdir(tmp_path_factory, monkeypatch):
     """`--signer test`'s leaf state and session log are in a temporary directory the audit removes, whether it ends or
-    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's
-    /workspace inodes, 19 Oct)."""
+    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's
+    /workspace inodes once)."""
     import tempfile
 
     from verity.core.protocols.pous.schemes import p2
@@ -789,12 +789,10 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     first = live.lms_signer(tmp_path / "key", params=small)
     assert first.scheme == "test/lms-sha512/n64-w1-h2/v0" and (tmp_path / "key" / "seed").stat().st_mode & 0o777 == 0o600
     a = lms.Signature.decode(small, first.sign(b"s" * 32, b"r"))
-    first.state.close()
     monkeypatch.setattr(lms, "keygen", lambda *_a, **_k: pytest.fail("the key is made again"))
     again = live.lms_signer(tmp_path / "key", params=small)
     assert again.public_key == first.public_key
     assert (a.q, lms.Signature.decode(small, again.sign(b"s" * 32, b"r")).q) == (0, 1)
-    again.state.close()
     tree = tmp_path / "key" / "tree.bin"
     raw = tree.read_bytes()
     tree.write_bytes(raw[:-1] + bytes([raw[-1] ^ 0xFF]))
@@ -825,7 +823,7 @@ def _deployed_signer(tmp_path):
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):

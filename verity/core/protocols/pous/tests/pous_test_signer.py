@@ -49,7 +49,7 @@ def TestSigner(secret: bytes, height: int = 3, directory: str | Path | None = No
     key = _key(secret, height)
     path = _fresh("pous-test-signer-", directory) / "leaf-state.json"
     lms.LeafState.create(path, lms.public_key(key), height)
-    return mc.LmsSigner(key, lms.LeafState(path, lms.public_key(key), height), scheme=scheme(height))
+    return mc.LmsSigner(key, path, scheme=scheme(height))
 
 
 def session_log(directory: str | Path | None = None) -> mc.SessionLog:

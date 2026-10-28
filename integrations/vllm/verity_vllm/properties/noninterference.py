@@ -1,9 +1,9 @@
-"""Non-interference (lane L5, DESIGN §3 "by construction", §8): the observer changes nothing the model computes.
+"""Non-interference (DESIGN §3 "by construction", §8): the observer changes nothing the model computes.
 
 Three FRESH processes on the same engine build (κ, `vllm_adapter.build_engine`) and the same workload, launched
 sequentially by this module's orchestrator (`subprocess`), then a torch-free comparison:
 
-  (a) `--variant observer`   the full observer (`vllm_adapter.Capture`: dispatch mode + re-entry + Triton hook + module
+  (a) `--variant observer`   the full observer (`observe.capture.Capture`: dispatch mode + re-entry + Triton hook + module
                              naming hooks) with snapshots of EVERY step, **hash-only** (`HashOnlyCapture`: the snapshot
                              machinery runs unchanged — pinned D2H copies stream-ordered after every recorded call /
                              launch, one `torch.cuda.synchronize()` per snapshot step — but `_flush_snapshots` records the
@@ -16,7 +16,7 @@ sequentially by this module's orchestrator (`subprocess`), then a torch-free com
                              tensors D2H asynchronously into fresh pinned buffers (stream-ordered right after the module,
                              i.e. before the next layer's in-place `fused_add_rms_norm` overwrites them); after every
                              `engine.step()` the driver synchronises once and hashes.  Output: `hooks.json`, `tokens.json`.
-  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `driver.run_requests`): `tokens.json`.
+  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
 
 Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M = token rows of the step):
   hidden[s, L]   = `LlamaDecoderLayer.forward` return[0] = the MLP `down_proj` output.
@@ -52,7 +52,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
@@ -62,18 +61,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm import settings
+from verity_vllm.config import option, workload_arg
 from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
 from verity_vllm.properties.record import seal
 
-# [SHARED-CODE lane cov-ln] the decoder-layer module and the final norm under their family's vLLM names: Llama-style
-# `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE lanes) and GPT-NeoX `gpt_neox.layers.N` /
+# the decoder-layer module and the final norm under their family's vLLM names: Llama-style
+# `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /
 # `gpt_neox.final_layer_norm` (Pythia).  The (b) hooks and the hooks-side parser read these; the Llama-shaped (a)-side rules
 # (`_DOWN_RE`, `_POST_RE`) stay Llama-only and the GPT-NeoX (a)-side boundaries are `parallel_residual_boundaries`.
 _LAYER_RE = re.compile(r"^(?:model|gpt_neox)\.layers\.(\d+)$")
 _DOWN_RE = re.compile(r"^model\.layers\.(\d+)\.mlp\.down_proj$")
 _POST_RE = re.compile(r"^model\.layers\.(\d+)\.post_attention_layernorm$")
-#: MoE layers (OLMoE, lane `moe`): the layer's return[0] is the `vllm.moe_forward*` custom op's output (module hint
+#: MoE layers (OLMoE): the layer's return[0] is the `vllm.moe_forward*` custom op's output (module hint
 #: `model.layers.L.mlp.experts`, snapshot path `outs`), not a `down_proj` launch — the experts' down GEMMs are one fused
 #: `fused_moe_kernel` launch and `moe_sum` writes the combined rows.
 _MOE_RE = re.compile(r"^model\.layers\.(\d+)\.mlp\.experts$")
@@ -108,8 +108,9 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
     import torch  # noqa: F401
 
     from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
 
-    class HashOnlyCapture(va.Capture):
+    class HashOnlyCapture(Capture):
         """`Capture` whose snapshot flush hashes the pinned copies and writes no value files."""
 
         def _flush_snapshots(self, st) -> None:  # type: ignore[override]
@@ -134,17 +135,17 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
     print(f"[nonint/a] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']})", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     if warmup:
-        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"]), wl["sampling"])
+        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED), wl["sampling"])
         print(f"[nonint/a] warm-up: {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
     try:
         revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
     except Exception:  # noqa: BLE001
         revision = "unknown"
     snap = frozenset(range(256))          # every step of the run (membership test only)
-    header = va.make_header(eng, wl, adapter_revision=revision, extra_notes={"argv": sys.argv, "snapshot_steps": "all (hash-only)",
-                                                                              "variant": "noninterference (a) observer"})
-    cfg = va.ObserverConfig(mode="record", reenter=True, triton=True, module_hooks=True, write_log=True, snapshot_steps=snap,
-                            snapshot_dir=out)
+    header = make_header(eng, wl, adapter_revision=revision, extra_notes={"argv": sys.argv, "snapshot_steps": "all (hash-only)",
+                                                                           "variant": "noninterference (a) observer"})
+    cfg = ObserverConfig(mode="record", reenter=True, triton=True, module_hooks=True, write_log=True, snapshot_steps=snap,
+                         snapshot_dir=out)
     cap = HashOnlyCapture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
     cap.install()
     t0 = time.perf_counter()
@@ -178,7 +179,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     print(f"[nonint/b] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']})", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     if warmup:
-        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"]), wl["sampling"])
+        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED), wl["sampling"])
         print(f"[nonint/b] warm-up: {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
         torch.cuda.synchronize()
 
@@ -313,7 +314,7 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
     out: dict[int, dict] = {}
     problems: list[str] = []
     sample_ids: dict[int, list[int]] = {}
-    sample_rows: dict[int, list[str]] = {}       # [GEN batch SHARED-CODE] request id per sampled row (StepStart.logits_rows)
+    sample_rows: dict[int, list[str]] = {}       # request id per sampled row (StepStart.logits_rows)
     for _pre, step in split_steps(read_log(a_dir / "log.jsonl.gz")):
         if not step:
             continue
@@ -372,7 +373,7 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
         if not rec["residual"] and rec["final"] is None:
             unfused_norm_boundaries(se, by_key, s, rec, problems)
         if not rec["hidden"] and rec["final"] is None:
-            parallel_residual_boundaries(se, by_key, s, rec, problems)   # [SHARED-CODE lane cov-ln] GPT-NeoX
+            parallel_residual_boundaries(se, by_key, s, rec, problems)   # GPT-NeoX
         out[s] = rec
     return {"steps": out, "sample_ids": sample_ids, "sample_rows": sample_rows}, problems
 
@@ -421,7 +422,7 @@ def _accepted_tokens(accepted_ctl: str | None, out: Path | None = None) -> dict[
     """The reference tokens of gate G1: what the CLEAN, UNINSTRUMENTED run generated — the control run's tokens.json
     (`--accepted-ctl`, `generated_token_ids`), else the c_bare variant's own generated tokens under --out.  The workload
     file's authored `accepted_record_token_ids` is never the reference (generalization plan: expected tokens are not a
-    fixture a lane can edit; see `_workload_accepted` for the diagnostic that still reports it)."""
+    fixture its author can edit; see `_workload_accepted` for the diagnostic that still reports it)."""
     for cand in (accepted_ctl, str(out / "c_bare" / "tokens.json") if out else None):
         if cand and Path(cand).exists():
             doc = json.loads(Path(cand).read_text())
@@ -458,7 +459,7 @@ def expected_layers_for(case: str | None) -> int | None:
     if not case:
         return None
     try:
-        from verity_vllm.engine.profiles import profile_for_case
+        from verity_vllm.observe.fold.profiles import profile_for_case
         return int(profile_for_case(case).config["NL"])
     except Exception:  # noqa: BLE001
         return None
@@ -520,7 +521,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
         sa = hashes_a["sample_ids"].get(s)
         sb = [t for v in (hashes_b["new_tokens"].get(s) or {}).values() for t in v]
         row["sampled_a"], row["sampled_b"] = sa, sb
-        # [GEN batch SHARED-CODE] the runner orders its batch by scheduled-token count, not by request: compare per request when the
+        # the runner orders its batch by scheduled-token count, not by request: compare per request when the
         # log names the request of each sampled row (StepStart.logits_rows); the positional result stays as a diagnostic
         rows_a = (hashes_a.get("sample_rows") or {}).get(s)
         if sa is not None and rows_a is not None and len(rows_a) == len(sa):
@@ -570,7 +571,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
         "layers": seen_layers if seen_layers is not None else sorted(map(str, layer_counts)),
         "schema": "verity-capture/noninterference/v1", "utc": _utc(), "dir": str(d),
         "variants": {"a_observer": "full observer + hash-only snapshots of every step (HashOnlyCapture)",
-                     "b_hooks": hashes_b.get("method"), "c_bare": "bench.m1_capture --no-observer (driver.run_requests, nothing installed)"},
+                     "b_hooks": hashes_b.get("method"), "c_bare": "bench.m1_capture --no-observer (vllm_adapter.run_requests, nothing installed)"},
         "hooked_modules_b": hashes_b.get("hooked_modules"), "hook_fire_counts_b": hashes_b.get("hook_fire_counts"),
         "tokens": {k: v for k, v in toks.items()}, "tokens_equal_accepted": token_eq, "reference": "clean control run (generated_token_ids)",
         "tokens_equal_workload_accepted": workload_accepted_eq,
@@ -693,7 +694,7 @@ def orchestrate(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     py = args.python or sys.executable
-    env = dict(os.environ)
+    env = settings.environ()
     common = ["--workload", args.workload, "--checkpoints", args.checkpoints, "--max-num-seqs", str(args.max_num_seqs)]
     if args.case:
         common += ["--case", args.case]
@@ -728,7 +729,7 @@ def orchestrate(args) -> int:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_32x16_1req.json")
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     max_tokens: int | None = option("--max-tokens", type=int, default=None)

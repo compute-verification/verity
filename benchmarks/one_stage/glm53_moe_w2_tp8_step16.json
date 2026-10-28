@@ -1,0 +1,1 @@
+{"templates": ["MoeExpertFp8GemmW_v2{E=256,K=256,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v2\"}}"], "law": "subset:4", "scope": {"steps": [16, 17], "op_path_prefix": "moe/L40"}, "chunk_cap": {"MoeExpertFp8GemmW_v2{E=256,K=256,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v2\"}}": 64}}

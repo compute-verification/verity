@@ -1,0 +1,19 @@
+{
+ "definitions": {
+  "AdviceParseEnd_v1{L=240}": {
+   "and": 35
+  },
+  "AdviceParse_v1{L=240}": {
+   "and": 7508
+  },
+  "AdviceReplayEnd_v1{L=240}": {
+   "and": 64
+  },
+  "AdviceReplay_v1{L=240}": {
+   "and": 940
+  },
+  "AdviceSwap_v1{L=240}": {
+   "and": 168
+  }
+ }
+}

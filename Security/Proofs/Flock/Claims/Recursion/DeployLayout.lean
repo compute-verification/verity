@@ -57,12 +57,13 @@ the earlier reps', at its `k`-th round that absorbs a message (`RecVStar.commitR
 def msgRound (rs : Array RecVStar.SchedRound) (r k : ℕ) : Option ℕ :=
   ((RecVStar.commitRounds rs)[k]?).map (r * rs.size + ·)
 
-/-- The input column of row bit `i` of the circuit's port `q` in unit `u`: bit `i % 16` of the unit input leaf that
-reads the port's word `i / 16` (`leavesIn`), the ports' words in order. -/
+/-- The input column of row bit `i` of the circuit's port `q` in unit `u`: bit `i % 16` of the unit input leaf `k` that
+reads the port's word `i / 16` (`leavesIn`), the ports' words in order, leaf `k` from column `col · WORD + 16 k` of the
+unit's first input group (`Flat.leafCol`). -/
 def portCol (c : Circuit) (u q i : ℕ) : Option ℕ := do
   let w : ℕ := (c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16
   let k ← (c.leavesIn.getD u #[]).findIdx? (· == (w : Int))
-  pure (16 * k + i % 16)
+  pure ((c.unit.inGroups.getD 0 default).col * WORD + 16 * k + i % 16)
 
 /-- **The hidden values of port `nm`'s row at instance `n`** of a part's one table: each row bit's input column
 (`portCol`) in the instance's copy (block `n / g`, VU `n % g`, its first unit: `Circuit.instOf`), at
@@ -236,7 +237,7 @@ theorem ksA_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readab
 /-- **`KSFlock` at `deployRec` from V\*'s parts at the registered ports**: `ksA_deployed_concrete` at every inner decoder
 that meets the spec, as `KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the
 deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the
-`2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed
+`2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed
 records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/

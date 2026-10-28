@@ -14,10 +14,10 @@ from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity_vllm.program import boolean as SW_
-from verity_vllm.program.kernels import dsv4_decode_metadata_twin as T
-from verity_vllm.program.registry import boolean_dsv4_decode_metadata as BX
-from verity_vllm.program.registry import dsv4_decode_metadata as X
+from verity.ml.definitions import boolean as SW_
+from verity.ml.definitions.numerics import dsv4_decode_metadata_twin as T
+from verity.ml.definitions.registry import boolean_dsv4_decode_metadata as BX
+from verity.ml.definitions.registry import dsv4_decode_metadata as X
 
 U = np.uint32
 M32 = 0xFFFFFFFF
@@ -235,6 +235,7 @@ def test_the_c128a_row_is_the_kernels_stores_on_edge_tokens(st):
     assert np.array_equal(_reference(bind(X.Dsv4C128aGlobalTopk, **st), args), _c128a_want(st, args))
 
 
+@pytest.mark.slow
 def test_the_c128a_row_at_the_served_statics():
     """Width 8192 (the widest `active_topk_width` at max_model_len 1,048,576), ratio 128, block 2, the compressed group's row of
     4096 blocks: the last position (1,048,575) makes every lane valid and its last lane reads block 4095; position 4095 makes 32

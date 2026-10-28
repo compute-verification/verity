@@ -1,7 +1,7 @@
 """Autotune equivalence of an Inductor kernel's candidate launch configs -- shown on the committed data, in the treatment process.
 
-Daniel (R15 DECISIONS-3, R16 BRIEF §6 Compiled): "if the autotune choice affects the numerics, it is part of the specialization identity and
-must be pinned; if it does not, show it (same outputs bit-for-bit) and record it".  Inductor's pointwise heuristic offers more than one
+The rule for compiled kernels: if the autotune choice affects the numerics, it is part of the specialization identity and
+must be pinned; if it does not, show it (same outputs bit-for-bit) and record it.  Inductor's pointwise heuristic offers more than one
 launch config (XBLOCK x num_warps) and benchmarks them ONCE per process, keeping the winner -- so two processes (the control and the
 treatment arm, or the production run and a later one) may execute two different specializations of the SAME generated source (Qwen L40S B8
 run 9: `triton_poi_fused_mul_silu_slice_t_1` control XBLOCK=512/8 warps vs treatment XBLOCK=1024/4 warps; the deny-list identity then says
@@ -21,9 +21,11 @@ import re
 from typing import Any
 
 _AUT: dict[str, Any] | None = None
+_SCAN_ERROR: str | None = None
 _LAUNCHERS: dict[tuple[str, str], Any] = {}
-_CANDS: dict[str, list[Any] | None] = {}
+_CANDS: dict[str, tuple[list[Any] | None, str | None]] = {}
 MAX_LAUNCHES_PER_KERNEL = 8
+NO_AUTOTUNER = "no autotuner bound to this kernel in the process"
 
 
 def cfg_dict(c: Any) -> dict[str, Any]:
@@ -37,12 +39,16 @@ def cfg_label(d: dict[str, Any]) -> str:
 
 
 def _scan() -> dict[str, Any]:
+    """This process's autotuners by kernel name; when Inductor's can't be imported, none, with the cause in ``_SCAN_ERROR``."""
+    global _SCAN_ERROR
     out: dict[str, Any] = {}
     try:
         from torch._inductor.codecache import PyCodeCache
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        _SCAN_ERROR = f"{NO_AUTOTUNER}: Inductor's autotuner is not importable ({e!r})"[:200]
         return out
+    _SCAN_ERROR = None
     seen: set[int] = set()
     for src_name in ("modules", "modules_no_attr", "cache"):
         coll = getattr(PyCodeCache, src_name, None)
@@ -67,39 +73,42 @@ def autotuner(kernel: str) -> Any | None:
 
 
 def _decorator_hints(aut: Any) -> tuple[Any, int]:
-    """(tile_hint, min_elem_per_thread) parsed from the generated module's @triton_heuristics.pointwise(...) text (None/0 when unreadable)."""
-    tile_hint, mept = None, 0
-    try:
-        from torch._inductor.runtime.hints import TileHint
+    """(tile_hint, min_elem_per_thread) parsed from the generated module's @triton_heuristics.pointwise(...) text (None/0 when the
+    decorator names none).  Raises when the module can't be read: defaults in place of its hints could offer other candidates."""
+    from torch._inductor.runtime.hints import TileHint
 
-        path = aut.fn.fn.__code__.co_filename
-        text = open(path).read()
-        name = aut.fn.__name__
-        i = text.find(f"def {name}(")
-        deco = text[max(0, text.rfind("@triton_heuristics.", 0, i)):i] if i >= 0 else ""
-        m = re.search(r"tile_hint=TileHint\.(\w+)", deco)
-        if m:
-            tile_hint = getattr(TileHint, m.group(1), None)
-        m = re.search(r"min_elem_per_thread=(\d+)", deco)
-        if m:
-            mept = int(m.group(1))
-    except Exception:  # noqa: BLE001
-        pass
+    tile_hint, mept = None, 0
+    path = aut.fn.fn.__code__.co_filename
+    with open(path) as f:
+        text = f.read()
+    name = aut.fn.__name__
+    i = text.find(f"def {name}(")
+    deco = text[max(0, text.rfind("@triton_heuristics.", 0, i)):i] if i >= 0 else ""
+    m = re.search(r"tile_hint=TileHint\.(\w+)", deco)
+    if m:
+        tile_hint = getattr(TileHint, m.group(1), None)
+    m = re.search(r"min_elem_per_thread=(\d+)", deco)
+    if m:
+        mept = int(m.group(1))
     return tile_hint, mept
 
 
-def candidates(kernel: str) -> list[Any] | None:
+def candidates(kernel: str) -> tuple[list[Any] | None, str | None]:
     """Every launch config the kernel's heuristic offers in this process (Inductor's own `pointwise/reduction/persistent_reduction(...,
-    return_configs=True)` with the autotuner's recorded size_hints / triton_meta / inductor_meta); None when not reconstructable."""
+    return_configs=True)` with the autotuner's recorded size_hints / triton_meta / inductor_meta), with None; or None and why the
+    set is not reconstructable."""
     if kernel in _CANDS:
         return _CANDS[kernel]
     aut = autotuner(kernel)
     res: list[Any] | None = None
+    why: str | None = None
     try:
         from torch._inductor.runtime import triton_heuristics as th
         from torch._inductor.runtime.hints import HeuristicType
 
-        if aut is not None:
+        if aut is None:
+            why = _SCAN_ERROR or NO_AUTOTUNER
+        else:
             ht = getattr(aut, "heuristic_type", None)
             im, tm, sh = dict(aut.inductor_meta or {}), dict(aut.triton_meta or {}), aut.size_hints
             if getattr(aut, "device_props", None) is not None:
@@ -107,7 +116,7 @@ def candidates(kernel: str) -> list[Any] | None:
             if ht == HeuristicType.POINTWISE:
                 tile_hint, mept = _decorator_hints(aut)
                 if tile_hint is None and set(sh or {}) - {"x"}:
-                    res = None                                       # 2-D pointwise: the tile hint drives the candidate set; not read -> not reconstructable
+                    why = "2-D pointwise kernel without a tile hint: the hint drives the candidate set"
                 else:
                     res = list(th.pointwise(sh, tm, tile_hint=tile_hint, filename=aut.filename, min_elem_per_thread=mept, inductor_meta=im, return_configs=True))
             elif ht == HeuristicType.REDUCTION:
@@ -116,10 +125,10 @@ def candidates(kernel: str) -> list[Any] | None:
                 res = list(th.persistent_reduction(sh, reduction_hint=im.get("reduction_hint", False), triton_meta=tm, filename=aut.filename, inductor_meta=im, return_configs=True))
             else:
                 res = [l.config for l in (aut.launchers or []) if getattr(l, "config", None) is not None]   # templates etc.: one fixed config
-    except Exception:  # noqa: BLE001
-        res = None
-    _CANDS[kernel] = res
-    return res
+    except Exception as e:  # noqa: BLE001
+        res, why = None, f"reconstructing the heuristic's candidates raised: {e!r}"[:200]
+    _CANDS[kernel] = (res, why)
+    return res, why
 
 
 def executed(kernel: str) -> list[dict[str, Any]]:
@@ -142,16 +151,16 @@ def replay_under_candidates(kernel: str, ins: list, outs: dict[str, Any], roles:
     rec: dict[str, Any] = {"kernel": kernel, "shown": False, "why": None, "candidates": [], "executed": executed(kernel), "results": []}
     aut = autotuner(kernel)
     if aut is None:
-        rec["why"] = "no autotuner bound to this kernel in the process"
+        rec["why"] = _SCAN_ERROR or NO_AUTOTUNER
         return rec
-    cands = candidates(kernel)
+    cands, why = candidates(kernel)
     rec["heuristic"] = str(getattr(aut, "heuristic_type", None))
-    # [rev F-r16-22] config independence is STRUCTURAL only for a pointwise kernel (one thread per element: XBLOCK/num_warps set scheduling
+    # config independence is STRUCTURAL only for a pointwise kernel (one thread per element: XBLOCK/num_warps set scheduling
     # and masking, not the arithmetic); for a reduction the config sets the summation/fma order, so bit-equality on sampled launches is a
     # property of the data, not of the kernel -- recorded, but the merge lifts a cross-arm config difference only when `structural`
     rec["structural"] = rec["heuristic"].endswith("POINTWISE")
     if cands is None:
-        rec["why"] = "candidate configs not reconstructable"
+        rec["why"] = f"candidate configs not reconstructable: {why}"
         return rec
     rec["candidates"] = [cfg_dict(c) for c in cands]
     if len(cands) <= 1:

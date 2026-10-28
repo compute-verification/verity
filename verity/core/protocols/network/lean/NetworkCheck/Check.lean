@@ -4,7 +4,7 @@ import Lms.Verify
 import CoreProtocol.Cli
 
 /-!
-# The network certificate check, a core protocol: `verity/network-certificate/v3`
+# The network certificate check, a core protocol: `verity/network-certificate/v4`
 
 The auditor's check of one spatial unit's certified link-windows (record v2, `certificate.py`), as `audit.py`'s `Audit`
 runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each against the
@@ -24,14 +24,15 @@ and every value ≥ 1); Σ_sync (`SyncSet`: non-empty, every δ and every ρ = n
 windows checked; the LMS parameters (`lms.Params`) and the public key, 16 + N bytes; and the certifier session's id, the 32
 bytes the challenger drew for the certifier's session, which every certificate's message binds.
 
-**Commitment**: what the auditor holds before the check, the unit's certified records (`CertifiedRecord`: the record head
-and the certificate that signs it), each in `service.encode`'s bytes, concatenated:
+**Commitment**: what the auditor holds before the check, the unit's certified records (`CertifiedRecord`: the record
+head, the 64 bytes the certifier drew for it, `salt_c`, and the certificate that signs the head's digest salted by them),
+each in `service.encode`'s bytes, concatenated:
 
-    RecordHead.encode() ‖ u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ digest (64) ‖
-    u32be len(signature) ‖ signature
+    RecordHead.encode() ‖ salt_c (64) ‖ u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖
+    digest (64) ‖ u32be len(signature) ‖ signature
 
 decoded exactly: UTF-8 links, direction 0 or 1, a status code of `STATUS_CODES`, deadline 0 or 1, T counts each at most r,
-nothing left over. Its `digest` is `tagged_sha512("verity-network-certifier/certificates/v2", the commitment's bytes)`
+nothing left over. Its `digest` is `tagged_sha512("verity-network-certifier/certificates/v3", the commitment's bytes)`
 (`Identity.taggedSha512`), which every commitment under `2 ^ 64` bytes has; a longer one, which Python refuses to hash,
 gets the empty digest, since `Core.Protocol.digest` is total.
 
@@ -42,18 +43,19 @@ gets the empty digest, since `Core.Protocol.digest` is total.
 the Program's logical frames on the link in canonical order (`LogicalFrame`) and the clock sync it declares for each of the W
 windows (`ClockSync`, num and den ≥ 1). The audit reads no frames or Merkle openings from a certified record: it recomputes
 the Program's grid from these frames and syncs (`NetworkCertifier.expectedRow`, the rows of the constant-rate Program
-`constantRate`) and compares its record digest, root and counts included, with the signed one. Evidence that doesn't fit
+`constantRate`) and compares its record digest, root and counts included, with the signed head's. Evidence that doesn't fit
 the parameters (another number of links or of syncs, a payload of other than B bytes) is a rejection.
 
 **The verdict** of each link-window, in `Audit`'s order and with its names (`_status_violation`, then the link's own checks):
 * `no-verdict`: no record for it, so no certificate (a refused signer issues none), or a head not settled by the deadline;
 * `duplicate`: more than one record;
 * `signature`: the certificate is not the key's (its I), names another link, direction or window than the head, signs
-  another digest than the head's, or its LMS signature doesn't verify over `certificate_message` in the parameters'
-  session (a certificate of another session of the certifier included);
+  another digest than the head's salted by the record's `salt_c` (`certificateDigest`), or its LMS signature doesn't
+  verify over `certificate_message` in the parameters' session (a certificate of another session of the certifier
+  included);
 * `status:<reason>`: the signed status is not complete;
 * `advice` (egress): the declared sync is outside Σ_sync or not the spatial unit's, the first egress link's;
-* `mismatch`: on egress, the signed digest is not that of `record_head` of the Program's grid under the declared syncs
+* `mismatch`: on egress, the head's record digest is not that of `record_head` of the Program's grid under the declared syncs
   (complete, settled, under `parameters_digest` of the grid and Σ_sync); on ingress, the head's T, r, B or τ_b, or its
   parameters digest, is not the ingress grid's.
 
@@ -76,8 +78,8 @@ open Lean (Json toJson)
 open Flock (V)
 open NetworkCertifier (ClockSync LogicalFrame expectedRow)
 
-def protocolId : String := "verity/network-certificate/v3"
-def commitmentTag : String := "verity-network-certifier/certificates/v2"
+def protocolId : String := "verity/network-certificate/v4"
+def commitmentTag : String := "verity-network-certifier/certificates/v3"
 
 /-- The grid parameters of one direction (`grid.GridParams`). -/
 abbrev Grid := NetworkCheck.Params
@@ -102,9 +104,10 @@ structure Certificate where
   digest : ByteArray
   signature : ByteArray
 
-/-- `certificate.CertifiedRecord`. -/
+/-- `certificate.CertifiedRecord`: the head, the certifier's salt for it (`salt_c`) and the certificate. -/
 structure Certified where
   head : RecordHead
+  salt : ByteArray
   certificate : Certificate
 
 structure Commitment where
@@ -261,7 +264,7 @@ def commitmentOf (b : ByteArray) : V Commitment := do
     let mut out := #[]
     for _ in [0:b.size] do
       if (← get).pos ≥ b.size then break
-      out := out.push ⟨← head, ← certificate⟩
+      out := out.push ⟨← head, ← bytes saltBytes, ← certificate⟩
     pure out
   let (rs, r) ← records.run ⟨b, 0⟩
   if r.pos ≠ b.size then throw "bytes left after the records"
@@ -298,14 +301,14 @@ def manifestSet (ss : NetworkCertifier.SyncSet) : NetworkCheck.SyncSet :=
   ⟨ss.deltas.toArray.map Int.ofNat, ss.rhos.toArray.map fun ρ => (ρ.num, ρ.den)⟩
 
 /-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate is the key's, names the head's
-link-window, signs the head's digest, and its signature verifies over the message in that session; a signature that
-doesn't decode is false. -/
+link-window, signs the head's digest salted by the record's salt (`certificateDigest`), and its signature verifies over
+the message in that session; a signature that doesn't decode is false. -/
 def verifies (p : Params) (r : Certified) : Bool :=
   let c := r.certificate
   let h := r.head
   c.keyId == p.key.extract 0 16 && c.link == h.link && c.direction == h.direction && (c.window : Int) == h.window &&
     (match h.digest with
-     | .ok d => c.digest == d
+     | .ok d => c.digest == certificateDigest r.salt d
      | .error _ => false) &&
     match certificateMessage c.keyId p.session c.link c.direction c.window c.digest,
         Lms.Signature.decode p.lms c.signature with
@@ -351,9 +354,9 @@ def egressVerdict (p : Params) (c : Commitment) (e : Evidence) (egressDigest : B
     let s := link.syncs.getD w noSync
     if !(inSyncSet p.syncSet s && sameSync s (unitSync e w)) then some "advice"
     else match recordHead l .egress w (expectedGrid p.grid p.windows link w) none p.grid egressDigest true >>=
-        RecordHead.digest with
-      | .ok d => if r.certificate.digest == d then none else some "mismatch"
-      | .error _ => some "mismatch"
+        RecordHead.digest, r.head.digest with
+      | .ok d, .ok d' => if d' == d then none else some "mismatch"
+      | _, _ => some "mismatch"
 
 /-- An ingress link-window's violation (`check_ingress_link`), none when it is accepted. -/
 def ingressVerdict (p : Params) (c : Commitment) (ingressDigest : ByteArray) (l : String) (w : Nat) : Option String :=

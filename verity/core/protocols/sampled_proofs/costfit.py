@@ -7,12 +7,12 @@ relative error with non-negative coefficients over the observations that measure
     verify  CPU-s a statement    = v0 + v1 ands + v2 ands staged + v3 ands drawn
     stage   CPU-s a statement    = s0 + s1 ands + s2 ands staged
 
-each on the features its caller gives.  `ands` is one unit's in-circuit ANDs, its rows' openings included
-(`optimize.row_ands`), `staged` the statement's units and `drawn` the session's.  A coefficient another fit measures
+each on the features its caller gives.  `ands` is one proof block's in-circuit ANDs, its rows' openings included
+(`optimize.row_ands`), `staged` the statement's proof blocks and `drawn` the session's.  A coefficient another fit measures
 better is pinned (`fixed`), and its source says so.  `model` puts the three in the planner's currency, GPU-seconds, at
 `cpu` GPU-seconds a CPU-second (the price ratio): each feature's rate is its prove coefficient plus its verify and stage
-coefficients at `cpu`, `one` and `ands` per touched statement, `ands*staged` per staged unit and `ands*drawn` per proved
-unit.  A fit's `sigma` is its relative residual, at least `floor` when it has no spare observation; the model's is the
+coefficients at `cpu`, `one` and `ands` per touched statement, `ands*staged` per staged proof block and `ands*drawn` per proved
+proof block.  A fit's `sigma` is its relative residual, at least `floor` when it has no spare observation; the model's is the
 largest.  `record` is the cost-model/v1 payload (`research data put --kind cost-model/v1`), keyed by the prover's build,
 the verifier's and the hardware, so a plan reads the fit of the builds it will run.
 """
@@ -31,8 +31,8 @@ TARGETS = ("prove", "verify", "stage")
 
 @dataclass(frozen=True)
 class Observation:
-    """One measurement from `source` (a run or `art:` id): a session drawing `drawn` units from a statement of `staged`
-    units of `template`, `ands` ANDs a unit, with what it measured: `prove` (GPU-s, the session), `verify` and `stage`
+    """One measurement from `source` (a run or `art:` id): a session drawing `drawn` proof blocks from a statement of `staged`
+    proof blocks of `template`, `ands` ANDs a proof block, with what it measured: `prove` (GPU-s, the session), `verify` and `stage`
     (CPU-s, the statement)."""
 
     source: str

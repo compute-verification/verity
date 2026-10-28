@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Complete.Json.Live
 import Proofs.Flock.Claims.Complete.Json.Stmt
 import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+import Proofs.Flock.Claims.Complete.Json.Text
 
 /-!
 # B's record checks at the honest run
@@ -16,7 +17,7 @@ The goals of `Goals` on the record, proved at every honest run (`Run`) from thre
   (`Replay.proverOk`).
 
 What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable draw that decodes, and the
-statement's draw), holds at every good case under `JsonSpec` (`stmtOk`, `Stmt`).
+statement's draw), holds at every good case (`stmtOk`, `Stmt`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
 first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
@@ -121,7 +122,7 @@ theorem Run.json (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H)
       o.live = ⟨#[rb], o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
-  obtain ⟨hct, hsig, hdraw, -⟩ := stmtOk S o.toCase
+  obtain ⟨hct, hsig, hdraw, -⟩ := stmtOk o.toCase
   obtain ⟨hC, hR⟩ := hP o.toCase st (by rw [hst]; simp)
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   have htabs : tabsOf #[st] = #[Setup.ofCircuit st] := by simp [tabsOf]
@@ -178,6 +179,23 @@ theorem liveReads_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Ou
     Run.json S h64 hP o
   exact hlv
 
+/-- **The record is in its canonical text** (S0): the goal `RecordCanonical`, the printed honest record
+(`check_printJ`). -/
+theorem canonical_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    RecordCanonical H rel := by
+  intro o
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
+    Run.json S h64 hP o
+  obtain ⟨-, -, hdraw, -⟩ := stmtOk o.toCase
+  have hd : Good (o.spec.unitDraw.getD Json.null) := by
+    unfold DrawOk at hdraw
+    revert hdraw
+    cases o.spec.unitDraw with
+    | none => exact fun _ => .null
+    | some d => exact fun hd => hd.2.1
+  rw [hrec]
+  exact check_printJ S (good_recordObj ht _ rb _ streams o.proofs hd)
+
 /-- **Alike values are equivalent** (`JsonEquiv`, what `drawEq` decides). -/
 theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   induction h with
@@ -194,7 +212,7 @@ theorem drawMatches_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hP o
-  obtain ⟨-, -, hdraw, hdr⟩ := stmtOk S o.toCase
+  obtain ⟨-, -, hdraw, hdr⟩ := stmtOk o.toCase
   have hd := recordDraw_recordObj S (h := Claims.hOf H) ht hdraw rb (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
     o.proofs
   rw [hrec, ← hdr]
@@ -204,7 +222,7 @@ theorem drawMatches_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+    exact (drawEq_iff _ _).2 (.some hs)
 
 theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   induction l with

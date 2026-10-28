@@ -1,9 +1,12 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
-reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
-core interface and mirrors of the stub components). Hypothesis draws each component's case to accept, reject, be
-undecided or fail to decode, then often breaks the composition's own inputs (a component dropped, unknown, repeated or
-out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case
-itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly."""
+reference (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the
+core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
+fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the
+network certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), then
+often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other
+params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a field missing or not hex,
+not an object), and every field of the outcome but its reason must agree exactly: the components' certified quantities
+and profiles among them."""
 
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ from pathlib import Path
 import pytest
 from hypothesis import strategies as st
 
+import periods
 import reference as R
 import verity_difftest as D
 from verity_difftest import canonical
@@ -28,52 +32,75 @@ JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max
                     max_leaves=6)
 
 
+#: PoUW's mutations of its window that leave the case's framing whole (`case-*` break the line `serve` reads, which a
+#: composition's evidence can't carry).
+POUW_REFUSALS = [n for n in R.POUW_CASES.NAMES if not n.startswith("case-") and n != "answer-undecided"]
+
+OS = R.ONE_STAGE
+#: Sampled proofs' audits by the verdict they aim at: an honest audit, one change to the verifiers' verdicts (undecided
+#: or a rejection), and one or two changes anywhere.
+ONE_STAGE_CASES = {R.ACCEPT: OS.changed_audits(most=0), R.UNDECIDED: OS.changed_audits([OS.VERDICTS_OF], most=1, least=1),
+                   R.REJECT: OS.changed_audits(most=2, least=1)}
+
+NP = R.PERIOD
+#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
+PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
+                for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+
+#: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
+KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", "broken-params", "broken-evidence"]
+
+
+def kinds(C) -> list[str]:
+    """The kinds of case `component_case` may aim `C` at when it is free to."""
+    if isinstance(C, R.Recorded):
+        return [k for k in KINDS if k in C.cases]
+    return [R.ACCEPT, R.REJECT, R.UNDECIDED]
+
+
 @st.composite
-def stub_case(draw, cid: str) -> dict:
-    """A stub's case that accepts, rejects, is undecided, or fails to decode (its params, root or evidence)."""
-    kind = draw(st.sampled_from([R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken"]))
-    k = draw(st.integers(0, 3))
-    if kind == R.REJECT:
-        drawn = draw(st.integers(1, 4))
-        passed = draw(st.integers(0, drawn - 1))
-    elif kind == R.UNDECIDED:
-        k = draw(st.integers(1, 3))
-        drawn = draw(st.integers(0, k - 1))
-        passed = draw(st.integers(drawn, drawn + 1))
+def component_case(draw, C, kind: str | None) -> dict:
+    """`C`'s case aimed at `kind` (any of `kinds(C)` when it is None), from its own difftest's generator or its recorded
+    cases, with its digest as its Python reads it (the case's own commitment when it doesn't decode, which a rejection
+    never binds)."""
+    kind = kind or draw(st.sampled_from(kinds(C)))
+    if isinstance(C, R.Recorded):
+        case = C.cases[kind][0]
+    elif C is R.POUW:
+        name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
+        case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
+    elif C is R.CERTIFIER:
+        case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     else:
-        drawn = draw(st.integers(k, k + 2))
-        passed = draw(st.integers(drawn, drawn + 1))
-    case = {"id": cid, "params": {"k": k}, "root": draw(st.binary(min_size=32, max_size=32)),
-            "evidence": canonical({"drawn": drawn, "passed": passed}).encode()}
-    if kind == "broken":
-        how = draw(st.sampled_from(["params", "root", "evidence"]))
-        if how == "params":
-            case["params"] = draw(st.sampled_from([{}, {"k": -1}, {"k": True}, {"k": "2"}, [], None]) | JSON)
-        elif how == "root":
-            case["root"] = draw(st.binary(max_size=40).filter(lambda b: len(b) != 32))
-        else:
-            case["evidence"] = draw(st.sampled_from([b'{"passed":2,"drawn":2}', b'{"drawn": 2,"passed":2}',
-                                                     canonical({"drawn": -1, "passed": 0}).encode(), b'{"drawn":2}'])
-                                    | st.binary(max_size=12))
-    return case
+        case = OS._case(draw(ONE_STAGE_CASES[kind]))
+    root = bytes.fromhex(case["commitment"])
+    digest = C.answer(case)["commitment"]
+    return {"id": C.id, "params": case["params"], "root": root, "evidence": bytes.fromhex(case["evidence"]),
+            "digest": bytes.fromhex(digest) if digest else root}
 
 
-#: The binding breaks come thrice: with `commitment-size` they are the breaks that leave every component's case standing,
+#: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
-MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
+MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
-                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 3
+                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 5
 
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
-    """One case of `product`: its components' cases, then at most one break of the composition's own inputs."""
-    cases = [draw(stub_case(C.id)) for C in product.components]
+    """One case of `product`: its components' cases (one time in six every one aimed at acceptance, one in six every one
+    but one that is aimed at undecided, so that a product of five reaches its binding breaks and its undecided verdict,
+    and each at any verdict otherwise), then at most one break of the composition's own inputs."""
+    mode = draw(st.integers(0, 5))
+    pending = draw(st.sampled_from([j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]))
+    aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
+            for j in range(len(product.components))]
+    cases = [draw(component_case(C, k)) for C, k in zip(product.components, aims)]
     named = [{"id": c["id"], "params": c["params"]} for c in cases]
     entries = [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "id": c["id"], "params": c["params"]}
                for c in cases]
-    commitment = R.bind(product.id, [(c["id"], c["root"]) for c in cases])
+    commitment = R.bind(product.id, [(c["id"], c["digest"]) for c in cases])
     params: object = {"components": named}
     m = draw(st.sampled_from(MUTATIONS))
     i = draw(st.integers(0, len(cases) - 1))
@@ -92,7 +119,7 @@ def composite(draw, product: R.Product) -> dict:
     elif m == "binding":
         commitment = draw(st.binary(min_size=64, max_size=64).filter(lambda b: b != commitment))
     elif m == "binding-id":
-        commitment = R.bind("verity/other/v0", [(c["id"], c["root"]) for c in cases])
+        commitment = R.bind("verity/other/v0", [(c["id"], c["digest"]) for c in cases])
     elif m == "commitment-size":
         commitment = draw(st.binary(max_size=70).filter(lambda b: len(b) != 64))
     elif m == "params-extra-key":
@@ -146,8 +173,15 @@ onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 
 
+@pytest.fixture(scope="module")
+def recorded(tmp_path_factory):
+    """Space's and bandwidth's cases, made once (their memory challenger's session logs under the suite's basetemp)."""
+    if not R.POUS.cases:
+        periods.build(tmp_path_factory.mktemp("periods"))
+
+
 def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_component():
-    """Over every list of up to four verdicts, top's rule and the trial's agree but where a component rejects while
+    """Over every list of up to four verdicts, the composition's rule and the trial's agree but where a component rejects while
     another is undecided: the trial waits for the missing statement, and the port rejects."""
     for n in range(1, 5):
         for vs in itertools.product([R.ACCEPT, R.REJECT, R.UNDECIDED], repeat=n):
@@ -167,11 +201,13 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) 
         assert seen[kind] > examples // 50, (kind, dict(seen))
 
 
+@pytest.mark.slow
 def test_remote_agrees(remote_server):
     _agree(REMOTE, remote_server, SEEN["remote"], 1000)
 
 
-def test_onsite_agrees(onsite_server):
+@pytest.mark.slow
+def test_onsite_agrees(onsite_server, recorded):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
 
 
@@ -187,8 +223,9 @@ class Trial(R.Product):
         return super().check(ps, c, ev)
 
 
-def test_a_reference_without_reject_dominance_is_caught(onsite_server):
-    """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
+@pytest.mark.slow
+def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
+    """The difftest tells the composition's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
     trial = Trial(R.ONSITE.id, R.ONSITE.components)
     with pytest.raises(D.Mismatch) as e:

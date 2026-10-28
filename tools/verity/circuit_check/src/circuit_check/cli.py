@@ -2,14 +2,24 @@
 
     circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
-    circuit-check path/to/build_request_LP3_T2                      a served row's request Program
+    circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
+    circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
+                                                                    the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
+    circuit-check --batch                                           batch invariance of the v0 registration's templates
+
+A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
+``"mode": "by-calls"`` and names the target each callee relies on.
 
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
 warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
+
+Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
+from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
+its time went (``seconds_by_check``, `checks.spent`).
 """
 from __future__ import annotations
 
@@ -23,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ambient as AM
+from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
 from . import sidecars as SC
@@ -48,13 +59,26 @@ def _info(task: tuple) -> dict:
 
 
 def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
+    """``fn()``'s result with the target's ``seconds`` and its ``seconds_by_check`` (`checks.spent`), heaviest first."""
+    CK.SPENT.clear()
     t0 = time.time()
     try:
         r = fn()
     except Exception as e:  # noqa: BLE001  (a target the checks cannot run on is a failure by name, not a crash)
         r = {"failures": [{"check": "circuit-check", "code": "error", "definition": label,
                            "name": f"circuit-check/error {label}: {type(e).__name__}: {str(e)[:200]}"}], "warnings": []}
-    return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3)}
+    by = {k: round(v, 3) for k, v in CK.SPENT.most_common()}
+    return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3), "seconds_by_check": by}
+
+
+#: the checks a target's log line names, heaviest first, each that took at least `SHOWN_SECONDS`
+SHOWN_CHECKS = 4
+SHOWN_SECONDS = 0.1
+
+
+def _where_time_went(r: dict) -> str:
+    by = [(k, v) for k, v in (r.get("seconds_by_check") or {}).items() if v >= SHOWN_SECONDS][:SHOWN_CHECKS]
+    return f"{r['seconds']:.1f}s" + (": " + ", ".join(f"{k} {v:.1f}" for k, v in by) if by else "")
 
 
 def _errored(r: dict) -> bool:
@@ -97,7 +121,9 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index).  Traced
     (`cache.tracing`), each check gets a memo of its own, so its result never rests on what an earlier target's check computed,
     and the pins it looks up are recorded (`cache.recorded_pins`); a suite Definition's ``as_call`` is resolved here (the catalog's
-    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check."""
+    `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check.  A named by-calls
+    root brings the targets its callees rely on (`by_calls.relied_targets`), each checked beside it, so the report holds their
+    verdicts (`by_calls.joined`); ``--all``'s are its suite's."""
     from verity.ml.circuits.evaluation.reference import resolve
 
     TG.load_registries()
@@ -106,6 +132,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     memo = (lambda: {}) if fresh else (lambda: shared)
     pins = CC.recorded_pins(CK.load_pins()) if fresh else CK.load_pins()
     tasks: list[tuple] = []
+    named = 0
     if everything:
         found = TG.suite()
         calls = TG.call_families(found)
@@ -116,17 +143,47 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
         for label, sub, sts in TG.templates():
             tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
                           {"units": sorted(TG.BINDINGS.get(label, ()))}))
+        named = len(tasks)
     for s in specs:
         kind = TG.kind_of(s)
         if kind == "row":
             tasks.append(("row", s, lambda s=s: CK.check_row(s, opts, memo=memo(), pins=pins)))
+        elif kind == "sidecar":
+            found, tpls = TG.sidecar_targets(s)
+            for fid, fn in found.items():
+                tasks.append(("definition", fid, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                              {"units": sorted(TG.BINDINGS.get(fid, ())), "roots": [fn]}))
+            for label, sub, sts in tpls:
+                tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
+                              {"units": sorted(TG.BINDINGS.get(label, ()))}))
         elif kind == "template":
             def tpl(s=s):
                 sub, sts = TG.subcircuit(s)
                 return CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins)
             tasks.append(("template", s, tpl))
         else:
-            tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo(), pins=pins, as_call=as_call)))
+            try:
+                fn = TG.definition(s)
+            except Exception:  # noqa: BLE001  (its check raises it again, by name, and an errored check is never stored)
+                tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo(), pins=pins, as_call=as_call)))
+                continue
+            tasks.append(("definition", s, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                          {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
+    labels = {t[1] for t in tasks}
+    for t in tasks[named:]:
+        if not any(TG.is_by_calls(fn) for fn in _info(t).get("roots", ())):
+            continue
+        try:
+            relied = BC.relied_targets(_info(t)["roots"][0])
+        except Exception as e:  # noqa: BLE001  (the root's own check fails by name on what raised here)
+            print(f"circuit-check: {t[1]}: the targets its callees rely on aren't added ({type(e).__name__}: {str(e)[:200]})",
+                  file=sys.stderr)
+            continue
+        for fn in relied:
+            if fn.id not in labels:
+                labels.add(fn.id)
+                tasks.append(("definition", fn.id, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                              {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
     return tasks
 
 
@@ -197,9 +254,11 @@ def _calls(specs: list[str]) -> None:
     from verity.ml.circuits.evaluation.reference import resolve
 
     for s in specs:
-        if TG.kind_of(s) == "definition":
+        kind = TG.kind_of(s)
+        for make in ([lambda s=s: TG.definition(s)] if kind == "definition" else
+                     [lambda fn=fn: fn for fn in TG.sidecar_targets(s)[0].values()] if kind == "sidecar" else []):
             try:
-                TG.is_call(TG.family(resolve(TG.definition(s))))
+                TG.is_call(TG.family(resolve(make())))
             except Exception:  # noqa: BLE001  (its check raises it again, by name)
                 continue
 
@@ -531,7 +590,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         if progress is not None:
             with progress.open("a") as f:
                 f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
-                                    "failures": len(r["failures"]), **({"killed": True} if r.get("killed") else {})}) + "\n")
+                                    "seconds_by_check": r.get("seconds_by_check"), "failures": len(r["failures"]),
+                                    **({"killed": True} if r.get("killed") else {})}) + "\n")
         if tracing and got is not None:
             if _errored(r):
                 stats["errors"].append(r["target"])
@@ -546,8 +606,10 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             qc = (r.get("partition") or {}).get("q_call") or {}
             call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
                     f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
+            if r.get("mode") == BC.CHECK:
+                call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
-                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({r['seconds']:.1f}s)")
+                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
 
     todo = list(range(len(tasks)))
     if tracing:
@@ -556,6 +618,9 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             if (hit := hits.get(i) if hits is not None else CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
+                if log and not everything:
+                    log(f"{'FAIL' if hit[0]['failures'] else 'ok  '} {tasks[i][0]:10s} {tasks[i][1][:90]}  reused: every input "
+                        f"its check read is unchanged (it took {hit[0].get('seconds', 0):.1f}s)")
             else:
                 todo.append(i)
     if isolated and todo:
@@ -596,12 +661,12 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
 
 
 def update_pins(rep: dict) -> dict:
-    """Every pin, with each unpinned or changed count the report saw set to the count measured now, in the file that holds the pin
+    """Every pin, with each unpinned, untyped or changed one the report saw set to what it measures now, in the file that holds the pin
     or, for a new one, the sidecar of the module that defines its Definition (`sidecars.write_pins`)."""
     updates = {}
     for t in rep["targets"]:
         for f in t.get("failures", []) + t.get("warnings", []):
-            if f["check"] == "lowering" and f["code"] in ("unpinned", "pin-mismatch"):
+            if f["check"] == "lowering" and f["code"] in ("unpinned", "untyped", "pin-mismatch"):
                 updates[f["pins"], f["pin"]] = f["counts"]
     CK.load_pins()
     SC.write_pins(updates)
@@ -609,8 +674,9 @@ def update_pins(rep: dict) -> dict:
 
 
 #: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
-#: isolated `--all` run (`run`'s scheduling; it counts that task list, 26.7 GiB on 17 Oct).  The commit that writes a peak
-#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here
+#: isolated `--all` run (`run`'s scheduling; it counts that task list).  The commit that writes a peak
+#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
+#: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
 HEAVY = CC.HEAVY
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
@@ -621,8 +687,8 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 
 
 def slot_gb() -> int | None:
-    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (CIR-21: two runs in one
-    node's slots each budgeted the whole machine's MemAvailable and took it down)."""
+    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (else two runs in
+    one node's slots each budget the whole machine's MemAvailable and take it down)."""
     v = os.environ.get(SLOT_MEM_ENV, "")
     return int(v) if v.isdigit() else None
 
@@ -652,18 +718,16 @@ def heavy() -> dict[str, float]:
         return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
 
 
-#: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
-#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct); a cold `--all` at 7 workers in
-#: vy-n2's 900 GiB session scope grew them to 107-155 GiB and was OOM-killed (r20261009-061009-1b4d, 9 Oct)
+#: the memory a worker counts on: a cold `--all` grows some workers to 40-155 GiB, and two `--all -j 0` runs, ~130 workers
+#: each, took 1.4 TB of a 1.6 TB user slice
 GB_PER_JOB = 160
 
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's session
     scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's inactive_file (its memory.stat) is in
-    its memory.current but the kernel reclaims it at the limit, so it counts as left: on vy-nebius-cpu-3 a user slice at 462 of
-    its 463 GiB, 278 GiB of it page cache, left a budget of ~0 and the targets ran one at a time, 0.06 a second
-    (r20261021-101535-85fb)."""
+    its memory.current but the kernel reclaims it at the limit, so it counts as left: otherwise a user slice that page
+    cache fills leaves a budget of ~0, and the targets run one at a time."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()
@@ -687,6 +751,42 @@ def auto_jobs(root: Path = Path("/")) -> int:
     """`--jobs 0`: one worker per core this process may run on, at most one per `GB_PER_JOB` of its memory (its slot's, in one)."""
     gb = min(memory_gb(root), slot_gb() or memory_gb(root))
     return max(1, min(len(os.sched_getaffinity(0)), gb // GB_PER_JOB))
+
+
+def cores(root: Path = Path("/")) -> int:
+    """The CPUs this process may use: its affinity, bounded by its cgroup's cpu.max quota (a pod's `nproc` can exceed it)."""
+    n = len(os.sched_getaffinity(0))
+    try:
+        q, p = (root / "sys/fs/cgroup/cpu.max").read_text().split()
+        return n if q == "max" else min(n, max(1, int(q) // int(p)))
+    except (OSError, ValueError):
+        return n
+
+
+def default_jobs(everything: bool) -> int:
+    """``--jobs`` when not given: 1 with ``--all`` (check.py gives its slot's), else one worker per core (`cores`), each target
+    still admitted only while the measured peaks fit the memory (`run`)."""
+    return 1 if everything else cores()
+
+
+def default_cache() -> Path:
+    """The cache named targets use unless ``--cache`` or ``--no-cache`` says otherwise: check's own (tools/verity/check's
+    ``cache_dir() / "circuit-check"``), so a target `check` or an earlier run checked is reused while its inputs are unchanged."""
+    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / "circuit-check"
+
+
+def time_summary(rep: dict, wall: float, jobs: int) -> str:
+    """One line: the run's wall time, the targets checked now and reused, and where the checked ones' time went
+    (their ``seconds_by_check`` summed, heaviest first)."""
+    ran = [t for t in rep["targets"] if "cache" not in t]
+    by: dict[str, float] = {}
+    for t in ran:
+        for k, v in (t.get("seconds_by_check") or {}).items():
+            by[k] = by.get(k, 0.0) + v
+    top = sorted(by.items(), key=lambda kv: -kv[1])[:SHOWN_CHECKS]
+    return (f"circuit-check: {wall:.1f}s wall at -j {jobs}: {len(ran)} target(s) checked in {sum(t.get('seconds', 0) for t in ran):.1f}s"
+            + (" (" + ", ".join(f"{k} {v:.1f}" for k, v in top) + ")" if top else "")
+            + f", {len(rep['targets']) - len(ran)} reused")
 
 
 def structural(target: str, path: Path, *, exhaustive_bits: int = ST.EXHAUSTIVE_BITS, vectors: int = ST.VECTORS,
@@ -739,12 +839,50 @@ def _ambient_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if any(t["failures"] for t in rep["targets"]) else 0
 
 
+#: the frozen v0 registration ``--batch`` checks: the engine profile's role and the row-id device token
+BATCH_REGISTRATION = ("LLAMA32_1B", "rtxpro6000")
+
+
+def batch(templates: Callable[[], list] | None = None) -> dict:
+    """``--batch``'s report: batch invariance (`verity_vllm.check.batch`: (a) separable, (b) shape-invariant) of each template
+    ``templates()`` gives, by default every one a request-major compilation of `BATCH_REGISTRATION` calls
+    (`verity_vllm.program.predict.batch.templates`), each verdict held to the one declared beside it."""
+    from verity_vllm.check import batch as BI
+    if templates is None:
+        from verity_vllm.program.predict import batch as PB
+
+        def templates() -> list:
+            return PB.templates(PB.registered_phi(*BATCH_REGISTRATION))
+    t0 = time.time()
+    vs = BI.check(templates())
+    return {"schema": "verity-circuit-check/batch/v1", "verdicts": [v.to_json() for v in vs], "table": BI.report(vs),
+            "seconds": round(time.time() - t0, 1)}
+
+
+def _batch_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
+    if a.all or a.targets:
+        ap.error("--batch checks the v0 registration's templates: give no target")
+    rep = batch()
+    print(rep["table"])
+    bad = [v for v in rep["verdicts"] if not v["ok"]]
+    for v in bad:
+        print(f"FAIL {v['template']}: declared {v['expect']}, got {v['got']}")
+    if a.out:
+        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
+    print(f"circuit-check --batch: {len(rep['verdicts'])} template(s), {len(bad)} not as declared, {rep['seconds']} s"
+          + (f", report {a.out}" if a.out else ""))
+    return 1 if bad else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="circuit-check", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
     ap.add_argument("--all", action="store_true", help="every registered Definition and template at the catalog's bindings")
     ap.add_argument("--out", type=Path, help="write the JSON report here")
-    ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
+    ap.add_argument("-j", "--jobs", type=int, default=None,
+                    help="targets checked in parallel by this many workers, each starting only while the targets' measured peaks "
+                         "fit the memory (see `run`); default: one per core for named targets, 1 with --all; 0: one per core, at "
+                         "most one per GB_PER_JOB of memory")
     ap.add_argument("--mem-gb", type=int, default=None, help="the memory circuit-check may take, in GiB, this process included "
                     "(default: the enclosing check slot's CHECK_SLOT_MEM_GB, else what this process may use, `memory_gb`); see `run`")
     ap.add_argument("--mem-gb-file", type=Path, default=None, metavar="FILE",
@@ -764,9 +902,11 @@ def main(argv: list[str] | None = None) -> int:
                     "(default: when its family is a Call of a served Program)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
     ap.add_argument("--fail-on-warnings", action="store_true")
-    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts measured now (review the diff)")
+    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
-                    help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one")
+                    help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one; named "
+                         "targets use check's own by default (`default_cache`)")
+    ap.add_argument("--no-cache", action="store_true", help="check every target now, and record nothing")
     ap.add_argument("--catalog-units", action="store_true",
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
     ap.add_argument("-q", "--quiet", action="store_true")
@@ -780,28 +920,37 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ambient", action="store_true",
                     help="lower each target in a plain and a perturbed interpreter instead of running the property checks "
                          "(circuit_check.ambient): one text, and no read of the environment, a clock or an unseeded draw")
+    ap.add_argument("--batch", action="store_true",
+                    help="check batch invariance of every template the request-major compiler emits for the frozen v0 registration "
+                         "instead of running the property checks (cli.batch): each verdict held to the declared one")
     a = ap.parse_args(argv)
-    if a.structural and a.ambient:
-        ap.error("--structural and --ambient are two modes: give one")
+    if sum(map(bool, (a.structural, a.ambient, a.batch))) > 1:
+        ap.error("--structural, --ambient and --batch are three modes: give one")
     if a.structural:
         return _structural_main(a, ap)
     if a.ambient:
         return _ambient_main(a, ap)
-    if a.cache and not a.update_pins:
+    if a.batch:
+        return _batch_main(a, ap)
+    if not a.targets and not a.all:
+        ap.error("give a target or --all")
+    cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
+    if cache:
         # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
         prebuild = ("from circuit_check import targets; targets.load_registries()\n"
-                    "try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
+                    "try:\n    from verity.ml.definitions.numerics import twins\nexcept ImportError:\n    twins = None\n"
                     "if twins:\n    twins.preload()        # the three C++ models, which checks otherwise compile on first use\n")
         subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
         CC.trace(REPO)
-    if not a.targets and not a.all:
-        ap.error("give a target or --all")
-    jobs = a.jobs or auto_jobs()
+    jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     opts = _options(a)
+    t0 = time.time()
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
-              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None,
+              log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
               mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None,
               units=a.catalog_units)
+    if not a.quiet:
+        print(time_summary(rep, time.time() - t0, jobs))
     if u := (rep.get("cache") or {}).get("units"):
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
               f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")

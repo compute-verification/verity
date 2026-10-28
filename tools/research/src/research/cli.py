@@ -10,7 +10,7 @@
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
-                                                 # sooner there, a slot of vy-nebius-cpu-1's research pool (research/auto.py)
+                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's SPILL)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -45,8 +45,8 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject|ready|judge [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `main` fast-forwarded to
-                                                 # the newest commit on it with a passing check (research/queue.py)
+  research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `main`
+                                                 # fast-forwarded to its reviewed prefix, checked after landing (research/queue.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -193,7 +193,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
-                         "a slot of vy-nebius-cpu-1's research pool when it starts sooner there (research/auto.py)")
+                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL)")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -203,7 +203,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
-                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer, Daniel, 19 Oct): then it stops waiting, "
+                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
                          "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
@@ -311,7 +311,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
-        harness_opts = _auto_spill(ns, harness_opts)
+        if (harness_opts := _auto_spill(ns, harness_opts)) is None:
+            return 2
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -346,10 +347,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
                   f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
-            # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
-            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
-            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} is dropped; the slot's own mem= admits and reserves the run",
-                  file=sys.stderr)
+            # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
+            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB); the
+            # slot takes the larger of its mem= and this (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)
+            ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
+            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
+                  "its own mem= and that", file=sys.stderr)
             ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
@@ -566,7 +569,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     return out
 
 
-#: The longest custody key ``research run`` mints on request (root's ruling 2026-09-26): the default stays 6 h.
+#: The longest custody key ``research run`` mints on request; the default stays 6 h.
 CUSTODY_TTL_CAP_S = 24 * 3600
 
 
@@ -1012,10 +1015,10 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     return None
 
 
-def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
-    kind's time as its --timeout. The harness options it runs with."""
+    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
@@ -1023,7 +1026,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if why is None:
-        target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+        try:
+            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+        except auto.Unplaceable as e:
+            print(f"research run --on auto: refused: {e}", file=sys.stderr)
+            return None
     if target is None:
         print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
         return harness_opts
@@ -1031,7 +1038,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
     if remote.flag_value(harness_opts, "--timeout") is None:
         harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
-    ns.cpus = ns.max_min = ns.mem_gb = ns.question = ns.disk_gb = None     # the slot's cores and mem= are the run's
+    ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
+    ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (INF-228: a 40-GB slot held a suite to 2 workers)
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     return harness_opts

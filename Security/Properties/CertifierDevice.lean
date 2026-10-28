@@ -9,7 +9,7 @@ import CertifierDevice.Issuer
 state it leaves and the proxy's actions out. The code has no fold of it over a trace, so this module defines one
 (`outputs`, `after`, from `init c`); every statement is about it, for every configuration and every trace, whatever its
 events' clock readings, order or bytes. `Issuer.certify` (`Issuer.lean`) signs a closed window's record. Each statement
-is a named `Prop`, proved as the lower-case theorem of the same name in `Properties.Proofs.CertifierDevice`, and a
+is a named `Prop`, proved as the lower-case theorem of the same name in `Proofs.Properties.CertifierDevice`, and a
 guarantee of this package (`lean-audit.json`). Each has one shape: for every input, if the code accepts it, the
 conclusion holds. `step` always returns, so the trace statements take no hypothesis; the issuer's takes the acceptances
 of the calls that made the key and of the one they are about. No statement takes an assumption about the world.
@@ -42,7 +42,7 @@ releases nothing (it writes `r · B` zero bytes), and the window's record has st
 every row from the fault on. The certifier keeps the first fault of a window, so `r` is the first fault's reason.
 
 **(4) The issuer.** `IssuerVerifies`: for every key `Lms.key` derives under parameters `Lms.Params.make` admits,
-every certificate `Issuer.certify` returns with it, in a certifier session, verifies (`CertifiedRecord.verify`) under the
+every certificate `Issuer.certify` returns with it, in a certifier session and under any salt, verifies (`CertifiedRecord.verify`) under the
 key's parameters and public key in that session. Its subject is such a key: the two calls' acceptances are its
 hypotheses, beside `certify`'s.
 
@@ -208,15 +208,15 @@ def FailClosed : Prop := ∀ (c : Config) (tr : List Event), ClosedAfterFault c 
 /-! ## (4) The issuer -/
 
 /-- **Every certificate the issuer returns verifies.** For a key `Lms.key` derives under parameters `Lms.Params.make`
-admits, every certificate `Issuer.certify` returns with that key in certifier session `session` verifies
-(`CertifiedRecord.verify`) under the parameters and the key's public key in that session. -/
+admits, every certificate `Issuer.certify` returns with that key in certifier session `session`, under any salt,
+verifies (`CertifiedRecord.verify`) under the parameters and the key's public key in that session. -/
 def IssuerVerifies : Prop :=
   ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray)
-    (refused : Array (String × NetworkCheck.Direction × Nat)) (i' : Issuer) (leaf : Except String Nat)
+    (refused : Array (String × NetworkCheck.Direction × Nat)) (i' : Issuer) (salt : ByteArray) (leaf : Except String Nat)
     (record : Record) (direction : NetworkCheck.Direction) (params : Params) (parameters : ByteArray) (deadline : Bool)
     (cr : CertifiedRecord),
     Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k →
-    ({ key := k, session, refused } : Issuer).certify leaf record direction params parameters deadline =
+    ({ key := k, session, refused } : Issuer).certify salt leaf record direction params parameters deadline =
       .ok (i', some cr) →
     cr.verify p k.publicKey session = true
 

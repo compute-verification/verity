@@ -1,7 +1,7 @@
 """Diff a device's SASS opcode census against A7's menu: every opcode the model doesn't price, and whether it can head a
 committed word (RT-ISA, the compute-accounting red team).
 
-A7 (`SheetSemantics`, `Security/Models/Accounting/Assumptions/Sheet.lean`) says no unit outside the menu heads a fresh
+A7 (`SheetSemantics`, `Security/Definitions/Accounting/Assumptions/Sheet.lean`) says no unit outside the menu heads a fresh
 committed word (NoSum) and a side unit costs at least its per-word vector (SideUnits). The menu is five routes
 (isa_escape.py): the tensor route (A3, priced by a form's operand-type peak), the CUDA lane route (q*, `loads.class_of`
 gives the census class), the uniform datapath (on issue), table routes (by bytes) and priced side units (the pi32 floor).
@@ -145,7 +145,11 @@ def mma_type(op: str) -> str | None:
 
 
 def isa_vocab(family: str) -> dict[str, dict]:
-    t = json.loads((HERE / "data" / "sass_isa_tables.json").read_text())["tables"]
+    p = HERE / "data" / "sass_isa_tables.json"
+    if not p.is_file():
+        raise FileNotFoundError(f"{p} is a fetched fixture and isn't here: "
+                                "`uv run research data fetch-fixtures benchmarks/pouw/sass_census/data`")
+    t = json.loads(p.read_text())["tables"]
     return t.get(ISA_TABLE.get(family, ""), {})
 
 

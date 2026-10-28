@@ -1,4 +1,4 @@
-"""Every pinned preset under ``benchmarks/specs`` resolves as an engine spec (`verity_vllm.pipeline.engine_spec`) to its
+"""Every pinned preset under ``benchmarks/specs`` resolves as an engine spec (`verity_vllm.engine.spec`) to its
 checkpoint pin (`verity_vllm.config.EnginePin`)."""
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import EnginePin
-from verity_vllm.pipeline import engine_spec as ES
+from verity_vllm import EnginePin
+from verity_vllm.engine import spec as ES
 
 SPECS = Path(__file__).resolve().parents[1]
 

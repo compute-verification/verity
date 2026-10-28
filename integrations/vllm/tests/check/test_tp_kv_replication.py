@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.engine.profiles.generic import rank_hf_config
+from verity_vllm.observe.fold.profiles.generic import rank_hf_config
 
 NH, KVH, D, H = 64, 4, 2, 8
 CFG = {"model_type": "qwen3_moe", "hidden_size": H, "num_attention_heads": NH, "num_key_value_heads": KVH, "head_dim": D,
@@ -76,7 +76,7 @@ def test_ranks_sharing_a_kv_head_hold_the_same_kv_rows():
 
 @pytest.mark.parametrize("W,kv", [(2, 2), (4, 1), (8, 1)])
 def test_the_build_predictor_rank_shape_replicates_kv_heads(W, kv):
-    from verity_vllm.predict import build as PB
+    from verity_vllm.program.predict import build as PB
     C = PB.ModelShape(arch="moe", model_class="Qwen3MoeForCausalLM", H=4096, V=151936, NL=94, NH=64, KVH=4, D=128, I=1536, EPS=1e-6,
                       tie=False, max_pos=40960, rot=128, E=128, TOPK=8)
     r = PB.rank_shape(C, W)

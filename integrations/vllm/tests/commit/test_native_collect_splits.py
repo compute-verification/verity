@@ -1,4 +1,4 @@
-"""[R16 stoch REQ-03 / reqval M-0305] the collector binding of `runner.sampler/splits` (manifest family `sampler_splits`): the top-p split
+"""The collector binding of `runner.sampler/splits` (manifest family `sampler_splits`): the top-p split
 count S is a HOST constant of vLLM `_apply_topp_split` (constexpr kwarg `S` of the three `_topp_sb_*_kernel` launches, grid = rows * S),
 never on the device.  The collector installs launch proxies on the module's kernel globals, records (kernel, grid, S) per launch and binds
 the step's S once per sampled row -- it never recomputes S from the batch.  Disagreeing launches bind nothing (-> coverage fails closed)."""
@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
+from verity_vllm.commit.committer import native_collect as NC
 
 
 class _FakeKernel:
@@ -81,7 +81,7 @@ def _step(B: int, S: int, *, mask: bool = True, s_mask: int | None = None, grid_
 def test_split_count_of_one_step_is_the_agreed_kernel_s_or_nothing():
     for B, S in ((1, 16), (8, 8), (2, 32), (64, 1), (5, 4)):
         assert NC.split_count_of_launches(_step(B, S), B) == (S, None)
-    # F-stoch-01's shape: a kernel S that is not the rows' expected geometry is still THE value of record (the collector does not judge it)
+    # a kernel S that is not the rows' expected geometry is still THE value of record (the collector does not judge it)
     assert NC.split_count_of_launches(_step(8, 16), 8) == (16, None)
     # nothing launched (a greedy / dense-path step): bind nothing, say so
     S, why = NC.split_count_of_launches([], 1)
@@ -105,12 +105,12 @@ def test_split_count_of_one_step_is_the_agreed_kernel_s_or_nothing():
 
 
 def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
-    """TinyLlama Gumbel (top_p 1) B8 on sm_120 (g211, r20260930-192928-96f5): the derived-S Program requires `runner.sampler/splits` per
+    """TinyLlama Gumbel (top_p 1) B8 on sm_120: the derived-S Program requires `runner.sampler/splits` per
     request per step, but vLLM runs no split kernel when every row has top_p 1 (`get_top_k_top_p` -> top_p None), so 118/118 were unbound.
     The prescribed S = SplitsFor_v1(rows, num_SMs) is bound instead -- only for a derived-S Program and only when EVERY row has top_p 1."""
     np = pytest.importorskip("numpy")
     from verity_vllm.commit.committer import topp_splits as TS
-    from verity_vllm.program.registry.topp_geometry import splits_for_v1
+    from verity.ml.definitions.registry.topp_geometry import splits_for_v1
     ones, sm = (lambda: np.ones(8, dtype=np.float32)), (lambda: 188)
     assert TS.step_splits([], 8, splits_for_v1, ones, sm) == (16, None, "splits_prescribed_steps")
     assert TS.step_splits([], 1, splits_for_v1, lambda: [1.0], sm) == (32, None, "splits_prescribed_steps")
@@ -127,7 +127,7 @@ def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
 
 
 def test_every_tp_rank_arms_the_prescribed_s_as_the_single_rank_commit_does(tmp_path):
-    """phi4-14b TP2 B8 top_p 1 on sm_120 (cov-gm358-r2, r20261002-220307-6e56): each rank left its 121 `runner.sampler/splits` unbound.
+    """phi4-14b TP2 B8 top_p 1 on sm_120: each rank left its 121 `runner.sampler/splits` unbound.
     Only the single-rank `taps.attach` armed the prescribed S; a TP rank attaches through `taps.for_ranks` (None with no tap on) and
     `attach_rank`, which did not.  Every rank arms it now, with or without taps, for a derived-S manifest only."""
     from types import SimpleNamespace
@@ -135,7 +135,7 @@ def test_every_tp_rank_arms_the_prescribed_s_as_the_single_rank_commit_does(tmp_
     np = pytest.importorskip("numpy")
     from verity_vllm.acquire.sources import taps as T
     from verity_vllm.commit.committer import topp_splits as TS
-    from verity_vllm.program.registry.topp_geometry import splits_for_v1
+    from verity.ml.definitions.registry.topp_geometry import splits_for_v1
     rows = [{"family": "sampler_splits", "op_path": "runner.sampler", "request_id": "r0", "step": 0, "rows": 1, "rank": r} for r in (0, 1)]
     derived = {"populations": {"by_family": {"sampler_splits": 2}}, "identities": rows}
     (tmp_path / "derived.json").write_text(json.dumps(derived))
@@ -170,7 +170,7 @@ def test_the_select_ignores_s_at_top_p_one():
     """What makes the prescribed S exact: at p >= 1 the S-split top-p mask returns early and keeps every lane, for every S -- the served
     no-top-p logits row."""
     np = pytest.importorskip("numpy")
-    from verity_vllm.program.registry.topp_split import topp_split_row
+    from verity.ml.definitions.registry.topp_split import topp_split_row
     x = np.random.default_rng(0).standard_normal(32000).astype(np.float32) * 4
     for S in (1, 2, 4, 8, 16, 32):
         out, _stats, _parts, trace = topp_split_row(x, 1.0, S)

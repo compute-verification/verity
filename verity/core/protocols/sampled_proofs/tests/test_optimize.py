@@ -1,12 +1,13 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
 bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
-between a partition and a covering, serving's commitment (per unit, and the fixed serve-time total with its overlaps), the
-block kinds' weights, and the sensitivity queries."""
+between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
+weight classes' weights, and the sensitivity queries."""
 
 from __future__ import annotations
 
 import random
 from dataclasses import replace
+from fractions import Fraction
 from itertools import combinations, product
 from math import ceil, exp, fsum, log, log1p, ulp
 
@@ -14,11 +15,13 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, for_budget,
-                                                           for_target, frontier, needs_benchmark, overlaps, perturb,
-                                                           replay_cost, row_ands, sensitivity, template_cost, touched,
-                                                           weigh, work_law)
+                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
+                                                           for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
+                                                           max_harm_check, needs_benchmark,
+                                                           overlaps, perturb, replay_cost, row_ands, sensitivity,
+                                                           template_cost, touched, weigh, work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -50,6 +53,48 @@ def test_density_bound_is_above_core_harm_bound():
         assert at_most(core, density_bound(((n, k, h) for _, n, k, h in strata), delta))
 
 
+def test_density_bound_is_its_exact_value_rounded_up():
+    """`density_bound`'s float is at least `density_exact`, Lean's rational (the sampled proofs service's `harm_bound`
+    difftest holds the two equal), and within 2^-18 of it unless delta is within 2^-40 of 1, where the budget's 2^-60
+    is most of ln(1/delta)."""
+    assert ln_upper(Fraction(1, 2)) == Fraction(3196577161300663915, 2 ** 62)
+    assert abs(ln_upper(Fraction(1, 100)) - Fraction(log(100))) < 2.0 ** -48
+    rng = random.Random(0)
+    for _ in range(500):
+        rows = [(n, rng.randint(0, min(n, rng.choice([1, 10, 1000, n]))),
+                 rng.choice([0.0, rng.random() * 10.0 ** rng.randint(-20, 20)]))
+                for n in (rng.randint(1, 10 ** rng.randint(1, 16)) for _ in range(rng.randint(0, 8)))]
+        delta = rng.choice([0.5, 0.01, 1e-6, 2.0 ** -40, 1 - 2.0 ** -40, 1 - 2.0 ** -53, rng.uniform(1e-9, 0.999)])
+        exact, f = density_exact(rows, delta), density_bound(rows, delta)
+        assert isinstance(exact, (int, Fraction)) and exact <= Fraction(f) and (delta > 1 - 2.0 ** -40 or Fraction(f) <= exact * Fraction(SLACK))
+
+
+def test_max_harm_brackets_the_exact_supremum():
+    """`max_harm`'s bracket holds the brute-force supremum of the harm over every count vector whose exact acceptance probability is at
+    least delta (`JointStratified`'s `maxHarm`), within a few proof blocks' harm; `ln_bound` brackets ln; a failing certificate
+    is refused, as Lean's `#guard`s pin."""
+    lo, hi = ln_bound(2, 1, False), ln_bound(2, 1, True)
+    assert lo < hi < lo + Fraction(1, 2 ** 100) and abs(lo - Fraction(log(2))) < 2.0 ** -52
+    assert ln_bound(7, 7, False) == ln_bound(7, 7, True) == 0
+    assert ln_bound(100, 1, False) <= ln_upper(Fraction(1, 100)) < ln_bound(100, 1, False) + Fraction(1, 2 ** 63)
+    assert max_harm_check([(10, 0, 3, 10, 0, 10)], Fraction(1, 2), 1) == (30, 30 + ln_upper(Fraction(1, 2)))
+    for bad in ((10, 1, 1, 5, 0, 8), (10, 1, 1, 6, 0, 9), (10, 1, -1, 0, 0, 9), (10, 1, 1, 0, 3, 2)):
+        with pytest.raises(ValueError):
+            max_harm_check([bad], Fraction(1, 2), 1)
+    rng = random.Random(1)
+    for _ in range(300):
+        rows = [(n, rng.randint(0, n), rng.choice([0, 1, 3, rng.random() * 10]))
+                for n in (rng.randint(0, 7) for _ in range(rng.randint(1, 3)))]
+        delta = rng.choice([0.5, 0.1, 0.01, rng.uniform(1e-4, 0.99)])
+        lower, upper, lam, cert = max_harm(rows, delta)
+        law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+        best = max(sum(Fraction(h) * x for (_, _, h), x in zip(rows, xs))
+                   for xs in product(*(range(n + 1) for n, _, _ in rows))
+                   if law.escape({f"s{i}": x for i, x in enumerate(xs)}) >= Fraction(delta))
+        assert lower <= best <= upper <= best + 4 * max(Fraction(h) for _, _, h in rows) + Fraction(1, 2 ** 40), rows
+        assert max_harm_check([(*r, *c) for r, c in zip(rows, cert)], delta, lam) == (lower, upper)
+
+
 def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():
     cands = [Candidate("a", "A", 50, 3, 16), Candidate("b", "B", 10, 7, 4)]
     exfil = Objective(2.0 ** -10, work=0.0, bits=1.0)
@@ -67,7 +112,7 @@ def test_a_population_without_harm_has_no_frontier():
 
 @pytest.fixture(scope="module")
 def achievability():
-    """Three templates of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work."""
+    """Three subcircuits of work 1, 8 and 200 at delta = 2^-10 and C = 400, each proof block costing its work."""
     cands = [Candidate("a", "A", 4000, 1, 16), Candidate("b", "B", 500, 8, 16), Candidate("c", "C", 20, 200, 16)]
     costs = CostModel({c.template: TemplateCost(unit=float(c.work)) for c in cands})
     objective = Objective(2.0 ** -10)
@@ -102,8 +147,8 @@ def test_work_law_draws_the_plan_sizes(achievability, batched):
 
 @pytest.fixture(scope="module")
 def batched():
-    """C-Flock's shape at small scale: G, many cheap units behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
-    unit, at most 4096 units a statement); N, units costing 10 per unit of work and no statement cost; M, 64 heavy units
+    """C-Flock's shape at small scale: G, many cheap proof blocks behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
+    proof block, at most 4096 proof blocks a statement); N, proof blocks costing 10 per unit of work and no statement cost; M, 64 heavy proof blocks
     that fit one statement."""
     cands = [Candidate("gemm", "G", 20000, 100, 16, cap=4096),
              Candidate("norm", "N", 1000, 100, 16),
@@ -134,7 +179,7 @@ def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
 
 
 def _uniform_cost(cands, costs, objective, target) -> float:
-    """The cheapest law drawing one fraction q of every template (each at its cheapest statement size) that certifies
+    """The cheapest sampling design drawing one fraction q of every subcircuit (each at its cheapest statement size) that certifies
     `target`, by bisection on q."""
     def sizes(q: float) -> dict[str, int]:
         return {c.template: min(c.units, max(1, ceil(q * c.units))) for c in cands}
@@ -183,11 +228,11 @@ def test_row_ands_follows_hm96_table():
     assert [row_ands(n) for n in (4, 256, 4096)] == [174_360, 290_600, 2_034_200]
 
 
-def test_candidates_follow_the_width_rule():
-    Candidate("a", "A", 1, 1, 32)
-    Candidate("a", "A", 1, 1, 16, out_gates=4)
-    for bits, gates in ((32, 2), (17, 2), (33, 1)):
-        with pytest.raises(ValueError, match="width rule"):
+def test_candidates_fit_a_size_class():
+    for bits, gates in ((16, 1), (64, 2), (2048, 128), (UNIT_CLASS_MAX, UNIT_CLASS_MAX // 16)):
+        Candidate("a", "A", 1, 1, bits, out_gates=gates)
+    for bits, gates in ((UNIT_CLASS_MAX + 1, 1), (UNIT_CLASS_MAX + 32, 8193)):
+        with pytest.raises(ValueError, match="size class"):
             Candidate("a", "A", 1, 1, bits, out_gates=gates)
     with pytest.raises(ValueError, match="per_replay"):
         Candidate("a", "A", 4, 1, 16, replay="layer")
@@ -219,7 +264,7 @@ def test_derived_costs_read_the_features_and_perturb_scales_one_group():
 
 
 def test_replay_cost_is_the_expected_number_of_replay_units_met():
-    """Three replay units, A holding 2 units of each and B 1: every pair of draws enumerated."""
+    """Three replay blocks, A holding 2 proof blocks of each and B 1: every pair of draws enumerated."""
     a = Candidate("x", "A", 6, 1, 16, replay="layer", per_replay=2)
     b = Candidate("y", "B", 3, 1, 16, replay="layer", per_replay=1)
     costs = CostModel(per_and=1.0, replay={"layer": ReplayDomain(3, 5.0)})
@@ -246,7 +291,7 @@ R, J, W = 32, 64, 100
 
 
 def _noised(influence: int = J * W, commit_bits: int = 0) -> list[Candidate]:
-    """One op of R rows of J dots of work W, cut two ways: a form unit per row (cost 4) that every dot of its row reads, and
+    """One op of R rows of J dots of work W, cut two ways: a form proof block per row (cost 4) that every dot of its row reads, and
     dots of cost 1 (a partition), or dots of cost 2 that each re-derive the row's form (a covering)."""
     return [Candidate("dot", "Form", R, 0, 16, cut="form", influence=influence, commit_bits=commit_bits),
             Candidate("dot", "DotP", R * J, W, 16, cut="form"),
@@ -267,7 +312,7 @@ def _crossing(plans) -> tuple[int, int]:
 
 
 def test_covering_wins_sparse_and_partition_wins_once_its_form_units_saturate():
-    """Each form unit's influence (its row's work) draws all R of them early; then k dots cost 4R + k as a partition and 2k
+    """Each form proof block's influence (its row's work) draws all R of them early; then k dots cost 4R + k as a partition and 2k
     as a covering at the same harm, so the switch is at k = 4R."""
     plans = frontier(_noised(), _noised_costs(), Objective(2.0 ** -20), grid=61)
     rec, form = _crossing(plans)
@@ -335,7 +380,7 @@ def test_overlaps_count_each_scale_and_price_committing_once():
 
 
 def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
-    """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a unit's.  At equal weights the
+    """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a proof block's.  At equal weights the
     density draws every tile, but core's bound (a draw without replacement) certifies the target with 15: the tiles'
     weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
     cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
@@ -351,7 +396,7 @@ def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
 
 
 def test_under_the_density_bound_kinds_keep_equal_weights(batched):
-    """The density bound charges the strata's largest harm per unit of risk, so a draw in proportion to harm is already
+    """The density bound charges the strata's largest harm per proof block of risk, so a draw in proportion to harm is already
     the cheapest: no weight moves."""
     cands, costs, objective, _ = batched
     for target in (1e6, 5e4):
@@ -375,15 +420,27 @@ def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
 
 
 def test_miss_holds_its_digits_on_huge_populations():
-    """A week of served units is about 10^16: the miss probability against the product it denotes, summed exactly."""
+    """A week of served proof blocks is about 10^16: the miss probability against the product it denotes, summed exactly."""
     for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16):
         for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
             t, s = min(m, k), max(m, k)
             assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
 
 
+def test_shared_statements_hold_only_the_drawn_units():
+    """Under `shared` a draw of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
+    sparse draw of a huge population touches one statement a drawn proof block."""
+    c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
+    costs = CostModel(per_and=1e-3, statement_fixed=5.0, statement_per_and=1e-2, staged_per_and=1e-4)
+    cost, size, parts = template_cost(c, replace(costs, shared=True), 130)
+    assert size == 44 and parts["statements"] == pytest.approx(3 * (5.0 + 10.0) + 130 * 0.1)
+    assert cost == pytest.approx(parts["statements"] + 130 * 1.0)
+    assert template_cost(c, costs, 130)[2]["statements"] == pytest.approx(130 * (15.0 + 0.1), rel=1e-6)
+    assert template_cost(c, replace(costs, shared=True), 0)[0] == 0.0
+
+
 def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_units():
-    """At 10^17 units the miss probability of a single draw rounds to 1: what it touches is kept as 1 - miss directly."""
+    """At 10^17 proof blocks the miss probability of a single draw rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
     assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)
     assert touched(n, 1024, 30_000) == pytest.approx(30_000, rel=1e-6)

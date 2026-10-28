@@ -41,6 +41,7 @@ nothing is registered afresh.
 import SampledProofs.Draw
 import SampledProofs.Registered
 import SampledProofs.Supplied
+import Std.Data.HashMap
 
 namespace SampledProofs.Registration
 
@@ -265,8 +266,99 @@ def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Ent
     let (c, mine, held) := applyOutputs c mine held outputs log
     checkRegistered c got (.ok mine) held supplied rootOf
 
+/-- R3's index of the record's roots, each root's port canonicalized once: the last root naming each canonical port, and
+how many distinct ports the roots name, a port with no canonical form counting as one of its own (`jeq` equals it to
+nothing). -/
+structure PortIndex where
+  last : Std.HashMap String Json := {}
+  count : Nat := 0
+
+/-- One root into the index. The index is taken apart first and the map read and written in one call, so a map held
+once is updated in place: reading it after the insert would copy it, root by root. -/
+def PortIndex.add : PortIndex → Json → PortIndex
+  | ⟨last, count⟩, r =>
+    match (Flock.canon (getD r "port")).toOption with
+    | none => ⟨last, count + 1⟩
+    | some k =>
+      let p := last.containsThenInsert k r
+      ⟨p.2, if p.1 then count else count + 1⟩
+
+def portIndex (roots : Array Json) : PortIndex := roots.foldl PortIndex.add {}
+
+/-- The last root naming the verifier's port `p`. -/
+def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
+  match Flock.canon (Json.str p) with
+  | .ok k => ix.last[k]?
+  | .error _ => none
+
+def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
+
 /-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
+  let v2 := !v.registered.isEmpty
+  if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
+  let get := getD rec
+  let mut c : Array String := #[]
+  -- R1
+  if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
+    c := addCode c "R1-protocol"
+  match Draw.derive v.program v.query v.law v.workTable with
+  | .error _ => c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  let w := get "window"
+  if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
+  -- R2
+  let program := Flock.hexOf v.program.sha512
+  let part := v.partition.getD (Partition.build program v.query)
+  if !jeq (getD part "program") program then c := addCode c "R2-program"
+  let partDigest := Partition.digest part
+  if partDigest.isNone then c := addCode c "R2-partition"
+  let mine : List (String × Option Json) :=
+    [("program", some (getD part "program")), ("query", (queryDigest (getD part "query")).toOption.map Json.str),
+     ("partition", partDigest.map Json.str)]
+  for (name, m) in mine do
+    if let some m := m then
+      if !jeq (get name) m then c := addCode c s!"R2-{name}"
+  match Partition.units v.program v.query with
+  | .error _ => c := addCode c "R2-query"
+  | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
+  -- R3
+  if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
+  let roots := match get "roots" with | .arr rs => rs | _ => #[]
+  if roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
+  else
+    let ix := portIndex roots
+    if ix.count != roots.size || ix.count != v.ports.size || !v.ports.all (fun (p, _) => ix.has p) then
+      c := addCode c "R3-ports"
+    for (p, want) in v.ports do
+      -- a port registered twice reads as its last root, as Python's dict does
+      let some r := ix.find p | continue
+      if !(match getD r "root" with | .str s => isHex s | _ => false) then c := addCode c "R3-root"
+      if !jeq (getD r "leaves") (getD want "leaves") then c := addCode c "R3-leaves"
+      if !jeq (getD r "domain") (getD want "domain") then c := addCode c "R3-domain"
+  -- R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
+  if !jeq (get "leaf_layer") (optStr v.leafLayer) then c := addCode c "R4-leaf-layer"
+  -- R5
+  if !jeq (get "anchors") (Json.arr v.anchors) then c := addCode c "R5-anchors"
+  -- R6
+  let previous := match v.log.back? with
+    | some e => (digestHex e).toOption.map Json.str |>.getD Json.null
+    | none => Json.null
+  if !jeq (get "previous") previous then c := addCode c "R6-previous"
+  if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
+  if let some (stream, prover) := v.binding then
+    if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
+    if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
+  -- R7
+  if v2 then
+    c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      v.outputs v.log
+  return c
+
+/-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
+before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
+def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
@@ -329,5 +421,100 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
   return c
+
+/-! ## `check` is `checkRef` -/
+
+theorem jeq_of_canon {x y : Json} {k : String} (h : Flock.canon y = .ok k) :
+    jeq x y = ((Flock.canon x).toOption == some k) := by
+  unfold jeq
+  rw [h]
+  cases Flock.canon x <;> simp [Except.toOption]
+
+theorem jeq_of_canon_error {x y : Json} {e : String} (h : Flock.canon y = .error e) : jeq x y = false := by
+  unfold jeq
+  rw [h]
+  cases Flock.canon x <;> rfl
+
+private def distinctStep (acc : Array Json) (r : Json) : Array Json :=
+  if acc.any (jeq · (getD r "port")) then acc else acc.push (getD r "port")
+
+private def keyIs (k : String) (x : Json) : Bool := (Flock.canon x).toOption == some k
+
+private def Inv (acc : Array Json) (ix : PortIndex) (seen : List Json) : Prop :=
+  ix.count = acc.size ∧ (∀ k, ix.last.contains k = acc.any (keyIs k)) ∧
+    ∀ k, ix.last[k]? = seen.find? fun r => keyIs k (getD r "port")
+
+private theorem inv_step {acc : Array Json} {ix : PortIndex} {seen : List Json} (h : Inv acc ix seen) (r : Json) :
+    Inv (distinctStep acc r) (ix.add r) (r :: seen) := by
+  obtain ⟨hc, hk, hl⟩ := h
+  obtain ⟨last, count⟩ := ix
+  unfold distinctStep PortIndex.add
+  simp only [Std.HashMap.containsThenInsert_fst, Std.HashMap.containsThenInsert_snd] at *
+  rcases hx : Flock.canon (getD r "port") with e | k₀
+  · have hn : acc.any (jeq · (getD r "port")) = false := by simp [jeq_of_canon_error hx]
+    have hkey : ∀ k, keyIs k (getD r "port") = false := fun k => by simp [keyIs, hx, Except.toOption]
+    simp only [hn, Except.toOption, Bool.false_eq_true, ↓reduceIte]
+    refine ⟨by simp [hc], fun k => by simp [hk, hkey], fun k => by simp [hkey, hl]⟩
+  · have hany : acc.any (jeq · (getD r "port")) = last.contains k₀ := by
+      rw [hk]; congr 1; funext y; rw [jeq_of_canon hx]; rfl
+    have hkey : ∀ k, keyIs k (getD r "port") = (k₀ == k) := fun k => by
+      simp [keyIs, hx, Except.toOption]
+    simp only [Except.toOption, hany]
+    refine ⟨?_, fun k => ?_, fun k => ?_⟩
+    · cases h0 : last.contains k₀ <;> simp [hc]
+    · rw [Std.HashMap.contains_insert]
+      cases h0 : last.contains k₀
+      · simp only [Bool.false_eq_true, ↓reduceIte, Array.any_push, ← hk, hkey, Bool.or_comm]
+      · simp only [↓reduceIte, ← hk]
+        by_cases he : k₀ = k
+        · subst he; simp [h0]
+        · simp [he]
+    · rw [Std.HashMap.getElem?_insert, List.find?_cons, hkey, hl]
+      by_cases he : k₀ = k
+      · simp [he]
+      · rw [show (k₀ == k) = false from by simp [he]]; rfl
+
+private theorem inv_foldl (l : List Json) :
+    ∀ acc ix seen, Inv acc ix seen → Inv (l.foldl distinctStep acc) (l.foldl PortIndex.add ix) (l.reverse ++ seen) := by
+  induction l with
+  | nil => intro acc ix seen h; simpa using h
+  | cons r l ih =>
+    intro acc ix seen h
+    simpa [List.foldl_cons, List.reverse_cons, List.append_assoc] using ih _ _ _ (inv_step h r)
+
+private theorem inv_portIndex (roots : Array Json) :
+    Inv (roots.foldl distinctStep #[]) (portIndex roots) roots.toList.reverse := by
+  unfold portIndex
+  rw [← Array.foldl_toList, ← Array.foldl_toList]
+  simpa using inv_foldl roots.toList #[] {} [] ⟨rfl, fun k => by simp, fun k => by simp⟩
+
+theorem portIndex_count (roots : Array Json) :
+    (portIndex roots).count = (roots.foldl (fun (acc : Array Json) r =>
+      if acc.any (jeq · (getD r "port")) then acc else acc.push (getD r "port")) #[]).size :=
+  (inv_portIndex roots).1
+
+theorem portIndex_has (roots : Array Json) (p : String) :
+    (portIndex roots).has p = (roots.foldl (fun (acc : Array Json) r =>
+      if acc.any (jeq · (getD r "port")) then acc else acc.push (getD r "port")) #[]).any (jeq · (Json.str p)) := by
+  unfold PortIndex.has PortIndex.find
+  rcases hp : Flock.canon (Json.str p) with e | k
+  · simp [jeq_of_canon_error hp]
+  · show (portIndex roots).last[k]?.isSome = _
+    rw [Std.HashMap.isSome_getElem?_eq_contains, (inv_portIndex roots).2.1 k]
+    congr 1; funext y; rw [jeq_of_canon hp]; rfl
+
+theorem portIndex_find (roots : Array Json) (p : String) :
+    (portIndex roots).find p = roots.reverse.find? (fun r => jeq (getD r "port") (Json.str p)) := by
+  unfold PortIndex.find
+  rcases hp : Flock.canon (Json.str p) with e | k
+  · simp only [jeq_of_canon_error hp]
+    exact (Array.find?_eq_none.2 (by simp)).symm
+  · show (portIndex roots).last[k]? = _
+    rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
+    congr 1; funext r; rw [jeq_of_canon hp]; rfl
+
+/-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
+theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
+  simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
 
 end SampledProofs.Registration

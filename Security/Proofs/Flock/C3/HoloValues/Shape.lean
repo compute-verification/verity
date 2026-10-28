@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Exec.Shape
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
-import Proofs.Flock.Soundness.Model.HoloCompiled
+import Definitions.Flock.HoloCompiled
 import Proofs.Flock.VBridge.InnerAccepts
 import Proofs.Flock.Recursive.StageKinds
 

@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+import Proofs.Flock.Soundness.ParseUnitPre
 
 set_option Elab.async false
 
@@ -111,14 +112,16 @@ theorem foldl_add_const {l : List ℕ} {k : ℕ} (h : ∀ b ∈ l, b = k) (a : �
       List.length_cons]
     ring
 
-/-- **The returned outputs' shape is the parse's**: in an untyped circuit whose unit returns the outputs, `OutShape` is
-what `Net.ofRows` (`built_out`) and `HmRow.check` (`check_out`) checked. -/
-theorem outShape_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
-    (h : HmRow.parse tags bytes tables = .ok c) (hU : Built c.unit) (ho : c.outNet = c.unitNet) : OutShape c := by
-  have P := parse_facts h
-  obtain ⟨ls, hls⟩ := P.check
-  obtain ⟨h16, hsz, hlo⟩ := check_out P.typed ho hls
-  obtain ⟨hne, hg⟩ := built_out hU
+/-- **The returned outputs' shape is the check's**: in an untyped circuit whose unit returns the outputs and has the
+output groups `Net.ofRows` checks (`built_out`'s conclusion), `OutShape` is what `HmRow.check` (`check_out`) checked. -/
+theorem outShape_of_check {tags : Tags} {c : Flock.Circuit} (ht : c.typed = none)
+    (hck : ∃ ls, HmRow.check c tags ls = .ok ())
+    (hout : c.unit.outGroups.size ≠ 0 ∧
+      ∀ g ∈ c.unit.outGroups.toList, isPow2 g.words = true ∧ g.bits.foldl (· + ·) 0 ≤ g.words * WORD)
+    (ho : c.outNet = c.unitNet) : OutShape c := by
+  obtain ⟨ls, hls⟩ := hck
+  obtain ⟨h16, hsz, hlo⟩ := check_out ht ho hls
+  obtain ⟨hne, hg⟩ := hout
   have hmem : c.unit.outGroups.getD 0 default ∈ c.unit.outGroups.toList := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (Nat.pos_of_ne_zero hne), Option.getD_some]
     exact Array.getElem_mem_toList _
@@ -142,5 +145,24 @@ theorem outShape_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Stri
     rw [hl]
     simp only [WORD] at hfit
     omega
+
+/-- **The returned outputs' shape is the parse's, for a unit given ahead of the file** (a templated file's unit net):
+in an untyped circuit whose unit `n` returns the outputs, `OutShape` is what `HmRow.check` checked, when `n`'s output
+groups are what `Net.ofRows` checks (`built_out`'s conclusion). -/
+theorem outShape_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {n : Net}
+    {c : Flock.Circuit} (h : HmRow.parse tags bytes tables (pre := #[("unit", n)]) = .ok c)
+    (hout : n.outGroups.size ≠ 0 ∧
+      ∀ g ∈ n.outGroups.toList, isPow2 g.words = true ∧ g.bits.foldl (· + ·) 0 ≤ g.words * WORD)
+    (ho : c.outNet = c.unitNet) : OutShape c := by
+  have P := (parse_factsPre_nets h).1
+  have hu := (unit_of_parsePre h).2.2
+  exact outShape_of_check P.typed P.check (hu ▸ hout) ho
+
+/-- **The returned outputs' shape is the parse's**: in an untyped circuit whose unit returns the outputs, `OutShape` is
+what `Net.ofRows` (`built_out`) and `HmRow.check` (`check_out`) checked. -/
+theorem outShape_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) (hU : Built c.unit) (ho : c.outNet = c.unitNet) : OutShape c :=
+  have P := parse_facts h
+  outShape_of_check P.typed P.check (built_out hU) ho
 
 end FlockSoundness.Discharge.Layout

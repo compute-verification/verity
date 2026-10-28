@@ -66,7 +66,7 @@ def test_stored_rows_replay_as_the_expanded_rows(request, tmp_path, name):
     assert _strip(reps[0]) == _strip(reps[1])
 
 
-def test_a_stored_moe_program_that_is_not_pair_major_is_named_alike(moe_world):  # noqa: F811
+def test_a_stored_moe_program_that_is_not_pair_major_is_named_alike(moe_world):
     rows = [dict(r) for r in moe_world.inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]
     rows[ups[0]]["args"], rows[ups[1]]["args"] = rows[ups[1]]["args"], rows[ups[0]]["args"]
@@ -78,7 +78,7 @@ def test_a_stored_moe_program_that_is_not_pair_major_is_named_alike(moe_world): 
     assert any("not pair-major" in k for k in pops[0][1])
 
 
-def test_rank_evaluate_on_its_loaded_index_decides_what_the_replays_own_index_decides(tmp_path, monkeypatch, attn_world):  # noqa: F811
+def test_rank_evaluate_on_its_loaded_index_decides_what_the_replays_own_index_decides(tmp_path, monkeypatch, attn_world):
     w = attn_world
     d = _write(tmp_path, w.inst)
     inst = RM.load_program(d, expand=False)["instances"]

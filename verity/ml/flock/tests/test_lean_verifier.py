@@ -48,18 +48,21 @@ def test_no_escape_hatches():
     assert sources()
     hits = [f"{p.relative_to(LEAN)}:{i}: {line.strip()}" for p in sources()
             for i, line in enumerate(p.read_text().splitlines(), 1) if FORBIDDEN.search(line)]
-    assert not hits, hits
+    assert not hits, ("the verifier of record runs only the definitions its proofs are about: write each of these in "
+                      "plain Lean, with no @[extern], @[implemented_by], unsafe or native_decide (reword a comment that "
+                      "names one):\n" + "\n".join(hits))
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_STATEMENTS = PROOFS.parent / "Models" / "Flock" / "Guarantees" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.|"
-                           r"Models\.Flock\.Guarantees\.Audit$)")
+AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+                           r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
 
 
 def test_audit_layer_is_abstract():
-    """The audit theorems import only the interaction model, Mathlib, each other and their lifted statements
-    (`Models.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
+    """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
+    the lock's layers hold to itself and Mathlib) and their lifted statements
+    (`Definitions.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
@@ -218,6 +221,66 @@ def test_unit_draw_check(tmp_path):
     assert len(got) == len(cases)
     for (case, want), g in zip(cases, got):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_is_held_to_its_registered_law(tmp_path):
+    """`draw --registration F` and `draw-test --registration F`: the law is the one the window registered before any coin,
+    so a draw at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    regs = {}
+    for k in (2, 8):
+        regs[k] = tmp_path / f"reg-{k}.json"
+        regs[k].write_text(json.dumps({"law": {"law": "subset", "k": k}, "population": 512, "program": "x"}))
+
+    def draw(k, reg, population=512):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
+                            "--registration", str(reg)], capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+    for k, other in ((2, 8), (8, 2)):
+        rc, out, _ = draw(k, regs[k])
+        assert rc == 0 and len(json.loads(out[5:])["units"]) == k
+        rc, out, err = draw(other, regs[k])
+        assert rc == 2 and not out and f"is not the registered law {{\"k\":{k},\"law\":\"subset\"}}" in err
+    rc, out, err = draw(2, regs[2], population=511)
+    assert rc == 2 and not out and "the population 511 is not the registered 512" in err
+
+    def subset(k, n=512):
+        return {"law": "subset", "population": n, "k": k, "units": list(range(k))}
+
+    cases = [(2, subset(2), ""), (2, subset(8), "U2: the law"), (8, subset(8), ""), (8, subset(2), "U2: the law"),
+             (2, subset(2, 511), "U2: the population")]
+    for k, d, want in cases:
+        f = tmp_path / "cases.json"
+        f.write_text(json.dumps([{"record": d, "statement": d, "instances": len(d["units"])}]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(f), "--registration", str(regs[k])],
+                           capture_output=True, text=True, check=True)
+        g = json.loads(p.stdout.splitlines()[-1][10:])
+        assert g["ok"] == (want == "") and g["why"].startswith(want), (k, d, g)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_over_several_tables_has_a_count_they_split():
+    """`draw --tables J` refuses a law whose unit count the J tables can't split evenly: a Bernoulli draw (its count is random),
+    a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one draw of 4 units."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def draw(*args):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args],
+                           capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+    rc, out, err = draw("--p", "1/2", "--tables", "2")
+    assert rc == 2 and not out and "tables: several tables need a subset or stratified draw" in err
+    rc, out, err = draw("--k", "3", "--tables", "2")
+    assert rc == 2 and not out and "3 units do not split into 2 equal tables" in err
+    for j in ("0", "65"):
+        rc, out, err = draw("--k", "4", "--tables", j)
+        assert rc == 2 and not out and "1 ≤ J ≤ 64" in err
+    for j in ("1", "2", "4"):
+        rc, out, _ = draw("--k", "4", "--tables", j)
+        assert rc == 0 and len(json.loads(out[5:])["units"]) == 4
 
 
 def _ir_tests() -> Path:
@@ -574,6 +637,7 @@ def _one_stage_draw():
     return draw if hasattr(draw, "derive") else None
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
                     reason="no Lean toolchain or no stratified law in core (PRs #161, #164)")
 def test_stratified_draw_agrees_with_core(tmp_path):
@@ -664,6 +728,7 @@ def test_the_reference_vectors_exist():
     assert not missing, missing
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
                     reason="no Lean toolchain or no program format vectors (PR #120)")
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
@@ -687,6 +752,7 @@ def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
@@ -742,6 +808,7 @@ def test_pin_is_a_column_of_the_block(tmp_path):
     assert p.stdout.split("\n")[:2] == [f"({out}, {out})", '("ok 896", "ok 896")'], p.stdout
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     """`HmRow.check` refuses a range whose slots are smaller than a 128-bit word (below 64 bits the fold is no
@@ -780,6 +847,7 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
         assert p.returncode == 1 and "a range's slots are smaller than a word or larger than the block" in p.stdout, (change, p.stdout)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     """`HmRow.parse` refuses a `k_log` past 27 where it reads it, before `check` computes `2^k_log` and `2^slot_log`, and

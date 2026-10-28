@@ -1,5 +1,5 @@
-"""R13 X-05 (B-SAMPLING) — the sampling policy is a structural input of the Bet A construction and an applicability condition;
-a row whose sampler the builder cannot bind is REFUSED, never built as the greedy Program (F-dse-08 was a fail-open Build).
+"""The sampling policy is a structural input of the Bet A construction and an applicability condition; a workload whose sampler
+the builder cannot bind is REFUSED, never built as the greedy Program (that would be a fail-open Build).
 
 GPU-free and vLLM-free: the refusal happens in `derive_step.run` before any vLLM import, so these tests run anywhere `verity.ml.circuits`
 imports.  Covered: policy parsing from `--sampling` and from the two manifest formats (sweep/workload.py `sweep.*`, legacy
@@ -96,7 +96,7 @@ def test_arg_and_manifest_must_agree(tmp_path):
 
 
 def test_top_k_row_is_refused_before_export(tmp_path):
-    """[R15 stoch] top-k has no Definition (`_topk_topp_kernel`): refused fail-closed with the reason, before any export."""
+    """top-k has no Definition (`_topk_topp_kernel`): refused fail-closed with the reason, before any export."""
     out = str(tmp_path / "build")
     pol = sampling_policy("stoch-t0.7-p0.9-k50", None)
     res = run(out, 1, 8, "b1-eager-v3", "gloo", wrapper="request", LP=8, T=4, sampling=pol)
@@ -110,7 +110,7 @@ def test_top_k_row_is_refused_before_export(tmp_path):
 
 
 def test_unseeded_stochastic_row_is_refused(tmp_path):
-    """[R15 stoch] no declared seed -> vLLM draws one at random: the RNG stream is not a Program input; refused, never built."""
+    """No declared seed -> vLLM draws one at random: the RNG stream is not a Program input; refused, never built."""
     pol = sampling_policy('{"temperature": 0.8, "top_p": 0.95, "seeded": false}', None)
     assert pol["kind"] == "stochastic" and pol["seeded"] is False
     res = run(str(tmp_path / "b"), 1, 8, "b1-eager-v3", "gloo", wrapper="request", LP=8, T=4, sampling=pol)
@@ -123,8 +123,8 @@ def test_mixed_batch_is_refused(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [R15 stoch -> R16 coord M-0169] the sampler geometry: S is a DERIVED input of the workload (S_t = SplitsFor_v1(|live(t)|, num_SMs)),
-# the request Program's `splits` Input -- never a static, never a declared schedule
+# the sampler geometry: S is the registered split count of the target (`topp_geometry.registered_splits`), the constant the served
+# engine pins -- never the live batch's, never a declared schedule
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -144,61 +144,41 @@ def _l40s():
     return TargetProfile.default().with_overrides(num_sms=142)
 
 
-DERIVED_GEOM_KEYS = {"sampler_batch", "num_sms", "pipeline", "relation", "rule", "live", "splits_range_1_to_B", "input"}
+GEOM_KEYS = {"num_sms", "pipeline", "relation", "splits", "rule", "constant"}
 
 
-def test_geometry_is_derived_for_every_batch_and_chronology(tmp_path, monkeypatch):
-    """Every stochastic row of several requests -- B2, the uniform B8, the B8 whose live count changes S, staggered arrivals, a shape that
-    is no declared request -- gets the SAME geometry: splits 'derived' + the relation; no schedule, no per-request field, no assumption.
-    The R15 knob STOCH_DECLARED_CHRONOLOGY_S is dead (set or not: same result).  (One request: the constant, below.)"""
-    from verity_vllm.pipeline.build import sampler_geometry
-    cases = [dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
-             dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8)]
-    geoms: dict[int, set] = {}
-    for env in (None, "1"):
-        if env is None:
-            monkeypatch.delenv("STOCH_DECLARED_CHRONOLOGY_S", raising=False)
-        else:
-            monkeypatch.setenv("STOCH_DECLARED_CHRONOLOGY_S", env)
-        for c in cases:
-            for lp_t in ((8, 15), (8, 9), (None, None)):          # request wrapper (a declared shape, an undeclared one) and the step wrapper
-                pol = sampling_policy(None, _requests_manifest(tmp_path, c["n"], arrive=c.get("arrive"), caps=c.get("caps")))
-                assert sampler_geometry(pol, _l40s(), LP=lp_t[0], T=lp_t[1]) is None
-                assert pol["splits"] == "derived"
-                g = pol["geometry"]
-                assert set(g) == DERIVED_GEOM_KEYS, sorted(g)
-                assert g["sampler_batch"] == c["n"] and g["num_sms"] == 142 and g["relation"] == "SplitsFor_v1" and g["live"] == "workload-derived"
-                assert g["splits_range_1_to_B"] == [{2: 32, 8: 16}[c["n"]], 32]
-                assert "request" not in g and "declared_live_counts" not in g and "assumption" not in g and "experimental" not in g
-                geoms.setdefault(id(c), set()).add(json.dumps(g, sort_keys=True))
-    # within one workload every component (every shape, the step wrapper, either env) declares the SAME geometry: GP-01 agreement by construction
-    assert all(len(v) == 1 for v in geoms.values()), {k: len(v) for k, v in geoms.items()}
-
-
-@pytest.mark.parametrize("num_sms,S", [(142, 32), (132, 32), (16, 16), (6, 4)])
-def test_a_single_request_takes_the_constant_S_of_its_sm_count(tmp_path, num_sms, S):
-    """[single-request workloads] A workload of one request has |live(t)| = 1 at every sampling event: S = SplitsFor_v1(1, num_SMs),
-    computed from the target's SM count, is a constant of its Program (`sampling["splits"]` the int; no `splits` input), for every
-    wrapper shape and the step wrapper alike."""
+@pytest.mark.parametrize("num_sms,S", [(188, 32), (142, 32), (132, 32), (16, 16), (6, 4)])
+def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms, S):
+    """The served engine runs every top-p launch at the registered split count (`engine.topp_pin`), so every stochastic row -- one
+    request, B2, the uniform B8, the B8 whose live count would change vLLM's own S, staggered arrivals, no manifest at all -- takes
+    S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) as a constant of its Program (`sampling["splits"]` the int, no `splits`
+    input), for every wrapper shape and the step wrapper alike; the geometry carries nothing of the batch, so every component of every
+    workload on the target declares the same (GP-01 agreement by construction)."""
     from verity_vllm.pipeline.build import sampler_geometry
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.frontend.vllm_meta import single_request_splits
-    from verity_vllm.program.registry.topp_geometry import splits_for_v1
+    from verity_vllm.program.frontend.vllm_meta import registered_policy_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for_v1
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
-    for lp_t in ((8, 15), (8, 9), (None, None)):
-        pol = sampling_policy(None, _requests_manifest(tmp_path, 1))
-        assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
-        assert pol["splits"] == S == splits_for_v1(1, num_sms) and single_request_splits(pol) == S
-        g = pol["geometry"]
-        assert g["sampler_batch"] == 1 and g["num_sms"] == num_sms and g["splits"] == S and g["live"] == "single request"
-        assert "input" not in g and g["relation"] == "SplitsFor_v1"
-    # a policy whose int disagrees with its geometry, or whose geometry is several requests', is no single-request constant
-    assert single_request_splits(dict(pol, splits=S * 2 if S < 32 else 16)) is None
-    assert single_request_splits(dict(pol, geometry=dict(g, sampler_batch=2))) is None
-    # without a workload manifest nothing establishes one request: the derived input stays
-    pol = sampling_policy(None, None)
-    pol.update(kind="stochastic", seeded=True, temperature=0.8, top_p=0.95, top_k=0)
-    assert sampler_geometry(pol, target) is None and pol["splits"] == "derived"
+    cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
+             dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8), None]
+    geoms = set()
+    for c in cases:
+        for lp_t in ((8, 15), (8, 9), (None, None)):
+            if c is None:
+                pol = sampling_policy(None, None)
+                pol.update(kind="stochastic", seeded=True, temperature=0.8, top_p=0.95, top_k=0)
+            else:
+                pol = sampling_policy(None, _requests_manifest(tmp_path, c["n"], arrive=c.get("arrive"), caps=c.get("caps")))
+            assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
+            assert pol["splits"] == S == registered_splits(num_sms) == splits_for_v1(1, num_sms) and registered_policy_splits(pol) == S
+            g = pol["geometry"]
+            assert set(g) == GEOM_KEYS, sorted(g)
+            assert g["num_sms"] == num_sms and g["splits"] == S and g["relation"] == "registered"
+            geoms.add(json.dumps(g, sort_keys=True))
+    assert len(geoms) == 1
+    # a policy whose int is not the registered S of its geometry, or that has no geometry, carries no registered S
+    assert registered_policy_splits(dict(pol, splits=S * 2 if S < 32 else 16)) is None
+    assert registered_policy_splits({k: v for k, v in pol.items() if k != "geometry"}) is None
 
 
 def test_geometry_refusals_are_named(tmp_path):
@@ -217,7 +197,7 @@ def test_geometry_refusals_are_named(tmp_path):
     pol = sampling_policy(None, _requests_manifest(tmp_path, 2))
     pol["top_k"] = 50
     assert sampler_geometry(pol, _l40s())["detail"]["missing"] == ["TopKMask"]
-    # a target without num_sms cannot derive S
+    # a target without num_sms has no registered S
     pol = sampling_policy(None, _requests_manifest(tmp_path, 2))
     class _NoSms:
         num_sms = None
@@ -234,12 +214,15 @@ def test_declared_live_counts_follow_arrivals_and_caps():
 
 
 def test_make_wrapper_refuses_a_declared_s():
-    """The wrapper takes S as an INPUT; a numeric `splits` (R15's static / schedule) is refused by name."""
+    """A numeric `splits` other than the registered S of the policy's geometry is refused by name."""
     pytest.importorskip("torch")
     from verity_vllm.program.frontend.vllm_meta import make_wrapper
-    with pytest.raises(ValueError, match="must be 'derived'"):
+    with pytest.raises(ValueError, match="must be the registered"):
         make_wrapper("request", object(), LP=8, T=4, sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32})
-    with pytest.raises(ValueError, match="must be 'derived'"):
+    with pytest.raises(ValueError, match="must be the registered"):
+        make_wrapper("request", object(), LP=8, T=4, sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 16,
+                                                                "geometry": {"num_sms": 188}})
+    with pytest.raises(ValueError, match="must be the registered"):
         make_wrapper("request", object(), LP=8, T=4, sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": [16] * 5})
 
 
@@ -256,7 +239,7 @@ def test_applicability_carries_the_sampler():
     s = applicability_conditions(prof, {}, {}, {}, {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "source": "arg", "label": "x",
                                                     "splits": "derived"})
     assert g["sampler"] == {"kind": "greedy"} and g["token_select"] == SAMPLERS_BOUND["greedy"]
-    # [R15 stoch] the stochastic select IS bound now (GumbelTopPTokenSelect_v1{V}); the policy is a condition of reuse, S is DERIVED (M-0169)
+    # the stochastic select IS bound now (GumbelTopPTokenSelect_v1{V}); the policy is a condition of reuse, S is DERIVED
     assert s["sampler"] == {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
     assert s["token_select"] == SAMPLERS_BOUND["stochastic"] and "GumbelTopPTokenSelect" in s["token_select"]
     assert g != s  # a greedy artifact is not reusable for a stochastic row (check_reuse names the differing field)

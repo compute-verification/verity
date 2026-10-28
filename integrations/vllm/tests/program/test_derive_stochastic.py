@@ -1,6 +1,6 @@
-"""[R15 stoch] The frontend binds the seeded temperature + top-p token select: `vllm_iface.gumbel_topp_token_select(logits, seed, T, p,
+"""The frontend binds the seeded temperature + top-p token select: `vllm_iface.gumbel_topp_token_select(logits, seed, T, p,
 pos, splits)` -> `GumbelTopPTokenSelectSharedGreedy_v1{V}(row, Const32[p], seed, Const64[pos], Const32[T], splits[s])` per sampled step
-(`GumbelTopPTokenSelect_v1{V}` under a declared `sampler_construction = "greedy-check-per-stage"`), the seed a Program INPUT and [R16 stoch, coord M-0169] the split count S a request-owned Program INPUT `splits` (int32 [STEPS+1], entry s = the
+(`GumbelTopPTokenSelect_v1{V}` under a declared `sampler_construction = "greedy-check-per-stage"`), the seed a Program INPUT and the split count S a request-owned Program INPUT `splits` (int32 [STEPS+1], entry s = the
 derived S_t = SplitsFor_v1(|live(t)|, num_SMs) of sampling event s) -- the 6th operand, never a static of the Definition.
 
 Positive: the stand-in `StochasticServe` (derive_examples) derives under the vLLM ruleset / `b1-eager-v3`: one composite per sampled
@@ -29,7 +29,7 @@ from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 
@@ -151,7 +151,7 @@ def test_literal_seed_is_hidden_state():
 
 @pytest.mark.parametrize("S", [32, 16])
 def test_literal_splits_is_refused_like_a_literal_seed(S):
-    """[coord M-0169] a wrapper that writes S itself (a literal tensor inside forward) is not a Program the Match can hold: S is the
+    """A wrapper that writes S itself (a literal tensor inside forward) is not a Program the Match can hold: S is the
     workload's derived value, read from the `splits` Input."""
     C = _tiny_config()
     with torch.device("meta"):

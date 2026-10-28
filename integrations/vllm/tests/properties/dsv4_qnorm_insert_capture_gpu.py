@@ -72,10 +72,10 @@ import numpy as np
 from tests.properties import dsv4_flashmla_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import derived_rows as DW
-from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as W
-from verity_vllm.program.kernels import flashmla_twin as FT
-from verity_vllm.program.registry import dsv4_qnorm_insert as R
+from verity.ml.definitions.numerics import derived_rows as DW
+from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as W
+from verity.ml.definitions.numerics import flashmla_twin as FT
+from verity.ml.definitions.registry import dsv4_qnorm_insert as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-qnorm-insert-capture/v1"
@@ -483,7 +483,7 @@ def selection() -> dict[str, Any]:
     from vllm.models.deepseek_v4.nvidia.model import _select_dsv4_attn_cls
     from vllm.v1.attention.backends.mla.indexer import dsa_indexer_uses_fp4
 
-    import vllm._C_stable_libtorch  # noqa: F401  -- registers torch.ops._C's stable ops
+    import vllm._C_stable_libtorch  # registers torch.ops._C's stable ops
 
     cfg = get_current_vllm_config()
     cls = _select_dsv4_attn_cls(cfg)
@@ -658,8 +658,8 @@ def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the seams: the insert's row is `FlashMlaKvRow_v1{448, 64, 64}`'s
     input, the indexer's outputs `DsaMqaLogit_v1{H=64, D=128}`'s q and w."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa as Dsa
-    from verity_vllm.program.registry import flashmla as F
+    from verity.ml.definitions.registry import dsa as Dsa
+    from verity.ml.definitions.registry import flashmla as F
 
     def row_seam() -> bool:
         out = bind(R.Dsv4QNormRopeKvInsert, **R.DSV4_INSERT).signature()[1].fields

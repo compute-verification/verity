@@ -62,7 +62,7 @@ SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
 ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",
-               "trusted-nebius-host")
+               "trusted-host")
 RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 

@@ -5,11 +5,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: a Definition registers its kernel lazily (verity.ml.kernels, which imports the catalog, so it is no dependency here).
-# tests/test_tc_probe_families.py imports the tensor-core probe's tile generation (benchmarks/tc_probe/tc_probe.py), and
-# tests/test_mufu.py checks the frozen SP1 backend's integer-only MUFU (verity_sp1, which raises vLLM's check codes).
+# tests/test_tc_probe_families.py imports the tensor-core probe's tile generation (benchmarks/tc_probe/tc_probe.py).
 # tests/test_discrepancy_log.py checks that each evidence ref in verity/ml/circuits/silicon/discrepancy_log.json exists, which the
 # guard can't see, so every ref outside this directory is listed here (its test_every_evidence_path_is_an_input_of_this_suite fails on one that isn't).
-inputs = ["verity", "Security", "verity/ml/kernels", "archive/sp1/python/verity_sp1", "integrations/vllm/verity_vllm/__init__.py",
+inputs = ["verity", "Security", "verity/ml/kernels", "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/check", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4/probe.py",
           "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
           "benchmarks/numerical/tests/checker/test_fp8.py",

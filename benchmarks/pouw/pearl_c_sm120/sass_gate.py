@@ -15,13 +15,13 @@ QMMA, HMMA = "QMMA.16832.F32.E4M3.E4M3", "HMMA.16816.F32.BF16"
 MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: kernel: (QMMA multiple, HMMA count); a multiple of one stage's atoms: the 128 x 128 tiles (mainloop_sm120.cuh: a warp of
 #: 64 x 32) 16 atoms per k32, 64 per 128-deep stage, and 64 of the peel;
-#: 64 x 64 (_d) and 128 x 32 (gemm_words) tiles 4 per k32, 8 per 64-deep stage, and 16 of the peel; the words kernels one atom
-#: per k32 per warp
+#: 64 x 64 (_d) and 128 x 32 (gemm_words) tiles 4 per k32, 8 per 64-deep stage (16 per 128-deep one, decode's served chain
+#: gemm_pearlc_d), and 16 of the peel; the words kernels one atom per k32 per warp
 WANT = {**{g: (64, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u")},
         **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u", "gemm_words", "gemm_words_u")},
         **{g: (64, 64) for g in ("gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u")},
-        "gemm_pearlc_d": (8, 16), "gemm_pearlc_d_u": (8, 16),
-        "words": (1, 0), "words_u": (1, 0), "form_s5": (1, 0), "form_s5_r144": (1, 0), "form_s5_scalar": (1, 0),
+        **{g: (16, 16) for g in ("gemm_pearlc_d", "gemm_pearlc_d_u")}, **{g: (8, 16) for g in ("gemm_pearlc4_d", "gemm_pearlc4_d_u")},
+        "words": (1, 0), "words_u": (1, 0), "words_k": (1, 0), "form_s5": (1, 0), "form_s5_r144": (1, 0), "form_s5_scalar": (1, 0),
         **{f: (1, 0) for f in ("form_rate", "form_rate_r144", "form_rate_scalar", "form_rate_nocast", "form_rate_nocast_r144",
                                "form_rate_atoms")}}
 
@@ -79,7 +79,7 @@ def main(argv: list[str]) -> int:
         return 1
     print(f"pearl_c_sm120.cubin: {len(funcs)} kernels; " + ", ".join(
         f"{n} {funcs[n]['regs']} regs {funcs[n]['QMMA']} QMMA" + (f" {funcs[n]['HMMA']} HMMA" if funcs[n]["HMMA"] else "")
-        for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_d", "words", "form_s5"))
+        for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_d", "words", "words_k", "form_s5"))
         + "; no local memory")
     return 0
 

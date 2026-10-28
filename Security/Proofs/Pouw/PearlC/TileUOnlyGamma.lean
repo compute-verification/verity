@@ -1,8 +1,8 @@
 import Proofs.Pouw.PearlC.UOnlyGamma
-import Models.Pouw.Assumptions.PearlC.TTOutTileUOnly
+import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 
 /-!
-# TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and γ from it (the cheap-binding lane's file)
+# TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and γ from it
 
 Staged; nothing pinned.
 * `goodTiles_subset_goodTilesU`: a tile good under (C̃, U) binding is good under U alone.

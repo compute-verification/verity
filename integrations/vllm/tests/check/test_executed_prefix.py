@@ -1,20 +1,23 @@
-"""[R17-1 / F-moe-r17-03 (moe M-0283)] the Commit's B>=2 population is placed over each request's EXECUTED PREFIX OF RECORD -- cap on a
+"""The Commit's B>=2 population is placed over each request's EXECUTED PREFIX OF RECORD -- cap on a
 length stop, served + LAG on an EOS stop under the DECLARED lag -- never over the Program's cap shape and never by a lag read from the trace.
 
-The record that found it: OLMoE B2 i32/o32 mixedstop (cp-moe 2026-09-20 18:45Z, lane e32550951): r0 served 11 (EOS 50279 at output index 10)
-/ executed 12 under LAG 1, r1 32 / 32; GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bound 13808/19988,
-composition 'engine step 12 ... missing [r0 x1] (+19 more steps)', linkage 44/64) and failed by name.  Torch-free (the offline committer of
+The record that found it: OLMoE B2 i32/o32 mixedstop: r0 served 11 (EOS 50279 at output index 10) / executed 12 under LAG 1, r1 32 / 32;
+GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bound 13808/19988, composition
+'engine step 12 ... missing [r0 x1] (+19 more steps)', linkage 44/64) and failed by name.  Torch-free (the offline committer of
 test_binding_negatives)."""
 from __future__ import annotations
 
 import pytest
 
 from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
-from verity_vllm.commit import binding as B
-from verity_vllm.check import executed_prefix as EP
+from verity_vllm.commit import binding as B, executed_prefix as EP
+from verity_vllm.check import executed_prefix as EPL
 from verity_vllm.check.replay.linkage import linkage_horizon
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 EOS = 50279
+#: the identity coverage `commit.binding.coverage_check` writes, which a binding's execution extent sits beside
+COVERED = {"ok": True, "expected_n": 64, "bound_n": 64, "missing_n": 0, "ambiguous_n": 0}
 
 
 def _served(lens: dict[str, int], eos_last: set[str] = frozenset()) -> dict[str, list[int]]:
@@ -47,7 +50,7 @@ def test_an_early_stop_the_declared_rule_cannot_place_is_refused_by_name_and_kee
     assert not e["ok"] and e["requests"]["r0"]["executed_prefix_len"] == 32 and "declares no LAG" in e["problems"][0] and "never default" in e["problems"][0]
     # no declared stop rule
     e = EP.executed_prefix_of_record(["r0", "r1"], served, caps=caps, eos_of_record=None, lag=1)
-    assert not e["ok"] and "declares no stop rule" in e["problems"][0] and "F-pm-24" in e["problems"][0]
+    assert not e["ok"] and "declares no stop rule" in e["problems"][0] and "fail closed" in e["problems"][0]
     # the last served token is not a declared EOS id (a request that stopped for no declared reason)
     e = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}), caps=caps, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "is not a declared EOS id" in e["problems"][0] and e["requests"]["r0"]["executed_prefix_len"] == 32
@@ -62,7 +65,7 @@ def test_an_early_stop_the_declared_rule_cannot_place_is_refused_by_name_and_kee
 
 
 def test_served_past_the_first_eos_fails_by_name_f_r17_14():
-    """[rev F-r17-14 (M-0540)] the Program's rule stops at the FIRST declared EOS.  served [EOS, x, EOS] (cap 5, LAG 1) is NOT an EOS stop
+    """The Program's rule stops at the FIRST declared EOS.  Served [EOS, x, EOS] (cap 5, LAG 1) is NOT an EOS stop
     at 3 with executed 4 -- it was served past an EOS at index 0 (Continuation_v1 stops there: served [EOS], executed [1, 2]).  FAIL by name;
     the prefix stays the cap (nothing accepted).  The same for an EOS mid-list on a length stop ([x, EOS, y] at the cap) and for an
     EOS-then-more under LAG 0.  An EOS ONLY at the last served index is the EOS stop it always was."""
@@ -71,7 +74,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
     r0 = e["requests"]["r0"]
     assert r0["first_eos_index"] == 0 and r0["executed_prefix_len"] == 5 and r0["eos_stop"] is None and "lag_steps" not in r0
     assert e["problems"] == [f"r0: {r0['why']}"] and r0["why"].startswith("served past an EOS at index 0: served token 50279 is a declared EOS id but 2 more token(s) were served after it (served 3, cap 5)")
-    assert "stops at the FIRST EOS -- served_output_len would be 1 (F-r17-14)" in r0["why"]
+    assert "stops at the FIRST EOS -- served_output_len would be 1" in r0["why"]
     # an EOS in the middle of a list that reached the cap: also served past the stop (the cap does not launder it)
     ec = EP.executed_prefix_of_record(["r0"], {"r0": [7, EOS, 9]}, caps={"r0": 3}, eos_of_record=[EOS], lag=1)
     assert not ec["ok"] and "served past an EOS at index 1" in ec["problems"][0] and ec["requests"]["r0"]["cap_exhausted"] is None
@@ -81,7 +84,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
     # the positive it must not touch: EOS at the last served index only
     ok = EP.executed_prefix_of_record(["r0"], {"r0": [7, 3, EOS]}, caps={"r0": 5}, eos_of_record=[EOS], lag=1)
     assert ok["ok"] and ok["requests"]["r0"]["first_eos_index"] == 2 and ok["requests"]["r0"]["executed_prefix_len"] == 4 and ok["requests"]["r0"]["lag_steps"] == [3]
-    # no declared EOS set: nothing to find (the length-stop request is fine; the early stop fails for its own reason, F-pm-24)
+    # no declared EOS set: nothing to find (the length-stop request is fine; the early stop fails for its own reason)
     nn = EP.executed_prefix_of_record(["r0"], {"r0": [7, 3, 9]}, caps={"r0": 3}, eos_of_record=None, lag=1)
     assert nn["ok"] and nn["requests"]["r0"]["first_eos_index"] is None
 
@@ -108,13 +111,13 @@ def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_sh
     """r1 declared cap 4 stops by EOS after 2 served (LAG 0 -> executed 2), r3 cap 5 after 3; the others run to their caps."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2, "r3": 3}
     bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
-    # the pre-R17-1 placement (every request over its cap): missing = r1's 2 + r3's 2 unexecuted steps, composition fails at step 2
+    # the older placement (every request over its cap): missing = r1's 2 + r3's 2 unexecuted steps, composition fails at step 2
     pop_cap, hdr_cap = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals)
     cov_cap = B.coverage_check(pop_cap, bmap)
     comp_cap = B.composition_check(hdr_cap, bmap)
     assert not cov_cap["ok"] and cov_cap["missing_n"] > 0 and {m["request_id"] for m in cov_cap["missing"]} <= {"r1", "r3"}
     assert not comp_cap["ok"] and comp_cap["problems"][0]["engine_step"] == 2 and "r1 x1" in comp_cap["problems"][0]["missing"]
-    # the R17-1 placement: the requirement is each request's executed prefix; the manifest stays the Program's (cap shape)
+    # the executed-prefix placement: the requirement is each request's executed prefix; the manifest stays the Program's (cap shape)
     pop, hdr = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
     assert hdr["programmed_not_executed_n"] == len(pop_cap) - len(pop) > 0 and hdr["request_steps_of_record"]["r1"] == [0, 1]
     cov = B.coverage_check(pop, bmap)
@@ -124,7 +127,7 @@ def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_sh
     assert EP.rows_past_the_stop(bmap, rsteps)["ok"]
     # every step still has its composition checked (no step was dropped: r2's cap 1 already ended at step 1 in the declaration)
     assert comp["checked_steps"] == max(B8_CAP)
-    # [rel M-0410 (a)] the classification is on the record by family / request / kind, and the manifest of record is untouched (rows_n, digest)
+    # the classification is on the record by family / request / kind, and the manifest of record is untouched (rows_n, digest)
     ne = hdr["not_executed_by_rule"]
     assert ne["n"] == hdr["programmed_not_executed_n"] and sum(ne["by_family"].values()) == ne["n"] and set(ne["by_request"]) == {"r1", "r3"}
     assert ne["by_request"]["r1"] == ne["by_request"]["r3"] and sum(ne["by_request"].values()) == ne["n"]     # 2 unexecuted steps each, every family per step
@@ -133,13 +136,13 @@ def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_sh
 
 
 def _population_block(epr: dict, by_family: dict[str, int], *, applied: bool = True, n_exec: dict[str, int] | None = None) -> dict:
-    """reqval's population.not_executed_by_rule as sampled_replay writes it (the keys the reconciliation reads)."""
+    """population.not_executed_by_rule as sampled_replay writes it (the keys the reconciliation reads)."""
     reqs = {rid: {"n_exec": (n_exec or {}).get(rid, r["executed_prefix_len"])} for rid, r in epr["requests"].items()}
     return {"applied": applied, "by_request": reqs, "totals": {"by_family": {f: {"N_manifest": n + 1, "N_required": 1, "N_excluded": n} for f, n in by_family.items()}}}
 
 
 def test_the_commits_classification_and_the_populations_third_bucket_are_reconciled_identity_count_by_identity_count(tmp_path):
-    """[COORD R17-26/27; rel M-0410 (a)] one mechanism on the record: n_exec per request equal, the count per ROW family equal; a batch-level
+    """One mechanism on the record: n_exec per request equal, the count per ROW family equal; a batch-level
     or named-input family (outside the population split's reach) is named, never a FAIL and never read as equal."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2, "r3": 3}
     bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
@@ -164,9 +167,9 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     rec = EP.reconcile_not_executed(cc2, _population_block(epr, dict(row_fams, input_token_ids=0, fa2_hidden_m1_stream=0)), epr)
     assert rec["ok"] and set(rec["outside_population_reach"]) == {"input_token_ids", "fa2_hidden_m1_stream"}
     o = rec["outside_population_reach"]["input_token_ids"]
-    assert (o["kind"], o["commit"], o["population_N_excluded"], o["population_reaches"]) == (EP.KIND_INPUT, 20, 0, False) and "F-moe-r17-05" in o["pending"]
+    assert (o["kind"], o["commit"], o["population_N_excluded"], o["population_reaches"]) == (EP.KIND_INPUT, 20, 0, False) and "does not reach" in o["pending"]
     assert "input_token_ids" not in rec["by_family"]
-    # [reqval 699bf6ee2 / 8eeff13eb / d13ea5153] the population REACHES both kinds: kind_by_family names the named-input family and
+    # the population REACHES both kinds: kind_by_family names the named-input family and
     # N_excluded counts it like a row; the batch-level family states its (plane, request) cells -> both reconcile in by_family, nothing
     # outside the population's reach, and a disagreement on either FAILS by name
     pb = _population_block(epr, dict(row_fams, input_token_ids=20, fa2_hidden_m1_stream=0))
@@ -179,15 +182,15 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     assert rec["by_family"]["input_token_ids"] == {"commit": 20, "population": 20, "equal": True, "kind": EP.KIND_INPUT, "unit": "identities"}
     assert rec["by_family"]["fa2_hidden_m1_stream"] == {"commit": 320, "population": 320, "equal": True, "kind": EP.KIND_BATCH, "unit": "cells", "population_N_excluded": 0}
     rec = EP.reconcile_not_executed(cc2, {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], input_token_ids={"N_excluded": 19})}}, epr)
-    assert not rec["ok"] and "input_token_ids (named-input): the Commit classified 20 not-executed(R17-1) identities, the population excluded 19" in rec["problems"][0]
+    assert not rec["ok"] and "input_token_ids (named-input): the Commit classified 20 not-executed-by-rule identities, the population excluded 19" in rec["problems"][0]
     pb2 = {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], fa2_hidden_m1_stream={"N_excluded": 0, "plane_cells_not_executed": {"identities": 0, "cells": 319}})}}
     rec = EP.reconcile_not_executed(cc2, pb2, epr)
-    assert not rec["ok"] and "fa2_hidden_m1_stream (batch-level): the Commit classified 320 not-executed(R17-1) cells, the population excluded 319" in rec["problems"][0]
+    assert not rec["ok"] and "fa2_hidden_m1_stream (batch-level): the Commit classified 320 not-executed-by-rule cells, the population excluded 319" in rec["problems"][0]
     # the cells statement may also be read from batch_level[fam].cells_not_executed alone (8eeff13eb before d13ea5153)
     pb3 = {**pb, "totals": {"by_family": dict(pb["totals"]["by_family"], fa2_hidden_m1_stream={"N_excluded": 0})}}
     rec = EP.reconcile_not_executed(cc2, pb3, epr)
     assert rec["ok"] and rec["by_family"]["fa2_hidden_m1_stream"]["population"] == 320 and rec["outside_population_reach"] == {}
-    # [revb M-0452 (i)(ii)] with the manifest's engine-step-annotated identities the two families are checked ARITHMETICALLY from the
+    # with the manifest's engine-step-annotated identities the two families are checked ARITHMETICALLY from the
     # population's own n_exec: r1 executed 2 of cap 4 -> its named input at steps 2,3 = 2 cells; a plane row listing (r0, r1) at steps 2,3
     # = 2 (request, plane) cells of r1 while the plane identity itself stays required (r0 executes there): N_excluded 0 is right
     ids = ([{"request_id": "r1", "step": s, "engine_step": s, "family": "input_token_ids", "op_path": "prompt"} for s in range(4)]
@@ -202,7 +205,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     assert rec["ok"] and rec["schema"].endswith("/v3")
     o = rec["outside_population_reach"]
     assert o["input_token_ids"]["expected_from_population_facts"] == 2 and o["input_token_ids"]["equal"] and o["input_token_ids"]["population_reaches"] is False \
-        and "F-moe-r17-05" in o["input_token_ids"]["pending"] and "input_token_ids" not in rec["by_family"] and rec["total"] is True
+        and "does not reach" in o["input_token_ids"]["pending"] and "input_token_ids" not in rec["by_family"] and rec["total"] is True
     assert o["fa2_hidden_m1_stream"]["expected_from_population_facts"] == plane_cells and o["fa2_hidden_m1_stream"]["equal"] and o["fa2_hidden_m1_stream"]["population_N_excluded"] == 0
     # the Commit's cell count off by one against the population's own n_exec: FAIL by name (both kinds)
     cc4 = {**cc3, "by_family": dict(cc3["by_family"], fa2_hidden_m1_stream=plane_cells + 1)}
@@ -224,7 +227,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     pb["totals"]["by_family"]["fa2_hidden_m1_stream"]["plane_cells_not_executed"] = {"identities": 0, "cells": plane_cells}
     rec = EP.reconcile_not_executed(cc3, pb, epr, manifest_identities=ids)
     assert rec["ok"] and rec["by_family"]["fa2_hidden_m1_stream"]["expected_from_population_facts"] == plane_cells and "fa2_hidden_m1_stream" not in rec["outside_population_reach"]
-    # no population block at all (a tree without reqval's mechanism) / not applied on an EOS-stopped record: FAIL by name
+    # no population block at all (a tree without the population's mechanism) / not applied on an EOS-stopped record: FAIL by name
     assert not EP.reconcile_not_executed(cc, None, epr)["ok"]
     rec = EP.reconcile_not_executed(cc, _population_block(epr, row_fams, applied=False), epr)
     assert not rec["ok"] and "not applied" in rec["problems"][0]
@@ -281,22 +284,22 @@ def test_restrictions_of_the_flat_manifest_and_the_linkage_horizon():
 
 
 def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_path):
-    """[r19-int-21, F-r19-int-19] #39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk (F-r19-int-14) while
+    """#39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk while
     the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
     attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
-    and reqval's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
+    and the population's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
     from verity_vllm.check.replay import population as POP
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
-    acct = EP.load_match_account(_match_account(tmp_path, write_tokens=False))
+    acct = EPL.load_match_account(_match_account(tmp_path, write_tokens=False))
     assert acct["tokens"] is None and acct["global_match"] is not None
-    link = EP.link_to_match_account(e, acct, order=ORDER, declared_lag=1)
-    binding = {"coverage": {"match_account_link": link}}
+    link = EPL.link_to_match_account(e, acct, order=ORDER, declared_lag=1)
+    binding = {"coverage": COVERED | {"match_account_link": link}}
     f = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert f["r0"]["account_missing"] == ["tokens.json"] and f["r1"]["account_missing"] == ["tokens.json"]
     assert "G6 lengths_by_request" in f["r0"]["a_r_source"] and f["r0"]["a_r_source"].endswith("Match account leg(s) NOT beside the Commit: tokens.json")
     assert f["r0"]["linked"] is False and f["r0"]["lag_attested"] is False
-    # the consumer (reqval's normaliser) accepts the fact and faults on it by name, first
+    # the consumer (the population's normaliser) accepts the fact and faults on it by name, first
     facts = EP.facts_accepted_by(POP.executed_prefix_of_record, f)
     assert "account_missing" in facts["r0"]
     rec = POP.executed_prefix_of_record("r0", **facts["r0"])
@@ -304,43 +307,43 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     assert any("a_r is not linked" in x for x in rec["faults"]) and any("LAG rule not attested" in x for x in rec["faults"])   # still fail-closed
     assert rec["account_missing"] == ["tokens.json"] and rec["mechanism"].startswith("not classified")
     # no Match record at all: both legs named; a complete record: none, and no such fault
-    none = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)}},
+    none = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)}},
                                     {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert none["r0"]["account_missing"] == ["tokens.json", "global_match.json"]
-    full = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
-    ff = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": full}}, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    full = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    ff = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": full}}, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert ff["r0"]["account_missing"] == [] and "NOT beside" not in ff["r0"]["a_r_source"]
     ok = POP.executed_prefix_of_record("r0", **EP.facts_accepted_by(POP.executed_prefix_of_record, ff)["r0"])
     assert ok["faults"] == [] and ok["account_missing"] == []
 
 
 def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_only(tmp_path):
-    """[reqval M-0343 / revb M-0349 n2] ONE mechanism for the class (sampled_replay.population.not_executed_by_rule, reqval): commit_delta is
+    """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
     in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
-    eos_declared by F-pm-24, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
+    eos_declared from the stop rule, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
     e = _mixed_epr()
-    link = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
     assert link["ok"] and link["lag_attested"] is True and link["tokens_json"]["served_by_request"] == {"r0": 11, "r1": 32}
-    binding = {"coverage": {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop({"entries": []}, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
+    binding = {"coverage": COVERED | {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop({"entries": []}, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
     stop = {"eos": [EOS], "lag": 1, "declared_lag": 1}
     f = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, stop)
     assert f["r0"] == {"a_r": 11, "a_r_source": f["r0"]["a_r_source"], "lag": 1, "cap": 32, "arrive": 0, "eos_declared": True, "served_len_commit": 11,
                        "linked": True, "lag_attested": True, "rows_past_stop": 0, "account_missing": []}
     assert f["r0"]["a_r_source"].startswith("match record ") and "tokens.json" in f["r0"]["a_r_source"] and "sha256" in f["r0"]["a_r_source"]
     assert f["r1"]["a_r"] == 32 and f["r1"]["eos_declared"] is False and f["r1"]["linked"] is True
-    # the C2 boundary linkage failed -> linked False (the class faults by name in reqval's normaliser)
+    # the C2 boundary linkage failed -> linked False (the class faults by name in the population's normaliser)
     assert EP.executed_prefix_facts(e, binding, {"result": False}, {"r0": 0, "r1": 0}, stop)["r0"]["linked"] is False
     # committed rows of r0 past its prefix -> rows_past_stop counts them
     bm = {"entries": [{"kind": "leaf", "identity": {"request_id": "r0", "step": s}} for s in (12, 13, 14)]}
-    binding2 = {"coverage": {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop(bm, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
+    binding2 = {"coverage": COVERED | {"match_account_link": link, "rows_past_the_stop": EP.rows_past_the_stop(bm, EP.request_steps_of_record(e, {"r0": 0, "r1": 0}))}}
     assert EP.executed_prefix_facts(e, binding2, {"result": True}, {"r0": 0, "r1": 0}, stop)["r0"]["rows_past_stop"] == 3
     # NO Match record beside the Commit: a_r is the Commit's own count, labelled, and linked is False; an undeclared LAG is -1 (out of domain)
-    nolink = EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)
-    f0 = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": nolink}}, {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": None, "declared_lag": None})
+    nolink = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
+    f0 = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": nolink}}, {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": None, "declared_lag": None})
     assert f0["r0"]["a_r"] == 11 and f0["r0"]["a_r_source"].startswith("the Commit's OWN served tokens") and f0["r0"]["linked"] is False
     assert f0["r0"]["lag_attested"] is False and f0["r0"]["lag"] == -1
-    # [reqval M-0585 / revb R3] with this run's served list the facts carry `served` + `eos_ids` (the recurrence's inputs); a consumer whose
+    # with this run's served list the facts carry `served` + `eos_ids` (the recurrence's inputs); a consumer whose
     # signature predates them receives the arithmetic's facts only -- never a TypeError on an older tree, never silently dropped on a newer one
     served = _served({"r0": 11, "r1": 32}, {"r0"})
     fs = EP.executed_prefix_facts(e, binding, {"result": True}, {"r0": 0, "r1": 0}, stop, served_tokens=served)
@@ -361,7 +364,7 @@ def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_
     assert EP.facts_accepted_by(lambda rid, **kw: kw, fs) == fs                       # **kwargs: everything passes through
 
 
-# ------------------------------------------------------------------ COORD R17-27 (a)+(b): the prefix is accepted only LINKED to the Match account
+# ------------------------------------------------------------------ (a)+(b): the prefix is accepted only LINKED to the Match account
 U0, U1 = "0f2b6d7e-r0", "5c1a9b3d-r1"
 ORDER = {U0: "r0", U1: "r1"}
 
@@ -386,44 +389,45 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
         lens = g6_lens if g6_lens is not None else {"rec-r0": {"served_output_len": 11, "executed_prefix_len": 12, "cap": 32, "cap_exhausted": False},
                                                      "rec-r1": {"served_output_len": 32, "executed_prefix_len": 32, "cap": 32, "cap_exhausted": True}}
         lag = g6_lag if g6_lag is not None else {"declared": 1, "record_attests": 1, "tokens_json_lag": 1, "exercised": True, "variable_lag": False}
-        gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+        gm = {"schema": GM_SCHEMA, "verdict": gm_verdict, "reasons": [], "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
               "requests": [{"request_id": "rec-r0", "workload_request_id": U0, "index": 0}, {"request_id": "rec-r1", "workload_request_id": U1, "index": 1}],
-              "checks": [{"id": "G6", "status": "PASS" if gm_verdict == "PASS" else "FAIL", "lengths_by_request": lens, "lag": lag}]}
+              "checks": [{"id": "G6", "what": "chronology", "status": "PASS" if gm_verdict == "PASS" else "FAIL", "problems": [], "n_problems": 0,
+                          "lengths_by_request": lens, "lag": lag}]}
         (row / "global_match.json").write_text(json.dumps(gm))
     return str(row / "match")
 
 
 def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_same_attempt(tmp_path):
-    """[R17-27 (a)] the Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
+    """The Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
     e = _mixed_epr()
-    acc = EP.load_match_account(_match_account(tmp_path))
+    acc = EPL.load_match_account(_match_account(tmp_path))
     assert acc["tokens"] is not None and acc["global_match"] is not None and acc["notes"] == []
-    L = EP.link_to_match_account(e, acc, order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1)
     assert L["ok"] and L["required"] and L["reduced_requests"] == ["r0"] and L["problems"] == [], L
     assert L["tokens_equal"] is True and L["tokens_json"]["tokens_equal"] == {"r0": True, "r1": True} and L["tokens_json"]["lag"] == 1
-    # [rev S-r17-23 (c)] with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
+    # with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
     # one interior id different -> not one serving transcript, first differing position named
     same_len = _served({"r0": 11, "r1": 32}, {"r0"}); same_len["r0"] = list(same_len["r0"]); same_len["r0"][4] = 99
-    Lf = EP.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
+    Lf = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
     assert not Lf["ok"] and Lf["tokens_json"]["tokens_equal"] == {"r0": False, "r1": True} and Lf["tokens_json"]["tokens_equal_rule"] == "full generated_token_ids list"
     assert any("first differing position 4" in p and "not one serving transcript" in p for p in Lf["problems"]), Lf["problems"]
-    assert EP.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=_served({"r0": 11, "r1": 32}, {"r0"}))["ok"]
+    assert EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=_served({"r0": 11, "r1": 32}, {"r0"}))["ok"]
     assert L["global_match"]["verdict"] == "PASS" and L["global_match"]["requests_linked"] == ["r0", "r1"]
     assert "active-reference implementation classification only" in L["classification"] and "tau(e) = bot" in L["classification"]
 
 
 def test_the_committers_own_count_is_never_sufficient_by_itself(tmp_path):
-    """[R17-27 (a)] no Match account beside a REDUCED prefix -> problem by name; the same with no reduction is recorded, not a problem."""
+    """No Match account beside a REDUCED prefix -> problem by name; the same with no reduction is recorded, not a problem."""
     e = _mixed_epr()
-    L = EP.link_to_match_account(e, EP.load_match_account(None), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["required"]
-    assert any("on the committer's own served count alone" in p and "(R17-27 (a))" in p for p in L["problems"]), L["problems"]
+    assert any("on the committer's own served count alone" in p and "(executed-prefix condition (a))" in p for p in L["problems"]), L["problems"]
     # tokens.json present but no global_match.json: linked to the served output only, not to the Match account -> problem
-    L2 = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
+    L2 = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
     assert not L2["ok"] and any("GM-01's account (global_match.json) is not beside" in p for p in L2["problems"]), L2["problems"]
     # every request ran its cap: nothing was placed on the committer's word -> a missing account is a note, ok stays True
     full = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 32, "r1": 32}), caps={"r0": 32, "r1": 32}, eos_of_record=[EOS], lag=1)
-    L3 = EP.link_to_match_account(full, EP.load_match_account(None), order=ORDER, declared_lag=1)
+    L3 = EPL.link_to_match_account(full, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert L3["ok"] and not L3["required"] and L3["notes"] == ["no --match-dir: the Match record of this attempt is not beside the Commit"]
 
 
@@ -431,33 +435,33 @@ def test_a_transcript_that_is_not_the_matchs_or_an_unattested_lag_breaks_the_lin
     e = _mixed_epr()
     # (a) the Match served 12 tokens for r0 where the Commit served 11 -> not one serving transcript
     d = _match_account(tmp_path / "a", served=_served({"r0": 12, "r1": 32}, {"r0"}))
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["tokens_json"]["tokens_equal"]["r0"] is False and any("not one serving transcript" in p for p in L["problems"]), L["problems"]
     # (b) tokens.json attests LAG 0 under a Program declaring LAG 1 -> lag not attested on the record (its executed_prefix_len 11 != 12 too)
     d = _match_account(tmp_path / "b", tj_lag=0)
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
-    assert not L["ok"] and any("lag not attested on the record" in p and "(R17-27 (b))" in p for p in L["problems"]), L["problems"]
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
+    assert not L["ok"] and any("lag not attested on the record" in p and "(executed-prefix condition (b))" in p for p in L["problems"]), L["problems"]
     assert any("executed_prefix_len 11 != this rule's 12" in p for p in L["problems"]), L["problems"]
     # GM-01 FAILED -> the account this prefix must be linked to did not pass
     d = _match_account(tmp_path / "c", gm_verdict="FAIL")
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("GM-01 verdict 'FAIL'" in p for p in L["problems"]), L["problems"]
     # G6's account carries other lengths for r0 -> not the same account
     d = _match_account(tmp_path / "d", g6_lens={"rec-r0": {"served_output_len": 11, "executed_prefix_len": 11, "cap": 32, "cap_exhausted": False},
                                                  "rec-r1": {"served_output_len": 32, "executed_prefix_len": 32, "cap": 32, "cap_exhausted": True}})
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("G6 executed_prefix_len 11 != this rule's 12" in p for p in L["problems"]), L["problems"]
     # G6 reports variable lag -> no constant-lag placement is linkable
     d = _match_account(tmp_path / "e", g6_lag={"declared": 1, "record_attests": 1, "tokens_json_lag": 1, "exercised": True, "variable_lag": True})
-    L = EP.link_to_match_account(e, EP.load_match_account(d), order=ORDER, declared_lag=1)
+    L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
     assert not L["ok"] and any("VARIABLE LAG" in p for p in L["problems"]), L["problems"]
 
 
 def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_padding_inside_the_prefix_is_the_prohibited_fallback():
-    """[R17-42 / reqval M-1318 (1)] pad's padded binding map (`padded-binding-map/1`) stamps `activity` on every entry.  A not-executed row's
+    """Pad's padded binding map (`padded-binding-map/1`) stamps `activity` on every entry.  A not-executed row's
     entry is `bot-by-enablement` (the REQUIRED padding: tau(e) = bot by rule) and lies at a step outside the executed prefix BY CONSTRUCTION:
     it is counted, never 'execution past the stop'.  An `active` entry there (or one with no activity field: an unpadded record) IS execution
-    past the stop, exactly as before.  The converse -- padding inside the executed prefix -- is the inactive fallback R17-42 prohibits, named."""
+    past the stop, exactly as before.  The converse -- padding inside the executed prefix -- is the prohibited inactive fallback, named."""
     rsteps = {"r0": [0, 1, 2], "r1": [0, 1, 2, 3, 4, 5]}
     leaf = lambda rid, st, **kw: {"kind": "leaf", "identity": {"family": "instance_outputs", "request_id": rid, "step": st, "op_path": "x", "rank": 0}, **kw}  # noqa: E731
     # an unpadded record: r0 stopped at step 2 (executed 0..2) and committed rows at 3, 4 -> past the stop; nothing padded
@@ -465,7 +469,7 @@ def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_paddin
     past = EP.rows_past_the_stop(unpadded, rsteps)
     assert not past["ok"] and past["requests"] == {"r0": [3, 4]} and past["entries_n"] == 2 and past["padding_entries_n"] == 0
     assert past["padded_record"] is False and "execution past the stop" in past["error"] and "inactive fallback" not in past["error"]
-    # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full cap population, R17-42), r1's are all active
+    # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full cap population), r1's are all active
     padded = {"schema": "padded-binding-map/1",
               "entries": [leaf("r0", s, activity="active") for s in range(3)] + [leaf("r0", s, activity=EP.ACTIVITY_PADDING) for s in range(3, 6)]
               + [leaf("r1", s, activity="active") for s in range(6)] + [{"kind": "leaf", "identity": {"family": "input_token_ids", "request_id": "r0", "step": None}, "activity": "registered-input"}]}

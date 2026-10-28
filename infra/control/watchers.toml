@@ -34,24 +34,16 @@ argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
 env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
 
-# node 1's monitors, the machine watchdogs' alerts and the relay-side monitors, posted to #agent-alerts (tmux `watchdog-relay`);
-# node 1's held-idle and held-idle-stale monitors are what idle_alerts.py (tmux `idle-alerts`, retired) posted
+# node 2's monitors, the machine watchdogs' alerts and the relay-side monitors, posted to #agent-alerts (tmux `watchdog-relay`)
 [[loop]]
 name = "monitors-relay"
-argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--node1", "n1",
-        "--machine-alerts", "vy-nebius-1=n1:/workspace/monitoring/watchdog/alerts",
+argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "n2",
+        "--machine-alerts", "vy-nebius-2=n2:/workspace/monitoring/watchdog/alerts",
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
         "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
 # `drift` (research deploy drift) reads main and origin's branches from a real clone, fetched each run: {src} has no history
 env = { RESEARCH_DEPLOY_REPO = "{dir}/repo" }
-
-# node 1's stall alerts in #agent-coordination, ringing the owners, and its Kueue quota changes (n1_alerts.py; tmux `n1-alerts`)
-[[loop]]
-name = "n1-alerts"
-argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/n1_alerts.py", "--node", "n1", "--state",
-        "{dir}/n1-alerts.json"]
-env_files = ["/root/.config/verity/relay.env"]
 
 # the agent watch's events (/data/agent-watch/events.jsonl) posted to #agent-alerts, and its doorbells.json (tmux
 # `agent-watch-relay`). It waits for its offset: the install writes the events' line count there, so it starts where the VM's
@@ -63,9 +55,10 @@ env_files = ["/root/.config/verity/relay.env"]
 needs = ["{dir}/agent-watch-offset"]
 env = { AGENT_WATCH_ON_POD = "1", AGENT_WATCH_OFFSET = "{dir}/agent-watch-offset" }
 
-# check's preflight on each node, hourly, and the nodes' drift from main (tmux `preflight-probe`). Its tree is a clone the deploy
-# key fetches (README's deploy). The store index it reads for the Lean bundles is on the pod's own disk: on /data's NFS, indexing
-# the attempts takes hours and the lean-deps step times out; after a reset, the first pass rebuilds it in a few minutes
+# check's preflight on each node, hourly (tmux `preflight-probe`); the nodes' drift from main is monitors-relay's `drift`. Its
+# tree is a clone the deploy key fetches (README's deploy). The store index it reads for the Lean bundles is on the pod's own disk:
+# on /data's NFS, indexing the attempts takes hours and the lean-deps step times out; after a reset, the first pass rebuilds it in
+# a few minutes
 [[loop]]
 name = "preflight-probe"
 argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
@@ -83,7 +76,8 @@ env_files = ["/root/.config/verity/relay.env", "{dir}/notion.env"]
 needs = ["{dir}/top-asks.json"]
 
 # top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
-# thread, main stalled while next is ahead, idle H200s from fleet's samples
+# thread, main stalled while next is ahead, idle H200s from fleet's samples, and the Linear audit with relay.env's Linear app
+# credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl
 [[loop]]
 name = "top-sweep"
 argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]

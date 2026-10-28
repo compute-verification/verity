@@ -1,4 +1,4 @@
-"""The remote audit's verifier of record, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
+"""The remote audit's verifier, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
 verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
@@ -24,8 +24,6 @@ from typing import Any
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
-import wire
-
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "verity/core/protocols/remote_bandwidth/lean"
 EXE = "remote-audit-verifier"
@@ -45,7 +43,7 @@ def build(package: Path = PACKAGE) -> Path:
     path."""
     if shutil.which("lake") is None:
         raise LeanError("lake is not on the PATH, so remote-audit-verifier cannot be built: put elan's bin on the PATH "
-                        "(tools/verity/lean/setup.sh), pass --lean-exe, or run with --verdict python")
+                        "(tools/verity/lean/setup.sh), or pass --lean-exe")
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -154,9 +152,11 @@ def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Cod
 
 
 def params_json(p: audit.Params) -> dict:
+    """A session's parameters as the Lean reads them (`Difftest.sessionOf`), naming `groups_per_coin` only above 1."""
+    shared = {} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}
     return {"deadline_ns": p.deadline_ns, "windows": p.windows, "samples": p.samples, "min_passes": p.min_passes,
             "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred,
-            "pace": None if p.pace is None else p.pace.to_json()}
+            "pace": None if p.pace is None else p.pace.to_json()} | shared
 
 
 def _ints(xs: Any, what: str) -> list[list[int]]:
@@ -184,13 +184,6 @@ def receive_event(t: Any, i: Any, root: bytes, change: Any, step: Any) -> dict:
             "step": step if type(step) is int else None}
 
 
-def opening_json(o: audit.Opening) -> dict:
-    return {"block": o.block.hex(), "digest": o.digest.hex(), "leaf": o.leaf.hex(), "leaf_salt": o.leaf_salt.hex(),
-            "pass": o.pass_index, "payload_path": [x.hex() for x in o.payload_path],
-            "payload_salt": o.payload_salt.hex(), "position": o.position,
-            "receipt_path": [x.hex() for x in o.receipt_path], "tile": o.tile.hex()}
-
-
 def verdict_json(v: audit.Verdict) -> dict:
     return {"accepted": v.window} if v.accepted else {
         "at": None if v.at is None else list(v.at), "failure": v.failure, "window": v.window}
@@ -213,10 +206,11 @@ def drew_json(out) -> dict:
 
 
 def summary_json(rec: audit.Record) -> dict:
-    """An accepted session's record as the Lean writes it (`Difftest.summaryJ`, `ra_cases.summary`): all of it but the
+    """An accepted session's record as the Lean writes it (`Difftest.recordJ`, `ra_cases.summary`): all of it but the
     coin commitment's root, the block size, the registration's fields its digest binds, and of each window's profile
-    more than its draws."""
-    return {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+    more than its draws; `groups_per_coin` only above 1."""
+    shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
+    return shared | {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
             "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
             "windows": [{"arrived_ns": list(w.arrived_ns), "deadline_ns": w.deadline_ns,
@@ -226,10 +220,11 @@ def summary_json(rec: audit.Record) -> dict:
                         for w in rec.windows]}
 
 
-def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float) -> audit.Record:
+def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Record:
     """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
-    registration its digest names, the coin commitment's root `coins`, and each window's openings law at `delta` over
-    the Lean's lengths and draws (`audit.window_profile`)."""
+    registration its digest names, the coin commitment's root `coins`, each window's openings law at `delta` over
+    the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's draws
+    must be min(samples, U_t) at (`audit.Record`)."""
     if j["registration"] != registration.digest.hex():
         raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
                          f"{registration.digest.hex()[:16]}…")
@@ -242,16 +237,17 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
                                  tuple(w["stale"]), tuple(w["arrived_ns"])) for t, w in enumerate(j["windows"])),
         registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
         j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
-        None if pace is None else audit.Pace(pace["k"], pace["window_ns"]))
+        None if pace is None else audit.Pace(pace["k"], pace["window_ns"], pace.get("in_flight", 2)),
+        j.get("groups_per_coin", 1), samples=samples)
 
 
 def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
-    """The session's coins as the Lean's session takes them: its 2W committed coins (window t's challenge at t, its
-    openings coin at W + t), each one the challenger never released 32 zero bytes, which no event reads, and the append
-    coins in the order released."""
-    zero, w = bytes(coins.COIN_BYTES), c.windows
+    """The session's coins as the Lean's session takes them: its W + ⌈W/g⌉ committed coins (window t's challenge at t,
+    draw d's openings coin at W + d, g windows a draw), each one the challenger never released 32 zero bytes, which no
+    event reads, and the append coins in the order released."""
+    zero, w, d = bytes(coins.COIN_BYTES), c.windows, coins.openings_coins(c.windows, c.per_coin)
     out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
-    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (w - len(out[1]))],
+    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (d - len(out[1]))],
             [coins.coin(o) for o in c.opened(coins.APPEND)])
 
 
@@ -259,12 +255,14 @@ class Transcript:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
     parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),
-    a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
-    (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
-    openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
-    verifier answers reads the commitment. Openings are decoded and written only once the session's passes are over
-    (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of JSON, and decoding them beside a timed pass
-    would take the verifier's process from the loop whose stamps the memory line reads."""
+    a window's openings frames as the wire carried them (`verify`, `frames`) where its verdict was set, and the coins the
+    challenger released (`close`, `released_coins`, which returns the file's path, bytes and sha256). Both verifiers
+    read the frames as the live ones do (`Wire.openingsOf`, `wire.openings_of`): a frame that doesn't decode leaves the
+    window no openings, so its replay rejects it as the session did. Every released coin is kept, never its salt: the
+    case replays each under a zero salt, and nothing a verifier answers reads the commitment. Frames are written only
+    once the session's passes are over (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of hex, and
+    writing them beside a timed pass would take the verifier's process from the loop whose stamps the memory line
+    reads."""
 
     def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
@@ -316,12 +314,9 @@ class Transcript:
                         put(item[1])
                         continue
                     self.passes.wait()
-                    put(f'{{"kind":"verify","t":{item[1]},"openings":[')
-                    first = True
-                    for body in item[2]:
-                        for o in wire.decode_openings(body) or ():
-                            put(("" if first else ",") + json.dumps(opening_json(o), separators=(",", ":")))
-                            first = False
+                    put(f'{{"kind":"verify","t":{item[1]},"frames":[')
+                    for k, body in enumerate(item[2]):
+                        put(("," if k else "") + '"' + body.hex() + '"')
                     put("]}")
             self.result = {"path": str(self.path), "bytes": n, "sha256": h.hexdigest(), "events": events}
         except OSError as e:

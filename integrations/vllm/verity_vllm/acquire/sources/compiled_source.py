@@ -1,11 +1,11 @@
-"""R15 lane `compiled`: graph-replay-safe acquisition for `Execution=compiled` rows (vLLM torch.compile + CUDA graphs, enforce_eager=False).
+"""Graph-replay-safe acquisition for `Execution=compiled` workloads (vLLM torch.compile + CUDA graphs, enforce_eager=False).
 
-Why the eager collector cannot see anything here (M-0055, F-dse-12 at rc3): vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
+Why the eager collector cannot see anything here: vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
 (`support_torch_compile`) and replays the Inductor-compiled pieces as CUDA graphs.  The committer's module-forward wrappers are installed AFTER
 the model was compiled, so Dynamo's guards were already skipped (`TorchCompileWrapperWithCustomDispatcher`) and the wrappers are never traced;
-during graph replay no Python runs at all.  Result at rc3: 1 of 189 required tensors per step (the sampled ids), Commit FAIL.
+during graph replay no Python runs at all.  The eager collector binds 1 of 189 required tensors per step (the sampled ids): Commit FAIL.
 
-The boundary chosen here (option A of the lane brief: graph-replay-safe taps):
+The boundary chosen here (graph-replay-safe taps):
 
   * `torch.ops.verity.collect_c(x, id)` -- a side-effecting custom op with NO outputs whose body is a device-to-device copy of `x` into a
     preallocated per-(module, invocation) staging slot ("ring").  The op is inserted into the FX graph by wrapping `module.forward` of every
@@ -40,6 +40,7 @@ from typing import Any
 
 import torch
 
+from verity_vllm import settings
 from verity_vllm.engine import env as engine_env, hooks
 
 OP_NS = "verity"
@@ -68,9 +69,9 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
             vc = getattr(runner, "vllm_config", None)
         if vc is None and llm is not None:
             try:
-                from verity_vllm.engine import engine_profile as prof
+                from verity_vllm.engine import handle
 
-                vc = getattr(prof.get_model_runner(llm), "vllm_config", None)
+                vc = getattr(handle.model_runner(llm), "vllm_config", None)
             except Exception:  # noqa: BLE001
                 vc = None
         if vc is not None:
@@ -84,16 +85,16 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
             out["use_inductor_graph_partition"] = bool(getattr(cfg, "use_inductor_graph_partition", False))
             out["backend"] = str(getattr(cfg, "backend", None))
             out["custom_ops"] = list(getattr(cfg, "custom_ops", None) or [])
-            # [M-0285 (b)] the Inductor config of the pieces: emulate_precision_casts = the compiled kernels perform the Program's bf16
+            # the Inductor config of the pieces: emulate_precision_casts = the compiled kernels perform the Program's bf16
             # roundings at every op boundary (default Inductor carries fp32 through fused regions, so a materialised boundary value
-            # changes the computation -- M-0227); recorded and compared across arms
+            # changes the computation); recorded and compared across arms
             out["inductor_compile_config"] = dict(getattr(cfg, "inductor_compile_config", None) or {})
             out["emulate_precision_casts"] = bool(out["inductor_compile_config"].get("emulate_precision_casts", False))
             out["enforce_eager"] = bool(getattr(vc.model_config, "enforce_eager", False))
             out["torch"] = torch.__version__
     except Exception as e:  # noqa: BLE001
         out["error"] = repr(e)[:200]
-    out["compile_cache_disabled"] = os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1"
+    out["compile_cache_disabled"] = settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1"
     return out
 
 
@@ -138,7 +139,7 @@ def _install_inductor_lowering(op) -> None:
     def handler(x, id):
         return fallback(x, id)
 
-    handler._is_fallback_handler = True     # noqa: SLF001
+    handler._is_fallback_handler = True
     L.register_lowering(op, type_promotion_kind=None)(handler)
 
 
@@ -186,7 +187,7 @@ class CompiledGraphSource:
 
     def __init__(self, rows: int = 512, fault: str | None = None) -> None:
         self.rows = int(rows)
-        self.fault = (os.environ.get("VERITY_FAULT", "") if fault is None else fault).strip()
+        self.fault = (settings.VERITY_FAULT if fault is None else fault).strip()
         self.c: Any = None
         self.names: list[str] = []
         self.id_of: dict[str, int] = {}
@@ -259,7 +260,7 @@ class CompiledGraphSource:
                 __orig(self_, *a, **kw)
                 try:
                     me.wrap_model(self_.get_model(), self_)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     me.errors.append(f"wrap_model: {e!r}"[:300])
                     raise
 
@@ -278,7 +279,7 @@ class CompiledGraphSource:
         return nid
 
     def use_plan(self, manifest: Any, out_dir: str | os.PathLike) -> None:
-        """[v2 acquire] the row's required-value manifest: `wrap_model` (inside the engine build) derives the acquisition plan from it and
+        """The workload's required-value manifest: `wrap_model` (inside the engine build) derives the acquisition plan from it and
         the built model exactly as the committer's stage entry does (`acquire.stage.plan_at_stage`; documents under `out_dir`)."""
         self.plan_manifest, self.plan_dir = manifest, str(out_dir)
 

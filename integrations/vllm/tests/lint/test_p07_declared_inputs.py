@@ -13,8 +13,10 @@ Checked today, against ``allowlists/p07_declared_inputs.json``:
   fails quietly.
 * ``seed-default``: a parameter named ``seed``/``*_seed``/``seed_*`` with a default value.
 
-``ENV_OWNERS`` may read the environment and name machine paths: ``pipeline/cli.py`` turns both into declared inputs
-(option defaults, ``config.RunEnv``), and ``engine/env.py`` writes vLLM's pins.  Every other ``environ`` use is a violation.
+``SETTINGS_OWNER``, ``verity_vllm/settings.py``, is where the library reads and writes the environment: every variable is declared
+there, with the machine path a ``where`` setting defaults to, and every other ``environ`` use is a violation.  ``ENV_OWNERS`` are the two modules that did it before the registry, until
+their uses move there: they may read the environment and name machine paths (``pipeline/cli.py`` turns both into declared inputs,
+option defaults and ``config.RunEnv``; ``engine/env.py`` writes vLLM's pins), and they may only leave the set.
 The rule's torch-stub test (the plan digest is the same with torch present and stubbed out) is not a lint.
 """
 from __future__ import annotations
@@ -23,10 +25,13 @@ import ast
 import re
 from functools import lru_cache
 
+import pytest
+
 from . import _ratchet as R
 
 NAME = "p07_declared_inputs"
 RULE = "P7 (results depend only on declared inputs)"
+SETTINGS_OWNER = "verity_vllm/settings.py"
 ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"})
 ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.putenv", "os.unsetenv", "os.getenvb"})
 CWD_CALLS = frozenset({"os.getcwd", "os.getcwdb", "pathlib.Path.cwd", "Path.cwd"})
@@ -88,7 +93,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
         out.append(R.Violation(rel, kind, symbol, detail, getattr(node, "lineno", 0)))
 
     for node, symbol in R.walk(tree):
-        if envy and isinstance(node, (ast.Name, ast.Attribute)) and rel not in ENV_OWNERS:
+        if envy and isinstance(node, (ast.Name, ast.Attribute)) and rel not in ENV_OWNERS and rel != SETTINGS_OWNER:
             origin = aliases.resolve(node)
             parent = parents.get(id(node))
             if origin in ENV_NAMES and not (isinstance(parent, ast.Attribute) and aliases.resolve(parent) in ENV_NAMES):
@@ -98,7 +103,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             if origin in CWD_CALLS:
                 emit("cwd", node, symbol, origin)
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs \
-                and rel not in ENV_OWNERS:
+                and rel not in ENV_OWNERS and rel != SETTINGS_OWNER:
             m = MACHINE_PATH.match(node.value)
             if m:
                 emit("machine-path", node, symbol, m.group(1))
@@ -167,6 +172,7 @@ def test_no_new_violations() -> None:
                     "optional dependency, re-raise or record broad exceptions, and make seeds required.")
 
 
+@pytest.mark.slow
 def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
 
@@ -186,6 +192,11 @@ def test_only_engine_env_writes_vllm_pins() -> None:
     assert sorted(w.split(" ", 1)[1] for w in pin_writes(bad, "verity_vllm/x.py")) == [
         "<module> VLLM_BATCH_INVARIANT", "build HF_HUB_OFFLINE", "build os.environ.update(....env())"]
     assert pin_writes(bad, "verity_vllm/engine/env.py") == []
+
+
+def test_env_owners_only_shrink() -> None:
+    assert ENV_OWNERS <= {"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"}, \
+        f"use the environment through {SETTINGS_OWNER} (verity_vllm.settings), not a new owner: {sorted(ENV_OWNERS)}"
 
 
 def test_detectors_on_examples() -> None:

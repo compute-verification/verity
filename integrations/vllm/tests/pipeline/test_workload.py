@@ -1,14 +1,17 @@
-"""Row files (`config.RowConfig`): every file under `workloads/` loads and round-trips, the flat v1 layout is refused with its fix,
-and the generator writes a TP row's `engine.env` NCCL_P2P_DISABLE and `engine.args.disable_custom_all_reduce` on a SYS target only, and a
+"""Row files (`config.RowConfig`): every file under `workloads/` loads and round-trips, a row outside it is found only in a directory
+`$VERITY_WORKLOADS` names (`config.row_file`), the flat v1 layout is refused with its fix, and the generator writes a TP row's `engine.env` NCCL_P2P_DISABLE and `engine.args.disable_custom_all_reduce` on a SYS target only, and a
 `--shared-prefix` row's one prefix and prefix caching."""
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, row_target, row_world
+from verity_vllm.config import (ROOT, TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, UsageError, done_source,
+                                row_file, row_path, row_target, row_world, workload_files)
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
 from verity_vllm.pipeline import workload as W
 
@@ -22,7 +25,7 @@ def is_row_id(name: str) -> bool:
         return False
 
 
-FILES = sorted(WORKLOADS.glob("*.json"))
+FILES = workload_files()
 TP_ROWS = [p for p in FILES if is_row_id(p.stem) and row_world(p.stem) > 1]
 
 
@@ -42,6 +45,34 @@ def test_every_workload_file_is_a_row_config_that_round_trips(p):
     assert cfg.engine.vllm == VLLM
     if is_row_id(p.stem):
         assert RowConfig.load(p.stem) == cfg and row_world(cfg.row) == row_world(p.stem)
+
+
+def test_a_row_outside_workloads_is_the_one_file_of_its_name_in_a_directory_verity_workloads_names(tmp_path, monkeypatch):
+    """An example keeps its own row beside it (examples/vllm/workloads/), which the integration never names: `row run` finds the
+    row's file through `$VERITY_WORKLOADS`, its Build, Match and Commit read it from the tree root (`row_path`), and a row id with
+    two files is refused."""
+    doc = json.loads((WORKLOADS / f"{GLM}.json").read_text())
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "elsewhere.json").write_text(json.dumps(doc))
+    assert row_file("elsewhere") == WORKLOADS / "elsewhere.json" and not row_file("elsewhere").exists()
+    monkeypatch.setenv("VERITY_WORKLOADS", f"{tmp_path / 'none'}{os.pathsep}{tmp_path / 'a'}")
+    assert row_file("elsewhere") == (tmp_path / "a" / "elsewhere.json").resolve()
+    assert RowConfig.load("elsewhere") == RowConfig.of(doc)
+    assert (ROOT / row_path("elsewhere")).resolve() == row_file("elsewhere")
+    assert row_path(GLM) == f"workloads/{GLM}.json"
+    (tmp_path / "a" / f"{GLM}.json").write_text(json.dumps(doc))
+    with pytest.raises(UsageError, match=f"row {GLM} has a file in more than one"):
+        row_file(GLM)
+
+
+@pytest.mark.parametrize("p", [p for p in TP_ROWS if done_source(json.loads(p.read_text())) == "public-cap"], ids=lambda p: p.stem)
+def test_every_tp_row_done_at_its_caps_declares_the_arrivals_it_is_served_at(p):
+    """The TP Commit places the Build's manifest at the declared arrive_steps, and the serving loop admits a request early when the
+    engine would idle; a gapped declaration leaves identities unbound (52,005 on GLM-5.3 B8 stochastic)."""
+    reqs = json.loads(p.read_text())["requests"]
+    declared = [int(r.get("arrive_step") or 0) for r in reqs]
+    assert declared == realized_arrive_steps(reqs), (f"declare arrive_steps {realized_arrive_steps(reqs)}, where the serving loop admits "
+                                                     f"them (pipeline/workload.py ARRIVE_STEP_RULE)")
 
 
 @pytest.mark.parametrize("p", [p for p in FILES if is_row_id(p.stem)], ids=lambda p: p.stem)

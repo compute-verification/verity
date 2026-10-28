@@ -1,4 +1,4 @@
-"""R13 X-04 — the general profile-mode broadcast bias add (`BroadcastBiasAdd[profile]_v1` -> `BiasAdd_v1{N}`).
+"""X-04 — the general profile-mode broadcast bias add (`BroadcastBiasAdd[profile]_v1` -> `BiasAdd_v1{N}`).
 
 What is under test: `aten.add.Tensor(x[.., N] bf16, b[N] bf16)` (either operand order; `b` may also be `[1,..,1,N]`) is bound to one
 `BiasAdd_v1{N}` call per row of `x`, the derived Program evaluates BIT-EXACTLY to eager PyTorch (bf16 add = one f32 add + RNE, the
@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager")
 BF = torch.bfloat16

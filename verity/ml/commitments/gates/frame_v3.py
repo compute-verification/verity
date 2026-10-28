@@ -60,13 +60,13 @@ nothing reads them). `opens_at` is its reference.
 """
 from __future__ import annotations
 
-from functools import lru_cache
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import OR, ZERO, and_reduce, const_bits, or_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -270,26 +270,6 @@ def node_hash(C, domain, level, index, d, cur, sib, n: int) -> list:
 
 
 # --- traced Definitions ------------------------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    # C-Flock lowers an activation by its builder, commits included (`ir_lower._boolean_activation`)
-    d.build = build  # type: ignore[attr-defined]
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
 
 def _leaf_blocks(schema: str, n: int, m: int | None = None) -> set[int]:
     """The block counts of the leaf messages under ``schema`` as uint(rank) takes 1 ... n bytes and uint(position) 1 ... m

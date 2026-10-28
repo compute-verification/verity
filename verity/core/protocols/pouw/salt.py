@@ -2,7 +2,7 @@
 
 PoUW window p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier draws p's 512-bit
 salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,
-registration)` once the proof service registered p (the receipt the registration's) and p's last ingress record is
+registration)` once the proof system registered p (the receipt the registration's) and p's last ingress record is
 published, once, and only until its reveal deadline on its own clock after p's end. PoUW doesn't import the certifier:
 `revealed` reads any object with that `reveal`.
 
@@ -62,6 +62,12 @@ PROVER_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
 #: `window_open_root`'s domain tag
 WINDOW_OPEN_TAG = b"verity/pouw-window-open/v1"
+#: `epoch_open_root`'s domain tag
+EPOCH_OPEN_TAG = b"verity/pouw-epoch-open/v1"
+#: `anchored_epoch_root`'s domain tag: `EPOCH_OPEN_TAG`'s, its version bumped for the anchors' root in its preimage
+ANCHORED_EPOCH_TAG = b"verity/pouw-epoch-open/v2"
+#: an H1 window's anchors' root X (`core_check.values_root` of its committed activations)
+ANCHORS_ROOT_BYTES = 64
 #: a live window's round-0 request table's root, a frame-v3-sha512 root
 REQUESTS_ROOT_BYTES = 64
 #: a challenger session's id, as the auditor's gate assigns it when it reserves the session (``s20261020T114752Z-9e52``)
@@ -138,6 +144,42 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
                           + hashlib.sha512(session.encode("ascii")).digest()).digest()
 
 
+def epoch_open_root(weights_root: bytes, k: int) -> bytes:
+    """A Pearl-C salt epoch's open root: SHA-512(`EPOCH_OPEN_TAG` ‖ weights_root ‖ u64be(k)), 97 bytes hashed with no
+    separator, every part at a fixed offset (Lean's `PouwCheck.epochOpenRoot` mirrors it, and `test_epoch_open_root_form`
+    pins it).
+
+    `weights_root` is the pass's `audit.weights_root`, W, and `k` its manifest's ``pass_index``: the epoch's number among
+    the epochs over W (one install, or one measured interval of an install), from 0, the same in every pass of the
+    epoch. The gate opens the epoch's salt-only session on this root, its challenger opens the salt coin only after it,
+    and the verifier recomputes it from the pass's manifest (`core_check.live_salt`). The ledger opens a root once, so
+    the passes of one epoch read one session and one salt."""
+    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
+        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+    if not (type(k) is int and 0 <= k < 1 << 64):
+        raise DomainError(f"a salt epoch's number is an integer in [0, 2^64), not {k!r}")
+    return hashlib.sha512(EPOCH_OPEN_TAG + weights_root + k.to_bytes(8, "big")).digest()
+
+
+def anchored_epoch_root(weights_root: bytes, anchors_root: bytes, k: int) -> bytes:
+    """An H1 window's salt epoch's open root: SHA-512(`ANCHORED_EPOCH_TAG` ‖ weights_root ‖ anchors_root ‖ u64be(k)),
+    161 bytes hashed with no separator, every part at a fixed offset (Lean's `PouwCheck.anchoredEpochRoot` mirrors it,
+    and `test_anchored_epoch_root_form` pins it).
+
+    `weights_root` is the window's W and `anchors_root` its X, the root of the activations it committed after serving
+    (`core_check.window_anchors`), and `k` its salt epoch's number among W's. The gate opens the window's salt-only
+    session on this root and its challenger opens the salt coin only after it, so the operands H1's cut reads at coin 0
+    (x, sx, the A rows) are fixed before the salt. Its tag is not `epoch_open_root`'s, so no Pearl-C epoch's session
+    salts a window."""
+    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
+        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+    if type(anchors_root) is not bytes or len(anchors_root) != ANCHORS_ROOT_BYTES:
+        raise DomainError(f"an anchors' root is {ANCHORS_ROOT_BYTES} bytes")
+    if not (type(k) is int and 0 <= k < 1 << 64):
+        raise DomainError(f"a salt epoch's number is an integer in [0, 2^64), not {k!r}")
+    return hashlib.sha512(ANCHORED_EPOCH_TAG + weights_root + anchors_root + k.to_bytes(8, "big")).digest()
+
+
 def prover_id(public_key: bytes) -> bytes:
     """The 64-byte id a certified window's prover is registered under: SHA-512(`PROVER_TAG` ‖ the public key the
     certifier verifies its records under, `Proxy(prover_key=…)`'s bytes). A record naming the id is taken only signed by
@@ -166,7 +208,7 @@ def unit_reason(unit: Any) -> str | None:
             "its proof passes on rows formed under any salt")
 
 
-# TODO(#2722): a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
+# TODO: a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
 # window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window.
 # `Registrations` is none of that.
 class Registrations:
@@ -225,7 +267,7 @@ def registered(registration: Registration) -> int | None:
 
 def revealed(certifier: Any, window: int, registration: Registration | None) -> bytes:
     """PoUW window `window`'s certifier salt, `certifier.reveal(window, registration)`, given the window's registration
-    as the proof service returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
+    as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the certifier (its receipt isn't the registration's; early, before the window's
     last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never drawn or
     the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""
@@ -270,7 +312,8 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES",
-           "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT",
-           "committed", "context", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered", "revealed",
-           "unit_reason", "window_of", "window_open_root"]
+__all__ = ["ANCHORED_EPOCH_TAG", "ANCHORS_ROOT_BYTES", "EPOCH_OPEN_TAG", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG",
+           "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
+           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "anchored_epoch_root", "committed",
+           "context", "epoch_open_root", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered",
+           "revealed", "unit_reason", "window_of", "window_open_root"]
