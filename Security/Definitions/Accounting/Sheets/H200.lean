@@ -111,7 +111,7 @@ inductive Ty
 /-- A1, f_max: 1980 MHz. Grade: whitepaper (H100 SXM5), and measured. Source: H100 Tensor Core GPU Architecture
 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980
 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's
-maximum on vy-dc-h200 is 1980 MHz (EPS1 DC). -/
+maximum at default clocks on the deployed H200 is 1980 MHz (sm_90/table.toml). -/
 def fmaxMHz : ℝ := 1980
 
 /-- The SMs A3's per-SM peaks multiply: 132. Grade: whitepaper (H100 SXM5), and measured. Source: H100 whitepaper V1.04,
@@ -200,7 +200,7 @@ def widthShfl : ℝ := 32
 
 /-- A4, the uniform pipe: 65.2693 results an SM clock, 1.96111 SMSP-cycles a warp instruction. Grade: measured only (no
 vendor document states the uniform datapath's rate). Source: Nsight Compute §2.3.6 defines the uniform pipe ('a scalar
-unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at
+unit') with no rate; the census's UP line (rows.csv): dc/probes/uniform.cuh, the fastest of 11 forms alone (uz_128i) at
 0.4999 uniform instructions a SMSP-cycle, at a 2% margin 1.96110716 SMSP-cycles each (five runs); the width counts a
 uniform instruction as a warp instruction's 32 results, as the pipe row reads a width. -/
 def widthUniform : ℝ := 3200000000 / 49027679
