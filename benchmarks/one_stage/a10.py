@@ -5,7 +5,7 @@ committed, in place of the Match capture's stand-ins, with every value where the
       --roles derive-report.json --kinds kinds.json --out OUT [--try KINDS] [a11.py's --steps --layers --per-kind ...]
     python benchmarks/one_stage/a10.py audit <a11.py's arguments, with --load-values OUT/saved-a11 or OUT/saved-a9>
 
-* **The record.** The Commit r20261019-074856-7c3a ran with ``--replay-deferred`` and ``retain=host``. Each rank's bundle
+* **The record.** The Commit of record (`a10_inputs.json`) ran with ``--replay-deferred`` and ``retain=host``. Each rank's bundle
   holds every byte that rank committed. Rank 0's bundle (``--bundle``) is opened as the deferred replay opens it
   (`commit_replay._of_record`): its manifest, the rank's run root in ``runs.jsonl`` (``--commit``, the Commit's records)
   and its combination into the TP run root, the store's step roots, the binding map. Its Program of record (``--build``,
@@ -53,10 +53,12 @@ import a9  # noqa: E402
 import a11  # noqa: E402
 import a11_kinds as K  # noqa: E402
 
-COMMIT = "r20261019-074856-7c3a"
-REPLAY = "r20261019-110314-3fd7"
-PENDING = (f"the Commit's verdict is PENDING (the deferred CPU replay {REPLAY} decides it; its attempt 1 r20261019-091406-48bd was "
-           "cancelled); rank 0's values only")
+#: the record's run and store ids (the Commit, its deferred replay), shared with a10.sh
+INPUTS = json.loads((HERE / "a10_inputs.json").read_text())
+COMMIT = INPUTS["commit"]
+REPLAY = INPUTS["replay"]
+PENDING = (f"the Commit's verdict is PENDING (the deferred CPU replay {REPLAY} decides it; its attempt 1 {INPUTS['replay_cancelled']} "
+           "was cancelled); rank 0's values only")
 WINDOW_OF = (f"GLM-5.3 TP8 B1 rank 0's committed step values: row {a11.ROW}'s Commit {COMMIT} (--replay-deferred, retain=host), "
              "its bundle opened against the rank's run root of record and its weights against the committed weights root; " + PENDING)
 LINK = ("provenance, not proof: every value was opened from the Commit's bundle and verified against rank 0's run root of record "
