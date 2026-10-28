@@ -907,7 +907,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                session_roots: dict, served: list[int], v2: dict | str | None = None) -> None:
     """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio), in ``out/case.json``, and
-    today's Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
+    the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
     evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`) in sampled proofs' one-stage form
     (`case_with_form`), in ``out/case-v2.json``, or why there is none in ``out/case-v2-error.txt``."""
     try:
