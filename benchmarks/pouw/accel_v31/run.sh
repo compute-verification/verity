@@ -44,7 +44,8 @@
 # over the overlapped call and over each FILL_STEPS step (pipes.md). FILL_STEPS, V31_STEP specs ("q,kv,q,up,down*52+head":
 # a layer's FILL_SHAPES names, the layers, the calls once a step), runs `v31 fill-step` (a build with 8 domain slots) on
 # each, for each variant and L, after the bench: out/fill-step-TAG-L.jsonl, its calls' sampled tiles checked as the
-# bench's, and h200_step.py's served-order table (step.md). FILL_BENCH=0 skips the bench.
+# bench's, and h200_step.py's served-order table (step.md). FILL_BENCH=0 skips the bench. FILL_GATES=0 skips the gates and
+# FILL_DITHER's recheck after the canary: cite a run whose gates passed at the same commit under the same knobs.
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -171,6 +172,7 @@ if [ "$MODE" = fill ]; then
     rc=$?
     echo "canary rc $rc" >> "$O/rc.txt"
     [ $rc = 0 ] || exit 3
+    [ "${FILL_GATES:-1}" = 0 ] && exit 0
     gk=(); [ "${FILL_GATE_KNOBS:-0}" = 1 ] && gk=($(knob_env "${VARIANTS%% *}"))
     for x in 0 1; do
       only=(); [ $x = 1 ] && only=(--only fill)
