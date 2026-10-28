@@ -44,22 +44,56 @@ def test_h1_chunks_and_digits_match_pouw():
 
 
 def test_the_k2048_tile_is_refused_and_its_lanes_fit():
-    """The 32 x 32 leaf at K 2,048 is one block over 2^27 in either reading of the cap; its lanes and combine fit."""
+    """The 32 x 32 leaf at K 2,048 is one block over 2^27 in either reading of the cap; its lanes and combine fit.
+    A lane is its 4 x 8 cells' MACs at h1_ands_per_mac plus its 12 operand rows and its partial row."""
+    lane = model.I("h1_ands_per_mac") * 32 * 2048 + 12 * model.row_ands(2052) + model.row_ands(8 * (64 + 2))
     for k_pad in (0, 1):
-        tile = model.J(model.design(pouw={"scheme": "j10r"}, prover={"k_pad": k_pad}))
-        assert any("k_log" in m for m in tile["infeasible"])
-        lanes = model.J(model.design(pouw={"scheme": "j10r", "form": "lanes"}, prover={"k_pad": k_pad}))
+        with model.inputs({"k_pad_h1_lane": k_pad}):
+            tile = model.J(model.design(pouw={"scheme": "j10r"}))
+            assert any("k_log" in m for m in tile["infeasible"])
+            lanes = model.J(model.design(pouw={"scheme": "j10r", "form": "lanes"}))
         assert lanes["infeasible"] == []
         blocks = {b["name"]: b for b in lanes["proving"]["pouw"]["classes"][0]["blocks"]}
         assert blocks["lane"]["count"] == 32 and blocks["combine"]["count"] == 1
-        assert blocks["lane"]["ands"] == pytest.approx(23e6, rel=0.05)
+        assert blocks["lane"]["ands"] == pytest.approx(lane)
+
+
+def test_pouw_tiles_match_the_inbox_and_small_tiles_prove_cheaper():
+    """The inbox's 1 x 1 ~2.7 M and 32 x 32 ~736 M ANDs a block (19:32Z); draws stay ~Lambda / eps, so proving
+    falls with the block, and openings take a larger share of a smaller block (~1.5 (1/R + 1/C))."""
+    def pouw(tile, form="tile", **kw):
+        return model.J(model.design(pouw={"scheme": "j10r", "tile": tile, "form": form}, **kw))["proving"]["pouw"]
+    small, big = pouw((1, 1))["classes"][0], pouw((32, 32))["classes"][0]
+    assert small["ands_with_openings"] == pytest.approx(2.7e6, rel=0.15)
+    assert big["ands_with_openings"] == pytest.approx(736e6, rel=0.1)
+    assert small["openings_share"] > 0.7 and big["openings_share"] < 0.15
+    costs = [pouw(t, "lanes")["gpu_s"] for t in ((1, 1), (2, 2), (4, 8), (8, 8), (16, 16), (32, 32))]
+    assert costs == sorted(costs) and costs[-1] > 100 * costs[0]
+    assert pouw((1, 1))["draws"] == pytest.approx(40 * math.log(2) / 0.01, rel=0.01)
+
+
+def test_a_bigger_cap_pays_prover_memory_and_cost_a_bit():
+    """16 x 16 at K 2,048 is one ~2^27.5-AND block: k_log 29 past compose's 27; at k_max 29 it fits the cap but not
+    the H200's memory at 2^29 x prover_bytes_per_row, and costs cap_cost_per_bit a bit past 27."""
+    pouw = {"scheme": "j10r", "tile": (16, 16)}
+    at27 = model.J(model.design(pouw=pouw))
+    assert any("k_log 29 > 27" in m for m in at27["infeasible"])
+    at29 = model.J(model.design(pouw=pouw, prover={"k_max": 29}))
+    assert not any("k_log" in m for m in at29["infeasible"])
+    assert any("prover memory" in m for m in at29["infeasible"])
+    with model.inputs({"prover_bytes_per_row": 237}):
+        assert model.J(model.design(pouw=pouw, prover={"k_max": 29}))["infeasible"] == []
+        with model.inputs({"cap_cost_per_bit": 0.0}):
+            flat = model.J(model.design(pouw=pouw, prover={"k_max": 29}))["proving"]["pouw"]["gpu_s"]
+        dear = model.J(model.design(pouw=pouw, prover={"k_max": 29}))["proving"]["pouw"]["gpu_s"]
+    assert dear > flat
 
 
 def test_chunked_lanes_fit_at_every_served_k():
     """Past K 4,096 a lane is proved in chunks of at most 4,096 entries, so at Llama-3.2-1B's K (2,048 and 8,192)
-    every block stays within 2^27 even with compose's padding (k_pad 1), whose limit for a whole lane is near the
-    struct worker's K ~5,041. (At K 14,336 the combine's 32 partial rows and 128 ok rows pass 2^26 ANDs.)"""
-    assert 350 * 32 * 5041 < 2 ** 26 < 350 * 32 * 6144
+    every block stays within 2^27 even with compose's padding (k_pad 1); a whole lane at K 8,192 would not. (At
+    K 14,336 the combine's 32 partial rows and 128 ok rows pass 2^26 ANDs.)"""
+    assert model.I("h1_ands_per_mac") * 32 * 8192 + 12 * model.row_ands(8196) > 2 ** 26
     for k in (2048, 4096, 8192):
         r = model.J(model.design(pouw={"scheme": "j10r", "form": "lanes", "K": k}))
         assert r["infeasible"] == [], (k, r["infeasible"])

@@ -21,12 +21,12 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
               gather, padded
     pouw      scheme ("off" | "j10r" | "jr2" | "dither"), K, L, L_prime, noise ("periodic" | "fresh" | "permuted"),
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
-              hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, unit_cells,
+              hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, tile (R, C),
               form ("tile" | "lanes")
     sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform" | "stratified"), retain_GB
     partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
               `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}]
-    prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, k_pad, shared
+    prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, k_max, k_pad, shared, stmt
     lowering  gates_per_and, s_per_gate, bytes_per_gate, per ("template" | "instance"), ram_gib
     verify    stmt_fixed, stmt_per_and
     price     cpu_s_in_gpu_s, cpu_in_J, baseline ("same" | "fastest")
@@ -173,9 +173,15 @@ INPUTS: dict[str, tuple[float, str, str]] = {
                       "inbox's '2^27 ANDs' (top, 19:16Z) is 0"),
     "k_pad_h1_lane": (1, "E", "k_pad of an H1 lane or combine block: the struct worker's 'a lane fits 2^27 to K about "
                               "5,041' (h1unit.stager; note:top/20261028T1845Z-report-lowering-struct)"),
-    "h1_ands_per_mac": (350, "E", "J10-R's H1 leaf, ANDs a MAC with its noise and openings: the coordinator's "
-                                  "calibration point (inbox 19:16Z: the 32x32 K 2,048 tile ~736 M ANDs, 32 lanes of "
-                                  "~23 M; TOP-138 19:25Z: a lane ~92 M at K 8,192, ~161 M at K 14,336) until GD-PROVER"),
+    "h1_ands_per_mac": (300, "E", "J10-R's H1 leaf, ANDs a MAC before its openings (inbox 19:32Z: 'about 300 ANDs a "
+                                  "MAC'; with the tile's openings, the 32x32 K 2,048 leaf is the inbox's ~736 M) until "
+                                  "GD-PROVER"),
+    "prover_bytes_per_row": (474, "E", "C-Flock prover memory a block row: twice the 31.8 GB circuit at k_log 27 "
+                                       "(test_universal_same_shape's docstring)"),
+    "prover_mem_GB": (141, "M", "the H200's HBM3e"),
+    "cap_cost_per_bit": (0.05, "E", "per k_log past 27 (a fast100 schedule and Stmt.InRange extended, inbox 19:32Z): "
+                                    "more queries and a bigger proof, on a block's per-AND prove cost and its "
+                                    "statement's verify cost"),
     "retain_GB": (100.0, "E", "GB a window may retain until its draw: the H200's 141 GB less weights, KV cache and "
                               "activations under --retain device; VERITY_RETAIN=host (served_verdicts.sh) is bounded by "
                               "the pod's host cgroup instead (host_retention.py), size not looked up"),
@@ -347,7 +353,9 @@ SCHEMA = {
         "noise_fused": (True, "dither: noise added in the GEMM's operand load"),
         "denoise_g_frac": (None, "dither: de-noising's cost as a share of G (None: from noise and L')"),
         "value_row_bytes": (16384, "dither: the value root's hm96 row (16 KiB pinned in PROTOCOL.md)"),
-        "unit_cells": (1, "PoUW proof block: cells (dither: 1 cell x 1 segment; J10-R tile: 32 x 32 = 1,024)"),
+        "tile": (None, "PoUW proof block's (R, C) cells (None: dither 1 x 1 over one segment; J10-R and JR2 32 x 32, "
+                       "the H1 kernel's warp tile). Registered operand rows are K + 4 bytes (chunk rows past K 4,096), "
+                       "opened whole; dither's A segment opens the Commit's rows"),
         "credit": ("all4", "dither's credited linears: all4 (qkv, o, gate_up and down) | k2048 (the K 2,048 three)"),
         "word_bits": (16, "dither: bits a T_s word (O stays 32)"),
         "agg": (1, "dither: cells a T_s word"),
@@ -382,7 +390,10 @@ SCHEMA = {
         "stmt_fixed": (None, "GPU-s a touched statement"),
         "stmt_per_and": (None, "GPU-s a statement per AND of its block"),
         "speed": (None, "prover speed on the H200 over sm_120's (None: 1.0, estimate)"),
-        "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above INPUTS k_max, 27)"),
+        "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above k_max)"),
+        "k_max": (None, "the block cap's k_log (None: 27, compose's K_MAX; 28-30 with a fast100 schedule and an "
+                        "extended Stmt.InRange, each bit past 27 at cap_cost_per_bit and prover memory 2^k_log x "
+                        "prover_bytes_per_row against prover_mem_GB)"),
         "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: INPUTS k_pad, 2 from class_size's "
                         "staged units; 0: the inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
@@ -780,47 +791,65 @@ def preset_units(d: dict) -> list:
     return units
 
 
+def registered_rows(K: int) -> list:
+    """The registered rows a K-entry operand row is hashed in: one row of K + 4 bytes to K 4,096, then h1_chunks(K)
+    chunk rows of K / n + 4 (pouw.weights)."""
+    n = h1_chunks(K)
+    return [K // n + 4] * n
+
+
 def pouw_units(d: dict) -> list:
-    """PoUW's proof blocks. J10-R/JR2: a 32 x 32 tile at K (the brief's ~1e9 gates at K 2,048). Dither: one segment of
-    one cell (PROTOCOL.md), opening the rows of A's and B's segment and of T_s and T_{s-1} (or O)."""
+    """PoUW's proof blocks, an R x C tile of cells each (pouw.tile). J10-R/JR2: the tile's H1 leaf at K, ANDs a MAC
+    before its openings (h1_ands_per_mac), opening its R A rows and C B rows (registered rows) and its z/y record;
+    the lanes form splits it into 4 x 8 lanes (each its own A and B rows, chunked past K 4,096, and a partial row)
+    and a combine block, drawn as a group. Dither: the tile over one segment (PROTOCOL.md), opening A's segment rows
+    (the Commit's rows), B's registered rows and the tile's T_s and T_{s-1} (or O) value rows, row-major."""
     w = d["pouw"]
     if w["scheme"] == "off" or not d["sampling"]["pouw_sampled"]:
         return []
-    cells = H1_CELLS_PER_TOKEN
+    R, mode = d["commit"]["row_bytes"], d["commit"]["open"]
     if w["scheme"] in ("j10r", "jr2"):
-        K = w["K"]
-        tile = w["unit_cells"] if w["unit_cells"] > 1 else 1024
-        work = tile * s8_coord_work(K)
-        ands = I("h1_ands_per_mac") * tile * K
-        unit = {"name": f"H1 leaf ({tile} cells, K {K}, {w['form']})", "per_token": cells / tile, "work": work,
-                "extra_ands": max(0.0, ands - work), "open_rows": [], "out_bits": 16}
-        if w["form"] == "lanes":
-            lanes = tile // 32
+        r, c = w["tile"] or (32, 32)
+        K, kp = w["K"], I("k_pad_h1_lane")
+        work = r * c * s8_coord_work(K)
+        compute = I("h1_ands_per_mac") * r * c * K
+        record = opened(r * c * w["record_bytes_per_cell"], R, "exact")
+        unit = {"name": f"H1 leaf ({r}x{c}, K {K}, {w['form']})", "per_token": H1_CELLS_PER_TOKEN / (r * c),
+                "work": work, "extra_ands": max(0.0, compute - work), "k_pad": kp, "out_bits": 16,
+                "open_rows": [b for _ in range(r + c) for b in registered_rows(K)] + record}
+        if w["form"] not in ("tile", "lanes"):
+            raise ValueError(f"pouw.form {w['form']!r}")
+        lr, lc = min(r, 4), min(c, 8)
+        lanes = (r // lr) * (c // lc)
+        if w["form"] == "lanes" and lanes > 1:
             n = h1_chunks(K)
             ks = K // 32
             partial = 4 * I("partial_words_per_ks") * (ks + h1_digits(ks))
-            carry = [partial] * (2 if n > 1 else 0)            # a middle chunk reads carry_in and writes carry_out
-            combine = lanes * row_ands(partial) + row_ands(16) + (lanes * n * row_ands(2) if n > 1 else 0)
-            kp = I("k_pad_h1_lane")
-            unit["blocks"] = [{"name": "lane chunk" if n > 1 else "lane", "count": lanes * n,
-                               "ands": ands / (lanes * n) + sum(row_ands(b) for b in carry), "k_pad": kp},
+            # a chunk writes the lane's partial row (the last) or a carry, and a later chunk reads the carry
+            rows = [b for _ in range(lr + lc) for b in registered_rows(K)[:1]] + [partial] * (2 if n > 1 else 1)
+            combine = (lanes * row_ands(partial) + row_ands(16) + sum(row_ands(b) for b in record)
+                       + (lanes * n * row_ands(2) if n > 1 else 0))
+            unit["blocks"] = [{"name": "lane chunk" if n > 1 else "lane", "count": lanes * n, "k_pad": kp,
+                               "ands": compute / (lanes * n) + sum(row_ands(b) for b in rows)},
                               {"name": "combine", "count": 1, "ands": combine, "k_pad": kp}]
-        elif w["form"] != "tile":
-            raise ValueError(f"pouw.form {w['form']!r}")
         return [unit]
     if w["joint"]:
         return []                                              # checked inside the values tiles (preset_units)
+    r, c = w["tile"] or (1, 1)
     L, Rv = w["L"], w["value_row_bytes"]
-    R, mode = d["commit"]["row_bytes"], d["commit"]["open"]
-    noise_ands = 2 * L * I("sha512_ands") / 64                 # V and U pi entries expanded from the coins (estimate)
+    noise_ands = (r + c) * L * I("sha512_ands") / 64           # V and U pi entries expanded from the coins (estimate)
+    t_rows = opened(c * w["word_bits"] / 8 / w["agg"], Rv, "whole")
     units = []
     for name, K, N in dither_linears(d):
         if L >= K:
             continue                                           # O alone: un-noised, credits 0, not drawn
         S_seg = math.ceil(K / L)
-        units.append({"name": f"dither block, {name} (1 cell, L {L} of K {K})", "per_token": LAYERS * N * S_seg,
-                      "work": L / 32 * I("s8_step_ands"), "extra_ands": noise_ands,
-                      "open_rows": opened(L, R, mode) * 2 + [Rv, Rv], "out_bits": 16})
+        b_rows = registered_rows(K)[:1] if mode == "whole" else [L]
+        units.append({"name": f"dither block, {name} ({r}x{c}, L {L} of K {K})",
+                      "per_token": LAYERS * N * S_seg / (r * c), "work": r * c * L / 32 * I("s8_step_ands"),
+                      "extra_ands": noise_ands,
+                      "open_rows": [b for _ in range(r) for b in opened(L, R, mode)] + b_rows * c + t_rows * 2 * r,
+                      "out_bits": 16})
     return units
 
 
@@ -863,9 +892,10 @@ def proving(d: dict, units: list, label: str) -> dict:
     with C = eps F, so draws ~ Lambda F / C = Lambda / eps; or the deployed uniform kd-subset over the population's
     units (ε then counts units, not ANDs). Each drawn block costs o (ANDs + row openings) and each touched statement
     stmt_fixed + stmt_per_and ANDs, with ceil(draws / cap) statements a class (cap = 2^(m_max - k_log), k_log =
-    ceil(log2 ANDs) + k_pad). A unit drawn as a group (its `blocks`, the lanes form) pays each of its blocks on
-    every draw, each block class its own k_log, cap and statements. Lowering is per class (template) or per draw
-    (instance)."""
+    ceil(log2 ANDs) + k_pad, refused above prover.k_max). A k_log past 27 costs cap_cost_per_bit a bit on o and on
+    verification, and every block's prover memory is 2^k_log x prover_bytes_per_row against prover_mem_GB. A unit
+    drawn as a group (its `blocks`, the lanes form) pays each of its blocks on every draw, each block class its own
+    k_log, cap and statements. Lowering is per class (template) or per draw (instance)."""
     s = d["sampling"]
     T, S = window_tokens(d), 1                                 # units cover what the forwards compute
     lam = math.log(1 / s["delta"])
@@ -885,9 +915,10 @@ def proving(d: dict, units: list, label: str) -> dict:
     C = s["eps"] * F
     out = {"population": label, "F_ands": F, "C_ands": C, "Lambda": lam, "classes": [], "draws": 0.0, "gpu_s": 0.0,
            "statements": 0, "lower_cpu_s": 0.0, "stage_cpu_s": 0.0, "verify_cpu_s": 0.0, "lower_peak_GiB": 0.0,
-           "infeasible": []}
+           "prover_peak_GB": 0.0, "infeasible": []}
     if F <= 0:
         return out
+    k_cap = round(pv["k_max"] if pv["k_max"] is not None else I("k_max"))
     if s["law"] == "uniform":
         # eps counts units under the kd-subset, so K0 wrong units hold up to K0 w_max of the work: eps of the work
         # (the brief's guarantee) needs eps w_avg / w_max of the units
@@ -921,7 +952,8 @@ def proving(d: dict, units: list, label: str) -> dict:
             q = max(q, qc)
         own = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
         blocks = []
-        for b in u.get("blocks") or [{"name": u["name"], "count": 1, "ands": own}]:
+        whole = {"name": u["name"], "count": 1, "ands": own, **({"k_pad": u["k_pad"]} if "k_pad" in u else {})}
+        for b in u.get("blocks") or [whole]:
             ands = b["ands"]
             if universal:
                 ands = 2.0 ** math.ceil(math.log2(max(ands, 2)))
@@ -941,15 +973,21 @@ def proving(d: dict, units: list, label: str) -> dict:
         for b in blocks:
             ands, nb, k_log, cap = b["ands"], b["nb"], b["k_log"], b["cap"]
             where = u["name"] if len(blocks) == 1 else f"{u['name']}, {b['name']}"
-            if k_log > I("k_max"):
-                out["infeasible"].append(f"{where}: {ands:.3g} ANDs needs k_log {k_log} > {I('k_max')} (compose "
+            if k_log > k_cap:
+                out["infeasible"].append(f"{where}: {ands:.3g} ANDs needs k_log {k_log} > {k_cap} (compose "
                                          f"and the prover refuse it)")
+            mem = 2.0 ** k_log * I("prover_bytes_per_row") / 1e9
+            out["prover_peak_GB"] = max(out["prover_peak_GB"], mem)
+            if mem > I("prover_mem_GB"):
+                out["infeasible"].append(f"{where}: prover memory {mem:.3g} GB at 2^{k_log} rows > "
+                                         f"{I('prover_mem_GB')} GB")
+            grow = 1 + I("cap_cost_per_bit") * max(0, k_log - I("k_max"))
             if universal:
                 stmts = math.ceil(pooled[k_log] / cap) * nb / pooled[k_log] if nb > 0 else 0
             else:
                 stmts = math.ceil(nb / cap) if nb > 0 else 0
             staged = nb if pv["shared"] else min(n * b["count"], stmts * cap)
-            gpu = (nb * o * ands + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
+            gpu = (nb * o * ands * grow + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
             gates = b.get("gates", u.get("gates") if len(blocks) == 1 else None) or ands * gpa
             lowerings = (1 if nb > 0 else 0) if lo["per"] == "template" else nb
             peak = gates * bpg / 2 ** 30
@@ -959,7 +997,7 @@ def proving(d: dict, units: list, label: str) -> dict:
                     "lower_cpu_s_today": lowerings * ands * I("lower_s_per_and_today"),
                     "stage_cpu_s": stmts * (I("stage_fixed") + I("stage_per_and") * ands)
                     + staged * I("stage_per_and_staged") * ands,
-                    "verify_cpu_s": stmts * (vf + va * ands)}
+                    "verify_cpu_s": stmts * (vf + va * ands) * grow}
             for k, v in part.items():
                 cls[k] += v
             cls["lower_peak_GiB"] = max(cls["lower_peak_GiB"], peak)
@@ -968,7 +1006,7 @@ def proving(d: dict, units: list, label: str) -> dict:
             cls["blocks"].append({"name": b["name"], "count": b["count"], "ands": ands, "k_log": k_log, "cap": cap,
                                   **part})
         group = sum(b["count"] * b["ands"] for b in blocks)
-        cls.update({"ands_with_openings": group, "openings_share": 1 - (u["work"] + u["extra_ands"]) / own,
+        cls.update({"ands_with_openings": group, "openings_share": 1 - (u["work"] + u["extra_ands"]) / group,
                     "k_log": max(b["k_log"] for b in cls["blocks"]), "cap": min(b["cap"] for b in cls["blocks"])})
         out["classes"].append(cls)
         out["draws"] += draws
