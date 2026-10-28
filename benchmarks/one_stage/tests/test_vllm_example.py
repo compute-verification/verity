@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / "examples" / "vllm"
+EXAMPLE = ROOT / "demos" / "vllm"
 ROW = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 FAKE_CLI = '''import json, os, sys
