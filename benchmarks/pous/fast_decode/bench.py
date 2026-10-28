@@ -33,6 +33,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
@@ -57,7 +59,7 @@ CONFIG_FIELDS = ("per", "depth", "limbs", "bytes", "q", "nt", "qb", "nops", "sme
 
 def params_of(per: int) -> R.Params:
     w = algo.Width(per)
-    return R.Params(w.w, w.c0, w.n - 2)
+    return R.Params.of(P2Params(w.w, w.c0, POINT[2]))
 
 
 def per_of_bits(bits: int) -> int:
