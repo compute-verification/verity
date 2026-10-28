@@ -90,8 +90,33 @@ CUDA_REDIST=${CUDA_REDIST:-13.3.1}; export CUDA_TK=${CUDA_TK:-$FW/cuda-$CUDA_RED
 GPU=${GPU:-1}; GPUF=; [ $GPU = 1 ] && GPUF=--gpu
 if [ $GPU = 1 ] && [ ! -x $CUDA_TK/bin/nvcc ]; then
   exec 7>$FW/cuda.lock; flock 7
-  [ -x $CUDA_TK/bin/nvcc ] || python3 $REPO/verity/ml/flock/pod/cuda_redist.py $CUDA_REDIST $CUDA_TK > $O/cuda-redist.log 2>&1 \
-    || { cat $O/cuda-redist.log; exit 1; }
+  [ -x $CUDA_TK/bin/nvcc ] || python3 - $CUDA_REDIST $CUDA_TK > $O/cuda-redist.log 2>&1 <<'EOF' || { cat $O/cuda-redist.log; exit 1; }
+import hashlib, json, shutil, sys, tarfile, urllib.request
+from pathlib import Path
+ver, dest = sys.argv[1], Path(sys.argv[2])
+base = "https://developer.download.nvidia.com/compute/cuda/redist/"
+d = json.load(urllib.request.urlopen(f"{base}redistrib_{ver}.json"))
+tmp = dest.with_name(dest.name + ".tmp")
+shutil.rmtree(tmp, ignore_errors=True)
+tmp.mkdir(parents=True)
+for k in ("cuda_nvcc", "cuda_cudart", "cuda_crt", "libnvvm", "cccl", "libnvptxcompiler", "cuda_culibos", "cuda_cuobjdump", "cuda_nvdisasm"):
+    x = d[k]["linux-x86_64"]
+    data = urllib.request.urlopen(base + x["relative_path"]).read()
+    if hashlib.sha256(data).hexdigest() != x["sha256"]:
+        raise SystemExit(f"{k}: sha256 mismatch")
+    arc = tmp / Path(x["relative_path"]).name
+    arc.write_bytes(data)
+    with tarfile.open(arc) as t:
+        for m in t.getmembers():
+            parts = Path(m.name).parts
+            if len(parts) > 1:
+                m.name = str(Path(*parts[1:]))
+                t.extract(m, tmp)
+    arc.unlink()
+    print(k, d[k]["version"], x["sha256"], flush=True)
+(tmp / "lib64").symlink_to("lib")
+tmp.rename(dest)
+EOF
   exec 7>&-
 fi
 export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
