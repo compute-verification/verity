@@ -13,7 +13,8 @@
 // chained, 2 CTAs of 256 threads an SM) on a second stream, each warp paced by %globaltimer to RATIO times the alone arm's
 // rate; the arm reports the ratio it achieved over the hash's window and the tensor's rate inside that window. Where the
 // hash falls short of RATIO beside the whole tensor, wgmma tries again with the tensor paced (`tensor_paced`, a fraction
-// of the alone rate) at the fraction the shortfall names and halfway from it to the whole, leaving the hash room.
+// of the alone rate) at the fraction the shortfall names and halfway from it to the whole, leaving the hash room. Where
+// the hash overshoots (the tensor slowed beside it), wgmma tries again with the hash paced to the rate the tensor kept.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -I../torch_gpu/sha512_rows -o class_rate
 //        class_rate.cu -lcublasLt
@@ -350,10 +351,11 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
       continue;
     }
     const double ref = alone > 0 ? alone : macs_per_iter * nsm / t_iter;
-    // the tensor at `frac` of `ref` (1: unpaced), the hash paced to `ratio` of that; returns (tensor rate, achieved ratio)
-    auto beside = [&](double frac) {
+    // the tensor at `frac` of `ref` (1: unpaced), the hash paced to `ratio` of `base` (0: of the tensor's target);
+    // returns (tensor rate, achieved ratio)
+    auto beside = [&](double frac, double base = 0) {
       const double rt = frac * ref;
-      auto [reps, pace] = h.pace(ratio * 1e-6 * rt, secs);
+      auto [reps, pace] = h.pace(ratio * 1e-6 * (base > 0 ? base : rt), secs);
       const u64 tpace = frac < 1 ? (u64)(TB * macs_per_iter / (rt / nsm) * 1e9) : 0;
       const int iters = std::min((double)cap, (1.25 * secs + 1.0) * (frac < 1 ? rt / nsm / macs_per_iter : 1 / t_iter));
       launch(iters, tpace);
@@ -374,6 +376,9 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
       const double f1 = std::min(0.999, tr / ref * got / ratio);
       beside(f1);
       beside((1 + f1) / 2);
+    } else if (got > 1.02 * ratio && tr > 0) {
+      // the tensor slowed beside the hash, so the hash overshot: pace it to the rate the tensor kept, 1% over
+      beside(1.0, 1.01 * tr);
     }
   }
 }
