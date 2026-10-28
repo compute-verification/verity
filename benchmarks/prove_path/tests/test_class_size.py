@@ -4,6 +4,7 @@
   positions (`window_circuit.class_circuit`) and at a class of two lanes (its scan state row another): every template but
   the heads is a fixed count a position, `TokenFeed_v1` one a prompt position past the first, `ScanSlots_v2` and
   `SlotEntry_v1` one a Program and `OutCollect_v1` one a position;
+* so it is for int8 Llama-3.2-1B on the H200, whose first blocks read a key's value as slices (`AttnBlockFirst_v2`);
 * v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
   guarded: a one-row decode's FA2 guards its first visited block only) and its end;
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
@@ -14,11 +15,13 @@
 """
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
 
 import pytest
+from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
@@ -32,6 +35,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 PROBE = WindowClass(1, 2, 2)
+LLAMA_1B = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 
 
 def _registered(config: dict) -> Registered:
@@ -48,6 +52,19 @@ def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_c
     assert PROBE.positions == 3 and at.positions == 7
     assert CZ.project(probe, PROBE, at) == _census(at)
     assert CZ.project(probe, PROBE, two) == _census(two) and "ScanSlots_v2{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
+
+
+def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
+    """int8 Llama-3.2-1B on the H200, whose keys' values are each two rows of the value GEMM: its first blocks are
+    `AttnBlockFirst_v2{..., VS=32}`, and the probe's projection is still the exact lowering."""
+    cfg = json.loads(LLAMA_1B.read_text()) | {"quantization_config": dict(INT8_EXACT_QUANT)}
+    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
+              target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
+    reg, at = Registered.of(phi, default_seed=7), WindowClass(1, 5, 3)
+    probe, exact = (CZ.census(class_circuit(reg, c, 1, provable=False)) for c in (PROBE, at))
+    assert {lab for lab in exact if lab.startswith("AttnBlockFirst")} == {
+        f"AttnBlockFirst_v2{{D=64,NVIS={t},BN=192,VS=32}}" for t in range(1, at.positions + 1)}
+    assert CZ.project(probe, PROBE, at) == exact
 
 
 def test_v19s_heads_are_key_blocks():
