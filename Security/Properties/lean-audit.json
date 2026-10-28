@@ -6088,6 +6088,62 @@
     "Properties.Evaluator.TC.zero"
    ]
   },
+  "Definitions.Flock.Circuit": {
+   "digest": "09eb90810bfa68249e2d6ac5f7e7f8301658515ffc77220056c49cb48fc86c80",
+   "definitions": {
+    "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
+    "FlockSoundness.Audit.Circuit.N": "2b5691665b0fbb60db49cdf4b0747640b7040dfa5bf45633080d74aba0ad1b78",
+    "FlockSoundness.Audit.Circuit.op": "97912b36c50d00a1dbe0dfc71e4078501f7f6ac4ff029f43397ff23629d59ecc",
+    "FlockSoundness.Audit.Circuit.outputs": "97687faac62607feefae89c9d9802053cfade7d48f155c95c6e3c7abe73a0412",
+    "FlockSoundness.Audit.Op": "75bebd7c162b9b7f27418d44dc50b25f09902fd3c7d8b106af390c8d6bb286c7",
+    "FlockSoundness.Audit.Op.and": "2826c574c26cf547071a45321935d27f979852961bdd8e252b4ef119a8de4ebf",
+    "FlockSoundness.Audit.Op.args": "feaa0258468060300851a397170ccae05cdd531573e161570b64bdec262f1133",
+    "FlockSoundness.Audit.Op.casesOn": "68e61a592345106f03f09201521cec67e0aa7e72b8a6a1313d24322199973c55",
+    "FlockSoundness.Audit.Op.ctorIdx": "5c683427c86ede41231aec4d579cffa127c580ca9e923da6770cbfa363425a3d",
+    "FlockSoundness.Audit.Op.input": "93946cf1d6220a01fb4a02480fcf835edb8ea1a9245ceca8b900ac67c242b11e",
+    "FlockSoundness.Audit.Op.isInput": "e015c7679e24eb27509d6d17561f98222fcf9154a5e01328c30b070b971f502c",
+    "FlockSoundness.Audit.Op.isInput._sparseCasesOn_1": "87b2063dd85c18f50211e1c0c44fa4f049e2190f5e1b601badd9c1c01a128931",
+    "FlockSoundness.Audit.Op.not": "2bcdf9f429225986c3dd1d04b1be42f03676ab4e9bd9e34241f9d5a62301b0aa",
+    "FlockSoundness.Audit.Op.rec": "3c718220fecd306c81da0f7a18c687f3e0cdee3f9a83fd60e8333a0b11c5408e",
+    "FlockSoundness.Audit.Op.row": "c98f343a7b497c5240dc00c014258c27ab9436f94261c13bab71a8cac1250c07",
+    "FlockSoundness.Audit.Op.xor": "5c1dec09723d8ee00d06d1262a7a375eca9ee8f1487a265808a68457a7ed8a38",
+    "FlockSoundness.Audit.Partition": "b65f35550e9e6cbc591e4686bca25d01c8306cec89ffb3e3422d0da96829111a",
+    "FlockSoundness.Audit.Partition.unit": "d82fc1dedb29bad631c723bb99a0d7279d6147ed84f507a13d382fd8976e1b7b"
+   },
+   "guarantees": ["Verity.soundness_of_subprotocols"]
+  },
+  "Definitions.Flock.Lowering": {
+   "digest": "e463c4b5abc6383613fbd3f5d9582fc933a7604aeb9e6c34c94bc89d823577ce",
+   "definitions": {
+    "FlockSoundness.Audit.Op.lift": "4d31b388e3260b4a5885878f749f29c82670f01d2bfef8e48195eb55ee07ab32",
+    "FlockSoundness.Prog": "802da4afc4af4a75ed5d2db20fb003a7af1259d87e5edb1db2d80afecb37b7d1",
+    "FlockSoundness.Prog.RowsWire": "220d041887a7d1ec34c0cf4f8ab77a45377a59c9e9aabc0adb5790cbefee5eb0",
+    "FlockSoundness.Prog.RowsWire.wire": "10588e7680e590f7eedc663b3138a14a3c06dc6d5b7f89e8e245ac4c52942644",
+    "FlockSoundness.Prog.below": "f0aea5d042c797d07001fd99c634bf592ad737a8014f558165dc897a13f6be1e",
+    "FlockSoundness.Prog.brecOn": "ab90e79444d45a21ed8ddfef6061a98d0d21d18e3a5f795bb931c8711ff5e780",
+    "FlockSoundness.Prog.brecOn.go": "11439838ec0cc14b5fc3e0d644794c4866fa4d6dddb2c72439f03ca2d7ad0fcb",
+    "FlockSoundness.Prog.casesOn": "d15302b863392328fe8d2db27dd30c56a25aa18fccbd57e7e9cdb5b834a84596",
+    "FlockSoundness.Prog.circuit": "a6d3656593dfb2a802e0ca12587a94b6c6b3cd20971d41209f14cd22c574313e",
+    "FlockSoundness.Prog.colWire": "a96a9881c265f01bf687a913e44e4722886ec0e626cd26b7663262d43800b11b",
+    "FlockSoundness.Prog.inputs": "0e1d0f90035642ee5d3b9f197bc4e5f5971b6aa79fdd2a00c4bd890b89f04e59",
+    "FlockSoundness.Prog.op": "0728dd09e049945cf4d4f7a3613c20268d194d0bb8064092fdbc8aa1a8fce4a3",
+    "FlockSoundness.Prog.partition": "e2701061aefaa8d7b0f43c1d03c6c5d1c3862c37baf81b6a3e98b878e1ed1cd3",
+    "FlockSoundness.Prog.rec": "2c31920e8fe9b2676de5ddd63a4f0619c6e9b5229c40999dbee56ff25d9eaf17",
+    "FlockSoundness.Prog.rows": "0f659f071f791b57aab0875f59eaee080d155fa9a8f933150a3d3634c167c735",
+    "FlockSoundness.Prog.rowsWire_last": "103266f58d566a38762451c9e722bb4e0f8df7f926e82780f63cd555c18264e5",
+    "FlockSoundness.Prog.rowsWire_snoc": "a5eddcd7add6dd4bec578ff1addad05800b16ebfc746e3f8284e1401a2ad6c0a",
+    "FlockSoundness.Prog.snoc": "a483637c248db1a5929db2dc137add6bb784521bb16797965b86ee881b0739bc",
+    "FlockSoundness.Prog.unit": "7f6a77a3b13e21c3d7ed0c675630a5b0e2a5683f95ac6107ccc13b11e96159a7",
+    "FlockSoundness.Rows": "eafd00fa7b02297bcaa72274acd01d5ac81dc5a3f0ba6e2d15c9322c62d8ffe1",
+    "FlockSoundness.Rows.a": "335a51d69a144b8d413cb547f18224b7d037e6e7ba69f0cc2bc67f08e7669a70",
+    "FlockSoundness.Rows.b": "1283308c04d49734be64c36247c2479128b739cb0ca4b4675c5d09ebeacb7740",
+    "FlockSoundness.Rows.comp": "bb38af5bec533c247fab8b96a3d8d434e7abcd323ad825edf62266d3b1143c2a",
+    "FlockSoundness.Rows.nComp": "e13d7d482dc919a97f87f860c02c995aaa7d5ccf79a3255919b640cce1e4d6b4",
+    "FlockSoundness.Rows.nIn": "bb9beed789afc7db95b33121c205828c98973eb279961de31250ce3d72de441f",
+    "FlockSoundness.Rows.w": "4e7e17ee3e738a8458dfcf832185cd6e26b5c270e7c4330a028215e9cb3f9f7c"
+   },
+   "guarantees": ["Verity.soundness_of_subprotocols"]
+  },
   "Definitions.Hash.Basic": {
    "digest": "10de36d231fe618af8650ec4649c537fbabe75cbf8a102ed622ff40c797a9845",
    "definitions": {
