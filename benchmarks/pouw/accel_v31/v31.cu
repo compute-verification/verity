@@ -47,6 +47,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <random>
 #include <string>
 #include <thread>
@@ -1776,8 +1777,52 @@ __global__ void gen_uniform_kernel(int8_t* out, u64 n, u32 seed) {
   for (u64 i = blockIdx.x * (u64)blockDim.x + threadIdx.x; i < n; i += (u64)gridDim.x * blockDim.x)
     out[i] = (int8_t)((int)(mix32(seed ^ mix32((u32)i ^ mix32((u32)(i >> 32)))) % 255u) - 127);
 }
+// fill-bench's windows: one CTA an SM (STAMP_SMEM keeps a second off the SM) writes its %globaltimer, %clock64 and %smid
+// once every CTA has arrived, so the stamps are the SMs' clocks at one moment; sm ~0 where they weren't all resident within a
+// millisecond (stamp_span refuses the window)
+constexpr int STAMP_SMEM = 120 * 1024;
+__global__ void stamp_kernel(unsigned long long* out, u32* arrive) {
+  if (threadIdx.x) return;
+  auto gt = [] {
+    unsigned long long t;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    return t;
+  };
+  atomicAdd(arrive, 1u);
+  const unsigned long long t0 = gt();
+  bool all = true;
+  while (*(volatile u32*)arrive < gridDim.x)
+    if (gt() - t0 > 1000000) { all = false; break; }
+  out[3 * blockIdx.x] = gt();
+  out[3 * blockIdx.x + 1] = (unsigned long long)clock64();
+  out[3 * blockIdx.x + 2] = all ? smid() : ~0ull;
+}
 
 // ---------------------------------------------------------------- host
+// two stamp_kernel stamps of nsm CTAs: every SM's clocks between them, summed, and the SMs' mean globaltimer span; sms 0
+// unless both stamps have one CTA on each of the same nsm SMs
+struct Span {
+  double clocks = 0, ns = 0;
+  int sms = 0;
+};
+static Span stamp_span(const unsigned long long* a, const unsigned long long* b, int nsm) {
+  std::map<unsigned long long, int> ia, ib;
+  for (int i = 0; i < nsm; i++) {
+    ia[a[3 * i + 2]] = i;
+    ib[b[3 * i + 2]] = i;
+  }
+  Span s;
+  if ((int)ia.size() != nsm || (int)ib.size() != nsm || ia.count(~0ull) || ib.count(~0ull)) return s;
+  for (const auto& [sm, i] : ia) {
+    const auto j = ib.find(sm);
+    if (j == ib.end()) return Span{};
+    s.clocks += (double)(b[3 * j->second + 1] - a[3 * i + 1]);
+    s.ns += (double)(b[3 * j->second] - a[3 * i]);
+  }
+  s.ns /= nsm;
+  s.sms = nsm;
+  return s;
+}
 static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
   CUtensorMap m;
   const cuuint64_t dims[2] = {(cuuint64_t)depth, (cuuint64_t)rows}, strides[1] = {(cuuint64_t)depth};
@@ -3536,51 +3581,81 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     const gk::Timing tm = gk::timed_items(arms, reps, f.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
-    // the power arms (V31_POWER_ARMS, default lt,gemm,ovl,wgl): each arm's calls back to back for V31_POWER_MS (default
-    // 1500; 0: none) after V31_POWER_LEAD_MS of them (default a fifth of that), NVML's energy over their event time;
-    // V31_POWER_REPS rounds (default 1), the arms in turn in each round. Every window is a record (power: its calls, event
-    // ms, mJ, host start and end in Unix seconds, clock64's MHz where the arm is clocked, NVML's SM clock and clock event
-    // reasons halfway through); an arm's w is the median of its windows' watts
+    // the lt, gemm, ovl and wgl arms' power (w): each arm's calls back to back for V31_POWER_MS (default 1500; 0: none),
+    // after a fifth of that as a lead-in, NVML's energy over their event time
     std::vector<double> watts(arms.size(), NAN);
-    const double pms = env_int("V31_POWER_MS", 1500), plead = env_int("V31_POWER_LEAD_MS", (int)(0.2 * pms));
-    const int prounds = std::max(1, env_int("V31_POWER_REPS", 1));
-    const std::string parms = "," + env_str("V31_POWER_ARMS", "lt,gemm,ovl,wgl") + ",";
-    std::vector<std::vector<double>> pw(arms.size());
-    std::string precs;
-    auto host_s = [] {
-      return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
-    };
-    for (int r = 0; pms > 0 && nv.energy_mj() && r < prounds; r++)
+    const double pms = env_int("V31_POWER_MS", 1500);
+    for (size_t a = 0; pms > 0 && nv.energy_mj() && a < arms.size(); a++) {
+      const std::string& nm = arms[a].name;
+      if (nm != "lt" && nm != "gemm" && nm != "ovl" && nm != "wgl") continue;
+      std::vector<double> v;
+      for (const auto& it : tm.items)
+        if (it.arm == (int)a) v.push_back(it.ms / it.calls);
+      const double per = gk::median(v);
+      if (!(per > 0)) continue;
+      arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(0.2 * pms / per)));
+      CK(cudaStreamSynchronize(f.s0));
+      cudaEvent_t e0, e1;
+      CK(cudaEventCreate(&e0));
+      CK(cudaEventCreate(&e1));
+      const unsigned long long j0 = nv.energy_mj();
+      CK(cudaEventRecord(e0, f.s0));
+      arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(pms / per)));
+      CK(cudaEventRecord(e1, f.s0));
+      CK(cudaEventSynchronize(e1));
+      const unsigned long long j1 = nv.energy_mj();
+      float ms = 0;
+      CK(cudaEventElapsedTime(&ms, e0, e1));
+      watts[a] = (double)(j1 - j0) / ms;
+      cudaEventDestroy(e0);
+      cudaEventDestroy(e1);
+    }
+    // sustained windows (V31_WINDOW_ARMS, default lt,gemm_d,wgl): each arm's calls back to back for V31_WINDOW_MS (default
+    // 0: none) after V31_WINDOW_LEAD_MS of them (default a quarter of that), V31_WINDOW_REPS rounds (default 3) with the
+    // arms in turn in each round. stamp_kernel stamps every SM just before the first call and just after the last, so a
+    // window's SM clocks (sm_clocks, summed over the SMs) and span (span_ns, globaltimer, the SMs' mean) cover every call
+    // and every gap between them, for any arm. Every window is a record (windows: its calls, event ms, sm_clocks, span_ns,
+    // sms, clock64's MHz where the arm is clocked, NVML's SM clock and clock event reasons halfway through)
+    const double wms = env_int("V31_WINDOW_MS", 0), wlead = env_int("V31_WINDOW_LEAD_MS", (int)(0.25 * wms));
+    const int wrounds = std::max(1, env_int("V31_WINDOW_REPS", 3));
+    const std::string warms = "," + env_str("V31_WINDOW_ARMS", "lt,gemm_d,wgl") + ",";
+    std::string wrecs;
+    unsigned long long* stamps = wms > 0 ? dalloc<unsigned long long>(2 * 3 * f.nsm) : nullptr;
+    u32* arrive = wms > 0 ? dalloc<u32>(2) : nullptr;
+    if (wms > 0) CK(cudaFuncSetAttribute(stamp_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, STAMP_SMEM));
+    for (int r = 0; wms > 0 && r < wrounds; r++)
       for (size_t a = 0; a < arms.size(); a++) {
-        if (parms.find("," + arms[a].name + ",") == std::string::npos) continue;
+        if (warms.find("," + arms[a].name + ",") == std::string::npos) continue;
         std::vector<double> v;
         for (const auto& it : tm.items)
           if (it.arm == (int)a) v.push_back(it.ms / it.calls);
         const double per = gk::median(v);
         if (!(per > 0)) continue;
-        if (plead > 0) arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(plead / per)));
+        if (wlead > 0) arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(wlead / per)));
+        CK(cudaMemsetAsync(arrive, 0, 8, f.s0));
         CK(cudaStreamSynchronize(f.s0));
         cudaEvent_t e0, e1;
         CK(cudaEventCreate(&e0));
         CK(cudaEventCreate(&e1));
-        const int calls = std::max(1, (int)std::ceil(pms / per));
+        const int calls = std::max(1, (int)std::ceil(wms / per));
         const auto start = std::chrono::steady_clock::now();
-        const double h0 = host_s();
-        const unsigned long long j0 = nv.energy_mj();
+        stamp_kernel<<<f.nsm, 32, STAMP_SMEM, f.s0>>>(stamps, arrive);
         CK(cudaEventRecord(e0, f.s0));
         arms[a].enqueue(f.s0, calls);
         CK(cudaEventRecord(e1, f.s0));
+        stamp_kernel<<<f.nsm, 32, STAMP_SMEM, f.s0>>>(stamps + 3 * f.nsm, arrive + 1);
         // halfway from the window's start (a full launch queue can hold the enqueue past it)
-        std::this_thread::sleep_until(start + std::chrono::duration<double, std::milli>(0.5 * pms));
+        std::this_thread::sleep_until(start + std::chrono::duration<double, std::milli>(0.5 * wms));
         const gk::Sample mid = nv.sample();
-        CK(cudaEventSynchronize(e1));
-        const unsigned long long j1 = nv.energy_mj();
-        const double h1 = host_s();
+        CK(cudaStreamSynchronize(f.s0));
+        CK(cudaGetLastError());
         float ms = 0;
         CK(cudaEventElapsedTime(&ms, e0, e1));
         cudaEventDestroy(e0);
         cudaEventDestroy(e1);
-        pw[a].push_back((double)(j1 - j0) / ms);
+        std::vector<unsigned long long> st(2 * 3 * f.nsm);
+        CK(cudaMemcpy(st.data(), stamps, st.size() * 8, cudaMemcpyDeviceToHost));
+        const Span sp = stamp_span(st.data(), st.data() + 3 * f.nsm, f.nsm);
         char cm[32] = "null";
         if (cks[a]) {
           unsigned long long h[2];
@@ -3589,14 +3664,16 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
         }
         char b[384];
         snprintf(b, sizeof b,
-                 "%s{\"arm\": \"%s\", \"round\": %d, \"calls\": %d, \"ms\": %.3f, \"mj\": %llu, \"host_t0\": %.3f, "
-                 "\"host_t1\": %.3f, \"cmhz\": %s, \"nvml_mhz\": %u, \"reasons\": %llu}",
-                 precs.empty() ? "" : ", ", arms[a].name.c_str(), r, calls, ms, j1 - j0, h0, h1, cm, mid.sm_mhz,
-                 mid.throttle);
-        precs += b;
+                 "%s{\"arm\": \"%s\", \"round\": %d, \"calls\": %d, \"ms\": %.3f, \"sm_clocks\": %.0f, \"span_ns\": %.0f, "
+                 "\"sms\": %d, \"cmhz\": %s, \"nvml_mhz\": %u, \"reasons\": %llu}",
+                 wrecs.empty() ? "" : ", ", arms[a].name.c_str(), r, calls, ms, sp.clocks, sp.ns, sp.sms, cm,
+                 mid.sm_mhz, mid.throttle);
+        wrecs += b;
       }
-    for (size_t a = 0; a < arms.size(); a++)
-      if (!pw[a].empty()) watts[a] = gk::median(pw[a]);
+    if (stamps) {
+      cudaFree(stamps);
+      cudaFree(arrive);
+    }
     // the timed schedule's own values: two overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
     for (int b = 0; b < 2; b++) {
       f.poison(b, f.s0);
@@ -3676,8 +3753,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              "\"gamma_gemm_cutlass\": %s, \"cutlass_over_lt\": %s, ",
              jn(at("ovl") / med[ICUT]).c_str(), jn(at("ovl_w") / med[ICUT]).c_str(), jn(at("ovl_pad") / med[ICUT]).c_str(),
              jn(at("gemm") / med[ICUT]).c_str(), jn(med[ICUT] / l).c_str());
-    printf("\"gen\": \"%s\", \"power_ms\": %.0f, \"power_lead_ms\": %.0f, \"power_reps\": %d, \"power\": [%s], ", gen.c_str(),
-           pms, plead, prounds, precs.c_str());
+    printf("\"gen\": \"%s\", \"window_ms\": %.0f, \"window_lead_ms\": %.0f, \"window_reps\": %d, \"windows\": [%s], ",
+           gen.c_str(), wms, wlead, wrounds, wrecs.c_str());
     printf("\"kernels\": ");
     kernel_attrs(stdout);
     printf("}\n");
