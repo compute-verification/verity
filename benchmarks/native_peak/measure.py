@@ -41,31 +41,27 @@ RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
 DTYPES = ("bf16", "e4m3", "nvfp4")
 
-#: Datasheet dense tensor-core peaks (flop/s) with FP32 accumulate, keyed by a regex on `torch.cuda.get_device_name`.  First match
-#: wins.  RTX 4090: NVIDIA Ada GPU architecture whitepaper (BF16 with FP32 acc 165.2 TFLOPS, FP8 with FP32 acc 330.3 TFLOPS,
-#: boost clock, dense).  A100 SXM4 / PCIe 80GB: NVIDIA A100 datasheet (BF16 312 TFLOPS dense; no FP8 tensor cores).  RTX 5090:
-#: NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A table "GeForce RTX 5090 vs RTX 4090 vs RTX 3090" -- BF16 with FP32
-#: accumulate 209.5, FP8 with FP32 accumulate 419, "Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)" 1676 dense / 3352
-#: with 2:4 sparsity (the card's headline "3352 AI TOPS" is the sparse figure), all at the 2407 MHz boost clock.
+#: Datasheet dense tensor-core peaks (flop/s) with FP32 accumulate, keyed by a regex on `torch.cuda.get_device_name`; first match
+#: wins.  Each entry's source is its results' `spec_source`; tests/test_native_peak.py holds the table to every census line.
 SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12, "nvfp4": None}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate; Ada has no FP4"),
     (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
     (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
-    # H100 SXM5: benchmarks/census/hardware.json h100-sxm5-80gb/bf16 and h100-sxm5-80gb/e4m3 (tests/test_native_peak.py checks every census line).
     (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
      "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate; Hopper has no FP4"),
     (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12, "nvfp4": None}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate; Hopper has no FP4"),
+    # H200 SXM: the H100 SXM5's tensor cores and clocks (census has no H200 line); the H200 NVL's peaks are lower.
+    (r"H200(?!.*NVL)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
+     "NVIDIA H200 data sheet, H200 SXM dense (BF16 1,979 / FP8 3,958 TFLOPS with sparsity, halved to the Hopper whitepaper's "
+     "989.4 / 1978.9), FP32 accumulate; Hopper has no FP4"),
     (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
-    (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
-     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved), "
-     "FP32 accumulate at full rate (RTX PRO Blackwell whitepaper Table 4); census rtx-pro-6000-server/{bf16,e4m3,e2m1}"),
-    (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
-     "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
     # benchmarks/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
     (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
-     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); FP32 "
-     "accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper, Table 4)"),
+     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); "
+     "FP32 accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper v1.1, Table 4)"),
+    (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
+     "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]
 
 #: --dtype nvfp4: the block-scaled FP4 instruction itself (`mma_peak_fp4.cu`) -- see `measure_nvfp4_mma`.
