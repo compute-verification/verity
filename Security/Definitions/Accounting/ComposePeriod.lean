@@ -32,15 +32,16 @@ period's coins, which the cheater may steer, and the tail at a stopping time is 
   a dead tile's cone holds no live words.
 * `periodGame`: the period's ideal game, window `w`'s round its `serviceGame` at weights of its live tiles.
 * `RoundGame.acceptsUpTo`, `RoundGame.deficiencyUpTo`: a game's first `j` rounds pass; their shares' sum.
-* `PeriodRun`, `PeriodRun.Credited`, `PeriodRun.prefixLen`: the period's proofs' run-dependent half; window `w` and
-  every earlier one had every drawn tile's proof accepted; the number of such windows, the accepted prefix.
+* `Outcomes`, `Outcomes.Credited`, `Outcomes.prefixLen`: the outcomes of the period's proofs, their run-dependent
+  half; window `w` and every earlier one had every drawn tile's proof accepted; the number of such windows, the
+  accepted prefix.
 * `periodMode`: the run's modes as the period's proofs read them: a live tile `(w, t)` of a credited window has window
   `w`'s mode along its rounds' coins (`tileMode` per window), and every other tile is skipped whole.
 * `PerLiveTile`: `PerTile` on the window's live tiles.
 * `Declared.periodLayer`: the period's proofs as one `Accounting.TS.DrawnLayer` over `n` rounds, each window
   `Declared.layer`'s: positions are `(window, gate)`, so each window's positions are its own, cut at its own coins (a
   registered input at its window's first coin, which binds no earlier than the service does) and written by its own
-  proof blocks; the draw is each window's; only the run-dependent half (`PeriodRun`) is abstract.
+  proof blocks; the draw is each window's; only the run-dependent half (`Outcomes`) is abstract.
 * `PrefixOf`: `DrawnLayer.Of`'s game clause on every prefix: right drawn tiles in the first `j` windows pass the
   game's first `j` rounds.
 * `creditedLive`, `LiveWorkAt`, `rOfPrefix`: the credited windows' live words; `WorkAt` on live words, with the
@@ -144,26 +145,29 @@ noncomputable def periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (w 
   | _, .window live W next =>
     consGame (serviceGame (Ξ := Ξ) stg W (w live) a b K) fun ω => periodGame stg w a b K (next ω)
 
-/-- **The period's proofs' run-dependent half**: `ProofRun` with a window index. On the period's coins, whether window
-`w`'s proof of its `i`-th drawn tile was accepted and the values its opening gives its slots, and each tile's relation
-and rightness on its slots' values in window `w`. -/
-structure PeriodRun (C B : Type) (m s Np n : ℕ) (V : Type) where
+/-- **The outcomes of the period's proofs**, their run-dependent half: `ProofRun` with a window index. On the
+period's coins, whether window `w`'s proof of its `i`-th drawn tile was accepted and the values its opening gives its
+slots, and each tile's relation and rightness on its slots' values in window `w`. -/
+structure Outcomes (C B : Type) (m s Np n : ℕ) (V : Type) where
   accepted : Paths (Paths C m × B) n → Fin n → Fin s → Prop
   opened : Paths (Paths C m × B) n → Fin n → Fin s → ℕ → V
   rel : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop
   right : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop
 
+/-- `Outcomes` under its former name, kept while queued changes still read it; nothing here reads it. -/
+abbrev PeriodRun := Outcomes
+
 /-- **Window `w` is credited** on the period's coins `x`: it and every earlier window had every drawn tile's proof
 accepted. The period stops at its first window with a refused proof, with no retry, and credits the windows before
 it. -/
-def PeriodRun.Credited {C B V : Type} {m s Np n : ℕ} (pr : PeriodRun C B m s Np n V) (x : Paths (Paths C m × B) n)
+def Outcomes.Credited {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V) (x : Paths (Paths C m × B) n)
     (w : Fin n) : Prop :=
   ∀ w' : Fin n, w' ≤ w → ∀ i, pr.accepted x w' i
 
 open Classical in
 /-- **The accepted prefix's length**: the number of credited windows, which are the first `prefixLen` windows. Its
 first window past them is the period's first failure, a stopping time of its coins. -/
-noncomputable def PeriodRun.prefixLen {C B V : Type} {m s Np n : ℕ} (pr : PeriodRun C B m s Np n V)
+noncomputable def Outcomes.prefixLen {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V)
     (x : Paths (Paths C m × B) n) : ℕ :=
   (Finset.univ.filter fun w : Fin n => pr.Credited x w).card
 
@@ -172,7 +176,7 @@ open Classical in
 mode at its rounds' coins (`tileMode` of the window played there), and every other tile, dead or in a window past the
 accepted prefix, is skipped whole, so it is never good and folds nothing. -/
 noncomputable def periodMode {ι C B V : Type} {s Np n : ℕ} (Cd : Declared ι)
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (pr : PeriodRun C B Cd.rounds s Np n V)
+    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (pr : Outcomes C B Cd.rounds s Np n V)
     (x : Paths (Paths C Cd.rounds × B) n) (u : Fin n × Fin Np) : Mode :=
   if pr.Credited x u.1 ∧ Wp.liveAt x u.1 u.2 = true then
     ((Wp.windowAt x u.1).joint (tileStage Cd Np)).mode (coinAt x u.1).1 u.2
@@ -198,7 +202,7 @@ cones stay inside their windows. A registered input is cut at its window's first
 commits it. The draw is uniform over every tile, dead ones included, as the served gate's is; a drawn dead tile is
 proved like any other, and its words count for nothing (`periodMode`, `liveCone`). -/
 def Declared.periodLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) :
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) :
     DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V where
   draw := drawOf hK
   pos := fun w t k => (w, (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length))
@@ -225,10 +229,10 @@ def PrefixOf {C B : Type} [Fintype C] [Fintype B] {n m s : ℕ} {J Q Pos V : Typ
 
 open Classical in
 /-- **The credited windows' live words**: the words of the live tiles of every window of the accepted prefix
-(`PeriodRun.Credited`), along the period's coins. With every tile live and every window credited it is `n·N_w` when
+(`Outcomes.Credited`), along the period's coins. With every tile live and every window credited it is `n·N_w` when
 the tiles hold the circuit's credited words. -/
 noncomputable def creditedLive {ι K C B V : Type} (Sc : Scheme K) (Cd : Declared ι) {s Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (pr : PeriodRun C B Cd.rounds s Np n V)
+    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (pr : Outcomes C B Cd.rounds s Np n V)
     (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if pr.Credited x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
