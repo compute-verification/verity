@@ -146,7 +146,7 @@ CONTEXT = 512
 #: the endpoint's record in its records artifact: each engine request's engine_id and its warden user (null for a body
 #: that sent none), a line in requests.jsonl's order: requests.jsonl less its values
 USERS = "request_users.jsonl"
-HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
