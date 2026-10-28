@@ -415,11 +415,11 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_648, "NP": 4_496, "NV": 4_832, "egress_row": 65_536}
+    assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
-    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_496 + rate * cap))
+    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap))
     assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
