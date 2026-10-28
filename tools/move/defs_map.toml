@@ -1,6 +1,5 @@
 # The circuit Definitions' move down from the vLLM integration into `verity.ml`: what
-# `tools/move/layout.py --map tools/move/defs_map.toml` moves, renames and rewrites (the vision's I10 and its rows X1/X2,
-# note:20261024T0615Z-draft-verity-vllm-vision; the map and its evidence are note:20261024T2200Z-report-defs-down-map).
+# `tools/move/layout.py --map tools/move/defs_map.toml` moves, renames and rewrites.
 #
 # Whole packages and modules move; nothing is split, edited or deleted, and no file is added:
 # - `verity.ml.definitions`, a unit off `SOUNDNESS_PATH` (`tests/test_boundaries.py`'s `ALLOWED`), takes the kernel
