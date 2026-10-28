@@ -263,8 +263,8 @@ This second table is what the generator-form lowering would give if it registers
 It is not the record's number.
 
 K also rests on these conditions:
-- The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
-  That reading is a claim, with lean and Daniel.
+- The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
+  reading is a claim, with lean and Daniel.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at

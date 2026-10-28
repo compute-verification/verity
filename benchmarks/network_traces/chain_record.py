@@ -686,8 +686,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int | None = None) -
                       "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS}},
             "weights_bits": weights_bits, "rows": rows, "theorems": dict(LB.STATEMENTS),
             "conditions": [
-                "the generator reading of the scan's statement (each proof block's registered rows its boundary "
-                "values): a claim, with lean and Daniel",
+                "the generator reading of the scan's statement (each unit's registered rows its boundary values): "
+                "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met today)",
                 f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
