@@ -273,7 +273,7 @@ def cmd_prepare(a) -> int:
                     f"{EXPECT[tag]}")
 
     for u in units:
-        s, m = u // p, served[u // p]
+        m = served[u // p]
         z, opening = unit(u)
         problems += check_openings(pub, u, opening, files(pub, u, m))
         tag = tag_of(u)
