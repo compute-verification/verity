@@ -198,3 +198,154 @@ def test_add_norm_quant_is_the_definitions_twin(norm_refs):
         normed, res, _, _ = RF.fused_rows(words(x)[fin], words(r)[fin], np.repeat(words(w)[None], fin.sum(), 0), eps,
                                           RF.variance_v2)
         assert np.array_equal(normed, words(gx)[fin]) and np.array_equal(res, words(gr)[fin]), x.shape
+
+
+WIRING = textwrap.dedent('''
+    import json, sys
+    import torch
+    import torch.nn as nn
+    import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
+    from torch.utils._python_dispatch import TorchDispatchMode
+    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
+    from vllm.model_executor.layers.activation import SiluAndMul
+    from vllm.model_executor.layers.layernorm import RMSNorm
+
+    from verity_vllm.engine import hooks, int8_fused, int8_ops, int8_producers
+    from verity_vllm.engine.int8_experts import PlainGemm
+
+    H, N, I, T, EPS = 2048, 3072, 8192, 37, 1e-5
+    seen = []
+
+    class Gemm(PlainGemm):
+        def observe(self, layer, xq, s_a, y, z=None):
+            seen.append((self.prefix, xq.clone(), s_a.clone(), y.clone()))
+
+    class Lin(nn.Module):
+        def __init__(self, name, n, k, g):
+            super().__init__()
+            self.weight = nn.Parameter(torch.randint(-127, 128, (n, k), generator=g, device="cuda", dtype=torch.int8),
+                                       requires_grad=False)
+            self.weight_scale = nn.Parameter(torch.rand(n, 1, generator=g, device="cuda", dtype=torch.float32) * 1e-3,
+                                             requires_grad=False)
+            self.quant_method = Gemm(name)
+
+        def forward(self, x):
+            return self.quant_method.apply(self, x)
+
+    class LlamaDecoderLayer(nn.Module):
+        """vLLM's LlamaDecoderLayer.forward with attention and o_proj replaced by a slice of qkv."""
+
+        def __init__(self, i, g):
+            super().__init__()
+            self.input_layernorm, self.post_attention_layernorm = RMSNorm(H, eps=EPS), RMSNorm(H, eps=EPS)
+            self.self_attn, self.mlp = nn.Module(), nn.Module()
+            self.self_attn.qkv_proj = Lin(f"l{i}.qkv", N, H, g)
+            self.mlp.gate_up_proj, self.mlp.down_proj = Lin(f"l{i}.gate_up", 2 * I, H, g), Lin(f"l{i}.down", H, I, g)
+            self.mlp.act_fn = SiluAndMul()
+
+        def forward(self, x, residual):
+            if residual is None:
+                residual = x
+                x = self.input_layernorm(x)
+            else:
+                x, residual = self.input_layernorm(x, residual)
+            x = self.self_attn.qkv_proj(x)[:, :H].contiguous()
+            x, residual = self.post_attention_layernorm(x, residual)
+            x = self.mlp.down_proj(self.mlp.act_fn(self.mlp.gate_up_proj(x)))
+            return x, residual
+
+    g = torch.Generator(device="cuda").manual_seed(5)
+    prev = torch.get_default_dtype()
+    torch.set_default_dtype(torch.bfloat16)
+    with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
+        model = nn.Sequential(LlamaDecoderLayer(0, g), LlamaDecoderLayer(1, g)).cuda()
+    torch.set_default_dtype(prev)
+    with torch.no_grad():
+        for m in model.modules():
+            if isinstance(m, RMSNorm):
+                m.weight.copy_((0.2 + torch.rand(H, generator=g, device="cuda") * 2).bfloat16())
+    x0 = (torch.randn(T, H, generator=g, device="cuda") * 3).bfloat16()
+    x0[1, 5], x0[2, 9] = float("nan"), float("inf")
+
+    quants = []
+    q0 = int8_fused.quant_rows
+
+    def counted(*a, **k):
+        quants.append(a[0].shape[1])
+        return q0(*a, **k)
+
+    int8_fused.quant_rows = counted
+
+    def run():
+        seen.clear()
+        quants.clear()
+        x, r = x0.clone(), None
+        with torch.inference_mode():
+            for layer in model:
+                x, r = layer(x, r)
+        torch.cuda.synchronize()
+        return [x, r] + [t for rec in seen for t in rec[1:]], [rec[0] for rec in seen], list(quants)
+
+    class Ops(TorchDispatchMode):
+        def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+            return func(*args, **(kwargs or {}))
+
+    def same(a, b):
+        return len(a) == len(b) and all(u.dtype == v.dtype and u.shape == v.shape
+                                        and torch.equal(u.view(torch.int8), v.view(torch.int8)) for u, v in zip(a, b))
+
+    out = {}
+    ref, calls, out["quants_unfused"] = run()
+    out["calls"] = calls
+    out["installed"] = int8_producers.install(model)
+    out["live"] = len(hooks.live(int8_producers.TAG))
+    got, calls2, out["quants_fused"] = run()
+    out["fused_equal"] = same(got, ref) and calls2 == calls
+    with Ops():
+        got, _, out["quants_dispatch"] = run()
+    out["dispatch_equal"] = same(got, ref)
+    taps = hooks.Hooks()
+    taps.patch(torch.ops._C, "fused_add_rms_norm", (lambda f: lambda *a: f(*a))(torch.ops._C.fused_add_rms_norm))
+    got, _, out["quants_norm_tap"] = run()
+    out["norm_tap_equal"] = same(got, ref)
+    taps.uninstall()
+    acquired = []
+    rq = int8_ops.row_quant
+
+    def source(x):
+        xq, s = rq(x)
+        acquired.append((xq.clone(), s.clone()))
+        return xq, s
+
+    taps.patch(int8_ops, "row_quant", source)
+    got, _, out["quants_int8_source"] = run()
+    taps.uninstall()
+    out["int8_source_equal"] = same(got, ref) and same([t for a in acquired for t in a],
+                                                       [t for i in range(0, len(ref) - 2, 3) for t in ref[2 + i:4 + i]])
+    int8_producers.uninstall()
+    out["live_after"] = len(hooks.live(int8_producers.TAG))
+    got, _, out["quants_after"] = run()
+    out["after_equal"] = same(got, ref)
+    print(json.dumps(out))
+''')
+
+
+@cuda
+def test_the_producers_hand_their_codes_to_the_linears_they_feed():
+    """Two of vLLM's Llama decoder layers (its RMSNorm and SiluAndMul, the plain int8 arm's linears; attention and o_proj a
+    slice of qkv), batch invariant, in a child process: with the producers installed every output and every linear's
+    observed codes, scales and y are bit for bit the unfused forward's, and the quantizer runs only for layer 0's qkv (its
+    input norm has no residual).  Under a dispatch mode the producers stand aside, under the norm tap (a patched
+    `_C.fused_add_rms_norm`) the norms do, and an int8 source wrapping `int8_ops.row_quant` acquires the same values;
+    uninstalled, the forward is the unfused one again."""
+    pytest.importorskip("vllm")
+    r = subprocess.run([sys.executable, "-c", WIRING], check=True, capture_output=True, text=True,
+                       env={**os.environ, "VLLM_BATCH_INVARIANT": "1", "VERITY_INT8_FUSED_PRODUCERS": "1"})
+    import json
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert out["installed"] == {"norms": 4, "acts": 2} and out["live"] == 6 and out["live_after"] == 0, out
+    assert out["calls"] == ["l0.qkv", "l0.gate_up", "l0.down", "l1.qkv", "l1.gate_up", "l1.down"], out
+    assert out["quants_unfused"] == out["quants_dispatch"] == out["quants_after"] == [2048, 2048, 8192] * 2, out
+    assert out["quants_fused"] == out["quants_int8_source"] == [2048], out
+    assert out["quants_norm_tap"] == [2048, 2048, 2048, 2048], out
+    assert all(out[k] for k in ("fused_equal", "dispatch_equal", "norm_tap_equal", "int8_source_equal", "after_equal")), out

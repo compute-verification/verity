@@ -107,7 +107,7 @@ def install(model: Any) -> dict | None:
     if not envs.VLLM_BATCH_INVARIANT:
         return None
     h = hooks.Hooks(TAG)
-    sites: list[tuple[Any, Any, Any]] = []
+    sites: list[tuple[Any, type, Any]] = []
     for _, layer in model.named_modules():
         if type(layer).__name__ not in LAYERS:
             continue
@@ -120,11 +120,21 @@ def install(model: Any) -> dict | None:
                     and producer._forward_method == producer.forward_cuda
                     and (kind is SiluAndMul or (producer.variance_size_override is None and producer.has_weight))):
                 sites.append((producer, kind, producer._forward_method))
-    for producer, kind, original in sites:
-        h.patch(producer, "_forward_method", (_norm if kind is RMSNorm else _act)(producer, original))
     if not sites:
         return None
+    for producer, kind, original in sites:
+        h.patch(producer, "_forward_method", (_norm if kind is RMSNorm else _act)(producer, original))
+    _INSTALLED.append(h)
     return {"norms": sum(kind is RMSNorm for _, kind, _ in sites), "acts": sum(kind is SiluAndMul for _, kind, _ in sites)}
 
 
-__all__ = ["ENV", "LAYERS", "TAG", "install", "take"]
+def uninstall() -> None:
+    """Put every producer's forward back and drop the hand-offs."""
+    while _INSTALLED:
+        _INSTALLED.pop().uninstall()
+    _HANDOFF.clear()
+
+
+_INSTALLED: list[hooks.Hooks] = []
+
+__all__ = ["ENV", "LAYERS", "TAG", "install", "take", "uninstall"]
