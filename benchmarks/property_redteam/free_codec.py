@@ -1,7 +1,7 @@
 """The whole codec word at 0 budgeted units, as Model.lean once counted: `EncodeChainHardness` false for every `E > 0`.
 
 `squaring.free_square` shows a squaring mod p1024 at 0 units through the one-word gather (`gather [idx, const c]` is
-`c·[idx ≤ 0]`, and `Gate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
+`c·[idx ≤ 0]`, and `IntGate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
 fields 6b's `codecRows` (`Security/Proofs/Accounting/Gates.lean`) use, `⟨8, 5⟩` and `⟨16, 17⟩`: a circuit of the model
 that computes `byte (lessParity (encodeWord F.p d.key (d.tweak F i) m)) l` for every `l`, on every draw, from the
 `CodecInputs` slots (payload bytes registered, round constants', mask's and tweak's bytes coin), with its window

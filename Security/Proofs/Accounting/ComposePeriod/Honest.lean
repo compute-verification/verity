@@ -33,7 +33,7 @@ theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p �
 /-! ## The circuit, its scheme and the honest period -/
 
 /-- The word: step `0` of an `S8Dot_v1` body of `K = L = 32` (its `T_1`, a served step), committed. -/
-def word : Accounting.Gates.Gate Unit where
+def word : Accounting.Gates.IntGate Unit where
   op := .const 0
   args := []
   lo := 0

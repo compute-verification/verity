@@ -112,32 +112,32 @@ variable {ι : Type} {k : ℕ}
 /-- The codec's inputs over draws `D`, by binding: a registered input is one value on every draw (a payload byte, or
 anything fixed before the draw); a coin input is a canonical slot's byte on every draw, or one value on every draw (a
 coin independent of the draw). -/
-def CodecInputs (F : Field) (C : Dag ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
+def CodecInputs (F : Field) (C : IntDag ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
   (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i) ∧
     ∀ i, (∃ g ∈ C, g.op = .input .coin i) →
       (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
 /-- On draw `d`, `C`'s inputs and budgeted gates but gathers hold their declared intervals and its outputs `out i l`
 hold the bytes of words `words`' encodings, less their parity. -/
-def Encodes (F : Field) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
+def Encodes (F : Field) (C : IntDag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
     (d : Draw k) : Prop :=
   DeclaredHold C (x d) ∧
     ∀ i ∈ words, ∀ l < F.bytes,
       val C (x d) (out i l) = byte (lessParity (encodeWord F.p d.key (d.tweak F i) (m i))) l
 
 /-- `C` computes words `words` on more than `ε = εnum/εden` of the draws: on a set `good` of draws that large. -/
-def ComputesWords (F : Field) (k : ℕ) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
+def ComputesWords (F : Field) (k : ℕ) (C : IntDag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
     (out : ℕ → ℕ → ℕ) (εnum εden : ℕ) : Prop :=
   ∃ good ⊆ draws F k, MoreThan (draws F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
 
 /-- A circuit of the chain's restricted class: its window proven, and at most `B` operand bits a budgeted gate. -/
-def Restricted (B : ℕ) (C : Dag ι) : Prop := Proven C ∧ OperandBits B C
+def Restricted (B : ℕ) (C : IntDag ι) : Prop := Proven C ∧ OperandBits B C
 
 /-- The nonlinear units (`nonlinear`: budgeted units and data products) of the restricted circuits with no run-input
 bits that compute `q` distinct words (each below `p`) of the codec's encoding, less parity, on more than `ε` of the
 draws, from the payload and whatever they registered before the draw. -/
 def encodeCosts (F : Field) (k B εnum εden q : ℕ) : Set ℕ :=
-  {c | ∃ (ι : Type) (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  {c | ∃ (ι : Type) (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted B C ∧ runBits C = 0 ∧
       CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ nonlinear C = c}
 
@@ -159,7 +159,7 @@ less their parity, on more than `ε = εnum/εden` of the draws (`ComputesWords`
 that is `q ≤ nonlinear C / E + runBits C / (n − 1)`: each word costs `E` nonlinear units, or `n − 1` bits of run
 input (the word itself, sent after the draw). What the encode budget reads; `Assumptions.ChainSum` concludes it. -/
 def EncodeBound (F : Field) (k B E εnum εden : ℕ) : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ nonlinear C * (F.n - 1) + runBits C * E
