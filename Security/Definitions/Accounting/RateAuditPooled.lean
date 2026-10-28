@@ -1,4 +1,5 @@
 import Definitions.Accounting.RateAuditRemote
+import Definitions.Core.Period
 
 /-!
 # The monitoring period's causal rounds: good sets that precede their samples (trusted)
@@ -54,14 +55,20 @@ def spent {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (E
 
 end Chain
 
-/-- A session of `n` chained windows on one store, each closed by its pooled draw of `d` openings: window `w`'s chained
-prover is any function of the earlier windows' coins, their draws among them. -/
-structure Session (n P N b h ρ S L q r s d : ℕ) where
-  window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → Chain P N b h ρ S L q r s
+/-- A session of `n` chained windows on one store, each closed by its pooled draw of `d` openings: a play over its
+windows (`Verity.Play`), window `w`'s chained prover any function of the earlier windows' coins, their draws among
+them. -/
+abbrev Session (n P N b h ρ S L q r s d : ℕ) : Type :=
+  Verity.Play n (WindowCoins P N b h ρ r s d) (fun _ => Chain P N b h ρ S L q r s)
 
 namespace Session
 
 variable {n P N b h ρ S L q r s d : ℕ}
+
+/-- Window `w`'s chained prover on the earlier windows' coins `η`: the play's move at `w`. -/
+def window (A : Session n P N b h ρ S L q r s d) (w : Fin n)
+    (η : {v : Fin n // v < w} → WindowCoins P N b h ρ r s d) : Chain P N b h ρ S L q r s :=
+  A w η
 
 /-- Window `w`'s chained prover at the session's coins `ω`: it reads the earlier windows' coins. -/
 def chain (A : Session n P N b h ρ S L q r s d) (w : Fin n) (ω : Fin n → WindowCoins P N b h ρ r s d) :
