@@ -182,7 +182,7 @@ class Rates:
 
 
 @dataclass(frozen=True)
-class Window:
+class SamplingBlock:
     """One subcircuit's sampling block of the block: `k` of its units drawn in one session of `tables` tables."""
 
     template: Template
@@ -198,7 +198,7 @@ class Window:
         return self.statements + self.drawn
 
 
-def window(t: Template, k: int, windows: int, r: Rates) -> Window:
+def window(t: Template, k: int, windows: int, r: Rates) -> SamplingBlock:
     """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
@@ -208,10 +208,10 @@ def window(t: Template, k: int, windows: int, r: Rates) -> Window:
     k = min(t.units, tables * ceil(k / tables))
     K0 = {str(d): min(ceil(log(windows / d) * t.units / k), t.units - k + 1) for d in DELTAS}
     pooled = {str(d): min(log(windows / d) * t.units / k, t.units - k + 1) for d in DELTAS}
-    return Window(t, k, tables, tables * (r.statement_fixed + r.statement_per_and * a), k * r.per_and * a, K0, pooled)
+    return SamplingBlock(t, k, tables, tables * (r.statement_fixed + r.statement_per_and * a), k * r.per_and * a, K0, pooled)
 
 
-def plan(ts: list[Template], share: float, r: Rates) -> list[Window]:
+def plan(ts: list[Template], share: float, r: Rates) -> list[SamplingBlock]:
     """Every subcircuit's sampling block at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
     units wrong."""
     k = ceil(log(len(ts) / DELTAS[0]) / share)
@@ -223,14 +223,14 @@ def commit_cost(ts: list[Template], r: Rates) -> float:
     return sum(t.units * t.out_bits / 8 for t in ts) * r.commit_per_byte
 
 
-def replay_cost(ws: list[Window], m: Shape) -> float:
+def replay_cost(ws: list[SamplingBlock], m: Shape) -> float:
     """Replaying the drawn units' requests: `REPLAY_BLOCKS` of the block's run, scaled by the expected share of requests
     the draw touches."""
     drawn = sum(w.k for w in ws)
     return REPLAY_BLOCKS * m.block_s * (1 - exp(-drawn / m.batch))
 
 
-def proving(ws: list[Window], m: Shape) -> float:
+def proving(ws: list[SamplingBlock], m: Shape) -> float:
     return sum(w.cost for w in ws) + replay_cost(ws, m)
 
 
@@ -246,14 +246,14 @@ def budget_share(ts: list[Template], m: Shape, r: Rates, gpu_s: float) -> float 
     return hi
 
 
-def window_blocks(ws: list[Window], m: Shape) -> int:
+def window_blocks(ws: list[SamplingBlock], m: Shape) -> int:
     """The least B for which sampling blocks of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
     of a sampling block's units whatever its n, and `_cap` reads only a unit's ANDs, so a sampling block over B blocks keeps k, its
     tables and its cost, and costs a block 1/B of it."""
     return ceil(proving(ws, m) / m.block_s)
 
 
-def informative_ands(ws: list[Window], delta: float) -> float:
+def informative_ands(ws: list[SamplingBlock], delta: float) -> float:
     """Faulty ANDs (`Stratified.harm_bound`, each unit its ANDs): not a Lean guarantee."""
     st = Stratified(tuple(Stratum(w.template.id, w.template.units, w.k) for w in ws))
     return st.harm_bound({w.template.id: float(w.template.ands) for w in ws}, delta)

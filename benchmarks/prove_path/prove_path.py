@@ -1328,10 +1328,10 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
-    the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
-    under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
-    ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    slots' rows and ``max_tokens`` give (`window_rows.standin_state`) the window's own value, a stand-in for the network
+    the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into an
+    `ExecutionBlockBuilder` under the record's run root, the weights it serves committed under the committer's key
+    ``--key`` as the registration ``--registration`` (`weights-registration`, before the first window's coins) committed
+    them, and the scan state the slots' rows and ``max_tokens`` give (`window_rows.standin_state`) the window's own value, a stand-in for the network
     certifier's, whose reads are free. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
     population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
     are free (``free``), and the seconds each part took."""
@@ -1413,7 +1413,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("weights")
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.ExecutionBlockBuilder(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")

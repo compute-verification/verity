@@ -495,7 +495,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
     rows = WR.Rows(low, [s0, slots[1]], values)
-    win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
+    win = IF.ExecutionBlockBuilder(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
     bad = {}
@@ -659,7 +659,7 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
     pub = {}
     for name, (state, slots) in _two(window).items():
         vals = {**values, SS.SCAN_STATE: state}
-        win = IF.Window(low.circuit, RUN, LAW, 64, registered=vals, forms=WR.FORMS)
+        win = IF.ExecutionBlockBuilder(low.circuit, RUN, LAW, 64, registered=vals, forms=WR.FORMS)
         win.supply(CR)
         WR.Rows(low, slots, vals).record(win)
         c = win.close()

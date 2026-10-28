@@ -740,7 +740,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/rho/rho/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
-    "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/stacked_share/units.py::Window": "homonym, an attention window of S keys: rename (memory-accounting)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
@@ -993,7 +992,6 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/sampled_proofs/optimize.py::Certificate":
         "homonym, what a sampling plan certifies: rename (proofs)",
     "verity/core/protocols/sampled_proofs/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
-    "verity/core/protocols/sampled_proofs/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Outcome":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Registration":
@@ -1050,7 +1048,6 @@ KNOWN: dict[str, str] = {
     "verity/ml/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
     "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
-    "verity/ml/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/ml/circuits/types.py::Record": "homonym, a record type of the circuit type system: rename (proofs)",
     "verity/ml/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
     "verity/ml/commitments/advice.py::Opening":
@@ -1061,8 +1058,6 @@ KNOWN: dict[str, str] = {
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
     "verity/ml/flock/python/verity_flock/boolean_export.py::Registry":
         "homonym, the export's circuit types by digest: rename (proofs)",
-    "verity/ml/flock/python/verity_flock/firewall_transcript.py::Session":
-        "homonym, one inner proof through the firewall: rename (proofs)",
     "verity/ml/flock/python/verity_flock/ir_lower.py::Layout":
         "homonym, a unit circuit laid out as one Flock block type: rename (proofs)",
     "verity/ml/flock/python/verity_flock/layouts.py::Layout":
@@ -1077,8 +1072,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
     "verity/ml/windows/interface.py::Layout": "homonym, a template's bit rows: rename (proofs)",
     "verity/ml/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
-    "verity/ml/windows/interface.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes the builder's output for it (proofs)",
     "verity/ml/windows/rows.py::Window":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes `interface.Window` (merged) (proofs)",
 }

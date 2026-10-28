@@ -1,5 +1,5 @@
 """A window's rows: every unit of a class circuit (`window_circuit.lower`) given its output rows from a served window's
-values, ready for `interface.Window.record`.
+values, ready for `interface.ExecutionBlockBuilder.record`.
 
 A node of a slot's class Program has one value, its return fields: the served value where the engine computed it (its
 request's tapped words in the sealed record, `Served`), else the class Program's own, its family's row kernel
@@ -27,12 +27,12 @@ its Definition's function of the window's values:
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state.
 
-`Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
+`Rows.record` gives an `ExecutionBlockBuilder` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
-them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`). The index they make is the prover's, bound
-by its hiding leaf under `index_salt`.
+them. The window takes `FORMS` as its ``forms`` (`interface.ExecutionBlockBuilder.record`). The index they make is the
+prover's, bound by its hiding leaf under `index_salt`.
 """
 from __future__ import annotations
 
@@ -534,7 +534,7 @@ class Rows:
         """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
         return self._span(tid, 2)
 
-    def record(self, win: IF.Window) -> None:
+    def record(self, win: IF.ExecutionBlockBuilder) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
         labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
         in its element width."""
@@ -602,9 +602,9 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
 
 
 def index_salt(key: bytes, index: int) -> bytes:
-    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
-    committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
-    takes, so the committer draws it again from its key alone."""
+    """Window ``index``'s index salt (`interface.ExecutionBlockBuilder.write`'s ``index_salt``, `rows.index_leaf`): drawn
+    under the committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value
+    under ``key`` takes, so the committer draws it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
     return H1R.salts(key, INDEX_NONCE + index, 1)

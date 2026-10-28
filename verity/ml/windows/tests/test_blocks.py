@@ -47,7 +47,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
     malformed one, and blocks in a record that lists its members. Two windows of the class, under other runs, record
     byte-identical blocks."""
     plan = "ab" * 32
-    win = I.Window(blocked(chain_blocks(plan=plan)), RUN, TI.LAW, 2)
+    win = I.ExecutionBlockBuilder(blocked(chain_blocks(plan=plan)), RUN, TI.LAW, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert doc["blocks"] == win.circuit.blocks_record() == {
         "format": I.BLOCKS, "proof": {"units": 8, "partition": doc["partition"], "plan": plan},
@@ -55,7 +55,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
                                                            "axes": ["-", "step", "slot"], "step": 0}]}}
     by_id = {GID: TI.GEMM}.__getitem__
     assert I.window_of_record(doc, TI.LAW, by_id).members == win.window.members
-    other = I.Window(blocked(chain_blocks(plan=plan)), "cd" * 64, TI.LAW, 2)
+    other = I.ExecutionBlockBuilder(blocked(chain_blocks(plan=plan)), "cd" * 64, TI.LAW, 2)
     assert I.circuit_bytes(other.circuit_record()["blocks"]) == I.circuit_bytes(doc["blocks"])
     b = doc["blocks"]
     for bad, why in [({**b, "proof": {**b["proof"], "units": 9}}, "not the record's"),
@@ -74,7 +74,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
         I.window_of_record({**listed, "blocks": b}, TI.LAW, by_id)
     with pytest.raises(ValueError, match="stated with a cap"):
         I.circuit_record(win.window, "chain", [(GID, 8)], blocks=b)
-    assert "blocks" not in I.Window(TI.chain(), RUN, TI.LAW, 2).circuit_record()
+    assert "blocks" not in I.ExecutionBlockBuilder(TI.chain(), RUN, TI.LAW, 2).circuit_record()
 
 
 def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_classs_slots_and_steps():
@@ -112,7 +112,7 @@ def test_members_are_cut_where_a_servers_units_begin_or_end():
     block on one, is network accounting's check."""
     net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
            "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
-    plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
+    plain, split = I.ExecutionBlockBuilder(TI.chain(), RUN, TI.LAW, 8), I.ExecutionBlockBuilder(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
     assert [(m.base, m.n) for m in plain.window.members] == [(0, 2), (2, 2), (4, 4)]
     assert [(m.base, m.n) for m in split.window.members] == [(0, 2), (2, 1), (3, 1), (4, 4)]
     assert split.circuit.server_ends() == {GID: (0, 3, 8)}
@@ -120,7 +120,7 @@ def test_members_are_cut_where_a_servers_units_begin_or_end():
     assert {k: doc["blocks"][k] for k in I.NETWORK} == net
     assert I.window_of_record(doc, TI.LAW, {GID: TI.GEMM}.__getitem__).members == split.window.members
     one = {**net, "server": [{"name": "a", "uplink": "l0", "units": "all"}]}
-    assert [(m.base, m.n) for m in I.Window(blocked(chain_blocks(network=one)), RUN, TI.LAW, 8).window.members] == \
+    assert [(m.base, m.n) for m in I.ExecutionBlockBuilder(blocked(chain_blocks(network=one)), RUN, TI.LAW, 8).window.members] == \
         [(0, 2), (2, 2), (4, 4)]
     for server, why in [([{"name": "a", "units": [[GID, 6, 3]]}], "among a template's units"),
                         ([{"name": "a", "units": [["Gemm_v2{}", 0, 1]]}], "among a template's units"),

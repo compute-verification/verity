@@ -38,11 +38,11 @@ LAW, CAP = D.parse_law("work:1"), 16
 EMBED = "model.embed_tokens.weight"
 
 
-def _ends_of(win: IF.Window) -> list[str]:
+def _ends_of(win: IF.ExecutionBlockBuilder) -> list[str]:
     return [descriptor_id(fn) for fn, _ in win.circuit.templates if descriptor_id(fn).startswith("Sha512StreamLast")]
 
 
-def _ends(win: IF.Window) -> dict[str, list[int]]:
+def _ends(win: IF.ExecutionBlockBuilder) -> dict[str, list[int]]:
     """Each last unit's recorded digest row (its ``o0`` words), by the supplied value its read names."""
     ends = _ends_of(win)
     rows = {t: np.concatenate([b.words[-1] for b in win._recorded[t]]) for t in ends}
@@ -54,7 +54,7 @@ def _pins(want: dict) -> dict[str, dict]:
     return {p: e for doc in want["registered"] for p, e in doc["values"].items()}
 
 
-def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -> set[tuple[str, str]]:
+def _unopened(win: IF.ExecutionBlockBuilder, c: CS.Committed, d: Path, pins: dict[str, dict]) -> set[tuple[str, str]]:
     """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`), from its records
     and the verifier's ``pins`` alone: each member's ports, ``(member, port)``, whose table rows' ``b || c`` don't open
     the pinned root at their stated positions."""

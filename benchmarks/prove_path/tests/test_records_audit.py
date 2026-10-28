@@ -74,7 +74,7 @@ def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dic
     registered through the interface under core's registration."""
     reg = IF.commit_advice(compiler, ADVICE)
     bound = IF.advice_binding(compiler, reg.root.hex(), 8 * len(ADVICE)) if advice else None
-    win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, D.parse_law(LAW), cap, advice=bound)
+    win = IF.ExecutionBlockBuilder(IF.Circuit("test", ((COORD, n),)), RUN, D.parse_law(LAW), cap, advice=bound)
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
@@ -413,7 +413,7 @@ def _registered(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
     value = REG.Registered.commit("test/model", "w", rows.tolist(), schema=REG.SCHEMA_V2)
     read = IF.Read(TID, "wrow", "w", 0, (n // 4, 4), 0, (0, K // 2))
-    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"w": 4 * K // 2}, reads=(read,))), RUN,
+    win = IF.ExecutionBlockBuilder(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"w": 4 * K // 2}, reads=(read,))), RUN,
                     D.parse_law(LAW), cap, registered={"w": value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
@@ -665,7 +665,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     s = _served(tmp_path, monkeypatch)
     loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
     monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
-    window = IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_law(LAW), 4).window
+    window = IF.ExecutionBlockBuilder(IF.Circuit("test", ((COORD, 5),)), "", D.parse_law(LAW), 4).window
     monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, []) if run == "" else None)
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
