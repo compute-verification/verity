@@ -1,4 +1,4 @@
-"""serve-openai's draw-gated release (`pipeline.serve_release`, VLLM-157 B): a window's device-held values are released only once
+"""serve-openai's draw-gated release (`pipeline.serve_release`): a window's device-held values are released only once
 every named subprotocol has drawn it; the union of the leaves the drawn blocks open is kept, inputs an unsampled block wrote
 included, and opens against the pre-coin root after the drop; a later draw, or a read of a dropped leaf, is refused by name."""
 from __future__ import annotations
@@ -216,14 +216,12 @@ def opts(**retention):
 
 
 def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
-    from verity_vllm.pipeline import serve_seal as SS
-
-    assert SS.retention_refusal(opts()) is None
-    assert "--release-after" in SS.retention_refusal(opts(release_after=""))
-    assert "needs --retain device and --seal" in SS.retention_refusal(opts(retain="host"))
-    assert "distinct protocol names" in SS.retention_refusal(opts(release_after="sampled_proofs,sampled_proofs"))
-    assert "distinct protocol names" in SS.retention_refusal(opts(release_after="a/b"))
-    rec = SS.retention_record(opts(), SimpleNamespace())
+    assert SL.retention_refusal(opts()) is None
+    assert "--release-after" in SL.retention_refusal(opts(release_after=""))
+    assert "needs --retain device and --seal" in SL.retention_refusal(opts(retain="host"))
+    assert "distinct protocol names" in SL.retention_refusal(opts(release_after="sampled_proofs,sampled_proofs"))
+    assert "distinct protocol names" in SL.retention_refusal(opts(release_after="a/b"))
+    rec = SL.retention_record(opts(), SimpleNamespace())
     assert rec["release_after"] == "sampled_proofs,pouw_h1" and rec["draws_dir"] == "OUT/draws"
     draws, d = SL.release_of(opts(), tmp_path)
     assert draws.protocols == ("sampled_proofs", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
@@ -231,4 +229,4 @@ def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
     assert SL.release_of(opts(), tmp_path, SimpleNamespace(device_pool="the pool"))[0].pool == "the pool"
     unsealed = opts()
     unsealed.seal = False
-    assert "it needs --seal and the subprotocols" in SS.retention_refusal(unsealed)
+    assert "it needs --seal and the subprotocols" in SL.retention_refusal(unsealed)

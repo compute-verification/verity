@@ -162,13 +162,13 @@ def opts(retention=(), **kw):
 
 
 def test_serve_openai_refuses_retain_device_without_the_rows_commit_or_room_for_a_window():
-    from verity_vllm.pipeline import serve_seal as SS
+    from verity_vllm.pipeline import serve_release as SL, serve_seal as SS
 
-    assert SS.retention_refusal(opts()) is None
-    assert "needs the Commit under" in SS.retention_refusal(opts(commit=False))
-    assert "needs the Commit under" in SS.retention_refusal(opts(scheme=SS.V1))
-    assert "is under --window-gb" in SS.retention_refusal(opts(retention={"retain_device_gb": 8.0}))
-    assert SS.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0, "release_after": ""})) is None
+    assert SL.retention_refusal(opts()) is None
+    assert "needs the Commit under" in SL.retention_refusal(opts(commit=False))
+    assert "needs the Commit under" in SL.retention_refusal(opts(scheme=SS.V1))
+    assert "is under --window-gb" in SL.retention_refusal(opts(retention={"retain_device_gb": 8.0}))
+    assert SL.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0, "release_after": ""})) is None
 
 
 def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed(cs):

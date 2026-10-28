@@ -5,8 +5,8 @@
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--retain host|device [--retain-device-gb 32]
         [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
-        [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
-        [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
+        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
+        [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
@@ -64,7 +64,7 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`).
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`).
 ``--retain device --release-after P,Q`` holds each window's values in a device pool until every subprotocol named has drawn
 it, then keeps on host and seals only the leaves their drawn blocks open (`serve_release`, draws via ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
@@ -89,9 +89,9 @@ bandwidth audit's verifier in lockstep with the server's engine steps from its f
 record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
-the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
-``--switch-interval-ms`` (0.1 ms; Python's is 5 ms). ``pauses.jsonl``
-(`serve_seal.Watchdog`) records each stall of the process of 0.2 s or more.
+another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
+``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
+the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -111,7 +111,8 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import serve_h1 as SH, serve_release as SL, serve_remote as SR, serve_row as RW, serve_seal as SS
+from verity_vllm.pipeline import (seal_process as SP, serve_h1 as SH, serve_release as SL, serve_remote as SR, serve_row as RW,
+                                   serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
@@ -180,10 +181,7 @@ class Options:
                                         "again, which committed under vllm-v1 and served this --model and --revision")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
-    seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
-                                 help="finalize and seal each window on a thread of its own while the engine serves the next one "
-                                      "(serve_seal.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
-                                      "stops serving for them")
+    sealing: SP.SealingOptions = group(SP.SealingOptions)
     seal_hold_gb: float = option("--seal-hold-gb", type=float, default=64.0,
                                  help="the committed GB the windows awaiting their seal may hold (pinned host memory) before a "
                                       "close waits for room")
@@ -232,7 +230,7 @@ class Options:
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
-    retention: SS.RetentionOptions = group(SS.RetentionOptions)
+    retention: SL.RetentionOptions = group(SL.RetentionOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -694,8 +692,8 @@ def main(opts: Options) -> int:
         from verity_vllm.engine.step_trace import scheduler_config
 
         arm = SH.arm_of(opts, llm, com, out)
+        sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
-        sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
@@ -744,6 +742,7 @@ def main(opts: Options) -> int:
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
+              "seal_process": sealer.summary()["process"] if sealer is not None and sealer.process is not None else None,
               "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
               "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
@@ -752,7 +751,7 @@ def main(opts: Options) -> int:
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **SL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
