@@ -3,10 +3,9 @@ import Definitions.Nci.Guarantees.Fit
 /-!
 # Proof of the fit bound
 
-The page's section 2 ("The fit bound", Notion), over a slot map `σ` (`Threading.Slots`). Write `p_j^t` for the slots
-thread `t` uses in window `j`, `A_t` for `p_j^t` at its start window and `B_t` for the sum of `p_j^t` over the windows
-it entered. A thread's counted multiplications in a window number at most `reuse` per slot it uses there
-(`card_threadMults_le_reuse_slots`).
+The fit bound, over a slot map `σ` (`Threading.Slots`). Write `p_j^t` for the slots thread `t` uses in window `j`, `A_t`
+for `p_j^t` at its start window and `B_t` for the sum of `p_j^t` over the windows it entered. A thread's counted
+multiplications in a window number at most `reuse` per slot it uses there (`card_threadMults_le_reuse_slots`).
 
 * Token side (`token_bound`): `ReachSlots` gives `A_t + B_t ≥ N*` and `FitsSlots` gives `A_t b_w ≤ S`, so a thread's
   multiplications times `N* b_w − S` are at most `reuse · N* b_w B_t`. A thread with no counted multiplication in its
@@ -147,9 +146,9 @@ theorem token_ineq {N bw S A B W r : ℝ} (hS : 0 ≤ S) (hN0 : 0 ≤ N) (hgap :
     _ ≤ r * (N * bw * B) := mul_le_mul_of_nonneg_left h3 hr
     _ = r * N * bw * B := by ring
 
-/-- **The token side** (the page's section 2, step 2): a thread's counted multiplications, times `N* b_w − S`, are at
-most `reuse · N* b_w` times the slots it uses in the windows it entered. It needs `ReachSlots` only for a thread with
-counted multiplications in its start window: one without has every slot it uses in a window it entered. -/
+/-- **The token side**: a thread's counted multiplications, times `N* b_w − S`, are at most `reuse · N* b_w` times the
+slots it uses in the windows it entered. It needs `ReachSlots` only for a thread with counted multiplications in its
+start window: one without has every slot it uses in a window it entered. -/
 theorem token_bound {c : Declaration} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 < b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) (t : Fin T.m)
@@ -201,14 +200,14 @@ theorem token_bound {c : Declaration} {T : Threading c} (σ : T.Slots) {k : ℕ}
             (Nstar * b_w) := mul_le_mul_of_nonneg_right hW (mul_nonneg hN0 hbw.le)
       _ = _ := by ring
 
-/-- **The window side** (the page's section 2, step 3), by AM–GM: `b_w p + w_e e ≤ S` gives `4 b_w w_e p e ≤ S²`. -/
+/-- **The window side**, by AM–GM: `b_w p + w_e e ≤ S` gives `4 b_w w_e p e ≤ S²`. -/
 theorem window_ineq {bw we p e S : ℝ} (hbw : 0 ≤ bw) (hwe : 0 ≤ we) (hp : 0 ≤ p) (he : 0 ≤ e)
     (h : bw * p + we * e ≤ S) : 4 * (bw * we) * (p * e) ≤ S ^ 2 := by
   have h0 : 0 ≤ bw * p + we * e := add_nonneg (mul_nonneg hbw hp) (mul_nonneg hwe he)
   have h1 : (bw * p + we * e) * (bw * p + we * e) ≤ S * S := mul_le_mul h h h0 (h0.trans h)
   nlinarith [sq_nonneg (bw * p - we * e)]
 
-/-- The two sides together (the page's section 2, step 4). -/
+/-- The two sides together. -/
 theorem fit_ineq {M X Bs PE N r bw we S n : ℝ} (hwe : 0 ≤ we) (hbw : 0 ≤ bw) (hN : 0 ≤ N) (hr : 0 ≤ r)
     (hgap : 0 ≤ N * bw - S) (hM : M ≤ X) (htok : X * (N * bw - S) ≤ r * N * bw * Bs) (hB : Bs ≤ PE)
     (hwin : 4 * (bw * we) * PE ≤ n * S ^ 2) :
@@ -274,10 +273,9 @@ theorem reachSlots_iff {c : Declaration} {T : Threading c} (σ : T.Slots) (hσ :
     Assumptions.ReachSlots c T σ Nstar ↔ Assumptions.Reach c T Nstar := by
   simp only [Assumptions.ReachSlots, Assumptions.Reach, card_threadSlots σ hσ]
 
-/-- **The fit bound over parameter slots** ("The fit bound", Notion, section 2), with `ReachSlots` asked only of the
-threads that have counted multiplications in their start window (`token_bound`). With no counted multiplication the
-bound is `0 ≤ …`; otherwise some window exists, so `S ≥ 0` and `b_w > 0`, and at `w_e ≤ 0` the left side is not
-positive. -/
+/-- **The fit bound over parameter slots**, with `ReachSlots` asked only of the threads that have counted
+multiplications in their start window (`token_bound`). With no counted multiplication the bound is `0 ≤ …`; otherwise
+some window exists, so `S ≥ 0` and `b_w > 0`, and at `w_e ≤ 0` the left side is not positive. -/
 theorem fitBoundSlots_start {c : Declaration} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S)
@@ -331,8 +329,7 @@ namespace Nci.SecurityProofs
 
 open Verity Finset Nci.SecurityProofs.Fit
 
-/-- **The fit bound over parameter slots** ("The fit bound", Notion, section 2): `fitBoundSlots_start`, whose premise
-`ReachSlots` gives. -/
+/-- **The fit bound over parameter slots**: `fitBoundSlots_start`, whose premise `ReachSlots` gives. -/
 theorem FitBoundSlots : Guarantees.FitBoundSlots := by
   intro c T σ k P start Nstar S b_w w_e hgap hS hR hF
   exact fitBoundSlots_start σ P start Nstar S b_w w_e hgap hS
@@ -345,7 +342,7 @@ theorem fitBound_of_slots (h : Guarantees.FitBoundSlots) : Guarantees.FitBound :
   exact h c T (idSlots T) k P start Nstar S b_w w_e hgap hS ((reachSlots_iff _ (idSlots_injOn T) Nstar).2 hR)
     ((fitsSlots_iff _ (idSlots_injOn T) P start b_w w_e).2 hF)
 
-/-- **The fit bound** ("The fit bound", Notion, section 2), as `FitBoundSlots` at one slot per weight gate. -/
+/-- **The fit bound**, as `FitBoundSlots` at one slot per weight gate. -/
 theorem FitBound : Guarantees.FitBound := fitBound_of_slots FitBoundSlots
 
 end Nci.SecurityProofs

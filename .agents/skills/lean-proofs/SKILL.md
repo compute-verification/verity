@@ -1,8 +1,8 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
-  warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE, lake env lean
+  in the file's package; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
@@ -23,7 +23,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - **Own a subdirectory and namespace** with one aggregator module, imported once by the area's root, so parallel lanes
   don't edit one root file.
 - **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
-  are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
+  are on the branch before anyone proves a piece. What isn't closed by the deadline is a gap list of exact lemma names, each
   with a size and an owner, with no `sorry` outside them.
 - **Definitions a guarantee or property reads go in `Definitions/`**, not in a proof file (`reads` in the
   lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
@@ -32,13 +32,14 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine gets its own worktree, its dependencies copied (never symlinked) from a
   checkout with the same manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages
-  WT/PKG/.lake/`. A reviewer or red-team subagent is a cloud worker in its own checkout.
+  WT/PKG/.lake/`. A reviewing or attacking subagent runs as a cloud agent in its own checkout.
 
 ## Build, iterate, check
 
-- **The edit loop is `verity lean try FILE`** (FILE from the root; `--on vy-nebius-cpu-5 --pool proofs` for another
-  node with `build` Lean slots): your checkout, uncommitted edits included, on a warm slot tree (the README). It never
-  writes a record. After editing a file others import, try an importer.
+- **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
+  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
+  on a project machine with `--on` (the README).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
@@ -84,7 +85,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
   takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
   premise is a record change. AGENTS.md "Lean" has the rest.
-- **Statement first, then red team, then an ask for each new premise, then the proof.** State the guarantee on
+- **Statement first, then an attack on it, then an ask for each new premise, then the proof.** State the guarantee on
   a `sorry` stub in your lane branch, list it and run `--update`, so the record shows if it moves. Never make a guarantee
   easier: no stronger input relation, weaker output relation, smaller challenge space, unmotivated hypothesis, or
   verifier check moved into an assumption.
