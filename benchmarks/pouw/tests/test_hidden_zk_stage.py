@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 STAGE = Path(__file__).resolve().parents[1] / "hidden_zk" / "stage.py"
@@ -83,3 +85,63 @@ def test_fast_staging_composes_the_library_circuit_flat_and_templated(layout, tm
     fast, lib = ((tmp_path / m / "circuit.txt").read_bytes() for m in ("fast", "library"))
     assert fast == lib and got["fast"] == got["library"]
     assert fast.startswith(b"flock-circuit/tmpl " if layout else b"flock-circuit ")
+
+
+def _random_unit(C, seed: int):
+    """A random unit of inputs, ANDs, commits, assertions and outputs with constant bits (``C``'s, either class), and its
+    `ir_lower.layout` arguments: port names and splits."""
+    from verity.ml.circuits.boolean import forms
+
+    rnd = random.Random(seed)
+    ins = [C.input(f"in{j}", rnd.choice([16, 32, 48, 64])) for j in range(rnd.randint(1, 3))]
+    pool = [b for p in ins for b in p]
+
+    def lin():
+        x = forms.ZERO
+        for _ in range(rnd.randint(1, 5)):
+            x = x ^ rnd.choice(pool)
+        return x.inv() if rnd.random() < 0.3 else x
+
+    for _ in range(rnd.randint(0, 600)):
+        pool.append(C.commit([lin()])[0] if rnd.random() < 0.1 else C.AND(lin(), lin()))
+    for i in range(rnd.randint(0, 3)):
+        if not (f := lin()).is_const():
+            C.assert_zero(f"a{i}", f)
+    for j in range(rnd.randint(1, 3)):
+        C.output(f"out{j}", [lin() for _ in range(rnd.randint(0, 40))] + [forms.ZERO] * rnd.randint(0, 5)
+                 + ([forms.ONE] if rnd.random() < 0.3 else []))
+    names, outs = [f"in{j}" for j in range(len(ins))], [f"out{j}" for j in range(len(C.outputs))]
+    return names, outs, [1] if len(names) > 1 and rnd.random() < 0.5 else None, [1] if len(outs) > 1 and rnd.random() < 0.5 else None
+
+
+def test_the_stream_layout_is_the_library_layout(tmp_path, monkeypatch):
+    """About 3 s: `fast_stage.StreamLayout` of 150 random units, its spool cut into blocks of 37 ANDs and its netlist into
+    pieces of 11 rows, against `ir_lower.layout`'s: the netlist, counts, port groups, rows and evaluations (all-zero, which
+    `StreamLayout.zero` answers, and random). The H1 units stream too, but have no dead AND, assertion, constant output or
+    split port group, and fill few spool blocks."""
+    monkeypatch.syspath_prepend(str(STAGE.parent))
+    import fast_stage as FS
+    from verity.ml.circuits.boolean import forms
+    from verity_flock import ir_lower as IL
+
+    monkeypatch.setattr(FS, "BLOCK", 37)
+    monkeypatch.setattr(FS, "ROWS", 11)
+    monkeypatch.setattr(FS, "_scratch", [tmp_path])
+    for seed in range(150):
+        C = forms.Circuit()
+        args = _random_unit(C, seed)
+        want = IL.layout(C, *args)
+        S = FS.StreamCircuit()
+        assert _random_unit(S, seed) == args
+        got = FS.StreamLayout(S, *args)
+        assert "".join(FS._netlist(got, "u/t")) == IL.netlist(want, "u/t"), seed
+        assert (got.counts, got.useful, got.const) == (want.counts, want.useful, want.const), seed
+        assert (got.in_groups, got.out_groups) == (want.in_groups, want.out_groups), seed
+        assert (got.rows_a, got.rows_b) == (want.rows_a, want.rows_b), seed
+        rnd = random.Random(seed)
+        for T, ports in ((1, [[0] for _ in want.in_bits]),
+                         (5, [[rnd.getrandbits(b) if rnd.random() < 0.9 else 0 for _ in range(5)] for b in want.in_bits])):
+            (wo, wok), (go, gok) = IL.evaluate_layout(want, ports, T), FS.evaluate_layout(got, ports, T)
+            assert wok == gok and len(wo) == len(go) and all(np.array_equal(x, y) for x, y in zip(wo, go)), (seed, T)
+        FS._drop_spools()
+    assert not list(tmp_path.iterdir())
