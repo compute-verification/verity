@@ -20,9 +20,10 @@ link-windows come in one of two forms, which the parameters name:
 
 It accepts when every link-window passes its form's check and every compute audit accepted; it then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.PeriodLeakAccepted` counts them. The rows form accepts no period of a link-window yet: its scan's
-Programs' row must be a compute audit's slot entries (`wired`, below), but no check reads that those Programs compute
-on the scan's state (`untied`).
+`NetTiming.Guarantees.PeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
+compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
+state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
+read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -142,10 +143,15 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   included, is
   the one its Program computed, not the prover's word, which with read 1 and no outputs would pass for a request no
   Program reads (`Properties.NetworkPeriod.RowsProgWired`);
-* in the rows form, the period, if it has a link-window (`untied`): a slot's Program reads the requests from its own
-  registered `SCAN_STATE`, which no check yet ties to the scan's state (by root and domain), so it could compute its
-  entry on a state the prover chose. Which slots are due and occupied is private, so the refusal is of every such
-  period, and states the fix (`Properties.NetworkPeriod.RowsUntiedRefused`).
+* in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
+  (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
+  whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
+  audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
+  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
+  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
+  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
+  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -952,6 +958,35 @@ def wired (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg
           named "port" (entriesPort k) o && named "root" root o && named "domain" dom o
       | _, _ => false
 
+/-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
+def stateName : String := "scan/state"
+
+/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
+before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
+def stateValue : String := "verity/certifier/scan-state/v1"
+
+/-- A registration's state entries: those of its `roots` whose port is `stateName` and of its `registered` whose value
+is `stateValue`. -/
+def stateEntries (reg : Registration) : Array Json :=
+  let entries := fun (k : String) => match reg.record.getObjValD k with | .arr xs => xs | _ => #[]
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+  (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
+
+/-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
+every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
+The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
+audit's Programs read is the chain of the scan's transitions. -/
+def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+  match (stateEntries reg)[0]? with
+  | some e => match e.getObjValD "root", e.getObjValD "domain" with
+    | .str root, .str dom =>
+      let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
+      (stateEntries reg).all atRoot && (audits.zip regs).any fun (a, r) =>
+        wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
+    | _, _ => false
+  | none => false
+
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
 def tiedIn (audits windows : Array Registration) (i : Nat) : Bool :=
   windows.any fun reg => (tiedAudits audits reg).contains i
@@ -1033,16 +1068,21 @@ def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => wiredCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
 
-/-- The rows form's refusal of every link-window while no check reads that a tied audit's Programs compute on the
-scan's state: with the scan's `prog` wired (`wired`), each slot's entry is the one its Program computed, but the
-Program reads the requests from its own registered `SCAN_STATE`, which nothing ties to the scan's state, so it can
-compute its entry on a state the prover chose. Which slots are due and occupied is private, so the check refuses a
-period of any link-window in the rows form. -/
-def untied : Form → Nat → Option (Core.Verdict × String)
-  | .rows .., _ + 1 => some (.reject, "the rows form: no check reads that each tied audit's SCAN_STATE is the scan's \
-      state (its root and domain), so a slot's Program can compute its entry on a state the prover chose: tie each \
-      tied audit's SCAN_STATE to the scan's state by root and domain, and check that tie here")
-  | _, _ => none
+/-- Link-window `w`'s state finding in the rows form: a refusal unless its scan's state is the `SCAN_STATE` of an audit
+its `prog` is wired to (`stateTied`). With the `prog` wired, each slot's entry is the one its Program computed, and a
+Program reads the requests from its own registered `SCAN_STATE`; unless that is the scan's state, it computes its entry
+on a state the prover chose. -/
+def stateCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Nat) (reg : Registration) :
+    Option (Core.Verdict × String) :=
+  if stateTied p.audits s audits reg then none else
+    some (.reject, s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its {stateName} entries' root and \
+      domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
+      compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
+
+/-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
+def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
+  | .clock _ => #[]
 
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
@@ -1158,7 +1198,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        [untied p.form p.windows]) with
+        (stateChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
