@@ -6,10 +6,9 @@
 # K of them, scan_zk.sh's); then scan_period.py's
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (the rows form's branch) in a
-# worktree. From a clone, in one of the network slots:
-#   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env SC_MEM_GB=64 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/network_traces/scan_period.sh
+# worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py \
+#     --by LANE -- bash benchmarks/network_traces/scan_period.sh
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (default cursor/allp-cert-warden-form-061a)
 #      SC_CLASS (default test; w63k4 with SC_PROMPT_MAX=32, SC_MAX_TOKENS=4 and SC_LATE_MS past its 2.7 s delay)
 # Kept in $OUT: honest/ and late/ (each scan_zk.sh's out/: the rehearsal's public files and the scan's kept files) and
