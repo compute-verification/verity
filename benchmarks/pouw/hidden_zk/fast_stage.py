@@ -19,7 +19,9 @@ the circuit back.
       keeps no AND in memory: each goes to a spool under ``scratch`` as it is made, with its value bit on the all-zero
       instance (all `compose`'s dummy reads), and `StreamLayout` lays the unit out from the spool (`ands_layout`'s rows: a
       backward pass for liveness, then the netlist written block by block). It holds two bytes a bit while it lays out,
-      none after; a unit that reads a table, makes a hint or takes an input after an AND is built again the library's way
+      none after; a unit that reads a table, makes a hint or takes an input after an AND is built again the library's way.
+      A Boolean activation's CSE memo (`ir_lower._lower_activation`'s) holds each AND's key's hash and bit, and a hit
+      reads its sides back from the spool: the library's memo holds both sides' forms of every AND the activation made
 
 stage.py runs the library unpatched under `HZ_STAGE=library`; both write the same bytes."""
 from __future__ import annotations
@@ -30,6 +32,7 @@ import hashlib
 import inspect
 import io
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -50,6 +53,7 @@ CHUNK = 1 << 26
 ROWS = 1 << 16
 #: the ANDs a spool block holds: its operand bits are about 140 MB as int64
 BLOCK = 1 << 19
+_key_hash = hash
 _scratch: list[Path] = []
 _spools: list[Path] = []
 _memo: dict[int, tuple[str, dict]] = {}
@@ -282,7 +286,7 @@ class _Spool:
     def __init__(self, scratch: Path):
         self.dir = Path(tempfile.mkdtemp(prefix=".spool-", dir=scratch))
         _spools.append(self.dir)
-        self.files = [open(self.dir / "heads", "wb"), open(self.dir / "ids", "wb")]
+        self.files = [open(self.dir / "heads", "w+b"), open(self.dir / "ids", "w+b")]
         self.heads, self.ids = array("i"), array("i")
         self.blocks: list[tuple[int, int, int, int]] = []   # (first AND, ANDs, first bit, bits)
         self.ands = self.bits = 0
@@ -346,6 +350,40 @@ class StreamCircuit(forms.Circuit):
             raise _NotStreamed(f"a {kind} bit at {v}")
         self.n = v + 1
         return forms.L(frozenset((v,)), 0)
+
+    def AND(self, a, b):
+        """`forms.Circuit.AND`, whose CSE memo (an activation's, `ir_lower._lower_activation`) holds each AND's key's hash
+        and its bit, not the key: a hit is the AND whose spooled sides are the key, so the memo keeps no form alive."""
+        memo = self.cse
+        if memo is None or a.is_const() or b.is_const() or a.s == b.s:
+            return super().AND(a, b)
+        ka, kb = a.key(), b.key()
+        h = _key_hash(frozenset((ka, kb)))
+        got = memo.get(h)
+        if got is not None:
+            for e in (got if type(got) is list else (got,)):
+                v = e & 0xFFFFFFFF
+                if {ka, kb} == self._sides(v - self.n_in, e >> 32):
+                    return forms.L(frozenset((v,)), 0)
+        at = self.spool.bits + len(self.spool.ids)
+        w = self._new("and", (a, b))
+        e = at << 32 | (self.n - 1)
+        memo[h] = e if got is None else (got if type(got) is list else [got]) + [e]
+        return w
+
+    def _sides(self, i: int, at: int) -> set:
+        """AND i's two sides, ``(frozenset of bits, constant)``, from its spooled heads and its bits at ``at``."""
+        sp = self.spool
+        if i >= sp.ands:
+            ha, hb = sp.heads[2 * (i - sp.ands)], sp.heads[2 * (i - sp.ands) + 1]
+            x = sp.ids[at - sp.bits:at - sp.bits + (ha >> 1) + (hb >> 1)]
+        else:
+            for f in sp.files:
+                f.flush()
+            ha, hb = array("i", os.pread(sp.files[0].fileno(), 8, 8 * i))
+            x = array("i", os.pread(sp.files[1].fileno(), 4 * ((ha >> 1) + (hb >> 1)), 4 * at))
+        na = ha >> 1
+        return {(frozenset(x[:na]), ha & 1), (frozenset(x[na:]), hb & 1)}
 
 
 class StreamLayout(IL.Layout):

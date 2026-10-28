@@ -114,6 +114,37 @@ def _random_unit(C, seed: int):
     return names, outs, [1] if len(names) > 1 and rnd.random() < 0.5 else None, [1] if len(outs) > 1 and rnd.random() < 0.5 else None
 
 
+def test_the_stream_circuits_memo_is_the_librarys(tmp_path, monkeypatch):
+    """About 1 s: `fast_stage.StreamCircuit`'s CSE memo, which holds hashes and reads a hit's sides back from the spool,
+    against `forms.Circuit`'s on random ANDs of a few forms (pairs repeated in either order, constants, a form and its
+    complement), its spool cut into blocks of 37 ANDs, and half the seeds with every hash in 3 buckets: the same bit for
+    each AND."""
+    monkeypatch.syspath_prepend(str(STAGE.parent))
+    import fast_stage as FS
+    from verity.ml.circuits.boolean import forms
+
+    monkeypatch.setattr(FS, "BLOCK", 37)
+    monkeypatch.setattr(FS, "_scratch", [tmp_path])
+    for seed in range(40):
+        monkeypatch.setattr(FS, "_key_hash", (lambda k: hash(k) % 3) if seed % 2 else hash)
+        got = []
+        for C in (forms.Circuit(cse=True), FS.StreamCircuit(cse=True)):
+            rnd = random.Random(seed)
+            pool = [*C.input("x", 6), forms.ZERO, forms.ONE]
+            ands = []
+            for _ in range(500):
+                a, b = rnd.choice(pool), rnd.choice(pool)
+                w = C.AND(a, b.inv() if rnd.random() < 0.2 else b)
+                ands.append(w.key())
+                if rnd.random() < 0.15 and len(pool) < 40:
+                    pool.append(w ^ rnd.choice(pool))
+            got.append((ands, getattr(C, "n", None) or len(C.kind)))
+        assert got[0] == got[1], seed
+        assert len(set(k for k in got[0][0] if len(k[0]) == 1)) > 100, seed
+    FS._drop_spools()
+    assert not list(tmp_path.iterdir())
+
+
 def test_the_stream_layout_is_the_library_layout(tmp_path, monkeypatch):
     """About 3 s: `fast_stage.StreamLayout` of 150 random units, its spool cut into blocks of 37 ANDs and its netlist into
     pieces of 11 rows, against `ir_lower.layout`'s: the netlist, counts, port groups, rows and evaluations (all-zero, which
