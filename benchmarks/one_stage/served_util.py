@@ -279,7 +279,9 @@ def windows(serve_dir: Path) -> dict[str, Any]:
     if p.exists():
         recs = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
         keep = ("window", "steps", "committed_bytes", "passed", "seconds", "close_phases_s", "on_loop_phases_s", "error")
-        rows = [{k: r[k] for k in keep if k in r} | ({"pouw_h1_seconds": r["pouw_h1"].get("seconds")} if isinstance(r.get("pouw_h1"), dict) else {})
+        rows = [{k: r[k] for k in keep if k in r} | ({"pouw_h1_seconds": r["pouw_h1"].get("seconds"), "pouw_h1_tied": r["pouw_h1"].get("tied"),
+                                                      "pouw_h1_error": (r["pouw_h1"].get("error") or None) and str(r["pouw_h1"]["error"])[:300]}
+                                                     if isinstance(r.get("pouw_h1"), dict) else {})
                 for r in recs]
         got["windows"] = rows
         sizes = [r["committed_bytes"] for r in rows if r.get("committed_bytes")]
@@ -294,7 +296,7 @@ def windows(serve_dir: Path) -> dict[str, Any]:
         doc = json.loads(s.read_text())
         got["summary"] = {k: doc.get(k) for k in ("served", "engine_steps", "engine_error", "stopped_by", "pauses", "sealer")}
         if isinstance(doc.get("commit"), dict):
-            got["summary"]["commit"] = {k: v for k, v in doc["commit"].items() if not isinstance(v, (list, dict)) or k == "seals"}
+            got["summary"]["commit"] = {k: v for k, v in doc["commit"].items() if not isinstance(v, (list, dict)) or k in ("seals", "pouw_h1")}
     return got
 
 
@@ -322,6 +324,10 @@ def main() -> int:
     if rows := doc.get("serve", {}).get("windows"):
         print(f"WINDOWS {len(rows)} closed, {sum(1 for r in rows if r.get('passed'))} passed, committed GB a window "
               f"{doc['serve'].get('committed_GB_per_window')}, seconds {doc['serve'].get('window_seconds')}")
+    if h1 := (doc.get("serve", {}).get("summary", {}).get("commit") or {}).get("pouw_h1"):
+        why = next((r["pouw_h1_error"] for r in doc["serve"].get("windows", []) if r.get("pouw_h1_error")), None)
+        print(f"H1 {h1.get('windows')} windows released, {h1.get('tied')} tied, untied {h1.get('untied')}, failed {h1.get('failed')}, "
+              f"gate-passed rows {h1.get('gate_passed_rows')}" + (f"; first failure: {why}" if why else ""))
     for key in ("queued", "all"):
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:
