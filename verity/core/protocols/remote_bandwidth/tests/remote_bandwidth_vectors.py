@@ -34,6 +34,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from remote_bandwidth_fakes import Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.sampled_proofs.challenger import live_domain, live_leaf
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
@@ -61,18 +62,6 @@ VARIANTS = (*((k, b, receipts.sketch_rows(k)) for k in receipts.KINDS for b in (
 
 def name(kind: str, bind: bool, rows: int) -> str:
     return kind + ("/bind" if bind else "") + ("" if rows == receipts.sketch_rows(kind) else f"/rows{rows}")
-
-
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(j: int) -> bytes:
