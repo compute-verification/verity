@@ -19,7 +19,7 @@ value's worth, every subcircuit `R` small by information computes at most `Λ = 
 multiplications per `b_a` bits of information its novel reads carry. It is `ThreadedReadsInfo` with
 `WeightsSupportFmt` in place of `WeightsSupport` and the threading premise. -/
 def ThreadedReadsInfoFmt : Prop :=
-  ∀ (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
+  ∀ (c : RegisteredCircuit) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
     0 < b_w → 0 < b_a → 0 < d → 0 < e → b_a ≤ Real.logb 2 n - μ →
     Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ →
     ∀ R, SmallInfo c θv Γ S R → b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e
@@ -30,7 +30,7 @@ circuit `c` through `M`, with `c`'s baseline values `θc` the ones `θv` gives t
 at most `K` bits of information, holds at most `Λ` of `c`'s counted multiplications per `b_a` bits of information `W`'s
 novel reads carry. -/
 def ThreadedContainedInfoFmt : Prop :=
-  ∀ (c d : Declaration) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
+  ∀ (c d : RegisteredCircuit) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
     (Γ : ℕ) (K b_w b_a : ℝ) (dd e n : ℕ) (μ : ℝ),
     (∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) →
     (∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) →
@@ -44,7 +44,7 @@ def ThreadedContainedInfoFmt : Prop :=
 is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `c`'s counted multiplications, at
 `K = k + width(Sin)`. -/
 def ThreadedOfStateFmt : Prop :=
-  ∀ (c d : Declaration) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
+  ∀ (c d : RegisteredCircuit) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
     (Γ : ℕ) (b_w b_a : ℝ) (dd e n : ℕ) (μ : ℝ) (W Sst Sin : Finset (Fin d.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (d.D.w g)),
     (∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) →

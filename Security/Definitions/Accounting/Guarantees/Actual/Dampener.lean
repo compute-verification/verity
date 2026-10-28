@@ -30,7 +30,7 @@ def DampenerWindowsCap : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R F α b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (d e Mr Md : ℕ),
+    (c : RegisteredCircuit) (T : Threading c) (d e Mr Md : ℕ),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →
@@ -50,7 +50,7 @@ def DampenerWindowsCapSlots : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R F α b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e Mr Md : ℕ),
+    (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (d e Mr Md : ℕ),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →

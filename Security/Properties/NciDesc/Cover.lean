@@ -31,11 +31,11 @@ open Flock.Program (Prog)
 cover theorem's factor at `Γ = gamma` and `α = num / den` (`Nci.Cover.Guarantees.CoverTraining`'s conclusion, under its
 premises on `c`'s bit view). -/
 def CoverTrained (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let α : ℝ := (i.num : ℝ) / i.den
-    ∀ (b α₀ : ℝ) (c : Verity.Declaration) (M : Verity.Containment c.D d.D)
+    ∀ (b α₀ : ℝ) (c : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
       {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : Nci.Cover.MulBlocks (Nci.Cover.Circuit.ofDecl c) J L)
       (A : J → Finset (Fin (Nci.Cover.Circuit.ofDecl c).N)) (s D w₀ : ℕ),
       0 < b → Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →

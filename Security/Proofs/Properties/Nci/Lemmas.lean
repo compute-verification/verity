@@ -944,7 +944,7 @@ theorem card_filter_fin (N : ℕ) (p : ℕ → Prop) [DecidablePred p] :
 
 /-- The setting of a verdict: the Program's circuit `c`, the checked division `dv`, a declaration `d` the Program lays
 out with the baseline θ names, and a partition `U` that the owners are. -/
-structure Setting (P : Prog) (theta owner : Array Json) (c : Circuit) (dv : Division) (d : Verity.Declaration)
+structure Setting (P : Prog) (theta owner : Array Json) (c : Circuit) (dv : Division) (d : Verity.RegisteredCircuit)
     (n : ℕ) (U : Verity.Partition d.D n) : Prop where
   hc : circuitOf P = .ok c
   hd : divisionOf c theta owner = .ok dv
@@ -954,7 +954,7 @@ structure Setting (P : Prog) (theta owner : Array Json) (c : Circuit) (dv : Divi
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.RegisteredCircuit} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 

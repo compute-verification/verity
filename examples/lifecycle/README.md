@@ -154,13 +154,13 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 ## (c) What this exposes
 
-- **The declared circuit has no one digest, and Lean's `Declaration` holds one circuit.** Each declaration block has its
+- **The registered circuit has no one digest, and Lean's `RegisteredCircuit` holds one circuit.** Each execution block has its
   own Program digest, and the record chain binds them in order; `codec.program_digest` of B(a_1 ‖ … ‖ a_k) as one Program
-  is not prefix-incremental. `Security/Definitions/Core/Declaration.lean`'s `Declaration` is the declared circuit so far,
-  and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every declaration block composed
-  along the state wire (block k's state input is block k − 1's state output, not an input gate), which the spec has no
-  operation for; d.θ, the registered information, is theta's and the initial state's input gates. `Baseline` is d before any block,
-  and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  is not prefix-incremental. `Security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose builder
+  names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
+  appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
+  state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
+  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
 - **State crosses declaration blocks as a committed value.** A drawn unit at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and

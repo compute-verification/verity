@@ -24,17 +24,17 @@ open Verity Finset
 
 /-- **The information in `R`'s novel reads**: `log₂` of the number of distinct values the gates of `in(R) \ θ` take over
 the runs of `d` with the baseline at `θv`. -/
-noncomputable def novelInfo (d : Declaration) (θv : d.D.Transcript) (R : Finset (Fin d.D.N)) : ℝ :=
+noncomputable def novelInfo (d : RegisteredCircuit) (θv : d.D.Transcript) (R : Finset (Fin d.D.N)) : ℝ :=
   Real.logb 2 (support d θv (d.D.into R \ d.θ))
 
 /-- **A small subcircuit, by information**: at most `Γ` computed gates, whose novel reads carry at most `S` bits over
 the runs with the baseline at `θv`. -/
-def SmallInfo (c : Declaration) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (R : Finset (Fin c.D.N)) : Prop :=
+def SmallInfo (c : RegisteredCircuit) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (R : Finset (Fin c.D.N)) : Prop :=
   R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ novelInfo c θv R ≤ S
 
 namespace Threading
 
-variable {c : Declaration} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 /-- **`(d, e)`-threaded by information** at `(Γ, S)`: every subcircuit small by information that reads fewer than `d`
 novel values of a thread computes at most `e` of that thread's counted multiplications per value it reads from the

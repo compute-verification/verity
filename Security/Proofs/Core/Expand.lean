@@ -151,7 +151,7 @@ theorem ExpandSize : Guarantees.ExpandSize := by
     calc (d.expand.unregistered (P.expand.gates u)).card
         ≤ (univ.filter fun b => (d.D.unbit b).1 ∈ d.unregistered (P.gates u)).card := by
           refine card_le_card fun b' hb' => ?_
-          simp only [Declaration.unregistered, mem_sdiff, Circuit.into, mem_filter, mem_univ, true_and]
+          simp only [RegisteredCircuit.unregistered, mem_sdiff, Circuit.into, mem_filter, mem_univ, true_and]
             at hb' ⊢
           obtain ⟨⟨hout, b, hb, hr⟩, hθ⟩ := hb'
           rw [P.expand_gates, mem_filter] at hb

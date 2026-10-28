@@ -4,7 +4,7 @@ import Definitions.Core.Partition
 import Definitions.Core.Annotation
 import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
-import Definitions.Core.Declaration
+import Definitions.Core.RegisteredCircuit
 import Definitions.Core.Boolean
 import Definitions.Core.Game
 import Definitions.Core.Draw
@@ -21,7 +21,7 @@ import Definitions.Core.Site
 /-!
 # Core's protocol: the model every protocol states its guarantees in
 
-The developer declares a circuit `D` and its baseline `θ` (`Declaration`), runs `D` and commits the values of its
+The developer declares a circuit `D` and its baseline `θ` (`RegisteredCircuit`), runs `D` and commits the values of its
 committed wires, and the verifier draws from its own coins (`Game`), by a draw law over units (`Draw`). Every protocol package states its guarantees about
 these objects and defines none of its own: a circuit, its transcripts, a partition into units and a unit's correctness
 are the ones here.

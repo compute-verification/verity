@@ -2,7 +2,7 @@
 
 A row's Lean column names declarations of the tree's Lean (`Security/` and the Lean packages under `verity/`), written
 in backticks, full (`Verity.Circuit`) or as a suffix of the full name (`Circuit.size`); a structure's field counts
-(`Verity.Declaration.θ`), and so does a namespace (`Accounting.Compose`). A part of the cell, between semicolons, that
+(`Verity.RegisteredCircuit.θ`), and so does a namespace (`Accounting.Compose`). A part of the cell, between semicolons, that
 says "not yet in Lean" is not checked until that lands.
 """
 from __future__ import annotations

@@ -19,14 +19,14 @@ open Verity Finset
 /-- **NCI's policy is a padded `(c, k)`-partition.** A Boolean declaration that complies with the NCI policy at `(Γ, α)`
 has a division into IUs that pads to a `(Γ, ⌊αΓ⌋)`-partition. -/
 def CompliesCK : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (d : Declaration), d.D.Boolean → Complies Γ α d →
-    ∃ (B : ℕ) (P : Partition d.D B) (d' : Declaration) (P' : Partition d'.D B),
+  ∀ (Γ : ℕ) (α : ℝ) (d : RegisteredCircuit), d.D.Boolean → Complies Γ α d →
+    ∃ (B : ℕ) (P : Partition d.D B) (d' : RegisteredCircuit) (P' : Partition d'.D B),
       Nonempty (Pad d P d' P') ∧ P'.IsCK d' Γ ⌊α * Γ⌋₊
 
 /-- **NCI's policy through the bit-level expansion.** If every computed gate is at least one bit wide and every gate at
 most `W`, a declaration that complies at `(Γ, α)` has an expansion that complies at `(Γ W, α)`. -/
 def ExpandComplies : Prop :=
-  ∀ (Γ W : ℕ) (α : ℝ) (d : Declaration), 0 ≤ α → (∀ g, d.D.isInput g = false → 1 ≤ d.D.w g) →
+  ∀ (Γ W : ℕ) (α : ℝ) (d : RegisteredCircuit), 0 ≤ α → (∀ g, d.D.isInput g = false → 1 ≤ d.D.w g) →
     (∀ g, d.D.w g ≤ W) → Complies Γ α d → Complies (Γ * W) α d.expand
 
 end Nci.Guarantees

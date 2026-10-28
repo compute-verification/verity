@@ -8,7 +8,7 @@ import Proofs.Pouw.PeriodJ10R.Honest
 The two witnesses of `Properties.Pouw.ServedValues.RightValues`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
 period. Its declared circuit has `N = N_p` committed words of no operands, one a block. The honest registered
 declaration (`andDecl N`) is a Boolean circuit of two input gates and `N` output gates, each the AND of the two
-(`andCircuit N`), and its lowering is itself (`Verity.Declaration.D`). The honest map (`blocks N`) has block `t` AND
+(`andCircuit N`), and its lowering is itself (`Verity.RegisteredCircuit.D`). The honest map (`blocks N`) has block `t` AND
 gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the ledger is empty), so each block's credit
 size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: C-Flock's `and a b` of two distinct gates is an AND gate).
 
@@ -49,7 +49,7 @@ def andCircuit (N : ℕ) : FlockSoundness.Audit.Circuit where
   outputs := Finset.univ.filter fun g => 2 ≤ g.val
 
 /-- The declaration of `andCircuit N`, with nothing registered. -/
-def andDecl (N : ℕ) : Verity.Declaration := ⟨(andCircuit N).toCircuit, ∅, by simp⟩
+def andDecl (N : ℕ) : Verity.RegisteredCircuit := ⟨(andCircuit N).toCircuit, ∅, by simp⟩
 
 /-- Block `t`'s gate, the AND gate `t + 2`. -/
 def gateOf {N : ℕ} (t : Fin N) : Fin (andDecl N).D.N := ⟨t.val + 2, show t.val + 2 < N + 2 by omega⟩
@@ -73,7 +73,7 @@ theorem andSize_gateOf {N : ℕ} (t : Fin N) : (andDecl N).D.andSize {gateOf t} 
 
 /-- **The honest map**: block `t` is AND gate `t + 2`, and word `i` is its one bit, that gate. The lowering is the
 declaration's own circuit, which is Boolean. -/
-def blocks (N : ℕ) : BlockMap (circuit N) N Verity.Declaration.D (andDecl N) where
+def blocks (N : ℕ) : BlockMap (circuit N) N Verity.RegisteredCircuit.D (andDecl N) where
   gates t := {gateOf t}
   bits i := if h : i < N then {gateOf ⟨i, h⟩} else ∅
   disjoint t t' h := Finset.disjoint_singleton.mpr fun he => h (Fin.ext (by
@@ -139,7 +139,7 @@ theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, -, -, -, -⟩ :=
     j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn hδs
   exact rightValues σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
-    (andDecl (tileCount σ sT)) Verity.Declaration.D (blocks (tileCount σ sT)) ∅ (windows σ sT regOf evOf n) opened
+    (andDecl (tileCount σ sT)) Verity.RegisteredCircuit.D (blocks (tileCount σ sT)) ∅ (windows σ sT regOf evOf n) opened
     enc place tile (period (Ω1 σ sT) (tileCount σ sT) n) (play Unit (tileCount σ sT) (k sT) n) 1 δs 0 0 hS one_pos
     le_rfl hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
 

@@ -1,4 +1,4 @@
-import Definitions.Core.Declaration
+import Definitions.Core.RegisteredCircuit
 import Definitions.Nci.Cover
 import Mathlib.Data.Finset.Lattice.Fold
 import Mathlib.Data.Fintype.Prod
@@ -7,7 +7,7 @@ import Mathlib.Logic.Equiv.Fin.Basic
 /-!
 # A declaration's circuit, bit by bit
 
-The cover theorem is stated over a circuit of one-bit gates (`Nci.Cover.Circuit`); a declaration (`Verity.Declaration`)
+The cover theorem is stated over a circuit of one-bit gates (`Nci.Cover.Circuit`); a declaration (`Verity.RegisteredCircuit`)
 has gates of `w g` bits each. `Circuit.ofDecl d` is `d`'s circuit bit by bit. It keeps the wiring and nothing of what the
 gates compute:
 
@@ -57,7 +57,7 @@ end BitView
 open BitView in
 /-- **A declaration's circuit, bit by bit**: the bits of `d`'s gates, each reading the bits of the gates its gate reads,
 with the free bits registered. -/
-def Circuit.ofDecl (d : Verity.Declaration) : Circuit where
+def Circuit.ofDecl (d : Verity.RegisteredCircuit) : Circuit where
   N := d.D.N * W d.D
   pred y := (bitPred d.D ((enc d.D).symm y)).map (enc d.D).toEmbedding
   pred_lt y y' hy := by
@@ -82,7 +82,7 @@ def Circuit.ofDecl (d : Verity.Declaration) : Circuit where
 
 open BitView in
 /-- **The bits of a set `S` of `d`'s gates** in its bit view: the real bits of the gates of `S`. -/
-def wordBits (d : Verity.Declaration) (S : Finset (Fin d.D.N)) : Finset (Fin (Circuit.ofDecl d).N) :=
+def wordBits (d : Verity.RegisteredCircuit) (S : Finset (Fin d.D.N)) : Finset (Fin (Circuit.ofDecl d).N) :=
   (bits d.D S).map (enc d.D).toEmbedding
 
 end Nci.Cover

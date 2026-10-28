@@ -57,14 +57,15 @@ theorem PrivateOutBitsLe : Guarantees.PrivateOutBitsLe :=
   fun _ _ P _ h T => P.sum_outBits_le h T
 
 theorem CommittedMeets : Guarantees.CommittedMeets := by
-  intro C H F hF A hA Q root r₀ ⟨⟨_, hf, hn, _⟩, hr₀⟩ r hr
-  have fits : ∀ x : (n : ℕ) × Partition C n, x = ⟨r₀.n, r₀.P⟩ →
-      x.1 ≤ Q.units ∧ x.2.Fits Q.X ∧ ∀ T : Finset (Fin x.1), ∑ u ∈ T, x.2.outBits u ≤ T.card * Q.X := by
+  intro B θ H F hF A hA Q root r₀ ⟨⟨_, hf, hn, _⟩, hr₀⟩ r hr
+  have fits : ∀ a : List (List Bool), a = r₀.a →
+      (B.run θ a).m ≤ Q.units ∧ (B.run θ a).P.Fits Q.X ∧
+        ∀ T : Finset (Fin (B.run θ a).m), ∑ u ∈ T, (B.run θ a).P.outBits u ≤ T.card * Q.X := by
     rintro _ rfl
-    exact ⟨hn, hf, r₀.P.sum_outBits_le hf⟩
+    exact ⟨hn, hf, (B.run θ r₀.a).P.sum_outBits_le hf⟩
   rcases Advice.root_bind hF (hr₀.trans hr.symm) with he | hc
-  · refine Or.inl (fits ⟨r.n, r.P⟩ (Option.some_inj.mp ?_))
-    rw [← hA r.n r.P, ← hA r₀.n r₀.P, he]
+  · refine Or.inl (fits r.a (Option.some_inj.mp ?_))
+    rw [← hA r.a, ← hA r₀.a, he]
   · exact Or.inr hc
 
 end Verity.SecurityProofs

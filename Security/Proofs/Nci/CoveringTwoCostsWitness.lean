@@ -41,7 +41,7 @@ abbrev tcCircuit : Circuit where
   outputs := {13}
 
 /-- The witness declaration: nothing registered. -/
-abbrev tcDecl : Declaration := ⟨tcCircuit, ∅, by simp⟩
+abbrev tcDecl : RegisteredCircuit := .ofCircuit tcCircuit ∅ (by simp)
 
 /-- The product gate of weight `i`. -/
 def tcProd : Fin 6 → Fin 14 := ![4, 5, 6, 7, 8, 13]
@@ -148,7 +148,7 @@ theorem tc_mem : ((5, 0) : Fin 6 × Fin 1) ∈ Assumptions.chainedBlocksAt tcDec
 covering satisfy every hypothesis of `CoveringBoundTwoCosts` at `c_w = 1/2`, `c_a = 1`, with a chained multiplication
 block. -/
 theorem coveringBoundTwoCosts_nonvacuous :
-    ∃ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+    ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       cw ≠ ca ∧ (k : ℝ) < cw * D ∧ 0 < ca ∧ Assumptions.ParameterHardAt d B s cw ∧ Covers d s k I ∧
       (Assumptions.chainedBlocksAt d B D ca).Nonempty :=
   ⟨tcDecl, tcBlocks, 3, 2, 5, 1 / 2, 1, 10, tcCover, by norm_num, by norm_num, by norm_num, tc_parameterHard 3,
@@ -158,7 +158,7 @@ open Nci.SecurityProofs.Covering in
 /-- **`c_a > 0` is needed**: at `c_a = -1`, `CoveringBound`'s witness meets the other hypotheses (`c_w = 1`, `D = 3`,
 `k = 2`, `s = 3`, six blocks), and the count's bound `n · ((k / c_w)(k / c_a) + k) = -12` is below every count. -/
 theorem coveringBoundTwoCosts_needs_ca_pos :
-    ∃ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+    ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       (k : ℝ) < cw * D ∧ Assumptions.ParameterHardAt d B s cw ∧ Covers d s k I ∧
       ¬ ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) ≤ n * (k / cw * (k / ca) + k) := by
   have hhard : Assumptions.ParameterHardAt exDecl exBlocks 3 1 := by

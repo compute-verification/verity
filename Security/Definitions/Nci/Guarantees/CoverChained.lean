@@ -44,7 +44,7 @@ parameter-hardness at `(s, c_w)` on `c`'s bits (`ParameterHardAt (bitDecl c)`) a
 slowdown `size(d) / size(c)` is at least `(|𝓜*| / size(c)) Γ / ((k / c_w)(k / c_a) + k)` at `k = α Γ`; in that form a
 division by zero is zero. -/
 def CoverTrainingChained : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (c d : Verity.Declaration) (M : Verity.Containment c.D d.D)
+  ∀ (Γ : ℕ) (α : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
     (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ) (cw ca : ℝ),
     0 ≤ α → Nci.Complies Γ α d →
     Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →

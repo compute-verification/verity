@@ -33,7 +33,7 @@ than it carries beyond `θ`. Read as a parameter slot from a step `t0` after the
 `c_w = H(θ'_{t0} | θ)` (the module doc). It fails when a block rebuilds the weights it uses from fewer bits: a registered
 base that an update stacks on, a low-rank update narrower than the weights it updates, or an update small enough for a
 block of `s` gates to compute itself. -/
-def ParameterHardAt (d : Declaration) (B : MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
+def ParameterHardAt (d : RegisteredCircuit) (B : MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
   ∀ S : Subcircuit d.D, S.gates.card ≤ s → cw * (B.weightsCompleted S).card ≤ (S.ins \ d.θ).card
 
 /-- **Activation-chaining at activation cost `c_a`** `(D, c_a)` of the multiplication block `m_{i,j}`, `p = (i, j)`:
@@ -47,7 +47,7 @@ so `c_a` is about an activation's width, 16 at bf16, 8 at FP8, 4 at FP4, whateve
 guarantee asks is `c_w · D > k`: at `k ≈ 10⁷` bits and `c_w` about a bit, `D ≈ 10⁷`, which a token's activation crosses at
 layer 1's attention output, whose Q, K and V weights number about `8 · 10⁷` in a 70B model (`d = 8192`, eight KV heads).
 So, as at one cost, only layer 1's Q/K/V products are not chained. -/
-def ActivationChainedAt (d : Declaration) (B : MulBlocks d) (D : ℕ) (ca : ℝ) (p : Fin B.nw × Fin B.nt) : Prop :=
+def ActivationChainedAt (d : RegisteredCircuit) (B : MulBlocks d) (D : ℕ) (ca : ℝ) (p : Fin B.nw × Fin B.nt) : Prop :=
   p ∈ B.P ∧ ∃ (A : Finset (Fin d.D.N)) (W : Finset (Fin B.nw)),
     A ⊆ B.T p.2 ∧ (∀ a ∈ A, ∃ g ∈ B.m p, a ∈ d.D.reads g) ∧ D ≤ W.card ∧
     (∀ i' ∈ W, (i', p.2) ∈ B.P ∧ B.m (i', p.2) ⊆ B.T p.2 ∧
@@ -56,7 +56,7 @@ def ActivationChainedAt (d : Declaration) (B : MulBlocks d) (D : ℕ) (ca : ℝ)
 
 open Classical in
 /-- `𝓜*` at activation cost `c_a`: the multiplication blocks chained at `(D, c_a)`. -/
-noncomputable def chainedBlocksAt (d : Declaration) (B : MulBlocks d) (D : ℕ) (ca : ℝ) :
+noncomputable def chainedBlocksAt (d : RegisteredCircuit) (B : MulBlocks d) (D : ℕ) (ca : ℝ) :
     Finset (Fin B.nw × Fin B.nt) :=
   B.P.filter (ActivationChainedAt d B D ca)
 

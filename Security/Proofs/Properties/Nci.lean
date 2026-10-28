@@ -121,7 +121,7 @@ theorem failStep_fst (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u v : ℕ) 
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.RegisteredCircuit} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 
@@ -189,13 +189,13 @@ theorem toJson_nat_inj {a b : ℕ} (h : toJson a = toJson b) : a = b := by
 
 /-- **The verdict is the definition's.** -/
 theorem Reports : Properties.Reports := by
-  intro j out hev i P d n U hpar hdec hL hθ hU
+  intro j out hev i P d hpar hdec hL hθ hU
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, rfl⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
   replace h2 := ((decodeProgram_ok _ _).1 h2).1
   rw [hdec, Except.ok.injEq] at h2
   subst h2
-  have S : Setting P i'.theta i'.owner c dv d n U := ⟨h3, h4, hL, hθ, hU⟩
+  have S : Setting P i'.theta i'.owner c dv d d.n d.𝓘 := ⟨h3, h4, hL, hθ, hU⟩
   have hden : 0 < i'.den := hpar.2.2.2.2.2
   intro α
   have hcompl : (verdict c.N (ius c dv) (failure i'.gamma i'.num i'.den (ius c dv))).getObjVal? "complies" =
@@ -212,7 +212,7 @@ theorem Reports : Properties.Reports := by
     apply Array.ext
     · simpa using S.ius_size
     · intro k hk1 hk2
-      have hk : k < n := by simpa using hk2
+      have hk : k < d.n := by simpa using hk2
       rw [Array.getElem_map, Array.getElem_ofFn, ← getElem!_pos _ k (by simpa using hk1)]
       rw [S.ius_get ⟨k, hk⟩]
   · rw [hcompl, ← hnone]
@@ -240,7 +240,8 @@ theorem Witnesses : Properties.Witnesses := by
   rw [hdec, Except.ok.injEq] at h2
   subst h2
   obtain ⟨U, hU⟩ := exists_partition h3 h4 hL
-  exact ⟨dv.n, U, (Reports j out hev i' P d dv.n U hpar hdec hL hθ hU).2.2.1.1 hc⟩
+  refine ⟨⟨dv.n, U, (Reports j out hev i' P (.ofPartition d.D d.θ d.θ_input dv.n U) hpar hdec hL hθ hU).2.2.1.1 hc⟩,
+    fun hI => (Reports j out hev i' P d hpar hdec hL hθ hI).2.2.1.1 hc⟩
 
 /-! ## Completeness
 

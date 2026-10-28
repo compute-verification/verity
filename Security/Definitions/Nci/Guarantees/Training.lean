@@ -25,7 +25,7 @@ open Verity
 declaration `d` that contains a `(dd, e)`-threaded reference circuit `c` and complies at `(Γ, α)`, with its θ
 registered (`ThetaRegistered`), has at least `b_a / (αΛ)` gates per counted multiplication of `c`, where `Λ` is the thread bound at `S = αΓ`. -/
 def IncompressibleThreadedThrottled : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd e : ℕ) (M : Containment c.D d.D),
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd e : ℕ) (M : Containment c.D d.D),
     0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
     Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
     T.Threaded Γ (α * Γ) dd e → Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
@@ -37,7 +37,7 @@ def IncompressibleThreadedThrottled : Prop :=
 has at least `b_a / (αΛ)` gates per counted multiplication of `c` in `S`, forward and activation-gradient alike, with no
 term for the dark gates. -/
 def IncompressibleThreadedThrottledOn : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd e : ℕ)
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd e : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.ThetaRegistered c d M →
     T.Threaded Γ (α * Γ) dd e → Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
@@ -49,7 +49,7 @@ size, every declaration that contains `c` and complies at `(Γ, α)`, with its �
 is larger by a factor of at least `κ F`. `dd` is the
 chain's smallest inner dimension. -/
 def IncompressibleContainedTraining : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd : ℕ) (M : Containment c.D d.D),
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd : ℕ) (M : Containment c.D d.D),
     0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → Complies Γ α d →
     Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
     Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
@@ -65,7 +65,7 @@ with `e_max` the largest output dimension. The assumption is on `c` at read cap 
 `ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an IU of its own: the dark gates absorb
 at most their reads of the partial sums. -/
 def IncompressibleContainedMatMulOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
+  ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →
@@ -82,7 +82,7 @@ def IncompressibleContainedMatMulOn : Prop :=
 the reference circuit's size, each product off the books is a dark gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(c) − 2 #dark) ≤ 2 (α size(d) + (1 − μ) ∑_{v dark} novelReads(v))`. -/
 def IncompressibleContainedTrainingOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
+  ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →
@@ -103,7 +103,7 @@ completes entries of, `K / (4 b_w dd)` per `b_a` bits by AM–GM on its weight a
 incompressibility it needs only the activations' half, `ActivationsIncompressible` on `c` at read cap `K ≥ αΓ`, besides
 the θ premise `ThetaRegistered`. -/
 def ContainedFanOutOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd emax : ℕ) (M : PartialContainment c d),
+  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd emax : ℕ) (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →
     Assumptions.ActivationsIncompressible c ch Γ K b_w b_a →
