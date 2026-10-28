@@ -794,7 +794,6 @@ KNOWN: dict[str, str] = {
         "homonym, the Program side of a match's resolution: rename (vllm)",
     "integrations/vllm/verity_vllm/check/verdict.py::Verdict":
         "homonym, a check run's results and outcome: rename (vllm)",
-    "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
     "integrations/vllm/verity_vllm/commit/served_record.py::Record":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
     "integrations/vllm/verity_vllm/observe/fold/resolver.py::Witness":
