@@ -75,7 +75,7 @@ from verity.ml.randomness import frame
 from ..codec import Codec
 from ..labels import salt_value, tag
 from ..params import SALT_BITS
-from ..protocol import Certificate, Scheme
+from ..protocol import CapacityBound, Scheme
 
 EXPERIMENTAL = ("abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not accepted, "
                 "and the XOR-then-reduce compression attack on it is open")
@@ -442,13 +442,13 @@ class P2(Scheme):
         return self.params.codec.name
 
     @cached_property
-    def certificate(self) -> Certificate | None:
+    def certificate(self) -> CapacityBound | None:
         p = self.params
         if (p.w, p.c0, p.blocks_per_segment) != POINT:
             return None
-        return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                           theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
-                           claims=P2_CLAIMS)
+        return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                             theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
+                             claims=P2_CLAIMS)
 
     def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
         out = []
@@ -472,7 +472,7 @@ class P2ChaCha(P2):
     expander = CHACHA8
 
 
-def family_certificate(params: P2Params) -> Certificate | None:
+def family_certificate(params: P2Params) -> CapacityBound | None:
     """`P2SlackFamilyUncond`'s `λ = 128` row for a v4 store at the registered width and prime of any block count in
     `CERT_FAMILY_BLOCKS`, in any number of segments: the theorem is about `m1p B 16448 (2^16448 − 21065) b` for every such
     `B`, and segments only frame each block's keys.  `P2.certificate` stays the registered point's alone, the one the
@@ -481,11 +481,11 @@ def family_certificate(params: P2Params) -> Certificate | None:
     lo, hi = CERT_FAMILY_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
-    return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+    return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                         theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
 
 
-def wide_certificate(params: P2Params) -> Certificate | None:
+def wide_certificate(params: P2Params) -> CapacityBound | None:
     """`Pous.Period.SecurityProofs.periodHeldAt` for a v4 store at the registered width and prime of any block count in
     `CERT_WIDE_BLOCKS`, in any number of segments: at every point of the run's composed check and every `N` from `2^19`
     to `2^27`, an accepted period with no break while the node held fewer than `⌊ρ·N·16448⌋` bits has probability at
@@ -494,8 +494,8 @@ def wide_certificate(params: P2Params) -> Certificate | None:
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
-    return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+    return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                         theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",

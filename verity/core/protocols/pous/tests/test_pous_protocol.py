@@ -284,9 +284,9 @@ def test_certificates_at_their_points():
     assert schemes.Band(band.BandParams(512, 524_288, 5)).certificate.cliff == 5
     assert schemes.Band(band.BandParams(256, 524_288, 12)).certificate is None
     with pytest.raises(ValueError, match="cliff"):
-        protocol.Certificate(111, 6, 1 << 20, 483_000, "x", cliff=5)
+        protocol.CapacityBound(111, 6, 1 << 20, 483_000, "x", cliff=5)
     with pytest.raises(KeyError):
-        protocol.Certificate(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
+        protocol.CapacityBound(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
 
 
 def test_certificates_name_proved_guarantees():
