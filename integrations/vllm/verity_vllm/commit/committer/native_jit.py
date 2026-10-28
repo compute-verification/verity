@@ -11,7 +11,7 @@ both torch-free so the laptop and the pod CPU gate test them:
   * `binding_names(cpp)` / `missing_bindings(module, cpp)`   every pybind `.def*("name"` of the source must be an attribute of the loaded
     module or of one of its classes; the pod readiness FAILS on a missing one (a stale .so is no longer canary-blind).
 
-`jit_load()` is how every torch JIT extension of the Commit loads (the collector, `hidden_gpu_tree`), safe for several
+`jit_load()` is how the Commit's torch JIT extension (the collector, through `native_ext`) loads, safe for several
 jobs on one host at once: the source set keys the build dir, and builders serialise on an fcntl lock beside it (`build_lock`).  The kernel
 drops that lock however its holder exits, so under it a torch FileBaton `lock` left in the dir can only be a killed build's, and it is
 removed -- never guessed from its age (a build on a loaded host can outlast any age limit).
@@ -28,7 +28,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu")
+SOURCES = ("native_collect.cpp", "native_gather.cu", "native_rows.cu")
 CFLAGS = ("-O3",)
 CUDA_CFLAGS = ("-O3", "--use_fast_math")
 

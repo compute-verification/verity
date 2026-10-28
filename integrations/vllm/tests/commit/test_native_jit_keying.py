@@ -21,7 +21,7 @@ def _write(tmp_path, name, data: bytes):
 def test_source_set_digest_changes_with_any_source_byte_and_with_the_flags_and_toolchain(tmp_path):
     a = _write(tmp_path, "native_collect.cpp", b"int x;")
     b = _write(tmp_path, "native_gather.cu", b"__global__ void k(){}")
-    c = _write(tmp_path, "native_tree.cu", b"__global__ void t(){}")
+    c = _write(tmp_path, "native_rows.cu", b"__global__ void t(){}")
     d0 = nj.source_set_digest([a, b, c], torch_version="2.8.0", cuda_version="12.9")
     assert d0 == nj.source_set_digest([a, b, c], torch_version="2.8.0", cuda_version="12.9"), "stable over identical input"
     # touching the mtime changes NOTHING -- the digest is the content, never the clock
@@ -88,7 +88,7 @@ def test_missing_bindings_names_exactly_what_a_stale_so_lacks(tmp_path):
 
 def test_the_real_source_binds_the_names_the_python_side_calls():
     names = nj.binding_names(CPP)
-    for n in ("begin_step", "end_step", "commit", "plan_used", "stats", "cuda_runtime_version"):
+    for n in ("begin_step", "end_step", "rows_leaves", "rows_tree_window", "plan_used", "stats", "cuda_runtime_version"):
         assert n in names, n
     assert {"StepHasher", "Collector"} <= nj.class_names(CPP)
     assert len(names) >= 40
