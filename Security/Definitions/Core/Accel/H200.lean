@@ -33,7 +33,7 @@ them.
   exponential, sine and cosine);
 * shared memory: 32 bank words; L2: 512 words read or written, a placeholder, neither measured nor a ceiling (the
   lane loads' issue bound; open until a measured ceiling with its argument replaces it). At 512 a table method that
-  reads a word of L2 a MAC runs at 12.5% of the tensor's `s8` rate;
+  reads a word of L2 a MAC runs at 13.5% of the tensor's `s8` rate;
 * HBM3e: 3201 MHz at two transfers a clock on 6144 bits (six stacks), 4.917 TB/s, above the data sheet's 4.8 TB/s;
   1.229184 · 10¹² words a second.
 -/
