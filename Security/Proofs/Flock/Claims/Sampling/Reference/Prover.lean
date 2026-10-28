@@ -65,8 +65,8 @@ def found (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (w : Wit) 
 under `xS`, the Flock reference prover `PF` at the session's history, on the Flock witness of what it reveals and
 `xS`'s tape. -/
 def refP {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF) (step : Msg → List (Msg × Msg) → Step)
-    (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ) (Cm : Commitment Bool)
-    (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) : Prover (Msg → ΩF) :=
+    (parse : Msg → Option AuditStatement) (reads : AuditStatement → Msg → List ℕ) (Cm : Commitment Bool)
+    (wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) : Prover (Msg → ΩF) :=
   ⟨fun x hist ω =>
     match step x hist with
     | .say m => .ret m
@@ -124,7 +124,7 @@ theorem found_opens {H : Msg → Msg} {Cm : Commitment Bool} {roots : List Msg} 
   exact this.2
 
 /-- **What it reveals is the committed value `Wit.val` reads** at its position. -/
-theorem found_val {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wit} {gs : List ℕ} {o : Opening Bool}
+theorem found_val {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {w : Wit} {gs : List ℕ} {o : Opening Bool}
     (h : o ∈ found H Cm s.roots w gs) : w.val H Cm s o.pos = some o.val := by
   obtain ⟨g, -, hg⟩ := List.mem_flatMap.1 h
   cases hf : w.vals.find? (fun o => o.pos == g && Cm.Opens H s.roots o) with
@@ -139,7 +139,7 @@ theorem found_val {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wit} 
     rfl
 
 /-- **It covers every read position with a committed value.** -/
-theorem found_covers {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wit} {gs : List ℕ} {g : ℕ} {b : Bool}
+theorem found_covers {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {w : Wit} {gs : List ℕ} {g : ℕ} {b : Bool}
     (hg : g ∈ gs) (hb : w.val H Cm s g = some b) : ∃ o ∈ found H Cm s.roots w gs, o.pos = g := by
   unfold Wit.val at hb
   cases hf : w.vals.find? (fun o => o.pos == g && Cm.Opens H s.roots o) with
@@ -155,9 +155,9 @@ theorem found_covers {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wi
 /-- **In a session, its message is Flock's reference prover's** at the session's history, on the Flock witness of what
 it reveals. -/
 theorem refP_session (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF)
-    (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ)
-    (Cm : Commitment Bool) (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
-    (w : Wit) {x : Msg} {s : Stmt} {hist : List (Msg × Msg)} {xS : Msg} {hS : List (Msg × Msg)}
+    (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option AuditStatement) (reads : AuditStatement → Msg → List ℕ)
+    (Cm : Commitment Bool) (wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit)
+    (w : Wit) {x : Msg} {s : AuditStatement} {hist : List (Msg × Msg)} {xS : Msg} {hS : List (Msg × Msg)}
     (hs : parse x = some s) (hstep : step x hist = .session xS hS) (ω : Msg → ΩF) :
     (((refP PF step parse reads Cm wit w).next x hist ω).eval H).1 =
       (((PF (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS (ω xS)).eval H).1 := by
@@ -165,8 +165,8 @@ theorem refP_session (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → P
 
 /-- **Outside the sessions, it says what the framing fixes.** -/
 theorem refP_say (H : Msg → Msg) {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF)
-    (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ)
-    (Cm : Commitment Bool) (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
+    (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option AuditStatement) (reads : AuditStatement → Msg → List ℕ)
+    (Cm : Commitment Bool) (wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit)
     (w : Wit) {x : Msg} {hist : List (Msg × Msg)} {m : Msg} (hstep : step x hist = .say m) (ω : Msg → ΩF) :
     (((refP PF step parse reads Cm wit w).next x hist ω).eval H).1 = m := by
   simp only [refP, hstep, OC.eval]

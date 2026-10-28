@@ -134,8 +134,8 @@ advice `(traceVal C ref, free)`, its inputs the trace's committed values and `fr
 faulty units' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every observation
 sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
 are pinned to the trace, so the registered ones are what the registration commits. -/
-def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
-    (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) : Rel Wit :=
+def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+    (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w ∧
     Disjoint (faulty H Cm s P w) (allSlots s.design P) ∧
     ∃ free : ℕ → Option Bool, (∀ g b, free g = some b → FaultyGate s.prog P (faulty H Cm s P w) g) ∧
@@ -150,7 +150,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- **The sampled audit's scope**: the sampling scope (`Scope`), and the statement's layout fits its program over its
 horizon (`Layout.Fits`). -/
-def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (x : Msg) : Prop :=
+def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (x : Msg) : Prop :=
   Scope D x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
 
 /-- **The sampled audit implies `Accepted`** at the deployment `D`, at the public layout `lay` and horizon `k` of each
@@ -158,7 +158,7 @@ statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ �
 decoder that lists every trace within Flock's radius: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `KS`'s errors
 (`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the units' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
 through `M_δ`. -/
-def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) : Prop :=
+def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) : Prop :=
   ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
       (fun _ => 1) (Bext H D.V (E D decode))

@@ -104,7 +104,7 @@ theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
 /-- **At the deployment**: at a statement `x` that parses to `s` with a `SubsetDesign` over `n` replay units of one
 class, `EndToEnd`'s sampling term is at most `missAt D K₀ x`, the δ of the claims' `KSCount`. -/
 theorem choose_le_missAt {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (D : Deploy Coin Col T) (x : Msg) (s : Stmt) (hs : D.parse x = some s)
+    [Zero Col] (D : Deploy Coin Col T) (x : Msg) (s : AuditStatement) (hs : D.parse x = some s)
     (n kd : ℕ) (hkd : kd ≤ n) (hd : SubsetDesign s.design kd) {c : List (List RU)}
     (hP : (D.part s).classes = [c]) (hn : (D.part s).rus.length = n) (K₀ : ℕ) (hK₀ : K₀ ≤ n) :
     ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) ≤ ENNReal.ofReal (missAt D K₀ x) := by
