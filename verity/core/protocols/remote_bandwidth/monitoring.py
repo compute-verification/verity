@@ -6,7 +6,7 @@ openings' pooled bound's δ, 2^-40, and S the session's draws).
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
 
-- **Pooled** (`pooled_step`): #4413's count bound (`FlockSoundness.Audit.Periods.prCoin_count_le_choose`). When each
+- **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each
   session, given the earlier ones, is accepted and short of its `q_bytes` with probability at most p = `eps`, at least M
   of the T are with probability at most C(T, M)·p^M. M is the least count within δ (`short_sessions`), so except with δ
   at least T − M + 1 sessions certify their `q_bytes`: the period certifies at least (T − M + 1)·`q_bytes`, and at most
@@ -15,7 +15,7 @@ T = machines·⌊period/window_s⌋ sessions in a period, each on its own live c
   so that every one of the T sessions certifies that much at once, except with δ + T·S/2^64.
 
 Both leave out each session's coin PRF advantage and coin commitment's hiding, which are named assumptions, not
-numbers. What the session proves is its verdict and outputs, by the Lean verifier of record; what is scaled is the
+numbers. What the session proves is its verdict and outputs, by the Lean verifier; what is scaled is the
 number of sessions and that each is audited as this one was."""
 
 from __future__ import annotations

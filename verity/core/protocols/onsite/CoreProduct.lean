@@ -1,9 +1,10 @@
 /-
 The verifier's product for a configuration (`verity run CONFIG`): `Core.Composition.product` over exactly the components
-the configuration's `protocols` lists, by their ids, on the caller's blobs. Listing every one of onsite's six components
-is onsite's own protocol (`verity/onsite/v0`); any other list is
-`productB "verity/product/v0"` over the listed components, in the order of their ids. A list naming a component onsite doesn't have, naming one twice, or naming none is refused by
-name, so a product never runs over a component it can't check, and an unlisted component is never read as accepted.
+the configuration's `protocols` lists, by their ids, on the caller's blobs. Listing every one of onsite's seven components
+is onsite's own protocol (`verity/onsite/v0`, with its record tie); any other list is `productB "verity/product/v0"` over
+the listed components, in the order of their ids, with no tie. A list naming a component onsite doesn't have, naming one
+twice, or naming none is refused by name, so a product never runs over a component it can't check, and an unlisted
+component is never read as accepted.
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the listed ids, comma-separated
 
