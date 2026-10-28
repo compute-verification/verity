@@ -14,6 +14,9 @@
 #   seal    the Commit with --seal: each closed window sealed to UTIL_ROOT's scratch (deleted after the run)
 #   h1      the Commit (sealed iff H1_SEAL=1) and PoUW H1 at T and S 1 with the epoch's in-process coins (no challenger
 #           gate: it credits nothing; the gate's own costs are not in this run)
+#   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
+#           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
+#           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
@@ -23,7 +26,7 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
-ARM=${ARM:?ARM is stock, noseal, seal or h1}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
+ARM=${ARM:?ARM is stock, noseal, seal, h1 or graphs}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
@@ -37,10 +40,10 @@ export TREE ARM T N SLOTS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO N
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
-  case $ARM in stock|noseal|seal|h1) ;; *) say "ARM $ARM: not stock, noseal, seal or h1"; exit 2 ;; esac
+  case $ARM in stock|noseal|seal|h1|graphs) ;; *) say "ARM $ARM: not stock, noseal, seal, h1 or graphs"; exit 2 ;; esac
   [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
-  if [ "$ARM" != stock ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
+  if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
   fi
   mkdir -p "$D"
@@ -68,21 +71,34 @@ export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.max.sm,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
-      --required-manifest "$ROW/manifest.json" --admit arrival --window-requests "$SLOTS" --max-num-seqs "$SLOTS"
+      --admit arrival --window-requests "$SLOTS" --max-num-seqs "$SLOTS"
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
+[ "$ARM" = graphs ] || args+=(--required-manifest "$ROW/manifest.json")
 commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
         --window-gb 32 --seal-hold-gb 32 --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
+serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in
   stock) args+=(--no-commit) ;;
   noseal) args+=("${commit[@]}" --no-seal) ;;
   seal) args+=("${commit[@]}" --seal) ;;
   h1) args+=("${commit[@]}" "$([ "${H1_SEAL:-0}" = 1 ] && echo --seal || echo --no-seal)" --protocols pouw:eps1-sm120-h1fx1) ;;
+  graphs)
+    args+=(--no-commit)
+    sizes=1; s=2; while [ "$s" -le "$T" ]; do sizes+=",$s"; s=$(( 2 * s )); done
+    export UTIL_ENGINE_JSON=${UTIL_ENGINE_JSON:-"{\"enforce_eager\": false, \"async_scheduling\": true, \"compilation_config\": {\"cudagraph_capture_sizes\": [$sizes]}}"}
+    serve=("$PY" -c 'import json, os, sys
+from verity_vllm.pipeline import cli, serve_openai as so
+over, base = json.loads(os.environ["UTIL_ENGINE_JSON"]), so.engine_options
+so.engine_options = lambda opts: base(opts) | over
+print("UTIL engine options overridden (not the served stack):", json.dumps(over), flush=True)
+sys.exit(cli.main())' serve-openai)
+    say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
 SESS=util80-${RESEARCH_RUN_ID:-local}
 cd "$TREE/integrations/vllm" || exit 9
 # shellcheck disable=SC2086
 "$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node \
-  "$PY" -m verity_vllm.pipeline.cli serve-openai "${args[@]}" ${EXTRA:-} > "$SCR/serve.log" 2>&1 &
+  "${serve[@]}" "${args[@]}" ${EXTRA:-} > "$SCR/serve.log" 2>&1 &
 srv=$!
 trap '"$NSYS" shutdown --session="$SESS" --kill=sigterm >/dev/null 2>&1; wait "$srv"; exit 143' TERM INT
 up=0
@@ -91,7 +107,7 @@ for _ in $(seq 1 1500); do
   kill -0 "$srv" 2>/dev/null || break
   sleep 2
 done
-log() { grep -aE "SERVE-OPENAI|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
+log() { grep -aE "SERVE-OPENAI|UTIL engine|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
   log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
   "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; exit 10
