@@ -17,7 +17,8 @@
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off
-# Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments).
+# Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments),
+# PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at PYHZ, 1000, for the host gaps).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -95,9 +96,11 @@ sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
 SESS=util80-${RESEARCH_RUN_ID:-local}
+pysample=()
+[ "${PYSAMPLE:-0}" = 1 ] && pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}")
 cd "$TREE/integrations/vllm" || exit 9
 # shellcheck disable=SC2086
-"$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node \
+"$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node "${pysample[@]}" \
   "${serve[@]}" "${args[@]}" ${EXTRA:-} > "$SCR/serve.log" 2>&1 &
 srv=$!
 trap '"$NSYS" shutdown --session="$SESS" --kill=sigterm >/dev/null 2>&1; wait "$srv"; exit 143' TERM INT
