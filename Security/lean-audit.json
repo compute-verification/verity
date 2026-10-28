@@ -2394,6 +2394,7 @@
    "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
    "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
    "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost",
+   "Claims.Json.Ascii": "a helper the claims read: an ASCII JSON value without DEL, which `JsonSpec` reads",
    "Claims.Json.Good": "a helper the claims read: a printable JSON value, which `JsonSpec` reads",
    "Claims.Json.Same": "a helper the claims read: two JSON values alike, which `JsonSpec` reads",
    "Claims.Json.Wf": "a helper the claims read: a well-formed JSON value, which `JsonSpec` reads",
