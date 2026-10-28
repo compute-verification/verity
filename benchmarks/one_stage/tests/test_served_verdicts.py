@@ -707,11 +707,12 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     v2 = d / "private" / "sampled-proofs-v2"
     (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
 from pathlib import Path
-assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private"], sys.argv
+assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
 Path("{v2}").mkdir(parents=True)
 Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
 Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
 print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
+print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "read off the honest division"}}))
 print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
 sys.exit(1)
 ''')
@@ -722,7 +723,9 @@ sys.exit(1)
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
-        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
+        "COMPOSITE CASE verity/registration/v0 accept (alpha_gamma read off the honest division)",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
