@@ -3,7 +3,7 @@ import Definitions.Pouw.PearlC.DeviceKernelWref
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.Instance
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.FlockTile.Audit
+import Definitions.Pouw.PearlC.FlockTile.Audit
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit (trusted)
@@ -13,9 +13,8 @@ C-Flock's hidden audit (`Pouw.PearlC.FlockTile.TileReadSession.audit`), with the
 `TileProofSoundAll` replaced by the two it reduces to there, T3 at the TileRead session and the binding, each a
 hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`.
 
-C-Flock's definitions, and the session's (`FlockTile.Audit`), are still in the proofs package, so this module imports
-`Proofs.Pouw.PearlC.FlockTile.Audit`, as `Flock.Guarantees.EndToEndHidden`'s statement does C-Flock's; `Models.lean`,
-which the `security` package builds without `security_proofs`, does not import it.
+The session and the bridge to core's games are `Definitions.Pouw.PearlC.FlockTile`'s, over C-Flock's games
+(`Definitions.Flock.Game`).
 -/
 
 namespace Pouw.Guarantees.PearlC
