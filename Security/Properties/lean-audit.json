@@ -11381,7 +11381,7 @@
    ]
   },
   "Properties.CertifierDevice": {
-   "digest": "23288cf8412a4f729443f27f3bfc303f1b29eea6ac9b79925a21164009813641",
+   "digest": "e2ec7116fd0122f7622c1ddcf8d5aa825cb819971fdc9d8010231281b69d4da3",
    "definitions": {
     "Properties.CertifierDevice.ClosedAfterFault": "c9d3d4cbb556c9fc4673b58c7663912c18e4e38b7af17e69fd10ea20dc2540b8",
     "Properties.CertifierDevice.CompleteRows": "be52753ad07d3bf66bc0eedad8847cb9647939e2f239df4f7cad966dea1fce9f",
@@ -11391,7 +11391,7 @@
     "Properties.CertifierDevice.IssuerVerifies": "988d7b9dd58e941e863789610c7f5a815a07a690c5c04699147c07eda1d5aad3",
     "Properties.CertifierDevice.LinkSchedule": "3a940ea36d36c08a19671ab8a8071c5742d8bd0bfbf814187db09c39c1642db1",
     "Properties.CertifierDevice.Packed": "9ea91c7d79b3e40e2297151339dbe4583239f041959f8165f0590d17ec29cbf8",
-    "Properties.CertifierDevice.ProgramRows": "1282d2dab36c0182397e56860b49a225beaf1e703357449963f3d207e2393cee",
+    "Properties.CertifierDevice.ProgramRows": "d3af0f17a3d9bdc34439b989752447457b8dfba058ff1eaac766f37935a73351",
     "Properties.CertifierDevice.Records": "c24d4ce8730906365c18e9b870894022feb1f3e15d83c7f085fae5ecba08d24e",
     "Properties.CertifierDevice.RowsWritten": "7b8e3e3f20e3e71497ff6c59b7c94aeea7becfcdcd09d302e84a90c02ab31fda",
     "Properties.CertifierDevice.SameWrites": "74b84c43bbda3c920e1b698ba5e065813d815d7998e7ffadd4b99c532fdc592c",
@@ -11401,6 +11401,8 @@
     "Properties.CertifierDevice.egressRun": "1036688bd8ab3c8240658cbd230bcd488b2c9b7a9dd4ab6bd87aa03b541434b9",
     "Properties.CertifierDevice.handed": "994ce9c83cc1d242d675fbb191d30756acc14089b437aab26dc6d375bd1ee43b",
     "Properties.CertifierDevice.handedAt": "a26c37ae3be69c53bbc878f3b92983264e39c5188eeccc176eae8e1ec2ccc1cd",
+    "Properties.CertifierDevice.handedBits": "60e8995bfb88deeacf3070f169f9bfda9808bb3637c0b6fcbd42fd7ff736ec7e",
+    "Properties.CertifierDevice.handedCount": "16ef51ef0b83601bc9fbc30a065b6600e445f556c70879129577f9373896172d",
     "Properties.CertifierDevice.horizon": "b21f47041f962ee8fc89a4b3047a9b91af43b29417346c074b104c940d8f0dff",
     "Properties.CertifierDevice.linkWrites": "610744be861f15ae8d38222d66110460e9b3f94b843729f2ae706fd4957c21e8",
     "Properties.CertifierDevice.linkWrites._sparseCasesOn_1": "c1e7e94c3380e79135f2597aa20d0ddc3fa75686d703b45b98ca042ef3742292",

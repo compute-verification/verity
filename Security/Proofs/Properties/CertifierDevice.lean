@@ -7,8 +7,9 @@ import Proofs.Properties.CertifierDevice.Issuer
 # The certifier device's properties, proved
 
 Each statement of `Properties.CertifierDevice`, proved as the lower-case theorem of its name: the trace properties from
-one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`), complete records from the egress FIFO's and
-the handing buckets' (`Proofs.CertifierDevice.Fifo`, `Proofs.CertifierDevice.Late`, `Proofs.CertifierDevice.Complete`),
+one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`), complete records from the egress FIFO's
+(`Proofs.CertifierDevice.Fifo`, `Proofs.CertifierDevice.Complete`, with a complete window's clean ticks from
+`Proofs.CertifierDevice.Late`),
 the issuer's from LMS's correctness (`Proofs.CertifierDevice.Lms`, `Proofs.CertifierDevice.Issuer`), which is
 completeness and no guarantee (`Proofs.CertifierDevice.Lms.lmsCorrect`).
 -/
@@ -24,7 +25,7 @@ theorem contentIndependent : ContentIndependent := Proofs.contentIndependent_pro
 /-- **(2) The records are the rows written.** -/
 theorem records : Records := Proofs.records_proof
 
-/-- **(2) A complete record is the Program's.** -/
+/-- **(2) A complete record is the FIFO's release of what was handed.** -/
 theorem completeRows : CompleteRows := Proofs.completeRows_proof
 
 /-- **(3) Fail-closed.** -/
