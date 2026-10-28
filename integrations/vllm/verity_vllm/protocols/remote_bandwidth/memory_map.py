@@ -57,7 +57,7 @@ write waits for its encode.  No margin past L is needed, provided the window of 
 closes (the binder takes the verifier's messages before `kv_append`).
 
 The header names the remote audit's `Registration.digest`, the one the verifier gives `NodeMemory.begin_window` for the
-session's first window; without it there is no map.  Its indices are one session's (`audit.Session`: a later session
+session's first window; without it there is no map.  Its indices are one session's (`audit.AuditRun`: a later session
 over the store starts again from N), so a store records one map.
 
 The map is a witness (``d_j`` hashes user data): it goes to ``path``, the prover's own file, and is never published.
