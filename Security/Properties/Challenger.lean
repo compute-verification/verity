@@ -13,32 +13,32 @@ what that record shows, for every input: the coins the challenger device drew, o
 * `CoinsFromLog`, the target: what a component that reads its coins through that reader (`ReadsChallenger`)
   accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
-  concatenation of the coins of that family that a session of the device released after `after`, a session the device's
+  concatenation of the coins of that family that a run of the device released after `after`, a run the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 
-**The device** (`Device`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs sessions
-(`Session`): it draws each coin and its salt by position, commits to the frame-v3 root over their live leaves
-(`Session.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
-released after it), and signs its record before any coin opens and its close over the log once the session ends. A
-session its ledger opens withheld (`OpensOn`, `remote.open_session(..., withhold=True)`) releases, while it runs, each
-coin's raw bytes and nothing else, and its commitment, salts and paths only once its close is signed, after the prover's
+**The device's history** (`History`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs
+sessions, each a run (`Run`): it draws each coin and its salt by position, commits to the frame-v3 root over their live
+leaves (`Run.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
+released after it), and signs its record before any coin opens and its close over the log once the run ends. A run its
+ledger opens withheld (`OpensOn`, `remote.open_session(..., withhold=True)`) releases, while it runs, each coin's raw
+bytes and nothing else, and its commitment, salts and paths only once its close is signed, after the prover's
 commitments are in: nothing the prover sees before a coin depends on a coin not yet released, so no hiding premise on
-the root enters soundness. It also signs the auditor's ledger, line by line. `Signed` is all it signs under a key.
-One role per key: a key also used for another role is outside the model, and a `forgery` witness is then an EUF-CMA
-break only under that one-role reading.
+the root enters soundness. It also signs the auditor's ledger, line by line. `Signed` is all it signs under a key. One
+role per key: a key also used for another role is outside the model, and a `forgery` witness is then an EUF-CMA break
+only under that one-role reading.
 
 **The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a draw reads the concatenation
 of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
 stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
-session's releases are those bits alone.
+run's releases are those bits alone.
 
 **The break** (`Break`) is one adversary form's: it is no event of the run but what one fixed finder
 outputs. `findBreak` is a computable function of the run (the record the evidence carries and the device's log), the
 same for every prover; its SHA-512 calls are one per string in `readHashed` and `deviceHashed` and an LMS verification
-per signature `drawCoins` checks, so at most a constant times the reader's and the device's own. It outputs a `Witness`,
-and `Break` is that it outputs a valid one (`Witness.Valid`):
+per signature `drawCoins` checks, so at most a constant times the reader's and the device's own. It outputs a `Finding`,
+and `Break` is that it outputs a valid one (`Finding.Valid`):
 * `forgery`: an LMS signature among those `drawCoins` checks that verifies under the verifier's key over a message the
   device never signed under it (`Signed`), the LMS term (`euf-cma/lms-sha512-n64` asked of the finder);
 * `collision`: two different strings, each hashed in reading the coins (`readHashed`) or by the device
@@ -66,9 +66,9 @@ def LiveAnswer : Prop :=
 
 /-! ## The challenger, as it runs -/
 
-/-- One session the challenger ran under its key: its id and host, its layout, its coins and their salts by position,
-the lines of the release log it wrote, and how it ended (`none` when its client closed it). -/
-structure Session where
+/-- One run of the challenger under its key, a session: its id and host, its layout, its coins and their salts by
+position, the lines of the release log it wrote, and how it ended (`none` when its client closed it). -/
+structure Run where
   id : String
   host : String
   scheme : String
@@ -79,21 +79,21 @@ structure Session where
   log : List String
   ended : Option String
 
-/-- The session's tree's leaves under its domain `dom`: position `p`'s frame-v3 leaf over its coin's live leaf. -/
-def Session.leaves (s : Session) (dom : ByteArray) : Array ByteArray :=
+/-- The run's tree's leaves under its domain `dom`: position `p`'s frame-v3 leaf over its coin's live leaf. -/
+def Run.leaves (s : Run) (dom : ByteArray) : Array ByteArray :=
   (Array.range (total s.families)).map fun p =>
     Flock.FV3.leaf dom p s.scheme (liveLeaf s.scheme (s.coins p) (s.salts p)) Flock.Sha512.hash
 
-/-- The coin commitment the session publishes before any coin opens: its layout and the frame-v3 root over its leaves
+/-- The coin commitment the run publishes before any coin opens: its layout and the frame-v3 root over its leaves
 under its live domain; `none` when its layout has none. -/
-def Session.commitment (s : Session) : Option LiveCommitment :=
+def Run.commitment (s : Run) : Option LiveCommitment :=
   match liveDomain s.scheme s.epoch s.families with
   | .ok dom => some ⟨s.scheme, s.epoch, s.families, Flock.FV3.root dom (s.leaves dom) Flock.Sha512.hash⟩
   | .error _ => none
 
-/-- The coins of family `label` the session released after it received `after`, concatenated in order: coin `i` of the
+/-- The coins of family `label` the run released after it received `after`, concatenated in order: coin `i` of the
 family for each `i` whose root its log shows received is `after`. -/
-def Session.released (s : Session) (label : String) (after : ByteArray) : ByteArray :=
+def Run.released (s : Run) (label : String) (after : ByteArray) : ByteArray :=
   match s.commitment with
   | none => .empty
   | some c =>
@@ -105,19 +105,19 @@ def Session.released (s : Session) (label : String) (after : ByteArray) : ByteAr
         | some p => acc ++ s.coins p
         | none => acc) .empty
 
-/-- The challenger devices: under each key, the sessions its holder ran and the auditor's ledger lines it signed, in
-order. -/
-structure Device where
-  sessions : ByteArray → List Session
+/-- A challenger device's history: under each key, the runs its holder ran and the auditor's ledger lines it signed,
+in order. -/
+structure History where
+  runs : ByteArray → List Run
   ledger : ByteArray → List Json
 
 /-- The key's LMS identifier, its public key's first 16 bytes. -/
 def ident (pk : ByteArray) : ByteArray := pk.extract 0 16
 
-/-- Everything the device signs under the key `pk`, in order: each session's record and close messages, and each of
+/-- Everything the device signs under the key `pk`, in order: each run's record and close messages, and each of
 its ledger lines' messages. -/
-def signedBy (dev : Device) (pk : ByteArray) : List ByteArray :=
-  ((dev.sessions pk).flatMap fun s => match s.commitment with
+def signedBy (dev : History) (pk : ByteArray) : List ByteArray :=
+  ((dev.runs pk).flatMap fun s => match s.commitment with
     | none => []
     | some c => (recordMessage (ident pk) s.host c).toOption.toList ++
         (closeMessage (ident pk) s.host c s.id s.log.length (logChain s.log) s.ended).toOption.toList) ++
@@ -126,11 +126,11 @@ def signedBy (dev : Device) (pk : ByteArray) : List ByteArray :=
     (ledgerMessage (ident pk) e.entry).toOption
 
 /-- The device signed `m` under the key `pk` (`signedBy`). -/
-def Signed (dev : Device) (pk m : ByteArray) : Prop := m ∈ signedBy dev pk
+def Signed (dev : History) (pk m : ByteArray) : Prop := m ∈ signedBy dev pk
 
-/-- The device's own ledger under `pk` opens window `w` (its open root) for the session `id`, under the ledger's v2
-schema, as a withheld session (`withheld: true`). -/
-def OpensOn (dev : Device) (pk : ByteArray) (w id : String) : Prop :=
+/-- The device's own ledger under `pk` opens window `w` (its open root) for the run `id`, under the ledger's v2
+schema, as a withheld run (`withheld: true`). -/
+def OpensOn (dev : History) (pk : ByteArray) (w id : String) : Prop :=
   ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.schema = LEDGER_SCHEMA ∧
     e.session = id ∧ getD (getD e.body "window") "root" = .str w ∧ getD e.body "withheld" = .bool true
 
@@ -295,11 +295,11 @@ def readHashed (key : ChallengerKey) (label : String) (coins : Json) : List Byte
     | _ => []
   ofSession ++ ofLedger ++ ofPins
 
-/-- Everything SHA-512 hashes as the device runs under `pk`: for each session its domain, its tree (every leaf and every
+/-- Everything SHA-512 hashes as the device runs under `pk`: for each run its domain, its tree (every leaf and every
 node of each level below the root), its record, close and release log, and each of its ledger lines. -/
-def deviceHashed (dev : Device) (pk : ByteArray) : List ByteArray :=
+def deviceHashed (dev : History) (pk : ByteArray) : List ByteArray :=
   let I := ident pk
-  ((dev.sessions pk).flatMap fun s =>
+  ((dev.runs pk).flatMap fun s =>
     domainHashed s.scheme s.epoch s.families ++
       match liveDomain s.scheme s.epoch s.families, s.commitment with
       | .ok dom, some c =>
@@ -319,13 +319,13 @@ def deviceHashed (dev : Device) (pk : ByteArray) : List ByteArray :=
 /-! ## The finder -/
 
 /-- What the finder outputs: two strings it hashed, or a signature it checked with the message it signs. -/
-inductive Witness where
+inductive Finding where
   | collision (x y : ByteArray)
   | forgery (m sig : ByteArray)
 
 /-- **A witness is a break**: two different strings with one SHA-512 digest, or an LMS signature that verifies under the
 key over a message the device never signed under it. -/
-def Witness.Valid (dev : Device) (key : ChallengerKey) : Witness → Prop
+def Finding.Valid (dev : History) (key : ChallengerKey) : Finding → Prop
   | .collision x y => x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
   | .forgery m sig => LmsVerifies key m sig ∧ ¬ Signed dev key.pub m
 
@@ -338,13 +338,13 @@ def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
 /-- **The finder**, one fixed computable function of the run for every prover: the first signature `drawCoins` checks
 under `key` in `coins` that verifies over a message the device didn't sign, else the first collision among the strings
 the reader hashes in `coins` and the device hashes under `key`. -/
-def findBreak (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) : Option Witness :=
+def findBreak (dev : History) (key : ChallengerKey) (label : String) (coins : Json) : Option Finding :=
   match (signatures key coins).find? fun x => lmsVerifies key x.1 x.2 && !((signedBy dev key.pub).contains x.1) with
   | some (m, sig) => some (.forgery m sig)
   | none => (collisionIn (readHashed key label coins ++ deviceHashed dev key.pub)).map fun (x, y) => .collision x y
 
 /-- **The break**: the finder, run on the record `coins` and the device, outputs a valid witness. -/
-def Break (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) : Prop :=
+def Break (dev : History) (key : ChallengerKey) (label : String) (coins : Json) : Prop :=
   ∃ w, findBreak dev key label coins = some w ∧ w.Valid dev key
 
 /-! ## The coins, as raw bits -/
@@ -354,8 +354,8 @@ and a draw reads them. -/
 def bitsOf (b : ByteArray) : List Bool :=
   b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit i
 
-/-- The bits of the coins of family `label` the session released after `after`, in order. -/
-def Session.releasedBits (s : Session) (label : String) (after : ByteArray) : List Bool :=
+/-- The bits of the coins of family `label` the run released after `after`, in order. -/
+def Run.releasedBits (s : Run) (label : String) (after : ByteArray) : List Bool :=
   bitsOf (s.released label after)
 
 /-- **The device's rounds in the causal game**: one round per coin it may release, each `8 * COIN_BYTES` raw bits
@@ -366,15 +366,15 @@ def oneStageRounds : List Nat := List.replicate MAX_COINS (8 * COIN_BYTES)
 
 /-- `DrawnByDevice` for the reader `read` in `drawCoins`' place. -/
 def DrawnByDeviceAt (read : ChallengerKey → String → String → ByteArray → Json → Flock.V ByteArray) : Prop :=
-  ∀ (dev : Device) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+  ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
     read key w label after coins = .ok ξ →
-      (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
         Break dev key label coins
 
 /-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
 from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
-after `after`, then `ξ` is the coins of `label` that a session of the device under `key` released after `after`, a
-session the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
+after `after`, then `ξ` is the coins of `label` that a run of the device under `key` released after `after`, a
+run the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
 def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
 
 /-! ## The target: a component's coins, from the device's log -/
@@ -401,15 +401,15 @@ structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
 break.** For every protocol whose check reads its coins through the challenger's reader (`ReadsChallenger`) and every
 challenger device: if `answer` accepts `a`, `b`, `e`, they decode to `p`, `c`, `ev`, and `answerAt` accepts them at
 the coins `ξ` the evidence's record shows; and where `p` and `c` name a challenger (`source`), `ξ` is the decoding of
-what a session of the device under its key released of the family after what they name, a session the device's own
+what a run of the device under its key released of the family after what they name, a run the device's own
 ledger opens on their window, or the fixed finder outputs a break from the record in `ev` and the device (`Break`). -/
 def CoinsFromLog : Prop :=
-  ∀ (P : Core.Protocol) (L : Core.Live P) (R : ReadsChallenger P L) (dev : Device) (a b e : ByteArray),
+  ∀ (P : Core.Protocol) (L : Core.Live P) (R : ReadsChallenger P L) (dev : History) (a b e : ByteArray),
     (P.answer a b e).verdict = .accept →
       ∃ p c ev ξ, (Core.canonicalJson a >>= P.params) = .ok p ∧ P.commitment b = .ok c ∧ P.evidence e = .ok ev ∧
         (P.answerAt L a b ξ e).verdict = .accept ∧
         ∀ d, R.source p c = some d →
-          (∃ s ∈ dev.sessions d.key.pub, OpensOn dev d.key.pub d.window s.id ∧
+          (∃ s ∈ dev.runs d.key.pub, OpensOn dev d.key.pub d.window s.id ∧
             R.decode (s.released d.label d.after) = ξ) ∨
           Break dev d.key d.label (R.record ev)
 
