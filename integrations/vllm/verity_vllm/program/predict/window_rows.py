@@ -587,6 +587,48 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
     return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
 
 
+def _scan(scan: IS.Class, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[IS.State]:
+    got = IS.scan(scan, list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
+    if got is None:
+        raise ValueError(f"the scan at {scan} refuses the warden's ingress rows to bucket {len(ingress) - 1}: a request it "
+                         f"can't hold (more than {scan.KI} prompt ids or {scan.KO} outputs) or rows that aren't the "
+                         "warden's")
+    return got[0]
+
+
+def scan_anchors(cls: WindowClass, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> dict[int, int]:
+    """Each request's anchor in the scan of ``ingress`` (`scan_state`'s): the bucket whose Programs start it (its slot's
+    ``occ`` bit 0 set in the state before it), by its ordinal q. ValueError where the scan refuses the rows."""
+    out: dict[int, int] = {}
+    for t, st in enumerate(_scan(cls.scan, ingress, outputs)):
+        for s in st.slots:
+            if s.occ & 1:
+                out.setdefault(s.q, t + 1)
+    return out
+
+
+def scan_state(cls: WindowClass, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]],
+               t0: int = 0) -> tuple[list[list[int]], list[int | None]]:
+    """The network certifier's scan as a window of ``cls`` from scan bucket ``t0`` reads it: its state rows
+    (`state_value`'s ``rows``, `ingress_scan.window_state`'s) and the request each class Program starts, slot k's the
+    ordinal q of the request whose Program starts at its anchor in its lane (``occ``'s bit 0 set in the row there,
+    `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the warden's registered ingress
+    rows ``ingress`` (a row a bucket, `warden_rows.window_rows`) from the empty state at bucket 0 to the window's last
+    row, each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses the rows."""
+    scan, n = cls.scan, t0 + cls.buckets - 1
+    if len(ingress) < n:
+        raise ValueError(f"the window from scan bucket {t0} reads the scan's states to bucket {n - 1}: give the ingress "
+                         f"rows to it, {n}, not {len(ingress)}")
+    states = _scan(scan, ingress[:n], outputs)
+    rows = IS.window_state(scan, [IS.encode(scan, s) for s in states], t0, cls.buckets)
+    at = {a: states[t0 + a - 1] if t0 + a else IS.empty(scan) for a in {cls.anchor(k) for k in range(cls.slots)}}
+    starts = []
+    for k in range(cls.slots):
+        s = at[cls.anchor(k)].slots[cls.lane(k)]
+        starts.append(s.q if s.occ & 1 else None)
+    return rows, starts
+
+
 def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
                   window: str) -> G.Registered:
     """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
@@ -611,4 +653,4 @@ def index_salt(key: bytes, index: int) -> bytes:
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served",
-           "Slot", "index_salt", "positions", "scan_slots", "standin_state", "state_value"]
+           "Slot", "index_salt", "positions", "scan_anchors", "scan_slots", "scan_state", "standin_state", "state_value"]

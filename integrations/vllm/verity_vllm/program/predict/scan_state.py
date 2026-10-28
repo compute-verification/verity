@@ -26,10 +26,11 @@ SCAN_STATE = IS.SCAN_STATE
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 
 
-def scan_class(lanes: int, outputs: int, every: int) -> IS.Class:
-    """The scan's class at a window class's lanes, outputs (KO) and timestep, on the class of record's cells; its delay
-    the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
-    return IS.Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN, D=WITHIN + every - 1, KO=outputs)
+def scan_class(lanes: int, outputs: int, every: int, prompt: int = 1024) -> IS.Class:
+    """The scan's class at a window class's lanes, outputs (KO), timestep and prompt ids (KI), on the class of record's
+    cells; its delay the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
+    return IS.Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN, D=WITHIN + every - 1, KO=outputs,
+                    KI=prompt)
 
 
 def words(cls: IS.Class) -> int:

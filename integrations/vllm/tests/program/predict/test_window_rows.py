@@ -2,12 +2,16 @@
 output rows from its slots' values. Pinned on `test_window_circuit`'s TINY class (2 slots, 4 prompt ids, 2 outputs: 5
 positions a Program) at its grain, TINY's bf16 checkpoint on the H200 (FA3's `Attention_v4`, the class 4,32,4's
 attention; its exact-int8 window waits on its norm's reader, `test_window_circuit_int8`), with random weights registered
-under a committer's key and a scan state whose row at bucket 0 carries the two slots' requests.
+under a committer's key and a scan state whose row at bucket 0 carries the two slots' requests; and the network
+certifier's scan of warden traffic (`scan_state`), which starts each request in the slot its anchor and lane give, at
+TINY's slots and the class of record's.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +19,7 @@ import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, SPLIT, SPLIT_GRAIN, state_row
+from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
 from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
@@ -22,6 +27,9 @@ from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 
+from verity.core.protocols.certifier import ingress_scan as IS
+from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
@@ -228,6 +236,71 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
     assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
     assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
+
+
+def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
+    """Warden-form id requests (`active.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``,
+    request i answered ids 100 + i and 200 + i, through the warden at ``cls``'s scan schedule for 3 link-windows of its
+    buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
+    ordinal."""
+    spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent / "tests" / "scan_traffic.py")
+    ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ST)
+    scan = cls.scan
+    params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
+                            queue=scan.lanes, window=cls.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
+                            egress_cells=scan.KO + 1, every=scan.EVERY)
+    reqs = [id_request(model="org/m", user=f"user-{i}", prompt=list(p), max_tokens=2, seed=i, temperature=0.0, top_p=1.0,
+                       frame_bytes=scan.B, offset=0) for i, p in enumerate(prompts)]
+    served = ST.serve(params, reqs, arrivals, [1 << 20] * len(reqs), [(100 + i, 200 + i) for i in range(len(reqs))], 3)
+    return served.rows()[0], served.outputs
+
+
+def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
+    """`scan_state` on warden traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries at buckets 0 and 16
+    of a 32-bucket window, TINY's caps): three requests admitted at bucket 0 are anchored at bucket 16 (WITHIN 12 on), in
+    lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth admitted at 5 is
+    anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each started slot's lane
+    of the row at its anchor holds its prompt and every other none; the rows are the scan's, from the empty state's, and
+    carry what the scan does past the slots' rows, so a stand-in (`standin_state`) giving the same slots the same rows
+    is another value. A prompt past the class's prompt cap (the scan's KI) and rows short of the window's last are
+    refused."""
+    prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
+    ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
+    scan = SLOTS_CLASS.scan
+    assert WR.scan_anchors(SLOTS_CLASS, ingress, outputs) == {1: 16, 2: 16, 3: 16, 4: 32}
+    for w, want in ((0, [None, 1, None, 2, None, 3, None, None]), (1, [None] * 6 + [4, None])):
+        rows, starts = WR.scan_state(SLOTS_CLASS, ingress, outputs, w * SLOTS_CLASS.buckets)
+        assert starts == want and len(rows) == SLOTS_CLASS.buckets
+        heads = []
+        for k, q in enumerate(starts):
+            p = prompts[q - 1] if q else ()
+            assert IS.token_row(scan, IS.decode(scan, rows[SLOTS_CLASS.anchor(k)]))[SLOTS_CLASS.lane(k)] == \
+                ((1, len(p), p) if q else (0, 0, ()))
+            heads.append(([int(bool(q)), len(p), *p, *[0] * (SLOTS_CLASS.prompt - len(p))], 2 if q else 0))
+        got = WR.state_value(PROGRAM, SLOTS_CLASS, rows, KEY, w, window=RUN)
+        standin = WR.standin_state(PROGRAM, SLOTS_CLASS, heads, KEY, w, window=RUN)
+        assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
+    assert rows[0] != IS.encode(scan, IS.empty(scan))
+    assert WR.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
+    with pytest.raises(ValueError, match="refuses the warden's ingress rows"):
+        WR.scan_state(WC.WindowClass(8, 3, 2, lanes=4, every=16), ingress, outputs)
+    with pytest.raises(ValueError, match="give the ingress rows to it, 63, not 40"):
+        WR.scan_state(SLOTS_CLASS, ingress[:40], outputs, SLOTS_CLASS.buckets)
+
+
+def test_the_scans_state_value_gives_the_window_its_slots(window):
+    """The window's scan state as the network certifier's scan gives it: `LANES`' two requests, admitted at bucket 0 of
+    TINY's 16-bucket windows, are anchored at bucket 16, window 1's one boundary, in lanes 0 and 1, so class Programs 0
+    and 1 start them; the scan's rows, committed (`state_value`), give each slot its row and head as the stand-in's
+    `STATE` does (`scan_slots`), and `Rows` takes the scan's value with the slots of those rows."""
+    low, _f, values, _w, slots = window
+    ingress, outputs = _traffic(CLASS, [ids[:lp] for _o, lp, _m, ids in LANES], (0, 0))
+    rows, starts = WR.scan_state(CLASS, ingress, outputs, CLASS.buckets)
+    assert starts == [1, 2]
+    v = WR.state_value(PROGRAM, CLASS, rows, KEY, 1, window=RUN)
+    assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 

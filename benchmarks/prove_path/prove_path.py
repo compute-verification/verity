@@ -111,13 +111,16 @@ Two kinds of committed run:
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
   requests).
 * **window-commit** (the prover): the served window committed as that Circuit's units (`window_commit_of_advice`):
-  slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
+  where the certifier front kept a warden run under the serve dir, slot k is the request whose Program the network
+  certifier's scan of it starts there (`kept_scan`), its row (occupancy, prompt length, ids) the scan's, else the advice's
+  k-th request, its row its ingress prompt; its values its sealed
   record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
   checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints`` where given) and opened against the committed weights
   root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
-  any other's reads are free; a stand-in scan state a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
+  any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
+  (`window_rows.standin_state`), a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
   class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
@@ -1325,16 +1328,96 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
+@contextlib.contextmanager
+def network_traces() -> Iterator[None]:
+    """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
+    its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
+    path, replay = list(sys.path), sys.modules.pop("replay", None)
+    sys.path.insert(0, str(HERE.parent / "network_traces"))
+    try:
+        yield
+    finally:
+        sys.path[:] = path
+        sys.modules.pop("replay", None)
+        if replay is not None:
+            sys.modules["replay"] = replay
+
+
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
+    """The network certifier's scan of the warden run the certifier front kept under ``serve_dir``
+    (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
+    state rows and slot k's request, the I1 id (its warden-form request's ``user``) of the one whose Program starts there,
+    None for a slot no request starts (`window_rows.scan_state`). The window is the link-window, of the class's
+    buckets, whose Programs start its requests (their anchors, `window_rows.scan_anchors`); the scan reads the warden's
+    certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`). None where the
+    front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
+    from verity.core.protocols.certifier import warden_rows as WRW
+    from verity_vllm.program.predict import window_rows as WRS
+
+    with network_traces():
+        import certifier_piece as CP
+        import warden_chain as WCH
+        import warden_serve as WSV
+
+    if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
+        return None
+    unpacked = None
+    try:
+        run = CP.kept_run(serve_dir)
+        unpacked, warden = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
+        _, params = WCH.deployment(warden)
+        io = WCH.io(warden)
+        records = WSV.read_records(WCH.witness(warden), params)
+    except (SystemExit, CP.NotRun) as e:
+        raise ValueError(f"the certifier front's kept warden run: {e}") from None
+    finally:
+        if unpacked is not None:
+            CP.rm(unpacked)
+    T = params.window
+    cls.scan.serves(params)
+    if T != cls.buckets:
+        raise ValueError(f"the kept warden run's link-windows are {T} buckets, not a window of class {cls}'s "
+                         f"{cls.buckets}: serve at the class's scan schedule")
+    if not io["accepted"]:
+        raise ValueError(f"the kept warden run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
+    by = {r["user"]: r for r in io["records"]}
+    if missing := [u for u in users if u not in by]:
+        raise ValueError(f"{len(missing)} of the window's {len(users)} requests are no certified request: the window "
+                         "served traffic the warden didn't see")
+    if None in (release := [by[u]["release"] for u in users]):
+        raise ValueError("a request of the window has no END in the kept warden run's ingress")
+    windows = sorted(r.window for r in records[WSV.INGRESS])
+    if windows != list(range(len(windows))):
+        raise ValueError(f"the kept warden run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
+    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+    outputs = {r["stream"]: r["output"] for r in io["records"]}
+    anchors = WRS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
+    at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
+    if len(at) != 1 or None in at:
+        raise ValueError(f"the window's requests start in the scan's link-windows {sorted(map(str, at))}, not one")
+    (w,) = at
+    rows, starts = WRS.scan_state(cls, ingress, outputs, w * T)
+    user = {r["stream"]: r["user"] for r in io["records"]}
+    if bad := [q for q in starts if q is not None and q not in user]:
+        raise ValueError(f"the scan starts connections {bad[:4]}, whose requests the warden's certified I/O doesn't hold")
+    return rows, [None if q is None else user[q] for q in starts]
+
+
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
-    the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
+    its request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    slots' rows and ``max_tokens`` give (`window_rows.standin_state`) the window's own value, a stand-in for the network
-    certifier's, whose reads are free. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
-    population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
-    are free (``free``), and the seconds each part took."""
+    window's own value. Where the certifier front kept a warden run under the serve dir, the scan state is the network
+    certifier's scan of it (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
+    Program the scan starts there, its row the scan's (refused where a served request isn't started in the window, one
+    started isn't served, or the scan's prompt or ``max_tokens`` isn't the served one); else slot k holds the advice's
+    k-th request and the scan state is a stand-in, the rows its slots' rows and ``max_tokens`` give
+    (`window_rows.standin_state`). Refused for a registration of another model. -> the window's run root, its circuit
+    record's SHA-512, its population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered
+    weights whose root the window's is (``held``) and those it isn't, whose reads are free (``free``), and the seconds
+    each part took."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1388,15 +1471,35 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units])
+    state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
+    lap("scan")
+    if state is None:
+        placed, heads = [units[k] if k < len(units) else None for k in range(cls.slots)], None
+    else:
+        by = {u.id: u for u in units}
+        starts = scanned[1]
+        if len({s for s in starts if s is not None}) != sum(s is not None for s in starts):
+            raise ValueError("the scan starts one request in two slots of the window")
+        if unplaced := set(by) - set(starts):
+            raise ValueError(f"{len(unplaced)} of the window's {len(by)} served requests start in none of its slots: the "
+                             "scan anchors them in another window")
+        if extra := sum(s is not None and s not in by for s in starts):
+            raise ValueError(f"the scan starts {extra} certified requests in the window that it didn't serve")
+        placed, heads = [None if s is None else by[s] for s in starts], WRS.scan_slots(low, state.rows)
     slots, rows = [], []
-    for k in range(cls.slots):
-        u = units[k] if k < len(units) else None
-        if u is None:
-            row, max_tokens, served_ = [0] * (cls.prompt + 2), 0, None
-        else:
+    for k, u in enumerate(placed):
+        row, max_tokens, served_ = [0] * (cls.prompt + 2), 0, None
+        if heads is not None:
+            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
+        if u is not None:
             body = compiler.inner.ingress[u.id]
-            ids, max_tokens = [int(x) for x in body["prompt"]], int(body["max_tokens"])
-            row = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
+            ids = [int(x) for x in body["prompt"]]
+            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
+            if heads is None:
+                row, max_tokens = want, int(body["max_tokens"])
+            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
+                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
             pi = ProgramIndex(p.progs[u.id], program_dir=p.dirs[u.id])
             served_ = WRS.Served.of_record(pi, store, u.id, p.arrivals[u.id])
         slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
@@ -1408,7 +1511,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run)}
+              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run) if state is None
+              else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
     filled = WRS.Rows(low, slots, values)
@@ -1426,6 +1530,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
+            "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
             "seconds": seconds}
 
