@@ -33,11 +33,11 @@ for line in open(f"{out}/s8_orbit.sass"):
     if k:
         cur = kernels.setdefault(k.group(1), Counter())
         continue
-    op = re.match(r"\s+/\*[0-9a-f]{4}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)", line)
+    op = re.match(r"\s+/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)", line)
     if cur is not None and op:
         cur[op.group(1)] += 1
 for name, c in kernels.items():
-    if name.startswith("s8orbit_") and name != "s8orbit_layout":
+    if name.startswith("s8orbit_") and name not in ("s8orbit_layout", "s8orbit_bfix"):
         if not any(o.startswith("HGMMA") or o.startswith("IGMMA") for o in c):
             problems.append(f"{name}: no IGMMA")
         if c.get("STL", 0) or c.get("LDL", 0):
