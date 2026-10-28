@@ -71,7 +71,7 @@ end Partition
 `r`'s salts, framed by `F` and hashed by `H`, has root `root`. The commitment's statement is that some `r` does; the
 verifier holds `Q` and `root`, never `r`. -/
 def Commits {C : Circuit} (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
-    (r : Advice.Commitment C) (root : Digest) : Prop :=
+    (r : Advice.Committed C) (root : Digest) : Prop :=
   r.P.Meets Q ∧ r.root H F A = root
 
 /-- The circuit's computed gates grouped into its root Calls `0, …, m − 1`, with the gates the Calls return. A value read

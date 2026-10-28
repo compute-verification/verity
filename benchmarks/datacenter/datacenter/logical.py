@@ -344,7 +344,7 @@ class Registration:
     `root` is public, and so is the number of profiles; the values, salts and profiles are the developer's."""
 
     values: dict[str, int | tuple[int, ...]]
-    rows: advice.Commitment
+    rows: advice.Committed
     #: the digests of the occupancy profiles the developer may choose from (`profile_digest`), which the root binds;
     #: none: one profile, the placement's own
     profiles: tuple[bytes, ...] = ()
@@ -389,7 +389,7 @@ def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]
     return _committed[program]
 
 
-def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] | None = None) -> advice.Commitment:
+def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] | None = None) -> advice.Committed:
     """The hiding commitment to a run's values (`committed`), a row per element: its `root` is public, its rows and salts
     witness."""
     rs = committed(program)

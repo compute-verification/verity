@@ -126,14 +126,14 @@ def Rows.Decodes {C : Circuit} (A : Rows C) : Prop :=
 
 /-- A commitment, the prover's side of an advice root: a partition of `C` into `n` units, and the salt of each of its
 rows (the prover's choice). Only its root goes public. -/
-structure Commitment (C : Circuit) where
+structure Committed (C : Circuit) where
   n : ℕ
   P : Partition C n
   salt : ℕ → List UInt8
 
-namespace Commitment
+namespace Committed
 
-variable {C : Circuit} (A : Rows C) (r : Commitment C)
+variable {C : Circuit} (A : Rows C) (r : Committed C)
 
 /-- The commitment's root: the advice tree over its partition's rows under its salts. -/
 def root : Digest := Advice.root H F (A.rows r.n r.P) r.salt
@@ -141,6 +141,6 @@ def root : Digest := Advice.root H F (A.rows r.n r.P) r.salt
 /-- Every string the commitment hashes from its rows up to its root. -/
 def hashInputs : Finset (List UInt8) := Advice.hashInputs H F (A.rows r.n r.P) r.salt
 
-end Commitment
+end Committed
 
 end Verity.Advice
