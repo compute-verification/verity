@@ -14,7 +14,7 @@ The pins are `vllm_moe.MOE_GEMM_PINS`' kernel body with the FP8 numeric constexp
 (`frontend.targets.moe_expert_fp8_launch_dot`; a target or tile without a registered step refuses by name).  The tile is
 the one vLLM picks: on a batch-invariant target `get_default_config`'s fixed BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB
 False; on cc 9.0 without batch invariance the tuned config's (fused_moe.py:1422-1451), with SWAP_AB =
-`enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) and DOT selected by #1944's
+`enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, fused_moe/utils.py:628-633) and DOT selected by the
 `fp8_moe.sm90_dot` rule (MMAv2 at the small tiles, QGMMA elsewhere): the acceptance rule is
 `frontend.targets.moe_fp8_tuned_tile_refusal`, which the fold applies too.  The Definitions read only KB = BLOCK_SIZE_K and SWAP.
 The schedule (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
@@ -214,7 +214,7 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
                                    "group_size G a power of two dividing I; scale_ub None"),
                     evidence_domain="structural; numerics: SiluMulFp8BlockQuant_v1 (registry.fp8_moe, model-untested: not on "
                                     "vLLM's served cc 9.0 path; glm53_block_fp8_capture/v3 compared it on cc 9.0 at "
-                                    "VLLM_USE_DEEP_GEMM=0, run r20261014-092222-e32d)")
+                                    "VLLM_USE_DEEP_GEMM=0)")
 
     def targets(self):
         return targets_for("silu_and_mul_per_block_quant")

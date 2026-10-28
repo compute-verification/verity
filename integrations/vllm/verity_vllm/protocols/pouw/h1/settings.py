@@ -85,14 +85,14 @@ def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
 
 def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int = 0) -> dict[str, Any]:
     """`fills`' settings from the built ``vllm.LLM`` ``llm``: its in-process model runner, where the scheduler's admissions
-    arrive (`engine_profile.get_model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
+    arrive (`engine.handle.model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
     this process, the Lean verifier of record's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
     Coins held in the serving process credit nothing (`pouw_h1.IN_PROCESS`)."""
     keys = fills(scheme, settings)
     out: dict[str, Any] = {}
     if "runner" in keys:
-        from verity_vllm.engine.engine_profile import get_model_runner
-        out["runner"] = get_model_runner(llm)
+        from verity_vllm.engine.handle import model_runner
+        out["runner"] = model_runner(llm)
     if "coins" in keys:
         out["coins"] = Challenger(epoch, verifier.coins)
     if "rounds" in keys:

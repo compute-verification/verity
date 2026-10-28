@@ -40,7 +40,7 @@ def definition_digest(d: dict[str, Any]) -> str:
 
 #: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
 #: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
-#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count on #101) -- else at WORD_SAMPLES values; the rest
+#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count) -- else at WORD_SAMPLES values; the rest
 #: are interpolated
 WORD_EXACT = 320
 WORD_SAMPLES = 12

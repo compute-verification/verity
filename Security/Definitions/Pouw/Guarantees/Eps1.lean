@@ -3,7 +3,7 @@ import Definitions.Pouw.Eps1.M3
 /-!
 # Dither's CUDA-core lower bounds in model M3 (trusted)
 
-EPS1-QSTAR's proved lower bounds (note:20261017T0344Z-draft-eps1-qstar, (b)), over `Pouw.Eps1`'s model M3, each
+The proved lower bounds, over `Pouw.Eps1`'s model M3, each
 proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`:
 
 * `WordLocalZero`: Theorem B at the zero instance, a word-local program costs at least 4 instructions a word;
@@ -12,11 +12,11 @@ proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`:
   `1 + (32 − w)/(65·d)` slots a word when a slot writes at most `d` words.
 
 Theorem C's packed form, `(1 + 28/27)·L·m·n` instructions, is retired: its paper proof caps a writer's creations at 4,
-and a writer can create 8 (note:20261018T0230Z-draft-floors). `ClassPSlots` takes the cap as its parameter `w`.
+and a writer can create 8. `ClassPSlots` takes the cap as its parameter `w`.
 
 Free words (functions of one side alone) cost nothing, and the fold is not counted. M3 has no data-dependent
 addressing and each instruction writes one 32-bit word from at most three, so these bound the gather-free `q*` in
-M3; that the ISA's instructions are such is SCALAR-ROUTE's business, not these statements'.
+M3; that the ISA's instructions are such is not these statements' business.
 -/
 
 namespace Pouw.Guarantees.Eps1

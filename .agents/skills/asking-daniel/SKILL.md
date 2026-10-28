@@ -3,7 +3,7 @@ name: asking-daniel
 description: >
   How to ask Daniel for a decision in Verity: one short Notion page per ask in the Asks for Daniel database, written to a
   fixed template with LaTeX for the math, plus a card in #ask-daniel that notifies him and links the page. Covers what
-  needs Daniel (keys, access, and what a guarantee says or rests on), the page template, `research msg ask-daniel --page
+  needs Daniel (what a guarantee says or rests on, and what only his own accounts can do), the page template, `research msg ask-daniel --page
   FILE.md` (or a page made with the Notion MCP and `--link`), iterating on his page comments, `research msg ask-daniel
   pages` to see his decisions and comments, recording a decision (`resolve`, the page's Status, the friction skill's
   rulings), and when a default may apply. Use when a lane needs Daniel's decision, writes or revises an ask, is woken by
@@ -12,35 +12,29 @@ description: >
 
 # Asking Daniel
 
-An ask is a **page** in the [Asks for Daniel](https://app.notion.com/p/914ab9399fe44f79ae19ff05db87e1fa) Notion database,
-where Daniel reads it, comments to iterate, and decides; and a **card** in `#ask-daniel` that notifies him and links the page
-(Daniel, 18 Oct: the cards had too little context, and math doesn't read in Slack). The registry's `#ask-daniel` entry holds the
-database's URL and data source (`pages`). A coordinator asks directly, one question per page; a worker asks its coordinator.
+An ask is a **page** in the Asks for Daniel Notion database (Notion's search finds it by that title),
+where Daniel reads, comments and decides, and a **card** in `#ask-daniel` that mentions him and links the page (the
+registry's `#ask-daniel` `pages` holds the database's URL and data source). A coordinator asks, one question a page; a worker asks its coordinator. Every ask gets
+a card: a decision waiting in a note or a thread waits forever.
 
 ## Before asking
 
-Only keys and claims need him (8 Oct, narrowed 13 Oct): access and keys, and what a guarantee says or rests on. Anything else,
-spend included, is its owner's call, and his standing rulings stand until he reverses them. Check the recorded rulings first
-(`AGENTS.md`, the skills, "Standing rulings" in `.agents/skills/friction/SKILL.md`): if one covers the case, follow it.
-A question whose answer follows from what the system already is isn't an ask either. ASK-112 asked which circuit a
-templated unit's theorem names, and the answer was the circuit its template unrolls to, which is what the IR is for (Daniel,
-26 Oct).
+Only claims and his own clicks need him (the team skill's "Working principles"): keys and access between our own
+machines and accounts are the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
+skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
+an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 
-Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't keys or access
-goes on its page already decided: Status *Decided by lane*, Choose set to your pick, and Decision "Provisionally accepted
-(Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and
-`--provisional` (implied by a `--note` starting "Provisionally accepted"), so the card says your lane decided, not Daniel, and act
-on it; he reviews them as a batch in the database's "Provisional, to review" view and can reverse any. On a page that does
-wait on him, leave Choose empty: a Choose there reads as his pick.
-
-A decision that waits in a note or a thread waits forever: every ask gets a card, which mentions him (1 Oct).
+An ask that isn't a click only he can make goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
+"Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
+that option and `--provisional` (implied by a `--note` starting "Provisionally accepted"), so it says your lane decided,
+and act on it; he reviews these in the "Provisional, to review" view and can reverse any. A page that waits on him leaves
+Choose empty: a Choose reads as his pick.
 
 ## Write the page
 
-Write it to this template, in Notion-flavored Markdown: inline math as ``$`\gamma \le 0.01`$`` (the backticks inside the
-dollars are required), display math in `$$` blocks, tables in `<table header-row="true">`, no Slack mrkdwn. `research msg ask-daniel --page` refuses a
-page that lacks a section or reorders them, and adds the yellow reply callout if the page has none. A page made with the
-Notion MCP needs it too.
+Notion-flavored Markdown: inline math ``$`\gamma \le 0.01`$`` (the inner backticks are required), display math in `$$`
+blocks, tables in `<table header-row="true">`, no Slack mrkdwn. `ask-daniel --page` refuses a missing or reordered
+section and adds the reply callout if absent; a page made with the Notion MCP needs it too.
 
 ~~~markdown
 <callout icon="❓" color="gray_bg">
@@ -77,19 +71,16 @@ Dated lines, newest last, or "None.".
 Links: notes (GitHub research-notes URLs), PRs, branches, Lean declarations, runs, Linear.
 ~~~
 
-- **Plain English first, then the math.** Define every term and symbol on first use. Daniel knows the field, not this week's
-  codenames: explain or drop a red-team round's name, a row number, a worker's name.
-- **Short:** about 400 to 900 words, one screen of options. Detail goes behind a link in Sources.
-- **The page is current.** A correction or new data edits the page in place (the numbers, the options, the recommendation)
-  and adds a dated line under "Updates since the card". Don't stack addenda in the card's thread.
-- **Exact statements.** A claim ask shows the statement or premise as it would enter the lock, in LaTeX, with its Lean name.
-- **Price the design the rules want,** not just tweaks to today's design. ASK-122 priced three anchor spacings and never
-  all-private fixed slots, which Daniel then chose (26 Oct).
+Plain English first, then the math, every term and symbol defined on first use: Daniel knows the field, not this week's
+codenames (a red-team round, a row number, a worker). About 400 to 900 words, one screen of options, detail behind links.
+A correction or new data edits the page in place, with a dated line under "Updates since the card", never an addendum in
+the thread. A claim ask shows the statement or premise as it would enter the lock, in LaTeX, with its Lean name. Price the
+design the rules want, not just tweaks to today's.
 
 ## Post it
 
-With `$NOTION_API_KEY` set (a Notion connection's token, shared on the database), one command makes the page, posts the card
-linking it, and names the card on the page:
+With `$NOTION_API_KEY` (a Notion connection's token, shared on the database), one command makes the page, posts the card
+and names the card on the page:
 
 ~~~bash
 research msg ask-daniel --as memory-accounting --kind default --area 'Claim or assumption' \
@@ -99,41 +90,32 @@ research msg ask-daniel --as memory-accounting --kind default --area 'Claim or a
 # -> "page <url>" on stderr, then "<id> <ts> <permalink>"; subscribe_slack_thread(channelId=<#ask-daniel id>, threadTs=<ts>)
 ~~~
 
-Without the token, make the page with the Notion MCP: `notion-create-pages` with parent
-`{"data_source_id": "9c204dab-e175-407f-b18d-bc3b3bddec61"}`, the properties below and the template as content. Then post the
-same command with `--link <page url>` in place of `--page`/`--area`, and set the page's Card ID and Slack card from its output.
-`--link` takes only a Notion page.
+Without it, make the page with the Notion MCP (`notion-create-pages`, parent `{"data_source_id":
+"9c204dab-e175-407f-b18d-bc3b3bddec61"}`, the template as content, and the properties Ask, Status *Waiting on Daniel*,
+Lane (your handle), Kind, Area, Recommendation, If no answer, Deadline, Lane checked (yes once you've read it as Daniel will), Asked by
+(your agent's URL)), run the same command with `--link <page url>` for `--page`/`--area`, and set the page's Card ID and
+Slack card from its output. If the card route fails, `research msg send --as <you> --to @daniel --text '... <page url>'`
+mentions him too.
 
-The card's fields are its question in one line, why it matters in a sentence or two (the page has the rest), 2 to 5 options
-with one recommended, the default, and a deadline in Pacific time at most 7 days out. **Blocking** is for access and keys:
-nothing happens until he decides. **Default** applies at the deadline unless he comments or decides.
-
-The page's properties: Ask (the question), Status (Waiting on Daniel), Lane (your handle), Kind, Area (Claim or assumption,
-Access or keys, Machines or spend, Process, Research direction), Recommendation, If no answer, Deadline, Lane checked (yes,
-once you've read the page as Daniel will), Asked by (your agent's URL), Card ID, Slack card.
+The card's question is one line and its why a sentence or two. **Blocking** is for a click only he can make: nothing
+happens until he makes it. **Default** applies at the deadline unless he comments or decides.
 
 ## Iterate and record
 
-- **See what changed:** `research msg ask-daniel pages --as <you>` lists your asks' pages edited in the last day (`--hours H`)
-  with Status, Decision and the newest comment. Run it on every wake, and keep a 30-minute timer while you have an open ask.
-  Top relays decisions and comments to your inbox too, but don't wait on it.
-- **A comment** from Daniel, or his text in the yellow "Your reply" callout: revise the page, reply to the comment (under his callout text), add a line under "Updates since the card", and set Status
-  back to Waiting on Daniel if he set Revising. Start a reply with your handle (`@memory-accounting:`): the Notion MCP writes as
-  Daniel's own account.
-- **A decision** is the page's Status: **Approved** takes the recommendation; **Decided otherwise** takes what he wrote in
-  Decision. A button or a thread reply on the card counts the same: set the page's Status to match. Record it on the card with
-  `research msg ask-daniel resolve <id> --choice <value> --note '<page url>'` (only the card's asker may), and as a ruling for
-  its class of case, where the next asker will read it (friction skill §3). `status` or `resolve` on a decided card rings
-  @top's inbox once with the outcome, for Daniel's decisions log: file no TOP issue just to log it (COMM-34).
-- **A default** applies at the deadline only if he hasn't commented since the page was posted and Status isn't Revising: a
-  comment pauses it. When it applies, set Status to Default applied. Withdrawn is for an ask that events overtook.
+- **Every wake**, `ask-daniel pages --as <you>` lists your asks' pages edited in the last day (`--hours H`) with Status,
+  Decision and newest comment; keep a 30-minute timer while an ask is open. Top relays these too; don't wait on it.
+- **A comment**, or his text in "Your reply": revise the page, reply under his text starting with your handle
+  (`@memory-accounting:`; the Notion MCP writes as him), add an "Updates since the card" line, and set Status back to
+  Waiting on Daniel if he set Revising.
+- **A decision** is the Status: **Approved** takes the recommendation, **Decided otherwise** his Decision text; a button
+  or thread reply on the card counts the same, and you set Status to match. Record it with `resolve` (only the asker may)
+  and as a ruling for its class of case where the next asker reads it (friction skill §3). `status` or `resolve` on a
+  decided card rings @top once for Daniel's decisions log: file no issue to log it.
+- **A default** applies at the deadline only if he hasn't commented since posting and Status isn't Revising; then set
+  Default applied. Withdrawn is for an ask that events overtook.
 
 ~~~bash
 research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at"; exit 0 once decided
-                                                              # --wait polls 20 min at most: still pending, it exits 79; end your turn
 research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]
 research msg ask-daniel resolve <id> --choice <value> --note '<page url or his reply>'
 ~~~
-
-If the card route fails, post the same question with `research msg send --as <you> --to @daniel --text '... <page url>'`,
-which mentions him too.

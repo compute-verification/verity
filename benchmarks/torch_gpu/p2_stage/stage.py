@@ -34,7 +34,7 @@ try:
 except ImportError:
     import layout as L  # type: ignore[no-redef]
 
-from p2_v1 import gpu  # noqa: E402  (layout put benchmarks/pous on the path)
+from p2_v1 import gpu
 
 P_BYTES = L.SPEC.p.to_bytes(L.ROW, "big")
 WIDE, PADDING = 1 << 2, 1 << 3

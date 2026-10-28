@@ -4,7 +4,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 /-!
 # NCI over threads, each value charged once over its copies: the named assumption
 
-`WeightsSupportFmt` is false at the deployed point (compute-accounting's NCI-FALSIFY, 19 Oct 2026): on weights a few
+`WeightsSupportFmt` is false at the deployed point: on weights a few
 AdamW steps past the checkpoint, on a weight's fprop and dgrad copies, and at llama-3-405b's fan-out.
 `WeightsSupportFmt2` restates it with weights charged per source, a fan-out bound in place of the margin, `e` per model,
 and the counted multiplications off weights fewer than `k₀` steps from the baseline. It is not signed off.
@@ -37,7 +37,7 @@ It is `WeightsSupportFmt` with four changes, at the deployed point (`d = 2048`, 
   gate-and-up subcircuit over 300,000 tokens is charged 1.597·10⁷ bits against at most 1.947·10⁷; three copies of
   each of deepseek-v3's dense inputs would need 55,414 (55,494).
 * It claims nothing of counted multiplications on weights fewer than `k₀` AdamW steps past `θ`, which `θ` pins to an
-  interval. Under compute-accounting's interval model one token's fprop on a DeepSeek-V3 128 × 128 E4M3 block refutes
+  interval. Under the interval model one token's fprop on a DeepSeek-V3 128 × 128 E4M3 block refutes
   it below `k₀` = 2, 4 and 7 steps at lr 2.2·10⁻⁴ and σ = 0.006, 0.01 and 0.02 (4, 5 and 9 when `|m₀|/√v₀` is
   gradient noise's 0.23), below 18 to 61 at 2.2·10⁻⁵, 53 to 175 at 7.3·10⁻⁶, and 83 to 151 in warmup from the
   initialization. A subcircuit that reads the block's copies at several consecutive steps, one token a step, needs

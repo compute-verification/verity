@@ -66,6 +66,7 @@ def stand_ins(monkeypatch):
     returns the profiles the Commit's guard was given."""
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import handle
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC
     from verity_vllm.pipeline import gpu_lease as GL
@@ -80,7 +81,7 @@ def stand_ins(monkeypatch):
         vllm.LLM = llm
         monkeypatch.setitem(sys.modules, "vllm", vllm)
         for owner, name, value in [(prof, "apply_env", lambda: {"VLLM_BATCH_INVARIANT": "1"}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
-                                   (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (prof, "get_model_runner", lambda llm: 1 / 0),
+                                   (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (handle, "model_runner", lambda llm: 1 / 0),
                                    (va, "load_workload", lambda path, max_tokens: json.loads(json.dumps(WORKLOAD))),
                                    (va, "target_of_workload", lambda wl, *a: target), (va, "case_of", lambda wl, case: case),
                                    (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (va, "versions_doc", lambda eng: {}),

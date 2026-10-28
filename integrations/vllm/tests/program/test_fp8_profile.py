@@ -1,8 +1,8 @@
-"""[R15 fp8] The block-scaled FP8 / Qwen3 eager Match profile: `dense_generic` derives it from the checkpoint's config.json (no
+"""The block-scaled FP8 / Qwen3 eager Match profile: `dense_generic` derives it from the checkpoint's config.json (no
 per-model module), the weights Record carries the e4m3 weights + f32 block scales + per-head q/k norm weights, and the two FP8
 patterns resolve the recorded custom ops (`_C.per_token_group_fp8_quant`, `_C.cutlass_scaled_mm` blockwise) into the registered
 families -- and refuse every knob / target / layout the pinned Definitions do not cover.  Op names, schemas and argument orders are
-those of the cp-h100 capture `out/gen/sweep/evidence/fp8/` (Qwen3-4B-Instruct-2507-FP8, vLLM d9105ea80, VLLM_USE_DEEP_GEMM=0)."""
+those of the H100 capture (Qwen3-4B-Instruct-2507-FP8, vLLM d9105ea80, VLLM_USE_DEEP_GEMM=0)."""
 from __future__ import annotations
 
 import hashlib
@@ -15,8 +15,9 @@ from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns import ALIAS_OPS, classify_transparent
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
-from verity_vllm.engine.profiles import dense_generic as dg, generic
-from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.observe.fold.profiles import generic
+from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Transparent, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
 
@@ -61,7 +62,7 @@ def test_qwen3_fp8_role_derives_a_profile_with_the_fp8_patterns_first():
     assert "RMSNormTritonLaunch" in names and "GemmLaunch" in names
     assert p.notes["fp8"]["families"] == ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
                                           "ScaledMmFp8Block_v1{K,N,G})"]
-    mod = importlib.import_module(f"verity_vllm.engine.profiles.dense_{ROLE}")
+    mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.dense_{ROLE}")
     assert mod.PROVENANCE["QK_NORM"] == "hand" and mod.PROVENANCE["FP8_BLOCK"] == "hf-config"
 
 
@@ -247,7 +248,7 @@ def test_cutlass_scaled_mm_refuses_non_hopper_targets_bias_and_other_scale_shape
     r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(cc=(8, 9)))          # L40S / Ada: another FP8 GEMM, no Definition
     assert isinstance(r, Unsupported) and r.detail["compute_capability"] == [8, 9]
     assert r.reason == "blockwise FP8 linear on ada (8.9): this target's _C.cutlass_scaled_mm blockwise kernel has no registered Definition"
-    # the record must attest the kernel class: a header without the read-back (pre-R15 capture) or with another class is refused
+    # the record must attest the kernel class: a header without the read-back (an older capture) or with another class is refused
     r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(kernel=None))
     assert isinstance(r, Unsupported) and "does not attest CutlassFp8BlockScaledMMKernel" in r.reason and r.detail["fp8_block_gemm_kernel"] is None
     r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(kernel="FlashInferFp8DeepGEMMDynamicBlockScaledKernel"))

@@ -5,7 +5,7 @@ whose salt is not its device's (`Verifier`).
 
 The verifier (`Verifier`, `Window`, `ChallengerState`) is the auditor's hardware, on a machine the prover doesn't
 control; whatever runs on the GPU's node (`read_device`, the tagger's host) is the prover's, and every bound holds if it
-is adversarial, except that the device id it reads is the prover's word (`PROTOCOL.md` §0).
+is adversarial, except that the device id it reads is the prover's word (`PROTOCOL.md` §2).
 
 1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk
    (`Window.open`); then it derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and
@@ -62,7 +62,7 @@ REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
 (`pous.schemes.p2.ROOT_CALL_NS` is half of it).  Rebuilding a block of `C*` from `W` takes two roots in sequence, so a
 window shorter than one cannot rebuild any block.  The fastest root measured on the RTX PRO 6000 is slower, 18.53 ms
-(floor 2.26 ms, art:f26f917e0605e2974f44a9b0f8ae7f4fe4a78b95181deaf8d8c457ce98c64ad3)."""
+(floor 2.26 ms)."""
 
 FAILURES = ("late", "malformed", "store-path", "tag-path", "tag-mismatch")
 
@@ -116,7 +116,7 @@ def nvidia_smi(args: Sequence[str]) -> str:
 
 
 def read_device(gpu: str, *, smi: Callable[[Sequence[str]], str] | None = None) -> bytes:
-    """The id of GPU `gpu` as the on-node challenger reads it on the GPU's node, the prover's word (`PROTOCOL.md` §0):
+    """The id of GPU `gpu` as the on-node challenger reads it on the GPU's node, the prover's word (`PROTOCOL.md` §2):
     the UUID the driver reports, `GPU-…` as nvidia-smi prints it (`smi`, by default `nvidia_smi`), through `device_id`.
     `gpu` is what nvidia-smi's `-i` takes: an index, the GPU's UUID or its PCI bus id.  A MIG slice is refused, whether
     `gpu` names one or the GPU is in MIG mode, whose CUDA devices are its slices, each with a UUID of its own: a slice
@@ -299,7 +299,7 @@ class ChallengerState:
     object left it.  Nothing here rewrites or truncates the file.  A state restored from a snapshot, or copied to another
     directory or host, is past what the directory can see; that the verifier keeps one state directory and never rolls
     back or forks a state rests on its host (`trusted-host`), and neither repeats a key while the nonces are
-    fresh (PROTOCOL.md §3)."""
+    fresh (PROTOCOL.md §5)."""
 
     def __init__(self, directory: str | os.PathLike, vk: VerifierKey, *,
                  nonces: Callable[[int], bytes] = secrets.token_bytes) -> None:
@@ -620,7 +620,7 @@ class Bound:
 def bound(params: Params, blocks: int, block_bytes: int, *, chip_bytes: int, side_bytes_per_s: float,
           epsilon: Fraction = EPSILON, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2) -> Bound:
     """`ingress ≥ k·b − S − c − G·b − λ` bits with `k = ⌈(1 − ε_s)·N⌉`, except with probability
-    `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` (`Bandwidth.Guarantees.AuditRO`, PROTOCOL.md §5).  `S` is the chip's storage,
+    `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` (`Bandwidth.Guarantees.AuditRO`, PROTOCOL.md §1).  `S` is the chip's storage,
     `c = cap_side·(T + RTT)`, `G = 0` because `Params` refuses a window as long as a rebuild, `q ≤ 2^queries_log2` and
     `λ = queries_log2·k + slack_log2`, so `C(q, k)/2^λ ≤ q^k/2^λ = 2^-slack_log2`.  Only a certified tag has a bound."""
     tag = tags.get(params.tag)

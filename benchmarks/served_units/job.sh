@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# A served model's units under C-Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier of record
-# (`flock-verify`). Run from the source tree's root (`research run --cwd source --declared-output 'out/**'`); results go to
+# A served model's proof blocks under C-Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier of record
+# (`flock-verify`). Run from the source tree's root; results go to
 # $RESEARCH_RUN_DIR/out, scratch to a `mktemp -d` directory the job removes, builds and stagings to $SU_CACHE (kept, keyed by their
-# inputs) or the scratch directory. The builds, the session and the selftest controls are hidden_zk's (its job.sh, sourced):
+# inputs) or the scratch directory. The builds, the run and the selftest controls are hidden_zk's (its job.sh, sourced):
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build; the selftest build, with
 #      seed-injection), the Lean flock-verify from verity/core/service/flock, and a venv with numpy and blake3
-#   2. per UNIT in SU_UNITS (stage.py's TYPE[:S=V,...]): stage N instances of its Q_word unit from synthetic values, one loopback
-#      --zk session drawing all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
+#   2. per UNIT in SU_UNITS (stage.py's TYPE[:S=V,...]): stage N inputs of its Q_word proof block from synthetic values, one loopback
+#      --zk run drawing all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
 #      and the Lean verifier on all of them:
-#        honest-own   the honest session                                                                     ACCEPT
+#        honest-own   the honest run                                                                         ACCEPT
 #        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                     output_row_committed_false (a forged output word, committed and proved), output_claim_false and
 #                     unit_internal_bit_flipped REJECT
@@ -24,7 +24,7 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/t
 source benchmarks/pouw/hidden_zk/job.sh
 SU=$SRC/benchmarks/served_units
 
-stage_one() {   # stage_one SPEC D O: D holds the unit's staged files, from the stage cache or staged now
+stage_one() {   # stage_one SPEC D O: D holds the proof block's staged files, from the stage cache or staged now
   local spec=$1 D=$2 O=$3 key S rc=0
   key=$(tree_key benchmarks/served_units/stage.py verity/ml/flock/python verity integrations/vllm/verity_vllm/program \
     tools/verity/circuit_check/src)
@@ -61,7 +61,7 @@ run_units() {
     if [ "${SU_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$SU/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
-    controls "$D" "$O" tile        # hidden_zk's "tile" form: a unit without public input ports
+    controls "$D" "$O" tile        # hidden_zk's "tile" form: a proof block without public input ports
     lean_jobs "$D" "$O" tile
     "$PY" "$SU/summarize.py" "$OUT" > /dev/null
     rm -rf "$D"

@@ -77,7 +77,7 @@ class WithPeers(nn.Module):
     def _run(self, own: tuple, peers: tuple, schedule: torch.Tensor | None = None):
         self.bus.reset("trace", list(peers), schedule)
         out = self.inner(*own)
-        if self.bus.cursor * (self.bus.world - 1) != len(peers):    # [lane vllm-tp-n] world-1 peer inputs per collective
+        if self.bus.cursor * (self.bus.world - 1) != len(peers):    # world-1 peer inputs per collective
             raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed x {self.bus.world - 1} peers, {len(peers)} peer inputs given")
         if self.bus.schedule_cursor != len(self.bus.schedule_record):
             raise RuntimeError(f"rank {self.bus.rank}: {self.bus.schedule_cursor} align calls read the schedule, the probe recorded "
@@ -159,7 +159,7 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
             try:
                 init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"tcp://127.0.0.1:{_free_port()}", local_rank=0, backend=backend)
                 break
-            except Exception as e:  # noqa: BLE001 -- torch's DistNetworkError; only the port race is retried
+            except Exception as e:  # torch's DistNetworkError; only the port race is retried
                 if "EADDRINUSE" not in str(e) or attempt == _PORT_TRIES - 1:
                     raise
         ensure_model_parallel_initialized(1, 1)
@@ -247,7 +247,7 @@ class GreedyRequest(nn.Module):
     each consuming the previous step's greedy sample. Returns the T+1 sampled ids (int32). The KV cache is implicit vLLM
     state: the frontend's per-layer history (UnifiedAttentionWithOutput[vllm]) accumulates across the steps of this graph.
 
-    Generic: any vLLM `*ForCausalLM`; `LP`, `T` and greedy sampling are the request's structural inputs (BRIEF: prompt
+    Generic: any vLLM `*ForCausalLM`; `LP`, `T` and greedy sampling are the request's structural inputs (prompt
     length, max_tokens, sampling kind)."""
 
     DERIVE_SOURCE = "verity-vllm/greedy-request/v1"
@@ -295,7 +295,7 @@ class CachedGreedyRequest(GreedyRequest):
 
 
 class PaddedGreedyRequest(nn.Module):
-    """The FIXED padded request rectangle `prefill | decode 1 .. decode D_MAX` (BRIEF "Padding"; serve3-spec §3–§8) over the
+    """The FIXED padded request rectangle `prefill | decode 1 .. decode D_MAX` over the
     actual vLLM model: liveness is a value — `live_0 = 1`, `live_{g+1} = live_g & ~(y_g == EOS)` on the raw sample; the
     emitted slot is `live ? y : PAD(0)`; the next step consumes the muxed slot; after every decode step the engine's
     step-boundary cache clear `vllm_iface.unified_cache_pad(live_in, zero, slot)` makes every layer's appended K/V row
@@ -405,7 +405,7 @@ class StochasticRequest(nn.Module):
         return self._request(prompt, 0, seed, splits)
 
     def _request(self, prompt: torch.Tensor, C: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
-        entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
+        entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])
         tok = self._step(prompt[C:] if C else prompt, C, seed, entry(0), 0)
         toks = [tok]
         for s in range(self.T):
@@ -512,7 +512,7 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
 
 #: environment variables this construction SETS (module top, or the target's `env()`) — recorded as consulted only if the pinned vLLM's `envs` defines them
 _ENV_SET_BY_BUILDER = ("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "HF_HUB_OFFLINE", "VLLM_LOGGING_LEVEL", "TOKENIZERS_PARALLELISM", "VLLM_ATTENTION_BACKEND",
-                       "VLLM_USE_DEEP_GEMM")   # [R15 fp8] the block-scaled FP8 kernel knob `TargetProfile.fp8_block_gemm` applies
+                       "VLLM_USE_DEEP_GEMM")   # the block-scaled FP8 kernel knob `TargetProfile.fp8_block_gemm` applies
 
 
 def consulted_facts(vllm_config) -> dict:

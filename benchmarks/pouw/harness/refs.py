@@ -15,6 +15,9 @@ import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor
 
+from verity_config.settings import of
+
+settings = of(__file__)
 _POOL: ProcessPoolExecutor | None = None
 
 
@@ -22,9 +25,10 @@ def cpus() -> int:
     """The job's CPUs: ``OMP_NUM_THREADS`` (a fill job's ``cpus=``), at most the CPUs the process may run on."""
     allowed = len(os.sched_getaffinity(0))
     try:
-        return max(1, min(int(os.environ["OMP_NUM_THREADS"]), allowed))
-    except (KeyError, ValueError):
-        return allowed
+        n = settings.OMP_NUM_THREADS
+    except ValueError:
+        n = None
+    return allowed if n is None else max(1, min(n, allowed))
 
 
 def pool() -> ProcessPoolExecutor | None:

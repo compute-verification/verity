@@ -5,7 +5,7 @@ import Proofs.Pouw.PearlC.DeviceGamma
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
 
-Daniel's card a6872606, option (a): at a census `k < 1024` the served check caps each credited row of a tile at
+By ruling (option (a)): at a census `k < 1024` the served check caps each credited row of a tile at
 `ρr = 4ρ` and the tile at `ρ` (`pearlCTilesDevRev1RowCapAt`, `TTOutRowSeed.lean`). The row-seeded γ rests on rev1's
 TT_OUT per tile at `ρr`, through (C2) at `ρr`:
 
@@ -228,7 +228,7 @@ theorem wrefDevRev1_h100_n6144k256 (m : ℕ) : wrefDevRev1 devH100 ⟨m, 6144, 2
 variable (CM : CostModel Q R S) {sem sem' semC : PearlCSem Q R S}
 
 /-- **GLM-5.3's down projection, `m × 6144 × 256` at any `m`, on the H100 record with per-row seeds per audit tile, the
-tile cap 1/400 and the row cap 1/100** (card a6872606, option (a)), from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3:
+tile cap 1/400 and the row cap 1/100**, from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3:
 `γ = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at `ω = 25210/25137`, with the error at the
 `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)

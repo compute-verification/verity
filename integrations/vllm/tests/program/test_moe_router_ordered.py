@@ -74,6 +74,6 @@ def test_the_statement_is_the_default_and_the_kernel_order_router_stays_declarab
 
 
 def test_the_fold_states_the_declared_router():
-    from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS
+    from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS
     assert MOE_CONSTRUCTION_PATTERNS["indexed-read"]({}).router is None
     assert MOE_CONSTRUCTION_PATTERNS["indexed-read-ordered"]({}).router == "ordered"

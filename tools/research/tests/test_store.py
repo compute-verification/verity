@@ -12,6 +12,7 @@ import pytest
 
 from research.cli import main as research_main
 from research.store import canon, ids, remote_s3
+from research.store import preserved as P
 from research.store.cli import main
 from research.store.index import flatten
 from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound, StoreError
@@ -1086,6 +1087,21 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
     assert [p["bytes"] for p in side["parts"]] == [4096, 4096, 1000] and [p["n"] for p in side["parts"]] == [1, 2, 3]
     assert st.index.replicas(art)["remote"]["verified"] == "etag-md5,etag-multipart"
     assert st.verify(art)["preserved"], "read-back of a multipart object is the same streamed GET + sha256"
+
+    # the durability gate (`research data preserved`): `head` reproduces the multipart ETag from the local blob ...
+    chk = P._check_artifact(st, art, "head")
+    assert chk["preserved"] and chk["errors"] == [] and chk["verified"] == "etag-md5,etag-multipart", chk
+    good = s.etags[key]
+    s.etags[key] = remote_s3.multipart_etag([hashlib.md5(b"x").hexdigest()] * 3)
+    chk = P._check_artifact(st, art, "head")
+    assert not chk["preserved"] and "is not what the local blob yields" in chk["errors"][0], chk
+    s.etags[key] = good
+    # ... and reads the blob back when it is not local
+    blob = st.object_path(big_sha)
+    blob.rename(tmp_path / "aside")
+    chk = P._check_artifact(st, art, "head")
+    assert chk["preserved"] and chk["verified"] == "etag-md5,sha256-readback", chk
+    (tmp_path / "aside").rename(blob)
 
     n = len(s.log)
     again = st.push(art, jobs=4)

@@ -191,9 +191,9 @@ def test_r7_reads_each_values_first_registration():
 
 
 def test_a_supplied_position_reads_the_whole_log():
-    """W-a: a supplied position follows every unit of the log (`registered.log_base`), so a check whose supplied values
+    """W-a: a supplied position follows every proof block of the log (`registered.log_base`), so a check whose supplied values
     read one gets the whole log and its verdict. On the few records R6 and R7 read, the honest record's positions would
-    follow fewer units and it would be refused (`R7-supplied`)."""
+    follow fewer proof blocks and it would be refused (`R7-supplied`)."""
     base = _seeded_case()
     stream, log = _stream(), []
     for i in range(6):

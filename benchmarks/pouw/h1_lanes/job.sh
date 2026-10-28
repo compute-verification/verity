@@ -19,6 +19,8 @@
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  H1_TMPL (h1unit.layout's: unset or flat the flat statement,
 #      structural the templated one at iv/hybrid/4)  HZ_CACHE: hidden_zk's
+#      H1L_J10R=1: j10r.py's J10-R leaf in place of run.py's (H1L_K 4608 by default, its lanes in 3 chunks; H1L_RC its
+#      R x C, 16x16), with no pouw-leaf-own-window check, which states v1's statements only
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -26,7 +28,8 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 . benchmarks/pouw/hidden_zk/job.sh
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 H=$SRC/benchmarks/pouw/h1_lanes
-K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
+RUN=$H/run.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
+[ -n "${H1L_J10R:-}" ] && RUN=$H/j10r.py K=${H1L_K:-4608}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
@@ -37,9 +40,12 @@ build_own() {       # build_own DEST: DEST/verity/core/protocols/pouw/lean/check
     && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity/core) | tar -xf - -C "$D.tmp" \
     && (cd "$D.tmp/verity/core/protocols/pouw/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
-OWN=$(cached leafownwin "$(tree_key verity/core)" build_own)/verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-leaf-own-window
-[ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
-sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+OWN=:
+if [ -z "${H1L_J10R:-}" ]; then
+  OWN=$(cached leafownwin "$(tree_key verity/core)" build_own)/verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-leaf-own-window
+  [ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
+  sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+fi
 build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
@@ -53,9 +59,9 @@ if [ "${H1_TMPL:-flat}" != flat ]; then
   cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
-log "h1-lanes: K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"
+log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"
 
-$TIME "$OUT/prepare.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/run.py prepare --work $WK --k $K --jobs ${H1L_JOBS:-8} \
+$TIME "$OUT/prepare.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $RUN prepare --work $WK --k $K --jobs ${H1L_JOBS:-8} \
   --name h1-lanes-${RESEARCH_RUN_ID:-local}" > "$OUT/prepare.out" 2> "$OUT/prepare.err"
 rc=$?
 tail -4 "$OUT/prepare.out" | cut -c1-2000 | tee -a "$OUT/job.log"
@@ -105,7 +111,7 @@ while IFS=$'\t' read -r kind tag D pub reg prog part _expect regrec prodrec desc
 done < "$WK/plan.tsv"
 wait
 
-"$PY" "$H/run.py" summarize --work "$WK" --out "$OUT" 2>&1 | tee -a "$OUT/job.log"
+"$PY" "$RUN" summarize --work "$WK" --out "$OUT" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 log "h1-lanes: done (exit $rc)"
 exit "$rc"

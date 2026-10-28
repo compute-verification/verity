@@ -1,17 +1,17 @@
-"""The static serving schedule: a run whose step counts, batch membership and admissions are a function of the public declaration only
-(Daniel's static-circuit ruling, 18 Oct 20:52Z; VLLM-31).  Torch-free.
+"""The static serving schedule: a run whose step counts, batch membership and admissions are a function of the public declaration only,
+so the served circuit is static.  Torch-free.
 
 A workload declares the static form with `sampling.ignore_eos: true`: every request runs exactly its `max_tokens` steps from its
 arrival, so no generated token decides when a slot frees, who shares a launch, where a waiting prefill is cut by the token budget, or
 when the next arrival is admitted.  The EOS a request may sample is a value: the circuit's done flag masks the steps after it, and the
-host never acts on it.  GP-01's stop rule already reads the same declaration (`global_program.stop_rule`: ignore_eos -> every request
+host never acts on it.  The global Program's stop rule already reads the same declaration (`global_program.stop_rule`: ignore_eos -> every request
 must reach its cap); `vllm_adapter.sampling_params` hands it to vLLM.
 
 `check` holds a realized run to that form, failing by name on what the host decided from values:
 
     early stop         a request finished other than by length at its cap (an EOS, a stop id, max_model_len)
     preemption         a request's computed-token count went down (KV pressure: the host recomputed it)
-    host prefix cache  a request read KV blocks vLLM's hash match chose (`num_cached_tokens` > 0)
+    host prefix cache  a request read KV pages vLLM's hash match chose (`num_cached_tokens` > 0)
 
 and records the realized schedule (`schedule_of`: per request in declared order, arrival, prefill forwards, token forwards, finish),
 whose digest leaves out request ids and tokens.  Two runs of one declaration with different prompt contents must have the same
@@ -42,7 +42,7 @@ def host_prefix_cache_refusal(enable_prefix_caching: Any) -> str | None:
         return None
     return ("the workload declares the static schedule (sampling.ignore_eos) but the engine has enable_prefix_caching on: vLLM's hash match "
             "would decide which KV pages a request reads, outside the circuit.  Serve it with --engine-arg enable_prefix_caching=false; "
-            "prefix sharing needs the circuit-native form (static page pool + in-circuit prefix match), VLLM-31")
+            "prefix sharing needs the circuit-native form (static page pool + in-circuit prefix match)")
 
 
 def preemptions(snapshots: Iterable[Mapping[str, Any]]) -> dict[str, int]:

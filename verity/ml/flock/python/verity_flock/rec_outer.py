@@ -64,6 +64,7 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from . import rec_circuits as RC
 from . import rec_live as RL
 from . import rec_open as R
@@ -279,6 +280,7 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program_)))
     (d / "partition.json").write_text(json.dumps(part))
+    RB.check(own, f"rec-L{level['level']}", n)
     (d / "registered.json").write_text(json.dumps(own))
     tables = {"row": rows, "aux": aux, "acc": np.array(acc_rows, np.uint16), "coef": coef, "dirs": dirs}
     outs = {"out": np.asarray(out_rows, np.uint16), "acc_out": np.asarray(out_acc, np.uint16)}

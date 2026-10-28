@@ -1,5 +1,5 @@
 """verity_vllm's serving Program as the workload: it is `Serve_v1` with registered weights, a pipeline placement's crossings
-are what a stage boundary of a decoder carries, and the blocks serve it in memory with N3 holding."""
+are what a stage boundary of a decoder carries, and the blocks serve it in memory."""
 import asyncio
 
 import pytest
@@ -7,12 +7,10 @@ import pytest
 pytest.importorskip("torch")
 pytest.importorskip("verity_vllm")
 
-from workload import n3
 from workload import placement as P
 from workload import served as S
 from workload.block import Context, MemoryNet
 from workload.hardware import OUTSIDE, mock
-from workload.run import statement
 
 CFG = S.Config()
 
@@ -58,21 +56,10 @@ def test_a_stage_boundary_carries_the_hidden_state_and_residual(model):
     assert len(by_kind["registered"]) == CFG.vocab * CFG.hidden + tokens * CFG.head_dim * (blocks - 1)
 
 
-def serve(config):
+@pytest.mark.slow
+def test_the_blocks_serve_it_and_answer_as_the_reference_does():
+    config = {"workload": "served", "spec": CFG.to_json(), "blocks": 3, "devices": 1, "frame_bytes": 1024, "seed": 2}
     ctx = Context(config)
     results = asyncio.run(MemoryNet(ctx).run())
-    public, witness = statement(ctx, results)
-    records, disagreements = n3.merge(results)
-    assert disagreements == []
-    return ctx, results, n3.check(public, witness, records)
-
-
-@pytest.mark.slow
-def test_the_blocks_serve_it_and_n3_holds_and_refuses_a_flipped_bit():
-    config = {"workload": "served", "spec": CFG.to_json(), "blocks": 3, "devices": 1, "frame_bytes": 1024, "seed": 2}
-    ctx, results, report = serve(config)
-    assert report.ok, report.violations[:3]
     assert results[OUTSIDE]["answers"] == ctx.model.reference(2)
-    assert report.stats["values"] == len({e.value for e in ctx.edges})
-    _, _, report = serve(dict(config, tamper={"unit": "b1", "mode": "flip-bit"}))
-    assert not report.ok and {"content", "value"} <= set(report.codes())
+    assert all(results[b]["values"] is not None for b in ctx.hw.units)

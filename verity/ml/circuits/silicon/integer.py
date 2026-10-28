@@ -7,29 +7,35 @@ encodings, carried as unsigned ints like the FP32 words of the other models; ope
 complement for s8).
 
 What the model rests on (``pinned`` in ``instructions``): one device, an RTX PRO 6000; no other sm_120 part has been
-probed.  Run r20261015-084000-06d8 (compute-accounting's IMMA probe) ran one ``mma.sync`` per tile in eight forms: s8/u8 x
+probed.  An IMMA probe ran one ``mma.sync`` per tile in eight forms: s8/u8 x
 s8/u8, with and without ``.satfinite``, each lowered to one ``IMMA.16832.<A>.<B>[.SAT]``.  Every form reproduces
 ``IntegerMma`` at its operand formats bit for bit on 10,243,968 words, with code -128, random and +-2^31-edge incoming
 accumulators, and 0.29M-1.1M words per form whose exact sum leaves s32.  ``.satfinite`` clamps once, at D: tiles whose products run past the range
 and come back within the instruction exclude a clamp after every product or every 2, 4, 8 or 16 products, in either k
 order (in each form with a signed operand; u8 x u8 sums only grow, so there every clamp point gives the same word).
-Without it, D wraps modulo 2^32.  An earlier library-kernel probe (run r20261015-071801-6d3c, CUTLASS ``i16832gemm_s8``
+Without it, D wraps modulo 2^32.  An earlier library-kernel probe (CUTLASS ``i16832gemm_s8``
 through ``torch._int_mm``) agrees: random int8 products exact to k = 133,120, and the s32 edge saturating.
 
 The datacenter cards compute the same function (`benchmarks/pouw/dc/s8_mma.py`, the same families at each instruction's tile).
-An H200 (sm_90a, run r20261019-043020-f267) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[.SAT]``) and
-``mma.sync`` m16n8k32; a B200 (sm_100a, run r20261019-042817-8fd3) ran ``tcgen05.mma.cta_group::1.kind::i8`` M128 N32 K32
+An H200 (sm_90a) ran ``wgmma.mma_async`` m64n8k32 (SASS ``IGMMA.64x8x32.<A>.<B>[.SAT]``) and
+``mma.sync`` m16n8k32; a B200 (sm_100a) ran ``tcgen05.mma.cta_group::1.kind::i8`` M128 N32 K32
 (SASS ``UTCIMMA``, the formats and the saturation in the instruction descriptor, its bit 3 ``.satfinite``) and ``mma.sync``
 m16n8k32.  Each of the eight forms of each instruction reproduces this module's step at its formats on every word, with the
 clamp at D.  `HOPPER_SM90_S8_K32` and `BLACKWELL_SM100_S8_K32` are that step under each architecture's name.
 
 `step_s8_bits` is the s8 x s8 step as a GF(2) circuit (`verity.ml.circuits.boolean.forms`), the builder of
 `verity.ml.circuits.ops.boolean.gemm.BlackwellS8ImmaDot32_v2`.
+
+The store ids each model's ``validated`` string rests on are :data:`EVIDENCE_IDS` (``integer_evidence.json``), keyed by
+model name and then by role: a name in backticks in a ``validated`` string (``run``, ``device``) is a role of that model's
+entry.
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from verity.ml.circuits.boolean.forms import NOT, ONE, compress_columns
@@ -42,6 +48,7 @@ __all__ = [
     "BLACKWELL_SM120_S8_M16N8K32_WRAP",
     "BLACKWELL_SM120_U8S8_M16N8K32",
     "BLACKWELL_SM100_S8_K32",
+    "EVIDENCE_IDS",
     "HOPPER_SM90_S8_K32",
     "IntegerMma",
     "S32_MAX",
@@ -54,6 +61,9 @@ __all__ = [
 ]
 
 S32_MIN, S32_MAX = -(1 << 31), (1 << 31) - 1
+
+#: Model name -> role -> the store id (run, ``art:``) or GPU UUID its ``validated`` string names by that role.
+EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("integer_evidence.json").read_text())
 
 
 def decode_int8(fmt: str, code: int) -> int:
@@ -130,17 +140,16 @@ class IntegerMma:
 
 
 _PRO6000_IMMA_PROBE = (
-    "run r20261015-084000-06d8 (RTX PRO 6000 Blackwell Server Edition, cc 12.0, driver 580.173.02, CUDA 13.0 V13.0.88, "
-    "sm_120a, GPU-415b238c): one mma.sync m16n8k32 per tile, 80,031 tiles (seed 20261015), 10,243,968 words per form, "
+    "the `run` (RTX PRO 6000 Blackwell Server Edition, cc 12.0, driver 580.173.02, CUDA 13.0 V13.0.88, "
+    "sm_120a, GPU `device`): one mma.sync m16n8k32 per tile, 80,031 tiles (seed 20261015), 10,243,968 words per form, "
     "0 mismatches in each of s8.s8, s8.u8, u8.s8, u8.u8 with and without .satfinite; SASS one IMMA.16832.<A>.<B>[.SAT] "
     "per kernel"
 )
 
 _PRO6000_IMMA = (
     "the satfinite form on the device: " + _PRO6000_IMMA_PROBE + "; the clamp tiles admit only a clamp at D; trust "
-    "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474 (PINNED).  Earlier, run "
-    "r20261015-071801-6d3c (torch._int_mm -> CUTLASS cutlass_80_tensorop_i16832gemm_s8_64x64_64x6_tn_align16, zero "
-    "incoming accumulators): random int8 at k = 4096, 14,336, 65,536 and 133,120 exact; all-127 against all +-127 at "
+    "dossier `dossier` (PINNED).  Earlier, run `int_mm` (torch._int_mm -> CUTLASS "
+    "cutlass_80_tensorop_i16832gemm_s8_64x64_64x6_tn_align16, zero incoming accumulators): random int8 at k = 4096, 14,336, 65,536 and 133,120 exact; all-127 against all +-127 at "
     "k = 133,120 gives +-2,147,092,480; at k = 133,152 (true sum 2,147,608,608) it gives 2,147,483,647"
 )
 
@@ -196,7 +205,7 @@ HOPPER_SM90_S8_K32 = IntegerMma(
     k_per_instruction=32,
     satfinite=True,
     validated=(
-        "run r20261019-043020-f267 (NVIDIA H200, cc 9.0, sm_90a, GPU-8ca4992f): wgmma m64n8k32 (SASS IGMMA.64x8x32.<A>.<B>[.SAT], "
+        "the `run` (NVIDIA H200, cc 9.0, sm_90a, GPU `device`): wgmma m64n8k32 (SASS IGMMA.64x8x32.<A>.<B>[.SAT], "
         "one per tile kernel), 20,028 tiles, 10,254,336 words per form, and mma.sync m16n8k32 (IMMA.16832.<A>.<B>[.SAT]), "
         "80,031 tiles, 10,243,968 words per form; " + _DC_FORMS
     ),
@@ -213,7 +222,7 @@ BLACKWELL_SM100_S8_K32 = IntegerMma(
     k_per_instruction=32,
     satfinite=True,
     validated=(
-        "run r20261019-042817-8fd3 (NVIDIA B200, cc 10.0, sm_100a, GPU-2e39ef52): tcgen05.mma kind::i8 M128 N32 K32 (SASS UTCIMMA, "
+        "the `run` (NVIDIA B200, cc 10.0, sm_100a, GPU `device`): tcgen05.mma kind::i8 M128 N32 K32 (SASS UTCIMMA, "
         "one per tile kernel; idesc bit 3 selects .satfinite), 2,523 tiles, 10,334,208 words per form, and mma.sync m16n8k32 "
         "(IMMA.16832.<A>.<B>[.SAT]), 80,031 tiles, 10,243,968 words per form; " + _DC_FORMS
     ),

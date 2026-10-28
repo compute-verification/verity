@@ -1,4 +1,4 @@
-description = "the adopted design's attention: rotated, keys centred, w64 peel on Q and P (P served as P - 64 + E), key 0 its own P block, K and V dithered (tonight's int8-rot-eqp=w64-poff64-psink-kc-kv=dith)"
+description = "the adopted design's attention: rotated, keys centred, w64 peel on Q and P (P served as P - 64 + E), key 0 its own P block, K and V dithered"
 
 [[attention]]
 step = "rotate"

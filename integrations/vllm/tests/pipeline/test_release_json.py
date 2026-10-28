@@ -1,4 +1,4 @@
-"""[R17 rel, exec M-0477 / M-0709 (R16)] RELEASE.json names the tree the ship INSTALLED -- the own-tree bug class, fixed at the writer
+"""RELEASE.json names the tree the ship INSTALLED, enforced at the writer
 (explicit tree, refused unless it is the cwd), the reader (tree-local record first) and the ship (read-back check).  Torch-free."""
 
 from __future__ import annotations
@@ -61,11 +61,11 @@ def test_parse_artifacts_fa3_optional_and_fail_closed():
 
 
 def test_m0477_shape_does_not_name_the_own_tree():
-    """The R16 record as measured (exec M-0477 08:06Z / M-0709 10:10Z): tag + commit of the own tree, tree field = the pod's shared tree."""
+    """A record with the own tree's tag and commit whose tree field is the pod's shared tree names the shared tree."""
     bad = {"tag": "r16-int-3", "commit": EXPORT["commit"], "tree": "/workspace/cp/shared"}
     assert rj.release_names_tree(bad, "/workspace/cp/shared")
     assert not rj.release_names_tree(bad, "/workspace/cp/r16-int-3")
-    legacy = {"tag": "r15-int-6", "commit": "x"}          # pre-R16 record without a tree field: names no tree
+    legacy = {"tag": "r15-int-6", "commit": "x"}          # a record without a tree field names no tree
     assert not rj.release_names_tree(legacy, "/workspace/cp/shared") and not rj.release_names_tree(legacy, "/workspace/cp/lane-moe")
     assert not rj.release_names_tree({}, "/workspace/cp/shared")
 
@@ -77,10 +77,10 @@ def test_write_then_check_pod_wide_and_tree_local(tmp_path):
     assert paths == [str(pod), os.path.join(os.path.realpath(str(own)), "RELEASE.json")]
     assert json.load(open(pod))["tree"] == os.path.realpath(str(own)) == json.load(open(own / "RELEASE.json"))["tree"]
     assert rj.check_installed(str(own), "r16-int-3", EXPORT["commit"][:9], str(pod)) == []
-    # the ship's read-back check catches the M-0477 shape: a pod-wide record that names another tree
+    # the ship's read-back check catches a pod-wide record that names another tree
     json.dump({**json.load(open(pod)), "tree": "/workspace/cp/shared"}, open(pod, "w"))
     probs = rj.check_installed(str(own), "r16-int-3", EXPORT["commit"][:9], str(pod))
-    assert len(probs) == 1 and "pod-wide" in probs[0] and "M-0477" in probs[0]
+    assert len(probs) == 1 and "pod-wide" in probs[0] and "the record names another tree" in probs[0]
     # wrong tag / commit / missing file are problems too
     assert any("tag" in p for p in rj.check_installed(str(own), "r16-int-4", EXPORT["commit"][:9], str(own / "RELEASE.json")))
     assert any("commit" in p for p in rj.check_installed(str(own), "r16-int-3", "deadbeef0", str(own / "RELEASE.json")))
@@ -94,7 +94,7 @@ def _tree_with_export(tmp_path: Path, name: str, export=EXPORT) -> Path:
 
 
 def test_release_line_two_trees_on_one_pod(tmp_path):
-    """cp-r1 10:08Z: the pod's shared tree = int-2, /workspace/cp/r16-int-3 = int-3 own tree.  The pod-wide record is the LAST ship
+    """The pod's shared tree = int-2, /workspace/cp/r16-int-3 = int-3 own tree.  The pod-wide record is the LAST ship
     (int-3); each tree still cites ITS release through the tree-local record, and neither cites the other's."""
     exp2 = {**EXPORT, "commit": "30486e648" + "0" * 31, "branch": "lane/r16-int"}
     base = _tree_with_export(tmp_path, "shared", exp2)
@@ -114,19 +114,19 @@ def test_release_line_two_trees_on_one_pod(tmp_path):
 def test_release_line_pod_wide_fallback_and_unreleased(tmp_path):
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
-    # pod-wide only (a pre-R17 ship wrote no tree-local record): applies when it names this tree
+    # pod-wide only (a ship that wrote no tree-local record): applies when it names this tree
     json.dump({**_rec(own), "tree": os.path.realpath(str(own))}, open(pod, "w"))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("r16-int-3|") and src == str(pod)
-    # the M-0477 shape: pod-wide names the shared tree -> this tree is UNRELEASED, by name
+    # pod-wide names the shared tree -> this tree is UNRELEASED, by name
     json.dump({**_rec(own), "tree": "/workspace/cp/shared"}, open(pod, "w"))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("UNRELEASED|commit=a2dabe493 ") and "is the tree /workspace/cp/shared, not this one" in line and src == "-"
-    # a pre-R16 record (no tree field) cites no tree
+    # a record with no tree field cites no tree
     json.dump({k: v for k, v in _rec(own).items() if k != "tree"}, open(pod, "w"))
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("UNRELEASED|") and "is the tree None, not this one" in line and src == "-"
-    # a tree-local record whose commit no longer matches EXPORT (lane ship.sh over the tree) never cites the stale release
+    # a tree-local record whose commit no longer matches EXPORT (ship.sh over the tree) never cites the stale release
     rj.write_record(_rec(own), str(own), str(pod))
     json.dump({**EXPORT, "commit": "f" * 40}, open(own / "EXPORT.json", "w"))
     line, src = rj.release_line(str(own), pod_path=str(pod))
@@ -165,7 +165,7 @@ def test_cli_check_and_line_as_a_process(tmp_path):
 
 
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
-    """The row's REL-09 line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
+    """The row's release line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
     from tests.pipeline.test_row import _row
     rel = tmp_path / "RELEASE.json"

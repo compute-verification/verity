@@ -4,7 +4,7 @@ in the same step stream and run root as the rank's other values.  Opt-in (the ro
 
 The sites are the rank's required manifest's `vocab_range` identities.  A forward pre-hook marks the site module that runs; inside it,
 during a committed step, the wrapper of `torch.ops._C.vocab_parallel_embedding` (the fused TP embedding kernel `EmbeddingShard_v1`
-states) computes the three values from the launch's own token ids with the IR's integer semantics (`query.vocab_range.values`: wrapping
+states) computes the three values from the launch's own token ids with the circuit's integer semantics (`query.vocab_range.values`: wrapping
 32-bit subtract, signed 32-bit compares) on the device, then runs the installed kernel unchanged.  No kernel changes: the values are
 integer functions of the committed token id and the rank's static range, and the vocabulary-range exactness property checks them against
 the IR and against the kernel's own output (zero rows exactly where the range bits say the rank does not own the token).  A launch whose

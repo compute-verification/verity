@@ -483,7 +483,7 @@ def selection() -> dict[str, Any]:
     from vllm.models.deepseek_v4.nvidia.model import _select_dsv4_attn_cls
     from vllm.v1.attention.backends.mla.indexer import dsa_indexer_uses_fp4
 
-    import vllm._C_stable_libtorch  # noqa: F401  -- registers torch.ops._C's stable ops
+    import vllm._C_stable_libtorch  # registers torch.ops._C's stable ops
 
     cfg = get_current_vllm_config()
     cls = _select_dsv4_attn_cls(cfg)

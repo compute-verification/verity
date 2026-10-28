@@ -16,29 +16,35 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# record.py's mixes are workloads of the vLLM integration, which test_consistency loads; the auditor host's gate runs
+# record.py's mixes are workloads of the vLLM integration, which test_record loads; the auditor host's gate runs
 # warden_serve.py's rehearsal, which test_warden_serve holds it to. compile_slice_zk's engine class is vLLM 8eb1's trace
-# header, read through the encodings' replay (with the modules `_encodings` loads beside it). leak_scan reads C-Flock's
+# header, read through the encodings' replay (with the modules `_encodings` loads beside it); the trace is in the
+# encodings' fixtures, one fetched tree, which is listed whole so that suites.py fetches it. leak_scan reads C-Flock's
 # proof format with its verifier's reader. A served run's Commit windows are the vLLM integration's window advice, which
 # window_chain joins for n2_advised_zk. n2_advised_zk's period draws take the challenger's coins through one_stage's
 # a5_coins, whose local session is live_challenger's auditor host and serve.py (under its tests' stub).
-# torch_loop_stub.py serves the toy's model. chain_record writes the block record's certifier entry by the
-# all-protocols runner's block_leg, which test_chain_record holds to the block record's schema on certifier/v0 cases
-# from period_case (the period check's Python mirror, with verity_difftest's decoders), which also re-decides them.
+# chain_record writes the block record's certifier entry by block_certifier's block_leg, which test_block_certifier
+# holds to the block record's schema, `block_record` and its period-0 fixture, and test_chain_record to the schema on
+# certifier/v0 cases from period_case (the period check's Python mirror, with verity_difftest's decoders), which also
+# re-decides them.
 # demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
-# step trace and the records it imports) and network-e2e's chain.
+# step trace and the records it imports) and network-e2e's chain. certifier_piece is the network certifier's piece of
+# one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
 inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
           "integrations/vllm/verity_vllm/pipeline/advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
-          "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/engine/__init__.py",
+          "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/settings.py",
+          "integrations/vllm/verity_vllm/engine/__init__.py",
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/step_trace.py",
           "integrations/vllm/verity_vllm/records/__init__.py", "integrations/vllm/verity_vllm/records/fields.py",
           "integrations/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
-          "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py", "integrations/torch_loop/verity_torch_loop",
+          "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
-          "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz",
+          "benchmarks/network_e2e/encodings/tests/fixtures",
           "verity/ml/flock/verifier/redigest.py", "verity/ml/flock/verifier/transcript_check.py",
-          "benchmarks/all_protocols/legs/certifier.py",
-          "benchmarks/e2e_demo/verity_e2e_demo/schemas/block-record.v1.schema.json",
+          "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v1.schema.json",
+          "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+          "examples/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
+          "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]

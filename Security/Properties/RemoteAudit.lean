@@ -13,9 +13,9 @@ premise or a proofs unit of the bridge, named in each docstring.
 
 The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
 verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/RemoteAudit/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with the line's code-to-model premises named in
-`Properties/RemoteAudit/Line/Premises.lean` and the W's cover of the session's pooled bound in
-`Properties/RemoteAudit/Pooled.lean`.
+proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
+record, `Properties/RemoteAudit/Line/Premises.lean`, and the verifier refuses a record not of the registration given,
+`LineRegistered`) and the W's cover of the session's pooled bound in `Properties/RemoteAudit/Pooled.lean`.
 
 The window (`verifyWindow`):
 
