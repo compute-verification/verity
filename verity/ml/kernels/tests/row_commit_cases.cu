@@ -10,13 +10,15 @@ using rc::u64;
 
 enum Kind { LEAF, PAD, NODE, HM96, EMPTY, LEAF_AT };
 // LEAF, PAD, NODE: 0 compile-time nb, 1 run-time nb; LEAF 2 compile-time a body a length (frame_leaf_nb), NODE 2 run-time
-// through Compact. HM96: the table and loop of the mask, and the frame leaf's nb.
-constexpr int HM96_FORMS = 5;
+// through Compact. PAD 2 pad_of, NODE 3 node_at from node_mid, LEAF_AT 1 from its head (leaf_head, leaf_tail). HM96 0 to 4:
+// the table and loop of the mask, and the frame leaf's nb; 5 and 6: mask_lanes over a strided salt in two column orders,
+// then the leaf from its head.
+constexpr int HM96_FORMS = 7;
 
 struct Case {
   int32_t kind, form, sl, level;
   uint64_t pos, position;  // pos: the leaf's rank and position, the pad's rank or the node's index; LEAF_AT's position
-  uint8_t did[64], schema[32], value[64], L[64], R[64], x[64], y[192];
+  uint8_t did[64], schema[96], value[64], L[64], R[64], x[64], y[192];
 };
 struct Out {
   uint8_t bc[128], hs[64], out[64];
@@ -88,6 +90,35 @@ RC_HD int hm96_by_form(int form, const rc::FrameK& F, const rc::Hm96K& H, const 
   }
 }
 
+template <int FORM>
+struct Cols {
+  RC_HD uint32_t operator()(int k) const { return FORM == 5 ? k : (7 * k + 5) % 12; }
+};
+// HM96 5 and 6: the salt as little-endian u32 words 3 apart, the mask in column order Cols, and the leaf from its head
+template <int FORM>
+RC_HD int hm96_lanes(const Case& k, const rc::Hm96K& H, const Tabs& T, const u64* x, const u64* Y, Out& o) {
+  constexpr uint32_t YS = 3;
+  uint32_t y[48 * YS], mk[16];
+  for (int w = 0; w < 48; ++w) {
+    uint32_t v = 0;
+    for (int b = 3; b >= 0; --b) v = v << 8 | ((uint32_t)(Y[(4 * w + b) >> 3] >> (56 - 8 * ((4 * w + b) & 7))) & 0xFFu);
+    y[w * YS] = v;
+  }
+  u64 my[8], B[16], h[8], mid[8], tail[16], f[8];
+  rc::mask_lanes(rc::ByteTab<256, false>{T.b256}, y, YS, Cols<FORM>{}, mk);
+  rc::mask_words(mk, my);
+  for (int w = 0; w < 8; ++w) B[w] = x[w] ^ my[w];
+  rc::salt_digest(H.mid_salt, rc::SaltU32{y, YS}, B + 8);
+  rc::st_be(o.bc, B, 16);
+  rc::hm96_value(H.mid_leaf, H.kw_leafpad, B, h);
+  rc::st_be(o.hs, h, 8);
+  const int q = rc::leaf_head(k.did, k.pos, k.pos, k.schema, k.sl, mid, tail);
+  if (q < 0) return -1;
+  rc::leaf_tail(mid, tail, (uint32_t)q, h, f);
+  bytes(f, o.out, 8);
+  return 0;
+}
+
 // the frame message of a leaf at any rank and position, hashed whole (the builders' path)
 RC_HD void leaf_at(const Case& k, u64* out) {
   uint8_t m[384] = {};
@@ -118,14 +149,24 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
       }
       break;
     case PAD:
+      if (k.form == 2) {
+        rc::pad_of(k.did, k.pos, d);
+        break;
+      }
       if (rc::frame_plan(k.did, k.schema, k.sl, F)) return -1;
       if (k.form == 0) rc::pad(F, k.pos, d);
       else rc::pad_rt(F, k.pos, d);
       break;
     case NODE:
-      if (rc::node_plan(k.did, N)) return -1;
       words(k.L, L, 8);
       words(k.R, R, 8);
+      if (k.form == 3) {
+        u64 mid[8];
+        rc::node_mid(k.did, k.level, mid);
+        rc::node_at(mid, k.pos, L, R, d);
+        break;
+      }
+      if (rc::node_plan(k.did, N)) return -1;
       if (k.form == 0) rc::node(N, k.level, k.pos, L, R, d);
       else if (k.form == 1) rc::node_rt(N, k.level, k.pos, L, R, d);
       else rc::node_rt<rc::Compact>(N, k.level, k.pos, L, R, d);
@@ -134,15 +175,25 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
       rc::empty_root(k.did, d);
       break;
     case LEAF_AT:
-      leaf_at(k, d);
+      if (k.form == 1) {
+        u64 mid[8], tail[16];
+        const int q = rc::leaf_head(k.did, k.pos, k.position, k.schema, k.sl, mid, tail);
+        if (q < 0) return -1;
+        words(k.value, v, 8);
+        rc::leaf_tail(mid, tail, (uint32_t)q, v, d);
+      } else {
+        leaf_at(k, d);
+      }
       break;
     case HM96: {
-      if (rc::frame_plan(k.did, k.schema, k.sl, F)) return -1;
       rc::Hm96K H;
       rc::hm96_plan(T.key, H);
       u64 x[8], Y[24];
       words(k.x, x, 8);
       words(k.y, Y, 24);
+      if (k.form == 5) return hm96_lanes<5>(k, H, T, x, Y, o);
+      if (k.form == 6) return hm96_lanes<6>(k, H, T, x, Y, o);
+      if (rc::frame_plan(k.did, k.schema, k.sl, F)) return -1;
       if (F.sx == 0) return hm96_by_form<0>(k.form, F, H, T, k.pos, x, Y, o);
       if (F.sx == 4) return hm96_by_form<4>(k.form, F, H, T, k.pos, x, Y, o);
       return -1;
