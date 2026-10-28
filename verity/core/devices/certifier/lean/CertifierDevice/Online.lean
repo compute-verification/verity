@@ -52,7 +52,7 @@ def eligibleAt (anchor index : Nat) (s : ClockSync) : Nat := eligible ⟨[], anc
 
 /-- `online._Link`: the egress frames as the prover has read them, by canonical position: the contiguous prefix
 (`anchor`, `index`, `ready`), those read ahead of it (`early`), how many are seen, and the seen ones by anchor window. -/
-structure Link where
+structure Arrivals where
   T : Nat
   anchor : Array Nat := #[]
   index : Array Nat := #[]
@@ -61,10 +61,10 @@ structure Link where
   seen : Nat := 0
   positions : Std.HashMap Nat (Array Nat) := {}
 
-namespace Link
+namespace Arrivals
 
 /-- `_Link.arrive`: a position already held is ignored. -/
-def arrive (l : Link) (position anchor index : Nat) (ready : Int) : Link := Id.run do
+def arrive (l : Arrivals) (position anchor index : Nat) (ready : Int) : Arrivals := Id.run do
   if position < l.anchor.size || l.early.contains position then return l
   let mut l := { l with early := l.early.insert position (anchor, index, ready) }
   for _ in [0:l.early.size] do
@@ -77,7 +77,7 @@ def arrive (l : Link) (position anchor index : Nat) (ready : Int) : Link := Id.r
 
 /-- `_Link.see`: extend the seen prefix to the frames ready by `bucket`, and whether one of them is ready no later than
 its anchor's bucket. -/
-def see (l : Link) (bucket : Int) : Link × Bool := Id.run do
+def see (l : Arrivals) (bucket : Int) : Arrivals × Bool := Id.run do
   let mut l := l
   let mut early := false
   for k in [l.seen:l.ready.size] do
@@ -88,10 +88,10 @@ def see (l : Link) (bucket : Int) : Link × Bool := Id.run do
     else break
   return (l, early)
 
-def count (l : Link) (u : Nat) : Nat := (l.positions.getD u #[]).size
+def count (l : Arrivals) (u : Nat) : Nat := (l.positions.getD u #[]).size
 
 /-- `_Link.h_before`: the most eligibility, under `syncs`, of the frames before window `u`'s first seen one. -/
-def hBefore (l : Link) (u : Nat) (syncs : Array ClockSync) : Nat := Id.run do
+def hBefore (l : Arrivals) (u : Nat) (syncs : Array ClockSync) : Nat := Id.run do
   let first := (l.positions.getD u #[])[0]!
   let mut h := 0
   for k in [0:first] do
@@ -102,7 +102,7 @@ def hBefore (l : Link) (u : Nat) (syncs : Array ClockSync) : Nat := Id.run do
 
 /-- `_Link.cost`: window u's seen frames' total hand time with u at `sync` and every other window as declared, or none if
 one is late. -/
-def cost (l : Link) (u : Nat) (sync : ClockSync) (syncs : Array ClockSync) : Option Nat := Id.run do
+def cost (l : Arrivals) (u : Nat) (sync : ClockSync) (syncs : Array ClockSync) : Option Nat := Id.run do
   let pos := l.positions.getD u #[]
   let mut h := l.hBefore u syncs
   let mut total := 0
@@ -119,7 +119,7 @@ def cost (l : Link) (u : Nat) (sync : ClockSync) (syncs : Array ClockSync) : Opt
         total := total + h
   return some total
 
-end Link
+end Arrivals
 
 /-- `online.Prover` of one spatial unit, on the shaper's link. Window w's choice sees the frames ready by w·T − `lag`.
 `syncs` holds its own declarations so far, `prior` the latest `depth` windows of an earlier run. -/
@@ -129,7 +129,7 @@ structure Prover where
   rule : Rule
   envelope : ClockSync
   lag : Nat
-  link : Link
+  link : Arrivals
   syncs : Array ClockSync := #[]
   prior : Array Past := #[]
 
