@@ -14,8 +14,8 @@ changes here and the older name gets a row under Older names, in the same change
   `trusted-host` (`TrustedHost`), which per-party `Faithful`, `Secret` and `Confined` are to replace.
 - **Challenger**: the auditor's device that draws live coins, committed in advance, and keeps the record; at the MVP it
   is the device running the server's network certifier, so a server's coins never leave that boundary in the clear. It
-  never sees the witness. Its premises `CoinsConfidential` and `OneClock` (one clock for its release times and the
-  certifiers' ingress) are named premises under `trusted-host`. Private messages travel only on private links
+  never sees the witness. Its premises `CoinsConfidential` and `OneClock` (one clock for every auditor device of a
+  monitoring period: the challenger, every network certifier and the memory challenger) are named premises under `trusted-host`. Private messages travel only on private links
   (`WitnessPathPrivate`, proposed). Fiat–Shamir's challenger keeps its own sense.
 - **Verifier**: the auditor's Lean verifier, run offline, and the outcome it writes; C-Flock's is
   `verity/core/service/flock/`, cross-checked by upstream Flock's Rust verifier. As a party in a statement, "the
@@ -42,8 +42,12 @@ changes here and the older name gets a row under Older names, in the same change
   the period (the models, code and data committed up front); and **the builder** B, the ahead-of-time compiler (vLLM's
   `program/predict/`). The subprotocols' Programs and the proof system are the protocol's own, not registered.
 - **Execution**: for each **declared advice** a_j (declaring is the developer's), B outputs the **execution block** E_j,
-  its partition 𝓘_j into inference blocks, and its placement loc_j on the site's registered devices. The **declared
-  circuit** is D = E_1 ‖ … ‖ E_n, the one use of "declared". The **actual circuit** A is everything the hardware
+  its partition 𝓘_j into inference blocks, and its placement loc_j on the site's registered devices. B also outputs the
+  cut into proof blocks, which validation checks against public rules (outputs of at most 16 bits, size classes, a
+  count cap). 𝓘_j and loc_j are private; only their padded counts are public. For network traffic loc_j carries when:
+  B predicts each transfer's send tick, and a_j corrects it. a_j is charged only by its length, a public budget per
+  execution period, and is committed after its period ends and before that period's challenge. PoUW's own compile is
+  not part of B. The **declared circuit** is D = E_1 ‖ … ‖ E_n, the one use of "declared". The **actual circuit** A is everything the hardware
   computed, hidden work included, each gate placed at a device and a tick (`Accounting.Placed`).
 - **Verification** follows each execution in four steps, in order: **commitment**, **challenge** (live coins),
   **proof** and **validation**, where the verifier checks the proofs, and the inference-only policy checks each E_j.
