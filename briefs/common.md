@@ -93,3 +93,6 @@ A PR is marked within 3 hours of starting it; split longer work into pieces, eac
 
 ## Avoid cpu-2 entirely (00:05Z)
 cpu-2 is out of disk: suites and tries there fail mid-run (d9db, e825 and fbab at 00:00Z). Send every run, records, tries and suites alike, to vy-nebius-cpu-6's soundness pool. Treat a cpu-2 failure as the node until its log shows otherwise, and resend it on cpu-6.
+
+## cpu-6 is out of disk too (00:10Z)
+cpu-6 now refuses runs at clone ("No space left on device"). Until infra clears it, send new runs to vy-nebius-cpu-4's soundness pool (`--on vy-nebius-cpu-4`, `CHECK_SLOTS=/workspace/research/locks/soundness/slots`). Use cpu-7, 8 or 9 as soon as infra announces them. Leave runs that already hold a slot on cpu-6 alone.
