@@ -1,5 +1,5 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`demos/h200/e2e_h200/plan.py`'s
+commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`examples/h200/e2e_h200/plan.py`'s
 `Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 

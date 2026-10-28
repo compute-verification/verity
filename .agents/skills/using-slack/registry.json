@@ -272,8 +272,8 @@
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
-        "demos/h200/",
-        "demos/dither_full_util/"
+        "examples/h200/",
+        "examples/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -552,8 +552,8 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "demos/README.md",
-        "demos/lifecycle/",
+        "examples/README.md",
+        "examples/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -568,7 +568,7 @@
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/",
-        "demos/vllm/",
+        "examples/vllm/",
         "ruff.toml"
       ],
       "linear": "VLLM",

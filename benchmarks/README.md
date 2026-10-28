@@ -1,7 +1,7 @@
 # Benchmarks
 
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
-against. End-to-end examples, what a person runs to serve and audit a workload, are in `demos/`. Results are not
+against. End-to-end examples, what a person runs to serve and audit a workload, are in `examples/`. Results are not
 committed: a run publishes its outputs to the evidence store, and tables are rendered from the store on demand.
 `verity-bench` (`harness/`) is the shared harness for what an arm adds to served inference against stock vLLM, with its
 specs in `specs/`; `verity bench NAME` runs a directory's own runner.

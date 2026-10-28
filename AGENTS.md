@@ -26,7 +26,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `demos/`: one directory per example: its workload, placement, commands and doneness (`demos/README.md`).
+- `examples/`: one directory per example: its workload, placement, commands and doneness (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).

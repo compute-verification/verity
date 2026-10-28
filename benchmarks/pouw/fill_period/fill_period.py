@@ -51,7 +51,7 @@ sys.path.insert(0, str(HERE.parent / "window_salt"))
 import window_salt as WS  # noqa: E402
 
 TREE = WS.TREE
-sys.path.insert(0, str(TREE / "demos" / "h200"))
+sys.path.insert(0, str(TREE / "examples" / "h200"))
 from e2e_h200 import served_weights as SW  # noqa: E402
 
 STUB = TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"

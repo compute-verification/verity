@@ -12,7 +12,7 @@ its functions' types; each library's table of them sits beside the script that l
 **Status: active.** `kv.cu` is the store's encode on the GPU: `benchmarks/remote_session/run.sh` builds it, the vLLM
 integration calls it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`), and `benchmarks/vllm_encoded`
 and `benchmarks/kv_filler` build it. The `codec_tensor`, `kv_filler`, `serve_bandwidth` and `vllm_encoded` suites read
-its Python as inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `demos/`, `tests/` and `integrations/`.
+its Python as inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/word_codec` checks the references against their vectors
 (`tests/vectors.json`, `tests/kv_vectors.json`, `tests/wide_vectors.json`) and the twins against the references, on the

@@ -62,7 +62,7 @@ negatives.
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `demos/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -118,7 +118,7 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
-- `prove_bundle.sh`: a drawn-unit replay bundle (`demos/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
+- `prove_bundle.sh`: a drawn-unit replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
   `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else the store's `BUNDLE_WINDOW` (a W8A8 MLP's window under a
   test key, its tampered twin and the interfaces' bundle of four drawn units under the window's registered `subset:4`).
   `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's draw to be live. The bundle is held to the prover's window: its own check (the draw's

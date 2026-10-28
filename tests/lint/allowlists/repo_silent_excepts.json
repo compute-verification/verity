@@ -9,8 +9,6 @@
     {"file": "benchmarks/codec_tensor/bench.py", "count": 1},
     {"file": "benchmarks/codec_tensor/sketching.py", "count": 1},
     {"file": "benchmarks/commitments/hiding_leaf_cost.py", "count": 1},
-    {"file": "demos/h200/e2e_h200/ops.py", "count": 1},
-    {"file": "demos/h200/replay.py", "count": 2},
     {"file": "benchmarks/harness/verity_bench/vllm/arms.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/vllm/commit_arm.py", "count": 2},
     {"file": "benchmarks/harness/verity_bench/vllm/runner.py", "count": 3},
@@ -434,6 +432,8 @@
     {"file": "verity/ml/flock/verifier/qword_program_agree.py", "count": 1},
     {"file": "verity/ml/flock/verifier/transcript_check.py", "count": 1},
     {"file": "verity/ml/randomness/tests/test_randomness.py", "count": 1},
-    {"file": "benchmarks/torch_gpu/s8_linear/int_mm.py", "count": 1}
+    {"file": "benchmarks/torch_gpu/s8_linear/int_mm.py", "count": 1},
+    {"file": "examples/h200/e2e_h200/ops.py", "count": 1},
+    {"file": "examples/h200/replay.py", "count": 2}
   ]
 }
