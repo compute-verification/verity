@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +15,7 @@ from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.program import model as M
 
 #: Qwen/Qwen3-235B-A22B-FP8 at revision 39eb2b06, the bytes the 235B pin records as its config_sha256
-CFG_235B_PATH = Path(__file__).parent / "data" / "QWEN3_235B_A22B_FP8.config.json"
+CFG_235B_PATH = dg.HF_CONFIG_DIR / "QWEN3_235B_A22B_FP8.config.json"
 CFG_235B_SHA256 = "702c46d431bb984db9035a1225186bbfdb52c0d19c82104df4a37cd005e0369e"
 LAYER = "model.layers.0."
 EXPERTS = "model.layers.0.mlp.experts.routed_experts."
