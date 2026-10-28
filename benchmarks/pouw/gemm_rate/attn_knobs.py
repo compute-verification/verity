@@ -123,12 +123,12 @@ class Arms:
                 page_size=BLOCK if paged_ else None, causal=True, window_size=(-1, -1), num_splits=1)
         return self.sched_cache[key]
 
-    def call(self, arm: str, s: Step):
+    def call(self, arm: str, s: Step, out: torch.Tensor | None = None):
         op = self.ops["wheel"]
         if arm.startswith("so:"):
             ns, _, form = arm[3:].partition(":")
             op, arm = self.ops[ns], form or "served"
-        out = s.out()
+        out = s.out() if out is None else out
         if arm in ("served", "served-eager", "splits0", "sched", "kattn", "page128"):
             kc, vc, bt = s.caches["kattn" if arm == "kattn" else "page128" if arm == "page128" else "served"]
             sched = self.sched(s, True) if arm == "sched" else None
@@ -163,13 +163,16 @@ def snap(r):
     return o.clone(), lse.clone()
 
 
+def poisoned(s: Step) -> torch.Tensor:
+    return s.out().view(torch.int16).fill_(0x7FC1).view(torch.bfloat16)
+
+
 def checks(arms: Arms, arm: str, s: Step, bat: Step, ref) -> dict:
-    """arm's out and lse against `served`'s (ref), on a rerun, and with bat's extra sequence ahead of s's in the batch."""
-    f = arms.call(arm, s)
-    a = snap(f())
-    b = snap(f())
-    fb = arms.call(arm, bat)
-    c = fb()
+    """arm's out and lse against `served`'s (ref), on a rerun, and with bat's extra sequence ahead of s's in the batch, each
+    call into its own NaN-poisoned output."""
+    a = snap(arms.call(arm, s, poisoned(s))())
+    b = snap(arms.call(arm, s, poisoned(s))())
+    c = arms.call(arm, bat, poisoned(bat))()
     torch.cuda.synchronize()
     x = bat.lead
     lead = (c[0][x:], c[1][:, x:])
@@ -237,10 +240,10 @@ def main() -> None:
         lens = ar.parse_prompt(prompt)
         s = Step(m, lens, args.seed + pi)
         bat = batched(m, s, args.seed + 100 + pi)
-        ref = snap(arms.call("served", s)())
+        ref = snap(arms.call("served", s, poisoned(s))())
         kc, vc, bt = s.caches["served"]
         via = arms.fai.flash_attn_varlen_func(
-            q=s.q, k=kc, v=vc, out=s.out(), cu_seqlens_q=s.cu, max_seqlen_q=s.max, seqused_k=s.used, max_seqlen_k=s.max,
+            q=s.q, k=kc, v=vc, out=poisoned(s), cu_seqlens_q=s.cu, max_seqlen_q=s.max, seqused_k=s.used, max_seqlen_k=s.max,
             softmax_scale=s.scale, causal=True, window_size=(-1, -1), block_table=bt, softcap=0.0, scheduler_metadata=None,
             fa_version=3, num_splits=1, return_softmax_lse=True)
         emit({"kind": "check", "prompt": prompt, "arm": "flash_attn_varlen_func", "vs_served": compare(snap(via), ref)})
@@ -250,10 +253,15 @@ def main() -> None:
             if a != "served-eager":
                 emit({"kind": "check", "prompt": prompt, "arm": a, **checks(arms, a, s, bat, ref)})
             f = arms.call(a.removesuffix("-eager"), s)
+            emit({"kind": "prepare", "prompt": prompt, "arm": a})
             it = ar.prepare(emit, a, "bf16", macs, f, not a.endswith("-eager"), {"prompt": prompt, "t": s.t, "form": "whole"})
+            for _ in range(3):
+                it["fn"]()
+            torch.cuda.synchronize()
             ready.append(it)
         for r in range(args.rounds):
             for it in ready:
+                emit({"kind": "start", "prompt": prompt, "arm": it["arm"], "round": r})
                 emit(ar.window(args, nv, st, it, r))
         del ready, s, bat
         torch.cuda.empty_cache()
