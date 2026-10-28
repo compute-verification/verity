@@ -16,7 +16,7 @@ Where the two differ, the Python is what is wrong. The properties of the Lean's 
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
-it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
+it returns, and the ledger reads that record. `audit.AuditRun` keeps the books beside it as the reference, and a
 registration, event, window verdict or record field on which they differ refuses the session at that window as
 `disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
 runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean became the verifier of record under
@@ -33,7 +33,7 @@ the 8 Oct ruling (the friction skill), on these grounds:
 - the Python keeps running beside the Lean as the reference.
 - the protocol's properties are in `Security/Properties/`.
 
-The driver's scheduling (when a boundary leaves, `Session.next_boundary_ns`), the plans the `memory` diagnostic
+The driver's scheduling (when a boundary leaves, `AuditRun.next_boundary_ns`), the plans the `memory` diagnostic
 reads, and the window and draw counts `verifier.json` keeps are still read from the books. The Lean checks the same
 plans event by event.
 
@@ -96,7 +96,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 
 ## Code
 
-- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes, two
+- `audit.py`: the lifecycle (`register`, `Registry`, `AuditRun`), pacing (`Pace`: a live coin every k passes, two
   windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
@@ -107,7 +107,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`). The prover gets the
   coins in this order: each window's challenge as it is released, its value and the root it follows (`Released`); the
   window's draws after its roots; and, once the session has its outcome and no root can follow, the commitment and
-  every released coin's opening (`audit.Session.disclose`; the remote session's `coins` after `ended`), which it
+  every released coin's opening (`audit.AuditRun.disclose`; the remote session's `coins` after `ended`), which it
   checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
   prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).
 - `receipts.py`: seeds, plans, receipts and their trees.
@@ -127,7 +127,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   process each session. The standard library only, so the party runs as an auditor gate starts it (`python3 -s -E`).
 - `session_parties.py`: `period.session` as two parties of the deployment layer (`verity.core.deploy`): the verifier
   and its challenger, on their own clock and coins, which time each root by its arrival (`Received.at`), disclose the
-  session's coins at its end (`audit.Session.disclose`) and finish with its answer and case; and the prover, on its
+  session's coins at its end (`audit.AuditRun.disclose`) and finish with its answer and case; and the prover, on its
   node's store (`capabilities["store"]`), which checks each challenge it was sent against them (`period.Prover.end`).
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
@@ -136,7 +136,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
   verifier's plan of the published schedule at its step, the schedule is within the cap on its bits the session
   committed before its coins (`audit.Params.schedule_cap`), and that cap is the layout's steering
-  (`audit.Session.scheduled`, `audit.Ledger.steering`). Of record in `lean/RemoteAudit/Schedule.lean`.
+  (`audit.AuditRun.scheduled`, `audit.GammaTerms.steering`). Of record in `lean/RemoteAudit/Schedule.lean`.
 - `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
   lays out the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler
   (`arena`, `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`).

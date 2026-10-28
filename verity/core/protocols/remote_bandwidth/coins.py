@@ -15,7 +15,7 @@ after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had rec
            after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
 released   (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`Released`), no salt or path
 end        once the session has its outcome, so no root can follow: the commitment and every released coin's opening
-           (`audit.Session.disclose`), against which the prover checks each coin it was sent (`received_reason`)
+           (`audit.AuditRun.disclose`), against which the prover checks each coin it was sent (`received_reason`)
 ~~~
 
 The commitment's root is a function of every coin, the windows' to come among them, and a coin's salt and path give it
@@ -173,7 +173,7 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
 def received_reason(commitment: Any, received: Sequence[Released], openings: Sequence[Any]) -> str | None:
     """Why the coins the prover was sent during the session, `received`, are not coins of `commitment` as `openings`
     open them; None when they are.  The prover's check at the session's end, once the verifier has sent it the
-    commitment and every released coin's opening (`audit.Session.disclose`): each coin it was sent is opened, once,
+    commitment and every released coin's opening (`audit.AuditRun.disclose`): each coin it was sent is opened, once,
     with the value and the root it was sent with, against the commitment (`coin_reason`)."""
     if type(commitment) is not LiveCommitment:
         return "a session's coin commitment is a live coin commitment"

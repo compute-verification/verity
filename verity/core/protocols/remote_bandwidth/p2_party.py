@@ -18,7 +18,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   next window's first root, or its deadline for the last) it sends `{"open": {"draws", "t"}}`, answered `{"openings":
   [opening_json, ...]}`, and verifies them while the prover serves on.
 - Once the session has its outcome, `{"end": {"commitment", "openings"}}`: the session's coin commitment and every
-  released coin's opening (`audit.Session.disclose`), against which the prover checks each challenge it was sent
+  released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
   (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's

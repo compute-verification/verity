@@ -215,7 +215,7 @@ def binding(record: audit.Record, node: Node) -> float:
     term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
-    prover is sent no coin commitment before the session's end (`coins.Released`, `audit.Session.disclose`), so
+    prover is sent no coin commitment before the session's end (`coins.Released`, `audit.AuditRun.disclose`), so
     nothing it holds before a window's openings coin is released depends on that coin; the statement that the play
     then fixes each window's roots by its cut is not yet in Lean, and this charge takes split_t as 0 (the gap
     `binding-split`, `PROTOCOL.md` §8)."""
@@ -229,7 +229,7 @@ def binding(record: audit.Record, node: Node) -> float:
 
 
 @dataclass(frozen=True, slots=True)
-class Draw:
+class SamplingTerms:
     """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
     (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
     is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
@@ -248,9 +248,9 @@ class Draw:
                                             "in_total": False}}}
 
 
-def draw(record: audit.Record, node: Node) -> Draw:
+def draw(record: audit.Record, node: Node) -> SamplingTerms:
     """The record's draw terms on `node`."""
-    return Draw(rejection(record), binding(record, node))
+    return SamplingTerms(rejection(record), binding(record, node))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -265,17 +265,17 @@ def windows(record: audit.Record) -> list[tuple[int, int]]:
 
 @dataclass(frozen=True, slots=True)
 class Gamma:
-    """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
+    """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
     ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection and binding terms, the PRF
     advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float
-    ledger: audit.Ledger
+    ledger: audit.GammaTerms
     windows: tuple[audit.WindowLedger, ...]
     sketch: float
-    draw: Draw
+    draw: SamplingTerms
 
     @property
     def gamma(self) -> float:
@@ -302,7 +302,8 @@ class Gamma:
                              "window": w.window} for w in self.windows]}
 
 
-def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
+def _fixed(record: audit.Record, lg: audit.GammaTerms, chip_bytes: int,
+           capacity: float) -> tuple[audit.WindowLedger, ...]:
     """The ledger's window terms over a paced record's fixed windows (`windows`).  A pass is in the fixed window that
     holds it whole, from its challenge's release to its root's arrival, and in none if it straddles a boundary; each
     term is its passes': their credited receipts, chip and counting, and of each window they are from, its wrong
