@@ -90,3 +90,6 @@ Only the site, θ and B are registered (log entries: site, theta, builder). Subp
 
 ## Three-hour rule (Daniel 4:38 PM PDT, 23:55Z)
 A PR is marked within 3 hours of starting it; split longer work into pieces, each within 3 hours. A plan, answer or design note is due within 1 hour of the ask. Your PR's date is on its Linear issue (PRF-266, PRF-268, PRF-270, PRF-272); if it slips, comment there with the new date and why.
+
+## Avoid cpu-2 entirely (00:05Z)
+cpu-2 is out of disk: suites and tries there fail mid-run (d9db, e825 and fbab at 00:00Z). Send every run, records, tries and suites alike, to vy-nebius-cpu-6's soundness pool. Treat a cpu-2 failure as the node until its log shows otherwise, and resend it on cpu-6.
