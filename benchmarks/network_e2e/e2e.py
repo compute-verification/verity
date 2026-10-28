@@ -107,7 +107,8 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
 ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
-GATE_HOST = "vy-challenger-1"
+#: the auditor's host whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
+GATE_HOST = json.loads((ROOT / "benchmarks" / "network_traces" / "site.json").read_text())["challenger"]
 
 CLAIM = {
     "statement": (
