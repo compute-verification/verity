@@ -9,8 +9,7 @@ import Definitions.Pous.Assumptions.P2
 Six statements about the abstract model `m1p` (`Security/Definitions/Pous/Model/M1p.lean`: independent uniform
 permutations of `[0, p)`, forward queries only), at the block counts, widths and primes P2 uses, that `grade.sh` grades
 against, in namespace `Pous.Guarantees` with the rest. The proofs are in `Security/Proofs/Pous/P2/`
-(`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `Security/Proofs/Pous.lean`); a docstring's
-`lean/submissions/efficient-crypto/…` path names the store draft each was graded from. A seventh,
+(`Pous.SecurityProofs.P2MeetsM1pB19Uncond` and the others in `Security/Proofs/Pous.lean`). A seventh,
 `P2SlackFamilyFreeBlocks` (the sampled setup's free blocks), is proved in `Security/Proofs/Pous/FreeBlocks/`. Two more,
 `P2SlackFamilyWide` and `P2SlackFamilyFreeBlocksWide`, carry the families from `2^23` to `2^64` blocks
 (`Security/Proofs/Pous/P2/Wide.lean`). The last, `P2RingAuditSecureOfReduces`, carries the `m1p` row to P2 in the ring
@@ -34,7 +33,7 @@ zero-extended to 16,448 bits (`Pous.m1p`), meet the requirement with sequential 
 answer, any forward-query depth, 88 challenges and `ε = 2^-128`, for every `b` with `20·16448 ≤ 21·b` (the space
 bound) and `b ≤ 16447` (equivalently `2^b ≤ p`: every payload lies in `[0, p)`). Instances: `b = 16447` (one pad bit)
 and `b = 16432` (2,054 bytes, the MVP's packing). Pinned as drafted
-(`lean/submissions/efficient-crypto/p2-domain/P2Domain.lean`, `PousP2p.p2_meets_m1p_b19`). 88 is the least k this
+(`Security/Proofs/Pous/P2/Domain.lean`, `PousP2p.p2_meets_m1p_b19`). 88 is the least k this
 certificate route gives. Storing floor(S/w) code blocks raw breaks `Meets` at k = 85 for every `b`
 (`not_meets_m1p_b19_k85`).
 
@@ -52,7 +51,7 @@ def P2MeetsM1pB19Uncond : Prop :=
 exact 16,448-bit domain.** For every B with `2^8 ≤ B ≤ 2^23` and every `b` with `20·16448 ≤ 21·b` and `b ≤ 16447`,
 `m1p B 16448 (2^16448 − 21065) b` meets the requirement with sequential reveal, `2^20` forward queries per answer, any
 forward-query depth, 88 challenges and `ε = 2^-128`. Pinned as drafted
-(`lean/submissions/efficient-crypto/p2-domain/P2Domain.lean`, `PousP2p.family`). `k = 85` fails at its `2^19` instance,
+(`Security/Proofs/Pous/P2/Domain.lean`, `PousP2p.family`). `k = 85` fails at its `2^19` instance,
 for every `b` (`family_k85_fails`). Scope: as `P2MeetsM1pB19Uncond`.
 
 Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
@@ -65,7 +64,7 @@ def P2MeetsM1pFamilyUncond : Prop :=
 each block carrying `b` payload bits (`Pous.m1p`), meet the requirement with sequential reveal, `2^20` forward queries
 per answer, any forward-query depth, 90 challenges and `ε = 2^-128`, for every `b` with `20·8192 ≤ 21·b` and
 `b ≤ 8191`. Instances: `b = 8191` and `b = 8176` (1,022 bytes). Pinned as drafted
-(`lean/submissions/efficient-crypto/p2-domain/P2Domain.lean`, `PousP2p.p2_meets_m1p_8192`).
+(`Security/Proofs/Pous/P2/Domain.lean`, `PousP2p.p2_meets_m1p_8192`).
 Scope: as `P2MeetsM1pB19Uncond`; it asserts no zero-RTT or root-latency fact.
 
 Frozen (no-function, hash): the abstract `m1p` in the random-oracle model, not the deployed P2. -/
@@ -80,7 +79,7 @@ block, for every payload width in range.** `m1p (2^19) 16448 (2^16448 − 21065)
 prime) is correct, holds `W`, and is within the space bound. Every adversary holding `⌊ρ·|C|⌋ + λ·2^19` bits, with
 sequential reveal, `2^20` forward queries per answer and any depth, is accepted with probability at most
 `1% + 2^-128`: at `k = 95` for `λ = 64`, `k = 104` for `λ = 128` and `k = 127` for `λ = 256`. This holds for every
-`b` with `20·16448 ≤ 21·b` and `b ≤ 16447`. Proposed in `lean/submissions/efficient-crypto/p2-margin/P2Margin.lean`
+`b` with `20·16448 ≤ 21·b` and `b ≤ 16447`. Proved in `Security/Proofs/Pous/P2/Margin.lean`
 (`PousMargin.b19_64`, `b19_128`, `b19_256`). Each k is the least this certificate route gives. Storing
 ⌊(S + λ·2^19)/16448⌋ code blocks raw breaks the requirement at every `k ≤ 92`, `100` and `121` respectively
 (`raw_b19_64`, `raw_b19_128`, `raw_b19_256`).
@@ -115,7 +114,7 @@ probability at most `1% + 2^-128`, at:
 - `λ = 128`: `k = 105`, and `k = 104` for `B ≥ 2^9`;
 - `λ = 256`: `k = 128`, and `k = 127` for `B ≥ 2^10`.
 
-Proposed in `lean/submissions/efficient-crypto/p2-margin/P2Margin.lean` (`PousMargin.fam_*`). Below those thresholds
+Proved in `Security/Proofs/Pous/P2/Margin.lean` (`PousMargin.fam_*`). Below those thresholds
 the uniform certificate `g = ⌊c·B⌋ + 1` does not reach the lower k. At `λ = 64` and `λ = 256` no `g` passes the
 bound `logHistGammaM1_le` at some such `B` (for example `B = 275`), while the lower bound on `Γ` does not rule the
 lower `k` out there, so the family's lower `k` for small `B` is open. Statement non-vacuity: as `P2SlackB19Uncond`,
@@ -145,7 +144,7 @@ def P2SlackFamilyUncond : Prop :=
 (`λ = 0`, `k = 88`) and `P2SlackB19Uncond` (`λ = 64`, `128`, `256` at `k = 95`, `104`, `127`) hold with
 `ε = 2^-129` in place of `2^-128`, for every payload width in range. The ideal-model term therefore needs at most
 half of the `2^-128` budget. The proved `log₂(|Hist|·Γ)` bounds are about `−3.0·10^6`, `−1.0·10^6`, `−2.0·10^6` and
-`−1.2·10^6` (`PousMargin.log_b19_*`). Proposed in `lean/submissions/efficient-crypto/p2-margin/P2Margin.lean`
+`−1.2·10^6` (`PousMargin.log_b19_*`). Proved in `Security/Proofs/Pous/P2/Margin.lean`
 (`PousMargin.b19_meets_129`, `b19_64_129`, `b19_128_129`, `b19_256_129`). Scope: as `P2SlackB19Uncond`. Under an
 external reduction in which all unmodelled errors add and total at most `2^-129`, the combined cryptographic error is
 at most `2^-128`; Lean proves neither that reduction nor the external bound.
