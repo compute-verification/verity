@@ -1,6 +1,6 @@
-"""`rename.py`, the rename move: where a word is renamed and where it stands, what it moves, the locks' records it leaves for
-`audit.py --update --moved`, the pins it rewrites, that a second run changes nothing, and that no tracked path is left to move
-on this tree."""
+"""`rename.py`, the rename move, with a past move's word maps as fixtures (`fixtures/`): where a word is renamed and where it
+stands, what it moves, the locks' records it leaves for the Lean check's `--update --moved`, the pins it rewrites, and that a
+second run changes nothing."""
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +17,8 @@ spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.par
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
-WORDS = M.Words(tomllib.loads((HERE.parent / "rename_map.toml").read_text()))
+MAP = HERE / "fixtures" / "rename_map.toml"
+WORDS = M.Words(tomllib.loads(MAP.read_text()))
 
 
 def test_a_word_is_renamed_as_a_word_or_a_part_of_an_identifier():
@@ -142,7 +143,7 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
     """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
     quoted string names the module, and everywhere else the name stands."""
-    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    areas = M.Words(tomllib.loads((HERE / "fixtures" / "areas_map.toml").read_text()))
     code = ("import Properties.RemoteAudit.Line.Record\nimport Proofs.Properties.RemoteAudit.Line\n"
             "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
             "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
@@ -157,7 +158,7 @@ def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
 def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
     """The areas move renames module `Properties.CertifierDevice` and keeps namespace `Properties.CertifierDevice`: the
     rewrite and the declaration renames the locks need agree on what stands."""
-    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    areas = M.Words(tomllib.loads((HERE / "fixtures" / "areas_map.toml").read_text()))
     code = ("import Properties.CertifierDevice\nimport Proofs.Properties.CertifierNetwork.Runs\n"
             "namespace Properties.CertifierDevice\nopen Properties.NetworkCertifier Properties.NetworkCertifier.Bytes\n"
             "/-- `Properties.CertifierDevice.failClosed`, stated in `Properties.CertifierNetwork.Runs`. -/\n"
@@ -226,7 +227,7 @@ def toy(tmp_path):
 
 
 def test_the_move_on_a_toy_tree(toy, capsys):
-    assert M.main(["--root", str(toy)]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     tracked = set(git(toy, "ls-files").split())
     assert {"w/certifier/grid.py", "w/certifier/tests/test_network_certifier_grid.py",
             "Sec/Proofs/NetworkCertifier.lean"} <= tracked
@@ -251,7 +252,7 @@ def test_the_move_on_a_toy_tree(toy, capsys):
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
     head = git(toy, "rev-parse", "HEAD:")
     capsys.readouterr()
-    assert M.main(["--root", str(toy)]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     assert "files rewritten: 0, files moved: 0, TRUSTED.sha256 files repinned: 0" in capsys.readouterr().out
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
@@ -263,15 +264,15 @@ def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
     lock = json.loads(path.read_text())
     path.write_text(json.dumps(lock | {"guarantees": {"Flock.Guarantees.gatewayLeaf": {}}}, indent=1) + "\n")
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "a branch's guarantee")
-    assert M.main(["--root", str(toy)]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
     capsys.readouterr()
-    assert M.main(["--root", str(toy), "--moves"]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy), "--moves"]) == 0
     assert json.loads(capsys.readouterr().out) == {"Flock.Guarantees.gatewayLeaf": "Flock.Guarantees.firewallLeaf",
                                                    "NetTiming.Warden": "NetTiming.Certifier"}
     path.write_text(json.dumps({"guarantees": {"Flock.Guarantees.firewallLeaf": {}},
                                 "reads": {"Definitions.Warden": {"definitions": {"NetTiming.Certifier": "00"}}}}))
-    assert M.main(["--root", str(toy), "--moves"]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy), "--moves"]) == 0
     assert json.loads(capsys.readouterr().out) == {}
 
 
@@ -292,7 +293,7 @@ def test_a_file_lands_where_another_leaves(toy):
 def test_it_refuses_a_dirty_worktree(toy):
     (toy / "README.md").write_text("edited\n")
     with pytest.raises(SystemExit, match="isn't clean"):
-        M.main(["--root", str(toy)])
+        M.main(["--map", str(MAP), "--root", str(toy)])
 
 
 def test_two_files_landing_at_one_path_fail(toy):
@@ -301,4 +302,4 @@ def test_two_files_landing_at_one_path_fail(toy):
     git(toy, "add", "-A")
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clash")
     with pytest.raises(SystemExit, match="two files would land at one path"):
-        M.main(["--root", str(toy)])
+        M.main(["--map", str(MAP), "--root", str(toy)])

@@ -20,7 +20,7 @@ same script rather than by rename detection:
 
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
-report clean (duplicate imports and lock entries, TOP-90 row 18). Its owner merges main instead (`git merge origin/main`); the
+report clean (duplicate imports and lock entries). Its owner merges main instead (`git merge origin/main`); the
 restack is for branches based at or before B. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
 id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
@@ -336,11 +336,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="main, when it resolves: a branch that shares a commit after the move's base with it or --onto is "
                          "refused (default origin/main)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
-    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
-                                                    "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
+    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; a rename "
+                                                    "move's is tools/move/rename.py)")
     ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
                     help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
-                         "(the rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/security_map.toml)")
+                         "(a rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/MAP.toml)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
