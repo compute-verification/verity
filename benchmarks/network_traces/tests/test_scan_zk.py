@@ -3,15 +3,16 @@ computing the warden's row from the view its ingress bucket wrote, w63's request
 and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the references' outputs) as the
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
 (`scan_zk.wired`); chain's ingress member refused at unit A's o1 and tampered's egress member at the re-signed row
-("does not open"). A group of link-windows (IO-TIE's) is one registration, a member a template and link-window, its
-members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the synthetic run published as
-`warden_serve.Publisher` publishes a served one) is read under its deployment's key, its registration's
-``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in ``cells.jsonl``,
-and refused by name where a row, the key or the schedule isn't the warden's. Every round on a challenger session of its
-own (``--challenger``): flags that can't name one refused by name before anything runs, each round's root bound to the
-warden's signed link-windows, the step and the round, and the honest round's Spec what its registration shows
-(`service.check_public`) over the units its `Stream` takes. Nothing here lowers or proves (`scan_zk.prove` does, on a
-node)."""
+("does not open"); unread's one ingress unit, at a request's anchor with its Programs' entry unread, every read held and
+its output 0, its state and view the honest ones. A group of link-windows (IO-TIE's) is one registration, a member a
+template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
+synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
+registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
+``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. Every round on a
+challenger session of its own (``--challenger``): flags that can't name one refused by name before anything runs, each
+round's root bound to the warden's signed link-windows, the step and the round, and the honest round's Spec what its
+registration shows (`service.check_public`) over the units its `Stream` takes. Nothing here lowers or proves
+(`scan_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -74,6 +75,17 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert f.refused == f"registered reads: table row {b} does not open the registered root at position {b}"
     assert f.outputs == [1] * T and f.made == eg.made and at.tampered.row != eg.made["o1"][b]
     assert f.ports["o1"]["root"] == at.tampered.head.root.hex() != eg.ports["o1"]["root"] and f.base == 0
+    # unread: requests 1, 2 and 3 are anchored at 16, and request 1's slot 0 is read by no Program there
+    (u,) = h.rounds["unread"]
+    U = at.unread.bucket
+    assert (U, at.unread.slot, at.unread.q) == (16, 0, 1) and sz.targets(at, "unread") == [u.name] == ["ingress-0"]
+    assert (u.base, u.n, u.buckets, u.refused, u.outputs) == (0, 1, [U], None, [0])
+    assert sz.IS.prog_decode(sz.CLASS, sz._bits(at.unread.tree, U))[0] == (0, *sz.IS.prog_decode(
+        sz.CLASS, at.chain.progs[U])[0][1:]) and sz._bits(at.unread.tree, U - 1) == at.chain.progs[U - 1]
+    assert {p: u.made[p][0] for p in ("o1", "o2")} == {p: ing.made[p][U - 1] for p in ("o1", "o2")}
+    assert u.ports["prog"]["root"] == at.unread.tree.root.hex() != ing.ports["prog"]["root"]
+    assert u.ports["o1"]["root"] == u.ports["sin"]["root"] == ing.ports["o1"]["root"]
+    assert u.ports["prog"]["reads"] == u.ports["o1"]["reads"] == [U] and u.ports["sin"]["reads"] == [U - 1]
 
 
 def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
@@ -94,6 +106,7 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
     assert eg1.ports["o1"]["root"] == at.sides["egress"][1].head.root.hex() and eg1.ports["o1"][sz.REG.READS_FROM] == 3 * T
     assert [m.name for m in h.rounds["chain"] if m.refused] == sz.targets(at, "chain") == ["ingress-0"]
     assert [m.name for m in h.rounds["tampered"] if m.refused] == sz.targets(at, "tampered")
+    assert [(m.name, m.buckets, m.outputs) for m in h.rounds["unread"]] == [("ingress-0", [4], [0])]
     with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
@@ -115,10 +128,11 @@ EG = _toy("ScanZkTestEgress", lambda B, S_, x: B.call(XOR8, x[1], x[0]))
 def test_the_members_are_the_programs_ranges(G):
     """`members_of` against the partition's own ranges (stand-in templates; `program` asserts the same of the scan's):
     each template's first unit its first member's base and its count its members', the units 0 … N − 1 in order, the
-    ingress units computing buckets 1 … G·T − 1 and the egress units 0 … G·T − 1."""
+    ingress units computing buckets 1 … G·T − 1 and the egress units 0 … G·T − 1; the unread round's one unit its
+    bucket."""
     T, defs = 4, {"first": FIRST, "ingress": ING, "egress": EG}
     for templates in {t for t, _o in sz.ROUNDS.values()}:
-        members = sz.members_of(templates, G, T)
+        members = sz.members_of(templates, G, T, bucket=T + 1)
         counts = sz.counts_of(members)
         program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in templates])
         ranges = sz.PA.ranges(program, sz.PA.template_instances_query([defs[t] for t in templates]))
@@ -126,8 +140,12 @@ def test_the_members_are_the_programs_ranges(G):
             (next(m.base for m in members if m.template == t), counts[t]) for t in templates]
         units = [(m.base + k, m.template, b) for m in members for k, b in enumerate(m.buckets)]
         assert [u for u, _t, _b in units] == list(range(sum(counts.values())))
-        assert sorted(b for _u, t, b in units if t == "egress") == list(range(G * T))
-        assert sorted(b for _u, t, b in units if t != "egress") == (list(range(G * T)) if "first" in templates else [])
+        unread = templates == sz.UNREAD
+        assert sorted(b for _u, t, b in units if t == "egress") == ([] if unread else list(range(G * T)))
+        assert sorted(b for _u, t, b in units if t != "egress") == (
+            list(range(G * T)) if "first" in templates else [T + 1] if unread else [])
+        if unread:
+            assert [m.name for m in members] == [f"ingress-{(T + 1) // T}"]
 
 
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
@@ -156,7 +174,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 
 def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
-    assert set(h.rounds) == {"honest", "chain", "tampered"} and h.at.run_id == "00" * 32
+    assert set(h.rounds) == {"honest", "chain", "tampered", "unread"} and h.at.run_id == "00" * 32
     assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.at.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.at.tampered.key_of == "the driver's own"
