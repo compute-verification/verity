@@ -7,7 +7,7 @@ import pytest
 
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.commitment import commit, record_digest, row_digest
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier, fill
 from verity.core.protocols.certifier.schedule import run_shaper
 
 from test_network_certifier_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready
@@ -58,7 +58,7 @@ def test_committed_audit_matches_raw_audit():
     late = run_shaper(FRAMES, late_ready, SYNCS, Certifier("responses", P))
     rows = [list(row) for row in honest[0].grid]
     rows[0][0] = b"\xff"
-    tampered = [Record("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
+    tampered = [BlockGrid("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
     w = Certifier("responses", P)
     faulted = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
     w.fault(Reason.DROPPED)

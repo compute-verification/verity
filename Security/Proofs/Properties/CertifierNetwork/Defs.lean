@@ -60,7 +60,7 @@ def declaredSyncs (c : Config) (tr : List Event) : Array NetworkCertifier.ClockS
 /-- **The host's assembly**: each record, in order, certified by `Issuer.certify` under the next salt of the certifier's
 coins `salts`, at the reserved leaf, under its link's direction, grid and parameters digest; the certificates issued, in
 order. -/
-def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record →
+def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List BlockGrid →
     Except String (Issuer × List CertifiedRecord)
   | i, _, _, [] => pure (i, [])
   | i, next, salts, r :: rs => do

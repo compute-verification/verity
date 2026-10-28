@@ -41,7 +41,7 @@ def main : IO UInt32 := do
       ingressParams.frameBytes).getD ByteArray.empty
     link.send frame
   let wrote ← IO.mkRef ByteArray.empty
-  let records ← IO.mkRef (#[] : Array Record)
+  let records ← IO.mkRef (#[] : Array BlockGrid)
   let next ← IO.mkRef 0
   let started ← IO.mkRef (#[] : Array ByteArray)
   let now ← IO.monoNanosNow

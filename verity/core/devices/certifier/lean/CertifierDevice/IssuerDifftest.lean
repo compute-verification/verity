@@ -43,7 +43,7 @@ def slotOf : Json → Except String (Option ByteArray)
   | .null => pure none
   | j => some <$> bytesOf j
 
-def recordOf (j : Json) : Except String Record := do
+def recordOf (j : Json) : Except String BlockGrid := do
   let grid ← (← j.getObjValAs? (Array Json) "grid").mapM fun row => do (← arrOf row).mapM slotOf
   pure { link := ← j.getObjValAs? String "link", window := ← j.getObjValAs? Nat "window", grid,
          status := ← statusOf (← j.getObjVal? "status") }

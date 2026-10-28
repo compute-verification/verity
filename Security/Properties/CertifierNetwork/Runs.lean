@@ -61,13 +61,13 @@ structure DeviceInput where
 
 /-- What the device returns: the records it publishes and the certificates it signs. -/
 structure DeviceOutput where
-  records : List Record
+  records : List BlockGrid
   certificates : List CertifiedRecord
 
 /-- The certificates the host's assembly (`Properties.CertifierNetwork.certifyAll`) has the issuer sign, in order: each
 record certified under the next salt of the device's coins at the reserved leaf, under its link's direction, grid and
 parameters digest; where the assembly stops on an error, the ones signed before it. -/
-def issued (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record → List CertifiedRecord
+def issued (c : Config) : Issuer → Nat → (Nat → ByteArray) → List BlockGrid → List CertifiedRecord
   | _, _, _, [] => []
   | i, next, salts, r :: rs =>
     match parameters (gridOf c r) (syncSetOf c r) >>=
