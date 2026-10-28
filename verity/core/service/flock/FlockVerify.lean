@@ -387,6 +387,19 @@ def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) :
                  innerDraw := ← file (argOf args "--rec-inner-draw") }
   catch e => return .error s!"rec shared inputs: {e}"
 
+/-- The SHA-512, in hex, of the inner session's record (`--rec-inner-session DIR`'s `session.json`) and of the coin
+server's transcript of it (`--rec-inner-transcript F`), each at its `VERDICT` key, for those given: the files as the
+verifier reads them, from their paths. -/
+def recSessionDigests (args : List String) : IO (Except String (List (String × Lean.Json))) := do
+  let files := [("rec_inner_session_sha512", (argOf args "--rec-inner-session").map (· ++ "/session.json")),
+    ("rec_inner_transcript_sha512", argOf args "--rec-inner-transcript")]
+  let mut out := []
+  for (key, f) in files do
+    if let some f := f then
+      try out := out ++ [(key, Lean.Json.str (hexOf (Sha512.hash (← IO.FS.readBinFile f))))]
+      catch e => return .error s!"{key}: {e}"
+  return .ok out
+
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
 def identifierInput (args : List String) : IO (Except String (Option (Lean.Json × String))) := do
@@ -753,9 +766,12 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
-`recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), and with `--rec-rows F` the
-SHA-512 of the shared rows file it checked (`rec_rows_sha512`), which `rec-compose` holds every part of a recursive
-statement to (`RecCompose.Accepts`).
+`recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
+SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
+it read (`rec_inner_sha512`), and with `--rec-inner-session DIR` and `--rec-inner-transcript F` the SHA-512 of the inner
+session's record and of the transcript (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`,
+`recSessionDigests`), which `rec-compose` holds every part of a recursive statement to (`RecCompose.Accepts`, through
+`rec_shared`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
@@ -876,6 +892,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln e; return 2
   let recShared ← if recPart.isNone then pure none else match ← recSharedInput args with
     | .ok s => pure (some s)
+    | .error e => IO.eprintln e; return 2
+  let recInnerSha ← match ← fileDigest args "--rec-inner" with
+    | .ok h => pure h
+    | .error e => IO.eprintln e; return 2
+  let recSessionShas ← match ← recSessionDigests args with
+    | .ok hs => pure hs
     | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
@@ -1000,6 +1022,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- session's coin key, which `rec-compose` holds every part to (`RecCompose.Accepts`)
       (match recPart with | some j => [("rec_part", Lean.toJson j)] | none => []) ++
       (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []) ++
+      (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []) ++ recSessionShas ++
       (match recShared with
         | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
           (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])

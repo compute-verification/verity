@@ -242,7 +242,7 @@ sys.exit(0 if ok else 1)
 
 def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]:
     """A stand-in `rec-compose` binary and 85's files beside the logs: ``rec-inner.json``, ``rows.json`` and V*'s ``n``
-    statements in ``rec-statements.txt``. The rows file's SHA-512."""
+    statements in ``rec-statements.txt``. The rows file's SHA-512; `_inner` is the inner shape file's."""
     import hashlib
 
     (d / "compose.py").write_text(COMPOSER)
@@ -256,12 +256,15 @@ def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]
     return str(binary), hashlib.sha512(rows).hexdigest()
 
 
-def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True) -> None:
+def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
+           session: str = "s", transcript: str = "t") -> None:
     """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the
-    inputs every part shares (at DIR's ``rec-inner.json``), ``--zk`` and its coin key."""
-    shared = RC.shared(rec_inner=(d / "rec-inner.json").read_bytes(), inner_circuit=b"c", inner_public=b"p",
-                       inner_partition=b"{}", inner_session=b"s", inner_transcript=b"t", inner_statement="i",
-                       inner_statement_coins="os", inner_tables=[])
+    inputs every part shares (at DIR's ``rec-inner.json`` unless ``inner`` is another inner shape file's bytes, and at
+    the inner session record ``session`` and transcript ``transcript``), ``--zk`` and its coin key."""
+    rec_inner = inner.encode() if inner is not None else (d / "rec-inner.json").read_bytes()
+    shared = RC.shared(rec_inner=rec_inner, inner_circuit=b"c", inner_public=b"p",
+                       inner_partition=b"{}", inner_session=session.encode(), inner_transcript=transcript.encode(),
+                       inner_statement="i", inner_statement_coins="os", inner_tables=[])
     v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j,
          "rec_rows_sha512": digest, "rec_shared": shared, "zk": True, "coin_key": f"k-{name}"}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
@@ -286,6 +289,32 @@ def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
     _vpart(tmp_path, "L0", 0, h)
     _vpart(tmp_path, "alg-p0", 1, h)
     _vpart(tmp_path, "cap", 2, "ab" * 64)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+    assert out[-1] == "lean: 3/3 accepted: the step fails"
+
+
+def test_a_part_under_another_inner_shape_is_refused(tmp_path, capsys):
+    """A part verified under another inner shape file (`--rec-inner`) names another in its `rec_shared`, and the
+    composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
+    binary, h = _composer(tmp_path, 3)
+    _vpart(tmp_path, "L0", 0, h)
+    _vpart(tmp_path, "alg-p0", 1, h, inner="cd" * 64)
+    _vpart(tmp_path, "cap", 2, h)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+
+
+@pytest.mark.parametrize("other", [{"session": "ff" * 64}, {"transcript": "22" * 64}])
+def test_parts_from_different_inner_sessions_are_refused(tmp_path, capsys, other):
+    """Two parts verified over different inner sessions (85's `$REC_INNER`, `--rec-inner-session`) or transcripts of one
+    (`--rec-inner-transcript`) name different ones in their `rec_shared`, each accepting alone, and the composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
+    binary, h = _composer(tmp_path, 3)
+    _vpart(tmp_path, "L0", 0, h)
+    _vpart(tmp_path, "alg-p0", 1, h)
+    _vpart(tmp_path, "cap", 2, h, **other)
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
