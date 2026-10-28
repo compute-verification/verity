@@ -189,8 +189,8 @@ def sustain(bench, dev, entry, burst: int, seconds: float, lock_mhz: int | None)
 
 
 def hold(bench, dev, lt_ws, kernels, seed: int, seconds: float) -> dict:
-    """An FP8 and an NVFP4 GEMM, each held for `seconds` at whatever clocks the machine sets (node 2 fixes them node-wide);
-    nothing here changes a clock."""
+    """An FP8 and an NVFP4 GEMM, each held for `seconds` at whatever clocks the machine sets (the RTX PRO 6000 node
+    fixes them node-wide); nothing here changes a clock."""
     out = {}
     for fam_name in ("fp8-e4m3", "nvfp4"):
         entry, so, gated, burst = gated_gemm(bench, dev, fam_name, LOAD_SHAPE, seed, lt_ws, kernels)

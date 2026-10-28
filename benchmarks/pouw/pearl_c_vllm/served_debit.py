@@ -37,9 +37,9 @@ Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label
 the measurement is of the committed pass.
 
 **On a served pass.** `window.sh` keeps each served window's verify pass outside its run directory, under
-``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on node 2 (``WORK=/workspace/pouw/mvp-e2e``, about 45 GB a run,
-so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores, with one BLAS
-thread a worker (``--jobs`` defaults to the CPUs this process may use)::
+``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on window.sh's node (``WORK=/workspace/pouw/mvp-e2e``, about 45
+GB a run, so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores,
+with one BLAS thread a worker (``--jobs`` defaults to the CPUs this process may use)::
 
   research run --on MACHINE --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
@@ -49,7 +49,7 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
 
-A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of node 2's queue cores (Llama-3.1-8B's
+A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of that node's queue cores (Llama-3.1-8B's
 1,023 sampled tiles: 98 min on 44).  Add no ``taskset`` of your own: the queue pins the job's cores.
 """
 from __future__ import annotations

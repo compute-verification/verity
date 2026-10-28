@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# The highutil period on one leased GPU (vy-nebius-1's RTX PRO 6000, sm_120, by default; H200: below), cwd = the source tree's root under
+# The highutil period on one leased GPU (an RTX PRO 6000, sm_120, by default; H200: below), cwd = the source tree's root under
 # `research run`:
 # the build and the config (the checkpoint's weights, params) outside the lease, then under it capture.py's activations
 # (a W8A8 forward of the checkpoint), period.py's diag (one step's openings on the GPU against the prover's recomputed rows)
 # and its interleaved protocol and plain periods and the negative one, and the machine model's θ beside them.
 #
-#   research run --on vy-nebius-1 --project verity --campaign cmp-159 --source . --cwd source \
-#     --env GPU_LEASE_WHO=compute-accounting-highutil --send main.txt [--send challenger-key.json] -- \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by compute-accounting-highutil \
+#   research run --on MACHINE --project verity --source . --cwd source \
+#     --env GPU_LEASE_WHO=LANE --send main.txt [--send challenger-key.json] -- \
+#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE \
 #     -- bash benchmarks/pouw/highutil/run.sh
 #
-# COINS: local (default; a development session on this machine, not of record) or gate:USER@HOST (vy-challenger-1 with
+# COINS: local (default; a development session on this machine, not of record) or gate:USER@HOST (the challenger, with
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
 # card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
@@ -25,8 +25,8 @@
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
 # TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
-# revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
-# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with #5202's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
+# revision, fetched from the hub into the run's scratch). On an H200: GENCODE=arch=compute_90a,code=sm_90a
+# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
 # (benchmarks/hash/dither/pin.sh).
 set -uo pipefail
 export O=${OUT:?}

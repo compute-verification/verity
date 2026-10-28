@@ -1,5 +1,5 @@
-# Sourced before build.sh on a machine without CUDA 12.9 (node 2 has 13.0), so every build uses the one nvcc the baselines
-# were measured with:
+# Sourced before build.sh on a machine without CUDA 12.9 (the RTX PRO 6000 node has 13.0), so every build uses the one
+# nvcc the baselines were measured with:
 #
 #   . benchmarks/pouw/harness/jobs/toolkit.sh && benchmarks/pouw/harness/native/build.sh
 #

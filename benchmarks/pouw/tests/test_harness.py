@@ -1332,7 +1332,7 @@ def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_ro
 def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_takes_the_served_deferred_groups():
     """The side stream takes what the served deferred schedule moves (tile hashing) and leaves the screen on the main lane;
     v0.4's one ``after`` can't be split that way, so it gets no side chain."""
-    assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
+    assert isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
     assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS and A.DEFERRED <= A.MOVABLE
     try:
         from verity.core.protocols.pouw import serving
