@@ -1,5 +1,5 @@
 """HIGHUTIL: an 8B model's linear layers at full batch on one GPU, each call credited through Dither's no-fold receipt
-(v31.py's ``Fill``, under verity/core/protocols/pouw/accel/PROTOCOL.md v3.2's commit phase) on V31-GPU's
+(CMP-172; v31.py's ``Fill``, under verity/core/protocols/pouw/accel/PROTOCOL.md v3.2's commit phase) on V31-GPU's
 prover, with live coins, and the certified share of the GPU's tensor peak that the periods establish.
 
 **The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
