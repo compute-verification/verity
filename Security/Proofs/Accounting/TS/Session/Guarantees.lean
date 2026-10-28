@@ -18,7 +18,7 @@ open scoped ENNReal
 (`pf : ProofLayer Ω S nπ V`) whose proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i`
 (a `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's opening
-(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the proof service's
+(`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the proof system's
 acceptance rule (`Accounting.Assumptions.TS.AcceptedLive`), the window's law (`WindowLaw`), `pf`'s relation at the
 value layer of an accepted session whose drawn units are right (`ServedChecksHold`), that value layer being `pf`'s
 opening outside `δs` (`ServedRootsLinked`), and `δ ≥ 0` with

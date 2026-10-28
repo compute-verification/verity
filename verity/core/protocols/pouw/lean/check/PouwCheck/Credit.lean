@@ -228,7 +228,7 @@ def noServed (i t : Nat) : String :=
 
 def noRows (name : String) : String :=
   s!"period {name}'s open commits no table rows T ({ROWS_FIELD}, a positive integer: each round's request and " ++
-  "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof service commits T " ++
+  "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof system commits T " ++
   "in the period-open, beside its draw K, before any draw"
 
 def ROWS_FORM : String :=
@@ -429,7 +429,7 @@ def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Str
   let n := ss.foldl (fun a s => a + s.size) 0
   if n < k then
     throw ("budget", s!"the window's {n} units are fewer than K = {k}, the K its period committed, so its draw " ++
-      s!"would not be K's: the proof service commits a K at most every window's units ({K_FIELD} in the period-open)")
+      s!"would not be K's: the proof system commits a K at most every window's units ({K_FIELD} in the period-open)")
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
@@ -2152,7 +2152,7 @@ def committedK (ledger : Json) (name : String) : R Nat := do
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some k := (body.bind fun b => nat? (get b K_FIELD)).filter (fun k => 1 ≤ k && k ≤ MAX_K)
     | throw ("budget", s!"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), so " ++
-        "its windows have no K to be drawn with: the proof service commits K in the period-open, beside its circuit " ++
+        "its windows have no K to be drawn with: the proof system commits K in the period-open, beside its circuit " ++
         "and cap, before any draw")
   pure k
 

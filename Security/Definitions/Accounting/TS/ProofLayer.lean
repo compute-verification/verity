@@ -1,9 +1,9 @@
 import Definitions.Accounting.TS.Play
 
 /-!
-# A window's proofs: what (I8) reads of the proof service (trusted)
+# A window's proofs: what (I8) reads of the proof system (trusted)
 
-EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof service and one of the
+EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof system and one of the
 TS model's accounting:
 
 * **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows in
