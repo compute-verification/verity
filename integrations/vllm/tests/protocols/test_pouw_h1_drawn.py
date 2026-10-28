@@ -104,7 +104,6 @@ def served(tmp_path, monkeypatch):
         monkeypatch.setattr(SV, "unit_of", lambda name: j10r if name == "j10r" else None)
         monkeypatch.setattr(HW, "tile_unit", lambda k, tile, definition=None:
                             (j10r if definition is HT.PouwH1Tile5 else _unit())(k))
-    monkeypatch.setenv("HZ_STAGE", "library")
     srv, auditor = _Server(monkeypatch), _PeriodAuditor(tmp_path, monkeypatch)
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     d = tmp_path / "serve"

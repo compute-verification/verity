@@ -60,7 +60,6 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
 
@@ -427,9 +426,6 @@ def stage(a) -> int:
                     raise Refused(f"call {c}'s statement reads {v} at port {port}, which drawn.py doesn't rebuild (a "
                                   "receipt table: stage it as the window registered it)")
         print(f"REBUILT K = {k}: {sorted(values)} at the window's roots", flush=True)
-        if os.environ.get("HZ_STAGE", "fast") == "fast":
-            import fast_stage
-            fast_stage.install(work / f".scratch-k{k}")
         from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
         shape = U.Shape(k, *lay["tile"], j10r=True)
         circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
