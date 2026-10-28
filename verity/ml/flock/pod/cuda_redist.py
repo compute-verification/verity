@@ -14,14 +14,14 @@ from pathlib import Path
 
 ver, dest = sys.argv[1], Path(sys.argv[2])
 base = "https://developer.download.nvidia.com/compute/cuda/redist/"
-d = json.load(urllib.request.urlopen(f"{base}redistrib_{ver}.json"))
+d = json.load(urllib.request.urlopen(f"{base}redistrib_{ver}.json"))  # noqa: S310  (NVIDIA's https base)
 tmp = dest.with_name(dest.name + ".tmp")
 shutil.rmtree(tmp, ignore_errors=True)
 tmp.mkdir(parents=True)
 for k in ("cuda_nvcc", "cuda_cudart", "cuda_crt", "libnvvm", "cccl", "libnvptxcompiler", "cuda_culibos", "cuda_cuobjdump",
           "cuda_nvdisasm"):
     x = d[k]["linux-x86_64"]
-    data = urllib.request.urlopen(base + x["relative_path"]).read()
+    data = urllib.request.urlopen(base + x["relative_path"]).read()  # noqa: S310
     if hashlib.sha256(data).hexdigest() != x["sha256"]:
         raise SystemExit(f"{k}: sha256 mismatch")
     arc = tmp / Path(x["relative_path"]).name
