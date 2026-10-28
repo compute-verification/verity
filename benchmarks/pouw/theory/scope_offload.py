@@ -58,6 +58,7 @@ clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
 """
 from __future__ import annotations
 
+import hashlib
 import random
 import sys
 from pathlib import Path
@@ -69,7 +70,7 @@ from verity_machine_model.model import device as family_data
 
 MAC_PER_WORD = 32  # a committed word sums 32 int8 products (FOLD-BW)
 BYTES_PER_WORD = 4  # a fresh s32
-DIGEST_BYTES = 64  # a tile's SHA-512 digest, the transcript's leaf
+DIGEST_BYTES = hashlib.sha512().digest_size  # a tile's SHA-512 digest, the transcript's leaf
 H1_SMALLEST_TILE_MACS = 4 * 8 * 64  # one lane (4 x 8) at K = 64
 M32 = 0xFFFFFFFF
 

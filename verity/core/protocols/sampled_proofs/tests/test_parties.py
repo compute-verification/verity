@@ -1,11 +1,12 @@
-"""Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest run's
-verifier audits each block once its registration, the firewall's pin and the challenger's address are in, in order, and
-its product accepts; a listed component with no answer is absent and the product never accepts over it; an accepting
-audit of another registration rejects; an audit that is `Unavailable` is its block's error, and one that raises anything
-else fails the run (``party-died``, its error recorded); workers that can't serve leave the verifier refused ``closed``
-with nothing audited; parameters out of their range are refused by every party; the
-challenger's host stops once the verifier is done, however it finishes; the verifier replays from its own transcript;
-and the placement holds each party's principal to its machine's owner."""
+"""Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest
+run's verifier audits each block once its registration, the firewall's pin and the challenger's address are in, in
+order, and its composite (remote, over sampled proofs, PoUW and the inference-only policy) accepts; a listed
+subprotocol with no answer is absent and the composite never accepts over it; an accepting audit of another registration rejects; an audit that is
+`Unavailable` is its block's error, and one that raises anything else fails the run (``party-died``, its error
+recorded); workers that can't serve leave the verifier refused ``closed`` with nothing audited; parameters out of their
+range, a list of subprotocols that is no composite's among them, are refused by every party; the challenger's host
+stops once the verifier is done, however it finishes; the verifier replays from its own transcript; and the placement
+holds each party's principal to its machine's owner."""
 
 from __future__ import annotations
 
@@ -19,10 +20,14 @@ from verity.core.protocols.sampled_proofs import parties as P
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.wire import Refused
 
-SP, CERT = P.IDS["sampled-proofs"], P.IDS["certifier"]
+SP, CERT, POUW = P.SUBPROTOCOLS["verity/remote/v0"]["sampled-proofs"], P.IDS["certifier"], P.IDS["pouw"]
+NCI = P.IDS["inference-only"]
+REMOTE = ("sampled-proofs", "pouw", "inference-only")
 ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
+#: another listed subprotocol's accepting answer and its case
+OTHER = ({"verdict": "accept", "commitment": "cd" * 64}, {"commitment": "03", "evidence": "04", "params": {}})
 
 
 def registration(i: int) -> bytes:
@@ -44,7 +49,7 @@ class Host:
 class Machine:
     """Stand-in capabilities: what each was called with, in order."""
 
-    def __init__(self, *, accept: bool = True, other: dict | None = None, commitment: str | None = None,
+    def __init__(self, *, accept: bool = True, other: tuple | None = OTHER, commitment: str | None = None,
                  audit_raises: Exception | None = None, serve_raises: bool = False) -> None:
         self.host, self.calls = Host(), []
         self.accept, self.other, self.commitment = accept, other, commitment
@@ -76,7 +81,8 @@ class Machine:
         empty = [i for i in ids if cases[i] == P.NO_CASE]
         rejected = [i for i in ids if i == SP and not self.accept]
         bad = empty + rejected
-        return {"product": "verity/product/v0", "verdict": "reject" if bad else "accept",
+        return {"product": "verity/remote/v0" if len(ids) == 3 else "verity/onsite/v0",
+                "verdict": "reject" if bad else "accept",
                 "reason": "; ".join(f"{i} reject" for i in bad) or None}
 
     def caps(self) -> dict:
@@ -84,7 +90,7 @@ class Machine:
                 P.VERIFIER: {"audit": self.audit, "component": self.component, "product": self.product}}
 
 
-def go(m: Machine, *, blocks: int = 1, components=("sampled-proofs",), coins: str = "simulated", params=None,
+def go(m: Machine, *, blocks: int = 1, components=REMOTE, coins: str = "simulated", params=None,
        state=None, here=ROLES):
     params = params if params is not None else P.params_of(blocks, list(components), coins)
     return run({"protocol": P.ID, "params": params}, here, "simulated", state, protocols=P.PROTOCOLS,
@@ -97,39 +103,45 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     assert r.status == "completed", r.outcomes
     lines = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert [x["block"] for x in lines] == [0, 1]
-    assert lines[0] == {"block": 0, "coins": "simulated", "components": {"sampled-proofs": "accept"},
-                        "product": "verity/product/v0", "reason": None,
+    assert lines[0] == {"block": 0, "coins": "simulated", "components": dict.fromkeys(REMOTE, "accept"),
+                        "product": "verity/remote/v0", "reason": None,
                         "registration": R.digest(json.loads(registration(0))), "verdict": "accept"}
     audits = [c for c in m.calls if c[0] == "audit"]
     assert audits == [("audit", i, registration(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
-    assert [c for c in m.calls if c[0] == "product"][0][1:] == ([SP], {SP: CASE}, {SP: lines[0]["registration"]})
+    assert [c for c in m.calls if c[0] == "product"][0][1:] == (
+        [SP, POUW, NCI], {SP: CASE, POUW: OTHER[1], NCI: OTHER[1]},
+        {SP: lines[0]["registration"], POUW: OTHER[0]["commitment"], NCI: OTHER[0]["commitment"]})
     assert m.host.events == ["start", "stop"]
     outputs = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"]
     assert outputs == lines
 
 
-def test_a_listed_component_with_no_answer_is_absent_and_the_product_rejects():
-    m = Machine()
-    r = go(m, components=("sampled-proofs", "certifier"))
+def test_a_listed_subprotocol_with_no_answer_is_absent_and_the_composite_rejects():
+    m = Machine(other=None)
+    r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "accept", "certifier": P.ABSENT}
-    assert line["verdict"] == "reject" and line["reason"] == f"{CERT} reject"
+    assert line["components"] == {"sampled-proofs": "accept", "pouw": P.ABSENT, "inference-only": P.ABSENT}
+    assert line["verdict"] == "reject" and line["reason"] == f"{POUW} reject; {NCI} reject"
     _, ids, cases, digests = next(c for c in m.calls if c[0] == "product")
-    assert ids == [SP, CERT] and cases[CERT] == P.NO_CASE and digests[CERT] == ""
+    assert ids == [SP, POUW, NCI] and cases[POUW] == P.NO_CASE and digests[POUW] == ""
 
 
-def test_another_components_answer_and_case_reach_the_product():
-    m = Machine(other=({"verdict": "accept", "commitment": "cd" * 64}, {"commitment": "03", "evidence": "04",
-                                                                          "params": {}}))
-    (line,) = go(m, components=("sampled-proofs", "certifier")).outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "accept", "certifier": "accept"} and line["verdict"] == "accept"
-    assert next(c for c in m.calls if c[0] == "product")[3][CERT] == "cd" * 64
+def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
+    onsite = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+    m = Machine()
+    (line,) = go(m, components=onsite).outcomes[P.VERIFIER]["outcome"]["verdicts"]
+    assert line["components"] == dict.fromkeys(onsite, "accept") and line["verdict"] == "accept"
+    assert line["product"] == "verity/onsite/v0"
+    _, ids, _, digests = next(c for c in m.calls if c[0] == "product")
+    assert ids == [P.SUBPROTOCOLS["verity/onsite/v0"][c] for c in onsite] and digests[CERT] == "cd" * 64
+    assert "verity/pouw/period/v1" in ids and POUW not in ids
 
 
 def test_an_accepting_audit_of_another_registration_rejects():
     m = Machine(commitment="00" * 64)
     (line,) = go(m).outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "reject"} and line["verdict"] == "reject"
+    assert line["components"] == {**dict.fromkeys(REMOTE, "accept"), "sampled-proofs": "reject"}
+    assert line["verdict"] == "reject"
     assert next(c for c in m.calls if c[0] == "product")[2][SP] == P.NO_CASE
 
 
@@ -137,7 +149,8 @@ def test_an_unavailable_audit_is_its_blocks_error():
     m = Machine(audit_raises=P.Unavailable("the records audit left no summary"))
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "error"} and line["verdict"] == "reject"
+    assert line["components"] == {**dict.fromkeys(REMOTE, "accept"), "sampled-proofs": "error"}
+    assert line["verdict"] == "reject"
     assert next(c for c in m.calls if c[0] == "product")[2][SP] == P.NO_CASE
     assert r.status == "completed"
     (why,) = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "private"]
@@ -161,10 +174,13 @@ def test_workers_that_cant_serve_leave_the_verifier_refused_closed_with_nothing_
     assert not [c for c in m.calls if c[0] == "audit"] and m.host.events == ["start", "stop"]
 
 
-@pytest.mark.parametrize("bad", [{"blocks": 0, "components": ["sampled-proofs"], "coins": "simulated"},
+@pytest.mark.parametrize("bad", [{"blocks": 0, "components": list(REMOTE), "coins": "simulated"},
                                  {"blocks": 1, "components": ["certifier"], "coins": "simulated"},
-                                 {"blocks": 1, "components": ["sampled-proofs"], "coins": "gate"},
-                                 {"blocks": 1, "components": ["sampled-proofs"], "coins": "simulated", "law": "x"}])
+                                 {"blocks": 1, "components": ["sampled-proofs"], "coins": "simulated"},
+                                 {"blocks": 1, "components": ["sampled-proofs", "certifier"], "coins": "simulated"},
+                                 {"blocks": 1, "components": ["sampled-proofs", "pouw", "pouw"], "coins": "simulated"},
+                                 {"blocks": 1, "components": list(REMOTE), "coins": "gate"},
+                                 {"blocks": 1, "components": list(REMOTE), "coins": "simulated", "law": "x"}])
 def test_parameters_out_of_range_are_refused(bad):
     if set(bad) == {"blocks", "components", "coins"}:
         with pytest.raises(ValueError):
@@ -179,7 +195,7 @@ def test_the_verifier_replays_from_its_own_transcript(tmp_path):
     m = Machine()
     r = go(m, state=tmp_path)
     assert r.status == "completed"
-    again = run({"protocol": P.ID, "params": P.params_of(1, ["sampled-proofs"], "simulated")}, [P.VERIFIER], "replay",
+    again = run({"protocol": P.ID, "params": P.params_of(1, list(REMOTE), "simulated")}, [P.VERIFIER], "replay",
                 None, protocols=P.PROTOCOLS, capabilities={P.VERIFIER: Machine().caps()[P.VERIFIER]},
                 replay_dir=tmp_path / "runs" / "1")
     assert (again.status, again.divergence) == ("completed", None)

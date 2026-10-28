@@ -55,6 +55,7 @@ from typing import Any
 
 import torch
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -248,7 +249,7 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
 
 
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
-        node: str | None = None, party: CP.Party | None = None, trusted_sha512: str = TRUSTED_SHA512,
+        node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
         private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
         protocol: str = period.PROTOCOL) -> dict[str, Any]:
     """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
@@ -264,8 +265,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     if not snapshot.is_dir():
         raise Refusal(f"no snapshot of {repo}@{rev} under {hf_home}")
     node = node or socket.gethostname()
-    party = party or CP.Party(CHALLENGER_HOST, tuple(os.path.expanduser(a) for a in CHALLENGER_COMMAND),
-                              _address(CHALLENGER_ADDRESS))
+    party = party or Side(CHALLENGER_HOST, tuple(os.path.expanduser(a) for a in CHALLENGER_COMMAND),
+                          _address(CHALLENGER_ADDRESS))
     private = private or serve_dir / "private" / "pous" / f"w{window}"
     out.mkdir(parents=True, exist_ok=True)
     reg_file = serve_dir / "weights_registration.json"
@@ -394,7 +395,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
-    party = CP.Party(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
+    party = Side(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
     try:
         answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=a.node,
                      party=party, trusted_sha512=a.trusted_sha512, private=a.private)

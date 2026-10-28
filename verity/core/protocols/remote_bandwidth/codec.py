@@ -1,4 +1,4 @@
-"""The store's codec: Sloth over one wide word, byte-exact with `verity/word-codec/kv/v0` (ra-codec-mix's
+"""The store's codec: Sloth over one wide word, byte-exact with `verity/word-codec/kv/v0` (the reference
 `benchmarks/word_codec/kv.py`, its kernel `kv.cu`), a 4 KiB chunk as W words.  A codec is its field, its k ≥ 2 rounds
 and whether σ_K masks between them, and a registration names it (`Codec.name`).  The default is p = 2^1024 − 105,
 masked, k = 3, with k = 2 at the same width the fallback.  p = 2^512 − 569, unmasked, is kept as the upgrade path.
@@ -47,6 +47,14 @@ fixes the encoded store; under a bound key, a chunk and a digest decode to the p
 payload word at or above p is refused: c is below 2^16, so its top 16 bits are all ones, a NaN under bf16 (and its top
 byte 0xFF, one under E4M3), and every chunk of finite values encodes.
 
+The same map is the word codecs' reference at any field p = 2^n − c ≡ 3 (mod 4) and any k ≥ 1 (`Sloth`, of which a
+store's `Codec` is the case a registration names), with its key by this derivation in a domain of the caller's
+(`derive`): the KV cache's (`benchmarks/word_codec/kv.py`), the tensor-core codec's (`benchmarks/codec_tensor/wide.py`),
+and, under key derivations of their own, the 61-bit word's and the fused GEMM's wide words'
+(`benchmarks/word_codec/codec.py`, `benchmarks/word_codec/wide.py`), each of which keeps only its layout.  A field's
+word is S = ⌈n/8⌉ bytes; its payload is any word below p at full slot (n a multiple of 32), else n − 1 bits, of which a
+byte-aligned payload takes B = ⌊(n − 1)/8⌋ bytes.
+
 A registration over PoUS's P2 store names `P2Codec` instead: PoUS's codec, which this protocol only names.
 """
 
@@ -57,11 +65,12 @@ import struct
 from dataclasses import dataclass
 
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 
 DOMAIN = b"verity/word-codec/kv/v0\0"
 BLOCK_BYTES = 4096
 SEED_BYTES = 32
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 TWEAK_INDEX = (1 << 32) - 1
 MASK_INDEX = (1 << 32) - 2
 BIND_INDEX = (1 << 32) - 3
@@ -73,7 +82,7 @@ WORD_INDICES = 1 << 64
 
 @dataclass(frozen=True, slots=True)
 class Field:
-    """p = 2^n − c, named as kv/v0 names it."""
+    """p = 2^n − c, named as kv/v0 names it, with its words' widths."""
 
     name: str
     n: int
@@ -85,7 +94,42 @@ class Field:
 
     @property
     def word_bytes(self) -> int:
-        return self.n // 8
+        """S = ⌈n/8⌉."""
+        return -(-self.n // 8)
+
+    @property
+    def limbs(self) -> int:
+        """A word's u32 limbs, ⌈n/32⌉."""
+        return -(-self.n // 32)
+
+    @property
+    def full_slot(self) -> bool:
+        """n fills its limbs: a payload is any word below p."""
+        return self.n % 32 == 0
+
+    @property
+    def payload_bits(self) -> int:
+        """n at full slot, else n − 1: every payload of fewer bits is below p."""
+        return self.n if self.full_slot else self.n - 1
+
+    @property
+    def payload_bytes(self) -> int:
+        """B, a byte-aligned payload's bytes: S at full slot, else ⌊(n − 1)/8⌋."""
+        return self.payload_bits // 8
+
+    @property
+    def max_payload(self) -> int:
+        """The largest byte-aligned payload: p − 1 at full slot, else 2^(8B) − 1."""
+        return self.p - 1 if self.full_slot else (1 << (8 * self.payload_bytes)) - 1
+
+    @property
+    def root_exp(self) -> int:
+        return (self.p + 1) // 4
+
+    @property
+    def root_squarings(self) -> int:
+        """A root's squarings: the bit length of (p + 1)/4 less one (n − 3 but at a Mersenne p, n − 2)."""
+        return self.root_exp.bit_length() - 1
 
     @property
     def block_words(self) -> int:
@@ -98,12 +142,32 @@ FIELDS = {f.name: f for f in (P1024, P512)}
 
 
 @dataclass(frozen=True, slots=True)
-class Codec:
-    """A store's codec: Sloth over `field` at k = `rounds`, with σ_K between the rounds if `masked`."""
+class Sloth:
+    """Sloth over one word of `field` at k = `rounds`, with σ_K between the rounds if `masked`: the map of
+    `encode_word` and `decode_word` at any field p ≡ 3 (mod 4) and k ≥ 1.  Of these a registration names a `Codec`."""
 
     field: Field
     rounds: int
     masked: bool
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.field, Field) or self.field.p % 4 != 3:
+            raise ValueError("Sloth's field is p = 2^n − c with p ≡ 3 (mod 4)")
+        if type(self.rounds) is not int or not 1 <= self.rounds < COIN_INDEX:
+            raise ValueError(f"a word has at least one round, and fewer than {COIN_INDEX}")
+        if type(self.masked) is not bool:
+            raise ValueError("a codec is masked or not")
+
+    @property
+    def max_blocks(self) -> int:
+        """The most 4 KiB chunks a key binds or a store under it holds: their words' indices, ⌈4096/S⌉ a chunk, fit a
+        u64 (2^59 at p1024, 2^58 at p512)."""
+        return WORD_INDICES // -(-BLOCK_BYTES // self.field.word_bytes)
+
+
+@dataclass(frozen=True, slots=True)
+class Codec(Sloth):
+    """A store's codec: Sloth over `field` at k = `rounds`, with σ_K between the rounds if `masked`."""
 
     def __post_init__(self) -> None:
         if type(self.field) is not Field or FIELDS.get(self.field.name) != self.field:
@@ -119,15 +183,10 @@ class Codec:
         return f"{self.field.name}/k{self.rounds}" + ("/masked" if self.masked else "")
 
     @property
-    def max_blocks(self) -> int:
-        """The most chunks a store under it holds: its words' indices fit a u64 (2^59 at p1024, 2^58 at p512)."""
-        return WORD_INDICES // self.field.block_words
-
-    @property
     def encode_squarings(self) -> int:
         """A chunk's encode in squarings: k roots a word, each the bit length of (p + 1)/4 less one (98,016 at
         p1024/k3/masked, 65,344 at p1024/k2/masked, 65,152 at p512/k2)."""
-        return self.field.block_words * self.rounds * (((self.field.p + 1) // 4).bit_length() - 1)
+        return self.field.block_words * self.rounds * self.field.root_squarings
 
     def to_json(self) -> dict:
         """Its parameters: the field `p = 2^n − c`, k, and the mask."""
@@ -198,13 +257,13 @@ def _xof(message: bytes, length: int) -> bytes:
     return out[:length]
 
 
-def _message(f: Field, seed: bytes, r: int) -> bytes:
+def _message(f: Field, seed: bytes, r: int, domain: bytes = DOMAIN) -> bytes:
     name = f.name.encode()
-    return DOMAIN + bytes([len(name)]) + name + seed + struct.pack(">I", r)
+    return domain + bytes([len(name)]) + name + seed + struct.pack(">I", r)
 
 
-def _element(f: Field, seed: bytes, r: int) -> int:
-    return int.from_bytes(_xof(_message(f, seed, r), f.word_bytes + 8), "little") % f.p
+def _element(f: Field, seed: bytes, r: int, domain: bytes = DOMAIN) -> int:
+    return int.from_bytes(_xof(_message(f, seed, r, domain), f.word_bytes + 8), "little") % f.p
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,19 +271,42 @@ class Key:
     """A codec seed's round constants `c_0 … c_(k−1)`, its tweak multiplier `τ`, masked, its mask `K`, and the seed,
     which a bound chunk's offset `b_j` is derived from."""
 
-    codec: Codec
+    codec: Sloth
     c: tuple[int, ...]
     tau: int
     mask: int | None = None
     seed: bytes | None = None
 
     @property
+    def field(self) -> Field:
+        return self.codec.field
+
+    @property
     def rounds(self) -> int:
         return len(self.c)
+
+    def tweak(self, i: int) -> int:
+        """t(i) = τ · i mod p."""
+        return self.tau * i % self.codec.field.p
 
     def sigma(self, x: int) -> int:
         v = x ^ self.mask
         return v if v < self.codec.field.p else x
+
+
+def derive(seed: bytes, sloth: Sloth, domain: bytes = DOMAIN) -> Key:
+    """The key of `seed` for `sloth`: its c_r, τ and, masked, K (n bits) as the table derives them, framed under
+    `domain`.  A key under another domain than kv/v0's keeps no seed, so `binding` refuses it."""
+    if type(seed) is not bytes or len(seed) != SEED_BYTES:
+        raise ValueError(f"a codec seed is {SEED_BYTES} bytes")
+    if not isinstance(sloth, Sloth):
+        raise ValueError("a key is of a Sloth")
+    f = sloth.field
+    mask = None
+    if sloth.masked:
+        mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX, domain), f.word_bytes), "little") % (1 << f.n)
+    c = tuple(_element(f, seed, r, domain) for r in range(sloth.rounds))
+    return Key(sloth, c, _element(f, seed, TWEAK_INDEX, domain) or 1, mask, seed if domain == DOMAIN else None)
 
 
 def key(seed: bytes, codec: Codec = DEFAULT) -> Key:
@@ -232,10 +314,7 @@ def key(seed: bytes, codec: Codec = DEFAULT) -> Key:
         raise ValueError(f"a codec seed is {SEED_BYTES} bytes")
     if type(codec) is not Codec:
         raise ValueError("a key is of a Codec")
-    f = codec.field
-    mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if codec.masked else None
-    c = tuple(_element(f, seed, r) for r in range(codec.rounds))
-    return Key(codec, c, _element(f, seed, TWEAK_INDEX) or 1, mask, seed)
+    return derive(seed, codec)
 
 
 def digest(payload: bytes) -> bytes:
@@ -265,7 +344,9 @@ def binding(d: bytes, j: int, k: Key, coin: bytes | None = None) -> int:
 
 def rho(a: int, f: Field) -> int:
     p = f.p
-    s = pow(a, (p + 1) // 4, p)
+    if not 0 <= a < p:
+        raise ValueError("ρ takes a canonical element")
+    s = pow(a, f.root_exp, p)
     square = s * s % p == a
     if (s & 1) == (0 if square else 1):
         return s
@@ -274,6 +355,8 @@ def rho(a: int, f: Field) -> int:
 
 def rho_inv(y: int, f: Field) -> int:
     p = f.p
+    if not 0 <= y < p:
+        raise ValueError("ρ⁻¹ takes a canonical element")
     q = y * y % p
     return q if y & 1 == 0 else (p - q) % p
 

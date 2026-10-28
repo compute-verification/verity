@@ -255,7 +255,7 @@ def pinnedIdentity (id : Json) : Json :=
       "which have no row: each of their bits a copy of a forced-zero row; the public file has no output word"))
   else id
 
-/-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
+/-- `verity/flock-circuit` (the circuit prover from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=
   { circuit631567f7 with

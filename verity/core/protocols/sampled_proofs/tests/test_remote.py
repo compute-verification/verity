@@ -29,6 +29,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
@@ -783,6 +784,26 @@ LEDGERS = {
 }
 
 
+def test_the_verifier_reads_an_entry_whose_text_past_ascii_the_auditor_escaped(tmp_path, signer):
+    """An auditor's string past ASCII is in its line escaped (`ledger_text`), while its signature is over the entry's
+    canonical JSON in UTF-8, as the challenger signs it: such an entry reads and verifies, and is refused only unescaped
+    (`LEDGERS`)."""
+    class Escaping(Ledger):
+        def end(self, session, directory, closed, **changes):
+            super().end(session, directory, closed, ended="closed by the client \u2026", **changes)
+
+    host = Host(tmp_path, signer, ledger=Escaping(tmp_path / "windows.jsonl", signer))
+    honest(host)
+    assert '"ended":"closed by the client \\u2026"' in R.ledger_lines(host.ledger.path)[-1]
+    host.trusted()
+    entry = {"body": {"ended": "\u2026"}, "kind": "end", "prev": "0" * 128, "schema": C.LEDGER_SCHEMA, "seq": 1,
+             "session": "s"}
+    utf8 = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    assert C.ledger_message(bytes(16), entry) == hashlib.sha512(
+        C._field(C.LEDGER_ROLE.encode()) + bytes(16)
+        + C._field(tagged_sha512(C.LEDGER_TAGS[C.LEDGER_SCHEMA], utf8))).digest()
+
+
 @pytest.mark.parametrize("case", sorted(LEDGERS))
 def test_the_verifier_refuses_a_missing_truncated_or_tampered_ledger(tmp_path, signer, case):
     """The window's session is only one the latest ledger opens and ends, every entry chained and signed under the
@@ -1382,12 +1403,13 @@ def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_
             C.ledger_head(heads, pinned_key(), lms_verify)
 
 
-def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
+def test_an_end_whose_reason_is_past_ascii_is_never_signed(tmp_path, signer):
+    """A ledger entry's signed digest is canonical JSON, so an end whose reason is past ASCII without DEL is refused
+    before it is signed."""
     host = Host(tmp_path, signer)
     honest(host)
-    path = _resealed(tmp_path, host, ended="the client closed it \u2026")
-    assert "\\u2026" in path.read_text()
-    assert host.trusted(ledger=path)[0] == host.challenger.commitment
+    with pytest.raises(ValueError, match=re.escape("outside the canonical JSON domain: $.body.ended")):
+        _resealed(tmp_path, host, ended="the client closed it \u2026")
 
 
 def test_the_pin_is_read_from_the_operators_key_record():
