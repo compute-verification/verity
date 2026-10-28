@@ -5,6 +5,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
+    served_verdicts.py inference-only CASE_DIR DIR
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -31,19 +32,31 @@ checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``-
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`).
 
+``inference-only``: the inference-only policy's piece. `served_cases.py` writes its case and Lean answer to CASE_DIR on
+the prover's node, private (0600): the answer's profile counts each block's gates and fresh-input bits, a rejection's
+reason may name a block, and the case holds α and Γ. Of these the piece publishes only what the protocol does
+(`inference_only`): the verdict and the commitment, the window's registration record's digest, written to
+``DIR/verdict.json`` (`VERDICT`). It does so where the answer is the policy's core answer, accepts or rejects, and
+commits to the record its case commits to; otherwise it writes ``{protocol, refused}``, which of those failed, and
+exits 1. Prints one ``INFERENCE-ONLY`` line of what it wrote.
+
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
 as `served_integrity.answer` reads it; each other subprotocol's from
-``--pieces/<component>/answer.json``, else a ``missing`` row naming its issue. They go into the window report
+``--pieces/<component>/answer.json``, else a ``missing`` row naming its issue; the inference-only policy's from
+``--pieces/inference-only/verdict.json`` (`inference_only_row`). They go into the window report
 (``verdicts.json``, `row_of`'s rows) and from it the block record (``block-record.json``, `block_record.from_period`,
 held by `block_record.check`). `block_record` carries only an accepted subprotocol's certificate, so where one rejects or
-errs the composed verdict is ``reject`` and no block record is written. Prints one ``RECORD`` line.
+errs the composed verdict is ``reject`` and no block record is written. The block record has no leg for the
+inference-only policy, which bounds no quantity: the composed verdict is ``pending`` while any subprotocol, that policy
+included, is missing. Prints one ``RECORD`` line.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -82,7 +95,16 @@ PIECES: dict[str, tuple[str, str, str, str, str]] = {
 #: the record's subprotocol outside this chain
 WIPE = ("the wipe", "wipe", "memory-accounting", "MEM-96",
         "WIPE_CMD unset: serve() runs benchmarks/pous/streamed_wipe/served_wipe.sh on the card before its engine loads")
-NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
+#: the inference-only policy's check of `served_cases.py`'s case: (its name, its component, its owner, why its row is
+#: missing when no case was made)
+INFERENCE_ONLY = ("the inference-only policy", "inference-only", "network-accounting",
+                  "V3c's records audit of the window wrote no case (window/case.json), so served_cases.py made none")
+#: what the inference-only piece publishes of its private answer (`inference_only`)
+VERDICT = "verdict.json"
+#: a rejection's row's reason: the answer's own may name a block
+REJECTED = "the policy's check rejects the window's division; its reason stays in the private answer"
+NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "inference-only": INFERENCE_ONLY[0],
+         "wipe": WIPE[0]}
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
@@ -339,6 +361,65 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
         return {"verdict": "error", "owner": owner, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
+def inference_only(case_dir: Path) -> dict[str, Any]:
+    """What the inference-only piece publishes of `served_cases.py`'s private ``case_dir`` (module docstring):
+    ``{protocol, verdict, commitment}``, else ``{protocol, refused}``. A refusal is fixed text, never the answer's."""
+    import served_cases as SC
+
+    def refused(why: str) -> dict[str, Any]:
+        return {"protocol": SC.INFERENCE_ONLY, "refused": why}
+
+    try:
+        a = check_answer(json.loads((case_dir / "answer.json").read_text()))
+    except OSError:
+        return refused("served_cases.py wrote no answer")
+    except ValueError:
+        return refused("its answer is not a core answer")
+    if a["protocol"] != SC.INFERENCE_ONLY:
+        return refused("its answer is another protocol's")
+    if a["verdict"] not in ("accept", "reject"):
+        return refused("its answer neither accepts nor rejects")
+    try:
+        _rec, digest = SC.record_of(json.loads((case_dir / "case.json").read_text()))
+    except (OSError, ValueError, SC.Refused):
+        return refused("its case commits to no registration record")
+    if a["commitment"] != digest:
+        return refused("its answer doesn't commit to its case's registration record")
+    return {"protocol": SC.INFERENCE_ONLY, "verdict": a["verdict"], "commitment": digest}
+
+
+def inference_only_row(pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
+    """The inference-only policy's row from what its piece published (`inference_only`): its verdict and commitment,
+    with `REJECTED` for a rejection's reason; ``error``, refused, where the piece published a refusal, wrote no
+    `VERDICT` in its directory, or wrote one not in its form; ``missing`` where it didn't run."""
+    import served_cases as SC
+
+    _name, comp, owner, why = INFERENCE_ONLY
+    d = pieces_dir / comp
+    if not d.is_dir():
+        return {"verdict": "missing", "owner": owner, "why": why}
+
+    def refused(what: str) -> dict[str, Any]:
+        return {"protocol": SC.INFERENCE_ONLY, "owner": owner, "verdict": "error", "reason": f"refused: {what}"[:2000]}
+
+    try:
+        v = json.loads((d / VERDICT).read_text())
+    except OSError:
+        return refused(f"its piece wrote no {VERDICT}")
+    except ValueError:
+        return refused(f"its {VERDICT} is not JSON")
+    if isinstance(v, dict) and set(v) == {"protocol", "refused"} and v["protocol"] == SC.INFERENCE_ONLY \
+            and isinstance(v["refused"], str):
+        return refused(v["refused"])
+    if not (isinstance(v, dict) and set(v) == {"protocol", "verdict", "commitment"}
+            and v["protocol"] == SC.INFERENCE_ONLY and v["verdict"] in ("accept", "reject")
+            and isinstance(v["commitment"], str) and re.fullmatch("[0-9a-f]{128}", v["commitment"])):
+        return refused(f"its {VERDICT} is not the policy's verdict and commitment")
+    return {"protocol": v["protocol"], "owner": owner, "verdict": v["verdict"],
+            "reason": None if v["verdict"] == "accept" else REJECTED, "commitment": v["commitment"], "quantity": None,
+            "epsilon": None, "runs": [run] if run else []}
+
+
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, wipe_server: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol rejected, erred or was
@@ -347,7 +428,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
 
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": dict(rows)}
     verdicts = {NAMES[k]: r.get("verdict") for k, r in rows.items()}
-    missing = {NAMES[k]: r.get("issue") for k, r in rows.items() if r.get("verdict") == "missing"}
+    missing = {NAMES[k]: r.get("issue") or r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
     bad = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") not in ("accept", "missing"))
@@ -360,7 +441,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     extra = ({"wipe": {"row": w, "server": wipe_server, "runs": w.get("runs") or [run]}}
              if w.get("verdict") == "accept" and wipe_server is not None else None)
     rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE, extra=extra)
-    line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing, **dev,
+    composed = "pending" if missing and rec["composed"]["verdict"] == "accept" else rec["composed"]["verdict"]
+    line = {"composed": composed, "verdicts": verdicts, "missing": missing, **dev,
             "record_missing": rec["composed"]["missing"], "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
     return report, rec, line
@@ -385,6 +467,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--key-sha512", default=os.environ.get("H1_KEY_SHA512"))
     o.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
+    i = sub.add_parser("inference-only")
+    i.add_argument("case_dir", type=Path)
+    i.add_argument("out", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -418,6 +503,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                    check=lambda *x: check_challenger(*x, python=a.python))
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
+    if a.cmd == "inference-only":
+        got = inference_only(a.case_dir)
+        a.out.mkdir(parents=True, exist_ok=True)
+        (a.out / VERDICT).write_text(json.dumps(got, sort_keys=True) + "\n")
+        print(f"INFERENCE-ONLY {json.dumps(got, sort_keys=True)}", flush=True)
+        return 1 if "refused" in got else 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
         got = pieces(a.serve_run, a.window, a.out)
@@ -425,7 +516,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: piece_row(k, a.pieces, run) for k in PIECES},
-            "wipe": piece_row("wipe", a.pieces, run)}
+            "inference-only": inference_only_row(a.pieces, run), "wipe": piece_row("wipe", a.pieces, run)}
     served = a.pieces / "wipe" / "served.json"
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                wipe_server=json.loads(served.read_text())["server"] if served.exists() else None)

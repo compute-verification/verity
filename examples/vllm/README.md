@@ -12,8 +12,10 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
 - **the inference-only policy** (`verity/core/protocols/network/nci/`): the declared circuit divides into inference
-  blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
-  declared division yet.
+  blocks within their gate and fresh-input budgets. The served run checks it where V3c's records audit wrote the
+  window's case: `served_cases.py` makes the policy's case of the window, its division the window's gates as one block
+  with α and Γ read off it unless ALPHA and GAMMA are set, and the record publishes only the check's verdict and
+  commitment.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form

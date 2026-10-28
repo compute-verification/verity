@@ -2,10 +2,14 @@
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
-composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
-and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing; its endpoint gets one token budget, T, with or without
-H1. Its load, `serve_load.py --varied`, writes each
+composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. The
+inference-only policy's row is the verdict and commitment its piece publishes of `served_cases.py`'s private answer,
+refused (an error) where that answer is missing or malformed, and missing where V3c wrote no case, which keeps the
+composed verdict pending; nothing public holds the answer's profile or reason or the case's α and Γ. PoUW's
+development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a
+period open. `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after
+them gates nothing; its endpoint gets one token budget, T, with or without H1; its inference-only step runs
+`served_cases.py` into a fresh private directory and publishes only the verdict and commitment. Its load, `serve_load.py --varied`, writes each
 request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
@@ -23,9 +27,12 @@ from pathlib import Path
 import jsonschema
 import pytest
 from verity.core.protocols.pous import wipe_period as W
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.circuits import codec
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+import served_cases as SC
 import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
@@ -170,6 +177,238 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
     else:
         assert rec["legs"]["wipe"] is None and line["missing"]["the wipe"] == "MEM-96"
+
+
+INF = SC.INFERENCE_ONLY
+#: what only the prover's node may hold: a block's gates and fresh-input bits (the answer's profile, and α and Γ read off
+#: them), and a rejection's reason naming its block
+GATES, BITS = 918273645, 564738291
+PRIVATE = (str(GATES), str(BITS), "block 7", '"blocks": [[', '"alpha"', '"gamma"', SC.FROM_DIVISION)
+
+
+def _case_dir(root: Path, verdict: str = "accept", answer: dict | str | None = None) -> tuple[Path, str]:
+    """`served_cases.py`'s private inference-only directory, written by its own `write`: a case committing to a
+    registration record, α and Γ in its params and policy.json, and the Lean answer line (an accept profiling one block,
+    or a rejection naming it; ``answer`` instead where given); and the record's digest."""
+    rec = {"format": R.FORMAT, "previous": None, "program": "ab" * 64}
+    case = {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json({"owner": [0]}).hex(),
+            "params": {"alpha": [BITS, GATES], "gamma": GATES, "log": [], "parameters": [], "program": "{}"}}
+    _, digest = SC.record_of(case)
+    if answer is None:
+        accepted = verdict == "accept"
+        answer = {"protocol": INF, "verdict": verdict, "commitment": digest, "public": {} if accepted else None,
+                  "reason": None if accepted else f"block 7 holds {BITS} fresh-input bits, more than α allows",
+                  "profile": {"blocks": [[GATES, BITS]], "gates": GATES} if accepted else None}
+    d = root / "private" / "inference-only"
+    SC.write(d, case, answer if isinstance(answer, str) else json.dumps(answer, sort_keys=True),
+             {"policy.json": {"alpha": [BITS, GATES], "gamma": GATES, "read": SC.FROM_DIVISION}})
+    return d, digest
+
+
+def _publish(capsys, case_dir: Path, pieces: Path) -> tuple[int, dict, str]:
+    """`served_verdicts.py inference-only`: its exit, the verdict.json it published, and what it printed."""
+    rc = S.main(["inference-only", str(case_dir), str(pieces / "inference-only")])
+    return rc, json.loads((pieces / "inference-only" / S.VERDICT).read_text()), capsys.readouterr().out
+
+
+def _record(tmp_path: Path, monkeypatch, capsys, pieces: Path) -> tuple[int, dict, dict, str]:
+    """`served_verdicts.py record` over sampled proofs' accepted row and ``pieces``: its exit, its RECORD line, its
+    window report, and what it printed."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(pieces),
+                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
+    out = capsys.readouterr().out
+    line = json.loads(out.strip().splitlines()[-1].removeprefix("RECORD "))
+    return rc, line, json.loads((tmp_path / "record" / "verdicts.json").read_text()), out
+
+
+def _published(root: Path, *printed: str) -> str:
+    """Everything public: each file under ``root`` and what was printed."""
+    return "\n".join([*(p.read_text() for p in sorted(root.rglob("*")) if p.is_file()), *printed])
+
+
+@pytest.mark.parametrize("verdict", ["accept", "reject"])
+def test_the_inference_only_row_is_the_private_answers_verdict_and_commitment_only(tmp_path, monkeypatch, capsys,
+                                                                                    verdict):
+    """The piece publishes the policy's answer's verdict and the registration record's digest it commits to, and the
+    record's inference-only row is that verdict and commitment: an accept leaves the record as its other rows compose
+    it (pending, with PoUW and the rest missing), and a rejection makes it reject with no block record. Neither the
+    published verdict, the record nor anything printed holds the answer's profile (the block's gates and fresh-input
+    bits) or reason (naming the block), or the case's α and Γ."""
+    case_dir, digest = _case_dir(tmp_path, verdict)
+    out = tmp_path / "out"
+    rc, published, printed = _publish(capsys, case_dir, out / "pieces")
+    assert rc == 0 and published == {"protocol": INF, "verdict": verdict, "commitment": digest}
+    assert printed == f"INFERENCE-ONLY {json.dumps(published, sort_keys=True)}\n"
+    rc, line, report, said = _record(out, monkeypatch, capsys, out / "pieces")
+    assert report["protocols"]["inference-only"] == {
+        "protocol": INF, "owner": "network-accounting", "verdict": verdict, "commitment": digest, "quantity": None,
+        "epsilon": None, "reason": None if verdict == "accept" else S.REJECTED, "runs": ["r1"]}
+    assert line["verdicts"]["the inference-only policy"] == verdict and "the inference-only policy" not in line["missing"]
+    if verdict == "accept":
+        assert rc == 0 and line["composed"] == "pending" and line["check"] == {}
+        assert "inference-only" not in json.loads((out / "record" / "block-record.json").read_text())["legs"]
+    else:
+        assert rc == 1 and (line["composed"], line["by"]) == ("reject", ["the inference-only policy"])
+        assert not (out / "record" / "block-record.json").exists()
+    public = _published(out, printed, said)
+    assert [s for s in PRIVATE if s in public] == []
+
+
+@pytest.mark.parametrize("case, why", [
+    ("no answer", "served_cases.py wrote no answer"),
+    ("not JSON", "its answer is not a core answer"),
+    ("not a core answer", "its answer is not a core answer"),
+    ("another protocol's", "its answer is another protocol's"),
+    ("undecided", "its answer neither accepts nor rejects"),
+    ("another record's", "its answer doesn't commit to its case's registration record"),
+    ("no record", "its case commits to no registration record"),
+])
+def test_a_missing_or_malformed_private_answer_is_refused_and_the_record_rejects(tmp_path, monkeypatch, capsys, case,
+                                                                                 why):
+    """No answer (`served_cases.py` wrote none: its Lean refused the case or ran out of time), one that isn't JSON or
+    isn't a core answer (an accept with a reason), another protocol's, an undecided one, one committing to another
+    record than its case's, or a case that commits to no registration record: the piece publishes that it refused the
+    answer, in fixed words, and exits 1; the row is that refusal, an error, and the record rejects with no block
+    record. Nothing private is published."""
+    private = tmp_path / "node"
+    answers = {
+        "not JSON": "not json {",
+        "not a core answer": {"protocol": INF, "verdict": "accept", "commitment": None, "public": {},
+                              "reason": "block 7 holds too many bits", "profile": {"blocks": [[GATES, BITS]]}},
+        "another protocol's": {"protocol": SC.V2, "verdict": "reject", "commitment": "ab" * 64, "public": None,
+                               "reason": "block 7", "profile": None},
+        "undecided": {"protocol": INF, "verdict": "undecided", "commitment": "ab" * 64, "public": None,
+                      "reason": f"block 7 holds {BITS} bits", "profile": None},
+        "another record's": {"protocol": INF, "verdict": "accept", "commitment": "cd" * 64, "public": {},
+                             "reason": None, "profile": {"blocks": [[GATES, BITS]], "gates": GATES}},
+    }
+    case_dir, _digest = _case_dir(private, answer=answers.get(case))
+    if case == "no answer":
+        case_dir = private / "private" / "not-written"
+    if case == "no record":
+        c = json.loads((case_dir / "case.json").read_text())
+        (case_dir / "case.json").write_text(json.dumps({**c, "commitment": b'{"program":1,"format":2}'.hex()}))
+    out = tmp_path / "out"
+    rc, published, printed = _publish(capsys, case_dir, out / "pieces")
+    assert rc == 1 and published == {"protocol": INF, "refused": why}
+    rc, line, report, said = _record(out, monkeypatch, capsys, out / "pieces")
+    assert report["protocols"]["inference-only"] == {"protocol": INF, "owner": "network-accounting", "verdict": "error",
+                                                     "reason": f"refused: {why}"}
+    assert rc == 1 and (line["composed"], line["by"]) == ("reject", ["the inference-only policy"])
+    assert not (out / "record" / "block-record.json").exists()
+    public = _published(out, printed, said)
+    assert [s for s in PRIVATE if s in public] == []
+
+
+@pytest.mark.parametrize("written, why", [
+    (None, "its piece wrote no verdict.json"),
+    ("{", "its verdict.json is not JSON"),
+    ({"protocol": INF, "verdict": "accept", "commitment": "ab" * 64, "profile": {"blocks": [[GATES, BITS]]}},
+     "its verdict.json is not the policy's verdict and commitment"),
+    ({"protocol": INF, "verdict": "undecided", "commitment": "ab" * 64},
+     "its verdict.json is not the policy's verdict and commitment"),
+    ({"protocol": SC.V2, "verdict": "accept", "commitment": "ab" * 64},
+     "its verdict.json is not the policy's verdict and commitment"),
+    ({"protocol": INF, "verdict": "accept", "commitment": "AB" * 64},
+     "its verdict.json is not the policy's verdict and commitment"),
+    ({"protocol": INF, "refused": ["served_cases.py wrote no answer"]},
+     "its verdict.json is not the policy's verdict and commitment"),
+])
+def test_a_published_verdict_not_in_its_form_is_refused_by_the_record(tmp_path, written, why):
+    """The record (which the verifier reruns on the public record alone) reads only the piece's form: a piece directory
+    with no verdict.json, or one that isn't JSON, carries more than the verdict and commitment, says neither accept nor
+    reject, is another protocol's, or isn't a SHA-512 digest in lowercase hex, is refused."""
+    (d := tmp_path / "inference-only").mkdir()
+    if written is not None:
+        (d / S.VERDICT).write_text(written if isinstance(written, str) else json.dumps(written))
+    assert S.inference_only_row(tmp_path, "r1") == {"protocol": INF, "owner": "network-accounting", "verdict": "error",
+                                                    "reason": f"refused: {why}"}
+
+
+def test_with_no_case_the_row_is_missing_and_keeps_an_accepted_block_record_pending(tmp_path, monkeypatch):
+    """Where V3c's audit wrote no case the piece doesn't run and the row is missing, saying why. The block record has no
+    leg for the policy, so a block whose legs all accept composes pending while the row is missing, and accept once the
+    policy accepts."""
+    missing = S.inference_only_row(tmp_path)
+    assert missing == {"verdict": "missing", "owner": "network-accounting", "why": S.INFERENCE_ONLY[3]}
+    (d := tmp_path / "inference-only").mkdir()
+    (d / S.VERDICT).write_text(json.dumps({"protocol": INF, "verdict": "accept", "commitment": "ab" * 64}))
+    accepted = S.inference_only_row(tmp_path)
+    real = BR.from_period
+
+    def legs_accept(*a, **k):
+        rec = real(*a, **k)
+        rec["composed"]["verdict"] = "accept"
+        return rec
+
+    monkeypatch.setattr(BR, "from_period", legs_accept)
+    composed = {}
+    for name, row in (("missing", missing), ("accepted", accepted)):
+        _report, rec, line = S.record({"integrity": _accepted(), "inference-only": row}, window=1, steps=(5, 11),
+                                      node="n", run="r")
+        composed[name] = (line["composed"], line["missing"], rec is not None)
+    assert composed == {"missing": ("pending", {"the inference-only policy": S.INFERENCE_ONLY[3]}, True),
+                        "accepted": ("accept", {}, True)}
+
+
+FAKE_SERVED_CASES = '''import json, shutil, sys
+a = sys.argv[1:]
+open({seen!r}, "w").write(json.dumps(a))
+shutil.copytree({prepared!r}, a[a.index("--private") + 1] + "/inference-only")
+print("CASE", json.dumps({{"protocol": "verity/inference-only/v0", "verdict": "accept"}}))
+'''
+
+
+def _inference_only_step(tmp_path: Path, env: dict[str, str], *, case: bool = True) -> tuple[int, Path, str]:
+    """`served_verdicts.sh inference-only 1` in a toy tree whose served_cases.py records its argv and copies a prepared
+    private case and answer where it is told, and whose served_verdicts.py is this one: its exit, D and the digest."""
+    tree, d = tmp_path / "tree", tmp_path / "serve"
+    one, bin_ = tree / "benchmarks" / "one_stage", tree / ".venv" / "bin"
+    for x in (one, bin_, d):
+        x.mkdir(parents=True)
+    prepared, digest = _case_dir(tmp_path / "prepared")
+    (one / "served_cases.py").write_text(FAKE_SERVED_CASES.format(seen=str(tmp_path / "argv"), prepared=str(prepared)))
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    (bin_ / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (bin_ / "python").chmod(0o755)
+    if case:
+        (d / "v3c-w1-4-32-4" / "audit" / "window").mkdir(parents=True)
+        (d / "v3c-w1-4-32-4" / "audit" / "window" / "case.json").write_text("{}")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(tmp_path / "venv"), "D": str(d),
+           "OUT": str(tmp_path / "out"), **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "inference-only", "1"], cwd=tree, env=env,
+                        check=False, capture_output=True).returncode
+    return rc, d, digest
+
+
+@pytest.mark.parametrize("env, policy", [({}, ["--from-division"]),
+                                         ({"ALPHA": "3/7", "GAMMA": "100"}, ["--alpha", "3/7", "--gamma", "100"])])
+def test_the_runners_inference_only_step_keeps_the_case_private_and_publishes_its_verdict(tmp_path, env, policy):
+    """`served_verdicts.sh`'s step: `served_cases.py` on V3c's audit of the window, α and Γ off the division unless
+    ALPHA and GAMMA are both set, into a fresh 0700 directory under D/private that holds its log; OUT gets the
+    verdict and commitment and nothing private."""
+    rc, d, digest = _inference_only_step(tmp_path, env)
+    argv = json.loads((tmp_path / "argv").read_text())
+    p = Path(argv[argv.index("--private") + 1])
+    assert rc == 0 and argv == ["--audit", f"{d}/v3c-w1-4-32-4/audit", "--private", str(p), *policy]
+    assert p.parent == d / "private" and p.name.startswith("cases-w1.") and p.stat().st_mode & 0o777 == 0o700
+    assert (p / "served_cases.log").read_text().startswith("CASE ")
+    out = tmp_path / "out"
+    published = json.loads((out / "pieces" / "inference-only" / S.VERDICT).read_text())
+    assert published == {"protocol": INF, "verdict": "accept", "commitment": digest}
+    assert [s for s in PRIVATE if s in _published(out)] == []
+    assert S.inference_only_row(out / "pieces")["verdict"] == "accept"
+
+
+def test_the_runners_inference_only_step_with_no_v3c_case_names_it_missing(tmp_path):
+    rc, _d, _digest = _inference_only_step(tmp_path, {}, case=False)
+    lines = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert rc == 0 and lines == ["MISSING the inference-only policy: V3c's audit of window 1 wrote no case"]
+    assert not (tmp_path / "argv").exists() and not (tmp_path / "out" / "pieces").exists()
 
 
 SID = "s20261026T221500Z-ab12"

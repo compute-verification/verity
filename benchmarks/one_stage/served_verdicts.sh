@@ -46,6 +46,12 @@
 #     accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or
 #     failed before its judge) leaves the wipe missing, one served elsewhere stays missing, and one whose answer rejects
 #     makes the record reject: a failed wipe is never accepted.
+#     The inference-only policy, where V3c's audit (step 3) wrote its case: `served_cases.py` makes the policy's case of
+#     the window and checks it (α and Γ read off the case's own division, or ALPHA and GAMMA where both are set),
+#     within CASES_TIMEOUT (default 60m), its case, answer and log private in a fresh directory under $D/private; then
+#     `served_verdicts.py inference-only` publishes only the answer's verdict and commitment to
+#     $OUT/pieces/inference-only/verdict.json, or that it refused the answer. `served_verdicts.sh inference-only K`, in
+#     TREE with D and OUT, runs only this.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
@@ -254,9 +260,23 @@ measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gate
   esac
   return 0
 }
+inference_only() {  # in TREE: the inference-only policy's piece on window K (step 4), only its verdict and commitment public
+  local audit=$D/v3c-w$K-$vtag/audit ag=(--from-division) py=$TREE/.venv/bin/python p
+  [ -f "$audit/window/case.json" ] \
+    || { say "MISSING the inference-only policy: V3c's audit of window $K wrote no case"; return 0; }
+  [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  mkdir -p "$D/private" && chmod 700 "$D/private"
+  p=$(mktemp -d "$D/private/cases-w$K.XXXXXX") || return 1  # fresh: a reused D's earlier case is not this window's
+  timeout "${CASES_TIMEOUT:-60m}" "$py" benchmarks/one_stage/served_cases.py --audit "$audit" --private "$p" \
+    "${ag[@]}" > "$p/served_cases.log" 2>&1
+  "$py" benchmarks/one_stage/served_verdicts.py inference-only "$p/inference-only" "$OUT/pieces/inference-only" 2>&1 \
+    | tee -a "$OUT/verdicts.txt"
+  return "${PIPESTATUS[0]}"
+}
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
+if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
 
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
@@ -396,6 +416,7 @@ say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proof
 # 4. the other subprotocols, each its piece's verdict or MISSING with its issue
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" 2>&1 | tee -a "$OUT/verdicts.txt"
+inference_only
 
 # 5. one record of every verdict
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
