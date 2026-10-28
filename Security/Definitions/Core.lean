@@ -4,6 +4,7 @@ import Definitions.Core.Partition
 import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration
+import Definitions.Core.Period
 import Definitions.Core.Boolean
 import Definitions.Core.Game
 import Definitions.Core.Draw
@@ -12,8 +13,6 @@ import Definitions.Core.Scalar
 import Definitions.Core.Prims
 import Definitions.Core.TC
 import Definitions.Core.Fp32
-import Definitions.Core.Formalism
-import Definitions.Core.Expand
 import Definitions.Core.NaiveStrassen
 
 /-!
