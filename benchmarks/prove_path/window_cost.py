@@ -78,8 +78,9 @@ CAP = 64
 ROOT_JSON_BYTES = 360
 #: the H200's rates, compressions a second: a measured step and commit_gpu's peak (`commit_slots`)
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
-#: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
-GPUS = 12_500 * 8
+#: the reference datacenter's GPUs: the census deployment whose role is reference (`benchmarks/census/deployments.json`)
+_REF = next(d for d in json.loads((HERE.parent / "census" / "deployments.json").read_text()) if d["role"] == "reference")
+GPUS = _REF["machines"] * _REF["gpus_per_machine"]
 PERIODS = {"week": 7 * 86_400, "month": 30 * 86_400, "year": 365 * 86_400}
 
 
