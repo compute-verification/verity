@@ -834,7 +834,8 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     multiple of `TILE_K_STEP` below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
     members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
-    gates its nodes unroll to."""
+    gates its nodes unroll to. The Lean reads the descriptor through C-Flock's decoder (`Credit.programOf`), so it also
+    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks only its form (`_parsed`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
