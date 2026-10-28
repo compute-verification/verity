@@ -388,9 +388,8 @@ abbrev NETWORK_CERTIFICATE : String := "verity/network-certificate/v4"
 abbrev NETWORK_RECORDS : String := "verity/network-records/v3"
 abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 
--- Not yet read from here: composition (onsite, remote, product)
+-- Not yet read from here: composition (onsite, remote)
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v0"
-abbrev PRODUCT_PROTOCOL : String := "verity/product/v0"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
 
 -- Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)
