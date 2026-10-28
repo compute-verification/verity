@@ -19,6 +19,9 @@ record, a function of all the run's coins.
 * `PeriodCapacity`, the joint's reading: in a run whose capacity verdict is that acceptance outside a break, the capacity
   audit has its per-run guarantee (`Accounting.Run.CapacitySoundPerRun`), the input `Accounting.Guarantees.JointPerRun`
   takes, and its sure-bound form (`Accounting.Run.CapacitySound`), the one `Accounting.Guarantees.Joint` takes.
+* In the shared coin game (`Verity.Game.prCoin`), `PeriodHeldCoins` over the hm96 coins and uniform streams, and
+  `PeriodHeldSha512` over the memory challenger's SHA-512 derivation of its streams, at `δ + ε_max + ε_prf` under
+  `Hash.Assumptions.Sha512Prf` (`Properties.Pous.PeriodGame`); both are proved from `PeriodHeld`.
 
 **Every prover strategy, one fixed extractor.** Both are stated for every prover strategy `τ` in the ring model
 (`Strategy`): what survives setup is any function of the payload, `C` and the whole primitive, and each round's answer
