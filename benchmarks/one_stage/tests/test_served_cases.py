@@ -1,17 +1,17 @@
-"""served_cases.py: sampled proofs' v2 case and onsite's registration case (`verity/inference-only/v0`) for a served
+"""served_cases.py: sampled proofs' v2 case and the inference-only case (`verity/inference-only/v0`) for a served
 window, from its records audit's v1 case (a5's ``window/case.json``) and v2 case (``case-v2.json``), each in a 0700
 directory beside its Lean answer, in the form `composite.py --cases` reads, and both answers naming the window's
 registration record's digest.
 
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
-templates) the registration case is accepted by the policy's Lean check (`inference-only check`) at Γ its gates and α
+templates) the inference-only case is accepted by the policy's Lean check (`inference-only check`) at Γ its gates and α
 its input bits a gate (which ``--from-division`` reads off the check's profile at no budget), and refused one gate or
 one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`) names the
 record's digest as its commitment (it rejects the toy's proofs, which are no proofs). A tampered field is refused: by the
 Lean check (the record naming another Program, an input node in a block, θ on an unregistered input, an evidence key,
 the record repeated in the log) or by the producer before any Lean runs (a record that isn't v1's Program's, a previous
 record with no log, α and Γ not given, a v2 case that isn't the audit's), and an answer that isn't the window's record's
-is written nowhere. The slow test makes the registration case on the 4,32,4 class's own Program (TINY on the H200)."""
+is written nowhere. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ PAIR = bind(CompositeDefinition("ServedCasesTestPair", 0, (), lambda S_: ((("x",
 TRIPLE = bind(CompositeDefinition("ServedCasesTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
                                   lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 SLOTS = 4
-REG = SC.REGISTRATION
+INF = SC.INFERENCE_ONLY
 UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
 
 
@@ -135,7 +135,7 @@ def run(capsys, *argv) -> tuple[int, list[dict], list[dict], str]:
 
 def budgets(v1: dict, exe: Path, scratch: Path) -> tuple[int, int]:
     """The one inference block's gates and fresh-input bits: the Lean check's profile on the case at no budget."""
-    got, _ = SC.lean_answer(exe, SC.registration_case(v1, *SC.UNBOUNDED), scratch)
+    got, _ = SC.lean_answer(exe, SC.inference_only_case(v1, *SC.UNBOUNDED), scratch)
     assert got["verdict"] == "accept" and len(got["profile"]["blocks"]) == 1, got
     return tuple(got["profile"]["blocks"][0])
 
@@ -146,8 +146,8 @@ def toy_v1() -> dict:
 
 
 @pytest.fixture(scope="module")
-def registration_exe() -> Path:
-    return SC.build(*SC.REGISTRATION_LEAN)
+def inference_only_exe() -> Path:
+    return SC.build(*SC.INFERENCE_ONLY_LEAN)
 
 
 @pytest.fixture(scope="module")
@@ -163,13 +163,13 @@ def test_both_cases_go_private_beside_answers_naming_the_records_digest(tmp_path
     v1 = v1_case(program, query)
     d = digest_of(v1)
     audit = audit_dir(tmp_path, v1)
-    v2x, regx = stand_in(tmp_path, "v2", answer(SC.V2, d)), stand_in(tmp_path, "reg", answer(REG, d))
+    v2x, regx = stand_in(tmp_path, "v2", answer(SC.V2, d)), stand_in(tmp_path, "reg", answer(INF, d))
     private = tmp_path / "serve" / "private"
     rc, cases, refused, out = run(capsys, "--audit", audit, "--private", private, "--alpha", "3/2", "--gamma", 100,
-                                  "--v2-exe", v2x, "--registration-exe", regx)
+                                  "--v2-exe", v2x, "--inference-only-exe", regx)
     assert (rc, refused) == (0, []), out
     assert cases == [{"dir": str(private / "sampled-proofs-v2"), "protocol": SC.V2, "verdict": "accept"},
-                     {"dir": str(private / "inference-only"), "protocol": REG, "verdict": "accept"}]
+                     {"dir": str(private / "inference-only"), "protocol": INF, "verdict": "accept"}]
     v2_case = json.loads((audit / "window" / "case-v2.json").read_text())
     for c in cases:
         cd = Path(c["dir"])
@@ -200,13 +200,9 @@ def test_both_cases_go_private_beside_answers_naming_the_records_digest(tmp_path
 
 def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, capsys):
     """`composite.py`'s own reader (`case_dirs`, `piece`) takes both directories: each piece is its protocol's, its
-    digest the record's, and its blobs v2's. Composed, its public output passes its own leak check and holds neither
-    case's evidence nor the Program's text. Which id a product composes as the registration is
-    `served_cases.REGISTRATION`'s to follow, so it isn't asserted here."""
-    path = HERE.parent / "composite.py"
-    if not path.is_file():
-        pytest.skip("no composite.py on this branch yet; this runs once it lands")
-    spec = importlib.util.spec_from_file_location("one_stage_composite", path)
+    digest the record's, and its blobs v2's, and both products compose both. Composed, its public output passes its own
+    leak check and holds neither case's evidence nor the Program's text."""
+    spec = importlib.util.spec_from_file_location("one_stage_composite", HERE.parent / "composite.py")
     C = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(C)
     program, query = toy()
@@ -216,14 +212,14 @@ def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, ca
     private = tmp_path / "private"
     rc, cases, _, out = run(capsys, "--audit", audit, "--private", private, "--alpha", "1", "--gamma", 100,
                             "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, d)),
-                            "--registration-exe", stand_in(tmp_path, "reg", answer(REG, d)))
+                            "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, d)))
     assert rc == 0, out
     pieces = {p["id"]: p for p in map(C.piece, C.case_dirs([private]))}
-    assert set(pieces) == {SC.V2, REG}
+    assert set(pieces) == {SC.V2, INF}
     assert all(p["digest"] == bytes.fromhex(d) and p["commitment"] == bytes.fromhex(v1["commitment"])
                for p in pieces.values())
     assert pieces[SC.V2]["blobs"] == json.loads((audit / "window" / "case-v2.json").read_text())["blobs"]
-    assert SC.V2 in C.COMPONENTS["onsite"] and SC.V2 in C.COMPONENTS["remote"]
+    assert all({SC.V2, INF} <= set(C.COMPONENTS[p]) for p in ("onsite", "remote"))
     capsys.readouterr()
     pub = tmp_path / "public"
     assert C.main(["remote", "--cases", str(private), "--private-out", str(tmp_path / "composed"),
@@ -243,24 +239,24 @@ def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, ca
                               "per gate"),
 ])
 def test_the_lean_check_accepts_the_registration_case_at_its_budgets_and_not_past_them(
-        tmp_path, capsys, registration_exe, toy_v1, change, verdict, reason):
+        tmp_path, capsys, inference_only_exe, toy_v1, change, verdict, reason):
     """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `nci_reference`'s),
     `inference-only check` accepts; one gate or one bit under, it rejects naming the budget. Its answer names the
     record's digest, so the case is written either way, its verdict the Lean's."""
     v1 = toy_v1
-    gates, bits = budgets(v1, registration_exe, tmp_path / "s")
-    case = SC.registration_case(v1, 10**9, 10**12)
+    gates, bits = budgets(v1, inference_only_exe, tmp_path / "s")
+    case = SC.inference_only_case(v1, 10**9, 10**12)
     inst = {k: case["params"][k] for k in ("alpha", "gamma", "program")} | json.loads(bytes.fromhex(case["evidence"]))
     assert SC._reference().check_desc(inst)["ius"] == [[gates, bits]]
     gamma, alpha = {"at-budget": (gates, f"{bits}/{gates}"), "gamma-1": (gates - 1, f"{bits}/{gates}"),
                     "alpha-under": (gates, f"{bits - 1}/{gates}")}[change]
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
-                                  "--alpha", alpha, "--gamma", gamma, "--registration-exe", registration_exe,
+                                  "--alpha", alpha, "--gamma", gamma, "--inference-only-exe", inference_only_exe,
                                   "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))))
     assert rc == 0 and refused == [], out
-    assert [c["verdict"] for c in cases if c["protocol"] == REG] == [verdict]
+    assert [c["verdict"] for c in cases if c["protocol"] == INF] == [verdict]
     got = json.loads((tmp_path / "private" / "inference-only" / "answer.json").read_text())
-    assert got["protocol"] == REG and got["commitment"] == digest_of(v1) and got["reason"] == reason
+    assert got["protocol"] == INF and got["commitment"] == digest_of(v1) and got["reason"] == reason
     if verdict == "accept":
         assert got["profile"] == {"blocks": [[gates, bits]], "gates": got["profile"]["gates"]}
 
@@ -273,10 +269,10 @@ def test_the_lean_check_accepts_the_registration_case_at_its_budgets_and_not_pas
     ("evidence-key", "evidence: the keys of the evidence are not owner, provenance, theta"),
     ("log-repeat", "trusted"),
 ])
-def test_the_lean_check_refuses_a_tampered_registration_case(tmp_path, registration_exe, change, reason):
+def test_the_lean_check_refuses_a_tampered_registration_case(tmp_path, inference_only_exe, change, reason):
     program, query = toy()
     v1 = v1_case(program, query)
-    case = SC.registration_case(v1, 10**9, 10**12)
+    case = SC.inference_only_case(v1, 10**9, 10**12)
     rec = json.loads(bytes.fromhex(case["commitment"]))
     ev = json.loads(bytes.fromhex(case["evidence"]))
     first_input = ev["owner"].index("input")
@@ -292,8 +288,8 @@ def test_the_lean_check_refuses_a_tampered_registration_case(tmp_path, registrat
     elif change == "log-repeat":
         case["params"]["log"] = [rec]
     case["evidence"] = codec.canonical_json(ev).hex()
-    got, _ = SC.lean_answer(registration_exe, case, tmp_path / "scratch")
-    assert got["protocol"] == REG and got["verdict"] == "reject", got
+    got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "scratch")
+    assert got["protocol"] == INF and got["verdict"] == "reject", got
     assert got["reason"] == reason or got["reason"].startswith(reason + ":"), got
 
 
@@ -306,7 +302,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
     v1 = v1_case(program, query)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--v2-exe", v2_exe, "--alpha", "1", "--gamma", 1,
-                                  "--registration-exe", stand_in(tmp_path, "reg", answer(REG, digest_of(v1))))
+                                  "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, digest_of(v1))))
     assert rc == 0 and refused == [], out
     assert [c["verdict"] for c in cases if c["protocol"] == SC.V2] == ["reject"]
     got = json.loads((tmp_path / "private" / "sampled-proofs-v2" / "answer.json").read_text())
@@ -330,7 +326,7 @@ def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(
         v1["commitment"] = codec.canonical_json({**rec, "program": "ee" * 64}).hex()
     argv = ["--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
             "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))),
-            "--registration-exe", stand_in(tmp_path, "reg", answer(REG, digest_of(v1)))]
+            "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, digest_of(v1)))]
     if change != "no-alpha-gamma":
         argv += ["--alpha", "1", "--gamma", 1]
     if change == "log-unchained":
@@ -338,11 +334,11 @@ def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(
         argv += ["--log", tmp_path / "log.json"]
     if change == "gamma-bool":
         with pytest.raises(SC.Refused, match=reason):
-            SC.registration_case(v1, 1, True)
+            SC.inference_only_case(v1, 1, True)
         return
     rc, cases, refused, out = run(capsys, *argv)
     assert rc == 1 and [c["protocol"] for c in cases] == [SC.V2], out
-    assert [r["protocol"] for r in refused] == [REG] and reason in refused[0]["reason"], refused
+    assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
     assert not (tmp_path / "private" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
 
@@ -354,38 +350,43 @@ def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(
 ])
 def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, capsys, profile, verdict, reason):
     """With ``--from-division``, Γ is the largest block's gates and α the most fresh-input bits a gate of any block, from
-    the check's profile at no budget, and the CASE line says so; a rejection there, or a profile with no blocks or a
-    block of no gates, is refused before the case is checked."""
+    the check's profile at no budget; the CASE line publishes only those numbers, and the case's private
+    ``policy.json`` says where they come from. A rejection there, or a profile with no blocks or a block of no gates,
+    is refused before the case is checked."""
     program, query = toy()
     v1 = v1_case(program, query)
     d = digest_of(v1)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--from-division", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, d)),
-                                  "--registration-exe", stand_in(tmp_path, "reg", answer(REG, d, verdict)
+                                  "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, d, verdict)
                                                                  | {"profile": profile}))
     if reason is None:
         assert rc == 0 and refused == [], out
-        assert [c.get("alpha_gamma") for c in cases] == [None, SC.FROM_DIVISION]
-        params = json.loads((tmp_path / "private" / "inference-only" / "case.json").read_text())["params"]
+        assert [c.get("alpha_gamma") for c in cases] == [None, [[2, 3], 10]]
+        assert SC.FROM_DIVISION not in out
+        d = tmp_path / "private" / "inference-only"
+        params = json.loads((d / "case.json").read_text())["params"]
         assert (params["alpha"], params["gamma"]) == ([2, 3], 10)
+        assert json.loads((d / "policy.json").read_text()) == {"alpha": [2, 3], "gamma": 10, "read": SC.FROM_DIVISION}
+        assert stat.S_IMODE((d / "policy.json").stat().st_mode) == 0o600
     else:
-        assert rc == 1 and [r["protocol"] for r in refused] == [REG] and reason in refused[0]["reason"], refused
+        assert rc == 1 and [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
         assert not (tmp_path / "private" / "inference-only").exists()
 
 
 @lean
-def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys, registration_exe, toy_v1):
+def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys, inference_only_exe, toy_v1):
     """The real check at no budget, then at what it read off: Γ the one block's gates and α its input bits a gate, at
     which the case is accepted."""
-    gates, bits = budgets(toy_v1, registration_exe, tmp_path / "s")
+    gates, bits = budgets(toy_v1, inference_only_exe, tmp_path / "s")
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, toy_v1), "--private", tmp_path / "private",
-                                  "--from-division", "--registration-exe", registration_exe,
+                                  "--from-division", "--inference-only-exe", inference_only_exe,
                                   "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(toy_v1))))
     assert rc == 0 and refused == [], out
-    assert [(c["verdict"], c.get("alpha_gamma")) for c in cases if c["protocol"] == REG] == [
-        ("accept", SC.FROM_DIVISION)]
-    params = json.loads((tmp_path / "private" / "inference-only" / "case.json").read_text())["params"]
     f = Fraction(bits, gates)
+    assert [(c["verdict"], c.get("alpha_gamma")) for c in cases if c["protocol"] == INF] == [
+        ("accept", [[f.numerator, f.denominator], gates])]
+    params = json.loads((tmp_path / "private" / "inference-only" / "case.json").read_text())["params"]
     assert (params["alpha"], params["gamma"]) == ([f.numerator, f.denominator], gates)
 
 
@@ -393,19 +394,19 @@ def test_the_parameters_are_the_population_programs_and_no_other_programs():
     """The program function's parameters come from the population program rebuilt over the root's templates, one
     template's included; a Program that isn't one (here a template on its own) is refused, its parameters unknown."""
     one = v1_case(P.population_program(PAIR, SLOTS), P.template_instance_query(PAIR))
-    assert SC.registration_case(one, 1, 1)["params"]["parameters"] == [["x", Array(SLOTS, Array(2, Bits(8))).to_json()]]
+    assert SC.inference_only_case(one, 1, 1)["params"]["parameters"] == [["x", Array(SLOTS, Array(2, Bits(8))).to_json()]]
     lone = Program(PAIR)
     desc = json.loads(codec.canonical_json(codec.encode_program(lone)))
     rec = {"format": R.FORMAT_V2, "previous": None, "program": codec.program_digest(desc)}
     with pytest.raises(SC.Refused, match="isn't the population program over its root's templates"):
-        SC.registration_case({"commitment": codec.canonical_json(rec).hex(), "params": {"program": desc}}, 1, 1)
+        SC.inference_only_case({"commitment": codec.canonical_json(rec).hex(), "params": {"program": desc}}, 1, 1)
 
 
 def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     program, query = toy()
     first = {"format": R.FORMAT_V2, "previous": None, "program": "11" * 64}
     v1 = v1_case(program, query, previous=R.digest(first))
-    assert SC.registration_case(v1, 1, 1, [first])["params"]["log"] == [first]
+    assert SC.inference_only_case(v1, 1, 1, [first])["params"]["log"] == [first]
 
 
 @pytest.mark.parametrize("change, reason", [
@@ -434,8 +435,8 @@ def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change,
         f.write_text(json.dumps(c))
     rc, cases, refused, out = run(capsys, "--audit", audit, "--private", tmp_path / "private", "--alpha", "1",
                                   "--gamma", 1, "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))),
-                                  "--registration-exe", stand_in(tmp_path, "reg", answer(REG, digest_of(v1))))
-    assert rc == 1 and [c["protocol"] for c in cases] == [REG], out
+                                  "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, digest_of(v1))))
+    assert rc == 1 and [c["protocol"] for c in cases] == [INF], out
     assert [r["protocol"] for r in refused] == [SC.V2] and reason in refused[0]["reason"], refused
     assert not (tmp_path / "private" / "sampled-proofs-v2").exists() and not (tmp_path / "v2.seen").exists()
 
@@ -443,7 +444,7 @@ def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change,
 @pytest.mark.parametrize("change, reason", [
     ("other-digest", "'s answer commits to"),
     ("null-digest", "'s answer commits to None"),
-    ("other-protocol", "the answer is 'verity/nci/v1''s"),
+    ("other-protocol", "the answer is 'verity/pouw/v1''s"),
     ("no-line", "answered no line"),
 ])
 def test_an_answer_that_is_not_the_windows_records_is_written_nowhere(tmp_path, capsys, change, reason):
@@ -452,14 +453,14 @@ def test_an_answer_that_is_not_the_windows_records_is_written_nowhere(tmp_path, 
     program, query = toy()
     v1 = v1_case(program, query)
     d = digest_of(v1)
-    bad = {"other-digest": answer(REG, "ee" * 64), "null-digest": answer(REG, None, "reject"),
-           "other-protocol": answer("verity/nci/v1", d), "no-line": None}[change]
+    bad = {"other-digest": answer(INF, "ee" * 64), "null-digest": answer(INF, None, "reject"),
+           "other-protocol": answer("verity/pouw/v1", d), "no-line": None}[change]
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--alpha", "1", "--gamma", 1,
                                   "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, d)),
-                                  "--registration-exe", stand_in(tmp_path, "reg", bad))
+                                  "--inference-only-exe", stand_in(tmp_path, "reg", bad))
     assert rc == 1 and [c["protocol"] for c in cases] == [SC.V2], out
-    assert [r["protocol"] for r in refused] == [REG] and reason in refused[0]["reason"], refused
+    assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
     assert not (tmp_path / "private" / "inference-only").exists()
 
 
@@ -472,14 +473,14 @@ def test_the_serve_dir_names_its_one_audited_window(tmp_path, capsys):
     serve = tmp_path / "serve"
     audit_dir(serve / "v3c-w0-a", v1)
     exes = ["--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, d)),
-            "--registration-exe", stand_in(tmp_path, "reg", answer(REG, d))]
+            "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, d))]
     rc, cases, _, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1", "--gamma", 1,
                             *exes)
     assert rc == 0 and len(cases) == 2, out
     audit_dir(serve / "v3c-w1-a", v1)
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private2", "--alpha", "1",
                                   "--gamma", 1, *exes)
-    assert rc == 1 and cases == [] and {r["protocol"] for r in refused} == {SC.V2, REG}, out
+    assert rc == 1 and cases == [] and {r["protocol"] for r in refused} == {SC.V2, INF}, out
     assert "holds 2 audited windows" in refused[0]["reason"]
 
 
@@ -504,9 +505,9 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 
 @lean
 @pytest.mark.slow
-def test_the_registration_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, registration_exe):
+def test_the_registration_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, inference_only_exe):
     """The 4,32,4 class's window circuit (TINY on the H200: about 85 s and 3 GB to build) as the served window's audit
-    holds it, its population program over the class's templates: the registration case `registration_case` makes from
+    holds it, its population program over the class's templates: the inference-only case `inference_only_case` makes from
     it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
     (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests
     can't catch what only the served shapes have: the class's own Definitions
@@ -521,12 +522,12 @@ def test_the_registration_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tm
                             provable=False)
     program, query = circuit.program()
     v1 = v1_case(program, query)
-    alpha, gates = SC.division_policy(v1, [], registration_exe, tmp_path / "s")
+    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")
     bits = alpha * gates
     assert bits.denominator == 1, (alpha, gates)
     bits = bits.numerator
     for gamma, verdict in ((gates, "accept"), (gates - 1, "reject")):
-        got, _ = SC.lean_answer(registration_exe, SC.registration_case(v1, alpha, gamma), tmp_path / "s")
-        assert (got["protocol"], got["commitment"], got["verdict"]) == (REG, digest_of(v1), verdict), got
+        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma), tmp_path / "s")
+        assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), verdict), got
     print(json.dumps({"class": "4,32,4", "templates": len(circuit.templates), "gates": gates, "input_bits": bits,
                       "program_bytes": len(codec.canonical_json(v1["params"]["program"]))}, sort_keys=True))

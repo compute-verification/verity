@@ -1,8 +1,8 @@
-"""Sampled proofs' v2 case and onsite's registration case for a served window, from its records audit, each beside its
+"""Sampled proofs' v2 case and the inference-only case for a served window, from its records audit, each beside its
 own Lean answer, for `composite.py` (`served_composite.sh` runs this after the record):
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
-                    [--log FILE] [--v2-exe PATH] [--registration-exe PATH]
+                    [--log FILE] [--v2-exe PATH] [--inference-only-exe PATH]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case. Both cases commit to the same
@@ -14,12 +14,12 @@ is written: that digest is what remote's and onsite's record tie compare.
   verdicts replaced by the drawn member's proofs' files, and ``blobs``), refused when it commits to another record than
   v1's case or names a blob that isn't there, and when a5 wrote none (its ``case-v2-error.txt`` says why: v2 verifies
   one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk check` on the case and its blobs.
-* **The registration case** (`registration_case`, `REGISTRATION`: `verity/inference-only/v0`; `verity/nci/v1` reads
-  the same form, so a rename is `REGISTRATION` and `REGISTRATION_LEAN`):
+* **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
+  policy's check, which onsite and remote both compose):
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
-    ``--from-division`` read off the case's own division, `division_policy`, which the registration's CASE line says
-    in its ``alpha_gamma``: the check then confirms that the division complies, and they're no security setting;
-    without either no case is written), ``log`` (the deployment's records before this one, ``--log``; empty when the
+    ``--from-division`` read off the case's own division, `division_policy`, so the check confirms that the division
+    complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
+    either no case is written), ``log`` (the deployment's records before this one, ``--log``; empty when the
     record's ``previous`` is null), ``program`` (v1's params' Program as canonical text, the one the record's
     ``program`` names) and ``parameters`` (its program function's, which the descriptor doesn't carry: the population
     program rebuilt over its root's templates and held to the record's ``program``, `parameters`);
@@ -34,9 +34,10 @@ is written: that digest is what remote's and onsite's record tie compare.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v2/``, ``inference-only/``; 0700, files
 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and v2's ``blobs``) and
-``answer.json``, its Lean answer line, the directory `composite.py --cases` reads. The Lean runs on files in a 0700
-scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written
-(the registration's with ``alpha_gamma`` too, given ``--from-division``) and a ``NOT_WRITTEN {"protocol", "reason"}``
+``answer.json``, its Lean answer line, the directory `composite.py --cases` reads (and, given ``--from-division``, the
+inference-only case's ``policy.json``). The Lean runs on files in a 0700 scratch directory under ``--private``. This
+prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (the inference-only one's, given
+``--from-division``, with ``alpha_gamma``, ``[[num, den], Γ]``) and a ``NOT_WRITTEN {"protocol", "reason"}``
 line per case refused, and nothing of a case's params or evidence; the lines go to a private log (a reason may quote
 a5's ``case-v2-error.txt``), of which only a line's ``protocol``, ``verdict`` and ``alpha_gamma`` are public. Exit 0
 when every case is written, 1 when one is refused, 64 on a usage error.
@@ -62,17 +63,16 @@ from verity.ml.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V2 = PF.V2
-#: Onsite's registration check: the inference-only policy's v0 (`verity/nci/v1` takes the same case).
-REGISTRATION = "verity/inference-only/v0"
-REGISTRATION_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
-NCI_REFERENCE = REGISTRATION_LEAN[0] / "scripts" / "nci_reference.py"
-DIRS = {V2: "sampled-proofs-v2", REGISTRATION: "inference-only"}
+INFERENCE_ONLY = "verity/inference-only/v0"
+INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
+NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "nci_reference.py"
+DIRS = {V2: "sampled-proofs-v2", INFERENCE_ONLY: "inference-only"}
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
 #: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
 #: the case's own division.
 UNBOUNDED = (2**64, 2**64)
-#: The registration CASE line's ``alpha_gamma`` with ``--from-division``.
+#: Where ``--from-division``'s α and Γ come from, in the inference-only case's private ``policy.json``.
 FROM_DIVISION = "read off the honest division, so the check confirms it complies; not a security setting"
 
 
@@ -178,9 +178,9 @@ def parameters(desc: Mapping[str, Any], root: Any) -> list[list[Any]]:
                   "parameters aren't known")
 
 
-def registration_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
+def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
                       log: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Onsite's registration case (module docstring) from v1's case of the window's audit."""
+    """The inference-only case (module docstring) from v1's case of the window's audit."""
     rec, _ = record_of(v1)
     desc = v1["params"].get("program") if isinstance(v1.get("params"), Mapping) else None
     _need(isinstance(desc, dict), "v1's params hold no Program descriptor")
@@ -205,7 +205,7 @@ def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe
     """α and Γ read off the case's own division (``--from-division``): the policy's Lean check at no budget
     (`UNBOUNDED`) profiles each block's gates and fresh-input bits; Γ is the largest block's gates and α the most bits a
     gate of any block, so the check at them confirms that the division complies."""
-    answer, _ = lean_answer(exe, registration_case(v1, *UNBOUNDED, log), scratch)
+    answer, _ = lean_answer(exe, inference_only_case(v1, *UNBOUNDED, log), scratch)
     profile = answer.get("profile")
     blocks = profile.get("blocks") if isinstance(profile, Mapping) else None
     _need(answer.get("verdict") == "accept",
@@ -244,11 +244,12 @@ def tie(answer: Mapping[str, Any], id: str, digest: str) -> None:
           "window's registration record's digest")
 
 
-def write(d: Path, case: Mapping[str, Any], line: str) -> None:
-    """``case.json`` and ``answer.json`` in ``d``, 0700 with files 0600."""
+def write(d: Path, case: Mapping[str, Any], line: str, also: Mapping[str, Any] | None = None) -> None:
+    """``case.json`` and ``answer.json`` in ``d``, and each of ``also`` as a JSON file, 0700 with files 0600."""
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(d, 0o700)
-    for name, body in (("case.json", json.dumps(dict(case), sort_keys=True)), ("answer.json", line)):
+    files = {"case.json": json.dumps(dict(case), sort_keys=True), "answer.json": line}
+    for name, body in (files | {n: json.dumps(v, sort_keys=True) for n, v in (also or {}).items()}).items():
         fd = os.open(d / name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as fh:
             fh.write(body + "\n")
@@ -281,7 +282,8 @@ def produce(a: argparse.Namespace) -> int:
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
 
-    said: dict[str, dict[str, str]] = {}
+    said: dict[str, dict[str, Any]] = {}
+    kept: dict[str, dict[str, Any]] = {}
 
     def one(id: str, make, exe) -> None:
         nonlocal bad
@@ -293,25 +295,26 @@ def produce(a: argparse.Namespace) -> int:
             bad = 1
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
             return
-        write(private / DIRS[id], case, line)
+        write(private / DIRS[id], case, line, kept.get(id))
         print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")}
                                    | said.get(id, {}), sort_keys=True), flush=True)
 
     one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
-    registration_exe = functools.cache(lambda: a.registration_exe or build(*REGISTRATION_LEAN))
+    inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*INFERENCE_ONLY_LEAN))
 
-    def registration() -> dict[str, Any]:
+    def inference_only() -> dict[str, Any]:
         log = _json(a.log) if a.log is not None else []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
         if not a.from_division:
             _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha "
                   "and --gamma, or --from-division")
-            return registration_case(v1, a.alpha, a.gamma, log)
-        alpha, gamma = division_policy(v1, log, registration_exe(), private / "scratch")
-        said[REGISTRATION] = {"alpha_gamma": FROM_DIVISION}
-        return registration_case(v1, alpha, gamma, log)
+            return inference_only_case(v1, a.alpha, a.gamma, log)
+        alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch")
+        said[INFERENCE_ONLY] = {"alpha_gamma": [_ratio(alpha), gamma]}
+        kept[INFERENCE_ONLY] = {"policy.json": {"alpha": _ratio(alpha), "gamma": gamma, "read": FROM_DIVISION}}
+        return inference_only_case(v1, alpha, gamma, log)
 
-    one(REGISTRATION, registration, registration_exe)
+    one(INFERENCE_ONLY, inference_only, inference_only_exe)
     return bad
 
 
@@ -333,7 +336,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="α and Γ read off the case's own division (division_policy) instead of given")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list")
     ap.add_argument("--v2-exe", help="sampled-proofs-one-stage-zk (default: built here)")
-    ap.add_argument("--registration-exe", help=f"{REGISTRATION_LEAN[1]} (default: built here)")
+    ap.add_argument("--inference-only-exe", help=f"{INFERENCE_ONLY_LEAN[1]} (default: built here)")
     a = ap.parse_args(argv)
     if a.from_division and (a.alpha is not None or a.gamma is not None):
         ap.error("--from-division reads α and Γ off the division: not with --alpha or --gamma")
