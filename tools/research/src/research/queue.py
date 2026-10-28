@@ -402,6 +402,9 @@ class DriveFlags:
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
+    #: the after-landing run as this many shards of the whole check over `on` (`train.sh --shards N`, `Driver.shards`), one of
+    #: ci.toml's plans; unset, one per machine of `on`; 1, one run of every step
+    shards: int | None = None
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -437,10 +440,11 @@ class DriveFlags:
             if not (on := names("on")):
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
-        if "max_lean_checks" in doc:
-            if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
-                raise bad("max_lean_checks", "a whole number, 1 or more")
-            got["max_lean_checks"] = doc["max_lean_checks"]
+        for k in ("max_lean_checks", "shards"):
+            if k in doc:
+                if type(doc[k]) is not int or doc[k] < 1:
+                    raise bad(k, "a whole number, 1 or more")
+                got[k] = doc[k]
         if "marked_after" in doc:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
@@ -3921,7 +3925,7 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, regenerate_locks=flags.regenerate_locks, after_landing_no_cache=flags.after_landing_no_cache,
                    reviews=labels.reviews, ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks,
                    stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
-                   stale_keep=flags.stale_keep).tick(dry_run=a.dry_run)
+                   stale_keep=flags.stale_keep, shards=flags.shards).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

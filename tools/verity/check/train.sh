@@ -21,13 +21,29 @@
 # `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
 # after-landing run (`after_landing_no_cache`), where nothing commits regenerated records.
 #
+# `--shards N` (MACHINE a list, M1,M2,...): the whole check as the N shards of ci.toml's plan with N shards (`check.py --record
+# --shard K/N`), shard K on the list's Kth machine (round the list again past its end), each in a priority slot of its own; it
+# takes --no-cache, --circuit-cache and --no-regenerate as --deferred does (drive's after-landing run, drive.toml's `shards`). The
+# shards launch one at a time, so the later ones reuse the verdicts the first gathered into this machine's store; it prints every
+# shard's run id in K's order (`RUN ID1 ... IDN`), and when one registers no run it cancels those launched before it.
+# `--combine RUN...`: once those shards have passed, `check.py --record --combine RUN...` here, without a slot: the `check/v1` of
+# COMMIT that `research merge` reads, which `research.merge.shard_set` admits only for a complete, matching, passing set. It
+# prints `RUN ID` of that record whatever its verdict (`research status ID`).
+#
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that is
 # empty (its tree is its base's: where it leaves origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen=
+pass=() deferred= nocache= ccache= noregen= shards= combine=()
+RUN_ID_RE='r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4}'
+if [ "${1:-}" = --combine ]; then
+  shift
+  [ $# -gt 0 ] || { echo "train: --combine needs the shards' run ids" >&2; exit 2; }
+  for x; do [[ $x =~ ^$RUN_ID_RE$ ]] || { echo "train: --combine $x: not a run id" >&2; exit 2; }; done
+  combine=("$@"); set --
+fi
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -36,16 +52,23 @@ while [ $# -gt 0 ]; do
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement and --deferred STEPS alone" >&2; exit 2 ;;
+    --shards) [[ $# -ge 2 && $2 =~ ^([2-9]|[1-9][0-9]+)$ ]] || { echo "train: --shards needs N, 2 or more" >&2; exit 2; }
+      shards=$2; shift ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS and --shards N alone" >&2
+      exit 2 ;;
   esac
   shift
 done
-[ -z "$nocache" ] || [ -n "$deferred" ] \
-  || { echo "train: --no-cache refused without --deferred: a train's check reuses the passes its inputs earned" >&2; exit 2; }
+[ -z "$shards" ] || [ -z "$deferred" ] \
+  || { echo "train: --shards refused with --deferred: a shard is part of the whole check, --deferred runs steps alone" >&2; exit 2; }
+[ -z "$shards" ] || [[ ,$machine, != *,auto,* ]] \
+  || { echo "train: --shards takes machines, not auto: each shard runs on the one its place in the list names" >&2; exit 2; }
+[ -z "$nocache" ] || [ -n "$deferred$shards" ] \
+  || { echo "train: --no-cache refused without --deferred or --shards: a train's check reuses the passes its inputs earned" >&2; exit 2; }
 [ -z "$ccache" ] || [ -n "$nocache" ] \
   || { echo "train: --circuit-cache refused without --no-cache: it keeps circuit-check's reuse on under --no-cache" >&2; exit 2; }
-[ -z "$noregen" ] || [ -n "$deferred" ] \
-  || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
+[ -z "$noregen" ] || [ -n "$deferred$shards" ] \
+  || { echo "train: --no-regenerate refused without --deferred or --shards: a train's check regenerates the locks drive commits" >&2; exit 2; }
 [ -z "$deferred" ] || pass+=(--deferred "$deferred")
 [ -z "$nocache" ] || pass+=(--no-cache)
 [ -z "$ccache" ] || pass+=(--circuit-cache)
@@ -56,12 +79,17 @@ done
 # From here a launch that registers no run says so in the merge thread, with the reason and the log's last lines, as well as
 # exiting nonzero: two launches of 9-10 Oct registered nothing and told nobody for hours. Quiet, ringing only the poster's own
 # handle: three refused resends of one commit rang every addressee of the merge thread (16 Oct, 14:02Z).
-why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log=
+why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log= launched=()
 die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred} registered no run (exit $rc):"
+    # a shard set missing a shard is no check: the shards launched before it would hold their slots for nothing
+    for r in ${launched[@]+"${launched[@]}"}; do
+      uv run -q research cancel "$r" --by "${TRAIN_AS:-ci}" --reason "train: a later shard of ${sha:-$commit} registered no run" \
+        > /dev/null 2>&1 && echo "train: cancelled shard $r" >> "$why" || echo "train: and could not cancel shard $r" | tee -a "$why" >&2
+    done
+    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred}${shards:+ --shards $shards} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
     uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
@@ -95,41 +123,70 @@ git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git wor
 exec 9>&-
 log="$tree.log"
 cd "$tree"
-echo "train: ${sha:0:12} on $machine; log $log"
-# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
-setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
-  > "$log" 2>&1 < /dev/null &
-pid=$!
-# with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
-# 30 min: drive launches several runs at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
-# volume (21 Oct 14:11-14:25Z: three such launches gathered past a 10 min wait and were stopped)
-launch_wait_s=1800
-want=1 ids=
-for _ in $(seq $((launch_wait_s / 5))); do
-  kill -0 "$pid" 2>/dev/null || break
-  ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
-  on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true
-  [ -z "$on" ] || want=$(( $(tr -cd , <<<"$on" | wc -c) + 1 ))
-  [ "$(wc -w <<<"$ids")" -ge "$want" ] && break
-  grep -qE "refused|Traceback" "$log" && break
-  sleep 5
-done
-ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
-# a launcher still running with no run after the wait is stopped, its whole session (setsid): left, it launched runs nobody
-# followed, which held check slots for hours on trees no longer on `next` (18 Oct: r20261018-173205-b114, 3 h, launched past
-# the wait while check.py gathered verdicts)
-if [ -z "${ids// /}" ] && kill -0 "$pid" 2>/dev/null; then
-  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
-  [ -n "${ids// /}" ] || die "no run launched in the wait; stopped its launcher (pid $pid), so none launches later; see $log"
+if [ ${#combine[@]} -gt 0 ]; then
+  echo "train: ${sha:0:12}: combining ${combine[*]}; log $log"
+  uv run -q python tools/verity/check/check.py --record --combine "${combine[@]}" > "$log" 2>&1 < /dev/null || true
+  grep -E "^check: --combine|refused|rror" "$log" | head -5 || true
+  id=$(grep -m1 -oE "^research: run $RUN_ID_RE " "$log" | cut -d' ' -f3) || true
+  [ -n "$id" ] || die "the combine registered no run; see $log"
+  echo "RUN $id"
+  exit 0
 fi
-grep -E "^check:|refused|rror" "$log" | head -5 || true
-if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
-  rc=0; wait "$pid" || rc=$?
-  echo "train: check.py exited $rc before launching a run$([ "$rc" = 137 ] && echo ' (killed: SIGKILL, the OOM killer when memory runs out)'); see $log" | tee -a "$why" >&2
-  exit $(( rc ? rc : 1 ))
+
+run_ids() { grep -oE "run $RUN_ID_RE launched" "$1" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ' || true; }
+
+# `check.py --record --priority --keep-going ARGS...` with its output to LOG, detached; its run ids into `ids` once it printed
+# them, or the exit that says why it registered none
+launch() {
+  log=$1; shift
+  echo "train: ${sha:0:12} $*; log $log"
+  # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
+  setsid nohup uv run -q python tools/verity/check/check.py --record --priority --keep-going "$@" > "$log" 2>&1 < /dev/null &
+  local pid=$!
+  # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
+  # 30 min: drive launches several runs at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
+  # volume (21 Oct 14:11-14:25Z: three such launches gathered past a 10 min wait and were stopped)
+  local launch_wait_s=1800 want=1 on
+  ids=
+  for _ in $(seq $((launch_wait_s / 5))); do
+    kill -0 "$pid" 2>/dev/null || break
+    ids=$(run_ids "$log")
+    on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true
+    [ -z "$on" ] || want=$(( $(tr -cd , <<<"$on" | wc -c) + 1 ))
+    [ "$(wc -w <<<"$ids")" -ge "$want" ] && break
+    grep -qE "refused|Traceback" "$log" && break
+    sleep 5
+  done
+  ids=$(run_ids "$log")
+  # a launcher still running with no run after the wait is stopped, its whole session (setsid): left, it launched runs nobody
+  # followed, which held check slots for hours on trees no longer on `next` (18 Oct: r20261018-173205-b114, 3 h, launched past
+  # the wait while check.py gathered verdicts)
+  if [ -z "${ids// /}" ] && kill -0 "$pid" 2>/dev/null; then
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    ids=$(run_ids "$log")
+    [ -n "${ids// /}" ] || die "no run launched in the wait; stopped its launcher (pid $pid), so none launches later; see $log"
+  fi
+  grep -E "^check:|refused|rror" "$log" | head -5 || true
+  if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
+    local rc=0; wait "$pid" || rc=$?
+    echo "train: check.py exited $rc before launching a run$([ "$rc" = 137 ] && echo ' (killed: SIGKILL, the OOM killer when memory runs out)'); see $log" | tee -a "$why" >&2
+    exit $(( rc ? rc : 1 ))
+  fi
+  [ -n "${ids// /}" ] || die "no run launched; see $log"
+  [ "$(wc -w <<<"$ids")" -ge "$want" ] || echo "train: $want twins, but only these launched; see $log" >&2
+}
+
+if [ -n "$shards" ]; then
+  IFS=, read -ra machines <<<"$machine"
+  for k in $(seq "$shards"); do
+    m=${machines[$(( (k - 1) % ${#machines[@]} ))]}
+    launch "$tree.shard-$k.log" --on "$m" --shard "$k/$shards" ${pass[@]+"${pass[@]}"}
+    [ "$(wc -w <<<"$ids")" -eq 1 ] || die "shard $k/$shards on $m launched ${ids% }, not one run; see $log"
+    launched+=(${ids% })
+  done
+  echo "RUN ${launched[*]}"
+  exit 0
 fi
-[ -n "${ids// /}" ] || die "no run launched; see $log"
-[ "$(wc -w <<<"$ids")" -ge "$want" ] || echo "train: $want twins, but only these launched; see $log" >&2
+launch "$log" --on "$machine" ${pass[@]+"${pass[@]}"}
 echo "RUN ${ids% }"
