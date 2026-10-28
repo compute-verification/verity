@@ -1,0 +1,5 @@
+# One Strassen level of the exact int8 GEMM on the H200 (orbit.cu, built on CUTLASS 3.x's sm90 collectives).
+# Not a package: the kernels build and run on a GPU node (run.sh); the CPU reference (orbit.py) runs here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/sw_orbit`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
