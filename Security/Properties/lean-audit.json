@@ -6510,7 +6510,7 @@
    ]
   },
   "Definitions.Pous.Model.Audit": {
-   "digest": "c870858b031338be4d0bf187c027739da3d147764ace03f6be648e42fb48ac24",
+   "digest": "9aedfd5503a2bd593d0855635325843380a75c6d32c55e5bbe177ed95ebd0ab0",
    "definitions": {
     "Pous.Outcome": "8a846063357fda1c64344bf40951e0d962fa4631fe3b7e7630665e6035b9cacd",
     "Pous.Preprocessor": "4e78a916037f4ca955530f8b8e5df3439c6bf46697b6625f1d95dfc0834c264c",
@@ -6519,6 +6519,10 @@
     "Pous.Reveal.rec": "9655b036689de00a1f29c0224d363a2469b3217010268b325f20d5e3b17be31b",
     "Pous.Reveal.sequential": "0a82b9b23446951f1362179a872bbf8a02b362ab1c69b6ae4dc2ab4dfb15fe09",
     "Pous.Reveal.simultaneous": "ca1a86ec63df0c64cd9b6310e4fe58c2abd9f34b378ae8ab5f3e4ed3c7ddac7e",
+    "Pous.SeqResponderBy": "23655af7a5fd51b1768677ee7e896f21d3df2afff1c988c8610cf31f3e6f5c9e",
+    "Pous.SeqResponderBy.step": "214e7db4b297d509cc488c1e8cea0864342e29dc0c097967cb73a7a0ca3cf2cb",
+    "Pous.SimResponderBy": "12d0b0dde3b0936592d3ddface91b141e247a8143e4ff0f44f4615752d0d29b0",
+    "Pous.SimResponderBy.prog": "0dbb331c2979c338627991d77707e591f44810cd31e061502b1d068f2d8c5608",
     "Pous.seqAnswers": "fa7d86156927a2653b23b9db3a28c80e980af999c7989217f0f078f60a80fed3"
    },
    "guarantees": [
@@ -6640,7 +6644,7 @@
    ]
   },
   "Definitions.Pous.P2.Cost": {
-   "digest": "0f92c989cf95e0d319f2906b71aff0dde15a26ca302a18bc6a203caa57afe05f",
+   "digest": "4d8658986d9c068b72209b686f8ca242fcbbc469ec9d477451bf870797dcc48d",
    "definitions": {
     "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
     "Pous.KeyPart": "eb2c163914e5f40399b790ce38d8b0b48f7d0fad1e64fb11d449ca855d26baee",
@@ -6665,10 +6669,8 @@
     "Pous.RingQry.mul": "cc97284a2a2b51d2e0acd983d424bb0f5fe16891de0895a766c992bdb0b8bd55",
     "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
     "Pous.RingQry.rec": "662150542c17dd3dfe6e2c8290691104cfa3810300966a3cee749d186b40f683",
-    "Pous.SeqResponderOn": "a3bc66a3ed2ab3aecba132b2032b5631acec15749aca42234627e50ebaea0057",
-    "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
-    "Pous.SimResponderOn": "c457aff17af43873e0491b82782d0fae10e963ff55d7987aa99ea4d2219e3a0b",
-    "Pous.SimResponderOn.prog": "5fbc08c1caef87dcc0ee147520ff272369887fcb366daab96043ee8d9ad9a514",
+    "Pous.SeqResponderOn": "037cd3a2d273fb6e81d0515b7872e809a60ebd4e7157e3753277dd4fe3962c49",
+    "Pous.SimResponderOn": "05be767a1c468b659d4bb814e59f7a2923bb249dded56656583ba2497799b2cd",
     "Pous.decBlock": "52c9d55db46e0fd203f72e1aef72df7c6a353810d3092818fc5dd45148865f4c",
     "Pous.eltD": "e0d35ad5a621d89317cedcaa1c472e5ca7089a6592f5e80abeed85a2296e66bb",
     "Pous.encBlock": "ae8a61be28a1724696c809666cbac5784158a6c30d0d19a592ad6b029056045e",
@@ -6680,9 +6682,9 @@
     "Pous.rhoE": "7b87742b079483bb4646a73b192b63783f6b444d89bddc24fa8e3fee71cd2b1e",
     "Pous.ringOp": "952205b604d82d005be8e71d6bd28794a4698271744b39d5bbf4ebbc249a29b8",
     "Pous.ringRO": "36e3e7e17100de2e8636562fbb7a41d0de57db072b605a8ea925994f7b4a6c43",
-    "Pous.seqAcceptsOn": "c8c26fb9cd30569149b52fbfb684d918763a29cbbbf51e2deea009ce7a66b3b5",
+    "Pous.seqAcceptsOn": "7a5fc70fd12970bfa612291b0a1e0e41da700f36b9720027fc67e5435995c4ab",
     "Pous.sigmaK": "f5d0511f2e4b58ee2f3ee9ef90efece277371316e9c739685f2f14e419e26ac9",
-    "Pous.simAcceptsOn": "580aa02890e29c4aa2d17307ee9ce271349d1bd90105b0eec0869a5b419bc6e6",
+    "Pous.simAcceptsOn": "1b1edc29b39bbbc462e6e074b185c22aa965923a1649ea83900a3d762aae2195",
     "Pous.sqE": "3727f1863cf42a82d1b2940a9ca18c4ff59c2909e3b961c3a0d83c5def7eaaed",
     "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
    },
@@ -6718,12 +6720,11 @@
    "guarantees": ["Pous.Period.SecurityProofs.obligationHeld"]
   },
   "Definitions.Pous.P2.Rounds": {
-   "digest": "565cf5818ebcc7936ff23cea1ba96ea0a57ab03ae5538aeef1c8a1d5c3e81412",
+   "digest": "cc4835b1f8a5fe819af73e478511b2dd3b31855359866b7d83dd02e35754bb76",
    "definitions": {
-    "Pous.VarResponderOn": "6f284758c66f2231d7802e1d996c49a0a3beb1071e8754c193cdd823ba0f981d",
-    "Pous.VarResponderOn.step": "813cf4769e42688bdce563b03dbd9d5d80fcca5dd763b11fff69c1751fba1b83",
+    "Pous.VarResponderOn": "251ff6ec724a960a344fb2ffedc790c65a6893b877ed06bf6b83691fc4d60803",
     "Pous.varAnswers": "f46e52cc7f22f537498e84dc6d1ae75aef6958d23e60c3df6cb2d0e9fbc0ee5d",
-    "Pous.varPassesOn": "0dc8f405a0c20d1994fa6ddc97d5660fc93c51660f1b89e40982ffb969d4d81e"
+    "Pous.varPassesOn": "c67e0ff161e36905079d330a726556f3667892f6f7b1835dbe1e6a29c753d0e8"
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
