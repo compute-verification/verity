@@ -179,6 +179,8 @@ import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
+import Proofs.Pouw.ServedWork
+import Proofs.Pouw.ServedWork.Honest
 import Proofs.Pouw.SteinerRigidity
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.TileBound.AlignedExact
