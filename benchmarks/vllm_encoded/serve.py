@@ -742,7 +742,7 @@ def hook_runner(hooks, install: Install) -> None:
             hooks.wrap(cls, "capture_model", make_capture)
 
 
-class Window:
+class ProfilerWindow:
     """cudaProfilerStart/Stop around `steps` steady decode steps of each point (for `ncu --profile-from-start off`), each
     window opened by torch's ``spin_kernel`` (`torch.cuda._sleep`) so the profile splits by point."""
 
@@ -775,7 +775,7 @@ class Window:
         self.point = None
 
 
-def recorder(hooks, sched, rec: list, window: Window) -> None:
+def recorder(hooks, sched, rec: list, window: ProfilerWindow) -> None:
     def make(orig):
         def update_from_output(so, mro):
             rec.append((time.perf_counter(), so.total_num_scheduled_tokens, len(so.num_scheduled_tokens)))
@@ -933,7 +933,7 @@ def main() -> None:
     attn = sorted({type(getattr(m, "attn_backend", None)).__name__ for _, m in model.named_modules()
                    if getattr(m, "attn_backend", None) is not None})
     rec: list = []
-    window = Window(args.profile_steps)
+    window = ProfilerWindow(args.profile_steps)
     recorder(hooks, handle.scheduler(llm), rec, window)
 
     props = torch.cuda.get_device_properties(0)
