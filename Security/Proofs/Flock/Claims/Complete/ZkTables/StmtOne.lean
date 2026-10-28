@@ -153,7 +153,7 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
 /-! ## The public header's draw -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
