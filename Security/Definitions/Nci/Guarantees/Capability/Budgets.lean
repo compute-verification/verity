@@ -18,17 +18,18 @@ namespace Nci.Guarantees
 open Verity Finset Nci.Capability
 open scoped ENNReal
 
-/-- **The held budget** (Lemma 1 with description hardness). In a `(c, k)`-partition whose proof blocks a fixed
-evaluator `e` of at most `aBlk` bits can extract within `t` (for each selection of `X`'s items held per block, the
-values of their cells), description hardness at deficit `Λ` bounds what every proof block holds:
-`Σ_{i ∈ U} price_i ≤ k + ⌈log₂ B⌉ + aBlk + Λ`, whether the block loads the values, decompresses them or computes them. -/
+/-- **The held budget** (Lemma 1 with description hardness). In a `(c, k)`-partition where, for each selection of
+`X`'s items held per block, some evaluator `e` of at most `aBlk` bits extracts the values of their cells from the proof
+blocks within `t`, description hardness at deficit `Λ` bounds what every proof block holds:
+`Σ_{i ∈ U} price_i ≤ k + ⌈log₂ B⌉ + aBlk + Λ`, whether the block loads the values, decompresses them or computes them.
+The evaluator is chosen per selection: one evaluator for every selection would have to output the empty selection's
+empty string on every program, so no block could hold an item with a nonempty cell. -/
 def HeldBudget : Prop :=
   ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
-    ∀ {ι : Type} (X : Items R.d.D ι) (ρ : Type) (M : Decoder ρ) (r : ρ) (t aBlk : ℕ) (Λ : ℝ) (e : List Bool),
-      e.length ≤ aBlk →
+    ∀ {ι : Type} (X : Items R.d.D ι) (ρ : Type) (M : Decoder ρ) (r : ρ) (t aBlk : ℕ) (Λ : ℝ),
       (∀ (U : Fin R.B → Finset ι) (σ : ι → Finset (Fin R.d.D.N)),
         (∀ u, Selects X (U u) σ ∧ ∀ i ∈ U u, σ i ⊆ holds R.d.D (R.P.gates u)) →
-        Evaluates M r t R e fun u T => selectionBits T (U u) σ) →
+        ∃ e : List Bool, e.length ≤ aBlk ∧ Evaluates M r t R e fun u T => selectionBits T (U u) σ) →
       Assumptions.DescriptionHard R X M r t Λ →
       HeldPriceAtMost R X ((k + Nat.clog 2 R.B + aBlk : ℕ) + Λ)
 

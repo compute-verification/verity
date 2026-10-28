@@ -256,13 +256,13 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 - The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
   `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
-  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **stated** (held in the lock by
-  `Nci.Guarantees.LocalBoundsStated` and `Nci.Guarantees.CapabilityFloorStated`), not proved. Every premise, structure
-  and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
-- Their premises: `Nci.Assumptions.CoversEfficientMethods` is a named assumption in the lock;
-  `Nci.Assumptions.DescriptionHard` (or `Nci.Assumptions.MinEntropyHard`) and the wiring property
-  `Nci.Capability.Consumers.Upstream` are recorded through those statements but **written, not in a lock** as named
-  assumptions.
+  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
+  (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
+- Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
+  `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
+  the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
+  certificate is not checked on a named training circuit.
 - The overhead lower bound over remote, `Nci.Guarantees.DampenerRemote`: **proved**, but as arithmetic over inline
   hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
 - Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **stated** (its lock entry is
@@ -385,7 +385,7 @@ The overhead, `DampenerRemote`:
 
 The local bounds (part 5):
 
-- `Nci.Assumptions.DescriptionHard` (written, not yet a named assumption in the lock): every selection of an item
+- `Nci.Assumptions.DescriptionHard` (in the lock): every selection of an item
   family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
 - `Nci.Assumptions.CoversEfficientMethods` (in the lock): every sufficiently cheap successful method carries at least
   the covered work Ω_*, except with probability η.

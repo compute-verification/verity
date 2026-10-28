@@ -344,9 +344,9 @@ None of these is assumed silently; each would restate the conclusion:
 | Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Registration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
-| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Written, not yet named assumptions in the lock; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
+| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
 | Structure | `Nci.Capability.Incidence`, `Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.StatHeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Stated (`Nci.Guarantees.LocalBoundsStated`), not yet proved |
+| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.StatHeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Proved (`Proofs/Nci/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
@@ -359,7 +359,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
-| The floor | `Nci.Guarantees.CapabilityFloor` | Stated (`Nci.Guarantees.CapabilityFloorStated`), not yet proved |
+| The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
 | Slowdown | `Accounting.Overhead.overhead`, `Accounting.Overhead.threshold`, `Accounting.Overhead.cost` | Defined, with cost in server-time, not fleet-time; no theorem reads it |
 | The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
