@@ -28,6 +28,13 @@ the coin was released after it: that rests on the challenger releasing coin i on
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
 `trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
+**A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
+`withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
+challenger releases each coin's raw bytes and nothing else (no root, salt or path), and once its signed close is written
+it releases the commitment and every opened coin's salt and path.  So nothing the prover sees before a coin depends on a
+coin not yet released, and soundness takes no hiding premise on the root.  One-stage's draw reads only a withheld
+session's coins (`withheld_on`, in `coins.draw_coins`).
+
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
 recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
 coin opened.  `LiveRecord` is the verifier's side of one family: it records a root and only then asks for that root's
@@ -1038,6 +1045,20 @@ def _ledger_entry(line: Any) -> dict | None:
     return e if ok else None
 
 
+WITHHELD = ("the session the auditor's ledger opens on the window does not withhold its coin commitment until it closes "
+            "(its open's body has no `withheld: true`: `remote.open_session(..., withhold=True)`)")
+
+
+def withheld_on(ledger: Any, window: str) -> bool:
+    """Lean `Challenger.withheldOn`: the ledger `ledger` (its lines) opens `window` (its open root), and every open of it
+    marks its session withheld (`withheld: true` in its body): a session whose challenger released only its coins' raw
+    bytes while it ran, and its commitment, salts and paths once it closed (`remote.serve`)."""
+    opens = [e for e in map(_ledger_entry, ledger if type(ledger) is list else []) if e is not None
+             and e["kind"] == "open" and isinstance(e["body"].get("window"), dict)
+             and e["body"]["window"].get("root") == window]
+    return bool(opens) and all(e["body"].get("withheld") is True for e in opens)
+
+
 def _checked(ledger: Any, key: ChallengerKey, verify: Verify) -> tuple[dict[str, dict], dict[str, dict]]:
     """`ledger` (its lines) as `verify_ledger` and `verify_periods` read it, under the pinned key `key`, each line first
     refused unless it is its own `ledger_text` of the ledger's form and names no other key."""
@@ -1357,6 +1378,7 @@ class LiveChallenger:
         self._tree = MerkleTree(live_domain(scheme, epoch, families),
                                 {p: live_leaf(scheme, *c) for p, c in enumerate(self._coins)}, lambda _: scheme)
         self.commitment = LiveCommitment(scheme, epoch, families, self._tree.commitment.root)
+        self.families = families
         self._opened: set[tuple[str, int]] = set()
         self.record: ChallengerRecord | None = None
 
@@ -1388,13 +1410,22 @@ class LiveChallenger:
         return [self.open(label, index, after) for label, index, after in requests]
 
 
+def _count(challenger: Any, label: str) -> int | None:
+    """How many coins family `label` of `challenger`'s layout holds: from its commitment, or from its layout while a
+    withheld session's commitment is still on the challenger's host (`remote.RemoteChallenger`)."""
+    if challenger.commitment is not None:
+        return challenger.commitment.family(label)
+    return next((n for name, n in challenger.families if name == label), None)
+
+
 class LiveRecord:
     """The verifier's record of one family of an epoch's coins, in order: `record(root)` records the family's next root and
     only then asks the challenger for its coin, after that root; `reason` is `order_reason` over the record.  `clock` is
-    the record's clock in seconds, and `log` the release order on it."""
+    the record's clock in seconds, and `log` the release order on it.  On a withheld session (`remote.serve`) its openings
+    are the coins' raw bytes until the session closes, and `reason` waits for the close."""
 
     def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = time.monotonic) -> None:
-        if challenger.commitment.family(label) is None:
+        if _count(challenger, label) is None:
             raise CoinError(f"the epoch's coins have no {label} family")
         self.challenger, self.label, self._clock = challenger, label, clock
         self.roots: list[bytes] = []
@@ -1415,7 +1446,7 @@ class LiveRecord:
         return opening
 
     def _root(self, root: bytes) -> tuple[str, int, bytes]:
-        if len(self.roots) == self.challenger.commitment.family(self.label):
+        if len(self.roots) == _count(self.challenger, self.label):
             raise CoinError(f"every {self.label} coin of the epoch is open")
         i = len(self.roots)
         self.roots.append(bytes(root))
@@ -1429,7 +1460,11 @@ class LiveRecord:
                           "released_at": self._clock()})
 
     def reason(self) -> str | None:
-        return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
+        if self.challenger.commitment is None:
+            return "the challenger withholds its coin commitment until its session closes"
+        opened = getattr(self.challenger, "opened", None) or {}
+        return order_reason(self.challenger.commitment, self.label, self.roots,
+                            [opened.get((o.label, o.index), o) for o in self.openings])
 
 
 def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
@@ -1443,7 +1478,7 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     if any(r.challenger is not challenger for r, _ in asks):
         raise CoinError("a batch's coins are one challenger's")
     for r, _ in asks:
-        if len(r.roots) + sum(q is r for q, _ in asks) > challenger.commitment.family(r.label):
+        if len(r.roots) + sum(q is r for q, _ in asks) > _count(challenger, r.label):
             raise CoinError(f"every {r.label} coin of the epoch is open")
     requests = [r._root(root) for r, root in asks]
     openings = challenger.open_many(requests)
@@ -1460,10 +1495,10 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
            "RECORD_FORM", "RECORD_ROLE",
-           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
+           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
-           "verify_periods", "write_record"]
+           "verify_periods", "withheld_on", "write_record"]
