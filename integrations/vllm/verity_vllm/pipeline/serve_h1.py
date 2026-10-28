@@ -443,7 +443,6 @@ class H1Windows:
         self.prover = None if prover is None else Path(prover)
         self.closer, self.clock = closer, clock
         self.draws: Any = None
-        self.drawing(draws)
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
         pw = pouw.Settings.of(self.config.get("pouw", {}))
