@@ -30,8 +30,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
 # step trace and the records it imports) and network-e2e's chain. certifier_piece is the network certifier's piece of
 # one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
-# test_leak_bounds counts K over the census's reference datacenter, one link a machine.
-inputs = ["benchmarks/census/deployments.json","integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
+# leak_bounds counts K over the census's reference datacenter and the adversary resource model's world, one link a
+# machine.
+inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "integrations/vllm/workloads",
+          "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
           "integrations/vllm/verity_vllm/pipeline/advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
           "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/settings.py",
