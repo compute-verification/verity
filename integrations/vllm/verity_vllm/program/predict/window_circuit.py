@@ -10,30 +10,32 @@ the token select, position p attending to keys 0..p. So the circuit is a functio
 request, arrival steps, prompt lengths, output lengths and key counts are values, never structure.
 
 A slot's request comes from the network certifier's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `io_shell.ScanSlots_v1` (`scan_state.bridge`, wires and no gate), which gives each
-lane its `io_shell.SlotRow_v1` row (its occupancy word, its prompt's length and its ids) and its head (its prompt's length and
-``max_tokens``). Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s below the class's prompt cap (the prompt's id
-below its length, else the previous position's select; its slot starts as the row's), and past it the previous position's
-select. Each select is masked by the slot's occupancy word (`io_shell.SlotMask_v1`, `io_shell.EMPTY` for an empty slot) and
-collected (`io_shell.OutCollect_v1`, from the prompt's last position on). The last position makes the slot's entry of the scan's
-Programs' row (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the model's first stop id, that one kept,
-`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold (a
-prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses
-at the anchor and the egress never renders. The state rows and the entries are the circuit's external ports. A slot's Program
+(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v2` (`scan_state.bridge`), which gives each lane
+its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and its head (its prompt's
+length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
+prompt cap (the prompt's id below its length, else the previous position's select), and past it the previous position's
+select. Each select is collected (`io_shell.OutCollect_v1`, from the prompt's last position on). The last position makes the
+slot's entry of the scan's Programs' row (`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the model's
+first stop id, that one kept, `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot (the
+entry reads the occupancy word, so no select is masked on the way); a request the class can't hold (a prompt past ``prompt``
+ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses at the anchor and the
+egress never renders. The state rows and the entries are the circuit's external ports. A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and
 emits its circuit.
 
 `class_circuit` walks the class Program's nodes in order and lowers each to units at ``grain``, once a slot: node j's units
 of slot 0, then of slot 1 and so on, each allocation's slots side by side in its template (`window_builder`, which holds
-the units, their feeds, gathers and weight reads, and wires them):
+the units, their feeds and weight reads, and wires them). Every unit reads its writers' rows as they hold them:
 
 - `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v1{V, H}` (`commitments.gates.embedding`): its ``root`` and
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
   ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
-- `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, n = ``grain.gemm_words`` // K output columns a slice, each reading
-  its weight rows from the weights record (`Read`) and its ``x`` whole.
-- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit, and its product `ScaledMmS8_v1{K, N}`,
+- `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
+  its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K columns, halved while an earlier node reads that slice
+  template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
+- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit (its body's two, scale and codes,
+  where an earlier node reads its template's ``x`` at another row count: o_proj's), and its product `ScaledMmS8_v1{K, N}`,
   ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
   is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
@@ -42,22 +44,21 @@ the units, their feeds, gathers and weight reads, and wires them):
 - `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
   nb = ⌈T / BN⌉), each full block below it `AttnBlock_v5` and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each
-  block's running state its predecessor's rows. A block's keys and values are one row a KV group, which its group's heads
-  read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
-  `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
-  `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
+  block's running state its predecessor's rows. A block's keys and values a KV group are its keys' rows as their
+  writers hold them (a key's RoPE head's row, a value's GEMM slices), key by key, which its group's heads read. A layer's
+  cache is refused unless it is the keys its earlier positions' nodes read and one more.
 - FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way: its first visited block
   `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
   `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
   the versions cut by key block and the cut of each.
 - Any other attention version (`Attention_v2`, as `fa3_construction = "guard-every-block"` binds) is its heads, a unit
-  each of its own head Definition (`AttentionHead_v2{T}`), while T is at most `KEYS`: a head's keys and values are one row
-  a KV group, an `AllGather_v1{T, D}` over every key's own row, and past `KEYS` keys it is refused.
-- `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
-  `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
-  ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
-  `Gemm_v2{K, 1}` unit over the LM head's input and its first weight row.
-- `RMSNormTriton_v5`, `RMSNormFusedCuda_v2` and `SiluMul_v2` are one unit each.
+  each of its own head Definition (`AttentionHead_v2{T}`), reading its KV group's every key's rows.
+- `TokenSelect_v4{V}` is its function at groups of `GROUP` logits: V / C units `TokenSelectGroups_v1{C, GROUP}`, C =
+  ``grain.select``, each reading its C logits as the LM head's rows and writing its groups' bests as a row and their indices
+  as another, then `TokenSelectCombine_v2{V, GROUP}` over those rows and ``x0`` (``logits[0]``), from one `Gemm_v2{K, 1}`
+  unit over the LM head's input and its first weight row. A V that isn't whole units of whole groups is refused.
+- `SiluMul_v2{I}` is P units `SiluMul_v2{I / P}`, each reading its gate and up elements as the gate-up GEMM's rows, P the
+  fewest that leaves a unit within ``grain.rows`` rows; `RMSNormTriton_v5` and `RMSNormFusedCuda_v2` are one unit each.
 
 The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
 (`window_builder.weight_param`: ``weights/<label>@<words>``), its reads' bases and steps whole rows of it, so each is pinned
@@ -68,40 +69,42 @@ table, as the LM head's rows and as ``x0``'s rows at the table's width. Nothing 
 another or to the checkpoint: the verifier pins each by name, its root and domain id (`interface.registered_reads`), at the
 committer's registration (`window_weights`).
 
-A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
-divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
-a use's rows gathered ``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part, so a gather of
-``m / d`` parts holds ``m / d + 1`` rows with its output). Every wire and read is stated per node as a pattern (a node's
-heads, KV groups and slices as digits of one) and `interface.coalesce`d, and each allocation's slots sit side by side in its
-template, so the slots' copies of a pattern are one and the circuit's description grows with the class Program's nodes, not
-its slots or units; so does the lowering's own state (a node's output rows are runs, a gather is keyed by its rows' runs).
+A reader port that reads m writer rows is cut m ways (`interface.Layout.cut`, `window_builder._Builder.settle`), a row of
+it a writer row, so no unit copies rows together: a template's port is read at one row count, its rows its outer elements
+cut that many ways. Every wire and read is stated per node as a pattern (a node's heads, KV groups and slices as digits of
+one) and `interface.coalesce`d, and each allocation's slots sit side by side in its template, so the slots' copies of a
+pattern are one and the circuit's description grows with the class Program's nodes, not its slots or units; so does the
+lowering's own state (a node's output rows are runs).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head,
-token select, mask and collector after it are that position's, a slot's scan read and `SlotRow_v1` its first position's, its entry
-its last's and a gather its reader's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
+token select and collector after it are that position's, a slot's `ScanSlots_v2` unit its first position's and
+its entry its last's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
 digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps (`_inference`).
 
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary than
 its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program would read
 more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request
-a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a head past `KEYS` keys of an attention
-version with no per-key-block cut, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a
-unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran is held by the
-units' proofs on their committed rows, never by this lowering.
+a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16
+words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port read at two row counts
+or as rows that aren't its outer elements cut that many ways, a unit of more than ``grain.rows`` rows, and then a unit
+C-Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what
+serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
 verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
 registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
-model and key, never roots the verifier computes (`window_weights`). Its scan state reads count registered likewise only
-where the verifier pinned `scan_state.SCAN_STATE` at the root of the scan's rows the window reads
-(`ingress_scan.window_state`), which no weights registration gives.
+model and key, never roots the verifier computes (`window_weights`). Its scan state reads are held otherwise: the window
+commits the scan's state rows it reads as `scan_state.SCAN_STATE` (`ingress_scan.window_state`, `window_rows.state_value`)
+and the scan's own state ports read that root under its domain, so the scan's chain and the window's reads are one tree.
+No pin holds them, so `interface.input_count` counts them free.
 """
 from __future__ import annotations
 
 import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import accumulate, product
 from typing import Any
 
 from verity.ml.circuits.codec import descriptor_id
@@ -109,8 +112,9 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
 from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
+from verity.ml.definitions.registry import int8_exact as IX
 from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.dead_free import AttentionV19
+from verity.ml.definitions.registry.dead_free import AttentionV19, TokenSelectGroupsV1
 from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
 
@@ -122,12 +126,11 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
-#: the most keys a head reads through one `AllGather_v1{T, D}` where its attention's version has no per-key-block cut (its
-#: gather's T parts and output within a unit's 256 rows, with room for its reader's cut)
-KEYS = 136
 #: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
 #: by v19, FA3's v4 by v20
 CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
+#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
+GROUP = 16
 
 
 @dataclass(frozen=True)
@@ -225,11 +228,10 @@ def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
 
 @dataclass
 class _Keys:
-    """A layer's keys (or values) as its attention nodes read them: ``segs`` the word runs its positions so far are, ``rows``
-    each position's row a KV group, and ``blocks`` each full key block's gather a group."""
+    """A layer's keys (or values) as its attention nodes read them: ``segs`` the word runs its positions so far are, and
+    ``rows`` each position's rows a KV group, as their writers hold them."""
     segs: list[tuple[str, Any, int, int]] = field(default_factory=list)
-    rows: list[tuple[Row, ...]] = field(default_factory=list)
-    blocks: dict[int, tuple[Row, ...]] = field(default_factory=dict)
+    rows: list[tuple[tuple[Row, ...], ...]] = field(default_factory=list)
 
 
 class _Program:
@@ -258,13 +260,13 @@ class _Program:
         self.occ: Row | None = None
         self.head: Row | None = None
         self.collect: Row | None = None
-        #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit and (at position 0) its
-        #: `SlotRow_v1` unit, None past the class's prompt cap; each token select's chunks, ``x0`` unit and `IO.SlotMask` unit
-        self.tokens: list[tuple[tuple[str, int] | None, tuple[str, int] | None]] = []
-        self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int], tuple[str, int]]] = {}
+        #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit, None at the first (the scan
+        #: unit's) and past the class's prompt cap; each token select's group units and ``x0`` unit
+        self.tokens: list[tuple[str, int] | None] = []
+        self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int]]] = {}
         #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
         self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
-        #: the slot's `ScanSlots_v1` unit, each position's `OutCollect_v1` unit and its `SlotEntry_v1` unit
+        #: the slot's `ScanSlots_v2` unit, each position's `OutCollect_v1` unit and its `SlotEntry_v1` unit
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
         self.entry_unit: tuple[str, int] | None = None
@@ -359,33 +361,30 @@ class _Program:
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
 
     def _token(self, tok: Any) -> tuple[Row, ...]:
-        """The next position's token: its `TokenFeed_v1`'s below the class's prompt cap (the first's slot its lane's
-        `SlotRow_v1` row of the scan state row the slot's `ScanSlots_v1` reads at its anchor, every other's its predecessor's,
-        ``sel`` the previous position's select), past it the previous position's select."""
+        """The next position's token: the first's its lane's of the scan state row the slot's `ScanSlots_v2` reads at its
+        anchor (with the slot it carries, its occupancy word and its head), below the class's prompt cap every other's
+        `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select."""
         p, NP = self.position, self.cls.prompt
         self.position += 1
         segs = self.segments(tok.refs)
         if (segs[0][:2] == ("p", PROMPT)) != (p == 0):
             raise Unexpressible(f"{self.name}: position {p}'s token reads {segs[0][:2]}; a class Program reads its one prompt row "
                                 "at position 0 and every other position's token from its predecessor's select")
-        if p >= NP:
-            self.tokens.append((None, None))
-            return self.rows(tok.refs)
-        tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=p == 0))
         if p == 0:
-            stid, su = self.b.unit(self.scan)
-            self.b.read(stid, "state", su, (1,), self.anchor * self.scan.bindings["NS"], (0,), SS.SCAN_STATE)
-            self.scan_unit = (stid, su)
-            rtid, ru = self.b.unit(bind(IO.SlotRow, NP=NP))
-            self.b.feed(rtid, "row", ru, 1, (Row(stid, su, f"o{2 * self.lane}", 2 * (NP + 2)),))
-            self.head = Row(stid, su, f"o{2 * self.lane + 1}", 4)
-            self.b.feed(tid, "slot", u, 1, (Row(rtid, ru, "o1", 2 * (NP + 1)),))
-            self.occ = Row(rtid, ru, "o0", 2)
-            self.tokens.append(((tid, u), (rtid, ru)))
-        else:
-            self.b.feed(tid, "slot", u, 1, (self.slot,))
-            self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
-            self.tokens.append(((tid, u), None))
+            tid, u = self.b.unit(self.scan)
+            self.b.read(tid, "state", u, (1,), self.anchor * self.scan.bindings["NS"], (0,), SS.SCAN_STATE)
+            self.scan_unit, o = (tid, u), 4 * self.lane
+            self.slot, self.occ, self.head = (Row(tid, u, f"o{o + 1}", 2 * (NP + 1)), Row(tid, u, f"o{o + 2}", 2),
+                                              Row(tid, u, f"o{o + 3}", 4))
+            self.tokens.append(None)
+            return (Row(tid, u, f"o{o}", 2),)
+        if p >= NP:
+            self.tokens.append(None)
+            return self.rows(tok.refs)
+        tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=False))
+        self.b.feed(tid, "slot", u, 1, (self.slot,))
+        self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
+        self.tokens.append((tid, u))
         self.slot = Row(tid, u, "o1", 2 * (NP + 1))
         return (Row(tid, u, "o0", 2),)
 
@@ -399,20 +398,52 @@ class _Program:
                 self.b.read(tid, p, u, (1,), self.weight(arg.refs, words), (0,))
             else:
                 self.b.feed(tid, p, u, 1, self.rows(arg.refs))
-        at, pieces = 0, []
-        for o, words in lay.outs:
-            pieces.append((at, at + words, Row(tid, u, o, words)))
-            at += words
-        self.outs[j] = pieces
+        ends = list(accumulate((w for _, w in lay.outs), initial=0))
+        self.outs[j] = [(a, e, Row(tid, u, o, w)) for (o, w), a, e in zip(lay.outs, ends, ends[1:])]
 
-    _RMSNormTriton = _RMSNormFusedCuda = _SiluMul = _Int8RowQuant = _one
+    _RMSNormTriton = _RMSNormFusedCuda = _one
+
+    def _Int8RowQuant(self, j: int, node: Any) -> None:
+        """`Int8RowQuant_v1{K}`, one unit, or where an earlier node reads its template's ``x`` at another row count, its body's
+        two: `Int8RowScale_v1{K}` (its scale) and `Int8StaticQuant_v1{K}` (its codes under it), each reading ``x``."""
+        xs, K, (codes, scale) = self.rows(node.args[0].refs), node.fn.bindings["K"], IF.layout(node.fn).outs
+        if self.b.read_rows.get((descriptor_id(node.fn), "x"), len(xs)) == len(xs):
+            return self._one(j, node)
+        (st, su), (qt, qu) = self.b.unit(bind(IX.Int8RowScale, K=K)), self.b.unit(bind(IX.Int8StaticQuant, K=K))
+        s = Row(st, su, "o0", scale[1])
+        self.b.feed(st, "x", su, 1, xs)
+        self.b.feed(qt, "x", qu, 1, xs)
+        self.b.feed(qt, "s", qu, 1, (s,))
+        self.outs[j] = [(0, codes[1], Row(qt, qu, "o0", codes[1])), (codes[1], codes[1] + scale[1], s)]
+
+    def _SiluMul(self, j: int, node: Any) -> None:
+        """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
+        gate-up GEMM's rows that hold them, P the fewest that leaves a unit within ``grain.rows`` rows."""
+        I, (gu,) = node.fn.bindings["I"], node.args
+        for P in (p for p in range(1, I + 1) if I % p == 0):
+            w = I // P
+            try:
+                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(I + k * w, I + (k + 1) * w))
+                          for k in range(P)]
+            except Unexpressible:
+                continue
+            if max(map(len, pieces)) + 1 <= self.b.grain.rows:
+                break
+        else:
+            raise Unexpressible(f"{node.fn.id}: no cut of its gate and up rows holds a unit within {self.b.grain.rows} rows")
+        tid, u = self.b.unit(bind(node.fn.defn, I=w), P)
+        self._each(tid, "gu", u, pieces)
+        self.outs[j] = [(0, I, Row(tid, u, "o0", w))]
 
     def _Gemm(self, j: int, node: Any) -> None:
         b = node.fn.bindings
         K, N = b["K"], b["N"]
-        n = max(1, min(N, self.b.grain.gemm_words // K))
         x, w = node.args
         xs, lo = self.rows(x.refs), self.weight(w.refs, N * K)
+        n = max(1, min(N, self.b.grain.gemm_words // K))
+        while n > 1 and any(self.b.read_rows.get((descriptor_id(bind(node.fn.defn, **{**b, "N": m})), "x"), len(xs)) != len(xs)
+                            for m in (n, N % n) if m):
+            n //= 2
         full, rest = divmod(N, n)
         pieces = []
         for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
@@ -514,34 +545,25 @@ class _Program:
         return plan
 
     def _cache(self, port: str, c: Any, T: int, KVH: int) -> _Keys:
-        """The layer's ``port`` (keys or values) at T keys: its earlier nodes' T - 1 and position T - 1's row a KV group
-        (`_Builder.gathers`), refused unless ``c`` is those T - 1 and one more."""
+        """The layer's ``port`` (keys or values) at T keys: its earlier nodes' T - 1 and position T - 1's rows a KV group,
+        refused unless ``c`` is those T - 1 and one more."""
         segs = self.segments(c.refs)
         ks = self.keys.setdefault((port, segs[0]), _Keys())
         if len(ks.rows) != T - 1 or segs[:len(ks.segs)] != ks.segs:
             raise Unexpressible(f"{self.name}: an attention's {port} of {T} keys is not its layer's {len(ks.rows)} earlier keys "
                                 "and one more")
         n = c.refs.count // T
-        ks.rows.append(self.b.gathers(self._split(c.refs.slice((T - 1) * n, T * n), KVH)))
+        ks.rows.append(tuple(self._split(c.refs.slice((T - 1) * n, T * n), KVH)))
         ks.segs = segs
         return ks
 
-    def _block(self, ks: _Keys, a: int, b: int, BN: int) -> tuple[Row, ...]:
-        """Keys [a, b)'s row a KV group: one key's own, a full block's gathers (made when it fills, then every later
-        position's) or the first block's own."""
-        if b - a == 1:
-            return ks.rows[a]
-        full = b - a == BN and a % BN == 0
-        if full and a // BN in ks.blocks:
-            return ks.blocks[a // BN]
-        rows = self.b.gathers([tuple(r[g] for r in ks.rows[a:b]) for g in range(len(ks.rows[a]))])
-        if full:
-            ks.blocks[a // BN] = rows
-        return rows
+    @staticmethod
+    def _block(ks: _Keys, a: int, b: int) -> list[tuple[Row, ...]]:
+        """Keys [a, b)'s rows a KV group, key by key: each key's rows as its writers hold them."""
+        return [tuple(r for key in ks.rows[a:b] for r in key[g]) for g in range(len(ks.rows[a]))]
 
     def _Attention(self, j: int, node: Any) -> None:
-        s = node.fn.bindings
-        T, NH, KVH, D, BN = s["T"], s["NH"], s["KVH"], s["D"], s["BN"]
+        T, NH, KVH, D = (node.fn.bindings[k] for k in ("T", "NH", "KVH", "D"))
         if node.fn.version not in CUTS:
             self._whole_heads(j, node)
             return
@@ -559,48 +581,40 @@ class _Program:
                     ctid, cu = calls[x[0]]
                     self.b.feed(tid, port, u, NH, (Row(ctid, cu, x[1], x[2]),), ((NH, 1),))
                 else:
-                    self._each(tid, port, u, [(r,) for r in self._block(keys[kind], *x, BN)], NH // KVH)
+                    self._each(tid, port, u, self._block(keys[kind], *x), NH // KVH)
             calls.append((tid, u))
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
         self.heads[j] = (plan, tuple(calls))
 
     def _whole_heads(self, j: int, node: Any) -> None:
-        """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition, its
-        keys and values each one row a KV group, an `AllGather_v1{T, D}` over every key's row (`_cache`'s), refused past
-        `KEYS` keys."""
-        s = node.fn.bindings
-        T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
-        if T > KEYS:
-            cut = ", ".join(map(str, sorted(CUTS)))
-            raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads; the window's "
-                                f"lowering cuts a head by key block only at `Attention` versions {cut} (`CUTS`), not "
-                                f"{node.fn.version}")
+        """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition,
+        reading its KV group's every key's rows (`_cache`'s), so a head past a unit's rows is refused at `settle`."""
+        T, NH, KVH, D = (node.fn.bindings[k] for k in ("T", "NH", "KVH", "D"))
         head = self._heads(node.fn, "AttentionHead", NH)
         q, kc, vc = node.args
         tid, u = self.b.unit(head, NH)
         self._each(tid, "q", u, self._split(q.refs, NH))
         for port, c in (("k", kc), ("v", vc)):
-            rows = self._cache(port, c, T, KVH).rows
-            self._each(tid, port, u, [(r,) for r in self.b.gathers([tuple(r[g] for r in rows) for g in range(KVH)])],
-                       NH // KVH)
+            self._each(tid, port, u, self._block(self._cache(port, c, T, KVH), 0, T), NH // KVH)
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _TokenSelect(self, j: int, node: Any) -> None:
-        V = node.fn.bindings["V"]
-        nodes = node.fn.body.nodes
+        V, nodes = node.fn.bindings["V"], node.fn.body.nodes
         chunk, combine = nodes[0].fn, nodes[-1].fn
         if chunk.name != "TokenSelectChunk" or combine.name != "TokenSelectCombine" or V < 2:
             raise Unexpressible(f"{node.fn.id}: its body is not chunks and one combine")
         C = min(self.b.grain.select, V)
-        (logits,) = node.args
-        parts = []
+        if V % C or (C % GROUP and C < V):
+            raise Unexpressible(f"{node.fn.id}: {V} logits aren't units of {C}, each groups of {GROUP}: bind the grain's "
+                                f"select to a divisor of V that is a multiple of {GROUP}")
+        (logits,), n, parts = node.args, -(-C // GROUP), []
         for lo in range(0, V, C):
-            tid, u = self.b.unit(bind(chunk.defn, **{**chunk.bindings, "C": min(C, V - lo)}))
-            self.b.feed(tid, "x", u, 1, (self.b.gather(self.rows(logits.refs.slice(lo, min(lo + C, V)))),))
+            tid, u = self.b.unit(bind(TokenSelectGroupsV1, C=C, G=GROUP))
+            self.b.feed(tid, "x", u, 1, self.rows(logits.refs.slice(lo, lo + C)))
             parts.append((tid, u))
-        ctid, cu = self.b.unit(bind(combine.defn, **{**combine.bindings, "V": V, "C": C}))
-        self.b.feed(ctid, "best", cu, 1, (self.b.gather([Row(t, u, "o0", 1) for t, u in parts]),))
-        self.b.feed(ctid, "idx", cu, 1, [Row(t, u, "o1", 2) for t, u in parts])
+        ctid, cu = self.b.unit(bind(combine.defn, **{**combine.bindings, "V": V, "C": GROUP}))
+        self.b.feed(ctid, "best", cu, 1, [Row(t, u, "o0", n) for t, u in parts])
+        self.b.feed(ctid, "idx", cu, 1, [Row(t, u, "o1", 2 * n) for t, u in parts])
         (_, lm, lo, _), = self.segments(logits.refs.slice(0, 1))
         if lm not in self.gemms:
             raise Unexpressible(f"{node.fn.id}: its logits are node {lm}'s, not a GEMM's")
@@ -612,14 +626,11 @@ class _Program:
         self.outs[j] = [(0, 2, Row(ctid, cu, "o0", 2))]
         if self.occ is None or self.head is None:
             raise Unexpressible(f"{node.fn.id}: a token select before its Program's first position's token")
-        mtid, mu = self.b.unit(bind(IO.SlotMask))
-        self.b.feed(mtid, "occ", mu, 1, (self.occ,))
-        self.b.feed(mtid, "tok", mu, 1, self.outs[j][0][2:])
-        self.selects[j] = (tuple(parts), (xtid, xu), (mtid, mu))
-        self._collect(self.position - 1, Row(mtid, mu, "o0", 2))
+        self.selects[j] = (tuple(parts), (xtid, xu))
+        self._collect(self.position - 1, Row(ctid, cu, "o0", 2))
 
     def _collect(self, p: int, tok: Row) -> None:
-        """Position p's masked select ``tok`` into the slot's `io_shell.OutCollect_v1` chain, and at its last its entry."""
+        """Position p's select ``tok`` into the slot's `io_shell.OutCollect_v1` chain, and at its last its entry."""
         KO = self.cls.outputs
         ctid, cu = self.b.unit(bind(IO.OutCollect, KO=KO, FIRST=p == 0))
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))
@@ -635,17 +646,6 @@ class _Program:
 
 FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",
             "TokenSelect")
-
-
-def _runs(xs: Sequence[Any], key: Any, at: Any, n: Any, make: Any) -> list[Any]:
-    """``xs`` with each run of like entries (equal ``key``, consecutive units) merged by ``make(first, units)``."""
-    out: list[Any] = []
-    for x in sorted(xs, key=lambda x: (key(x), at(x))):
-        if out and key(out[-1]) == key(x) and at(out[-1]) + n(out[-1]) == at(x):
-            out[-1] = make(out[-1], n(out[-1]) + n(x))
-        else:
-            out.append(x)
-    return out
 
 
 def class_program(registered: Any, cls: WindowClass) -> Any:
@@ -712,17 +712,20 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  name: str = NAME) -> IF.Circuit:
+                  name: str = NAME, provable: bool = True) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
-    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is
-    every slot's; ``programs`` is the first slots only, a probe's census (`class_size`)."""
-    return lower(registered, cls, programs, grain, name).circuit
+    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is every
+    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block C-Flock's composer
+    proves (`_Builder.settle`) unless not ``provable`` (a probe's, or a test's of too small a class)."""
+    return lower(registered, cls, programs, grain, name, provable=provable).circuit
 
 
-def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME) -> Lowered:
-    """`class_circuit`'s circuit with its lowering (`Lowered`)."""
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME,
+          wired: bool = True, provable: bool = True) -> Lowered:
+    """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
+    wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`)."""
     programs = cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
@@ -731,19 +734,16 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
-    b, fn = _Builder(grain, programs), class_program(registered, cls).program.fn
+    b, fn = _Builder(grain, programs, provable), class_program(registered, cls).program.fn
     progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry) for k in range(programs)]
-    for j, node in enumerate(fn.body.nodes):
-        for r in progs:
-            r.lower(j, node)
+    for (j, node), r in product(enumerate(fn.body.nodes), progs):
+        r.lower(j, node)
     for r in progs:
         if r.position != cls.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
-    b.settle()
-    roots = _runs(b.roots, lambda x: (x.reader, x.port, x.table, x.of), lambda x: x.at, lambda x: x.units,
-                  lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n))
-    openings = _runs(b.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict), lambda x: x.at, lambda x: x.units,
-                     lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n))
+    if wired:
+        b.settle()
+    roots, openings = b.merged()
     params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
@@ -755,14 +755,14 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
-                   placed: Sequence[tuple[int, int | None]] | None = None) -> IF.Circuit:
+                   placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
     ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
     certifier's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
     end unchecked. A last output past the window's end is the scan's to carry (module docstring)."""
     takes(compiled, cls, placed)
-    return class_circuit(registered, cls, None, grain, name)
+    return class_circuit(registered, cls, None, grain, name, provable)
 
 
 def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None) -> None:
@@ -796,5 +796,5 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
                                 f"{cls.outputs}")
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "Lowered", "NAME", "Row", "WindowClass", "class_circuit",
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "WindowClass", "class_circuit",
            "class_program", "lower", "stop_ids", "takes", "window_circuit"]

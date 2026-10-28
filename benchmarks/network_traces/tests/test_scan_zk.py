@@ -111,9 +111,9 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
 
 
 def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
-    """IO-TIE's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and view
-    trees G·T leaves and the slot entries NR a boundary of the group, each member's warden port its own link-window's
-    registration, and the chains running across the windows."""
+    """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
+    view trees G·T leaves and the slot entries NR a boundary of the group, each member's warden port its own
+    link-window's registration, and the chains running across the windows."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)
     at = h.at
