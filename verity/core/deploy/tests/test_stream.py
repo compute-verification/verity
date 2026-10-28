@@ -125,8 +125,8 @@ def test_a_stream_that_ends_is_the_callers() -> None:
 def test_the_side_follows_period_json() -> None:
     assert Side.of({}, "n0", "pous", ["run", "it"]) == Side("n0", ("run", "it"))
     assert Side.of({"challenger_host": "n0"}, "n0", "pous", ["run"]) == Side("n0", ("run",))
-    wired = {"challenger_host": "a1", "challenger": {"pous": {"command": ["ssh", "a1", "x"], "address": "10.0.0.7:71"}}}
-    assert Side.of(wired, "n0", "pous", ["run"]) == Side("a1", ("ssh", "a1", "x"), ("10.0.0.7", 71))
+    wired = {"challenger_host": "a1", "challenger": {"pous": {"command": ["ssh", "a1", "x"], "address": "192.0.2.7:71"}}}
+    assert Side.of(wired, "n0", "pous", ["run"]) == Side("a1", ("ssh", "a1", "x"), ("192.0.2.7", 71))
     with pytest.raises(RuntimeError, match="a1 isn't wired for the wipe: period.json's challenger.wipe.command"):
         Side.of(wired, "n0", "wipe", ["run"], "the wipe")
 
