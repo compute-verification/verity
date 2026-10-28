@@ -8,7 +8,7 @@ import Definitions.Core.DeviceFigures
 within tolerance of `bounding`'s (`DeviceFigures.Accepted.within_bounding`), and `bounding`'s are themselves accepted
 against the estimate (`DeviceFigures.Accepted.bounding`), so the bound reads at most the tolerance more capacity than the
 estimate. Registration accepts the estimate's own figures (`DeviceFigures.accepted_self`), so `Accepted` is not vacuous,
-and it refuses a toy device stated ten percent slow.
+and it refuses a toy device stated ten percent slow or ten percent fast.
 -/
 
 namespace Verity
@@ -16,7 +16,7 @@ namespace Verity
 open scoped NNRat
 
 theorem withinTolerance_self (τ e : ℚ≥0) : WithinTolerance τ e e :=
-  ⟨mul_le_of_le_one_left (zero_le _) tsub_le_self, le_mul_of_one_le_left (zero_le _) le_self_add⟩
+  ⟨mul_le_of_le_one_left zero_le tsub_le_self, le_mul_of_one_le_left zero_le le_self_add⟩
 
 theorem WithinTolerance.max_right {τ e x : ℚ≥0} (h : WithinTolerance τ e x) : WithinTolerance τ e (max x e) :=
   ⟨(withinTolerance_self τ e).1.trans (le_max_right _ _), max_le h.2 (withinTolerance_self τ e).2⟩
@@ -75,9 +75,12 @@ def toyEstimate : DeviceEstimate where
   figures := { sku := "toy", clock := 100, peakRate := fun _ => 10, energyFloor := fun _ => 1, powerCap := 50 }
   tolerance := { capacity := 1 / 20, floor := 1 / 10 }
 
-example : toyEstimate.figures.Accepted toyEstimate := by decide
+-- `Rat.blt` is irreducible to the elaborator's `decide`; the kernel evaluates it.
+example : toyEstimate.figures.Accepted toyEstimate := by decide +kernel
 
-example : ¬ ({ toyEstimate.figures with clock := 90 } : DeviceFigures).Accepted toyEstimate := by decide
+example : ¬ ({ toyEstimate.figures with clock := 90 } : DeviceFigures).Accepted toyEstimate := by decide +kernel
+
+example : ¬ ({ toyEstimate.figures with clock := 110 } : DeviceFigures).Accepted toyEstimate := by decide +kernel
 
 end DeviceFigures
 

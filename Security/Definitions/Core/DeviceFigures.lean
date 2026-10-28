@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Order.Field.Rat
 import Mathlib.Algebra.Order.Ring.NNRat
-import Mathlib.Tactic.DeriveFintype
+import Mathlib.Data.Fintype.Defs
 
 /-!
 # A device's figures, and registration's check of them against the auditor's estimates (trusted)
@@ -41,7 +41,11 @@ inductive OperandClass
   | twoBit
   /-- all-zero operands -/
   | zero
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
+
+-- `deriving Fintype` fails on an enumeration at the pinned Mathlib.
+instance instFintypeOperandClass : Fintype OperandClass :=
+  ⟨⟨{.random, .twoBit, .zero}, by decide⟩, fun c => by cases c <;> decide⟩
 
 /-- A device's figures, which its leaf in the registration log carries. The SKU is a string because the registration
 log names a card by its SKU and the check only compares it for equality. -/
