@@ -280,10 +280,6 @@ class SetClass:
         return self.per_activation * self.activations
 
 
-class _NoTiling(Exception):
-    pass
-
-
 # ---------------------------------------------------------------------------------------------------------
 # Family protocol
 # ---------------------------------------------------------------------------------------------------------
@@ -1524,13 +1520,13 @@ class PlanFamily:
         """The structural description, or None when a table or group set is reached (its sets are not one entry's)."""
         bodies: dict[str, BodyTiling] = {}
 
-        def visit(plan: Plan) -> None:
+        def visit(plan: Plan) -> bool:
             if plan.key in bodies:
-                return
+                return True
+            if any(e.multi for e in plan.entries):
+                return False
             ents: list[NodeTiling] = []
             for e in plan.entries:
-                if e.multi:
-                    raise _NoTiling
                 if e.kind == "zip":
                     for j in e.nodes:
                         ents.append(NodeTiling(j, "zip", e.members, group=e.group))
@@ -1539,15 +1535,9 @@ class PlanFamily:
                 else:
                     ents.append(NodeTiling(e.j, e.kind, e.members, k=e.k))
             bodies[plan.key] = BodyTiling(plan.key, plan.spec.id, plan.spec, len(plan.spec.body.nodes), tuple(ents), plan.total)
-            for e in plan.entries:
-                if e.kind == "descend":
-                    visit(e.sub)
+            return all(visit(e.sub) for e in plan.entries if e.kind == "descend")
 
-        try:
-            visit(self.plan)
-        except _NoTiling:
-            return None
-        return Tiling(self.plan.key, bodies)
+        return Tiling(self.plan.key, bodies) if visit(self.plan) else None
 
     def classes(self) -> list[SetClass]:
         """The layout classes of the family's sets (one per non-descend entry of every refined body reached from the
