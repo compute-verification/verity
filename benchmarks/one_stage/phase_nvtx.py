@@ -30,8 +30,16 @@ TARGETS: dict[str, dict[str, tuple[str, ...]]] = {
         "postprocess_num_computed_tokens")},
     "verity_vllm.pipeline.serve_openai": {"EngineLoop": ("_deliver", "_release", "_poll", "_take")},
     "verity_vllm.pipeline.serve_commit": {"CommitWindows": ("before_step", "stepped", "admitted", "streamed", "idle")},
-    "verity_vllm.commit.committer.native_collect": {"NativeCollectCommitter": ("_begin_step", "_end_step", "_record_step_rows")},
+    "verity_vllm.commit.committer.native_collect": {"NativeCollectCommitter": ("_begin_step", "_end_step", "_record_step_rows",
+                                                                                "_plan_held", "step_targets")},
+    "verity_vllm.commit.committer.native_host": {"NativeHostCommitter": ("step_min_bytes",)},
+    "verity_vllm.commit.committer.window_views": {"WindowViews": ("_next_seq", "_window_view")},
     "verity_vllm.engine.step_trace": {"StepTrace": ("_record_step",)},
+    **{f"verity_vllm.{m}": {"*": ("on_step_begin", "on_step_end")} for m in (
+        "commit.served_record", "commit.committer.native_hidden", "acquire.sources.hidden_source", "acquire.sources.int8_source",
+        "acquire.sources.kv_slots_source", "acquire.sources.linear_quant_source", "acquire.sources.narrowed_source",
+        "acquire.sources.norm_scale_source", "acquire.sources.scale_products_source", "acquire.sources.vocab_range_source",
+        "acquire.sources.attention_source", "acquire.sources.call_boundary_source")},
 }
 
 def _ranged(f: Any, label: str) -> Any:
@@ -49,8 +57,13 @@ def _ranged(f: Any, label: str) -> Any:
 
 
 def patch(module: Any) -> None:
-    """Wrap ``module``'s `TARGETS` methods, and say on stdout (the serve log) which it wrapped and which it has not."""
-    for cls_name, names in TARGETS.get(module.__name__, {}).items():
+    """Wrap ``module``'s `TARGETS` methods (class ``*``: every class the module defines that has them), and say on stdout (the
+    serve log) which it wrapped and which it has not."""
+    want = TARGETS.get(module.__name__, {})
+    if "*" in want:
+        want = {c.__name__: want["*"] for c in vars(module).values() if isinstance(c, type) and c.__module__ == module.__name__
+                and any(n in c.__dict__ for n in want["*"])}
+    for cls_name, names in want.items():
         cls = getattr(module, cls_name, None)
         got = [n for n in names if cls is not None and isinstance(cls.__dict__.get(n), types.FunctionType)]
         for n in got:
