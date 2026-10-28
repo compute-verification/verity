@@ -20,7 +20,7 @@
 # summary.json written after the lease.
 # Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default H1U_DEFAULT's five), STEPS, CHECK_ARGS, BENCH_ARGS,
 # PROF_ARGS, LEASE_MIN (default 25),
-# PY (default benchmarks/harness/env.sh's python, else torch and numpy from PyPI in a uv venv
+# PY (default /workspace/cp/venv312's or /workspace/jobs/venv312's python, else torch and numpy from PyPI in a uv venv
 # in the scratch directory), JOBS.
 set -uo pipefail
 WHAT=${1:?usage: job.sh build|cpu|gpu}
@@ -106,7 +106,7 @@ case $WHAT in
     S=$(mktemp -d /tmp/j10r-sm90.XXXXXX); trap 'rm -rf "$S"' EXIT
     : > "$OUT/rc.txt"
     PY=${PY:-}
-    [ -n "$PY" ] || PY=$(. benchmarks/harness/env.sh 2>/dev/null && echo "$VENV/bin/python")
+    for v in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -z "$PY" ] && [ -x "$v/bin/python" ] && PY=$v/bin/python; done
     if [ -z "$PY" ]; then
       uv venv -q -p 3.12 "$S/venv" && uv pip install -q -p "$S/venv" torch numpy > "$OUT/venv.out" 2>&1
       echo "venv rc $?" >> "$OUT/rc.txt"

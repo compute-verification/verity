@@ -12,7 +12,8 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
-PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
+PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+[ -x "$PY" ] || PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
 mkdir -p "$OUT"
 # the venv's bin holds ninja, which any JIT build vLLM or FlashInfer starts needs
 export PATH=$(dirname "$PY"):$PATH VLLM_USE_FLASHINFER_SAMPLER=0

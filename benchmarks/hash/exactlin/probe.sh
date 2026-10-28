@@ -5,6 +5,7 @@
 #   RESEARCH_RUN_DIR=DIR bash benchmarks/hash/exactlin/probe.sh      (on that host, no GPU lease)
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$OUT/src"
+[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null

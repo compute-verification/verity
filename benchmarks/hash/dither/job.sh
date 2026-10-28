@@ -44,13 +44,15 @@
 # kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
 # SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
-# benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
+# /workspace/cp/venv312, else benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's), NCU (default the ncu
+# beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
 ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|j10r90|j10r90t|partials|z|zprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
+PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
 SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$HERE" rev-parse HEAD 2>/dev/null || echo unknown)}
@@ -115,7 +117,7 @@ if [ "$BENCH" = build ]; then
   exit 0
 fi
 
-PY=$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python") || exit 2
+[ -x "$PY" ] || PY=$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python") || exit 2
 NEED=()
 CMDS=()
 for b in ${BENCH//,/ }; do

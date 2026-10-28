@@ -15,7 +15,7 @@
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
-PY=${PY:-$(. benchmarks/harness/env.sh 2>/dev/null && echo "$VENV/bin/python3")}
+for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
 PY=${PY:-python3}
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done

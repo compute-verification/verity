@@ -28,6 +28,7 @@ if [ "${1:-}" != --leased ]; then
 fi
 S=${SHARE_S:?}; NSYS=${NSYS:?}
 CUDA=${CUDA:-/usr/local/cuda-13.0}
+for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
 PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 CC=$(nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=compute_cap --format=csv,noheader | head -1)
 case $CC in

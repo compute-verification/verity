@@ -13,13 +13,16 @@
 # on the shipped cubin of the card's arch, its JSON lines in $OUT/check.jsonl; then, with units-old.tar, bench.py on the old
 # ship's modules and cubin ($OUT/bench-old.jsonl), so both builds are timed by one ruler on one card.  Every step's exit
 # code is in $OUT/rc.txt; exits non-zero if any failed.
-# VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default benchmarks/harness/env.sh's, else /usr's);
-# GPU_LEASE_WHO the lease's holder (default units/ and the run's id);
+# VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default the first of /workspace/cp/venv312,
+# /workspace/venv312 and /workspace/jobs/venv312); GPU_LEASE_WHO the lease's holder (default units/ and the run's id);
 # LEASE_MIN the lease's bound (default 30); check.py's environment (SWEEP_ONLY, BATCHES, ...) passes through.
 set -uo pipefail
 O=${OUT:?}; IN=${IN:-${RESEARCH_RUN_DIR:?set IN}/inputs}
 export O GPU_LEASE_WHO=${GPU_LEASE_WHO:-units/${RESEARCH_RUN_ID:-local}}
-V=${VERITY_BENCH_VENV:-$(. benchmarks/harness/env.sh 2>/dev/null && echo "$VENV")}
+V=${VERITY_BENCH_VENV:-}
+if [ -z "$V" ]; then
+  for c in /workspace/cp/venv312 /workspace/venv312 /workspace/jobs/venv312; do [ -x "$c/bin/python" ] && V=$c && break; done
+fi
 export PY=${V:-/usr}/bin/python3
 # the source tree's verity, which check.py reads only to diagnose a sweep chunk that disagrees (sweep.model)
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}

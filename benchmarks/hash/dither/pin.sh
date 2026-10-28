@@ -5,7 +5,8 @@
 #
 #   bash benchmarks/hash/dither/pin.sh      (on the host that serves it, e.g. an H200; HF_HOME, default /workspace/hf)
 set -euo pipefail
-PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
+PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+[ -x "$PY" ] || PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
 export HF_HOME=${HF_HOME:-/workspace/hf} PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
