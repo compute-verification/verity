@@ -40,7 +40,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, replace
-from math import ceil, log, log2
+from math import log, log2
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
