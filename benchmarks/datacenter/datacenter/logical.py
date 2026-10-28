@@ -46,6 +46,7 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols import registration
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import types as T
 from verity.ml.circuits.census import PRECISION, PRODUCTS, census, family
@@ -339,9 +340,11 @@ def _rows(words: list[int], bits: int) -> list[bytes]:
 
 
 @dataclass(frozen=True)
-class Registration:
-    """A Program's registered inputs and the occupancy profiles its developer may choose from, committed before any run:
-    `root` is public, and so is the number of profiles; the values, salts and profiles are the developer's."""
+class RegisteredInputs:
+    """The developer's side of a Program's registered inputs, which the registration log registers as one θ item
+    (`theta`): the values, their hiding commitment, and the occupancy profiles its developer may choose from, committed
+    before any run. `root` is public, and so is the number of profiles; the values, salts and profiles are the
+    developer's."""
 
     values: dict[str, int | tuple[int, ...]]
     rows: advice.Commitment
@@ -357,21 +360,34 @@ class Registration:
     def salts(self) -> tuple[bytes, ...]:
         return self.rows.salts
 
+    def theta(self) -> dict[str, Any]:
+        """The θ item the registration log registers for these values (`registration.item_of`): the root, a row per
+        element of one or more words of 16 or 32 bits, and the domain its leaves are hashed under, named by the
+        registered parameters."""
+        bits = 16 if self.rows.n_bits == 16 else 32
+        item = {"domain": advice.domain(self.rows.binding, len(self.rows.rows)).domain_id.hex(), "kind": "theta",
+                "leaves": len(self.rows.rows), "root": self.root.hex(), "value": ",".join(self.values),
+                "words": self.rows.n_bits // bits}
+        return registration.item_of(item | ({"word_bits": 32} if bits == 32 else {}))
+
 
 def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Sequence[bytes] | None = None,
-             profiles: Sequence[Mapping[Any, Mapping[int, int]] | bytes] = ()) -> Registration:
+             profiles: Sequence[Mapping[Any, Mapping[int, int]] | bytes] = ()) -> RegisteredInputs:
     """Commit the values of `program`'s registered parameters, a row per element, under a binding to the Program's
     digest and to the occupancy `profiles` the developer may choose from (each with its buckets counted from its
-    epoch's first, or its `profile_digest`)."""
+    epoch's first, or its `profile_digest`). A row is the element in θ's words (`RegisteredInputs.theta`): one 16-bit
+    word for an element of at most 16 bits, else as many 32-bit words as it needs."""
     params = [(n, t) for (n, b), (_, t) in zip(parameters(program), program.fn.signature()[0]) if b == REGISTRATION]
     if not params:
         raise ValueError("the Program registers no parameter")
     regd = {n: inputs[n] if isinstance(inputs[n], int) else tuple(inputs[n]) for n, _ in params}
     words = [w for n in regd for w in ([regd[n]] if isinstance(regd[n], int) else regd[n])]
     width = max(sum(e) for _, t in params for e in layout(t))
+    width = 16 if width <= 16 else -(-width // 32) * 32
     digests = tuple(o if isinstance(o, bytes) else profile_digest(o) for o in profiles)
-    return Registration(regd, advice.commit(_rows(words, width), width,
-                                              _binding(b"datacenter/registration/v1", program, digests), salts), digests)
+    return RegisteredInputs(regd, advice.commit(_rows(words, width), width,
+                                                _binding(b"datacenter/registration/v2", program, digests), salts),
+                            digests)
 
 
 _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
@@ -398,6 +414,6 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
                            width, _binding(b"datacenter/values/v1", program), salts)
 
 
-__all__ = ["REGISTRATION", "RUN", "Registration", "Value", "ands", "bind_inputs", "binding", "calls", "census_of",
+__all__ = ["REGISTRATION", "RUN", "RegisteredInputs", "Value", "ands", "bind_inputs", "binding", "calls", "census_of",
            "commit", "committed", "evaluate", "gates", "layout", "names", "nodes", "parameters", "reach",
            "read", "register", "rows", "values", "work"]

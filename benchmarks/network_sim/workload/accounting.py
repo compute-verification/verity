@@ -86,7 +86,7 @@ def datacenter(hw: Hardware, cadence: D.Cadence, kinds: set[str], rate: float = 
         cadence)
 
 
-def placement(model, hw: Hardware, p: P.Placement, dc: D.Datacenter, registration: D.Registration) -> D.Placement:
+def placement(model, hw: Hardware, p: P.Placement, dc: D.Datacenter, registration: D.RegisteredInputs) -> D.Placement:
     program = model.program
     body = program.root.body
     client = hw.leaves[hw.client]
