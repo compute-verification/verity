@@ -1,5 +1,6 @@
-"""The inference-only policy as a core protocol (`NciCheck.Protocol`, `inference-only serve`, `verity/inference-only/v0`)
-against `nci_reference`'s `check_baseline` behind the protocol's decoders, through the difftest harness's `ProtocolPort`.
+"""The inference-only policy as a core protocol (`NciCheck.Protocol`, `inference-only serve`,
+`verity/inference-only/v0`) against `nci_reference`'s `check_baseline` behind the protocol's decoders, through the
+difftest harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), checks that the run's
 record names the declared circuit (`names`), rebuilds the policy's check's instance and trusted input (the params' log
@@ -47,7 +48,7 @@ def _load(name: str):
 vectors = _load("baseline_difftest_vectors")
 NR = vectors.reference
 
-# --- the reference --------------------------------------------------------------------------------------------------------
+# --- the reference ----------------------------------------------------------------------------------------------------
 
 
 def _exactly(j, keys: list[str], what: str) -> None:
@@ -116,7 +117,7 @@ def reference(case) -> dict:
                     digest=lambda c: bytes.fromhex(c[1]))
 
 
-# --- the cases ------------------------------------------------------------------------------------------------------------
+# --- the cases --------------------------------------------------------------------------------------------------------
 
 #: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the policy's check, `unnamed`
 #: for a record that names another circuit, or `comply` for a division that fails the policy.

@@ -175,8 +175,9 @@ links between proof blocks.
 **Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedHost`); its coins
 reach the developer only after the commitment (`CoinsConfidential`, in prose only).
 
-**Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**. It states its own sampling relation; it doesn't take part 1's
-theorem as a hypothesis.
+**Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**, for non-templated sessions; templated sessions are covered by
+`flock_verify_sound` and get knowledge soundness with #6068. It states its own sampling relation; it doesn't take part
+1's theorem as a hypothesis.
 
 ### 3. The audit of each sampling period
 

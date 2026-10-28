@@ -65,7 +65,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   `tile_k`, its fix the K to pad to). Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C)
   instances of K's template, so the record names the units the circuit has. The cost is the descriptor's nodes and the
   record's calls, never the gates they unroll to.
-* **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof system's selection,
+* **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof service's selection,
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
   any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
   draw would not be K's. PoUW carries no ε target: `period_credit` reports each window's credited served work C and
@@ -237,7 +237,7 @@ CHANGED = ("the draw root over the manifest (each call's credit bit among it), i
            "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after "
            "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the draw "
            "root, and never change them after the draw coin")
-#: the period-open's field holding the draw's K, the proof system's selection, committed before any draw
+#: the period-open's field holding the draw's K, the proof service's selection, committed before any draw
 K_FIELD = "draw_k"
 #: the most a committed K may be
 MAX_K = 1 << 24
@@ -547,7 +547,7 @@ def no_served(i: int, t: int) -> str:
 
 def no_rows(name: str) -> str:
     return (f"period {name}'s open commits no table rows T ({ROWS_FIELD}, a positive integer: each round's request and "
-            "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof system commits T "
+            "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof service commits T "
             "in the period-open, beside its draw K, before any draw")
 
 
@@ -1087,7 +1087,7 @@ def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
     sizes = [sum(hi - lo for lo, hi in s["units"]) for s in ss]
     if sum(sizes) < k:
         return "budget", (f"the window's {sum(sizes)} units are fewer than K = {k}, the K its period committed, so its "
-                          f"draw would not be K's: the proof system commits a K at most every window's units "
+                          f"draw would not be K's: the proof service commits a K at most every window's units "
                           f"({K_FIELD} in the period-open)")
     total = sum(s["work"] * n for s, n in zip(ss, sizes))
     for s, n in zip(ss, sizes):
@@ -2218,7 +2218,7 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     k = body.get(K_FIELD)
     if not (type(k) is int and 1 <= k <= MAX_K):
         return None, ("budget", f"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), "
-                                "so its windows have no K to be drawn with: the proof system commits K in the "
+                                "so its windows have no K to be drawn with: the proof service commits K in the "
                                 "period-open, beside its circuit and cap, before any draw")
     return k, None
 
