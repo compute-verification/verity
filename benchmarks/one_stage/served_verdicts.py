@@ -80,7 +80,8 @@ PIECES: dict[str, tuple[str, str, str, str, str]] = {
                       "the network certifier in front of serve-openai (Llama-3.2-1B int8, ASK-122's slots)"),
 }
 #: the record's subprotocol outside this chain
-WIPE = ("the wipe", "wipe", "memory-accounting", None, "no step of this chain runs the wipe")
+WIPE = ("the wipe", "wipe", "memory-accounting", "MEM-96",
+        "WIPE_CMD unset: serve() runs benchmarks/pous/streamed_wipe/served_wipe.sh on the card before its engine loads")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
@@ -339,7 +340,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           run: str | None, wipe_server: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol rejected, erred or was
     undecided), and the ``RECORD`` line's summary."""
     from verity_e2e_demo import block_record as BR
@@ -355,7 +356,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
         line = {"composed": composed, "by": bad, "verdicts": verdicts, "missing": missing, "block_record": None,
                 "why": "block_record carries an accepted subprotocol's certificate only", **dev}
         return report, None, line
-    rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE)
+    w = rows.get("wipe") or {}
+    extra = ({"wipe": {"row": w, "server": wipe_server, "runs": w.get("runs") or [run]}}
+             if w.get("verdict") == "accept" and wipe_server is not None else None)
+    rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE, extra=extra)
     line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing, **dev,
             "record_missing": rec["composed"]["missing"], "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
@@ -422,7 +426,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID")
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: piece_row(k, a.pieces, run) for k in PIECES},
             "wipe": piece_row("wipe", a.pieces, run)}
-    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run)
+    served = a.pieces / "wipe" / "served.json"
+    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
+                               wipe_server=json.loads(served.read_text())["server"] if served.exists() else None)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

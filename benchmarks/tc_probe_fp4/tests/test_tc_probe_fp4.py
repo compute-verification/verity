@@ -133,7 +133,7 @@ def test_result_records_elide_chain_operands_only():
     assert slim["a"]["hex_chars"] == 32 * 1024 and len(json.dumps([slim] * 20)) < 1 << 16
 
 
-def test_fake_silicon_is_refused_under_a_research_run(no_nvcc, tmp_path, monkeypatch):
+def test_fake_silicon_is_refused_with_a_run_id(no_nvcc, tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     with pytest.raises(SystemExit):
         P.main(["--instruction", "f8f6f4", "--out", str(tmp_path), "--fake-silicon", "gs32_w26_native"])

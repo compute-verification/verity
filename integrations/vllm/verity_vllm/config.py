@@ -400,7 +400,7 @@ def row_path(row: str) -> str:
     return os.path.relpath(row_file(row), ROOT)
 
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
-#: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
+#: EOS the model samples before it.  A row of record is done only at its public cap, so its served length is
 #: public; the EOS a request samples there is a value, which decides no step.
 DONE_SOURCES = ("public-cap", "eos-token")
 
@@ -419,7 +419,7 @@ def done_source(workload: Mapping[str, Any]) -> str:
 def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False) -> str | None:
     """Why a row of record (its ``sweep.row_id`` in ``RECORDS``, or any row with ``of_record``: one about to be indexed) is not done
     only at its public cap; None for a row that is, and for every research row (its EOS stops are its own).  Row files
-    (:meth:`RowConfig.of`), the row precheck and GP-01 refuse with it, and so does whatever indexes a row
+    (:meth:`RowConfig.of`), the row precheck and `pipeline.global_program` refuse with it, and so does whatever indexes a row
     (``pipeline.config_record.index_refusal``: ``records publish``, ``pull`` and ``switch``, and ``row chain`` when it publishes)."""
     sw = workload.get("sweep")
     row = sw.get("row_id") if isinstance(sw, Mapping) else None
@@ -554,9 +554,9 @@ class BuildConfig:
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
                                                help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
-                                       help="seconds for one derive (and for one workload Program compose; TP: one rank's GP-01 and the "
-                                            "call-boundary check); default scales with the envelope (TP: 7200).  Never the TP manifest, "
-                                            "which --manifest-timeout bounds")
+                                       help="seconds for one derive (and for one workload Program compose; TP: one rank's global Program "
+                                            "and the call-boundary check); default scales with the envelope (TP: 7200).  Never the TP "
+                                            "manifest, which --manifest-timeout bounds")
     manifest_timeout: int | None = option("--manifest-timeout", env="MANIFEST_TIMEOUT", type=int, default=None,
                                           help="TP: seconds for the required-value manifest over the W ranks, the Build's and a Commit's "
                                                "rebuild (default 4 h + 1200 s a component build, W x declared requests: "
@@ -572,7 +572,7 @@ class BuildConfig:
                                 help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
                                      "step guard over every rank and a canary request derived in full; default off")
     build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
-                                      help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
+                                      help="TP: 1 = the Build ends at the rank and global Programs: no required-value manifest or call-boundary "
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
     build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
                                      help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
@@ -607,25 +607,25 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 350 s a GiB of a "
-                                           "rank's summed request derive peaks, at least 7200: row_records.fold_plan); tp-fold-match as a "
-                                           "whole gets the folds' rounds, the compare and GM-01 rounds and the cross-rank leg "
-                                           "(row_records.fold_phase_s: four legs when every rank runs at once)")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, the global match; default "
+                                           "350 s a GiB of a rank's summed request derive peaks, at least 7200: row_records.fold_plan); "
+                                           "tp-fold-match as a whole gets the folds' rounds, the compare and global-match rounds and the "
+                                           "cross-rank leg (row_records.fold_phase_s: four legs when every rank runs at once)")
     fold_mem_gb: float | None = option("--fold-mem-gb", env="RESEARCH_RUN_MEM_GB", type=float, default=None,
                                        help="TP: the memory (GB) the fold Match's concurrent legs are sized to (default: research run's "
                                             "--mem-gb, RESEARCH_RUN_MEM_GB; without one, the host's headroom); one that holds no planned "
-                                            "GM-01 leg beside one fold runs one rank at a time, with a warning in row.log")
+                                            "global-match leg beside one fold runs one rank at a time, with a warning in row.log")
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
-                                    help="TP: ranks whose compare and GM-01 legs run at once (0 = as many as --fold-mem-gb holds at a GM-01 "
-                                         "leg's planned peak beside one fold, 5.5x a rank's summed request derive peaks: GLM-5.3 B8 I256's "
-                                         "339 GiB; every rank when the checkpoint's layers are unknown)")
+                                    help="TP: ranks whose compare and global-match legs run at once (0 = as many as --fold-mem-gb holds at "
+                                         "a global-match leg's planned peak beside one fold, 5.5x a rank's summed request derive peaks: "
+                                         "GLM-5.3 B8 I256's 339 GiB; every rank when the checkpoint's layers are unknown)")
     fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
-                               help="TP: ranks whose fold leg runs at once (0 = as many as the memory those GM-01 legs leave holds at a "
-                                    "fold's planned peak, 0.6x the same sum: B8 I256's 40 GB; as --fold-rank-workers when it is given or "
-                                    "the layers are unknown)")
+                               help="TP: ranks whose fold leg runs at once (0 = as many as the memory those global-match legs leave holds "
+                                    "at a fold's planned peak, 0.6x the same sum: B8 I256's 40 GB; as --fold-rank-workers when it is given "
+                                    "or the layers are unknown)")
     match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
                               help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
-                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
+                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and global-match "
                                    "documents, so only the missing legs and the cross-rank leg run")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")

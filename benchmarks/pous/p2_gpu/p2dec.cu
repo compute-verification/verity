@@ -1,6 +1,6 @@
 // P2 public decode throughput on one GPU, CGBN (NVlabs) multi-precision.
-// From the efficient-cryptography campaign (POUS internal/efficient-crypto/candidates/p2-gpu-decode/, bc-28faaf0e: the
-// tuned kernel of run r20260928-065407-16f0). Added for benchmarks/pous: -DP2_DERIVE expands fresh per-block keys on the
+// From the efficient-cryptography campaign (its tuned
+// kernel). Added for benchmarks/pous: -DP2_DERIVE expands fresh per-block keys on the
 // device (M1's key schedule, verity.core.protocols.pous.schemes.p2 v2): per segment s a 32-byte seed, per block j of the segment a ChaCha8
 // stream with nonce j, read as big-endian W/8-byte words: K_j the first and t_j the second. The spec rejection-samples t_j
 // below p; a second word >= p (probability C0/2^W) makes the run exit 3 instead of drawing the third. Only the seeds cross

@@ -1,4 +1,4 @@
-"""The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, for
+"""The H200 window writer: where each proof block's input ports read their bytes in the step commitments, for
 circuits' FAMILIES map (`plan.Map`).
 
 **The layout.** `shared_layout` is FAMILIES' shared-row commit layout, one commit unit a row of at most
@@ -14,7 +14,8 @@ circuits' FAMILIES map (`plan.Map`).
 At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST`, and its
 writers (`writers`) are circuits' writers artifact's. Under the ``residual`` fusion (`plan.FUSIONS`) the projections' rows
 go: 18,529 rows and 24,008,260 B a slot, 1,099 writers. With ``norm`` as well each norm's output rows go too: 15,169 rows
-and 20,569,300 B a slot, 1,204 writers.
+and 20,569,300 B a slot, 1,204 writers. With ``pv`` too each layer's softmax rows go: 14,337 rows and 19,717,332 B a slot,
+1,152 writers.
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
@@ -338,6 +339,8 @@ class Window:
             return ports + ("r",) if t == "ScaledMmS8ResidualCoordinateRows_v1" else ports
         if t == "PvRow_v1":
             return ("p",) + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
+        if t == "QkSoftmaxPvPad_v1":
+            return ("q", "k") + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
         return {"EmbeddingCoordinate_v1": ("tok", "col", "pos"), "RmsSumSqChunks_v1": ("x",),
                 "RmsNormOutSums_v1": ("x", "w", "s"), "RowAbsMax_v1": ("x",), "QuantChunkS8_v1": ("x", "amax"),
                 "RmsNormAbsMax_v1": ("x", "w", "s"), "RmsNormQuantCodes_v1": ("x", "w", "s", "amax"),
@@ -415,7 +418,7 @@ class Window:
             if port.startswith("wrow"):
                 return self._registered(u.name, k * i + r * q, k * i + (r + 1) * q)
             return seg(qop, r * q, (r + 1) * q)
-        if t in ("QkSoftmaxRowPad_v1", "PvRow_v1"):
+        if t in ("QkSoftmaxRowPad_v1", "PvRow_v1", "QkSoftmaxPvPad_v1"):
             layer, d = u.table.split(".")[0], self.shape.head_dim
             if port == "n":
                 return (Run("n"),)

@@ -1,7 +1,7 @@
 """The certifier's signed clock sync, salted as a record digest is (`certificate.CertifiedClock`,
 `Issuer.salted_clock`), as an advised link's clock source of record (`advised.SignedClocks`,
 `LinkWindows(certified_clocks=…)`): an honest link whose certifier signed each egress window's sync is accepted; a
-window declaring a sync other than the one signed for it is refused, REDTEAM phase 11's δ below the certified one among
+window declaring a sync other than the one signed for it is refused, a δ below the certified one among
 them; and a window whose opening doesn't hold has no sync, which refuses it and every window after, each refused
 opening named with why: a forged signature, an altered digest, a reused salt, a wrong window, another key, session or
 link, an ingress or a record certificate, a record's opening, and two syncs for one window. The issuer signs no clock
@@ -26,7 +26,7 @@ from advised_traffic import LINK, P, SYNC_SET, SYNCS, WINDOWS, held, serve
 from test_network_certifier_advised import Run
 
 T, R = 8, 2
-#: phase 11's case: one request of 2 frames certified in bucket 3, its output released in bucket 3 too
+#: a coincident release: one request of 2 frames certified in bucket 3, its output released in bucket 3 too
 FRAMING = tuple(-(-n // 2) for n in range(1, 9))
 LOOSE = SyncSet((0, 1), (1,))
 INSTANT, ONE = ClockSync(0, 1), ClockSync(1, 1)
@@ -92,7 +92,7 @@ def test_an_honest_link_is_accepted_on_its_certifiers_signed_syncs(tmp_path):
 
 
 def test_a_declared_sync_other_than_the_signed_one_is_refused(tmp_path):
-    """The certifier signed each window at a δ one above the declared one: every window is refused. On phase 11's
+    """The certifier signed each window at a δ one above the declared one: every window is refused. On the
     coincident release, δ = 0 declared is accepted where the certifier signed δ = 0, refused where it signed δ = 1."""
     slower = [ClockSync(s.delta + 1, s.rho) for s in SYNCS]
     assert SignedRun(tmp_path / "slower", _signed(slower)).link(serve(1)) == [False] * WINDOWS

@@ -502,7 +502,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
   let header ← match Json.parse text with
-    | .ok j => pure j
+    | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
   if (← J.str header "format" pctx) != tags.publicFormat || (← J.str header "statement" pctx) != tags.statement then
@@ -689,7 +689,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 namespace HmOut
 
@@ -872,7 +872,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let sigma ← hs.sha512 (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+           hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-- `Stmt.setupTables` through the oracle. -/
 def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
@@ -951,6 +951,6 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 end Flock
