@@ -3,7 +3,7 @@ parameters (the defaults are those measured on one RTX PRO 6000 Blackwell Server
 
 - `tc_ceiling_gbps`: the decode rate if the tensor cores did nothing but the two squarings' MMAs at a given int8 rate.
 - `full_pass_gbps`: a kernel and the key expansion run one after the other.
-- `seqroot`: P2's SeqRoot margin at width w, derived as `p2/PROTOCOL.md` §12 derives it at 16,448 bits (the Zen 5 floor
+- `seqroot`: P2's SeqRoot margin at width w, derived as `schemes.p2.ROOT_CALL_NS` derives it at 16,448 bits (the Zen 5 floor
   τ_F, (w − 2) + 40 squaring-equivalents a root, the measured 8-core cooperation 3.490×, half the cooperating root as
   `ROOT_CALL_NS`, the RTT cap the largest whole µs with Δ + cap below it), with τ_F scaled to w as w^alpha: log2(3) when
   narrowing drops a Karatsuba level of the floor's plan, log4(7) when it drops a Toom-4 level (the narrower width's best
@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import math
 
+from verity.core.protocols.pous.schemes.p2 import DELTA_NS
+
 PAYLOAD = 2054
 MAC_PER_MMA = 16 * 8 * 32
 TAU_F_NS = 2060.845 / 5.7
 COOP = 2716.7 / 778.5
-DELTA_NS = 500_000
 W0 = 16_448
 
 MEASURED = {
