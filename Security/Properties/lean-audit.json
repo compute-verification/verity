@@ -6,6 +6,7 @@
   "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period",
   "Properties.Pouw.PeriodJ10R",
+  "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed",
   "Properties.Pouw.ServedWork",
   "Properties.Pouw.ServedValues",
@@ -246,6 +247,10 @@
    "owner": "@compute-accounting",
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
   },
+  "Properties.Pouw.PeriodJ10RStrata.StrataDrawIsCoin": {
+   "owner": "@compute-research",
+   "digest": "b6039c004f6202b9861b2b79fee2fa88f87b94fe22d929eeeb05bde7cc17cc3b"
+  },
   "Properties.Pouw.Served.CertifiedExchange": {
    "owner": "@compute-research",
    "digest": "a6929f13489cdf297588075b1af62348834de2858da838b461415ef613750244"
@@ -367,6 +372,7 @@
     "Properties.Pouw.Credit",
     "Properties.Pouw.Period",
     "Properties.Pouw.PeriodJ10R",
+    "Properties.Pouw.PeriodJ10RStrata",
     "Properties.Pouw.ServedFreed",
     "Properties.Pouw.ServedWork",
     "Properties.Pouw.ServedValues"
@@ -612,6 +618,11 @@
    "imports": ["Definitions.Pouw.Dither", "Properties.Pouw.ServedWork"],
    "except": [],
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
+  },
+  "Properties.Pouw.PeriodJ10RStrata": {
+   "imports": ["Properties.Pouw.PeriodJ10R"],
+   "except": [],
+   "why": "the period's credit over several tile strata is stated against the one-stratum statement's own vocabulary (`Properties.Pouw.PeriodJ10R`: its verdict `PouwCheck.Credit.window`, its coins, tile run and premises) read at each stratum's view of the period's coins, never a proof"
   }
  },
  "reads_exempt": {
@@ -1949,6 +1960,15 @@
    ],
    "assumptions": [],
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f"
+  },
+  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
+   "owner": "@compute-research",
+   "signature": [
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata :",
+    "  Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata"
+   ],
+   "assumptions": [],
+   "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "owner": "@compute-research",
@@ -3726,7 +3746,8 @@
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial": "lemma: WipeSigned's nontrivial lemma: WipeRanAccepted fails at a session with a batch no record encodes, under the empty key, for the challengers that ran nothing: it is no run of theirs, and the collision finder and the forger built from it output nothing, so the break is not always true",
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "lemma: WipeSigned with a check that accepts everything in place of the wipe's compiled check is false, at the session of wipeSigned_nontrivial",
    "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Jobs.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
-   "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, which is false of the accelerator model as Definitions.Core.Accel writes it (free register reductions run the four Russians' method below the public best's cost), so the guarantee is non-vacuous only on a model that prices register reductions; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork)."
+   "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, which is false of the accelerator model as Definitions.Core.Accel writes it (free register reductions run the four Russians' method below the public best's cost), so the guarantee is non-vacuous only on a model that prices register reductions; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
+   "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod over a finite set S of the sampling block's tile strata, one a contraction K (16,384 and 65,536 in H1's served layout), each s in S with its own N_s = |stratum sigma s|, K_d = k s, declared circuit, rho s and Lambda_s = j10rRate (k s) (rho s), so its own eps_s(j); the fixed words and the credits are summed over S and the error is the union bound, the sum over S of each stratum's delta_s + n(delta_bind + delta_ks) (the strata's permutations are independent coordinates of the draw, but every stratum's game reads the window's one round coin and the prover adapts across strata, so no sharper bound is claimed). Not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, as the one-stratum statement's. Period-wide premises, on the period's coins (StrataCoin): RegisteredBeforeDraw and SaltIsLiveCoin, as the one-stratum statement's (one registration and one salt a window), and StrataDrawIsCoin, listed under assumptions, in place of TileDrawIsCoin: the window's drawn proof blocks are exactly the union over S of the strata's coordinates (TileDrawIsCoin read per stratum is false at a window over two non-empty strata), a code fact once the verifier draws the tiles inside the stratified draw, one stratum a K (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin). Per stratum, at stratum s's view (pathsAt): the one-stratum statement's other premises, TileServiceSound, SharedNoiseLucks and UnitFixed among them. Proved from CircuitCreditPeriod at each stratum's tileRun, as Proofs.Pouw.PeriodJ10R applies it, then the union bound (Proofs.Pouw.PeriodJ10RStrata). Honest: HonestStrata.strata_meets_period, strata_meets_stratum and strata_credit (HonestJ10R's instance at every stratum, every premise met); nontrivial: HonestStrata.strata_nontrivial (at the verdict that credits every window, the provers that fix no word break the bound once Lambda_s ln(1/delta_s) < n at each stratum) (Proofs.Pouw.PeriodJ10RStrata.Honest)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4514,6 +4535,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -4616,6 +4638,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -4773,13 +4796,14 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.ComposePeriod": {
-   "digest": "04949afeb6bfe40ed3eb0253a6a26c7deabd025948c081614aa1c780c81a95e8",
+   "digest": "6acf59a32bcabe8b749507d3cbe17ff515898bae1c9bc19cbfd0c8da64d085d0",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
     "Accounting.Compose.Declared.periodLayer": "a01db9d427c342555e77bd8d0c437c88963489e2c43b2dcf299f6a71c649a843",
@@ -4802,6 +4826,12 @@
     "Accounting.Compose.Period.rec": "0adacc7d014142c938755d3cae5f6bd5e3d72fb4ea3a9bd8aaf22de7600610a4",
     "Accounting.Compose.Period.window": "f39dcb3af3972c3864f161ba68c3322dab3be434611c25337dd93763f73a8216",
     "Accounting.Compose.Period.windowAt": "371c0de8887af6adb233d1aee7802dffa4dcf89290b3344fd57fe0829ecd9765",
+    "Accounting.Compose.PeriodRun": "c84af28d1f24ad6a4991a9897228ed9961f41759113f46d4bc58632a7ce0a0ae",
+    "Accounting.Compose.PeriodRun.Credited": "32c64989de2e811fcb52f8a2127116230b0fd9cfe0a84d1205eee0e4fa9a1833",
+    "Accounting.Compose.PeriodRun.accepted": "cd159c8bc46429bd1f11185501b00f3b480d77c79fdb437f2f6a2d3d43bb9fdf",
+    "Accounting.Compose.PeriodRun.opened": "b427688c902ed0f1543589c5e8532fe018af081f15d3a21504ce9a5c55bdd918",
+    "Accounting.Compose.PeriodRun.rel": "271f1eeb9d4eaf8cc31c8d860ebabf1bf96572e129993a75bafd3f73b0134f72",
+    "Accounting.Compose.PeriodRun.right": "ff77b0e2393ad8e99bf3d5921c78366e3273e216a78d7c41b7976aba4301aaa0",
     "Accounting.Compose.PrefixOf": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a",
     "Accounting.Compose.RoundGame.acceptsUpTo": "7f24c520abbb1dae862a06cf3eeadacf1f0d8ffcbf0d8aa37c2c5ff9bfdc9db1",
     "Accounting.Compose.consGame": "c2028e515abf2a609322d707f397836d556d0ee509301d3ea18d80d0dadd2f26",
@@ -4820,6 +4850,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5080,6 +5111,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5103,6 +5135,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5516,6 +5549,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -5560,6 +5594,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5577,6 +5612,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5598,6 +5634,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5615,6 +5652,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5641,6 +5679,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5658,6 +5697,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -5682,6 +5722,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -6952,6 +6993,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -7013,6 +7055,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -7030,6 +7073,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -7439,6 +7483,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -7565,6 +7610,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -7636,6 +7682,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -7797,6 +7844,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -7920,6 +7968,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -7997,6 +8046,7 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -8019,6 +8069,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -8051,6 +8102,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -8290,6 +8342,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -8353,6 +8406,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -8453,6 +8507,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -8489,6 +8544,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -8794,6 +8850,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -10509,6 +10566,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -10732,6 +10790,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -10856,6 +10915,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -10890,6 +10950,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -10905,6 +10966,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -10993,6 +11055,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -11149,6 +11212,7 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -11197,6 +11261,7 @@
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -11236,6 +11301,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -11270,6 +11336,7 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -11427,6 +11494,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -12729,7 +12797,7 @@
    ]
   },
   "Properties.Pouw.Period": {
-   "digest": "f5f052e387cc2d06ca11a126dc59abdd6a25bc5e3ec0ec07c5cfb717e72c7f65",
+   "digest": "b0e5d035644b05cbc0c11cd86343c32acbca6b47972ecb91b0e3870c5a210487",
    "definitions": {
     "Properties.Pouw.Period.Accepts": "f8d73ed3046e1cfeb747c2ee4dc59ebe1506b4534642b95d6a902e320e950399",
     "Properties.Pouw.Period.CheckedCreditPeriod": "f5813e65f3e9f1fb320280402f67d130acbf817ab942077988f426b274558dda",
@@ -12745,6 +12813,11 @@
     "Properties.Pouw.Period.SaltIsLiveCoin": "62bf1dbd153325c70fa3981569702dee28e3d52af7dd5a58c64d6dd060a87331",
     "Properties.Pouw.Period.ServiceSound": "6abffbd796bf0fa56d131433a69dcfc0f8c7bc5d4d710313849e835b90e26e92",
     "Properties.Pouw.Period.StagedPins": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1",
+    "Properties.Pouw.Period.Windows": "009dd92ccf6efaa9a76d4d0ca05344397a6a28e81b017953196004e2bd765da5",
+    "Properties.Pouw.Period.Windows.AcceptedUpTo": "de2aa5eda8669cf2bf415a7282547a10cee2f568a16ce807f1308b19a0fc4afd",
+    "Properties.Pouw.Period.Windows.ev": "2d9e65bbc3deddbdd1cc552dbe4b3c8f6c3495c68f26e07b75a645f3be9d25a3",
+    "Properties.Pouw.Period.Windows.prefixLen": "5ce16d5a711a8b85207c1b0b4d48bd79f69893eae57a137c640f4b96765206d9",
+    "Properties.Pouw.Period.Windows.reg": "0590073c94d9fcbecd22a7b42d1174033ffdc74dff5d4e5bb010c9b46fe22801",
     "Properties.Pouw.Period.checkedLayer": "e40cf44df27df93eff57e87b97a6eded55fb8f0e443ef600dc2991978883a40a",
     "Properties.Pouw.Period.checkedLive": "780a4ceca4fe0d4133254133e4347a3ba30fad60889c51897b507ea1da7d8506",
     "Properties.Pouw.Period.checkedRun": "57131614fd6f2d8e6a41d5941212acb0814fd1acc2156c718e8c5c26b0307b25",
@@ -12758,13 +12831,14 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Properties.Pouw.PeriodJ10R": {
-   "digest": "e682f3c8c10401277969b06fbceb07fc12aebec00e56810c76ce4c8d649abdb4",
+   "digest": "bb5dd6054c420489cad293e61f75d8d44128d92d15cdd5ab2282c6bd845cbfaa",
    "definitions": {
     "Properties.Pouw.PeriodJ10R.Answered": "ad07d7dcb3b5ba1b02c1e159a9fa1fbc49fa3c68721667dba455072e3f7cfc7f",
     "Properties.Pouw.PeriodJ10R.Answered.draw": "34232c1aa04dce901132afc7c85bd9db84df44b652b39520da011c3cdcaf91c9",
@@ -12823,15 +12897,38 @@
     "Properties.Pouw.PeriodJ10R.stratum": "0fe4336d41b2989d69cfa42ae95d8f0c6647af2e53b350508508595663a6f361",
     "Properties.Pouw.PeriodJ10R.tileAt": "e9b64854c8ad31a1158ed8bfa3017d391ad5b121854ae9f83d2e8560b86a24b4",
     "Properties.Pouw.PeriodJ10R.tileCount": "294cbe291655d25c16ca6b696758908921beda6dfe08299ee58d4b1c93638257",
+    "Properties.Pouw.PeriodJ10R.tileDraw": "c07e6b3d8516ad948a68197ec9a518ac3c0361df1012d19028bb749f93e31485",
     "Properties.Pouw.PeriodJ10R.tileLayer": "414abffad6ce996ac797d9e02ef17e9b3e5382e07d8861f61e411e2763c447e8",
     "Properties.Pouw.PeriodJ10R.tileRun": "8b15a5f30246bc08252ac542e8110745b2f6929b3ad731b107c6e265a109d98f"
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
+  },
+  "Properties.Pouw.PeriodJ10RStrata": {
+   "digest": "1faea3e343035451fb9b47b2ad7aca2ac42a66db41de4123dfdfae19f1d1b5fa",
+   "definitions": {
+    "Properties.Pouw.PeriodJ10RStrata.BlockDraw": "8c51d87a44f26cbacd92f87b041c9f78598f3db7ddd2a2faba318647f99e076c",
+    "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "f1cd337a976e247f25a828cdce01cb6f7f96bce66da6ab844dbbd62e03dea897",
+    "Properties.Pouw.PeriodJ10RStrata.Rest": "8a7ce9ec6b58e64025d0e07db7d22b6838a29c7f5500f05be754aefa00e8d31a",
+    "Properties.Pouw.PeriodJ10RStrata.StrataCoin": "3b72d8959db0aa1c61278a35b72916d9816258e5e421d654717d40ba985d6b37",
+    "Properties.Pouw.PeriodJ10RStrata.StrataDrawIsCoin": "b6039c004f6202b9861b2b79fee2fa88f87b94fe22d929eeeb05bde7cc17cc3b",
+    "Properties.Pouw.PeriodJ10RStrata.atStratum": "830f7e19021da2a837bedbba12df6354b7ecb47b65cfc9a77d72876ae5c77f5c",
+    "Properties.Pouw.PeriodJ10RStrata.creditAt": "cd18afe088ab117e28401e6a08383ed0cb18a5a3551d10a282d995b0212820e7",
+    "Properties.Pouw.PeriodJ10RStrata.layerAt": "e03bebb34cdbb32b5a74d034a3ae65a88ec2ac61bc99ab382e5ef5f00668f7fd",
+    "Properties.Pouw.PeriodJ10RStrata.pathsAt": "93af8a0ff9e42bc9689e4b52f8c86420b30379acc1dfbbab9db9bf0a31c13d79",
+    "Properties.Pouw.PeriodJ10RStrata.pathsCongr": "e0341d2e2a2151a4b4005e491e56b32e9e3a3cab3ba7a43078ce44d901e1b6d9",
+    "Properties.Pouw.PeriodJ10RStrata.pullAt": "fc1ebaf3fde2273738b9a4bf7c55e02b80bcf2dddbf9fdb24d2e2134390bfd91",
+    "Properties.Pouw.PeriodJ10RStrata.relAt": "175453463eda382310efd4972422fa26dfc98094697ae4c6868f723c773475d2",
+    "Properties.Pouw.PeriodJ10RStrata.rightAt": "7998f40eaf2fe1b25eda4eace37ea67692654090865471ab3b4c2cf50f845af5",
+    "Properties.Pouw.PeriodJ10RStrata.runAt": "ba2c8b169a756bd49693d87e4b73c43e13948ecd2ea88313c0aa8f5c7bf0d2c5",
+    "Properties.Pouw.PeriodJ10RStrata.stratumLive": "ab89b5316fd9a86746b29c9490323bd745cbde74d01bcd07a3fc98331b93d600"
+   },
+   "guarantees": ["Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata"]
   },
   "Properties.Pouw.ServedFreed": {
    "digest": "8aaf49d891c36c2c3afc1db96ee0595ebb5a52d00278656ffd5ecb872df415cf",
@@ -14106,6 +14203,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -14156,6 +14254,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -14322,6 +14421,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
@@ -14440,6 +14540,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -14581,6 +14682,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -14645,6 +14747,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
