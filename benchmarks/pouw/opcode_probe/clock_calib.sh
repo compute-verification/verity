@@ -4,7 +4,7 @@
 # (clock_calib_lease.sh) runs a reference kernel of known cycle count REPS times at several lengths, timed by the host's
 # steady_clock (the auditor's clock, with no trust in the chip), and reports the jitter = u. From a pushed commit:
 #
-#   research run --on vy-nebius-2 --project verity --source <tree> --cwd source --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/clock_calib.sh
 #
 # $OUT gets jitter.jsonl (REPS host-timed rows a length), restored.txt, nvsmi-restored.txt and calib.txt (eps1.py
