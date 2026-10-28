@@ -44,7 +44,6 @@ class Engine:
     effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
     environ: dict | None = None    # the process environment keys its build set or changed (`engine_env.set_since`), None when not built here
     credited_read: dict | None = None  # the int8 attention's credited read installed at the build (`int8_credited_env`), None when none
-    fused_producers: dict | None = None  # the int8 linears' fused producers installed at the build (`int8_producers`), None when none
 
 
 # the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
@@ -237,10 +236,6 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     eng.credited_read = int8_credited_env.install(eng, engine_env.int8_credited_read())
     if eng.credited_read is not None:
         print(f"[engine] {int8_credited_env.ENV}: {json.dumps(eng.credited_read)}", flush=True)
-    from verity_vllm.engine import int8_producers
-    eng.fused_producers = int8_producers.install(model)
-    if eng.fused_producers is not None:
-        print(f"[engine] {int8_producers.ENV}: {json.dumps(eng.fused_producers)}", flush=True)
     return eng
 
 
