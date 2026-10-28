@@ -6,7 +6,9 @@ recorded `pub.bin` and `registered.json`, and its recorded outer session. The le
 again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
 session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
 as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
-check has passed at setup. The honest level passes setup at the honest inner session and the coin server's transcript of
+check has passed at setup. The recorded level's verifier-registered values are under `verity/rec-inner/v1`'s SHAKE256
+salts, so it is refused at check 5; the honest level is it restaged under SHA-512's (`rec_residuals.salt_of`), and passes
+setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
 the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the coin server's
 format (`RecSetup.checkReads`), and where V* registered its
@@ -95,6 +97,16 @@ def forged(built, once) -> Path:
         assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
 
     out = once("rec-coins-forged", make, _KEY) / f"L{LEVEL}"
+    assert hashlib.sha512((out / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
+    return out
+
+
+@pytest.fixture(scope="module")
+def restaged(built, once) -> Path:
+    """Level 3 restaged honestly: the recorded level's circuit, rows and registrations, but for its verifier-registered
+    `coef` and `dirs`, which are under the current salts (`rec_residuals.verifier_salts`). The recorded level's are under
+    `verity/rec-inner/v1`'s SHAKE256 salts, and it is refused (`test_the_recorded_level_under_v1s_salts_is_refused`)."""
+    out = once("rec-coins-honest", lambda d: _stage(d, levels=[LEVEL], algebra=False), _KEY) / f"L{LEVEL}"
     assert hashlib.sha512((out / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return out
 
@@ -195,33 +207,51 @@ def _acc_rows(dst: Path, level: Path) -> Path:
     return dst
 
 
-def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path):
-    """Its VERDICT names its part (`rec_part`) and the SHA-512 of the shared rows file it read (`rec_rows_sha512`), which
-    `rec-compose` holds every part to."""
-    rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
+def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path, restaged):
+    """Its VERDICT names its part (`rec_part`), the SHA-512 of the shared rows file it read (`rec_rows_sha512`), of
+    the verifier's inner shape file (`rec_inner_sha512`), and of the inner session's record and the coin server's
+    transcript of it (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`). `rec-compose` holds every part to
+    those inputs through `rec_shared` (`test_lean_rec_compose.py`)."""
+    rows = _acc_rows(tmp_path / "rows.json", restaged)
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
-    assert v["rec_rows_sha512"] == hashlib.sha512(rows.read_bytes()).hexdigest(), v
+    sha = {k: hashlib.sha512(f.read_bytes()).hexdigest() for k, f in (
+        ("rec_rows_sha512", rows), ("rec_inner_sha512", shape),
+        ("rec_inner_session_sha512", SET / "inner-honest" / "session" / "session.json"),
+        ("rec_inner_transcript_sha512", shape.parent / "transcript.json"))}
+    assert {k: v.get(k) for k in sha} == sha, v
     assert str(v["rec_part"]) == _own(forged, shape)[1], v
 
 
-def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, None,
+def test_the_recorded_level_under_v1s_salts_is_refused(forged, shape, tmp_path, restaged):
+    """The recursion's statement version: the recorded level was staged under `verity/rec-inner/v1`, whose
+    verifier-registered values are under SHAKE256 salts. Restaged under SHA-512's (`rec_residuals.salt_of`) its files
+    differ only there and it passes setup (`test_the_honest_level_passes_setup_at_the_honest_inner_session`); the
+    recorded files, whose registration is otherwise consistent, are refused by check 5 at the first opening's `coef`."""
+    assert (SET / "L3" / "pub.bin").read_bytes() != (restaged / "pub.bin").read_bytes()
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
+                        "verifier's rec-coef row 0"), v["why"]
+
+
+def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path, restaged):
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, None,
+                rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"].startswith(f"setup: rec-coins: {UNIT}: the verifier holds no inner session"), v["why"]
 
 
-def test_the_honest_level_is_refused_without_the_inner_transcript(forged, shape, tmp_path):
+def test_the_honest_level_is_refused_without_the_inner_transcript(forged, shape, tmp_path, restaged):
     """`RecVStar.checkTopRows`: level 3's `out` reads `rec-top-L3`, the tops its openings climb to, which only the coin
     server's record of the inner session fixes, so without it the honest level is refused at setup."""
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
-                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"), transcript=False)
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "rows.json", restaged), transcript=False)
     assert v["why"] == (f"setup: rec-tops: {UNIT}: the verifier holds no inner transcript (--rec-inner-transcript with "
                         f"--rec-inner-session), so no committed tops to check port out's rows of rec-top-L{LEVEL} against"), v["why"]
 
 
 @pytest.mark.parametrize("rep", [0, 1])
-def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forged, shape, tmp_path, rep):
+def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forged, shape, tmp_path, rep, restaged):
     """`RecVStar.checkTopRows` at a real level: the honest level 3 against an inner transcript whose rep `rep` level-3 top
     (its last salted top, 32 nodes; `rec-top-L3` is rep 0's, then rep 1's) has node 0's `b ‖ c` one bit off is refused at
     the table row that reads the node: the prover's registered top is not the one the coin server committed before the
@@ -233,34 +263,34 @@ def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forg
     c[0] ^= 1
     r["tops"][0][0] = c.hex()
     (tmp_path / "transcript.json").write_text(RL.record_bytes(t))
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
-                "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
+                "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(UNIT)}: port out's table row \d+ is not node 0 of rep {rep}'s level "
                         rf"{LEVEL} top, which the coin server committed", v["why"]), v["why"]
 
 
-def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, shape, tmp_path):
+def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, shape, tmp_path, restaged):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points, so the honest level
     against an inner transcript whose first link coin is one bit off from the record's is refused before setup."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     t["link"]["points"][0] = f"{int(t['link']['points'][0], 16) ^ 1:032x}"
     (tmp_path / "transcript.json").write_text(RL.record_bytes(t))
-    p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
-             "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    p = _run(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
+             "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the inner session's record's link points are not "
                                                    "the ones the coin server drew (link.points): check 5 would take the extra "
                                                    "claims at points the prover chose")
 
 
-def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(forged, shape, tmp_path):
+def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(forged, shape, tmp_path, restaged):
     """`RecSetup.checkReads` among `verify`'s inputs (`RecSetup.commits`): the honest level against the honest inner
     transcript's values written as compact JSON is refused before setup, since the recursion's transcript model reads
     the record in the coin server's own format."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     f = tmp_path / "transcript.json"
     f.write_text(json.dumps(t))
-    p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
-             "--rec-inner-transcript", str(f), rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    p = _run(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
+             "--rec-inner-transcript", str(f), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the coin server's record does not read in "
                                                    "its own format (RecRecord.readFull: rec_live.record_bytes, its "
                                                    "rounds first, then its kind, tops, Hello in its keys' order and "
@@ -276,22 +306,22 @@ def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
     return inner
 
 
-def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path):
+def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path, restaged):
     """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose draw is a well
     formed sample of the 64 units is refused before its record is read."""
     inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
-                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
+                rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's draw: the session's draw proves 1 units, not "
                         "every one of the statement's 64 in order"), v["why"]
 
 
-def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path):
+def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path, restaged):
     """`RecCoins.drawnSpec`: a record whose draw is every unit is decoded against the drawn statement's spec, whose
     header carries the draw. The honest session ran without one, so its record is refused there, at its parameters."""
     inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
-                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
+                rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"] == f"setup: rec-coins: {UNIT}: the inner session's record: {S2_R7}", v["why"]
 
 
@@ -511,8 +541,8 @@ def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape,
 
 
 #: `Test/RecCoins.lean`'s root of R's opening part's one zero row at program "p" (`RecCoins.checkOpening`'s `checkZero`)
-OPENING_ZERO_ROOT = ("af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7"
-                     "bad14ce4f03dc487265b9")
+OPENING_ZERO_ROOT = ("2eca9c1be0de4fd86674c7aefcc800622e515195cd96359356984ea51c40ae617781640911365d6f049bc6f4390754bd00fcb0064bc"
+                     "21c5b193ed407be742dfb")
 
 
 def test_r_openings_zero_row_is_the_one_check_5_computes_and_another_salt_is_not():
@@ -659,42 +689,42 @@ def test_the_registered_reads_hold_no_message_round_port_the_statement_lacks(alg
                         f"is not the statement's: the statement's is {port} under {value} reading {show(honest)}"), v["why"]
 
 
-def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
-    """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the recorded level 3 reads `rec-acc` as `acc` and
+def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path, restaged):
+    """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the restaged level 3 reads `rec-acc` as `acc` and
     `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and passes setup at those shared rows
     (`--rec-rows`; S2/R7 refuses its outer session after) and is refused without them."""
     reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
     site = lambda e: {k: x for k, x in e.items() if k != "reads"}
     shared = json.loads(rows.read_text())["ports"]
-    assert site(reads(SET / "L3")["acc"]) == site(reads(SET / "L3")["acc_out"]) == site(shared["acc0"]) == site(shared["acc1"])
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
+    assert site(reads(restaged)["acc"]) == site(reads(restaged)["acc_out"]) == site(shared["acc0"]) == site(shared["acc1"])
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: {UNIT}: it reads rec-acc; pass the verifier's record of V*'s shared rows (--rec-rows F), whose "
                         "rec-acc registration it must be"), v["why"]
 
 
-def test_a_value_the_shared_rows_register_is_read_at_that_registration(forged, shape, tmp_path):
+def test_a_value_the_shared_rows_register_is_read_at_that_registration(forged, shape, tmp_path, restaged):
     """`SharedOwnRoot`'s check (`RecVStar.checkShared`): a session's port reading a value the verifier's shared rows
     (`--rec-rows`) register must be that registration, but in reads. Shared rows that register level 3's `rec-coef` under
-    another root refuse the recorded level by its `coef`, which passes setup without that entry
+    another root refuse the restaged level by its `coef`, which passes setup without that entry
     (`test_the_honest_level_passes_setup_at_the_honest_inner_session`). R's tops, which need an entry, are
     `Flock.Test.SharedRows`'."""
-    ports = json.loads((SET / "L3" / "registered.json").read_text())["ports"]
+    ports = json.loads((restaged / "registered.json").read_text())["ports"]
     coef = ports["coef"]
     other = {**coef, "root": coef["root"][:-1] + ("1" if coef["root"][-1] == "0" else "0")}
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {
         "acc0": ports["acc"], ports["out"]["value"]: ports["out"], "x-coef": other}}))
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
+    v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest", rows=rows)
     assert v["why"] == (f"setup: {UNIT}: its port coef reads {coef['value']}, which the verifier's shared rows (--rec-rows) "
                         f"register as x-coef: root {coef['root']}, against {other['root']}"), v["why"]
 
 
-def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registration(salted, forged, shape, rows, tmp_path):
+def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registration(salted, forged, shape, rows, tmp_path, restaged):
     """`checkAcc` at another registration: level 3 staged under another salt of the running sums' row 0 reads the same rows
     as another `rec-acc`, consistently: it passes setup at its own registration and is refused at the verifier's by `acc`'s
-    root. The recorded level with its `acc_out` read at that other registration (its reads file's entry and `pub.bin`'s
+    root. The restaged level with its `acc_out` read at that other registration (its reads file's entry and `pub.bin`'s
     paths; the rows it reads are the same, row 0 being no opening's `acc_out`) and `acc` at the honest one is refused as two
     registrations."""
     reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
@@ -708,10 +738,10 @@ def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registrati
                         f"root {other}, against {honest}"), v["why"]
     c = tmp_path / "mixed"
     c.mkdir()
-    r = json.loads((SET / "L3" / "registered.json").read_text())
+    r = json.loads((restaged / "registered.json").read_text())
     r["ports"]["acc_out"] = reads(b)["acc_out"]
     (c / "registered.json").write_text(json.dumps(r))
-    data, salted = (SET / "L3" / "pub.bin").read_bytes(), (b / "pub.bin").read_bytes()
+    data, salted = (restaged / "pub.bin").read_bytes(), (b / "pub.bin").read_bytes()
     nl, snl = data.index(b"\n"), salted.index(b"\n")
     head = json.loads(data[:nl])
     head["registered"]["acc_out"] = json.loads(salted[:snl])["registered"]["acc_out"]
@@ -721,15 +751,15 @@ def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registrati
                         f"{other}"), v["why"]
 
 
-def test_a_level_reading_rec_acc_off_its_openings_rows_of_the_chain_is_refused(level_major, forged, shape, tmp_path):
-    """`OpenKeysS`' positions (`RecVStar.checkAccReads`): the recorded level 3's `acc` reads rows 395 to 447 for rep 0 and
+def test_a_level_reading_rec_acc_off_its_openings_rows_of_the_chain_is_refused(level_major, forged, shape, tmp_path, restaged):
+    """`OpenKeysS`' positions (`RecVStar.checkAccReads`): the restaged level 3's `acc` reads rows 395 to 447 for rep 0 and
     843 to 895 for rep 1 (the chain rep-major, then by level and query, at 448 openings a rep) and `acc_out` the next. On a
     level-major chain, consistently registered, `acc` reads row `790 + u` at unit `u`, which passes `checkAcc` at its own
     registration and is refused at unit 0."""
     reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
     honest = [395 + j for j in range(53)] + [843 + j for j in range(53)]
-    assert reads(SET / "L3")["acc"]["reads"] == honest
-    assert reads(SET / "L3")["acc_out"]["reads"] == [p + 1 for p in honest]
+    assert reads(restaged)["acc"]["reads"] == honest
+    assert reads(restaged)["acc_out"]["reads"] == [p + 1 for p in honest]
     assert reads(level_major)["acc"]["reads"] == [790 + u for u in range(106)]
     v = _verify(forged, level_major / "pub.bin", level_major / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "own.json", level_major))
@@ -738,14 +768,14 @@ def test_a_level_reading_rec_acc_off_its_openings_rows_of_the_chain_is_refused(l
 
 
 @pytest.mark.parametrize("other", ["verity/flock-circuit+seed-injection", "verity/flock-circuit@cec3e347"])
-def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, shape, tmp_path, other):
+def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, shape, tmp_path, other, restaged):
     """V*'s statements are `verity/flock-circuit`'s: the honest level set up as `other`, which parses the same file, is
     refused by that check alone, since `statement` derives it with every other flag under V*'s own; `verify` refuses it at
     setup. `verity/flock-circuit@cec3e347` is the statement the recorded outer session was proved as."""
     why = (f"setup: {UNIT}: one of V*'s statements, which are verity/flock-circuit statements (--statement "
            f"verity/flock-circuit), not {other}")
-    rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
-    pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
+    rows = _acc_rows(tmp_path / "rows.json", restaged)
+    pub, reg = restaged / "pub.bin", restaged / "registered.json"
     p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows)])
     assert p.returncode == 0 and json.loads(p.stdout)["statement"] == "verity/flock-circuit", (p.stdout, p.stderr)
     p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, other)])
@@ -754,15 +784,15 @@ def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, s
     assert v["why"] == why, v["why"]
 
 
-def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp_path):
+def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp_path, restaged):
     """V*'s statements read no lookup table, so under `--rec-inner` the verifier holds none: the honest level with a table
     under `--tables` (any bytes; the level reads no table, so nothing else reads it) is refused by that check alone, which
     `statement` shows, and `verify` refuses it at setup."""
     (tmp_path / "tables").mkdir()
     (tmp_path / "tables" / "rcp.u32").write_bytes(bytes(64))
     why = f"setup: {UNIT}: one of V*'s statements, which read no lookup table; the verifier holds [rcp] (--tables, --archive)"
-    rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
-    pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
+    rows = _acc_rows(tmp_path / "rows.json", restaged)
+    pub, reg = restaged / "pub.bin", restaged / "registered.json"
     p = keyed.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows), "--tables", str(tmp_path / "tables")])
     assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
     v = _verify(forged, pub, reg, shape, "inner-honest", "--tables", str(tmp_path / "tables"), rows=rows)
@@ -847,7 +877,7 @@ def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None 
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     inner = tmp_path / "inner.json"
-    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": claims, "regions": 3,
+    inner.write_text(json.dumps({"format": "verity/rec-inner/v2", "m": m, "k_log": 22, "claims": claims, "regions": 3,
                                  **({"sparse": list(sparse)} if sparse else {})}))
     session = ["--rec-inner-session", str(SET / "inner-honest" / "session")]
     rec = ["--rec-inner-circuit", str(circuit or u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),

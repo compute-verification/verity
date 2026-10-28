@@ -358,6 +358,48 @@ def fileDigest (args : List String) (flag : String) : IO (Except String (Option 
     | some dir => archiveGet dir f
   return bytes.map fun b => some (hexOf (Sha512.hash b))
 
+/-- **What every part of a recursive statement shares** (`RecCompose.Shared`, the `VERDICT`'s `rec_shared`), from the
+files `verify` read: `--rec-inner` as `recInnerInput` reads it, the inner statement's and session's files at their paths
+as `RecCoins.filesInput` and `recTranscriptInput` read them, and how the inner statement is set up as
+`RecCoins.formInput` reads it. -/
+def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) := do
+  let recInner ← match ← fileDigest args "--rec-inner" with
+    | .ok h => pure h
+    | .error e => return .error e
+  let file := fun (path : Option String) => path.mapM fun f => RecCompose.digest <$> IO.FS.readBinFile f
+  let statement := argOf args "--rec-inner-statement"
+  try
+    let tables ← if statement.isNone then pure none else
+      some <$> match argOf args "--rec-inner-tables" with
+        | some d => RecCoins.tablesIn d
+        | none => pure []
+    return .ok { recInner
+                 innerCircuit := ← file (argOf args "--rec-inner-circuit")
+                 innerPublic := ← file (argOf args "--rec-inner-public")
+                 innerPartition := ← file (argOf args "--rec-inner-partition")
+                 innerCoins := ← file (argOf args "--rec-inner-coins")
+                 innerSession := ← file ((argOf args "--rec-inner-session").map (· ++ "/session.json"))
+                 transcript := ← file (argOf args "--rec-inner-transcript")
+                 registration := ← file (argOf args "--rec-inner-registration")
+                 innerStatement := statement
+                 innerStatementCoins := statement.map fun _ => argOf args "--rec-inner-statement-coins" == some "os"
+                 innerTables := tables.map (·.map fun t => (t.1, RecCompose.digest t.2))
+                 innerDraw := ← file (argOf args "--rec-inner-draw") }
+  catch e => return .error s!"rec shared inputs: {e}"
+
+/-- The SHA-512, in hex, of the inner session's record (`--rec-inner-session DIR`'s `session.json`) and of the coin
+server's transcript of it (`--rec-inner-transcript F`), each at its `VERDICT` key, for those given: the files as the
+verifier reads them, from their paths. -/
+def recSessionDigests (args : List String) : IO (Except String (List (String × Lean.Json))) := do
+  let files := [("rec_inner_session_sha512", (argOf args "--rec-inner-session").map (· ++ "/session.json")),
+    ("rec_inner_transcript_sha512", argOf args "--rec-inner-transcript")]
+  let mut out := []
+  for (key, f) in files do
+    if let some f := f then
+      try out := out ++ [(key, Lean.Json.str (hexOf (Sha512.hash (← IO.FS.readBinFile f))))]
+      catch e => return .error s!"{key}: {e}"
+  return .ok out
+
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
 def identifierInput (args : List String) : IO (Except String (Option (Lean.Json × String))) := do
@@ -487,7 +529,7 @@ def sparseInput (args : List String) : Except String (Option RecSparse.Shape) :=
     | _ => .error s!"--sparse {v}: NU,ELL,S_LOG,T_LOG, four natural numbers"
 
 /-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]`: the shape of
-V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v1` line, for `verify
+V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v2` line, for `verify
 --rec-inner`; `--hide`: the verifier's own word that the inner session's circuits are private (`RecVStar.Inner.holo`);
 `--sparse`: its word that the session is candidate 3's, with the bucket's RecSparse shape (`RecVStar.Inner.sparse`). R's
 shape (`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R
@@ -723,8 +765,13 @@ of every unit in order.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
-with `--rec-part J` its part (`rec_part`) and with `--rec-rows F` the SHA-512 of the shared rows file it checked
-(`rec_rows_sha512`), which `rec-compose` holds every part of a recursive statement to.
+with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
+`recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
+SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
+it read (`rec_inner_sha512`), and with `--rec-inner-session DIR` and `--rec-inner-transcript F` the SHA-512 of the inner
+session's record and of the transcript (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`,
+`recSessionDigests`), which `rec-compose` holds every part of a recursive statement to (`RecCompose.Accepts`, through
+`rec_shared`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
@@ -735,7 +782,9 @@ statement whose form the soundness proof does not cover (`ProvedScope.check`, th
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
-over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
+over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session at a
+holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
+a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
 cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
@@ -841,6 +890,15 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let recRowsSha ← match ← fileDigest args "--rec-rows" with
     | .ok h => pure h
     | .error e => IO.eprintln e; return 2
+  let recShared ← if recPart.isNone then pure none else match ← recSharedInput args with
+    | .ok s => pure (some s)
+    | .error e => IO.eprintln e; return 2
+  let recInnerSha ← match ← fileDigest args "--rec-inner" with
+    | .ok h => pure h
+    | .error e => IO.eprintln e; return 2
+  let recSessionShas ← match ← recSessionDigests args with
+    | .ok hs => pure hs
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -932,7 +990,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
       else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
+      -- short of every unit, then a session's over an inner record without a draw, then a session's at a holo or sparse
+      -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
+      -- the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
       -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
       scope
@@ -940,6 +1000,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
+      RecSetup.denseOnly recInner
+      RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
       RecordText.check record
       ksFiles
@@ -956,9 +1018,15 @@ def verifyCmd (args : List String) : IO UInt32 := do
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
       (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []) ++
-      -- the part and the shared rows it was checked against, which `rec-compose` holds every part to
+      -- the part, the shared rows and every other shared input it was checked against, whether it ran --zk, and its
+      -- session's coin key, which `rec-compose` holds every part to (`RecCompose.Accepts`)
       (match recPart with | some j => [("rec_part", Lean.toJson j)] | none => []) ++
-      (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []))
+      (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []) ++
+      (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []) ++ recSessionShas ++
+      (match recShared with
+        | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
+          (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])
+        | none => []))
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
@@ -1565,9 +1633,11 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
 
 /-- `rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG...`: a recursive statement's verdict from its V* parts'
 `verify` logs (`RecCompose.check`). The verifier's own inner shape (`--rec-inner`) gives V*'s statements, and
-`--rec-rows` is the one shared rows file the prover staged. It accepts exactly when there is one log per V* statement,
-each of whose `VERDICT`s accepts at its part and names that file's SHA-512. One `REC-COMPOSE` line; exit 0 when
-accepted, 1 when refused, 2 on its inputs. -/
+`--rec-rows` is the one shared rows file the prover staged. It accepts exactly when `RecCompose.Accepts` holds of the
+logs' verdicts (`RecCompose.check_accepts`): one log per V* statement with one `VERDICT`, each accepted at its own part,
+under `--zk`, without an identifier and at that rows file's SHA-512; every part naming one set of the other shared
+inputs, the first at this inner shape's SHA-512 and in the compiled verifier's form; and no coin key twice. One
+`REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG..."
   let i ← match ← recInnerInput args with
@@ -1575,6 +1645,10 @@ def recComposeCmd (args : List String) : IO UInt32 := do
     | .ok none => IO.eprintln usage; return 2
     | .error e => IO.eprintln e; return 2
   let digest ← match ← fileDigest args "--rec-rows" with
+    | .ok (some h) => pure h
+    | .ok none => IO.eprintln usage; return 2
+    | .error e => IO.eprintln e; return 2
+  let innerDigest ← match ← fileDigest args "--rec-inner" with
     | .ok (some h) => pure h
     | .ok none => IO.eprintln usage; return 2
     | .error e => IO.eprintln e; return 2
@@ -1590,10 +1664,10 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   -- a log that can't be read is a part that never ran: no VERDICT, so refused
   let parts : List (String × String) ← logs.toList.mapM fun f => do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
-  let res := RecCompose.check n digest parts
+  let res := RecCompose.check n digest innerDigest parts
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
-    ("rec_rows_sha512", Lean.Json.str digest)]
+    ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest)]
   IO.println s!"REC-COMPOSE {line.compress}"
   return (if res.toBool then 0 else 1)
 

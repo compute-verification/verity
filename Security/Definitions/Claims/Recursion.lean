@@ -16,13 +16,12 @@ eight items:
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
    variant: `x` parses with a circuit commitment, and `R_I(x_I, w)`, whose outputs bind it to the circuit (`RPriv`).
-4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts:
-   dense, holo (private inner circuits) and sparse (a RecSparse phase and R). A fast100 inner table,
-   `k_log ≥ 6`, two claims and two per region, no circuit commitment; either no RecSparse phase and no R, or a valid
-   RecSparse phase at `T_LOG = 0` with `6 ≤ ℓ ≤ k_log`, the inner statement's dimensions the form's and its unit range
-   inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
-   (`Draw.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
-   verifier's own scope check, its setup's checks of the inner shape, its refusal of a V* session whose draw is not
+4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts: the
+   dense form only (public inner circuits, no RecSparse phase and no R; it refuses the holo and sparse forms, which
+   `RecursiveKS` doesn't cover). A fast100 inner table, `k_log ≥ 6`, two claims and two per region, no circuit
+   commitment. Every V* session draws every unit of its population (`Draw.Full`). There is no recursion-level scope
+   refusal: `ScopeMatches` states that this is the compiled verifier's own scope check, its setup's checks of the inner
+   shape, its refusal of a holo or sparse inner shape, its refusal of a V* session whose draw is not
    every unit, and its refusal of a session over an inner session whose record holds no draw. Where the V* records are
    run messages, the statement carries no draws, and the compiled verifier refuses a session whose draw is not every
    unit when that session decides.
@@ -348,17 +347,13 @@ def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 
 /-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session drawing every
 unit of its population. No circuit commitment; the inner table at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two
-claims and two per region, its circuits public or private (`holo` either way); and either no RecSparse phase and no R
-(a dense or holo inner session), or a sparse phase: a RecSparse shape at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`,
-`T_LOG = 0`, the inner statement's `(m, k_log, regions)` the form's, its unit range's slots inside the block, and R at
-the phase's `table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. Every V* session's
+claims and two per region; and the dense form only: public circuits (not `holo`), no RecSparse phase and no R. The
+compiled verifier refuses the holo and sparse forms (`RecSetup.denseOnly`), which `RecursiveKS` doesn't cover, so they
+are out of scope. Every V* session's
 record holds a draw, and it is the full draw (`Draw.Full`). -/
 def InScope (s : Stmt) : Prop :=
   s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
-    (s.form.sparse = none ∧ s.form.stacked = none ∨
-      ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
-        s.innerDims = some (s.form.m, s.form.kLog, s.form.regions) ∧ s.form.unitRangeInBlock = true ∧
-        s.form.stacked = some (max 22 (nu + pLog ell), 2) ∧ max 22 (nu + pLog ell) ≤ 35) ∧
+    (s.form.holo = false ∧ s.form.sparse = none ∧ s.form.stacked = none) ∧
     ∀ d ∈ s.draws, ∃ e, d = some e ∧ e.Full
 
 /-! ## What the compiled verifier brings -/
