@@ -14,6 +14,9 @@ the circuit back.
     - any other text's SHA-512 / SHA-256 goes in pieces of 64 Mi characters, each computed once
     - the unit's layout (`ands_layout`) sorts each form's columns in one call, and `ir_lower.evaluate_layout` XORs a row's
       columns with `functools.reduce`: the same rows and values
+    - a flat unit with inline reads is stamped (`stamp`, off under `HZ_STAMP=0`): each distinct sub-circuit built once and
+      its calls' rows rendered from it, so no AND of the unit is a Python object; a unit it can't stamp (a table read, a
+      hint, an assertion) is the library's
 
 stage.py runs the library unpatched under `HZ_STAGE=library`; both write the same bytes."""
 from __future__ import annotations
@@ -22,11 +25,14 @@ import gc
 import hashlib
 import io
 import json
+import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from operator import xor
 from pathlib import Path
 
+import stamp
 from verity.ml.circuits.boolean import forms
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
@@ -140,12 +146,12 @@ def _unit(lay, name: str) -> dict:
     if e is None or e["lay"] is not lay:
         path = _scratch[0] / f".unit-{len(_units)}.netlist"
         h, n, size = hashlib.sha256(), 0, 0
+        pieces = lay.netlist_pieces(name) if isinstance(lay, stamp.StampLayout) else (p.encode() for p in _netlist(lay, name))
         with open(path, "wb") as f:
-            for piece in _netlist(lay, name):
-                b = piece.encode()
+            for b in pieces:
                 h.update(b)
                 f.write(b)
-                n += piece.count("\n")
+                n += b.count(b"\n")
                 size += len(b)
         e = _units[(id(lay), name)] = {"lay": lay, "path": path, "newlines": n, "bytes": size, "sha256": h}
     return e
@@ -289,7 +295,14 @@ def install(scratch: Path) -> None:
     def unit_lowering_(*a, **k):
         _in_unit.append(True)
         try:
-            low, out_words = unit_lowering(*a, **k)
+            low = None
+            if os.environ.get("HZ_STAMP", "1") != "0" and stamp.applies(*a, **k):
+                try:
+                    low, out_words = stamp.unit_lowering(*a, **k)
+                except stamp.Unstampable as e:
+                    print(f"fast_stage: the library lowers the unit: {e}", file=sys.stderr, flush=True)
+            if low is None:
+                low, out_words = unit_lowering(*a, **k)
         finally:
             _in_unit.pop()
         if not hasattr(low, "template"):
