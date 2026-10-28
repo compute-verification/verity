@@ -38,6 +38,7 @@ import Definitions.Pouw.Assumptions.NCP.GamePinned
 import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 import Definitions.Pouw.Assumptions.NCP.RouteUGame
 import Definitions.Pouw.Assumptions.NCP.RouteUWord
+import Definitions.Pouw.Assumptions.OnsiteFreed
 import Definitions.Pouw.Assumptions.PearlC.Deadline
 import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
