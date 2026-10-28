@@ -46,3 +46,8 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
 - (20:22Z) GD-MODEL is refitting: values proving over 63 templates (MODEL-1), a forced-share constraint (MODEL-2), measured Dither serve arms (MODEL-3), and a named baseline (S4). Rerun on the refit when it's pushed and keep the n table.
   - Define the throughput window class explicitly: T 8,192 isn't a 4,32,4 window (S16).
   - Report J ranges (low/nominal/high over the uncertain inputs), not one number.
+- (20:20Z) GD-AGG (final, note 20261028T1945Z-report-gd-agg):
+  - A per-cell proof block is 15–27M ANDs, with whole-row openings at 81,402 a compression making up 97% of it. Check your per-cell block against that.
+  - Dither as specified (per-tile π) has a floor of 0.97 G at t = 3, by GD-NOISE's route. Only per-segment π keeps G. So constrain credit to 0.97 for per-tile π.
+  - Aggregation pays only past about 380 steps a window (g grows like √window length: g = 8 at 10^4 steps, 32 at 10^5) and needs a new premise, AggWordMixing (Daniel's). Keep it as an arm, off by default.
+  - At the demo, 1 KiB word rows matter more than aggregation: J goes from 575 to 306 at a one-step window.

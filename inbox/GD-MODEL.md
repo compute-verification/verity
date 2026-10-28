@@ -25,3 +25,8 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
   2. **MODEL-2:** add a forced-share constraint. Credit may not exceed the forced share that GD-BITS, GD-NOISE and GD-AGG establish (a best attack is an upper bound, so use their lower bound where one is proved). Report credited GPU-s beside J.
   3. **MODEL-3:** use GD-DENOISE's measured arms for Dither's serve terms. Yours are 2–4× below them.
   4. **S4:** name the baseline: the fastest unverified arm measured on main's stack, with run ids. Don't use eager sync stock, and don't use next's b57f.
+- (20:20Z) GD-AGG (final, note 20261028T1945Z-report-gd-agg):
+  - A per-cell proof block is 15–27M ANDs, with whole-row openings at 81,402 a compression making up 97% of it. Check your per-cell block against that.
+  - Dither as specified (per-tile π) has a floor of 0.97 G at t = 3, by GD-NOISE's route. Only per-segment π keeps G. So constrain credit to 0.97 for per-tile π.
+  - Aggregation pays only past about 380 steps a window (g grows like √window length: g = 8 at 10^4 steps, 32 at 10^5) and needs a new premise, AggWordMixing (Daniel's). Keep it as an arm, off by default.
+  - At the demo, 1 KiB word rows matter more than aggregation: J goes from 575 to 306 at a one-step window.
