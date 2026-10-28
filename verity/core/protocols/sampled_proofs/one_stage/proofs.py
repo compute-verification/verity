@@ -44,6 +44,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.ml.circuits.codec import canonical_json
+
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
@@ -259,12 +261,6 @@ def v2_executable() -> Path:
     return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
 
 
-def _canonical(x: Any) -> bytes:
-    """`x` in the canonical JSON `Core.canonicalJson` reads, for the integers, strings, lists and objects of ASCII keys
-    these inputs hold."""
-    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
-
-
 def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict, list[Path]]:
     """The v2 evidence's ``proofs`` for `proof`'s files, and the blobs that hold them: the public file's SHA-512 and, per
     session (named `names`, the v1 evidence's ``sessions``; by default its directory's name), its ``session.json``'s and
@@ -292,8 +288,8 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
            "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))
-        paths[0].write_bytes(_canonical(own))
-        paths[1].write_bytes(_canonical(pr))
+        paths[0].write_bytes(canonical_json(own))
+        paths[1].write_bytes(canonical_json(pr))
         p = subprocess.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:
@@ -318,7 +314,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
         for path, x in zip(paths, (p2, record, e2)):
-            path.write_bytes(_canonical(x))
+            path.write_bytes(canonical_json(x))
         p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:
