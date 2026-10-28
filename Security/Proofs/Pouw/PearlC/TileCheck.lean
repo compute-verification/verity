@@ -34,7 +34,7 @@ theorem TileCheck.mem_of_computes (TC : TileCheck Q R S) (P : Protocol Q R S) (T
     (D : UnitLayout → Prop) (h : TC.Computes P TR D) (U : Workload) (hU : U.InDomain P D) (H : Q → R) (s : S)
     (τ : CommitLog) (g : ℕ) (hg : g < (TR.tiling U.layout).NT) (c : Commit)
     (hc : τ ((TR.tiling U.layout).unit g) = some c)
-    (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).CommitLog) (hX : TC.Accepts P TR H s U g c X) :
+    (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) (hX : TC.Accepts P TR H s U g c X) :
     g ∈ goodTiles P TR U H s τ ∪ blankTiles TR U τ ∨
       TC.Collides U ((TR.tiling U.layout).unit g) ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g) c X := by
   rcases h U hU H s g hg c X hX with h | h

@@ -10,7 +10,7 @@
 
 [keep]
 patterns = ['(?m)^import .*$', '\b(?:Definitions|Proofs|Properties|Models)\.[\w.]+', '\b(?:Verity\.)?Accel\.Machine\b',
-            '(?:\bC|toCircuit|Circuit)\.Transcript\b', '(?m)^[ \t]+Prog :=', '\b(?:CM[₀-₉]?|M|m|Pous|Mc|toyMc|tm)\.Prog\b',
+            '(?:\bC|toCircuit|Circuit|\))\.Transcript\b', '(?m)^[ \t]+Prog :=', '\b(?:CM[₀-₉]?|M|m|Pous|Mc|toyMc|tm)\.Prog\b',
             '\b(?:Served|Discharge|Slots)\.Layout\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
 strings = []
 

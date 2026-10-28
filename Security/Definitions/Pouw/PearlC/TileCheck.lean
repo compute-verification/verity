@@ -58,15 +58,15 @@ structure TileCheck (Q R S : Type) where
   out : (sh : Shape) → Finset ℕ → Finset ℕ → Finset (Fin (C sh).N)
   pub : (sh : Shape) → Finset (Fin (C sh).N)
   reg : (sh : Shape) → Finset (Fin (C sh).N)
-  anchorsOf : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes → (C (U.layout.shape u)).CommitLog
+  anchorsOf : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes → (C (U.layout.shape u)).Transcript
   anchorsOK : (Q → R) → S → Workload → ℕ → Codes → Prop
-  rowsOf : (U : Workload) → (u : ℕ) → Commit → (C (U.layout.shape u)).CommitLog
-  Collides : (U : Workload) → (u : ℕ) → Finset ℕ → Finset ℕ → Commit → (C (U.layout.shape u)).CommitLog → Prop
+  rowsOf : (U : Workload) → (u : ℕ) → Commit → (C (U.layout.shape u)).Transcript
+  Collides : (U : Workload) → (u : ℕ) → Finset ℕ → Finset ℕ → Commit → (C (U.layout.shape u)).Transcript → Prop
 
 /-- The registered values of unit `u` in `τ`: its commitment's, and zero for a blank unit, whose tiles are never
 checked. -/
 def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : CommitLog) (u : ℕ) :
-    (TC.C (U.layout.shape u)).CommitLog :=
+    (TC.C (U.layout.shape u)).Transcript :=
   match τ u with
   | some c => TC.rowsOf U u c
   | none => fun _ => 0
@@ -77,7 +77,7 @@ wires is correct in `X`, `X` holds the anchors on the public wires, the anchors 
 (`P.weightOK`). The check decides the anchors' check from the public seeds and the last from the weight rows it opens,
 which are `U`'s, never from `X`. -/
 def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (H : Q → R) (s : S)
-    (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).CommitLog) : Prop :=
+    (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) : Prop :=
   (∀ v ∈ (TC.part _).cone (TC.out _ ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g)),
       (TC.part _).Correct X v) ∧
     (∀ w ∈ TC.pub _, X w = TC.anchorsOf H s U ((TR.tiling U.layout).unit g) c.act w) ∧
