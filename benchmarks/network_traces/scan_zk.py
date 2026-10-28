@@ -39,15 +39,15 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   NR·nb leaves for the group's nb = G·T / EVERY boundaries, leaf j·nb + b slot j's entry at boundary b (the outputs of
   the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them once it carries the read bit),
   the block round's o0 rows; and ``view``, G·T leaves, leaf t S_t's egress view.
-* **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
-  ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
+* **The block round** (`BLOCK`): the slot entries' stand-in (`SelectEntry{KO, IDB}`, whose Definition id,
+  ``SelectEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
   NOTs, a committed row the verifier never opens; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a slot entry of the
   group, unit k's ``x`` slot entry k, its free input, and its o0 a registered read of ``prog`` leaf k, standing in for
-  the anchored Programs' `SlotEntry_v1` units, whose outputs the slot entries are. Its entries, read bit included, are
+  the anchored Programs' `SelectEntry_v1` units, whose outputs the slot entries are. Its entries, read bit included, are
   the prover's: the stand-in copies its input. The ``prog`` tree is committed under the binding of the block's o0
   frame domain (`block_binding`, over the block's statement's input set `block_set`, bound to the session and the
   group's ingress heads), so its root is the o0 frame root C-Flock commits under the same salts, and `stage` refuses a
-  block whose o0 frame root and domain aren't the tree's: the registration's ``SlotEntry_v1{…}/c0/o0`` (its ports
+  block whose o0 frame root and domain aren't the tree's: the registration's ``SelectEntry_v1{…}/c0/o0`` (its ports
   named as one-stage names a template's first chunk's, `entries_port`) and the honest round's ``scan/prog`` are one
   root and domain, the tie `NetworkCheck.Period`'s rows form checks (`progTied`, `wired`). Its registration also names
   the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the `SCAN_STATE` it reads, the tie the
@@ -220,7 +220,7 @@ SESSION = bytes(range(32))
 TEMPLATES = ("first", "ingress", "egress")
 #: the unread round's: one ingress unit
 UNREAD = ("ingress",)
-#: the block round's: the slot entries' stand-in (`SlotEntry`), one unit a slot entry, whose o0 rows are the scan's
+#: the block round's: the slot entries' stand-in (`SelectEntry`), one unit a slot entry, whose o0 rows are the scan's
 #: slot entries
 BLOCK = ("block",)
 #: the templates whose o0 is a committed row the verifier never opens (the slot entries'), every other's its public word
@@ -810,9 +810,9 @@ def _entry_body(B, S, x):
     return Coll(_entry_signature(S)[1], TR._refs([y.refs[k] for k in range(IS.entry_bits(S))]))
 
 
-SlotEntry = CompositeDefinition(
-    "SlotEntry", 1, ("KO", "IDB"), _entry_signature, _entry_body, conformance="exact-model-tested", register=False,
-    doc="SlotEntry{KO, IDB}: the stand-in of a slot's Program's entry (io_shell's SlotEntry_v1, as the period check "
+SelectEntry = CompositeDefinition(
+    "SelectEntry", 1, ("KO", "IDB"), _entry_signature, _entry_body, conformance="exact-model-tested", register=False,
+    doc="SelectEntry{KO, IDB}: the stand-in of a slot's Program's entry (io_shell's SelectEntry_v1, as the period check "
         "names it): o0 its input x, an entry row of `ingress_scan.entry_bits`, through two NOTs, so its o0 rows are "
         "any entries the prover gives it, read bit included (scan_zk.py)")
 
@@ -822,7 +822,7 @@ def _defs(cls: IS.Class) -> dict[str, object]:
     sh = cls.egress
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D),
-            "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB)}
+            "block": bind(SelectEntry, KO=cls.KO, IDB=cls.IDB)}
 
 
 def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Program:

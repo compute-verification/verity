@@ -217,10 +217,10 @@ The terms, in the generator reading of the scan's statement (each unit's registe
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
 outside due and occupied slots, so a link-window's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
-compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
+compute audit's `SelectEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
 prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the link-window by
-name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`, `io_shell.SlotEntry_v1`
-at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1` stand-in, whose entries,
+name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`, `io_shell.SelectEntry_v1`
+at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SelectEntry_v1` stand-in, whose entries,
 read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the requests from its
 own registered `SCAN_STATE`, and the check refuses, last, by name, a link-window whose scan's state isn't a wired
 audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
@@ -286,7 +286,7 @@ K also rests on these conditions:
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.3%; as registered today they are 8.7%
   and 4.53× either way.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
-  audit's (the `SlotEntry_v1` stand-in's) are the link-window's free inputs above.
+  audit's (the `SelectEntry_v1` stand-in's) are the link-window's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

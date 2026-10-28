@@ -130,7 +130,7 @@ def test_the_rows_form_refuses_what_it_must(server):
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit undrawn, and a scan whose
+    no `SelectEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit undrawn, and a scan whose
     state is not its wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
@@ -200,10 +200,10 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
 
 
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
-    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, so the
+    """The scan reads each slot's entry, read bit included, from the `SelectEntry_v1` unit of that slot's Program, so the
     rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's wiring can fail
     (`PC.UNWIRES`): the audit's entry at an output port (another unit's `o<j>`, or the slot entries' chunk's `o1`), at
-    the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, that template one member off a
+    the entries port of a `SelectEntry_v1` template the audit's Program doesn't have, that template one member off a
     slot each, or that template under the slot entry's name and descriptor id with another body; and a mirror that
     skips the wiring, which the state tie reads too, accepts what Lean refuses at the wiring."""
     unwire = PC.UNWIRES
@@ -222,7 +222,7 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
 
 def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkeypatch):
     """`wired` pins the slot entry's Definition by its closure digest (`PC.SLOT_ENTRY_PINS`, Lean's `slotEntryPins`):
-    the cases' template (`PC.slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row) has the first, and
+    the cases' template (`PC.slot_entry`, `io_shell.SelectEntry_v1` at its smallest circuit-check row) has the first, and
     a template under its name and descriptor id (`PC.SLOT_KEY`) with another body (`PC.RENAMED_SLOT_ENTRY`) has none,
     so Lean and the mirror refuse its link-window at the wiring, Lean by the pin; and a mirror that pins that digest
     too accepts it, the pin being all that refuses it."""
@@ -236,7 +236,7 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
         case = build("rows-prog-unwired", n, small=n % 2 == 0)
         assert PC.UNWIRED in reference(case)["reason"], (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
-        assert verdict == REJECT and "whose template is a pinned SlotEntry_v1" in json.loads(out)["reason"], (n, out)
+        assert verdict == REJECT and "whose template is a pinned SelectEntry_v1" in json.loads(out)["reason"], (n, out)
         with monkeypatch.context() as mp:
             mp.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, other))
             assert reference(case)["verdict"] == ACCEPT, (n, reference(case))
@@ -300,12 +300,12 @@ def test_an_output_port_is_a_units_past_o0():
 
 
 def test_an_entries_port_is_a_slot_entry_templates_first_chunks_o0():
-    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SlotEntry_v1` template's `<id>/c0/o0`."""
-    assert PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") == "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
-    assert all(map(PC.entries_port_name, [PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}"),
-                                          "SlotEntry_v1{}/c0/o0"]))
-    assert not any(map(PC.entries_port_name, ["SlotEntry_v2{KO=2}/c0/o0", "SlotEntry_v1{KO=2}/c1/o0",
-                                              "SlotEntry_v1{KO=2}/c0/o1", "SlotEntry_v1/c0/o0", "", 1, None]))
+    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SelectEntry_v1` template's `<id>/c0/o0`."""
+    assert PC.entries_port("SelectEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") == "SelectEntry_v1{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
+    assert all(map(PC.entries_port_name, [PC.entries_port("SelectEntry_v1{IDB=8,KO=2,NP=4,STOP=1}"),
+                                          "SelectEntry_v1{}/c0/o0"]))
+    assert not any(map(PC.entries_port_name, ["SelectEntry_v2{KO=2}/c0/o0", "SelectEntry_v1{KO=2}/c1/o0",
+                                              "SelectEntry_v1{KO=2}/c0/o1", "SelectEntry_v1/c0/o0", "", 1, None]))
 
 
 def test_the_scan_is_read_off_its_program(server):

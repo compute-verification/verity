@@ -469,15 +469,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
-    ``SlotEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's, and
+    ``SelectEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
     and two row registrations, each named by the registration's roots. The period's mirror reads the block's
-    `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
+    `SelectEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
-    whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
+    whose entries are at another root by name, and one whose root is at its o1, no `SelectEntry_v1` template's entries, at
     the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
     that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in

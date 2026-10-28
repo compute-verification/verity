@@ -251,16 +251,16 @@ theorem rowsProgWired : RowsProgWired := by
     · assumption
     · cases h0
 
-/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
+/-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Registration :=
   { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+      [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
 
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
 is tied to it, so its free inputs are in the link-window's term. -/
@@ -281,9 +281,9 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   rw [tiedWindow_unwired] at hw
   cases hw
 
-/-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
+/-- `slotAudit` with its template's body another than every pinned one: a template under `SelectEntry_v1`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
-def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
+def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, "")]⟩
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
@@ -292,7 +292,7 @@ theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tie
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property at a renamed body** (its nontrivial
 lemma at the pin): such a check accepts a rows-form period whose scan's `prog` is at the root and domain of an audit's
-`SlotEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
+`SelectEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
@@ -339,7 +339,7 @@ def stateReg (root : String) : Registration :=
       ("registered", Lean.Json.arr #[Lean.Json.mkObj
         [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
       ("roots", Lean.Json.arr #[Lean.Json.mkObj
-        [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+        [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
 
 /-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, and whose state, the tree
 its units read and register their states in, is at the root `s` and the domain `e`. -/

@@ -636,7 +636,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     the scan's statement: log2 #Ss = 0, the fail cell's position log2(egress_cells + 1) a connection, the
     link-window's free inputs, which the scan's slot entries carry (NR·T / EVERY entries of NE bits a link-window as
     registered, `scan_zk.entries_of`; an entry's 33 + KO·IDB bits a request if ``prog`` were an input only at its
-    anchored entries, `ingress_scan.entry_layout`; tied, the entries are a compute audit's `SlotEntry_v1` outputs, so
+    anchored entries, `ingress_scan.entry_layout`; tied, the entries are a compute audit's `SelectEntry_v1` outputs, so
     their bits are the tied audit's free inputs, which the rows form's K charges to the link-window,
     `NetworkCheck.Period.tiedAudits`), no faulty term with every unit drawn, b = NS + NV, and Dj = 1. The period's
     link-windows and requests scale the run's own."""

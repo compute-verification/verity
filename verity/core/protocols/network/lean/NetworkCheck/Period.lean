@@ -123,7 +123,7 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
   for another window's rows is refused); its Programs' row is a compute audit's output (`progTied`): its `scan/prog`
-  entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1` template's
+  entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SelectEntry_v1` template's
   entries port's (`<descriptor id>/c0/o0`, `entriesPortName`) in the `roots` of an audit's registration, so a scan
   whose `prog` the prover committed alone is refused; and the answer is one-stage's for that
   registration's digest, accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and its
@@ -136,7 +136,7 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   for it;
 * in the rows form, link-window `w`'s scan's Programs' row is a compute audit's slot entries (`wired`): its `scan/prog`
   entry names the root and domain of the entries port `<descriptor id>/c0/o0` in the `roots` of an audit's
-  registration, where the descriptor id is a template node's of that audit's own Program calling `SlotEntry_v1`, a
+  registration, where the descriptor id is a template node's of that audit's own Program calling `SelectEntry_v1`, a
   Definition the check pins by closure digest (`slotEntryPins`: a template under that name with another body is
   refused), with one member a slot of the window (T / `every` · `lanes`), so each due, occupied slot's entry, read bit
   included, is
@@ -236,7 +236,7 @@ def cellHeader : Nat := 9
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
-templates (`entries`: each root template node calling a `SlotEntry_v1` Definition, by its descriptor id, members and
+templates (`entries`: each root template node calling a `SelectEntry_v1` Definition, by its descriptor id, members and
 closure digest, `slotEntryDigest`). -/
 structure Audit where
   free : Nat
@@ -482,9 +482,10 @@ def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
   | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
     bucket's"
 
-/-- The slot entry's Definition (`io_shell.SlotEntry_v1`): one unit a due, occupied slot's Program, committing the
-entry the scan's ingress reads at that slot (its `o0`). -/
-def slotEntryId : String := "SlotEntry_v1"
+/-- The slot entry's Definition (`io_shell.SelectEntry_v1`: the last position's select, its collector, then
+`io_shell.SlotEntry_v1`): one unit a due, occupied slot's Program, committing the entry the scan's ingress reads at
+that slot (its `o0`). -/
+def slotEntryId : String := "SelectEntry_v1"
 
 /-- A Definition's descriptor entry `e` with the descriptor's interning resolved (`callees`, `types`): each node's
 callee id (`fn`), output type (`out`) and argument types inline, as `annotations.definition_digest` hashes it, so one
@@ -541,22 +542,22 @@ def slotEntryDigest (j : Json) (key : String) : V String := do
   unless todo.isEmpty do throw s!"program: {key}'s callees outrun its descriptor's nodes"
   pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (Json.mkObj seen.toList)).toUTF8))
 
-/-- The slot entry's Definitions the check takes, by closure digest (`slotEntryDigest`): `io_shell.SlotEntry_v1` at
-its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`
-(a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v1`'s name with
-another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
-is pinned here. -/
+/-- The slot entry's Definitions the check takes, by closure digest (`slotEntryDigest`): `io_shell.SelectEntry_v1` at
+its circuit-check rows, `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}` and
+`SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024,STOP=[128001]}` (a Llama-3 tokenizer's vocabulary,
+17-bit ids and end-of-text id), in that order. A template under `SelectEntry_v1`'s name with another body has neither
+digest, so its entries are no slot entries (`wired`); a new binding or body of `SelectEntry_v1` is pinned here. -/
 def slotEntryPins : List String :=
-  ["0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb\
-    4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
-   "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753\
-    4cb522ce4f794bc5fcce71a7f09ec5a2170e0b2406339cc4d9268ea8487e3361"]
+  ["519d7d2265e827a7e9418c9ddfd28aed078a082bf62efd7d69236539c569a4f3\
+    268334a995dae35d0b7b7ca0ded132bfda4100f977d04f95bdf4cd94611a949d",
+   "e33bc598983b7ce7c8a1aaf0a7f730809167381a3be507c155f27e9f767ba409\
+    8a7abddd96efe04998ce65f395043c3556ccb78ad16e1b9a6aa8ea7dee196d3d"]
 
 #guard slotEntryPins.all (·.length == 128)
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
-template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1`, each
+template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SelectEntry_v1`, each
 with its closure digest (`slotEntryDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   exactly a ["free", "program", "steps"] ctx
@@ -580,7 +581,7 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
 and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `j · nb + ⌊(t0 + m) / every⌋` of input node
 `k`, `E` leaves a row, leaf by leaf (`Flock.Program.Arg.memberRef`). That row is lane `j`'s slot of the boundary whose
-Programs bucket `t0 + m` reads (`io_shell.SlotEntry_v1`'s row k is slot k, lane-major). -/
+Programs bucket `t0 + m` reads (`io_shell.SelectEntry_v1`'s row k is slot k, lane-major). -/
 def readsEntries (x : Flock.Program.Node) (o t0 lanes nb every E k : Nat) : Bool :=
   (List.range lanes).all fun j => match x.args[o + j]? with
     | some a => (List.range x.n).all fun m => (List.range E).all fun l =>
@@ -618,7 +619,7 @@ is an ingress row's input node, so no egress gate depends on an ingress gate; an
 The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
 the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
 `j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
-`SlotEntry_v1` entries port. -/
+`SelectEntry_v1` entries port. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -910,11 +911,11 @@ def outputPort (port : String) : Bool :=
     | 'o' :: d :: ds => (d :: ds).all Char.isDigit && d != '0'
     | _ => false
 
-/-- A `SlotEntry_v1` template's entry rows, the public word of its first chunk's members (one-stage names a template's
+/-- A `SelectEntry_v1` template's entry rows, the public word of its first chunk's members (one-stage names a template's
 members `<descriptor id>/c<j>`): `<descriptor id>/c0/o0`. -/
 def entriesPort (key : String) : String := key ++ "/c0/o0"
 
-/-- Whether a port is some `SlotEntry_v1` template's entries port (`entriesPort`), read over its characters: its `o0`
+/-- Whether a port is some `SelectEntry_v1` template's entries port (`entriesPort`), read over its characters: its `o0`
 is the entry the slot's Program computes, so it ties its audit as an output port does. -/
 def entriesPortName (port : String) : Bool :=
   let cs := port.toList
@@ -940,9 +941,9 @@ def tiedAudits (audits : Array Registration) (reg : Registration) : Array Nat :=
 def progTied (audits : Array Registration) (reg : Registration) : Bool := !(tiedAudits audits reg).isEmpty
 
 /-- The scan's Programs' row is a compute audit's slot entries: the root and domain of the scan's registration's
-`scan/prog` entry (`progName`) are those of an audit's entries port (`entriesPort`) of a `SlotEntry_v1` template of
+`scan/prog` entry (`progName`) are those of an audit's entries port (`entriesPort`) of a `SelectEntry_v1` template of
 that audit's own Program (`Audit.entries`) that is a pinned Definition (its closure digest one of `slotEntryPins`, so
-its whole body is `io_shell.SlotEntry_v1`'s), with one member a slot of the window (`Schedule.windowPrograms`), so
+its whole body is `io_shell.SelectEntry_v1`'s), with one member a slot of the window (`Schedule.windowPrograms`), so
 bucket `t`'s port `prog<j>`, which reads slot `j · (T / every) + ⌊t / every⌋`'s entry (`scanOf`), reads the entry that
 slot's Program computed, read bit included. One-stage binds the rest: a reused value is its port's leaves, one chunk's,
 and an audit's roots are the ports its Program's layout derives. -/
@@ -1270,7 +1271,7 @@ def protocol : Core.Protocol where
 #guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[({ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }, 0)] #[] 1 1).K ==
   0
 -- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit drawn, and its tied audit (the
--- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
+-- slot entries' `SelectEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
 -- entries, 1,136 bits each: K is the tied audit's 9,088
 #guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512⟩
   #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136)] #[] 1 1).K == 9088
@@ -1281,9 +1282,9 @@ def protocol : Core.Protocol where
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
   outputPort "u/o1x" || outputPort "u/o٣" || outputPort "u/prog" || outputPort "")
--- a SlotEntry_v1 template's entries port, its first chunk's o0; never another Definition's, chunk's or port's
-#guard entriesPortName (entriesPort "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") && entriesPortName "SlotEntry_v1{}/c0/o0"
-#guard !(entriesPortName "SlotEntry_v2{KO=2}/c0/o0" || entriesPortName "SlotEntry_v1{KO=2}/c1/o0" ||
-  entriesPortName "SlotEntry_v1{KO=2}/c0/o1" || entriesPortName "SlotEntry_v1/c0/o0" || entriesPortName "")
+-- a SelectEntry_v1 template's entries port, its first chunk's o0; never another Definition's, chunk's or port's
+#guard entriesPortName (entriesPort "SelectEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") && entriesPortName "SelectEntry_v1{}/c0/o0"
+#guard !(entriesPortName "SelectEntry_v2{KO=2}/c0/o0" || entriesPortName "SelectEntry_v1{KO=2}/c1/o0" ||
+  entriesPortName "SelectEntry_v1{KO=2}/c0/o1" || entriesPortName "SelectEntry_v1/c0/o0" || entriesPortName "")
 
 end NetworkCheck.Period
