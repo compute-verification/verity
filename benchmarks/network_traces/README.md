@@ -110,7 +110,10 @@ link-window (`scan_period.rows_case`). The answer is accept only when the chain 
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing.
+late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
+profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
+on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+whose rows count each Commit window's requests, stays beside the fetch.
 
 ## The chain's run of record
 
