@@ -5,7 +5,7 @@
 # frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
 # idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
 # --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
-# a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
+# a registered cap (--cap: CAP if set, else `advice_windows.CAP_BITS`) and the committer's weights registration (`prove_path.py weights-registration`: each weight
 # committed under salts drawn from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
 # check against the checkpoint's manifest; each window's registration records its roots, one a weight parameter, so the window
 # circuit's weight reads count registered at the pins the verifier holds before the first window's coins, `window-circuit
@@ -35,7 +35,7 @@
 # Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (row dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
-PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
+PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4}
 for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
   [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity example vllm serve\` (examples/vllm/run.sh)"; exit 2; }
 done
@@ -59,7 +59,7 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
 cd "$TREE/integrations/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" ${CAP:+--cap-bits "$CAP"}) \
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 CKPT=$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV
@@ -75,7 +75,7 @@ if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed 
   echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
   WA=$(weights_args "$READVICE" "$OUT/weights_registration.json") || no_weights "$READVICE"
   # shellcheck disable=SC2086
-  vv advice "$READVICE" --cap "$CAP" $CA $WA 2>&1 | tee "$OUT/advice.log"
+  vv advice "$READVICE" ${CAP:+--cap "$CAP"} $CA $WA 2>&1 | tee "$OUT/advice.log"
   "$PY" tools/advice_compile.py "$READVICE" --window "$K" > "$OUT/compile_w$K.log" 2>&1
   echo "w$K compile rc=$?" | tee "$OUT/steps.txt"
   cp "$READVICE/advice/w$K/registration.json" "$READVICE/windows/w$K/manifest.json" "$OUT/"
@@ -130,7 +130,7 @@ advice_pass() {
   for k in $(closed); do
     [ -f "$D/advice/.w$k/windows.json" ] && continue
     # shellcheck disable=SC2086
-    vv advice "$D" --window "$k" --cap "$CAP" $CA $WA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
+    vv advice "$D" --window "$k" ${CAP:+--cap "$CAP"} $CA $WA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
     [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace, or pending (rc 3) on a record: next pass
     [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
     "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
