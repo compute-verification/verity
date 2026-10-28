@@ -3,9 +3,10 @@ frame-v3-sha512 tree, computed by `protocol_options/pouw_cuda/registered_rows.cu
 the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given, under the domain id the host
 computes (`registered.domain`).
 
-`device_commit` copies the rows to the device in chunks of at most `CHUNK_BYTES`, hashes each row (its ``sha512/row/v2``
-digest, salt, hm96-sha512 string, tree leaf and frame leaf) and then the pads and levels, on a stream of its own, and
-returns the strings and levels as `Registered` holds them (64-byte nodes, 128-byte strings, as bytes). `host_commit` runs
+`device_commit` copies the rows to the device in chunks of at most `CHUNK_BYTES` (rows already there, as a call's z/y
+records are, it reads in place), hashes each row (its ``sha512/row/v2`` digest, salt, hm96-sha512 string, tree leaf and
+frame leaf) and then the pads and levels, on a stream of its own, and returns the strings and levels as `Registered`
+holds them (64-byte nodes, 128-byte strings, as bytes). `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
 (`row_tables_device._build`, keyed by sources, flags and compiler) and its per-device state (`row_tables_device.Device`);
@@ -187,18 +188,26 @@ def available() -> bool:
     return True
 
 
-def device_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
+def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
                   domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 hashed on the current CUDA device, on its own
-    stream, returned once done."""
+    stream, returned once done. ``words`` on the host are copied there; a u16 tensor on that device is read in place,
+    after everything its current stream has enqueued (the stream that wrote it), and is held until the hash is done."""
     import torch
 
-    rows = _rows(words)
-    n, rb = rows.shape
-    t = table(n, rb, key, nonce, row_salts is not None, domain_id)
     d = _device(torch)
     dev, st = d.hm.device, d.stream
+    held = isinstance(words, torch.Tensor) and words.is_cuda
+    if held and (words.device != dev or words.dtype != torch.uint16 or words.dim() != 2):
+        raise ValueError(f"words {tuple(words.shape)} of {words.dtype} on {words.device}: not (n, W) u16 on {dev}")
+    rows = words.contiguous().view(torch.uint8) if held else _rows(words)
+    n, rb = (int(v) for v in rows.shape)
+    t = table(n, rb, key, nonce, row_salts is not None, domain_id)
     per = max(1, CHUNK_BYTES // rb)
+    if held:
+        written = torch.cuda.Event()
+        written.record(torch.cuda.current_stream(dev))
+        st.wait_event(written)
     with torch.cuda.stream(st):
         salts = None if row_salts is None else torch.from_numpy(_salts(row_salts, n)).to(dev)
         t.salts = 0 if salts is None else salts.data_ptr()
@@ -206,7 +215,7 @@ def device_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | 
         levels = torch.empty(8 * (2 * t.W - 1), dtype=torch.int64, device=dev)
         for lo in range(0, n, per):
             hi = min(n, lo + per)
-            chunk = torch.from_numpy(rows[lo:hi]).to(dev)
+            chunk = rows[lo:hi] if held else torch.from_numpy(rows[lo:hi]).to(dev)
             t.rows = chunk.data_ptr()
             rc = d.lib.rr_leaves(st.cuda_stream, ctypes.byref(t), lo, hi - lo, d.hm.data_ptr(), d.ms.data_ptr(),
                                  bcs.data_ptr(), levels.data_ptr())
