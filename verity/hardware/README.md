@@ -6,7 +6,8 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 
 - `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
   (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
-- `source` names a data sheet, a document, a run id or an `art:` id.
+- `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
+  `outputs.run_record`), and a node by its kind, never its host name.
 
 | SKU | kind | file | Lean table |
 |---|---|---|---|

@@ -12,17 +12,14 @@ arch = "sm_90a"
 board = "692-2G520-0280-001"
 vbios = "96.00.A5.00.03"
 lean = "Security/Definitions/Core/Accel/H200.lean"
-nodes = "vy-dc-h200 and vy-dc-h200-2 (r20261027-032540-2c81, r20261027-032553-f3b2: identical apart from the current clocks)"
+nodes = "two H200 nodes (art:72daa20de42c, art:28ff838a63c9: identical apart from the current clocks)"
 
 [sm]
 count = { value = 132, unit = "SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3 (H100 SXM5: 132 SMs; the H200 is the same GH100 with HBM3e)" }
 
 [clock]
-sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "r20261027-032540-2c81, r20261027-032553-f3b2 (nvidia-smi -q: max, application, default application and max customer boost clocks 1980 MHz); r20261027-035033-dcba (SM and memory clock offset ranges [0, 0], supported clocks top at 1980 and 3201); H100 whitepaper V1.04 Table 3, 'GPU Boost Clock ... 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'" }
-memory = { value = 3201, unit = "MHz", mark = "ceiling", source = "r20261027-032540-2c81, r20261027-032553-f3b2 (max and application memory clock 3201 MHz); r20261027-035033-dcba (offset range [0, 0])" }
-
-[power]
-limit = { value = 700, unit = "W", mark = "ceiling", source = "r20261027-032540-2c81, r20261027-032553-f3b2 (power limit 700 W: default 700, min 200, max 700; the SXM H200's, the NVL card is 600 W)" }
+sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: max, application, default application and max customer boost clocks 1980 MHz); art:d10829e5b08e (SM and memory clock offset ranges [0, 0], supported clocks top at 1980 and 3201); H100 whitepaper V1.04 Table 3, 'GPU Boost Clock ... 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'" }
+memory = { value = 3201, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (max and application memory clock 3201 MHz); art:d10829e5b08e (offset range [0, 0])" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
 [store]
@@ -35,7 +32,7 @@ chip = { value = 0, unit = "B", mark = "placeholder", source = "not enumerated: 
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
-tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at 1980 MHz; measured 4095.6 (wgmma N >= 64, r20261017-060118-0230, r20261017-060725-d7ca)" }
+tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at 1980 MHz; measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd)" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "H100 whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler dispatching one warp instruction a clock" }
 alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer add, compare, min, max, logic and shift 64" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer multiply and multiply-add 64" }
@@ -43,12 +40,12 @@ shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C+
 f64 = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 64-bit floating-point add, multiply and multiply-add 64" }
 sfu = { value = 16, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: reciprocal, square root, logarithm, exponential, sine and cosine 16" }
 smem = { value = 32, unit = "bank word/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9, 'Shared Memory', CC 9.0: 32 banks of one 32-bit word a clock" }
-l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the lane loads' issue bound, neither measured nor a ceiling; open until a measured ceiling with its argument replaces it (scattered patterns measured 0.40-1.63 words a SM-clock, r20261026-231053-bd32)" }
+l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the lane loads' issue bound, neither measured nor a ceiling; open until a measured ceiling with its argument replaces it (scattered patterns measured 0.40-1.63 words a SM-clock, art:a71b3e384fd3)" }
 
 [memory]
 bus = { value = 6144, unit = "bit", mark = "ceiling", source = "six HBM3e stacks of 1024 bits; no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3201 MHz nvidia-smi reports" }
-bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, r20261018-085249-443d)" }
+bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, art:df775b659979)" }
 read = { value = 0, unit = "B/s", mark = "placeholder", source = "not measured: no encoded store's read has run on the H200 nodes (the 4.26e12 under memory.bandwidth is a bandwidth probe's, not a remote session's read); open until measured" }
 
 # The card's SHA-512 compressions a second.
@@ -77,5 +74,5 @@ f64 = { value = 32, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 w
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]
-exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma and wgmma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.HOPPER_SM90_S8_K32, r20261026-010336-7755, 0 mismatches)" }
+exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma and wgmma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.HOPPER_SM90_S8_K32, art:74353cac67fb, 0 mismatches)" }
 instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
