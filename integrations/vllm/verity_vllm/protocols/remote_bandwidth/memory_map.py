@@ -1,12 +1,12 @@
 """memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's record of the blocks each serving step
 wrote and freed beside its registered store, as `Lines` builds it: the integration's one builder, which the Commit's map
-(`verity_vllm.commit.memory_map.record`, from the circuit) and a `Store`'s (`MemoryMap`, from its KV events) both drive.
+(`verity_vllm.commit.memory_map.record`, from the circuit) and a `NodeMemory`'s (`MemoryMap`, from its KV events) both drive.
 
 ~~~text
-slot      a block's store index, a `Store`'s in the registry's numbering: region ``first`` plus its region block, a KV
+slot      a block's store index, a `NodeMemory`'s in the registry's numbering: region ``first`` plus its region block, a KV
           block of page p, column c in layer l at ``first_l + ids[p, c]``; every region's blocks are 4,096 bytes
 j         an appended block's index: N, the store's blocks when the map began, plus every block appended before it
-d_j       `codec.digest` of the block's payload (a `Store`'s: its region codec's decoding of its bytes, `Store.payload`)
+d_j       `codec.digest` of the block's payload (a `NodeMemory`'s: its region codec's decoding of its bytes, `NodeMemory.payload`)
 appended  a block `kv_append` completes, once its step's forward and frees are done (`complete`) if a free has not
           taken it back by then, a step's as one append by slot (``on_append``), which the session sends and the device
           encodes in place once its coin arrives (`encoded`); and a block re-keyed once its j is as old as the lifetime cap
@@ -15,19 +15,19 @@ written   an appended block, in the line open when its append lands (`Lines.land
           until then.  An append that would write a slot its line writes already waits a line, with every append after it
 freed     a slot's block, registered or written, in the line its caller frees it (`Lines.free`), and a written block in
           the line of its last structural reader (`Append.lasts`), or the line after its write if that is no earlier: one
-          read last before its write is recorded (a `Store`'s whose page `kv_free` returns first: at the open line's
+          read last before its write is recorded (a `NodeMemory`'s whose page `kv_free` returns first: at the open line's
           step) is written all the same (its j is the session's) and freed a line later (memory-map/v1 withdraws it,
           which `Lines` doesn't emit yet).  A line frees no slot it writes (a write releases the slot's previous block).
-          A `Store` frees an appended block (j >= N) of a page `kv_free` returns, though its bytes stay as filler: the
+          A `NodeMemory` frees an appended block (j >= N) of a page `kv_free` returns, though its bytes stay as filler: the
           audit credits only the blocks the circuit keeps live, so the store releases it (dirty, out of every plan) until
           a write completes it again.  A page's untouched blocks, registered before the seed and unwritten since, stay
           resident (`kv_free` leaves them in the filler).  And a live block a step's write reaches, completed or not: its
-          bytes are no registered block until the block's write is recorded (`Store`'s dirty); `kv_alloc` emits nothing
+          bytes are no registered block until the block's write is recorded (`NodeMemory`'s dirty); `kv_alloc` emits nothing
 re-key    a live written block appended again with its d_j at a fresh j (`Lines.rekey`): its old j freed in the open
           line, its new one written where that append lands
 ~~~
 
-Steps.  `Store.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
+Steps.  `NodeMemory.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
 `kv_free` is recorded in the open line, the step whose forward ran last, which bounds the freed values' last structural
 reader (where memory-map/v1 frees a block) from above: vLLM frees a finished request's pages in
 `Scheduler.update_from_output` after step s's forward, and a preempted request's in the next `Scheduler.schedule`,
@@ -54,7 +54,7 @@ plans before the first pass of window w, the first window that could not hold it
 write waits for its encode.  No margin past L is needed, provided the window of the next pass is open when the line
 closes (the binder takes the verifier's messages before `kv_append`).
 
-The header names the remote audit's `Registration.digest`, the one the verifier gives `Store.begin_window` for the
+The header names the remote audit's `Registration.digest`, the one the verifier gives `NodeMemory.begin_window` for the
 session's first window; without it there is no map.  Its indices are one session's (`audit.Session`: a later session
 over the store starts again from N), so a store records one map.
 
@@ -73,6 +73,7 @@ import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec
 from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
+from verity.ml.circuits import requirement
 
 LIFETIME = audit.lifetime_windows(audit.WINDOW_NS, deferred=True)
 """The lifetime cap a map keeps without the session's, in windows: the audit's at its stated window under deferred
@@ -82,10 +83,10 @@ residency, 2."""
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None,
            lifetime: int = LIFETIME, on_line: Callable[[Change], None] | None = None,
            on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
-    """Start ``store``'s memory map (`Store.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.Store`)."""
+    """Start ``store``'s memory map (`NodeMemory.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.NodeMemory`)."""
     if registration is None:
         raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
-                         "the one the session's first window chains from (Store.begin_window)")
+                         "the one the session's first window chains from (NodeMemory.begin_window)")
     if store.memory_map is not None:
         raise RuntimeError("the store already records a memory map")
     lay = store.layout()
@@ -350,11 +351,28 @@ class MemoryMap:
         return self.path.read_text() if self.path is not None else self._head + "".join(self._kept)
 
 
+def audit_store(m: MemoryMap | None) -> requirement.Store:
+    """The audit's store (`requirement.Store`, Lean's `CircuitRequirement.Store`) as the map ``m`` records it, replayed
+    from its header: its N registered blocks, each step's written indices and the indices it released (freed, or
+    overwritten by a write to their slot; a withdrawn index is never written, so never freed), and no payloads (the
+    map holds their digests)."""
+    if m is None:
+        raise RuntimeError("the audit's store is read off the memory map: start one (record_memory_map)")
+    head, steps = parse(m.text().splitlines(keepends=True))
+    r, written, freed = Replay(head), {}, {}
+    for st in steps:
+        change = r.apply(st)
+        written[st.step] = frozenset(w.index for w in st.written)
+        freed[st.step] = frozenset(j for f, n in change.released for j in range(f, f + n)) - set(st.withdrawn)
+    return requirement.Store(head.blocks, written, freed, {})
+
+
 def agreement(backend: Any) -> dict[str, Any]:
     """The memory map against the session and the store (``backend``, a `remote.StoreBackend`), once the session is done:
-    replayed from its header, its live indices are the session's last plan's and its blocks the audit's appends, in order,
-    up to those whose writes wait for their encodes (deferred residency); then, its open line closed, every slot it holds
-    at an appended index holds bytes of that index's digest in the store."""
+    replayed from its header, its live indices (`audit_store`'s resident blocks after its last step) are the session's
+    last plan's and its blocks the audit's appends, in order, up to those whose writes wait for their encodes (deferred
+    residency); then, its open line closed, every slot it holds at an appended index holds bytes of that index's digest
+    in the store."""
     trace, store = backend.trace, backend.store
 
     def replay() -> tuple[Replay, dict[int, bytes]]:
@@ -365,18 +383,13 @@ def agreement(backend: Any) -> dict[str, Any]:
             digests.update((w.index, w.digest) for w in st.written)
         return r, digests
 
-    def resident(r: Replay) -> np.ndarray:
-        out = np.zeros(max(r.extent, len(trace.live)), bool)
-        out[:r.header.blocks] = True
-        out[[x for x in r.moved if x < r.header.blocks]] = False
-        out[[j for j in r.moved.values() if j is not None]] = True
-        return out
-
     r, digests = replay()
     n = r.header.blocks
+    held = np.zeros(max(r.extent, len(trace.live)), bool)
+    held[sorted(audit_store(store.memory_map).resident(r.last + 1))] = True
     mine = np.zeros(max(r.extent, len(trace.live)), bool)
     mine[:len(trace.live)] = trace.live
-    live = bool(np.array_equal(resident(r), mine))
+    live = bool(np.array_equal(held, mine))
     appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
     store.memory_map.flush()
     r, digests = replay()
