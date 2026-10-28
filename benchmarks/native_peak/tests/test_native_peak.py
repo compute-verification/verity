@@ -27,7 +27,7 @@ def test_declaration_is_registered_and_keys_what_is_measured():
     t = tools_registry.load("native_peak", REPO)
     assert t.name == "native_peak" and t.spec == "benchmarks.native_peak.tool:NATIVE_PEAK" and "hw.family" in t.key_conditions
     assert "native-peak/v1" in t.produces
-    argv = ["/workspace/venv312/bin/python", "benchmarks/native_peak/measure.py", "--dtype", "bf16", "--sizes", "16384,8192", "--out", "/run/dir", "--device", "cuda:0"]
+    argv = [sys.executable, "benchmarks/native_peak/measure.py", "--dtype", "bf16", "--sizes", "16384,8192", "--out", "/run/dir", "--device", "cuda:0"]
     params, key = t.resolve_params(argv, REPO)
     assert key == {"dtype": "bf16", "sizes": "8192,16384", "warmup": 3, "reps": 5, "sustain_s": 2.0}
     assert params["out"] == "/run/dir" and "out" not in key and "device" not in key
@@ -48,6 +48,8 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
+    assert all(m.spec_peak("NVIDIA H200", d)[0] == m.spec_peak("NVIDIA H100 80GB HBM3", d)[0] for d in m.DTYPES)
+    assert m.spec_peak("NVIDIA H200 NVL", "bf16") == (None, None)  # its peaks are lower than the H200 SXM's
     assert m.spec_peak("NVIDIA A10G", "bf16") == (None, None)
     # RTX 5090: the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
     assert m.spec_peak("NVIDIA GeForce RTX 5090", "nvfp4")[0] == 1676.0e12 and m.spec_peak("NVIDIA GeForce RTX 5090", "e4m3")[0] == 419.0e12
