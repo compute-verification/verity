@@ -1,10 +1,10 @@
-"""N2's link-window verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
+"""N2's sampling block verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
 Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
-and digest on plain, served, advised and warden link-windows, honest and tampered (the session refused, rejected, naming
-another Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or
-in a shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates
-swapped, missing or not certificates; the declared syncs off Σ_sync or missing; an advised window without an advice;
-a warden link under another digest).
+and digest on plain, served, advised and warden sampling blocks, honest and tampered (the session refused, rejected,
+naming another Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit
+twice, or in a shared-row layout; the salts and the output word forged; each certificate's fields edited, the
+certificates swapped, missing or not certificates; the declared syncs off Σ_sync or missing; an advised window without
+an advice; a warden link under another digest).
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
 Lean can't state (a key other than an `LmsKey`) rejects."""
 
@@ -34,7 +34,7 @@ def lean(monkeypatch):
 
 
 class Case:
-    """One link-window's draw, certificates, syncs and delivered proof, with the findings of the stand-in Lean run on
+    """One sampling block's draw, certificates, syncs and delivered proof, with the findings of the stand-in Lean run on
     the honest proof."""
 
     def __init__(self, lw, opening, draw, syncs, tmp, advice=None):
@@ -239,7 +239,7 @@ def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
 
 def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypatch):
     """The switch names whose verdict is the record's (`by`), the other's accept bit is `reference`'s; where the two
-    differ, or the Lean has no case (a key other than an `LmsKey`), the link-window is rejected with deadline 0."""
+    differ, or the Lean has no case (a key other than an `LmsKey`), the sampling block is rejected with deadline 0."""
     c = _plain(tmp_path)
     run = lambda lw=c.lw: lw.verify(c.draw, c.certificates, c.syncs, c.delivered,
                                     circuit_sha512=standin.circuit_sha512(c.delivered))

@@ -1,4 +1,4 @@
-"""The ingress tie in zero knowledge: each ingress link-window's T bucket rows of the warden's cells, each proved as
+"""The ingress tie in zero knowledge: each ingress sampling block's T bucket rows of the warden's cells, each proved as
 IoTieRequest (`tie_service.IngressTie`, its unit `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the link's
 own stream, proved by C-Flock `prove --zk` behind the Lean firewall with each unit's witness row read off the warden's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
@@ -17,7 +17,7 @@ and the stream's registrations built from the stream's outcomes of record alone 
   instead, `n2_advised_zk`'s: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
 * **A warden's run** (``--class warden --warden-run RUN``, `warden_link`): the gate's ``warden-rehearse``'s real ingress
-  in place of the served link, its first K link-windows (``--windows``, 1 by default), every connection in them
+  in place of the served link, its first K sampling blocks (``--windows``, 1 by default), every connection in them
   starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the warden's key and
   session) and each window's registration in ``cells.jsonl``, its head's signature verified under that key; the
   prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.warden_run` reads them.
@@ -92,7 +92,7 @@ PROFILE = AD.AdvisedProfile(2, TS.framing(B, 64), 0)
 MEMBERS = ("honest", "carried", "forged", "split")
 #: each member's windows' outcomes of record, which are its tie's
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
-#: what the verifier receives per link-window, by file (`member`)
+#: what the verifier receives per sampling block, by file (`member`)
 def _received(T: int) -> dict[str, str]:
     return {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
             f"pub-{T}.bin": "the statement's public file", "registered.json": "the verifier's own registered reads",
@@ -118,7 +118,7 @@ REAL = None
 
 def use(name: str, run: Path | None = None, windows: int = 1) -> None:
     """Set the driver's size class to `CLASSES` [name]: its B, warden parameters, windows, and members with their
-    verdicts; ``warden`` reads them off the warden run `run`'s first `windows` link-windows (`warden_link`), the
+    verdicts; ``warden`` reads them off the warden run `run`'s first `windows` sampling blocks (`warden_link`), the
     forged member's window 0 refused and the rest tied."""
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
@@ -174,7 +174,7 @@ def _found(run: Path, name: str) -> Path:
 
 
 def warden_link(run: Path, windows: int) -> SimpleNamespace:
-    """The warden run's ingress link-windows 0 … windows − 1 (the module docstring, "A warden's run"): each window's
+    """The warden run's ingress sampling blocks 0 … windows − 1 (the module docstring, "A warden's run"): each window's
     rows under the warden's salts, held to the head the verifier read off its signed registration, the windows'
     release and their requests' prompt lengths, refused by name where any of it doesn't hold."""
     import warden_serve as WS
@@ -253,7 +253,7 @@ def _released(params: W.WardenParams, cells: list) -> tuple[list[Q.Release], tup
 
 
 class Forge(NamedTuple):
-    """A prover's row in place of the warden's: link-window `window`'s bucket `bucket`, byte `at` changed."""
+    """A prover's row in place of the warden's: sampling block `window`'s bucket `bucket`, byte `at` changed."""
 
     window: int
     bucket: int
@@ -385,7 +385,7 @@ def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
 
 
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
-    """Every link-window's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
+    """Every sampling block's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
     outputs the lowering's, held to the IR reference): a shared-row file whose ``wit`` table is the window's bucket rows
     under the warden's salts and paths (`warden_rows.Cells.statement`, its header's registered ``wit``), the ``pub``
     and ``o0`` rows under fresh salts. Each staged ``o0`` row must open to its output word, and each ``pub`` row to the
@@ -429,8 +429,8 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
-    """The member's link-windows on its own stream, in order: the warden registers, the challenger selects, the prover
-    proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
+    """The member's sampling blocks on its own stream, in order: the warden registers, the challenger selects, the
+    prover proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
     (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
     stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,

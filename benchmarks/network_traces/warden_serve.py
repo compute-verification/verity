@@ -33,8 +33,8 @@ endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an ou
 `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
 the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
-`--window-per-group` sends them in groups of the n, group g's half a bucket into link-window g·G (`group_windows`), so
-that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
+`--window-per-group` sends them in groups of the n, group g's half a bucket into sampling block g·G (`group_windows`),
+so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
 loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
@@ -163,7 +163,7 @@ FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor 
 TEMPERATURES = (0.0, 0.7, 1.0)
 #: a prompt id's bits, the scan's IDB (`scan_zk.CLASS`): the scan reads each prompt id and output id in IDB bits
 PROMPT_ID_BITS = 17
-#: the public file of a `--window-per-group` rehearsal: each group's requests and link-windows (`groups`)
+#: the public file of a `--window-per-group` rehearsal: each group's requests and sampling blocks (`groups`)
 GROUPS = "groups.json"
 
 
@@ -449,7 +449,7 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
 class Publisher:
     """The warden's `publish`, inline: each record packed to its file (`requests.records`, `responses.records`,
     `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`) with the schedule's
-    parameters digest, one line of `certified.jsonl` each, or the link-window under `refused`; the wire's two also
+    parameters digest, one line of `certified.jsonl` each, or the sampling block under `refused`; the wire's two also
     committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
     thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
 

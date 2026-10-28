@@ -216,7 +216,7 @@ X. Take messages `Ms` whose runs keep every status complete up to `n`, and whose
 released, are a prefix of the prescribed content `c ℓ` (the Program's input, charged as reads). If a decoder inside X
 reads the wire and recovers every message in `Ms`, then under W2, W4 with allocation `r ℓ`, and J, there are at most
 `(∏_ℓ (r ℓ + 1))^n · D^n` of them: `n · Σ_ℓ log2(r ℓ + 1)` bits of timing, which is `T·log2(r_in + 1)` per ingress
-link-window, and `n·log2 D` of jitter, none under J's `D = 1`. -/
+sampling block, and `n·log2 D` of jitter, none under J's `D = 1`. -/
 def EncardIngressDecodableLe : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
@@ -254,10 +254,10 @@ def EncardIngressDecodableLeContents : Prop :=
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over the
+/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress sampling block.** `EncardIngressObsDecodableLe` over the
 first `m` whole windows of `T` buckets, the horizon `n = m·T`: for one content assignment `c`, at most
-`(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its `T·log2(r ℓ + 1)` bits,
-and each window `D^T` of jitter, 1 under J. -/
+`(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each sampling block contributes the factor `(r ℓ + 1)^T`, its `T·log2(r ℓ + 1)`
+bits, and each window `D^T` of jitter, 1 under J. -/
 def EncardIngressObsDecodableLePerWindow : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)
@@ -268,8 +268,8 @@ def EncardIngressObsDecodableLePerWindow : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg),
     Ms.encard ≤ ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞)
 
-/-- **Content plus timing, per link-window.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows of
-`T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
+/-- **Content plus timing, per sampling block.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows
+of `T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
 `T·Σ_ℓ log2(r ℓ + 1)` bits of timing and `T·log2 D` of jitter per window. -/
 def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
@@ -356,10 +356,11 @@ The challenger's coins reach the developer's site on a certified link, so they a
 the ingress grid, and their content is exempt.
 
 - **Timing.** The coin link is one more ingress link, at τ_in and an allocation r_coin. It adds a factor
-  `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per link-window, the K charge's
-  unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`). r_coin isn't calibrated. At r_coin = 1, one 4 KiB frame
-  per bucket, it is 600 bits per link-window (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is on top of
-  the `requests` link's 3,077.6 bits per link-window (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a day in all.
+  `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per sampling block, the K
+  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`). r_coin isn't calibrated. At r_coin = 1, one 4
+  KiB frame per bucket, it is 600 bits per sampling block (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is
+  on top of the `requests` link's 3,077.6 bits per sampling block (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a day
+  in all.
 - **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` charges `log2 #Cs` for the
   content, where `Cs` is one set of content assignments covering every message counted. Conditioned on the
   challenger's coins, which is how the model treats a randomized outside party, the coin link's content is one fixed

@@ -75,7 +75,7 @@ theorem undigestedParamsReject : UndigestedParamsReject := by
   · obtain ⟨why, h'⟩ := check_unfit (c := c) hfit
     exact h why h'
 
-/-- The check accepts exactly the units every link-window of which is accepted. -/
+/-- The check accepts exactly the units every sampling block of which is accepted. -/
 theorem accepts_iff (p : Params) (c : Commitment) (e : Evidence) : protocol.Accepts p c e ↔ LinkWindowsAccepted p c e := by
   show (∃ pub prof, check p c e = .accept pub prof) ↔ _
   constructor
@@ -115,7 +115,7 @@ theorem acceptsOneRecordEach : AcceptsOneRecordEach := by
     rw [hset.1.1]
     rfl
 
-/-- The check is undecided exactly when no link-window is refused and some awaits its record. -/
+/-- The check is undecided exactly when no sampling block is refused and some awaits its record. -/
 theorem undecided_iff (p : Params) (c : Commitment) (e : Evidence) :
     (∃ why, protocol.check p c e = .undecided why) ↔ SomePending p c e := by
   show (∃ why, check p c e = .undecided why) ↔ _
@@ -173,25 +173,25 @@ theorem answer_of_decodedAccepted (a b c : ByteArray) (h : DecodedAccepted a b c
     (protocol.answer a b c).verdict = .accept :=
   (answer_accepts_iff a b c).mpr h
 
-/-- **The check accepts a unit every link-window of which is accepted** (the converse of `AcceptsLinkWindows`). -/
+/-- **The check accepts a unit every sampling block of which is accepted** (the converse of `AcceptsLinkWindows`). -/
 theorem accepts_of_linkWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) (h : LinkWindowsAccepted p c e) :
     protocol.Accepts p c e :=
   (accepts_iff p c e).mpr h
 
-/-- **The check is undecided on a unit with no link-window refused and some awaiting its record** (the converse of
+/-- **The check is undecided on a unit with no sampling block refused and some awaiting its record** (the converse of
 `UndecidedPending`). -/
 theorem undecided_of_somePending (p : Params) (c : Commitment) (e : Evidence) (h : SomePending p c e) :
     ∃ why, protocol.check p c e = .undecided why :=
   (undecided_iff p c e).mpr h
 
-/-- The record an honest certifier issues for link-window `(d, l, w)`: head `h`, the salt `s` it drew for it, and a
+/-- The record an honest certifier issues for sampling block `(d, l, w)`: head `h`, the salt `s` it drew for it, and a
 certificate of the key's identifier over `(d, l, w)` and `h`'s digest `dg` under `s` with signature `σ`. -/
 def honestRecord (p : Params) (d : Direction) (l : String) (w : Nat) (h : RecordHead) (s dg σ : ByteArray) :
     Certified :=
   ⟨h, s, ⟨p.key.extract 0 16, l, d, w, certificateDigest s dg, σ⟩⟩
 
 /-- **The honest transcript is accepted.** Evidence that fits, with every declared sync admitted; parameters with their
-digests; and a commitment holding exactly one record of every link-window, the honest one: on egress the head
+digests; and a commitment holding exactly one record of every sampling block, the honest one: on egress the head
 `record_head` makes of the Program's grid under the declared syncs, on ingress a complete head settled by the deadline
 of the ingress grid and its digest, each digest under the record's salt signed by the key over its
 `certificateMessage` in the parameters' session. -/

@@ -1,5 +1,5 @@
 """The active certifier (`active`): its shaper is `run_shaper`'s rule on frames that arrive, its faults fail closed, and
-over real localhost sockets, on an injected clock, an honest run is accepted raw and committed on every link-window
+over real localhost sockets, on an injected clock, an honest run is accepted raw and committed on every sampling block
 while a sender that times its writes to signal either leaves the wire byte-identical or is rejected by the audit."""
 
 import asyncio
@@ -749,7 +749,7 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
 
 
 def audit(proxy, frames, syncs, egress=EGRESS):
-    """The audit of the proxy's records, raw then committed: every egress and ingress link-window's verdict."""
+    """The audit of the proxy's records, raw then committed: every egress and ingress sampling block's verdict."""
     out = []
     for committed in (False, True):
         records = [commit(r, egress if r.link == "responses" else INGRESS) if committed else r for r in proxy.records]
@@ -775,7 +775,7 @@ def honest_run():
 
 
 def test_an_honest_run_over_sockets_is_accepted_raw_and_committed(honest_run):
-    """Every link-window is accepted, raw and committed; the records and hand times are `run_shaper`'s; the anchors
+    """Every sampling block is accepted, raw and committed; the records and hand times are `run_shaper`'s; the anchors
     are the ingress releases; and the peer reads exactly the Program's grids, r frames of B bytes per bucket."""
     proxy, wire = honest_run
     raw, committed = audit(proxy, FRAMES, SYNCS)
@@ -818,7 +818,7 @@ def compact_write(session: str, index: int, n: int, position: int) -> bytes:
 @pytest.mark.parametrize("cell", [8, 16])
 def test_compact_records_over_sockets_are_b_byte_cells_and_the_run_is_accepted(cell, honest_run):
     """Under `compact` the server writes each output as a (position, record) unit after its HTTP head, and the proxy
-    frames each record as its cell of B = 8 or 16 bytes: every link-window is accepted raw and committed against the
+    frames each record as its cell of B = 8 or 16 bytes: every sampling block is accepted raw and committed against the
     Program's cells, the records and hand times are `run_shaper`'s and the event-framed run's, the ingress records are
     unchanged, and the wire is B/512 of the event-framed run's, the same frames a bucket."""
     egress = dataclasses.replace(EGRESS, frame_bytes=cell)
@@ -1889,7 +1889,7 @@ class Held(Executor):
 def test_a_choice_not_ready_at_its_window_declares_the_envelope():
     """Window 1's choice never finishes. Its tick doesn't wait: no tick is late, window 1 declares the envelope and
     logs it unready, and window 2's choice, started at its tick less the lag, reads that declaration. The audit
-    accepts every link-window, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
+    accepts every sampling block, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
     would choose at its tick (lag 0)."""
     lag = 2
     held = Held({1})

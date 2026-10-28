@@ -14,9 +14,9 @@ inputs and the network's own terms. Given no N2 summary the report is the scan's
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
-session and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
+session and key, sampling blocks the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
-doesn't give, other audits, another registration, a link-window N2 didn't register, a missing case, no verifier, a
+doesn't give, other audits, another registration, a sampling block N2 didn't register, a missing case, no verifier, a
 refused or scan-only chain or no server."""
 
 from __future__ import annotations
@@ -250,7 +250,8 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 
 
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
-    """An accepted chain whose certifier session, link-windows, N2 registrations and compute audits are ``case``'s."""
+    """An accepted chain whose certifier session, sampling blocks, N2 registrations and compute audits are
+    ``case``'s."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})

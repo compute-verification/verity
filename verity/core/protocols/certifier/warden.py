@@ -122,7 +122,7 @@ class WardenParams:
     ingress_cells: int = 64
     ingress_buckets: int = 50
     egress_cells: int = 4096
-    every: int = 1  # a timestep's buckets: the Programs' boundaries are every `every` buckets of a window
+    every: int = 1  # the slot stride in buckets: the Programs' boundaries are every `every` buckets of a sampling block
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -140,7 +140,7 @@ class WardenParams:
 
     @property
     def window_programs(self) -> int:
-        """A window's Program slots: `window / every` timesteps of `program_slots`."""
+        """A sampling block's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
 
     @property

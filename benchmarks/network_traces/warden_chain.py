@@ -95,8 +95,8 @@ def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
 
 
 def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
-    """Each link-window's certified (egress, ingress) records, from window 0 until the first missing one, and the
-    link-windows the signer refused."""
+    """Each sampling block's certified (egress, ingress) records, from window 0 until the first missing one, and the
+    sampling blocks the signer refused."""
     certified, refused = WS.read_certified(witness(run) / "certified.jsonl")
     out = []
     for w in range(dep["windows"]):
@@ -108,7 +108,7 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 
 def certificates(run: Path, deployed: bool = False) -> dict:
-    """The certificates' check on the run (the module docstring's `certificates`), one row a link-window: certified
+    """The certificates' check on the run (the module docstring's `certificates`), one row a sampling block: certified
     when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
     dep, _ = deployment(run)
     wit = witness(run)
