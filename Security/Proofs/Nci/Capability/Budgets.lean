@@ -24,7 +24,7 @@ open Verity Finset Nci.Capability
 open scoped ENNReal
 
 theorem HeldBudget : Guarantees.HeldBudget := by
-  intro R c k hCK ι X ρ M r t aBlk Λ e he hev hD u U σ hsel hσ
+  intro R c k hCK ι X ρ M r t aBlk Λ hev hD u U σ hsel hσ
   classical
   let U' : Fin R.B → Finset ι := fun v => if v = u then U else ∅
   have hU' : ∀ v, Selects X (U' v) σ ∧ ∀ i ∈ U' v, σ i ⊆ holds R.d.D (R.P.gates v) := by
@@ -33,8 +33,8 @@ theorem HeldBudget : Guarantees.HeldBudget := by
     · subst hv
       simpa [U'] using ⟨hsel, hσ⟩
     · simp [U', hv, Selects]
-  have hL := Verity.SecurityProofs.BlockDescription R c k hCK ρ M r t aBlk e _ he (hev U' σ hU') R.val
-    (fun _ _ => rfl) u
+  obtain ⟨e, he, hE⟩ := hev U' σ hU'
+  have hL := Verity.SecurityProofs.BlockDescription R c k hCK ρ M r t aBlk e _ he hE R.val (fun _ _ => rfl) u
   simp only [U', ↓reduceIte] at hL
   have h1 : ENNReal.ofReal (∑ i ∈ U, X.price i - Λ) ≤ ENNReal.ofReal ((k + Nat.clog 2 R.B + aBlk : ℕ) : ℝ) := by
     refine (hD R.val (fun _ _ => rfl) U σ hsel).trans ?_

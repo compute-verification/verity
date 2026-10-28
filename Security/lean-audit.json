@@ -8353,6 +8353,18 @@
    "assumptions": [],
    "type_hash": "3cd4d482c3c12f3ad466634430bcd58aeaa3ad386fa3fc853e1b801800332c91"
   },
+  "Nci.SecurityProofs.CapabilityFloorHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.CapabilityFloorHonest : Nci.Guarantees.CapabilityFloorHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.CapabilityFloorNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.CapabilityFloorNontrivial : Nci.Guarantees.CapabilityFloorNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.CertificateSlack": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.CertificateSlack : Nci.Guarantees.CertificateSlack"],
@@ -8485,17 +8497,53 @@
    "assumptions": [],
    "type_hash": "649fa78eb4436954b0e70882bc9ade0c96348ae4fd1d8e5be0d04d7c8e6ea0e2"
   },
+  "Nci.SecurityProofs.HeldBudgetHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.HeldBudgetHonest : Nci.Guarantees.HeldBudgetHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.HeldBudgetNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.HeldBudgetNontrivial : Nci.Guarantees.HeldBudgetNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.ImportOrRecompute": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.ImportOrRecompute : Nci.Guarantees.ImportOrRecompute"],
    "assumptions": [],
    "type_hash": "b0566f4c210870fd460f66ef2a09437bb44e0861e72f26cd6949a4b3df31238c"
   },
+  "Nci.SecurityProofs.ImportOrRecomputeHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.ImportOrRecomputeHonest : Nci.Guarantees.ImportOrRecomputeHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.ImportOrRecomputeNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.ImportOrRecomputeNontrivial : Nci.Guarantees.ImportOrRecomputeNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.IncidenceCap": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.IncidenceCap : Nci.Guarantees.IncidenceCap"],
    "assumptions": [],
    "type_hash": "ddfd3a94408837043aac2beedc5935993583e7be953e295d6c9377a08119cfb7"
+  },
+  "Nci.SecurityProofs.IncidenceCapHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.IncidenceCapHonest : Nci.Guarantees.IncidenceCapHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.IncidenceCapNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.IncidenceCapNontrivial : Nci.Guarantees.IncidenceCapNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Nci.SecurityProofs.IncompressibleContainedMatMulOn": {
    "owner": "@lean",
@@ -8567,11 +8615,29 @@
    "assumptions": [],
    "type_hash": "08683b8ef2f3e7f5de4b197923de3fcfe6b1d583c4338536d6f903442f7fe523"
   },
+  "Nci.SecurityProofs.OperandCapJointHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.OperandCapJointHonest : Nci.Guarantees.OperandCapJointHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.OperandCapNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.OperandCapNontrivial : Nci.Guarantees.OperandCapNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.OperandCapSeparate": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.OperandCapSeparate : Nci.Guarantees.OperandCapSeparate"],
    "assumptions": [],
    "type_hash": "ee8481aaa9db44284d5df421ba85e34a76582e8ed8fe1246ecc8c59b4780f31e"
+  },
+  "Nci.SecurityProofs.OperandCapSeparateHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.OperandCapSeparateHonest : Nci.Guarantees.OperandCapSeparateHonest"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Nci.SecurityProofs.OtherPositions": {
    "owner": "@lean",
@@ -8619,17 +8685,53 @@
    "assumptions": [],
    "type_hash": "fcafa608147c36426d22c83d277a4feca6044ac384521f23e6ff6c43c82d45b1"
   },
+  "Nci.SecurityProofs.RecomputeByGatesHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecomputeByGatesHonest : Nci.Guarantees.RecomputeByGatesHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.RecomputeByGatesNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecomputeByGatesNontrivial : Nci.Guarantees.RecomputeByGatesNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.RecomputeByState": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.RecomputeByState : Nci.Guarantees.RecomputeByState"],
    "assumptions": [],
    "type_hash": "30eff23032d90df8831a8c53b3599c289759a731ccbc0a5b7fb33d384fd88506"
   },
+  "Nci.SecurityProofs.RecomputeByStateHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecomputeByStateHonest : Nci.Guarantees.RecomputeByStateHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.RecomputeByStateNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecomputeByStateNontrivial : Nci.Guarantees.RecomputeByStateNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.RecoveredBudget": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.RecoveredBudget : Nci.Guarantees.RecoveredBudget"],
    "assumptions": [],
    "type_hash": "107582fda70d340034c9949b7cd2349603b6c9fff465f8a11d055db89f344488"
+  },
+  "Nci.SecurityProofs.RecoveredBudgetHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecoveredBudgetHonest : Nci.Guarantees.RecoveredBudgetHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.RecoveredBudgetNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecoveredBudgetNontrivial : Nci.Guarantees.RecoveredBudgetNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Nci.SecurityProofs.ReferenceThreaded": {
    "owner": "@lean",
@@ -8648,6 +8750,18 @@
    "signature": ["Nci.SecurityProofs.StatHeldBudget : Nci.Guarantees.StatHeldBudget"],
    "assumptions": [],
    "type_hash": "7b04ca7558d5fd635d255e44644c64f63f07eb204f47165af034f3e1ad2f0602"
+  },
+  "Nci.SecurityProofs.StatHeldBudgetHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.StatHeldBudgetHonest : Nci.Guarantees.StatHeldBudgetHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.StatHeldBudgetNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.StatHeldBudgetNontrivial : Nci.Guarantees.StatHeldBudgetNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Nci.SecurityProofs.ThreadedContainedInfo": {
    "owner": "@lean",
@@ -8798,6 +8912,18 @@
    "signature": ["Nci.SecurityProofs.WeightedProductCap : Nci.Guarantees.WeightedProductCap"],
    "assumptions": [],
    "type_hash": "453a348af491ba42dc08081a3065e3ff19a594eb7f126ec10f555e816c0c8394"
+  },
+  "Nci.SecurityProofs.WeightedProductCapHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.WeightedProductCapHonest : Nci.Guarantees.WeightedProductCapHonest"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.WeightedProductCapNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.WeightedProductCapNontrivial : Nci.Guarantees.WeightedProductCapNontrivial"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "NetTiming.SecurityProofs.CardCountsEqLe": {
    "owner": "@network-accounting",
@@ -12594,6 +12720,27 @@
    "Nci.SecurityProofs.RecomputeByState": "frozen (no-function): It is about an arbitrary registration's proof blocks, a held budget and consumers whose recomputation needs state priced above it (Nci.Capability.HeldPriceAtMost, Nci.Capability.Consumers.RequiresState, Security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
    "Nci.SecurityProofs.WeightedProductCap": "frozen (no-function): It is about an arbitrary registration's proof blocks, counted products and a held slot budget (Nci.Capability.SlotsRead, Nci.Capability.HeldPriceAtMost, Security/Definitions/Nci/Capability/Products.lean), not about a function's code.",
    "Nci.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Overhead.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Nci.Assumptions.CoversEfficientMethods, Security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
+   "Nci.SecurityProofs.HeldBudgetHonest": "completeness: HeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every held selection of the product's value Y 1 has an evaluator of one bit, and DescriptionHard holds at deficit 0, all proved; the deficit is 0 only because the toy decoder M reads programs of exactly two bits, so it compresses nothing, so HeldBudget's premises hold together there and HeldBudget is not vacuous.",
+   "Nci.SecurityProofs.HeldBudgetNontrivial": "completeness: HeldBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product's value priced 3 bits (Y 3), above every description of it so DescriptionHard fails, is held by the proof block above k + clog2 B + aBlk + Λ = 2, so HeldBudget's conclusion is not a tautology.",
+   "Nci.SecurityProofs.StatHeldBudgetHonest": "completeness: StatHeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every run in the support of μ (the token drawn uniformly) is honest, and MinEntropyHard holds for Y 1 at Λ = 0, all proved; it is not degenerate: the product's value is a uniform bit, so StatHeldBudget's premises hold together there and StatHeldBudget is not vacuous.",
+   "Nci.SecurityProofs.StatHeldBudgetNontrivial": "completeness: StatHeldBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product's value priced 3 bits, above its one bit of entropy so MinEntropyHard fails, is held above k + Λ = 1, so StatHeldBudget's conclusion is not a tautology.",
+   "Nci.SecurityProofs.RecoveredBudgetHonest": "completeness: RecoveredBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true] has one bit, and SourceHard and Recovers hold with the token's bit as the source (ℓz = 1, δ = 0, βv = 1, amb = 0), all proved; δ = 0 rests on the same toy decoder, which compresses nothing, so RecoveredBudget's premises hold together there and RecoveredBudget is not vacuous.",
+   "Nci.SecurityProofs.RecoveredBudgetNontrivial": "completeness: RecoveredBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at βv = 3, more than the one-bit source can supply so Recovers fails, βv·J = 3 exceeds k + clog2 B + aBlk + δ + amb = 2; the conclusion there is arithmetic in the parameters, so RecoveredBudget's conclusion is not a tautology.",
+   "Nci.SecurityProofs.IncidenceCapHonest": "completeness: IncidenceCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the one counted product reads its slot and its operand (SlotsRead and the operand reads, proved), with at most one product per slot-operand pair and per operand, so IncidenceCap's premises hold together there and IncidenceCap is not vacuous.",
+   "Nci.SecurityProofs.IncidenceCapNontrivial": "completeness: IncidenceCap's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at r = aout = 0, below the one product per pair so the incidence premises fail, the product's gate completes one product, above min(r|U||V|, aout|V|) = 0, so IncidenceCap's conclusion is not a tautology.",
+   "Nci.SecurityProofs.OperandCapSeparateHonest": "completeness: OperandCapSeparate's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), slots and operands priced one bit each, the incidence at r = aout = 1, the proof block holding slots and operands priced at most one bit each (HeldPriceAtMost, proved) and Q = 1 bounding min(rxy, aout y) on the budget, so OperandCapSeparate's premises hold together there and OperandCapSeparate is not vacuous.",
+   "Nci.SecurityProofs.OperandCapJointHonest": "completeness: OperandCapJoint's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), slots and operands priced one bit each, the incidence at r = aout = 1, the proof block holding slots and operands priced at most two bits together (HeldPriceAtMost of W.sum O, proved) and Q = 2, so OperandCapJoint's premises hold together there and OperandCapJoint is not vacuous.",
+   "Nci.SecurityProofs.OperandCapNontrivial": "completeness: OperandCapSeparate and OperandCapJoint's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the proof block completes one product, above Q = 0, which bounds min(rxy, aout y) on no budget that holds the product's slot and operand (the premise on Q dropped), so OperandCapSeparate and OperandCapJoint's conclusion is not a tautology.",
+   "Nci.SecurityProofs.ImportOrRecomputeHonest": "completeness: ImportOrRecompute's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K (the product's use, its region and required gate the token) are upstream and carry overlap weight 1, both proved, so ImportOrRecompute's premises hold together there and ImportOrRecompute is not vacuous.",
+   "Nci.SecurityProofs.ImportOrRecomputeNontrivial": "completeness: ImportOrRecompute's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at weight 2, above what the use's regions allow so OverlapWeights fails, the block finishes weight 2, above its one unregistered input bit and the zero weight it recomputes, so ImportOrRecompute's conclusion is not a tautology.",
+   "Nci.SecurityProofs.RecomputeByGatesHonest": "completeness: RecomputeByGates's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K carry overlap weight 1 and each requires at least one gate (g = 1), both proved, so RecomputeByGates's premises hold together there and RecomputeByGates is not vacuous.",
+   "Nci.SecurityProofs.RecomputeByGatesNontrivial": "completeness: RecomputeByGates's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at g = 2, above the consumer's one required gate, the gates S = {1} recompute weight 1, above |S|/g, so RecomputeByGates's conclusion is not a tautology.",
+   "Nci.SecurityProofs.RecomputeByStateHonest": "completeness: RecomputeByState's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with two proof blocks (R2), each holding one computed gate's value priced one bit (HeldPriceAtMost R2 W2 1, proved), the consumer K2 requiring both gates requires state 1 (RequiresState, proved); it is not degenerate, so RecomputeByState's premises hold together there and RecomputeByState is not vacuous.",
+   "Nci.SecurityProofs.RecomputeByStateNontrivial": "completeness: RecomputeByState's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with one proof block holding both gates (R1), priced 2 together so HeldPriceAtMost at h = 1 fails, the block contains the consumer's required gates, so RecomputeByState's conclusion is not a tautology.",
+   "Nci.SecurityProofs.WeightedProductCapHonest": "completeness: WeightedProductCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product reads its slot (SlotsRead, proved), its use has weight 1, and the proof block holds slots priced at most one bit (HeldPriceAtMost, proved), so WeightedProductCap's premises hold together there and WeightedProductCap is not vacuous.",
+   "Nci.SecurityProofs.WeightedProductCapNontrivial": "completeness: WeightedProductCap's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at h = 0, below the slot the block holds so HeldPriceAtMost fails, its weighted products, 1, exceed h times the weight it serves, so WeightedProductCap's conclusion is not a tautology.",
+   "Nci.SecurityProofs.CapabilityFloorHonest": "completeness: CapabilityFloor's honest witness (its witnesses entry): at the toy task Accounting.Overhead.Toy (Security/Definitions/Accounting/CoverageToy.lean), CoversEfficientMethods holds at η = 0 and every covered computation costs Lc = 5, both proved, so CapabilityFloor's premises hold together there; it is degenerate in coverage: Core holds of every computation, so no run is uncovered.",
+   "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Overhead.Toy, a computation costing 0, below the floor Lc = 5 so the floor premise fails, succeeds with probability 1, above η = 0, so CapabilityFloor's conclusion is not a tautology.",
    "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet.",
    "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
@@ -59861,6 +60008,50 @@
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Nci.SecurityProofs.CapabilityFloor": {
+   "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
+   "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
+  },
+  "Nci.SecurityProofs.HeldBudget": {
+   "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial"
+  },
+  "Nci.SecurityProofs.ImportOrRecompute": {
+   "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
+   "nontrivial": "Nci.SecurityProofs.ImportOrRecomputeNontrivial"
+  },
+  "Nci.SecurityProofs.IncidenceCap": {
+   "honest": ["Nci.SecurityProofs.IncidenceCapHonest"],
+   "nontrivial": "Nci.SecurityProofs.IncidenceCapNontrivial"
+  },
+  "Nci.SecurityProofs.OperandCapJoint": {
+   "honest": ["Nci.SecurityProofs.OperandCapJointHonest"],
+   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
+  },
+  "Nci.SecurityProofs.OperandCapSeparate": {
+   "honest": ["Nci.SecurityProofs.OperandCapSeparateHonest"],
+   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
+  },
+  "Nci.SecurityProofs.RecomputeByGates": {
+   "honest": ["Nci.SecurityProofs.RecomputeByGatesHonest"],
+   "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial"
+  },
+  "Nci.SecurityProofs.RecomputeByState": {
+   "honest": ["Nci.SecurityProofs.RecomputeByStateHonest"],
+   "nontrivial": "Nci.SecurityProofs.RecomputeByStateNontrivial"
+  },
+  "Nci.SecurityProofs.RecoveredBudget": {
+   "honest": ["Nci.SecurityProofs.RecoveredBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.RecoveredBudgetNontrivial"
+  },
+  "Nci.SecurityProofs.StatHeldBudget": {
+   "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial"
+  },
+  "Nci.SecurityProofs.WeightedProductCap": {
+   "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
+   "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial"
   }
  }
 }

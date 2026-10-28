@@ -1,4 +1,5 @@
 import Definitions.Accounting.Assumptions.Coverage
+import Definitions.Accounting.CoverageToy
 
 /-!
 # The floor under coverage
@@ -23,5 +24,21 @@ def CapabilityFloor : Prop :=
     (∀ C x, (C, x) ∈ 𝒜 → Core C x → Lc ≤ cost (C x)) →
     ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
       G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Overhead.Succeeds (C x) pos 𝒴 ∧ cost (C x) < min Lc Tmax) ≤ η
+
+/-- **`CapabilityFloor`'s premises hold together** at the toy task (`Accounting.Overhead.Toy`): every computation has
+the covered structure, so coverage holds at `η = 0`, and every one costs `5 = Lc`. -/
+def CapabilityFloorHonest : Prop :=
+  Assumptions.CoversEfficientMethods Accounting.Overhead.Toy.task Set.univ Accounting.Overhead.Toy.covered
+      Accounting.Overhead.Toy.cost 5 0 ∧
+    ∀ C x, (C, x) ∈ (Set.univ : Accounting.Overhead.Class Unit Unit) → Accounting.Overhead.Toy.covered C x →
+      5 ≤ Accounting.Overhead.Toy.cost (C x)
+
+/-- **`CapabilityFloor`'s conclusion can fail**: when a computation costs `0`, below the floor `Lc = 5`, and reaches
+the target on every input, success below the floor has probability `1`, above `η = 0`. -/
+def CapabilityFloorNontrivial : Prop :=
+  ¬ Accounting.Overhead.Toy.task.prob (fun x 𝒴 =>
+      (Accounting.Overhead.Toy.comp, x) ∈ (Set.univ : Accounting.Overhead.Class Unit Unit) ∧
+        Accounting.Overhead.Succeeds (Accounting.Overhead.Toy.comp x) Accounting.Overhead.Toy.pos 𝒴 ∧
+        Accounting.Overhead.Toy.free (Accounting.Overhead.Toy.comp x) < min 5 5) ≤ 0
 
 end Nci.Guarantees
