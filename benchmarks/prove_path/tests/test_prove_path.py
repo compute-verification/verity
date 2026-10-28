@@ -4,7 +4,7 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
   refused the same way.
-* The advice is fixed before the sample: `advice_before_draw` holds the registration the verifier opens the advice under to the
+* The advice is fixed before the sample: `advice_before_sample` holds the registration the verifier opens the advice under to the
   one the sample's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
@@ -154,27 +154,27 @@ def _bound(rec: dict) -> dict:
     return {k: rec["window"][k] for k in SRT.BINDING}
 
 
-def test_the_advice_must_be_in_the_registration_the_draw_followed():
+def test_the_advice_must_be_in_the_registration_the_sample_followed():
     rec = _rec("11" * 64)
     drawn = R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
+    assert PP.advice_before_sample(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
         "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
-    assert PP.advice_before_draw(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
-    assert PP.advice_before_draw(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
-    assert PP.advice_before_draw(drawn, rec, _bound(late))["codes"] == ["advice"]
+    assert PP.advice_before_sample(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_sample(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_sample(drawn, rec, _bound(late))["codes"] == ["advice"]
     other = _rec("11" * 64, compiler="ef" * 64)
-    assert PP.advice_before_draw(drawn, rec, _bound(other))["codes"] == ["compiler"]
+    assert PP.advice_before_sample(drawn, rec, _bound(other))["codes"] == ["compiler"]
 
 
-def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
+def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_sampled_after():
     rec = _rec("11" * 64)
     theirs, ours = R.receipt(rec, A5.CHALLENGER, received="0"), R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_draw(theirs, rec, _bound(rec), "challenger")["ok"]
-    assert PP.advice_before_draw(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
-    assert PP.advice_before_draw(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_sample(theirs, rec, _bound(rec), "challenger")["ok"]
+    assert PP.advice_before_sample(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
+    assert PP.advice_before_sample(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
     late = _rec("22" * 64)
-    assert PP.advice_before_draw(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
+    assert PP.advice_before_sample(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
 
 
 @dataclass(frozen=True)
@@ -286,7 +286,7 @@ def _summary(drawn: list[int], accepted: bool | None, lean: bool, before: bool =
     (_summary([0, 1, 2], False, True), False),
     (_summary([0, 1, 2], False, False, before=False), False),
 ], ids=["refused-by-lean", "forged-unit-not-drawn", "accepted", "lean-accepted", "refused-before-the-draw"])
-def test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit(summary, ok):
+def test_a_forged_rank_passes_only_when_lean_refuses_its_sampled_forged_block(summary, ok):
     assert PP.forged_row(summary, {"member": 0, "unit": 1})["ok"] is ok
 
 
@@ -375,19 +375,19 @@ def test_the_advices_negatives_are_each_refused_by_name(tp):
 
 
 @pytest.mark.slow
-def test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_refused(tp):
+def test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused(tp):
     """With the receipt the stream writes on receiving the honest registration, the honest registration holds; the same advice
     committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
     compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
     rec = _registered(tp["honest"] / "rank0")
     receipt = R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_draw(receipt, rec, bound)["ok"]
-    got = PP.advice_after_draw(compiler, receipt, rec, opening, mine, held)
+    assert PP.advice_before_sample(receipt, rec, bound)["ok"]
+    got = PP.advice_after_sample(compiler, receipt, rec, opening, mine, held)
     assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
 
 
 @pytest.mark.slow
-def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit(tp):
+def test_a_forged_block_passes_every_check_before_the_sample_and_differs_in_one_bit(tp):
     """The forged window's registration holds to the verifier's window and its own public bodies, as the honest one does: its
     rows, commit strings and roots agree with the flipped word. Its rows differ from the honest window's in exactly one bit."""
     _c, _b, _o, mine, held = _mine(tp, "forged", 0)
@@ -401,7 +401,7 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 
 
 @pytest.mark.slow
-def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
+def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_sample(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
     unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
@@ -676,7 +676,7 @@ def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0()
         PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
 
 
-def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units():
+def test_per_block_timing_is_over_the_members_sampled_blocks_not_flocks_virtual_units():
     s = {"draw_counts": {"T": 2}, "timing": {"T": {"session_s": 501.2, "verify_s": 6.2, "lean_verify_s": 47.0,
                                                    "timing": {"prove_total_s": 428.9, "units": 16384, "k_log": 26,
                                                               "proof_bytes": [830330, 830330]}}}}

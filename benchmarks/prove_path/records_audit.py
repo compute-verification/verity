@@ -20,7 +20,7 @@ names for it (``--compilers``) from a checkout of the registered commit whose co
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
-advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
+advice was fixed before the sample (`fixed_before_sample`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
 proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
@@ -496,7 +496,7 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
     return {name: {"refused": not v["ok"], "codes": v["codes"]} for name, v in out.items()}
 
 
-def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None,
+def fixed_before_sample(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None,
                       coins: str = "verifier") -> dict[str, Any]:
     """That the circuit, its compiler and its advice were fixed before the coins, checked rather than assumed: the digest of the
     registration (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
@@ -518,7 +518,7 @@ def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound:
 def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any], coins: str = "verifier") -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a registration binding that root, with its opening. Every check before the sample passes on it (the new opening opens
-    the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_draw` refuses it
+    the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_sample` refuses it
     (``after-the-draw``): the sample followed the registration received first."""
     c = held["compiler"]
     data = bytes.fromhex(held["opening"]["advice"])
@@ -527,7 +527,7 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
     advice = {**rec["window"]["advice"], "root": late.root.hex()}
     late_rec = {**rec, "window": {**rec["window"], "advice": advice}}
     src = source(late_rec["window"], {**held, "advice": advice})
-    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice}, coins)
+    v = fixed_before_sample(receipt, late_rec, {"compiler": held["compiler"], "advice": advice}, coins)
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": opens and src["ok"]}
 
 
@@ -719,7 +719,7 @@ def audit(a: argparse.Namespace) -> int:
         coins = "challenger" if a.challenger else "verifier"
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
-        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound, coins)
+        row["fixed_before_draw"] = fixed_before_sample(receipt, rec, bound, coins)
         ordered = row["fixed_before_draw"]["ok"]
         if bound is not None:
             row["after_draw"] = after_draw(receipt, rec, held, coins)
