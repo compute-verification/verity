@@ -180,7 +180,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_ADMIT_SLACK_GIB", float, 6.0, VALUE, "admission: GiB of host memory kept free"),
     S("VERITY_CENSUS_GPU_UTIL", float, None, VALUE, "the kernel census engine's gpu_memory_utilization"),
     S("VERITY_DRAWS_POLL_S", float, 0.2, WHERE, "seconds between scans of serve-openai's --draws-dir (`serve_release.DrawDir`)"),
-    S("VERITY_SEAL_GATE", lowered, "off", VALUE, "experiment: when the sealer's threads may run (`serve_seal.Sealer.gate`): end, begin or off"),
+    S("VERITY_SEAL_GATE", lowered, "off", VALUE, "experiment: when the sealer's threads may run (`serve_seal.Sealer.gate`): end, begin, sync, fwd or off"),
     S("VERITY_SEAL_PACE_S", float, 0.5, VALUE, "experiment: the longest a sealer's thread waits on its gate"),
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
     S("VERITY_HOT_RESTART_REASON", str, None, WHERE, "why the hot worker restarted (it sets it for its child)"),

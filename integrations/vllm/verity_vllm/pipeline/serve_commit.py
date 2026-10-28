@@ -414,9 +414,11 @@ class CommitWindows:
     def stepped(self) -> None:
         """An engine step has returned: its committed steps ended now."""
         if self.sealer is not None and self.sealer.gate_mode != "off":
+            mode = self.sealer.gate_mode
             self.sealer.gate.clear()
             self.com.step_launched = self.sealer.gate.set
-            self.com.step_launched_at = self.sealer.gate_mode
+            self.com.step_launched_at = {"sync": "end", "fwd": "begin"}.get(mode, mode)
+            self.com.step_synced = self.sealer.gate.clear if mode in ("sync", "fwd") else None
         now = self.wall()
         for s in range(len(self.step_t), int(self.com._step_index)):
             self.step_t[s] = now

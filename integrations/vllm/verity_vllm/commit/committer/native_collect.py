@@ -463,6 +463,25 @@ class NativeCollectCommitter(NativeHostCommitter):
                 return res
 
             self._hooks.patch(runner, "sample", sample)
+        if hasattr(runner, "sample_tokens"):
+            orig_tokens = self._orig["sample_tokens"] = runner.sample_tokens
+
+            def sample_tokens(*a, **kw):
+                out = orig_tokens(*a, **kw)
+                synced, get = getattr(me, "step_synced", None), getattr(out, "get_output", None)
+                if synced is not None and get is not None:
+                    def get_output():
+                        try:
+                            return get()
+                        finally:
+                            synced()
+                    try:
+                        out.get_output = get_output
+                    except AttributeError:
+                        synced()
+                return out
+
+            self._hooks.patch(runner, "sample_tokens", sample_tokens)
         self.installed = True
 
     def uninstall(self) -> None:
