@@ -75,7 +75,7 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
    circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`; read by the
    inference-only policy once it joins). It also registers
    each subprotocol's public Program and parameters, by digest.
-2. **Declarations**, one or more per execution phase (a span of one or more verification phases). A declaration is one
+2. **Declarations**, one or more per execution phase. A declaration is one
    act of declaring: the developer reports its advice (a bit string that a registered compiler compiles, its
    length charged), and the compiler appends one execution block to the registered circuit. The block's values are
    committed under hiding commitments in SHA-512 trees before any coins are flipped.
@@ -151,7 +151,7 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 `StagedPins`):
 
 - `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is C-Flock's
-  soundness at each sampled proof block (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
+  soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
 - `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the window's live
   coin. A protocol-code fact still to prove.

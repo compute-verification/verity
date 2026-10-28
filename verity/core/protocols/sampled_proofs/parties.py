@@ -4,13 +4,13 @@ verifier, the roles `verity run CONFIG --party ROLE` runs, and their table (`PRO
 ~~~text
 challenger -> verifier    Challenger {address, pin}: where its host answers the verifier's open and finish of a session
 ZK server   -> verifier    Firewall {sha512, sessions}: the Lean ZK server every outer proof goes through, one at a time
-workers    -> verifier    Registration {block}, the verification phase's registration record its body (canonical JSON)
-verifier   -> challenger  Done, once every verification phase is decided
+workers    -> verifier    Registration {block}, the execution phase's registration record its body (canonical JSON)
+verifier   -> challenger  Done, once every execution phase is decided
 ~~~
 
 A party does no I/O: what its machine does is a capability it is given (`Identity.capabilities`), by name.
 
-- the workers' ``serve(block) -> bytes``: serve verification phase ``block`` of the run, and give its registration record;
+- the workers' ``serve(block) -> bytes``: serve execution phase ``block`` of the run, and give its registration record;
 - the ZK server's ``pin() -> {"sha512", "sessions"}``: the ZK server the prover's sessions run, by its SHA-512;
 - the challenger's ``host``, with ``start() -> {"address", "pin"}`` and ``stop()``: the challenger's host on its machine,
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
@@ -24,7 +24,7 @@ A capability that can't do its step raises `Unavailable` with its reason, and th
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
-The run's parameters (`params_of`) are its verification phases (``blocks``), the configuration's listed components
+The run's parameters (`params_of`) are its execution phases (``blocks``), the configuration's listed components
 (``components``, `IDS`' names, sampled proofs among them) and what its coins are (``coins``: ``simulated`` when the
 challenger's host is a machine the prover's parties share, else ``development``, a key made for the session).
 
@@ -154,7 +154,7 @@ class Firewall:
 
 
 class Workers:
-    """The workers: each verification phase served, and its registration sent to the verifier."""
+    """The workers: each execution phase served, and its registration sent to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:

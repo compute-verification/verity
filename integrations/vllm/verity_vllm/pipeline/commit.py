@@ -257,7 +257,7 @@ def admission_lag(wl: dict) -> int:
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
-    checkpoint's generation_config / config + the workload record's verification phase, read from the file `wl` was loaded from, as GP-01
+    checkpoint's generation_config / config + the workload record's sampling parameters, read from the file `wl` was loaded from, as GP-01
     reads it (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an

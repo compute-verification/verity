@@ -2,7 +2,7 @@
 
 The **network certifier** is the auditor's device on a boundary link of a spatial unit (the machines behind network
 certifiers). It shapes each link into a fixed grid of buckets and frames, records exactly that grid and one status per
-verification phase, and once per verification phase signs a **network certificate** over a salted digest of the record. What it bounds
+execution phase, and once per execution phase signs a **network certificate** over a salted digest of the record. What it bounds
 is how much a covert sender can move across the boundary through **when** frames leave, once the content and order of
 every frame are fixed by the declared Program.
 
@@ -14,10 +14,10 @@ every frame are fixed by the declared Program.
   no prover-controlled host reads a coin before the certifier admits it) and `OneClock` (the challenger's release times
   and the certifier's ingress ticks are read on one clock; on two devices, within 1.03 s of each other). No Lean
   statement reads either yet.
-- **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the verification phase and
+- **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase and
   the record's digest hidden under a salt the certifier samples ("Network certificates").
 - **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The certifier (`grid`)"), the set of clock-sync
-  values Σ_sync, the certifier's key id and session, and the verification phases audited.
+  values Σ_sync, the certifier's key id and session, and the execution phases audited.
 
 Where each part is stated in Lean:
 - the timing analysis `NetTiming`, its guarantees and its modelling choices: `Security/Definitions/NetworkCertifier` and
@@ -28,7 +28,7 @@ Where each part is stated in Lean:
 - the record and certificate encodings: `NetworkCheck.Certificate` (`verity/core/protocols/network/lean`);
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
-- one verification phase's verdict of record: `NetworkCheck.LinkWindow`;
+- one execution phase's verdict of record: `NetworkCheck.LinkWindow`;
 - a period, onsite's network-certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`).
 
 ## Zero knowledge: what ties the checks, and the named gap
@@ -36,12 +36,12 @@ Where each part is stated in Lean:
 N2's count check reads the head leaf of N2's commitment and holds the head's counts to the occupancy profile. Another
 check that reads the same leaf is tied to N2's only under three conditions, each of which holds:
 1. The root is registered before either check's coins or samples (the ZK server's registration, `LinkWindows.commit`).
-2. The leaf index, 2 + d, is fixed by the verification phase's direction (`service.HEADS`), which is public structure, not
+2. The leaf index, 2 + d, is fixed by the execution phase's direction (`service.HEADS`), which is public structure, not
    something the prover chooses.
 3. SHA-512 is collision resistant, as the hiding commitments in frame-v3-sha512 trees already assume.
 
 N2 compares no grid, and the network claim is counts only. N2's verifier of record
-decides each verification phase on a `--zk` proof of its registered unit and public inputs alone, and reads no head, salt or
+decides each execution phase on a `--zk` proof of its registered unit and public inputs alone, and reads no head, salt or
 sibling ("Its verifier of record" below). What stays open is in the README: the certificates reach the verifier in
 the clear beside the proof system, a provisional exception to the four public kinds, and a run that proves nothing is
 decided in the clear.
@@ -82,13 +82,13 @@ On each link:
   - A fault is an overflow beyond Q, a frame of the wrong size, or a reported one (monitor unavailable, drop, delivery
     refused, coverage never established).
   - After a fault, the rest of the window is padding, the queue is dropped, and the first reason is recorded.
-- **The record is exactly (grid, status) (W5).** The status is one untimed symbol per verification phase: complete, or not
+- **The record is exactly (grid, status) (W5).** The status is one untimed symbol per execution phase: complete, or not
   established with a reason. It carries no bucket index, time or count.
 
 ## The published record (`commitment`)
 
-A raw grid is 2.3 GiB per verification phase at r = 1,024, B = 4 KiB and T = 600. The certifier publishes one digest and the
-status instead, which is 32 bytes per verification phase, or about 46 KB per link per day.
+A raw grid is 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600. The certifier publishes one digest and the
+status instead, which is 32 bytes per execution phase, or about 46 KB per link per day.
 
 - **Padding is elided.** Left-packing (W4) fixes a row by its count n and its n real frames, so a row's digest covers
   only those: `tagged_sha256("verity-network-warden/row/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that isn't
@@ -118,7 +118,7 @@ certifier's public key. With an honest certifier every certificate verifies, and
 raw records.
 
 **The record (v2)** is still exactly the grid and one status (W5), with padding elided: a fixed binary head
-(`RecordHead.encode`: the verification phase, T, r, B and τ_b, the status, the deadline bit, the parameters digest, the
+(`RecordHead.encode`: the execution phase, T, r, B and τ_b, the status, the deadline bit, the parameters digest, the
 occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the window's real frames. Its layout,
 the frame tree and the record digest are `certificate.py`'s module docstring, stated in Lean by
 `NetworkCheck.Certificate` (`RecordHead.encode`, `RecordHead.digest`, `parametersDigest`, `framesRoot`) and held to the
@@ -134,7 +134,7 @@ D fixes R up to a SHA-512 collision (`cr/sha-512`). D hides R as SHA-512 under a
 which rests on `random-oracle`; no Lean guarantee states the hiding.
 
 **The certificate** is D and a signature over a 64-byte message that binds D to the key, the certifier session and the
-verification phase, so a certificate can't be replayed onto another window, link, direction, key or session:
+execution phase, so a certificate can't be replayed onto another window, link, direction, key or session:
 
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [D] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
@@ -153,11 +153,11 @@ keeps its next unused leaf and the session ids it has started in an `lms.LeafSta
 The `Issuer` starts its session on the signer (`Signer.start`) before its first signature, and the state refuses a session
 id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
 journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
-certifier then publishes nothing for the verification phase (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it
+certifier then publishes nothing for the execution phase (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it
 never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-host`, where the state
 the device keeps on its host is its next LMS leaf and the session ids it has started.
 
-**The check.** The certificate names the head's verification phase, D is the head's record digest under `salt_c`, and the
+**The check.** The certificate names the head's execution phase, D is the head's record digest under `salt_c`, and the
 signature verifies (`CertifiedRecord.verify`; the signature alone is `Certificate.verify`, which reads the public fields
 and D). On egress the audit recomputes the record digest from the Program's grid, with a complete status, the deadline
 bit set and the parameters digest of `params` and Σ_sync, and compares it with the head's. Under `cr/sha-512`, equal
@@ -166,9 +166,9 @@ on the signature's unforgeability, and on an honest certifier; not on `cr/sha-25
 
 ## Through the proof system (`service`)
 
-One verification phase's certificates are registered through the proof system (`verity.core.protocols.sampled_proofs.service`)
+One execution phase's certificates are registered through the proof system (`verity.core.protocols.sampled_proofs.service`)
 as a `Spec` of its own (`service.LinkWindows`, one per link):
-- **Committed:** one value, `certificates`, of four leaves: the verification phase's egress and ingress certified records,
+- **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress certified records,
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
   certificate), and their heads,
   leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
@@ -176,10 +176,10 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the certificate's 272
   more. The ZK server keeps the records and salts (`Opening`). The challenger receives one salted root and never a
   certificate, a certifier's salt or a head.
-- **Selection:** `All`. A registration is one verification phase, one proof block, so an accepted outcome is the exhaustive fact.
+- **Selection:** `All`. A registration is one execution phase, one proof block, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
-  registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the verification phase.
-- **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's verification phases with no ε
+  registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the execution phase.
+- **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε
   or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
   the egress profile (on a served link, of its served profile), the w-th registration is window w and its outcome of
   record accepted. A rejected or late window,
@@ -193,7 +193,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   charge (log2 #Σ_sync per window, 7 bits at 16 × 8) and the occupancy profile (`LinkWindows.occupancy`: for each end,
   each window's T counts as the Program and the placement fix them, or none for an end the Program reads rather than
   predicts), all bound by the spec's context with the link, the run,
-  the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected verification phase shows only the
+  the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected execution phase shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused. A served link has no egress profile, and its
   sizes and each window's declared sync are public instead (`PUBLIC_SERVED`, "A served link" below).
@@ -202,14 +202,14 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   fixes (egress 0, ingress 1). Its output is two bits: ``verdict``, the AND of the two head checks, and ``deadline``,
   the AND of the two heads' deadline bits. The certificates are not in the unit: the verifier checks them on their
   public fields (`LinkWindows.certified`: each verifies under the certifier's key in its session,
-  `LinkWindows.certifier_session`, over its public fields and its signed digest, and names the verification phase). A proof
+  `LinkWindows.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
   states the unit on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
   certifier's salt) and the output row ``o0``, one u16 word (`LinkWindows.layout`, `service.OUT_BITS`), its circuit
   `LinkWindows.proof_unit`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
   root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and window are the
-  verification phase's, its status is complete, its T, r, B, τ_b and parameters digest are the end's declared grid's
+  execution phase's, its status is complete, its T, r, B, τ_b and parameters digest are the end's declared grid's
   (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the window
   (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the certificate
@@ -229,7 +229,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   three ANDs that join the four parts a head check is 1,066,260 at T = 4 and 3,229,371 at T = 600. The record digest
   hashes the head a second time, beside the opening's row digest; a record v3 whose digest is the head row's
   sha512/row/v2 digest would share it and save about 1.2M ANDs a head at T = 600. The count check needs no frame's bytes, so it is the part of the egress grid check
-  a proof can make without the content, and the only grid check on ingress. It runs on every verification phase: a
+  a proof can make without the content, and the only grid check on ingress. It runs on every execution phase: a
   structural check runs in full.
 - **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
@@ -239,7 +239,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered unit (every gate
   names a pinned digest and every session names the registered Program, the partition object's `program`,
   `LinkWindows.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the verifier's
-  own copy (`LinkWindows.public_arguments`: the registered root, the verification phase's public fields and both signed
+  own copy (`LinkWindows.public_arguments`: the registered root, the execution phase's public fields and both signed
   digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
   certificates verify (`LinkWindows.certified`); and the window's declared sync is one of Σ_sync. It receives the
   registration, the sample, the certificates' public fields and signatures (from the certifier, beside the proof
@@ -261,7 +261,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   decides nothing) and the tests' reference. `LinkWindows.unproved_outcome` decides a run that proves nothing (a
   rehearsal, the simulator) on it, its verdict ``"decided_by": "clear"``, never zero-knowledge.
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
-  compared, and each head's counts the profile's (`LinkWindows.declares`). `clear` accepts every verification phase it
+  compared, and each head's counts the profile's (`LinkWindows.declares`). `clear` accepts every execution phase it
   accepts, and differs only where the record's grid, at the profile's counts, isn't the Program's: in its frames, which
   N2 doesn't hold, or where the declared syncs move the Program's counts off the profile, which N2 holds the counts to
   instead.
@@ -269,7 +269,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
 What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered unit
 whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the sync is
 declared; the outcome record binds the root, the sample and the delivered sessions. The claim is counts only: on every
-verification phase of a link whose egress end declares a profile, the egress head's counts are the profile's (and the ingress
+execution phase of a link whose egress end declares a profile, the egress head's counts are the profile's (and the ingress
 head's, where that end declares one), so the link's timing is at the profile. On a served link the egress head's counts
 are instead the ones its ingress head's counts derive under the window's declared sync ("A served link" below). An
 egress end with neither profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the head check
@@ -277,7 +277,7 @@ leaves the head's deadline byte and frames root free. The unit reads the deadlin
 the frames root, so an accepted outcome says nothing of the frames. The proof opens the head leaves (2, 3)
 only: the record leaves (0, 1), each certified record whole, are committed but nothing in the verdict reads them, and
 the certificates' signatures are checked on the host from their public fields, not in the proof. One clock per
-spatial unit across links is not checked (each registration is one verification phase, alone), and nothing here checks the
+spatial unit across links is not checked (each registration is one execution phase, alone), and nothing here checks the
 frames' consistency with the served computation.
 
 ## A network certifier link (`service.WardenProfile`)
@@ -357,7 +357,7 @@ public egress profile.
   - Both ends share T and τ_b (checked by `LinkWindows` and the proxy), and one declared sync applies to all of a
     window's anchors, as each request is admitted in its window.
 
-What this establishes: on every accepted verification phase of a served link, the egress head's counts are `derive`'s of the
+What this establishes: on every accepted execution phase of a served link, the egress head's counts are `derive`'s of the
 ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
 the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
 the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
@@ -367,10 +367,10 @@ the premises, which nothing checks.
 ## The I/O tie (`io_tie`, a design)
 
 N2 holds a window's counts but says nothing of its frames, nor that they carry the tokens the served computation
-produced. The I/O tie closes that on a served link's egress. It is one unit per egress verification phase at selection `All`.
+produced. The I/O tie closes that on a served link's egress. It is one unit per egress execution phase at selection `All`.
 It opens every cell of the window and holds each to the output the advice's map names there, and that output's id to
 the id the Commit sampled. It is a design with a prototype on the network certifier's own egress (`io_tie`, its cells cut by
-`warden.Warden._egress`), in no Spec and unproved. The verification phase's tie is T units, one a bucket row of the network certifier's
+`warden.Warden._egress`), in no Spec and unproved. The execution phase's tie is T units, one a bucket row of the network certifier's
 registration (WARDEN's v2, a row a bucket), and each outputs 1 exactly when:
 1. every cell of its row is one of the network certifier's three: a `PAD` on a stream (no payload; a slot no connection holds is
    B zero bytes, a `PAD` on stream 0), a `DATA` cell (P = B − 9 bytes of payload, one token id's canonical event
@@ -588,7 +588,7 @@ unit outputs 1 exactly when, in each lane of ordinal q:
 - **What N2's advised mode takes: the verdict** (`advised.IoTieVerdict`). `advised.ends` takes the prompt-length tie
   only from an `IoTieVerdict(link, registrations, advice, accepted)`: the link, its ingress windows' registrations
   (each one's `registration.digest`, in order), the advice's digest (`advised.digest`) and one bit a registration,
-  set when every bucket row of that verification phase is accepted. It is built only from IoTieRequest proofs the verifier
+  set when every bucket row of that execution phase is accepted. It is built only from IoTieRequest proofs the verifier
   verified on its own lanes (`lanes` from that advice's prompt lengths and order and the network certifier's release) and given
   only by the verifier's own tie source (`LinkWindows.ties`, `tie_service.Ties`). It refuses a verdict on another
   link or other registrations than the source records, and an advised link whose every ingress window isn't
@@ -676,7 +676,7 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   them.
 - **Witness:** the row and its salt, and the S port rows with their salts and paths (the registered reads'), and
   the switches.
-- **Output:** one bit, ok. A verification phase's tie is its T units'.
+- **Output:** one bit, ok. An execution phase's tie is its T units'.
 
 So the layout to register is a row a bucket. Row t − w·T holds bucket t's S slots in slot order, slot j at bytes
 j·B to (j + 1)·B: WARDEN's row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At WARDEN's schedule that
@@ -700,7 +700,7 @@ and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 `c00.input/ids` and `sampled_token_ids`, in zero knowledge what `check/commit_tokens.py` does in the clear. The tie
 reads the Commit's root as public.
 
-**The network certifier's rows, exactly.** The network certifier registers its cells as the following root a verification phase, and each bucket's
+**The network certifier's rows, exactly.** The network certifier registers its cells as the following root an execution phase, and each bucket's
 unit reads its row there by a registered read. The reference is `io_tie.data_cell`, `pad_cell`, `end_cell`,
 `bucket_rows`, `domain` and `rows_root`, and the network certifier's own cut is `warden.Warden._egress`.
 - **A cell** is B bytes (B = 256; `io_tie` takes B ≥ 147), `HEADER` (`>BII`: the kind, the stream as u32be, the
@@ -908,7 +908,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   its verdict on every ingress window of this link's registrations, for the same advice digest, from proofs the
   verifier of record verified itself (`advised.IoTieVerdict`, naming the link, the registrations and the advice),
   given by the verifier's own tie source (`LinkWindows.ties`). The tie service (`tie_service.IngressTie`) builds it,
-  and `tie_service.Ties` is that source. A registration is one ingress verification phase, the network certifier's salted root of its
+  and `tie_service.Ties` is that source. A registration is one ingress execution phase, the network certifier's salted root of its
   T bucket rows, held to the window's order, and T proof blocks, unit t bucket row t. The unit is
   `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by the
@@ -967,7 +967,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
     verifier sees);
   - both ends share T and τ_b (checked by `LinkWindows`).
 
-What this establishes: on every accepted verification phase of an advised link, the egress head's counts are the advice's
+What this establishes: on every accepted execution phase of an advised link, the egress head's counts are the advice's
 releases, and the advice's releases are eligible after the ingress head's releases under the declared sync. What it
 doesn't: the frames (the I/O tie's), that the advice is the computation's (the compiler's and PoUW's), the
 tie itself (IoTieRequest's, through the tie service; no IoTieRequest digest is pinned at the served size class, so
@@ -1003,13 +1003,13 @@ advice gives it.
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
 channel (`Security/Proofs/NetworkCertifier/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
-than predicts, so no grid is compared. An ingress verification phase is accepted if it has exactly one record, present by the
+than predicts, so no grid is compared. An ingress execution phase is accepted if it has exactly one record, present by the
 deadline, and its status is complete; otherwise it is a `no-verdict`, `duplicate` or `status:<reason>` violation, as on
 egress. A committed record's status is read in the clear, and the digest binds it. The verifier has no Program grid to
 recompute an ingress digest from, though, so unlike on egress it can't catch a published status that disagrees with
 the digest: that rests on the certifier publishing its own status (W5). A certified ingress record's status is the signed
 head's, so it rests on the certifier instead, and the audit (`check_ingress_link(..., key=key, params=params)`) also
-requires the head's T, r, B, τ_b and parameters digest to be `params`'s, or it is a `mismatch`. A run is accepted only if every verification phase of
+requires the head's T, r, B, τ_b and parameters digest to be `params`'s, or it is a `mismatch`. A run is accepted only if every execution phase of
 every link the audit checks is, so an accepted verdict on every link of ∂X, with `check_link` on egress and
 `check_ingress_link` on ingress, means every boundary link's status was complete in every window audited.
 
@@ -1025,7 +1025,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Left-packed | `(r + 1)^T` occupancies, attained by the FIFO certifier | `SecurityProofs.CardLeftPacked`, `SecurityProofs.EncardFifoGrids` |
 | Exactly M released | at most `binom(T + M − 1, M)` | `SecurityProofs.CardCountsEqLe` |
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
-| Envelope, with no clock | `T·log2(r + 1)` bits per verification phase | Proposition 2 |
+| Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
@@ -1035,7 +1035,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
-| Ingress, per verification phase (the K charge's unit) | `T·log2(r_in + 1)` bits per verification phase over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
+| Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
 **The advice string's row.** The advice string is the constant-rate Program's content advice, so its charge is `A_c`.
 The Lean statement keeps the charge abstract (`Security/Definitions/NetworkCertifier/AdviceString.lean`): a function
@@ -1109,7 +1109,7 @@ are the bounds `calibration.calibrate` reports: egress over a monitoring period
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
 (`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a monitoring period (the
 K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
-per verification phase (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
+per execution phase (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
 is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
 audited, with no record.
 
@@ -1143,12 +1143,12 @@ fewer patterns than Σ_sync has values.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
-verification phase (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
+execution phase (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
 (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
 establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of every ingress guarantee:
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
 the two per-window forms. Over the first m whole windows of a run (n = m·T; for the K charge, the run from the last
-wipe) the count factors per verification phase: `(r_ℓ + 1)^T` on each link in each window, `T·log2(r_in + 1)` bits, which is
+wipe) the count factors per execution phase: `(r_ℓ + 1)^T` on each link in each window, `T·log2(r_in + 1)` bits, which is
 the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`, and
 `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` for the `Contents` version).
 
@@ -1190,7 +1190,7 @@ The notation is for one audit of W windows:
 - `compile` is `compile_steps(registered, ·)`. It is registered with the codec, a cap c on the advice's charged bits,
   Σ_sync and (T, r, B, τ_b, Q), all before the audit's first window.
 - a is the advice the prover registers, and 𝒜_c is the set of advice strings whose charge `bits(a)` is at most c.
-- The units are the step units of the compiled circuits, the tie units, and N2's units (one per verification phase).
+- The units are the step units of the compiled circuits, the tie units, and N2's units (one per execution phase).
 
 **The claim.** Given the ingress, the registered items fix a set of egress observation sequences with at most
 
@@ -1920,7 +1920,7 @@ them.
     k's first bucket, its first records are window k's, and the first egress frame it takes is the Program's at
     position p, the frames before p being the earlier windows'. It carries nothing from before it went down: no queue,
     stream, fault or salt.
-  - **The windows it was down for** have no record, and the audit gives each of their verification phases `no-verdict`, as for
+  - **The windows it was down for** have no record, and the audit gives each of their execution phases `no-verdict`, as for
     any missing record. The certifier's audit has no maintenance: excusing those windows is the verifier's plan's, in
     the accounting layer (`benchmarks/datacenter`'s `Maintenance`), which charges everything the block held instead.
   - **Going down.** `windows` ends a proxy's run early: `Proxy(windows=w)` serves windows 0 … w − 1, publishes their
@@ -2164,7 +2164,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
   loopback on the prover's host.
 - **The cells' wiring is open to the verifier.** A unit's read is (q, k), connection q's
-  cell k of the verification phase. The verifier places it at its bucket's row and slot with the network certifier's wiring
+  cell k of the execution phase. The verifier places it at its bucket's row and slot with the network certifier's wiring
   (`Wiring.place`), which the signed head names by a salted digest, so the reads are the network certifier's and never the
   prover's (the phase-8 attack's finding, closed). Which cell each unit reads is the Program's: the units' wiring
   (`Units`, a (q, k) a unit) is fixed with the Program from the schedule, the ordinals and the signed wiring alone,
@@ -2172,7 +2172,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   header to, so a statement made for another units' wiring is refused even at the same rows (the phase-11 attack's pad
   for a data cell, closed; no gate). But the wiring is opened to the verifier, and it and the rows the units
   read give away each connection's first row and cell count, both the prover's. A permutation argument closes it, with
-  no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the verification phase's
+  no new verifier form. Before the window's coins, the prover registers V′, a value of its own: the execution phase's
   N = T·S cells as pairs (k, cell k of V, the network certifier's value), reordered into unit order, a fixed number of positions
   per consuming unit (its cells in wire order, then empty cells), so the population's shape is public and its
   occupancy isn't. Under two live coins α and γ, a population reads every row of V (a bucket's S cells) and of V′
@@ -2199,7 +2199,7 @@ receiver's opens the same row as an input, under a root the network certifier si
 reads (`Flock.Registered.checkPort`, `--registered`), with no new verifier form. `warden_rows.py`'s docstring has the
 encodings; this section says what is committed, signed and read.
 
-**The rows.** Each verification phase of the wire's two records (link, direction, window w) is T rows, a row a bucket of its
+**The rows.** Each execution phase of the wire's two records (link, direction, window w) is T rows, a row a bucket of its
 grid whatever the load (the I/O tie's layout, "The I/O tie"):
 - row t − w·T is bucket t's S = lanes·r slots in slot order, slot j at bytes j·B to (j + 1)·B, so at words j·B/2
   onward; at the served schedule a row is 4 KiB;
@@ -2211,27 +2211,27 @@ grid whatever the load (the I/O tie's layout, "The I/O tie"):
 
 **The wiring** says which connection holds which slots: connection q, live in `cells`/r rows from row `first`, holds
 slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live connections, so its cell k of the
-verification phase is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r) (`Wiring.place`). The network certifier reads it off the record
+execution phase is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r) (`Wiring.place`). The network certifier reads it off the record
 (`wiring`, which refuses a record not laid out so) and commits it, as (q, first, cells) by q, under a 64-byte salt of
 its own.
 
 **The commitment** is a registered value's: row k's `b‖c` is hm96's commit string of its `sha512/row/v2` digest under
 salt k, 192 bytes the network certifier samples from the operating system for that row alone, and the leaves form a
 frame-v3-sha512 tree. Its domain is the network certifier's own, binding the parameters digest, the certifier session, the link,
-direction and window, B, S, T and the row format, so a root opens under one verification phase of one session's schedule.
+direction and window, B, S, T and the row format, so a root opens under one execution phase of one session's schedule.
 The rows, their salts and the wiring's are witness, handed to the prover alone. What the network certifier keeps for the prover
-is the records and, for each verification phase, the rows' salts and the wiring's (`cells.salts`, `Cells.witness`): the
+is the records and, for each execution phase, the rows' salts and the wiring's (`cells.salts`, `Cells.witness`): the
 rows and the wiring are read off the records again. The auditor's gate keeps all of it under the run's `witness/`.
 
 **The signed head** names the root and the wiring: link, direction, window, the parameters digest, B, S, T, the
 wiring's digest, the domain and the root, under its own tag (`CellsHead`). The network certifier signs it with the certifier's
-signer (`Issuer.sign`: the certifier message for the key, the session and the verification phase, one LMS leaf). The record's
-own certificate of that verification phase signs its salted record digest, so neither verifies as the other.
+signer (`Issuer.sign`: the certifier message for the key, the session and the execution phase, one LMS leaf). The record's
+own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
 (`layout`: T, S, r and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
-verification phase give, and the certificate verifies over the head under the network certifier's key in the session.
+execution phase give, and the certificate verifies over the head under the network certifier's key in the session.
 
 **Ordinals count from 1.** A cell's stream field is its connection's ordinal, and so is the wiring's q: the k-th
 connection to reach the network certifier, from 0, is ordinal k + 1, the wire's ingress ordinal, as the active certifier's

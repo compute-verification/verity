@@ -29,7 +29,7 @@ and the stream's registrations built from the stream's outcomes of record alone 
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
   its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but which
   opens to no public row of the verifier's, so window 1 is refused; ``forged``, an advice whose request 1 is 45 prompt
-  tokens in the same cells, which IoTieRequest refuses in both verification phases; ``split``,
+  tokens in the same cells, which IoTieRequest refuses in both execution phases; ``split``,
   prompts of 40 and 5 tokens in cells the advice swaps, proved on the cells' own lanes, which
   the verifier refuses in every window, the release not being the swapped advice's schedule (`EXPECT`).
 * **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_unit` lowered once (the gate

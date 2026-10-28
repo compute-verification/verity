@@ -8,11 +8,11 @@ nothing carries across it. Its subcircuits are Definitions (`templates`): the W8
 and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-**The law is what Lean proves.** Each subcircuit is one verification phase of the block (`IntegrityPeriod`): one Flock `--zk`
+**The law is what Lean proves.** Each subcircuit is one execution phase of the block (`IntegrityPeriod`): one Flock `--zk`
 session sampling a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` sampled proof blocks each
-(m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each verification phase has
-fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S verification phases of the block split delta), and by
-`IntegrityHorizon` a subcircuit's verification phases over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
+(m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each execution phase has
+fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S execution phases of the block split delta), and by
+`IntegrityHorizon` a subcircuit's execution phases over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
@@ -183,7 +183,7 @@ class Rates:
 
 @dataclass(frozen=True)
 class Window:
-    """One subcircuit's verification phase of the block: `k` of its units sampled in one session of `tables` tables."""
+    """One subcircuit's execution phase of the block: `k` of its units sampled in one session of `tables` tables."""
 
     template: Template
     k: int
@@ -199,9 +199,9 @@ class Window:
 
 
 def window(t: Template, k: int, windows: int, r: Rates) -> Window:
-    """`t`'s verification phase sampling k: its tables (at most `_cap` sampled proof blocks each, k rounded up to a multiple of them, as
+    """`t`'s execution phase sampling k: its tables (at most `_cap` sampled proof blocks each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
-    the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's verification phases."""
+    the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's execution phases."""
     a, cap = t.proved, X._cap(t.proved)
     k = min(t.units, k)
     tables = ceil(k / cap)
@@ -212,7 +212,7 @@ def window(t: Template, k: int, windows: int, r: Rates) -> Window:
 
 
 def plan(ts: list[Template], share: float, r: Rates) -> list[Window]:
-    """Every subcircuit's verification phase at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
+    """Every subcircuit's execution phase at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
     units wrong."""
     k = ceil(log(len(ts) / DELTAS[0]) / share)
     return [window(t, k, len(ts), r) for t in ts]
@@ -247,8 +247,8 @@ def budget_share(ts: list[Template], m: Shape, r: Rates, gpu_s: float) -> float 
 
 
 def window_blocks(ws: list[Window], m: Shape) -> int:
-    """The least B for which verification phases of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
-    of a verification phase's units whatever its n, and `_cap` reads only a unit's ANDs, so a verification phase over B blocks keeps k, its
+    """The least B for which execution phases of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
+    of an execution phase's units whatever its n, and `_cap` reads only a unit's ANDs, so an execution phase over B blocks keeps k, its
     tables and its cost, and costs a block 1/B of it."""
     return ceil(proving(ws, m) / m.block_s)
 

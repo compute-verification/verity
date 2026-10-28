@@ -23,7 +23,7 @@ and about 257 bits of receipt committed a chunk. Drawn lanes share their chunks'
 
 **Budget.** Proving is within 1% of the block's compute. Serving's overhead is beside it, never in it: the commits
 (1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
-block's 1% is less than one statement's fixed cost, so the plan of record is given for verification phases (the proof blocks
+block's 1% is less than one statement's fixed cost, so the plan of record is given for execution phases (the proof blocks
 one sample covers, committed and registered before it) of the least length whose 1% affords a plan, a week, a month and a
 year: one sample over all their units, its statements shared per subcircuit. M3's live sample (`m3`) is a uniform 8 of one
 block's units (and, for its reservation, 8 of its tile lanes), given as its cost against the block's GPU time and its 1%
@@ -37,7 +37,7 @@ the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantee
 units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
 delta, from one sample at one delta. A difftest holds `certify`'s fields to that supremum.
 
-**Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit a verification phase,
+**Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit an execution phase,
 `ceil(k / cap)` statements of sampled proof blocks), its feature a unit's ANDs with its rows' openings, every unit's outputs
 committed at the GPU row committer's 225 GB/s, and a drawn request replayed at its share of the block's
 GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay domain,
@@ -77,7 +77,7 @@ COMMIT_STEP_S = 1.0
 COMMIT_BPS = 225e9
 DELTAS = H.DELTAS
 PERIODS = H.PERIODS
-#: the proving budget: proving at this share of the verification phase's GPU time
+#: the proving budget: proving at this share of the execution phase's GPU time
 BUDGET_SHARE = 0.01
 #: the budgets swept, in multiples of one serving block's GPU time, past the cheapest plan's
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
@@ -199,7 +199,7 @@ def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
 
 
 def candidates(m: H.Shape = SHAPE, *, blocks: int = 1, tiles: bool = True) -> list[Candidate]:
-    """One candidate a subcircuit over a verification phase of `blocks` serving blocks, its unit's work its own ANDs, its
+    """One candidate a subcircuit over an execution phase of `blocks` serving blocks, its unit's work its own ANDs, its
     output bits committed, and its statement cap its staged k_log's."""
     return [Candidate(t.id, t.id, t.units * blocks, t.ands, t.out_bits, ands=t.ands, rows=t.rows,
                       commit_bits=t.out_bits if t.commit is None else t.commit, cap=t.cap,
@@ -369,7 +369,7 @@ def sweep(cands: list[Candidate], cm: CostModel, m: H.Shape = SHAPE, *, grid: in
 
 
 def least_blocks(m: H.Shape = SHAPE, *, share: float = BUDGET_SHARE) -> int:
-    """The fewest serving blocks a verification phase spans for `share` of its GPU time to afford the cheapest plan. The
+    """The fewest serving blocks an execution phase spans for `share` of its GPU time to afford the cheapest plan. The
     cheapest plan's cost only grows with the span (its sampled proof blocks meet more requests to replay), so no span shorter
     than one block's cheapest over `share` of a block affords it, and past the first span that does every span does."""
     def affords(n: int) -> bool:
@@ -388,14 +388,14 @@ def least_blocks(m: H.Shape = SHAPE, *, share: float = BUDGET_SHARE) -> int:
 
 
 def spans(m: H.Shape = SHAPE, *, share: float = BUDGET_SHARE, periods: dict[str, int] = PERIODS) -> dict[str, int]:
-    """The verification phases the plan of record is given for, in serving blocks."""
+    """The execution phases the plan of record is given for, in serving blocks."""
     return ({"one block": 1, "least": least_blocks(m, share=share)}
             | {name: floor(seconds / m.block_s) for name, seconds in periods.items()})
 
 
 def plan_at(m: H.Shape, name: str, n: int, *, share: float = BUDGET_SHARE, grid: int = 41) -> dict:
-    """The plan at `share` of a verification phase of n serving blocks: its sample a subcircuit, its cost a serving block, and
-    its two bounds at each delta, each also as a share of the verification phase's ANDs and output bits, with the tile
+    """The plan at `share` of an execution phase of n serving blocks: its sample a subcircuit, its cost a serving block, and
+    its two bounds at each delta, each also as a share of the execution phase's ANDs and output bits, with the tile
     stratum's epsilon and serving's commits beside it."""
     cands, cm = candidates(m, blocks=n), costs(m, n)
     ands, bits = sum(c.units * c.ands for c in cands), sum(c.units * c.out_bits for c in cands)
@@ -558,7 +558,7 @@ def render_m3(rows: list[dict]) -> str:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--spans", nargs="*", help="only these verification phases (`spans`' names)")
+    ap.add_argument("--spans", nargs="*", help="only these execution phases (`spans`' names)")
     ap.add_argument("--no-frontier", action="store_true")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)

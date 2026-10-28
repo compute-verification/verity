@@ -93,7 +93,7 @@ class TokenSampleGumbel:
     def _state_gather(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         """vLLM's top-p/top-k path gathers the per-request sampling state (`top_p[req_indices]`, `top_k[...]`: small 1-D
         float32/int32 buffers of max_num_seqs entries) with `aten.index.Tensor` in the sample phase.  These are request facts
-        of the header (the workload's verification phase), not activations: a metadata noop.  Anything else is left to the pinned
+        of the header (the workload's sampling parameters), not activations: a metadata noop.  Anything else is left to the pinned
         patterns (the hidden-state `logits_gather`)."""
         a = bound_args(node)
         src = first(a.get("self"), a.get("arg0"))

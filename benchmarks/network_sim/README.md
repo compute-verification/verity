@@ -61,18 +61,18 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
 
 ## What a run checks
 
-`run` plays `benchmarks/network_traces/tests/test_active_replay.py`'s synthetic trace, three verification phases of 60
+`run` plays `benchmarks/network_traces/tests/test_active_replay.py`'s synthetic trace, three execution phases of 60
 buckets of 100 ms, on every zone at once. In each zone runs the server (`active_replay.Server`), in its certifier's
 namespace the proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer,
 whose connection crosses the fabric. Each zone's server plays one strategy: `honest`; `bits`, whose write times carry a
-random bit per request; `late`, which holds a request in verification phase 0 past every sync; `extra`, which writes one
-event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for verification phase 1
+random bit per request; `late`, which holds a request in execution phase 0 past every sync; `extra`, which writes one
+event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for execution phase 1
 (below). Each zone is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link`
 on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port
 (`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each sampling period, with
 the declared counts and digest, and each carried sampling period leaves log2 of the sync set's size bits of timing
 advice. The declaration's cadence is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks
-of 1 ms, verification phases of 60 buckets and 16 jitter classes (syncs). Each zone's wire is also compared with the
+of 1 ms, execution phases of 60 buckets and 16 jitter classes (syncs). Each zone's wire is also compared with the
 honest zone's. `DIR/summary.json` has the verdicts and the timing, and `DIR/b0/` a zone's records (`records.json` as
 `Record`s), logs and audit.
 
@@ -83,39 +83,39 @@ is the honest one, byte for byte.
 ### With the salt
 
 `run --salt` turns each certifier's per-verification-phase salt on (`Proxy(salt=active.fresh_salt)`, the certifier's
-`PROTOCOL.md`): at each verification phase's first bucket the ingress side puts one salt frame, which carries the verification
+`PROTOCOL.md`): at each execution phase's first bucket the ingress side puts one salt frame, which carries the execution
 phase's number and the placeholder (64 zero bytes) and never the salt, in the zone's ingress record, and sends the salt
 itself to the zone's server on a connection of its own. Once a zone's run is over, `run` makes the verifier's "reveal"
-call to its proxy and keeps the salts in `DIR/b0/salts.json`. The record check declares each ingress verification phase it
-has a salt for with its salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads each verification
-phase's salt frame and the revealed salt's width and counts the salt frames in each ingress verification phase and in
-egress. The salt takes one of the ingress side's frames in each verification phase's first bucket, so a request enqueued in
+call to its proxy and keeps the salts in `DIR/b0/salts.json`. The record check declares each ingress execution phase it
+has a salt for with its salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads each execution
+phase's salt frame and the revealed salt's width and counts the salt frames in each ingress execution phase and in
+egress. The salt takes one of the ingress side's frames in each execution phase's first bucket, so a request enqueued in
 that bucket can go out a bucket later.
 
 ### Maintenance
 
-The fifth strategy, `maintenance`, takes a zone's certifier down for verification phase 1. The default four zones take the
-first four strategies, so it needs `up --blocks 5` and `run --blocks 5`. The zone is drained for that verification phase
-(`active_replay.outage_plan`): no request is enqueued in it, and the plan is refused if anything of verification phase 0
-would still be in flight there. Its proxy serves verification phase 0, then closes the link and stops listening, so for
-verification phase 1 the link is dead and no record is published. Half a verification phase before verification phase 2, a proxy
+The fifth strategy, `maintenance`, takes a zone's certifier down for execution phase 1. The default four zones take the
+first four strategies, so it needs `up --blocks 5` and `run --blocks 5`. The zone is drained for that execution phase
+(`active_replay.outage_plan`): no request is enqueued in it, and the plan is refused if anything of execution phase 0
+would still be in flight there. Its proxy serves execution phase 0, then closes the link and stops listening, so for
+execution phase 1 the link is dead and no record is published. Half an execution phase before execution phase 2, a proxy
 back from maintenance (`Proxy(start=2, position=p)`, the certifier's `PROTOCOL.md`) listens on the same port, and the
 peer connects again. The proxy process stays up through the outage, but the proxy back from it is a new `Proxy` with
-fresh certifiers, so it carries nothing from verification phase 0. The zone's records are declared from its own drained
+fresh certifiers, so it carries nothing from execution phase 0. The zone's records are declared from its own drained
 plan, the Program its prover registers.
 
 The record check runs twice on that zone, each time with the account's charge for its claims (`mockdc.charge`:
 `datacenter.account` on a profile that credits no gates and registers no store, under the verifier's plan for that
 zone):
-- **Without a declared maintenance**, the plan is the epoch alone. Both ports' records for verification phase 1 are refused
+- **Without a declared maintenance**, the plan is the epoch alone. Both ports' records for execution phase 1 are refused
   "no record", and the account charges each at the uplink's full capacity.
 - **With `Plan(maintenance=[Maintenance(b4, [6000, 12000))])`** (`mockdc.verifier_plan`), the declared records leave
-  verification phase 1 out (`records.declared(..., verifier=plan)`, as `datacenter.audit` does), and the other four of the
+  execution phase 1 out (`records.declared(..., verifier=plan)`, as `datacenter.audit` does), and the other four of the
   zone's records are carried. The account is sound, but it charges everything the zone's devices hold. The plan has no
   wipe, so nothing bounds what the zone holds once it is back.
 
-The certifier's own audit has no verdict for verification phase 1 on either link (`no-verdict`). It has no notion of
-maintenance: excusing a verification phase is the accounting layer's. A run with `--blocks 5` leaves the lab in that shape;
+The certifier's own audit has no verdict for execution phase 1 on either link (`no-verdict`). It has no notion of
+maintenance: excusing an execution phase is the accounting layer's. A run with `--blocks 5` leaves the lab in that shape;
 `workload/lab_run.py` needs it back in its default shape (`mockdc.py down`, then `up`).
 
 ### Two sites
@@ -152,7 +152,7 @@ bucket late, and an honest zone's ingress records are refused unless the Program
 - All the processes share one host's monotonic clock, so one origin times every proxy. Zones on separate hosts would
   need their clocks synchronized to within the slack.
 - `datacenter.Cadence` holds one cadence for both directions. The lab's egress and ingress agree on frame size, bucket
-  and verification phase, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence`
+  and execution phase, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence`
   doesn't hold.
 - `active_replay`'s Program has one outside peer per link, so a fleet's traffic between sites is a zone and the outside
   host, across the WAN. A Program in which a zone on one site talks to a zone on the other would need the far zone,
@@ -166,12 +166,12 @@ proxy in its certifier's, and the client on `na-ext0`. A zone reaches only its c
 message between zones: it leaves its source as server-sent events of a response and enters its destination in a request
 (`workload/lab.py`), both on the canonical framing (`active.event`, `active.request_frames`). Each zone is checked three
 ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the zone's event log), N2's served verdict
-on each verification phase (`lab_run.n2_verdicts`), and the answers against the Program evaluated in one process. Every
-verification phase declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a Python with torch
+on each execution phase (`lab_run.n2_verdicts`), and the answers against the Program evaluated in one process. Every
+execution phase declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a Python with torch
 (below). Its tampers are `--tamper b2:late` and `b1:extra`, and their expected verdicts are `run.WORKLOAD`'s.
 
 Every zone's link is served (the certifier's `PROTOCOL.md`, "A served link"): responses padded with empty events to F,
-requests to F_in frames, and a proxy that admits a request only while its verification phase still ends idle. The proxy
+requests to F_in frames, and a proxy that admits a request only while its execution phase still ends idle. The proxy
 signs nothing: a stand-in LMS key (`lab_run.n2_verdicts`) signs N2's heads after the run.
 
 ## The whole night
@@ -213,7 +213,7 @@ results are read.
 ## N3, retired
 
 N3, the content check (every frame a certified link carried is a committed crossing), was prototyped here: in the clear
-over the certifiers' records and as Boolean circuits over a verification phase, `N3Window_v3` to `N3Window_v5`, that no Spec
+over the certifiers' records and as Boolean circuits over an execution phase, `N3Window_v3` to `N3Window_v5`, that no Spec
 ran. It is retired, superseded by the network certifier's step-indexed scan
 (`verity/core/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
 in zero knowledge.

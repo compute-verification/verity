@@ -33,7 +33,7 @@ makes that source the certifier's signed record.
 - **A certificate of its own, not a head field.** Signing the sync inside the egress head (`RecordHead.encode`) would
   change the head encoding that the head check's circuit, the Lean records and the CertifierDevice pin. The record
   certificate, the head and `active.py` are unchanged.
-- **Domain separation.** The record certificate of the same verification phase signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
+- **Domain separation.** The record certificate of the same execution phase signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
   R), R a record digest, and the clock certificate the same over a clock digest, each digest under its own tag. So one
   opens as the other only on a SHA-512 collision, as with the network certifier's cells certificate (`warden_rows`). Nor can the
   head check take a clock certificate as a record's: that needs a head whose record digest is the clock digest.
@@ -44,7 +44,7 @@ makes that source the certifier's signed record.
   hold, and the windows run from 0 to the first one without exactly one such sync. `SignedClocks.refused` names each
   opening it took no sync from and why: not a salted clock's opening, not egress, another key's, a sync and salt that
   don't open the signed digest (an altered digest or sync), a signature that doesn't verify (forged, another
-  session's, or relabelled to another link or window), a salt another verification phase's opening has too, or two signed
+  session's, or relabelled to another link or window), a salt another execution phase's opening has too, or two signed
   syncs for one window. Once a frame is released in a window without a sync no floor is under a signed sync, and
   every window of the link is refused. The link's verdict is the AND over its windows, so the link is refused either
   way. Whoever delivers the openings, the prover included, can't change what they open to.

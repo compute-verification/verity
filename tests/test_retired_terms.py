@@ -44,7 +44,8 @@ DOC_TERMS = {
     "declared advice": "advice",
     "declared circuit": "registered circuit",
     "declaration block, declaration period": "execution block, execution phase",
-    "sampling period, sampling block, PoUW's commit period": "verification phase",
+    "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
+                                                            "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
@@ -118,6 +119,8 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
+    "benchmarks/pouw/accel_v31/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
+    "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/Definitions/Nci/Capability/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/hash/lib/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",

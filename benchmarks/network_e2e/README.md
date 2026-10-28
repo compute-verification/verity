@@ -3,13 +3,13 @@
 Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
 
-- N2's verdict of record on every verification phase, and the link's network verdict;
+- N2's verdict of record on every execution phase, and the link's network verdict;
 - head checks proved with C-Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`
-  (`benchmarks/network_traces/n2_zk.py`): every honest verification phase at both ends, and the egress ends of the tampered
+  (`benchmarks/network_traces/n2_zk.py`): every honest execution phase at both ends, and the egress ends of the tampered
   and extra runs;
-- the negatives, each refused: `late`, `extra` and a tampered head (the honest run's verification phase 0 egress head, one
+- the negatives, each refused: `late`, `extra` and a tampered head (the honest run's execution phase 0 egress head, one
   count off);
-- the chain's steps after N2 and the proofs (`chain.py`): the advice and its bits per verification phase, the prove path's
+- the chain's steps after N2 and the proofs (`chain.py`): the advice and its bits per execution phase, the prove path's
   audit, the registry of negatives and, on the advice profile, the I/O tie.
 
 `e2e.py` is the driver and `chain.py` holds the chain's steps; their docstrings have each option and each check. It
@@ -33,7 +33,7 @@ uv run --extra torch-cpu verity bench network_e2e --from REHEARSAL --out DIR --n
 
 When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` (or a tarball of it) as
 `--proofs DIR` instead of `--no-prove`. The report adopts those proofs only if every proved proof block's public row
-carries the certificate digest of the `--from` runs' record for that end and verification phase (`e2e.adopt`).
+carries the certificate digest of the `--from` runs' record for that end and execution phase (`e2e.adopt`).
 
 To rehearse first, pass `--upstream URL` (an OpenAI streaming endpoint), `--vllm MODEL` (vLLM started on this host's
 GPU) or `--endpoint-peer NAME:PORT` (node NAME's endpoint on its loopback, through an ssh forward) instead of `--from`.
@@ -90,16 +90,16 @@ An honest run is required, because the tampered head is made from it. Two runs o
 
 `report.json` (`verity-network-e2e/report/v3`) holds:
 
-- per run: the rehearsal's own check, the gate's `end.json` verdict, N2's network verdict and its refused verification
+- per run: the rehearsal's own check, the gate's `end.json` verdict, N2's network verdict and its refused execution
   phases, and, per proved end, whether Lean held it and its proving run's cost (below);
-- per verification phase: N2's verdict, each end's proved verdict (accept or refuse, from the verdict row the verifier
+- per execution phase: N2's verdict, each end's proved verdict (accept or refuse, from the verdict row the verifier
   opens), and the head-check parts that fail (a diagnostic, evaluated in the clear on the rehearsal's witness);
 - per negative: refused or not, and by what (N2, the rehearsal's check, the proved head checks);
-- one verification phase proved alone (`n2_zk`'s cost pass), and the claim (below);
-- the chain's steps that ran (`chain`: the advice, its bits per verification phase, the prove path, the negatives' rows),
+- one execution phase proved alone (`n2_zk`'s cost pass), and the claim (below);
+- the chain's steps that ran (`chain`: the advice, its bits per execution phase, the prove path, the negatives' rows),
   and `stubbed`.
 
-`report.md` renders the same thing as tables. OK means: the honest run was accepted on every verification phase by N2 and,
+`report.md` renders the same thing as tables. OK means: the honest run was accepted on every execution phase by N2 and,
 where proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; a
 given advice is these runs' and rebuilt from their certified I/O; a bound prove path and the registry of negatives,
 where they ran, passed. On the advice profile the rehearsal's own check stands in for N2, and a negative counts only for
@@ -110,7 +110,7 @@ failed, a missing negative's run among them.
 ## What it proves, and what it doesn't
 
 The claim is in `e2e.py` (`CLAIM`) and in both files, word for word. **It covers counts only.** For the rehearsal's one
-link, every honest verification phase's per-bucket frame counts match the planned occupancy profile (on a served link, the
+link, every honest execution phase's per-bucket frame counts match the planned occupancy profile (on a served link, the
 counts its ingress head derives). That fixes the link's timing to the profile. Late, extra and a tampered head are each
 refused.
 
@@ -134,7 +134,7 @@ Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Zero kno
 what's open"):
 
 - N2's verdicts here are decided in the clear (`LinkWindows.unproved_outcome`, as for any run that proves nothing),
-  which reads the heads and the certifier's salts. `n2_zk` now decides each verification phase on a `--zk` proof of N2's
+  which reads the heads and the certifier's salts. `n2_zk` now decides each execution phase on a `--zk` proof of N2's
   registered proof block, one member a round; this report doesn't read that summary yet, so it proves nothing itself
   and refuses to adopt such a run (``--no-prove`` takes N2's verdicts only).
 - The proofs an adopted earlier `n2_zk` summary holds are of its row adapter, not of N2's registered proof block, so
@@ -144,11 +144,11 @@ what's open"):
 
 ## Cost
 
-Each end of a verification phase is one proof block of its member's statement. All of an end's verification phases are proved in
+Each end of an execution phase is one proof block of its member's statement. All of an end's execution phases are proved in
 one proving run, one statement and one pair of proofs (`circuit.rep0.bin`, `circuit.rep1.bin`), and Lean verifies them
-at once, so a verification phase has no proving time or proof of its own. The report gives each proving run's prover
+at once, so an execution phase has no proving time or proof of its own. The report gives each proving run's prover
 seconds, Lean verify seconds, proof bytes and peak memory, undivided. Peak memory is the largest process the driver had
 run by the end of the proving run (`RUSAGE_CHILDREN`, which only grows). `n2_zk` proves the honest members first, so the
 tampered and extra runs' peaks include theirs. Beside them is `n2_zk`'s cost pass: a proving run on the honest
-statement whose verifier samples one verification phase, per end, which is what one verification phase costs proved alone. The
+statement whose verifier samples one execution phase, per end, which is what one execution phase costs proved alone. The
 driver's own peak (the proof block's lowering) is shown when it proved.

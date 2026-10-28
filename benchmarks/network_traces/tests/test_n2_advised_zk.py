@@ -301,7 +301,7 @@ def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_bu
     """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
     zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
     off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros, so a
-    control on the instance files fails on exactly those pieces. Here the verification phases' wit rows, the rows the
+    control on the instance files fails on exactly those pieces. Here the execution phases' wit rows, the rows the
     instance files hold as they are, stand in for them."""
     _, rounds = _link(n2.T)
     rd = rounds["honest"]

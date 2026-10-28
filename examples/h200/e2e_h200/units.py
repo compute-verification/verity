@@ -28,7 +28,7 @@ weights (`weights.Weights`, from the generator, not the store, so a wrong decode
 slot ``slots[b]`` at its own position p; its attention reads the slot's K and V rows committed at positions 0 .. p, each at
 the step and row the slot ran it (`Replayer.history`), never the live cache.
 
-A `Subcircuit` joins the step's integrity registration as one more verification phase, drawn with the step's families: PoUW's
+A `Subcircuit` joins the step's integrity registration as one more execution phase, drawn with the step's families: PoUW's
 per-call-noise tiles (`percall`) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
 """
 from __future__ import annotations
@@ -290,7 +290,7 @@ class Replayer:
                 for g in self.map.groups() for _, us in g for u in us]
 
     def registration(self, step: int) -> dict:
-        """The step's verification phases: the model's families by template, then each subcircuit's."""
+        """The step's execution phases: the model's families by template, then each subcircuit's."""
         fams = self.model_families(step)
         return {"blocks": [{"name": "model", "families": len(fams), "templates": sorted({f.template for f in fams})}]
                 + [{"name": sub.name, **sub.manifest()} for sub in self.subcircuits]}

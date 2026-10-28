@@ -12,11 +12,11 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
   deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
-  `FAMILY`, sized from the samples before anything opens (`families`): one coin, then each rank's `need`, at least
-  `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the sample and planned it
-  (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's sample is
-  refused, so a refusal before the sample never spends the root's one session.
-* **The samples** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
+  `FAMILY`, sized from the draws before anything opens (`families`): one coin, then each rank's `need`, at least
+  `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the draw and planned it
+  (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's draw is
+  refused, so a refusal before the draw never spends the root's one session.
+* **The draws** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
   then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
   commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
@@ -25,7 +25,7 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
 * **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
-  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one sample's `{key, ledger, main, pins,
+  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one draw's `{key, ledger, main, pins,
   segment, session}` (`coins.coins_reason`'s, and the Lean run's), and `negatives` its altered copies.
 * **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` draws on `VerifierCoins`, the
   service's default coins (`verifier.coins`: the Lean verifier of record's `IO.getRandomBytes`, assumption A3), read by its
@@ -187,7 +187,7 @@ class Draws:
     def connect(self, address: str, secret: str | None, commitment: str | None) -> None:
         """The opened session's client at `address` (its hello with `secret`, its commitment the gate's open's `commitment`
         when given), then the one coin after the window's root itself, before any rank registers. Raises `CoinError`,
-        refusing every rank's sample, when either fails."""
+        refusing every rank's draw, when either fails."""
         client = None
         try:
             client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
@@ -685,7 +685,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
 
 
 def evidence(published: dict, segment: dict) -> dict | None:
-    """One sample's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
+    """One draw's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
     gave none."""
     if "error" in published:
         return None

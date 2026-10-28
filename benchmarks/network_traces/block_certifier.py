@@ -47,7 +47,7 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
     """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v1``) of one period's
     ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason, commitment and
     public; the quantity K, the bits a covert sender in ``server`` can move over the link in the period's ``windows``
-    verification phases; the error the answer's exact ``eps``; and the certificate at each δ of
+    execution phases; the error the answer's exact ``eps``; and the certificate at each δ of
     `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
     ``real`` or ``fixture``. Only an accepted answer certifies a K, so any other is a ValueError: the record's
     quantity has no shape for a period that certifies nothing."""

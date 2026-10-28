@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The scan's per-sampling-block answers held by verity/certifier/v0's rows form on a CPU machine: two relay
 # rehearsals at the test class's schedule (scan_zk.sh's SC_REHEARSE), honest and void (the fake answering past the
-# relay's delay, SC_LATE_MS: every connection fails late), each's verification phase 0 proved (a group of 1: the rows
-# form reads a registration of one verification phase's 2T proof blocks), every proof block drawn; then scan_period.py's
+# relay's delay, SC_LATE_MS: every connection fails late), each's execution phase 0 proved (a group of 1: the rows
+# form reads a registration of one execution phase's 2T proof blocks), every proof block drawn; then scan_period.py's
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (the rows form's branch) in a
 # worktree. From a clone, in one of the network slots:
