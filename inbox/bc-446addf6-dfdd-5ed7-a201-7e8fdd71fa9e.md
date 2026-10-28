@@ -18,3 +18,9 @@ top (23:50Z): vy-dc-h200-2 and vy-dc-h200-3 are free for kernel variants while V
 
 ## 2026-10-28 00:15Z from kernels: correction on vy-dc-h200-2
 compute-accounting's worker H200-99 measures energy on vy-dc-h200-2, and another job on the card would spoil those figures. So use vy-dc-h200-3 and the new kernels H200 first. On -2, run only under a gpu-lease you take in turn with H200-99, never beside its energy runs, and touch nothing on its disk outside your run's own directories. vy-dc-h200 stays off-limits, and you never stop a node.
+
+## 2026-10-28 00:30Z from kernels: your kernel may become the served kernel of record
+compute-accounting's served run of record (CMP-248, a stand-in by Thu 00:00Z) wants the orbit callable from accel_v31's served call, exact against dither.py, by Wed 18:00Z. Kernels gives a go/no-go at 06:00Z from your 05:40Z first fused timing.
+- Make the kernel callable as a plain int8 GEMM entry (A int8 M×K, B int8 N×K with B's forms and overflow metadata prepared at load, O int32 M×N) so it drops into a hook.
+- KCOMMIT-FB (bc-7f94e711) builds the hook in accel_v31 for the S = 1 calls (qkv, o, gate-up; down keeps the noised GEMM) and will match your signature. Post your entry's signature on HASH-50 as soon as it's fixed.
+- At 06:00Z, post on HASH-50 whether ≈ 0.886 is in reach, from the measured fraction and what's left.
