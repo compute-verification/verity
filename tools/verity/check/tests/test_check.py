@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -744,6 +745,22 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+
+
+def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
+    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
+    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
+    verdict of both."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    sets = [{"pr83": c, "lean_statement": "s", "statement": {"circuit": f"art:{c}/c", "public": f"art:{c}/p"},
+             "sessions": [{"dir": f"art:{c}/honest", "expect": expect}]}
+            for c, expect in (("aa", {"accepted": False, "why": "setup: registered reads (complete): ", "upstream_accepted": True}),
+                              ("bb", {"accepted": True, "why": ""}))]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
 
 
 def _fake_run(monkeypatch, groups, pre=()):

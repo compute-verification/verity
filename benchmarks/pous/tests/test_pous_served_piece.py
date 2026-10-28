@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -146,7 +147,7 @@ def _run(s: Served, tmp_path, monkeypatch, **kw):
     monkeypatch.setattr(CP, "session", session)
     kw.setdefault("trusted_sha512", hashlib.sha512(signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
-                    party=CP.Party(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
+                    party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
     return answer, calls
 
@@ -270,7 +271,7 @@ def test_a_session_signed_under_another_key_is_rejected(served, tmp_path, monkey
 def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(served, tmp_path):
     """No retry and no exception: the answer says the session didn't complete, and why."""
     answer = SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
-                    party=CP.Party(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
+                    party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                     pins=served.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
         f"the memory challenger's session on {AUDITOR} did not complete")

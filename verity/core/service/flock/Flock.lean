@@ -51,6 +51,7 @@ import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.PortRoots
+import Flock.KsScope
 import Flock.Registered
 import Flock.RegKnown
 import Flock.KnownRead

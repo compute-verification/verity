@@ -29,7 +29,7 @@ namespace RecDeploy.NumsFix
 open Flock
 open Claims (Msg Out)
 open FlockSoundness.Refine
-open FlockSoundness.Discharge.Exec (range_mapM_ok mPts_of_any)
+open FlockSoundness.Discharge.Exec (range_mapM_ok mPts_of_any ok_of_refuse)
 open Lean (Json)
 
 /-! ## Flock's parsers with the public file swapped -/

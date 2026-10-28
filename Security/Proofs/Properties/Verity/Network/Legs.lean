@@ -28,7 +28,7 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circui
 theorem networkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n}
     {A : Audit → ((i : I) → Ω i) → Prop} {s : ((i : I) → Ω i) → Sent}
-    (hA : ∀ ξ, A .network ξ → ComponentAccepts .network (s ξ)) (W : WindowRuns R) (h2 : PeriodRunsV2 W s)
+    (hA : ∀ ξ, A .network ξ → ComponentAccepts .onsite .network (s ξ)) (W : WindowRuns R) (h2 : PeriodRunsV2 W s)
     (h3 : V2AcceptMeans W) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
     (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) (hcov : RecordCovers W s) :
     NetworkWindowLe R A := fun ξ i =>
@@ -59,7 +59,7 @@ theorem network_atCode_of_steps {r : PeriodRun d α C Ω} (c : Certificates) (p 
     (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
       εtap)
     {A : Audit → ((i : I) → Ω i) → Prop} {s : ((i : I) → Ω i) → Sent}
-    (hA : ∀ ξ, A .network ξ → ComponentAccepts .network (s ξ)) (W : WindowRuns R) (h2 : PeriodRunsV2 W s)
+    (hA : ∀ ξ, A .network ξ → ComponentAccepts .onsite .network (s ξ)) (W : WindowRuns R) (h2 : PeriodRunsV2 W s)
     (h3 : V2AcceptMeans W) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
     (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) (hcov : RecordCovers W s) :
     (atCode r A).Sound c p .network (n * (δ + εks + εbind + εtap)) :=

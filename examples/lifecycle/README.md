@@ -18,8 +18,9 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 
 **The proofs are a stand-in.** `prove(statement, witness) -> proof` returns the drawn unit's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the example and not zero-knowledge; C-Flock behind the firewall replaces it (`verity/ml/flock/`,
-`verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
+It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
+one-stage v2 (`SampledProofs.OneStageZk`); C-Flock's zero-knowledge proofs behind the firewall replace it
+(`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
 
 ## Terms
 
@@ -70,8 +71,17 @@ chained through the state wire. The monitoring period is three declaration perio
    count and the frame commitments each drawn unit's I/O gates are held to; the memory challenger's round (`Open`,
    `Challenge`, `Answer`, `Report`) picks 2 theta rows on its own coins and times the answer on its own clock. PoUS holds
    the openings to theta's root; the bandwidth audit holds the time to twice the challenger's link latency plus the rows'
-   bits at the rate of the device theta is placed on, both read from the layout (`theta_reach`). Each subprotocol answers
-   in `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols.
+   bits at the rate of the device theta is placed on, both read from the layout (`theta_reach`). The wipe is a stand-in:
+   the first round fills the node's memory with 64 labels from the challenger's seed (`Fill`), each round reads 2 back
+   with the rows, and the wipe holds them to the fill. PoUW's answer is its window's remote and its period's onsite, one
+   declaration at a time. Both composites run the
+   inference-only policy's check (`inference_only`), which reads no coins: the record names the block's Program, and the
+   policy's Python check (`nci_reference.check_desc`, the reference `NciCheck` is held to) finds that the block divides
+   into inference blocks, one per request (19,620 gates reading 48 bits of fresh input: its input and the state word),
+   within Γ = 2^15 gates and α = 1/256 fresh-input bits per gate, with theta registered. Each subprotocol answers in
+   `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols, after
+   its record tie: the subprotocols it ties (remote all three, onsite the policy and sampled proofs) committed to one
+   record, or it rejects (`Core.Composition.same`).
 6. **Accounting** (`account`). The chain from the registration through every record, each declaration's composite, the
    period's verdict by the same rule, the credited AND gates (PoUW's grid point at or below the real units, fillers
    credited nothing) against the compute the layout held in each declaration period, the advice bits charged as leakage,
@@ -81,7 +91,7 @@ chained through the state wire. The monitoring period is three declaration perio
 The first registration and declaration 1, onsite, and the period, remote (`run.py` prints every phase of both):
 
 ```text
-1 hardware     registration: entry 72aec7485cfec4a3..., after e3d2030c65fc3ac4...
+1 hardware     registration: entry 4c9ea553cb07999b..., after e3d2030c65fc3ac4...
                cards      sim-int8-a, sim-int8-b
                locations  site0 (site), node0 (host in site0), gpu0 (device sim-int8-a in node0), hbm0 (memory hbm 64
                           GiB in gpu0), gpu1 (device sim-int8-b in node0), hbm1 (memory hbm 128 GiB in gpu1), dram0
@@ -91,11 +101,13 @@ The first registration and declaration 1, onsite, and the period, remote (`run.p
 declaration 1
   4 declare    advice 00000011000000010010 (20 bits charged); block of 4 units (1 filler) on gpu0, gpu1, gpu0
   5 audit      drew subset:3 of 4: units [0, 2, 3]
-               verity/sampled-proofs/one-stage/v1       accept
-               verity/pouw/v1                           accept
+               verity/sampled-proofs/one-stage/v2       accept
+               verity/pouw/period/v1                    accept
+               verity/inference-only/v0                 accept
                verity/certifier/v0                      accept
                verity/pous/p2/v4/run                    accept
-               verity/remote-bandwidth/v0               accept
+               verity/remote-bandwidth/p2/v0            accept
+               verity/wipe/v0                           accept
                composite verity/onsite/v0               accept
 6 accounting
   period       3 declarations: accept
@@ -123,6 +135,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `io-mismatch`: the wire carries other outputs than the committed ones | audit | the certifier's frames, onsite |
 | `lost-theta`: an answer with a row that isn't theta's | audit | PoUS, onsite |
 | `off-node`: theta fetched from elsewhere, 3 ms a round trip | audit | the bandwidth audit, onsite |
+| `foreign`: other content kept where the memory challenger's fill should be | audit | the wipe, onsite |
 | `fork`: record 2 names the registration, not record 1 | accounting | the chain; every subprotocol accepts |
 
 `test_check_registration` and `test_check_placement` hold every refusal of phase 1 and of the placement to a case.
@@ -131,9 +144,9 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 | name | caller | in | out | module |
 | --- | --- | --- | --- | --- |
-| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | missing: written in the example |
-| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | missing: written in the example (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
-| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | missing: written in the example |
+| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | `Security/Definitions/Core/Site.lean` (`Verity.Site.Sheet`, `Loc`, `Link`, `Verity.Site.Entry`, `Verity.Registration.Entry.site`) |
+| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `Security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the example (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
+| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `Security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the example doesn't check yet), decidable; no difftest yet |
 | `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the declaration blocks | missing: written in the example |
 | `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the example |
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the example |
@@ -145,11 +158,11 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the drawn proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | firewall | a `Statement`, the openings | a proof | STAND-IN for C-Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for C-Flock's verifier |
-| `sampled_proofs`, `pouw_window`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
+| `sampled_proofs`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/ml/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
-| `Challenger`, `theta_reach(layout, store)` | memory challenger, verifier | an open round; the layout | PoUS and bandwidth report; rate and latency | missing: written in the example |
+| `Challenger`, `theta_reach(layout, store)`, `label` | memory challenger, verifier | an open round; the layout | PoUS, bandwidth and wipe report; rate and latency | missing: written in the example (the wipe a STAND-IN for `verity/wipe/v0`) |
 | `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/core/deploy/` (`party`, `manifest`, `runtime.run`) |
 
 ## (c) What this exposes
@@ -194,8 +207,8 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   independent draws, a wrong share ε of the credited work escapes with probability at most q_max^⌈εN⌉ (q = 1 − K′/n, N
   credited units): 1.0 % over the three declarations, 10^-6017 over a week of declarations like these. The theorem from
   a declaration's audit to the period's is the layer the modular math still needs.
-- **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and PoUS's and the bandwidth audit's verifiers take
-  whole-run cases; the example writes one answer each a declaration. Only sampled proofs draws from the declaration
+- **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and `period_check`, and PoUS's, the bandwidth
+  audit's and the wipe's verifiers take whole-run cases; the example writes one answer each a declaration. Only sampled proofs draws from the declaration
   block; the memory challenger draws theta rows.
 - **The advice is charged but the toy's circuit doesn't depend on it beyond the count.** Batching enters B only as
   validation; a batched matmul would make B's output depend on it.
