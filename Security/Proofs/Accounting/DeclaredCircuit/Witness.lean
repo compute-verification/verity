@@ -153,7 +153,7 @@ def offset : Val → ℕ
 the step that completes it. -/
 def encoded (N b : ℕ) : ℕ := b / (N + 2) * (2 * N + 4) + 2 * (b % (N + 2)) + 4
 
-def kvLayout (n P N : ℕ) : Requirement.Layout Val := ⟨block n P N, offset, encoded N⟩
+def kvLayout (n P N : ℕ) : Requirement.Store.Placement Val := ⟨block n P N, offset, encoded N⟩
 
 /-- A value's group: its request, layer `0`, plane `0` and page parity. -/
 def kvGrp : Val → ℕ × ℕ × ℕ × ℕ
