@@ -11,6 +11,7 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.KSLive
+import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicDeployed
 
