@@ -3,6 +3,7 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
+        [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
@@ -64,7 +65,9 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). Each
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
+blocks open (`serve_release`; the draws come in through ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -109,7 +112,8 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import seal_process as SP, serve_h1 as SH, serve_remote as SR, serve_row as RW, serve_seal as SS
+from verity_vllm.pipeline import (seal_process as SP, serve_h1 as SH, serve_release as RL, serve_remote as SR, serve_row as RW,
+                                   serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
@@ -694,6 +698,7 @@ def main(opts: Options) -> int:
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to, before=trace.drain)
     windows = sealer = warmed = arm = None
+    draws, draws_dir = RL.release_of(opts, out)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
@@ -706,7 +711,9 @@ def main(opts: Options) -> int:
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm)
+                                request_cap=opts.window_requests, arm=arm, release=draws)
+    if draws_dir is not None:
+        draws_dir.start()
     if session is not None:
         session.begin(windows)
     loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests)
@@ -755,7 +762,7 @@ def main(opts: Options) -> int:
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), "retain_exclude": opts.retention.retain_exclude or None,
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
@@ -773,6 +780,7 @@ def main(opts: Options) -> int:
             got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
+                   "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
             (out / "summary.json").write_text(json.dumps(got, indent=1))
@@ -784,6 +792,8 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
+        if draws_dir is not None:                        # the pending seals have had their windows' draws
+            draws_dir.stop()
         if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
             arm.drain()
         watchdog.stop()
