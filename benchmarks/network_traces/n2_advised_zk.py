@@ -774,8 +774,8 @@ def main(argv=None) -> int:
                         "advice are committed, and only those proved (LinkWindows.period_draw); 0 (the default): every "
                         "window, Selection All")
     p.add_argument("--challenger", help="with --draw: the period draws on the auditor's challenger's coins (a5_coins, "
-                   "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (vy-challenger-1 "
-                   "through its gate, with --peer and --challenger-key)")
+                   "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (the auditor's "
+                   "challenger through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "

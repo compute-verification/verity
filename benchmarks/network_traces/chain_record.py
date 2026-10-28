@@ -10,8 +10,8 @@
       [--period-answer FILE [--period-case FILE] --server NODE] --out DIR
     python benchmarks/network_traces/chain_record.py leak --warden-run DIR [--scan SUMMARY] --out FILE
 
-* **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as `vy-challenger-gate
-  fetch` writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
+* **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as the gate's ``fetch``
+  writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
   files; it proves nothing about what the gate ran.
 * **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
@@ -689,7 +689,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int | None = None) -
                 "the generator reading of the scan's statement (each unit's registered rows its boundary values): "
                 "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
-                "and the server can't move an admission (not met today)",
+                "and the server can't move an admission (not met)",
                 f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
                 "buckets tell a receiver no more than an idle one",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
