@@ -40,7 +40,7 @@ import socket
 import subprocess
 import sys
 import time
-from math import ceil, sqrt
+from math import sqrt
 from pathlib import Path
 
 import numpy as np
