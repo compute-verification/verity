@@ -16,7 +16,7 @@ returns the same receipts with the same tier reads, sends what the device sends,
 
 **A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
 `G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
-draws are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
+draws are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_floor_le`), as in `Session.lean`.
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
@@ -452,7 +452,7 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's draws over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
+/-- A session's draws over one store as a causal family over the monitoring period (`Rate.Causal`): any event of the
 openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn
 before the session's coins. -/
 theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
@@ -508,7 +508,7 @@ theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev 
 
 /-- **A session's pooled draws over the monitoring period**: every window's openings land on correct receipts while the
 session holds at most `K`. -/
-theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
     pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -517,7 +517,7 @@ theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N
   refine pr_draws_map_of_causal store A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
     ∑ w, ((A.win w y).correctAll E (y w).1).card ≤ K) _ (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
-    ((Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, hK⟩ := hω
     refine ⟨fun w t => hmem ω w t (hall w t), ?_⟩
     show ∑ i, d * (Gs i ω).card ≤ d * K
@@ -534,13 +534,13 @@ theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-/-- `pr_draws_horizon_le_map` on a uniform store. -/
-theorem pr_draws_horizon_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
+/-- `pr_draws_pooled_le_map` on a uniform store. -/
+theorem pr_draws_pooled_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_draws_horizon_le_map id A K
+  pr_draws_pooled_le_map id A K
 
 /-- **A session's pooled draws in every window**: every window's openings land on correct receipts while some window
 holds at most `K_w`. -/
@@ -552,7 +552,7 @@ theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N 
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
   refine pr_draws_map_of_causal store A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
     ∃ w, ((A.win w y).correctAll E (y w).1).card ≤ Kw) _ (fun X _ Gs hG f E hmem hcard => ?_)
-  refine (pr_mono (fun ω hω => ?_)).trans ((Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
+  refine (pr_mono (fun ω hω => ?_)).trans ((Pooled.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, w, hw⟩ := hω
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
@@ -576,7 +576,7 @@ theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K) (pr_draws_window_le_map store A Kw)))
+    ((pr_or_le _ _).trans (add_le_add (pr_draws_pooled_le_map store A K) (pr_draws_window_le_map store A Kw)))
 
 /-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
@@ -697,7 +697,7 @@ theorem div_le_ofReal {a c : ℕ} (hc : 0 < c) {t : ℝ} (h : (a : ℝ) ≤ t * 
   exact ENNReal.ofReal_le_ofReal ((div_le_iff₀ hc').2 h)
 
 /-- The monitoring period's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
-theorem horizon_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
+theorem pooled_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
     ((⌊(1 - dbar) * M⌋₊ : ℝ≥0∞) / M) ^ e ≤ ENNReal.ofReal (1 - dbar) ^ e := by
   refine pow_le_pow_left₀ zero_le ?_ e
   by_cases h : 0 ≤ 1 - dbar
@@ -752,7 +752,7 @@ theorem ofReal_pow_le {x : ℝ} {m : ℕ} (hx : 0 ≤ x) (h : x ^ m ≤ 1 / 2 ^ 
   exact ENNReal.ofReal_le_ofReal h
 
 /-- The monitoring period's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
-theorem horizon_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
+theorem pooled_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
   refine ofReal_pow_le (by norm_num) ((one_sub_pow_le 0.0015 _ (by norm_num)).trans (exp_neg_le _ ?_))
   have : (7 : ℝ) ≤ n := by exact_mod_cast hn
   push_cast
@@ -803,7 +803,7 @@ theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservat
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) (le_of_eq (by ring))
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+      exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
@@ -815,7 +815,7 @@ theorem RemoteSessionConservationDeployed : Accounting.Guarantees.RemoteSessionC
     (by omega) hP hN (by norm_num) (by positivity) (by norm_num) hW hF hA
   refine h.trans (add_le_add ?_ ?_)
   · rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by rw [ENNReal.div_add_div_same]; norm_num]
-    exact add_le_add (Deployed.horizon_deployed n hn) (Deployed.window_deployed n (by omega))
+    exact add_le_add (Deployed.pooled_deployed n hn) (Deployed.window_deployed n (by omega))
   · have hq' : (q.choose 2 : ℝ≥0∞) ≤ (((2 ^ 55 : ℕ).choose 2 : ℕ) : ℝ≥0∞) := by
       exact_mod_cast Nat.choose_le_choose 2 hq
     have hG' : (G : ℝ≥0∞) ≤ 2 ^ 55 := by exact_mod_cast hG
