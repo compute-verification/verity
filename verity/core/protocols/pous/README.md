@@ -21,9 +21,9 @@ the prose spec and this code differ.
 
 ~~~python
 from verity.core.protocols.pous import audit, band, codec, setup
-from verity.core.protocols.pous.layout import Layout, decode_tensor
+from verity.core.protocols.pous.layout import TensorLayout, decode_tensor
 
-layout = Layout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
+layout = TensorLayout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
 params, prims = layout.params, band.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists

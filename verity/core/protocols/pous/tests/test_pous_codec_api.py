@@ -11,7 +11,7 @@ from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import Codec, encode_segments, split
-from verity.core.protocols.pous.layout import Layout, decode_tensor
+from verity.core.protocols.pous.layout import TensorLayout, decode_tensor
 from verity.core.protocols.pous.memory_challenger import block_digest
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.primitives import reference
@@ -71,14 +71,14 @@ def test_verifier_key_without_the_encoding():
 
 def test_layout_of_ranges():
     sizes = [("a", 100), ("b", 1500), ("c", 7)]
-    packed = Layout.of(PARAMS, sizes)
-    ranges = Layout.of_ranges(PARAMS, [(p.name, p.offset, p.size) for p in reversed(packed.tensors)])
+    packed = TensorLayout.of(PARAMS, sizes)
+    ranges = TensorLayout.of_ranges(PARAMS, [(p.name, p.offset, p.size) for p in reversed(packed.tensors)])
     assert ranges == packed
-    gapped = Layout.of_ranges(PARAMS, [("x", 10, 5), ("y", 600, 3)])
+    gapped = TensorLayout.of_ranges(PARAMS, [("x", 10, 5), ("y", 600, 3)])
     w = gapped.pack({"x": b"12345", "y": b"abc"})
     assert w[:10] == bytes(10) and w[10:15] == b"12345" and w[600:603] == b"abc" and gapped.params.segments == 2
     with pytest.raises(ValueError):
-        Layout.of_ranges(PARAMS, [("x", 0, 10), ("y", 5, 10)])
+        TensorLayout.of_ranges(PARAMS, [("x", 0, 10), ("y", 5, 10)])
 
 
 def test_responder_reports_ride_on_answers():
@@ -104,7 +104,7 @@ def test_a_second_codec_plugs_in():
     """A toy one-layer codec (not a scheme) through setup, per-tensor decode and the timed audit: nothing above the
     codec reads P3's structure."""
     toy = Codec("toy-xor", _xor_encode, _xor_decode)
-    layout = Layout.of(Params(8, 64, 3), [("t", 700), ("u", 900)])
+    layout = TensorLayout.of(Params(8, 64, 3), [("t", 700), ("u", 900)])
     params = layout.params
     data = {"t": random.Random(1).randbytes(700), "u": random.Random(2).randbytes(900)}
     w = layout.pack(data)

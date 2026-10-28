@@ -53,8 +53,8 @@ regenerated from the seed in the layout. `tie` recomputes the tie with a registr
 `...mlp.up_proj.weight`, `...mlp.down_proj.weight`; then `lm_head.weight` as layer `layers`. Embeddings, norms and
 scales are not in `W`. Each tensor starts on a block: its `W` offset is `first_block · 2054`, it takes `⌈size / 2054⌉`
 blocks, and its last block's payload is zero past the tensor, so no block holds bytes of two tensors. `W` is zero to
-whole segments of `blocks_per_segment` blocks (`Layout.of_ranges`, which `layout.decode_tensor` reads as is).
-`Layout.of` doesn't fit: packed, blocks straddle tensors; `align=True` starts each tensor on a segment, 7 GiB of
+whole segments of `blocks_per_segment` blocks (`TensorLayout.of_ranges`, which `layout.decode_tensor` reads as is).
+`TensorLayout.of` doesn't fit: packed, blocks straddle tensors; `align=True` starts each tensor on a segment, 7 GiB of
 padding at the real shape.
 
 **C*.** Block `i = blocks_per_segment · s + v` is 2,056 bytes, big-endian, at byte `2056 · i` of one buffer in HBM; on
@@ -102,7 +102,7 @@ else:
 
 from verity.core.protocols.pous import setup, verifier
 from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.layout import Layout
+from verity.core.protocols.pous.layout import TensorLayout
 from verity.core.protocols.pous.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
                                                     expand_prefix, stream)
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
@@ -195,7 +195,7 @@ class Tensor:
 @dataclass(frozen=True)
 class Store:
     shape: Shape
-    layout: Layout
+    layout: TensorLayout
     tensors: tuple[Tensor, ...]
 
     @property
@@ -242,7 +242,7 @@ def build(shape: Shape, blocks_per_segment: int = PER_SEGMENT, w: int = W_BITS, 
         tensors.append(Tensor(name, l, n, k, block * pb, block, blocks, staging))
         block += blocks
         staging += -(-n * k // STAGING_ALIGN) * STAGING_ALIGN
-    layout = Layout.of_ranges(params, [(t.name, t.offset, t.size) for t in tensors])
+    layout = TensorLayout.of_ranges(params, [(t.name, t.offset, t.size) for t in tensors])
     return Store(shape, layout, tuple(tensors))
 
 

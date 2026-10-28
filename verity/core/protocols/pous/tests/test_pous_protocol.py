@@ -16,7 +16,7 @@ import pytest
 from verity.core.claims import get as core_claim
 from verity.core.protocols.pous import band, dense, primitives, protocol, schemes
 from verity.core.protocols.pous.codec import Geometry
-from verity.core.protocols.pous.layout import Layout
+from verity.core.protocols.pous.layout import TensorLayout
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
@@ -117,7 +117,7 @@ def test_audit_through_the_interface(name):
 @pytest.mark.parametrize("name", ["band", "dense", "p3", "p2", "p2v2"])
 def test_decode_tensor(name):
     base = SMALL[name]()
-    layout = Layout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
+    layout = TensorLayout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
     sch = type(base)(layout.params)
     tensors = {"embed": random.Random(3).randbytes(150), "norm": b"\x01\x02\x03", "proj": bytes(range(170))}
     w, salt = layout.pack(tensors), SALT

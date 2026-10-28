@@ -25,7 +25,7 @@ from p2_v1 import reference  # noqa: E402
 from p2_v1 import store as S  # noqa: E402
 
 from verity.core.protocols.pous import protocol, setup, verifier  # noqa: E402
-from verity.core.protocols.pous.layout import Layout, decode_tensor  # noqa: E402
+from verity.core.protocols.pous.layout import TensorLayout, decode_tensor  # noqa: E402
 from verity.core.protocols.pous.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
 from verity.core.protocols.pous.verifier import VerifierKey  # noqa: E402
 
@@ -67,7 +67,8 @@ def test_real_layout():
         assert qkv.first_block == 1_307_915 * l and store.staging_bytes(l) == 2_686_451_712
     (head,) = store.layer(52)
     assert (head.name, head.first_block, head.blocks) == ("lm_head.weight", 68_011_580, 2_043)
-    aligned = Layout.of(P2Params(S.W_BITS, S.C0, S.PER_SEGMENT), [(t.name, t.size) for t in store.tensors], align=True)
+    aligned = TensorLayout.of(P2Params(S.W_BITS, S.C0, S.PER_SEGMENT), [(t.name, t.size) for t in store.tensors],
+                              align=True)
     assert aligned.params.segments > p.segments + 50
 
 

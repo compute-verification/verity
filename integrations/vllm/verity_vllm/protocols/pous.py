@@ -5,8 +5,9 @@ with the memory challenger a party of its own on the challenger host (`verity.co
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
   (`benchmarks/pous/p2_v1/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
-  past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`Layout.of_ranges`).  Scales, embeddings
-  and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while released.
+  past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`TensorLayout.of_ranges`).  Scales,
+  embeddings and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while
+  released.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
@@ -191,7 +192,7 @@ def _flat(t: Any) -> Any:
 
 def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
     """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_v1/store.py`'s ``build``)."""
-    from verity.core.protocols.pous.layout import Layout
+    from verity.core.protocols.pous.layout import TensorLayout
 
     base = _base(scheme)
     pb, block, ranges = base.payload_bytes, 0, []
@@ -199,7 +200,7 @@ def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
         size = t.numel() * t.element_size()
         ranges.append((name, block * pb, size))
         block += -(-size // pb)
-    return Layout.of_ranges(base, ranges)
+    return TensorLayout.of_ranges(base, ranges)
 
 
 def _segment(layout: Any, flats: Mapping[str, Any], s: int) -> bytes:
