@@ -108,11 +108,21 @@
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
+# SETTINGS=PATH names a file of NAME=VALUE lines on the node, read before every default below: the run's job record
+# publishes its launch command, so a load's counts (REQUESTS, PROMPTS, SLOTS, CERTIFIER_FRONT's) go in the file, and the
+# command names only its path.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # Defaults are vy-dc-h200's: the int8 B4 row and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
 # public records and every log.
 set -uo pipefail
+if [ -n "${SETTINGS:-}" ]; then
+  [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
+  set -a
+  # shellcheck source=/dev/null
+  . "$SETTINGS"
+  set +a
+fi
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
 H=/workspace/research/vllm-composed-h200int8
