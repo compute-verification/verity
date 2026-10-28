@@ -3,7 +3,7 @@ The partition as a named query over the verifier's own program (`one_stage/parti
 object and its digest (C-Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (C-Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other.
-Every unit's committed bits fit a public size class (`UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits; ASK-61,
+Every unit's committed bits fit a public size class (`UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits,
 provisional), its class the least that holds them (`unitClass`), a public property of its Definition: a program with a unit
 wider than the widest class is refused (a template instance's bits are its distinct returned gates', `templateBits`; a
 `Q_call` unit's count the constants its activation holds, `committedBits`, which `Q_call`'s width rule leaves out; a
