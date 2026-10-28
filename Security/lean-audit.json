@@ -1556,7 +1556,7 @@
   },
   "Pouw.Assumptions.HonestClock": {
    "owner": "@compute-accounting",
-   "digest": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
+   "digest": "938a0eac4742681871e4b9040195219d8694158a0e1a93368ac001585b9d1a3b"
   },
   "Pouw.Assumptions.ImportWithinCertifier": {
    "owner": "@compute-research",
@@ -1821,10 +1821,6 @@
   "Pouw.PearlC.Adversary.BoundedBy": {
    "owner": "@compute-accounting",
    "digest": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73"
-  },
-  "Pouw.PearlC.Assumptions.HonestClock": {
-   "owner": "@compute-accounting",
-   "digest": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
   },
   "Pouw.PearlC.Assumptions.TTOut": {
    "owner": "@compute-accounting",
@@ -26899,11 +26895,19 @@
    ]
   },
   "Definitions.Pouw.Assumptions.Deadline": {
-   "digest": "efde32e6e0055ddbe420d8f4b410840f185cbf92a03b58e3e2e3c54dcbf0cd03",
+   "digest": "ccd4764070094a2d6f49556442b51053b43c186069a04a6d01e39d4c1f21f604",
    "definitions": {
-    "Pouw.Assumptions.HonestClock": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
+    "Pouw.Assumptions.HonestClock": "938a0eac4742681871e4b9040195219d8694158a0e1a93368ac001585b9d1a3b"
    },
-   "guarantees": ["Pouw.SecurityProofs.SpareCapacityAtDeadline", "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"]
+   "guarantees": [
+    "Pouw.SecurityProofs.PearlCSampledByDeadline",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+    "Pouw.SecurityProofs.SpareCapacityAtDeadline",
+    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.Assumptions": {
    "digest": "1297f1b2528152e153cfe6ff04366d220e61c35f5e8ce834b6cd261861ad6876",
@@ -27145,19 +27149,6 @@
     "Pouw.SecurityProofs.OnsiteFreed_honest",
     "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
     "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
-   ]
-  },
-  "Definitions.Pouw.Assumptions.PearlC.Deadline": {
-   "digest": "94237cb299b4507820d41fd89d79cb236308b75d88630b926a6b2c812f29aa47",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.HonestClock": "1a8887962f5cb3a27b40e5ac7e29aea164b786ecaaeb358379f617e50b3be2ba"
-   },
-   "guarantees": [
-    "Pouw.SecurityProofs.PearlCSampledByDeadline",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
-    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
   },
   "Definitions.Pouw.Assumptions.PearlC.DeviceChainCap": {
@@ -28584,10 +28575,16 @@
    ]
   },
   "Definitions.Pouw.Game.Deadline": {
-   "digest": "5536c2433ec0cf835b20e6ee638e233db5052b022359c9c6d3f4bbf2c1f50e40",
+   "digest": "21f72ed0c378c7eeb4f39483f3c1d841bae0f34c3d2511ce51dfdbbca3690a08",
    "definitions": {
     "Pouw.AcceptsBy": "f9e97cc1f6f88a76a1b9bf9672ce5b1a58dce08f6237dbd87ac6a30a9d72b2c9",
+    "Pouw.Adversaries": "aee0684bd9535916e8d01e5604d92ddcffcd46b2625cfb4d7c8bcfa3bf0a66dd",
+    "Pouw.Adversaries.calls": "f83404be74bd6ed3d8b1ada22007dd34c3ec447a289ff438560f4fdb9c10aa89",
+    "Pouw.Adversaries.cost": "6a0259b19fd837477fce84c5754c2a2be0d88355ecadefcf74df46c659f692e5",
+    "Pouw.Adversaries.pre": "72ad01272129e79295c6a0da103d599fc69306f9ad5dbac77d77b7a0e8565b87",
+    "Pouw.Adversaries.transcript": "0a17c9df81c8a0ba78af940e748a96d4c19bd0981f96f270a569bebdedd81e2e",
     "Pouw.Adversary.BoundedBy": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739",
+    "Pouw.CostModel.adversaries": "e5eab8fa0fdc973124d301b93e307aeb66fb0f00d24ebb9582b8c5f7db42a91f",
     "Pouw.TimedRun": "6176b0efd647693ac6d1788b00f147d317e510cdce8bc4438efdd11a6858272a",
     "Pouw.TimedRun.spent": "afbcb7de60d2d4aeaf3190357473d8d435f777ecbac881b02141ef61aa3a8b63",
     "Pouw.TimedRun.spentIn": "94d3aecdabd767d55e312ed286d207c50e36f895b7ccdebc8b19edf88fee4253",
@@ -28761,15 +28758,15 @@
    "guarantees": ["Pouw.SecurityProofs.Barrier.Generic"]
   },
   "Definitions.Pouw.Guarantees.Deadline": {
-   "digest": "886d1f2fc50cc7b4ac8032a8dcf41b2e729e526b14a35a937dc440acbead5384",
+   "digest": "5efe20f536149e2bf6f1baabcf0f467edd4453a93427928ae336307612ea2299",
    "definitions": {
-    "Pouw.Guarantees.PearlCSampledByDeadline": "3a86f2ea9e2f778fce619faebcdbfa13b544082c767b89e03b4db16763ec141e",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "3f70c46b5861bc4e01c517eb6b28edcf43427225f5c420d895c5ad226615d3af",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "95c105727416f34f21f35592835a40ff61c621592fad46625ae8e6795c06e9d5",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "4e47effc6fa3fd2c1776dedee01818ccc18c4bb400c91eb2e85b5a3e32874737",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "f069a8337c449466ab80a4757ba762f544e43a24a4c0773b330b1d6aa4b29c56",
-    "Pouw.Guarantees.SpareCapacityAtDeadline": "fce79a1b3a99f37d1c77ca7e75afdd39bcf01d5aca010d24d79196206e28fd4b",
-    "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "3788462f2fdf84cd3f392455f2a420582c649e83cbe274c773123fee66e690df"
+    "Pouw.Guarantees.PearlCSampledByDeadline": "6e844a8bce536916467fb09fc89cc7726918fe001857f64ad8c773e78710fec5",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "47c9f49eeed5a780bb8fb8e2d5838cc807e0ec45382eef69c3526f335c36e7de",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "c018ffb07b0ad559face36f4d70b11184b9edec95a05b49b95df5494acd498bf",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "66e4f78cd7f41f7220d793d8c21ffe5f7341659ef2d542c94f049d4dc5cdfdef",
+    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "d4c3d97354478407218690f451002ff34468680661757beeb1283a4b219e12e9",
+    "Pouw.Guarantees.SpareCapacityAtDeadline": "a1d1cb6b2777de837034d354bcbcc928df669c015e92492ee340615464eec7d3",
+    "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "182920ccd71e474c07f12e852253620bff6a58fa416960f4d02f49a8c94f4cfe"
    },
    "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
@@ -29730,9 +29727,10 @@
    ]
   },
   "Definitions.Pouw.PearlC.Deadline": {
-   "digest": "ec8e500d4015183ba30f4fb488b31532fe08b7bd9b32137c74b8a0499df7ae96",
+   "digest": "5f145f4843c425a0255d3c62127b098bc8c24e55dd7025ce8c74b038f681f78e",
    "definitions": {
-    "Pouw.PearlC.Adversary.BoundedBy": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73"
+    "Pouw.PearlC.Adversary.BoundedBy": "a5b5bff4710605b5b183730c17860dfaf922415160258b902d1d7244133e3a73",
+    "Pouw.PearlC.CostModel.adversaries": "7d9537ddf15f3be5e856de0c98c3499217f3b8032186894dc1f391c89fc98768"
    },
    "guarantees": [
     "Pouw.SecurityProofs.PearlCSampledByDeadline",
