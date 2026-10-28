@@ -17,12 +17,13 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.core.protocols.pous import wipe_monitoring
 from verity.ml.circuits.codec import canonical_json
 
 PROTOCOL = "verity/certifier/v0"
 #: the block record's δs (``verity/block-record/v1``'s ``at``): a leg's certificate holds at δ where its error is at
 #: most δ. A period's answer at δ has error δ when each of its terms was decided at its share of δ.
-BLOCK_DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
+BLOCK_DELTAS = wipe_monitoring.DELTAS
 #: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
 BLOCK_ERROR_FROM = "quantity.eps"
 
