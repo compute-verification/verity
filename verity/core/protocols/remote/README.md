@@ -132,7 +132,7 @@ The whole argument rests on a short list. Everything else is a theorem or a name
 
 That each use of a weight needs its own token's context is not an assumption. It is a property of the training
 circuit's wiring: every gate a use requires reaches, inside that use's own upstream computation, the operand the use
-reads (`Nci.Capability.Upstream`, checked on the circuit). The two learning rows are all the overhead lower bound assumes
+reads (`Nci.Capability.Upstream`, checkable on the circuit, not yet checked on a named one). The two learning rows are all the overhead lower bound assumes
 about learning, and they are where its scientific content lies; the second is the least certain.
 
 ### 1. The proofs of the drawn proof blocks
@@ -155,7 +155,9 @@ commitments' hiding gap.
 - Knowledge soundness of the one-stage audit at the drawn proof blocks: `Flock.Guarantees.EndToEndRegisteredRows`,
   **proved**.
 - Zero knowledge against an honest verifier at each fixed coin vector: `Flock.Guarantees.ZeroKnowledgeHidden`, **proved**.
-- Zero knowledge against a verifier that chooses its coins: `Claims.Flock.ZK`, an unproved claim.
+- Zero knowledge against a verifier that chooses its coins: `Flock.Guarantees.MaskedZK`, **proved**, with its ε_zk
+  through hm96's hiding gap at the pinned key. What is unproved is the live zero-knowledge server
+  (`Flock.zk_server_lean_loop`'s hypotheses).
 
 ### 2. Sampling
 
@@ -374,6 +376,7 @@ The overhead, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
+- `Nci.Complies` (`Security/Definitions/Nci.lean`): the declaration meets the inference-only policy.
 
 The local bounds (part 5), written, not in a lock:
 
@@ -381,7 +384,6 @@ The local bounds (part 5), written, not in a lock:
   time-bounded description length at least its price, less a deficit.
 - `Nci.Assumptions.CoversEfficientMethods`: every sufficiently cheap successful method carries at least the covered
   work Ω_*, except with probability η.
-- `Nci.Complies` (`Security/Definitions/Nci.lean`): the declaration meets the inference-only policy.
 
 ## Results per monitoring period
 
