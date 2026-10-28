@@ -264,7 +264,7 @@
     {"file": "verity_vllm/check/match/resolve_decomp.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/resolve-decomp/v1"},
     {"file": "verity/ml/definitions", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity/ml/definitions/boolean.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/boolean-purity/v1"},
-    {"file": "verity/ml/definitions/numerics", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 8},
+    {"file": "verity/ml/definitions/numerics", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/gemm-correspondence/v1"},
     {"file": "verity_vllm/program/libdevice_sampling.py", "kind": "schema-literal", "symbol": "compare_dir", "detail": "verity-gen/ov-sampling-libdevice-compare/v1"},
     {"file": "verity_vllm/program/sampling_rng.py", "kind": "schema-literal", "symbol": "check_run", "detail": "verity-gen-sampling/rng-check/v1"},
