@@ -42,7 +42,8 @@ Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` ab
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
+time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`); with drive.toml's
+`after_landing_shards` N, as N runs at once (`--shard K/N` each), passed once every shard passed, `--no-cache
 --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
@@ -205,14 +206,15 @@ def authed(auth: tuple[str, ...]):
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
-                 detached: bool = False, circuit_cache: bool = False) -> tuple[list[str], str] | dict:
+                 detached: bool = False, circuit_cache: bool = False, shard: str | None = None) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail); ``detached``,
     started in the background (`detach`) from a copy of train.sh, which reads nothing by its own path (``$0`` only for its
     usage) and finds the tree from its working directory, and returned at once as the record `launched` reads.  Git never
     prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a password at the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
             *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
-            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else [])]
+            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
+            *(["--shard", shard] if shard else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
         return detach(repo, argv, env, script=argv[1])
@@ -248,7 +250,7 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
 
 def _ids(rec: dict) -> str:
     """A launch record's run ids, for a message, while its train.sh runs detached too."""
-    return " ".join(rec.get("ids") or ()) or ("(launching)" if rec.get("launch") else "(no run)")
+    return " ".join(rec.get("ids") or ()) or ("(launching)" if rec.get("launch") or rec.get("shards") else "(no run)")
 
 
 def launched(launch: dict) -> tuple[list[str] | None, str]:
@@ -670,8 +672,11 @@ class Driver:
                  evidence: Callable[[Path, list[str]], list[Path]] = evidence, regenerate_locks: bool = False,
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
-                 stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = ()):
+                 stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
+                 after_landing_shards: int = 1):
         self.q, self.on = q, on
+        #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`)
+        self.after_landing_shards = after_landing_shards
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
         self.max_lean_checks = max_lean_checks
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
@@ -689,9 +694,10 @@ class Driver:
         #: the after-landing run on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
-            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False:
+            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
+                    shard=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
-                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache))
+                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
@@ -837,6 +843,8 @@ class Driver:
         `CI`, and launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
+        if run.get("shards") and not self._shards_launched(drive, pl, run):
+            return
         if (tail := self._resolve(run, f"the post-landing run of `main` {run['tip'][:12]}")) is not None:
             pl["run"] = None
             if run.get("resend"):
@@ -858,7 +866,7 @@ class Driver:
         early = next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None)
         if not early and any(st in ACTIVE for st, *_ in states.values()):
             return
-        if not early and any(rc == 0 for _, rc, *_ in states.values()):
+        if not early and self._every_shard(run, states, lambda rc: rc == 0):
             pl["run"] = None
             if unrun := self._unrun(run["ids"], [s for s in pl.get("steps") or AFTER_LANDING if s not in run.get("skip", ())]):
                 if run.get("baseline"):
@@ -880,7 +888,7 @@ class Driver:
             self.q.log(f"research queue drive: `main` {tip[:12]} verified: its post-landing run {' '.join(run['ids'])} passed "
                        f"({', '.join(pl.get('steps') or ())})" + (f"; {len(pl['pending'])} landing(s) above it wait" if pl["pending"] else ""))
             return
-        if not early and all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
+        if not early and self._never_ran(run, states):
             pl["run"] = None
             self.q.log(f"research queue drive: the post-landing run {' '.join(run['ids'])} of {tip[:12]} never ran or was "
                        "stopped: it launches again")
@@ -900,6 +908,43 @@ class Driver:
                                       for _, rc, *_ in states.values())
         self._postland_failed(drive, pl, run, why, signalled)
         pl["run"] = None
+
+    def _shards_launched(self, drive: dict, pl: dict, run: dict) -> bool:
+        """Whether every shard of a sharded after-landing run (`start_postland`) has its run ids, which then become the run's own
+        (``ids``, ``groups``: each shard's twins).  One whose train.sh registered no run stops the others and is told, as an
+        unsharded one is, and the next `start_postland` launches the run again."""
+        shards, n = run["shards"], len(run["shards"])
+        for k, rec in enumerate(shards, 1):
+            if (tail := self._resolve(rec, f"shard {k}/{n} of the post-landing run of `main` {run['tip'][:12]}")) is None:
+                continue
+            if (got := [r for x in shards for r in x.get("ids") or ()]) and not (self.dry_run or self.q.shadow):
+                self.cancel(self.repo, got, f"drive: shard {k}/{n} of the post-landing run of {run['tip'][:12]} registered no run")
+            pl["run"] = None
+            if run.get("resend"):
+                pl["resend"] = True
+            self.refuse(drive, f"launch:postland:{run['tip']}", f"train.sh {run['tip'][:12]} {self.on} --deferred "
+                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard {k}/{n} "
+                                                                f"registered no run: {tail}")
+            return False
+        if any("launch" in rec for rec in shards):
+            return False
+        run["groups"] = [list(rec["ids"]) for rec in shards]
+        run["ids"] = [r for g in run["groups"] for r in g]
+        del run["shards"]
+        return True
+
+    @staticmethod
+    def _every_shard(run: dict, states: dict, ok: Callable[[object], bool]) -> bool:
+        """Whether in each shard of ``run`` (``groups``; an unsharded run is one) some twin's exit is ``ok``."""
+        return all(any(ok(states[r][1]) for r in g if r in states) for g in run.get("groups") or [run["ids"]])
+
+    def _never_ran(self, run: dict, states: dict) -> bool:
+        """Whether a shard of ``run`` never ran (each of its twins exited 75 or was stopped) and every other one passed or never
+        ran either: the run launches again, whole."""
+        never = (NOT_STARTED, SIGTERM_RC)
+        groups = run.get("groups") or [run["ids"]]
+        missed = [g for g in groups if all(states[r][1] in never for r in g if r in states)]
+        return bool(missed) and all(g in missed or any(states[r][1] == 0 for r in g if r in states) for g in groups)
 
     def _unrun(self, ids: list[str], steps: list[str]) -> list[str]:
         """The ``steps`` no run among ``ids`` records as passed in its steps.jsonl: a run's exit 0 says only that
@@ -1289,13 +1334,24 @@ class Driver:
                  "no_cache": self.after_landing_no_cache, "circuit_cache": self.after_landing_no_cache, "no_regenerate": True}
         skip = [s for s, off in (("lean-agreement", not extra["agreement"]), ("lean-changed", extra["no_cache"])) if off]
         flags = "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
+        n = self.after_landing_shards
         if self.dry_run or q.shadow:
-            q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}{flags}")
+            q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
+                  + (f" as {n} shards" if n > 1 else ""))
             return
-        rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, **extra))
+        if n == 1:
+            rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, **extra))
+        else:
+            got = [self._started(self.launch_postland(self.repo, main, self.on, steps, **extra, shard=f"{k}/{n}"))
+                   for k in range(1, n + 1)]
+            rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
+            if any(r is None for r, _ in got):
+                if ids := [i for r, _ in got if r for i in r.get("ids") or ()]:
+                    self.cancel(self.repo, ids, f"drive: a shard of the post-landing run of {main[:12]} registered no run")
+                rec = None
         if rec is None:
-            self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags} registered no "
-                                                          f"run: {tail}")
+            self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
+                                                          + (f" (as {n} shards)" if n > 1 else "") + f" registered no run: {tail}")
             return
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),

@@ -24,6 +24,8 @@ land = "review"
 # ten SHA-512 Definitions at 141-167 GB one at a time) outlasted every after-landing run from 24 Oct. The nightly `audit-main`
 # (`--no-cache`, no circuit cache) still checks every part cold, so it checks that reuse daily
 after_landing_no_cache = true
+# after_landing_shards = N runs the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh
+# --deferred STEPS --shard K/N`), so it takes about its longest shard; 1 (absent) is one run of every step
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 5
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)

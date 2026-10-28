@@ -7,7 +7,9 @@
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
                                                             post-landing run drive launches on `main`'s tip (`train.sh
-                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
+                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
+                                                            with --shard K/N, only those of shard K's parts (drive's
+                                                            `after_landing_shards`: one run per shard, at once)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
     ... --no-cache [--circuit-cache]                        reuse no pass (the nightly `audit-main`); with --circuit-cache,
@@ -979,6 +981,8 @@ def record(argv: list[str]) -> int:
     try:
         if "--shard" in rest[:-1]:
             parts = shard(rest[rest.index("--shard") + 1])["parts"]
+            if deferred is not None:
+                parts = [p for p in parts if p in deferred_parts(deferred)]
         elif deferred is not None:
             parts = deferred_parts(deferred)
     except DECLARATION.DeclarationError as e:
@@ -2141,14 +2145,21 @@ def main(argv: list[str]) -> int:
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
     if deferred is not None:
-        if sharded or picked:
-            print("check: --deferred runs the post-landing steps alone, without --shard or a part", file=sys.stderr)
+        if picked:
+            print("check: --deferred runs the post-landing steps alone, without a part", file=sys.stderr)
             return 2
         try:
-            sharded = {"parts": deferred_parts(deferred), "deferred": deferred.split(",")}
+            mine = deferred_parts(deferred)
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
+        if sharded:
+            if not (mine := [p for p in sharded["parts"] if p in mine]):
+                print(f"check: --deferred {deferred} --shard {sharded['k']}/{sharded['n']}: that shard holds none of those steps",
+                      file=sys.stderr)
+                return 2
+            sharded = {**sharded, "parts": mine}
+        sharded = {**(sharded or {}), "parts": mine, "deferred": deferred.split(",")}
         print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
     if picked:
         if sharded or os.environ.get("RESEARCH_RUN_ID"):

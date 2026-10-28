@@ -233,3 +233,25 @@ def test_a_combine_without_the_targets_checkout_passes_nothing(world):
         "it combines shards, which this gate reads only in the target's checkout, for a commit")
     assert passing(store, tip, kinds=frozenset({"check/v1"}), command=tuple(COMMAND)) == []
 
+
+def test_a_split_step_passes_in_a_shard_only_for_every_part_and_in_the_combine_for_all_of_them(world):
+    """Drive's Lean checks read `step_status(ID, "lean-audit")` from any passing run of a commit, and an after-landing shard is
+    one: shard 1 ran lean-audit on p alone, so its lean-audit is partial, as it is in a deferred run's shard; the combine's
+    `lean-audit:p` and `:q` together pass."""
+    _main, tip, _config, store = world
+    ids = _shards(world)
+    assert [step_status(store, i, "lean-audit") for i in ids] == ["partial", "partial"]
+    assert step_status(store, ids[0], "a") == "passed"
+    rid = _combine(world, ids)
+    assert step_status(store, rid, "lean-audit") == "passed"
+    steps, _ = shard_set(store, *world[:2], ids, "check", tuple(COMMAND))
+    steps[2]["status"] = "failed"
+    assert step_status(store, _combine(world, ids, steps=steps), "lean-audit") == "failed"
+    shard = _shard_meta(1, 2, tip, world[2])
+    deferred = _attempt(store, tip, [*COMMAND, "--deferred", "a,lean-audit", "--shard", "1/2"], "check-deferred/v1",
+                        {"deferred": {**shard["shard"], "deferred": ["a", "lean-audit"]}, "steps": shard["steps"]})
+    assert step_status(store, deferred, "lean-audit") == "partial" and step_status(store, deferred, "a") == "passed"
+    whole = _attempt(store, tip, [*COMMAND, "--deferred", "lean-audit"], "check-deferred/v1",
+                     {"deferred": {"parts": ["lean-audit:p"], "deferred": ["lean-audit"]},
+                      "steps": [{"step": "lean-audit", "status": "passed", "parts": ["lean-audit:p"]}]})
+    assert step_status(store, whole, "lean-audit") == "passed", "an unsharded deferred run ran every part it was given"
