@@ -205,11 +205,11 @@ theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D :
       refine ⟨by rw [hs]; rfl, ?_⟩
       simp only [hs, checkedOf]
       intro v hv hi
-      obtain ⟨p, hp⟩ := index_of_mem (hnPU ▸ size_checked_le l proved) hi
+      obtain ⟨p, hp⟩ := index_of_mem (n := nPU D x) (hnPU ▸ size_checked_le l proved) hi
       exact hm v hv p hp
     · exfalso
       have hv0l : v0 < l.blocks.size := hlen ▸ Finset.mem_range.1 (hB hv0)
-      obtain ⟨p, hp⟩ := index_of_mem (hnPU ▸ (size_allSlots l).le) ((mem_allSlots _ _).2 hv0l)
+      obtain ⟨p, hp⟩ := index_of_mem (n := nPU D x) (hnPU ▸ (size_allSlots l).le) ((mem_allSlots _ _).2 hv0l)
       exact hm v0 hv0 p hp
   · have hav : Ex (fun r => Pr fun dd => E (bytes (forkOn (D.stage2 x) r dd))) = Pr fun c => E (bytes c) := by
       classical
