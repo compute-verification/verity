@@ -40246,7 +40246,7 @@
    ]
   },
   "Flock.Tmpl": {
-   "digest": "ce03687ae285af9a480a005d108aeef1ed40f70bc0c627f65f2828537322805e",
+   "digest": "5ff4685f29cb62994ed663d89d1ff8ec53d89ede8b29d2c441b7033d59fac4cb",
    "definitions": {
     "Flock.Tmpl.Acc": "977dadb7026ef0ee9fecd23490ee0ab6dfcf4eff4aa0d4b49c4de239f97821f2",
     "Flock.Tmpl.Acc.empty": "f5793cac95dca49d796fcccae6a8a9edb614b41112b0485384b68ae4894f3be2",
@@ -40301,6 +40301,7 @@
     "Flock.Tmpl.parse._sparseCasesOn_3": "b637662f24e53b2d5717d95ac3e3c781b170b925d9e02e9ddcf23ce643efef4e",
     "Flock.Tmpl.parse.match_3": "7d381262edca2d1b0b707ceebefe187f31fbea53d7d954523602fe8acc0a0391",
     "Flock.Tmpl.place": "ac4b23f4e42fcfda2da4976d04cc28d67d5a041e10719ed5fe167b1bccfb1d4d",
+    "Flock.Tmpl.unroll": "b5e60733061ccc0a0a99ba4b28fec528e52516d67a7b5a37c6fd6f61570d0982",
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd"
    },
    "guarantees": [
@@ -52683,12 +52684,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Placed": {
-   "digest": "cd35a0e205516a7a5a7466760b5e3396cc3ba3d71296c05dd94acfccbd14ea7c",
+   "digest": "13019b36af95184ec0887a97a9414eb9ac373c6df709bbe94375328ff8564cdb",
    "definitions": {
     "FlockSoundness.Discharge.HiddenExec.AcceptedH": "708d9bb28a49f5df8c5f5a8e3ff2a02cef3c0bb0b1c30ec8593223763668ecfc",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.cf": "fe69793d68143abc67b0213e7caa599225c5b463bddf62469103f070f9900d46",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.coins": "0d7c65d5fdb7d00082c524297b7ef88a8b3809d24e838044671581d330876e59",
-    "FlockSoundness.Discharge.HiddenExec.AcceptedH.col": "c18bc219b8b92b3376f58e93e5209a6b3d3a704073eecc861e55275e2fbdc0d9",
+    "FlockSoundness.Discharge.HiddenExec.AcceptedH.col": "a9c2033e713d10120527fc61c56098d98dcad5694887d9413ef37d1644f68e15",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.draw": "7bcfd696dfbc00ca065e8d26c257fcb93b32aeb83dc9efafee5cd7cab50f9b8e",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.partition": "499da0c48819b186fd32e80712b11b871b4ea05aaa70ed0a4206081cbfe7832b",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.pf": "9fc11ecd13a67b0870d9fde23b854ab7f0c6ddd8e77337d432f130a51750c91a",
@@ -53872,12 +53873,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Setup": {
-   "digest": "91365c05697986b186ccf42f1de3ee1802f8b5997732ae85676d0533f3f06072",
+   "digest": "d90ffd07639ad3b5d26dc576bf76dd0c4d705d6aaca9b08ab4ff3b313f80c825",
    "definitions": {
     "FlockSoundness.Discharge.Placed.Accepted": "ec16515e7909d5871eb920dc707b2336094f628e52f5bac7f135561a8f7def23",
     "FlockSoundness.Discharge.Placed.Accepted.cf": "39c9f0d6aee5c8f9bc645eb4a22a9724dfaeef7706914bb73687fe9962dc3e3e",
     "FlockSoundness.Discharge.Placed.Accepted.coins": "71c0e9375ca77e8c73ea5c934a39d5e3a1ddda25518e91fc983b4c117d2df97b",
-    "FlockSoundness.Discharge.Placed.Accepted.col": "f3d0c59993a57edca1a2951d7b38b55c336dcafff8e1a6f67471e9fec8deb5d8",
+    "FlockSoundness.Discharge.Placed.Accepted.col": "47c98fe3a151eb1bc75ac100fed72f886caea3d4f52c5c43da84885de14f2161",
     "FlockSoundness.Discharge.Placed.Accepted.draw": "cd2bed415394a3e462b4f1a31662a078cc473bbdccf18fdb60d8b0421542f807",
     "FlockSoundness.Discharge.Placed.Accepted.partition": "2af7219ebbe877db44ac4eb214c80519c632d8f682960f6dbf71a05c5c5ef565",
     "FlockSoundness.Discharge.Placed.Accepted.pf": "acd93b2f9e6f278bc9e35a81c560622e1fdd1fd4b611e399ed9e664224b05573",
@@ -56370,19 +56371,23 @@
    ]
   },
   "Proofs.Flock.Soundness.ExecPlacement": {
-   "digest": "64555ca2f1fa201f48b0234ce2e982dc5874f51a77f1be712779ecc2dc379dfd",
+   "digest": "6a2a1033ce53c40ee2859ab333569a597936e6bee15ae6f047ce27b2e70279a3",
    "definitions": {
     "FlockSoundness.Apart": "48636400e28a2b03c7bd2e730ee9f7fae8aa40074c8c6a8eab33d425c0a5e61a",
     "FlockSoundness.ConstRow": "32cad996044af6bf1e264d89ac116d4f284eb761f98526fe598a453f7591d642",
     "FlockSoundness.InBit": "f7b869ddd210f64dee905097aa578e391cb77f6fe67addfbed6c880ecd5f43d3",
-    "FlockSoundness.Layout": "e47fb7b45ccf2adbb288bf03f0337cefcd0c1fdc086d8277ab75e32a0b324d0c",
-    "FlockSoundness.Layout.Aliased": "accb6e154c457d7060646bcfd13299d68d1cc515f10251e06625ad34350dfab7",
+    "FlockSoundness.Layout": "85cc2f11c998865ce3714e97cad07d64216befbe1c291fe0299fc025345435cf",
+    "FlockSoundness.Layout.Aliased": "feab46a22b3de95acc37eb6f8819146139b79d1def9bc554fa30ad3a6cdea733",
+    "FlockSoundness.Layout.col": "1d5aba202473fc7c6b61654da6b08cb389716288d5bb538a024043c6f534eefa",
     "FlockSoundness.Layout.model": "ba173c215de31837380bc1124d7eb5ac5f007c33b4164fe094815d7246937d38",
+    "FlockSoundness.UnitAt": "830a8822c338936fe0f22ec8c863129bdbd78a681b13ac7fd18835f1d261b4ab",
     "FlockSoundness.constPairs": "fcbad518052d5114c317349c285eeee245cc21b55646913674d70facfd84a1b2",
+    "FlockSoundness.lunit": "7b4810fa951402e2a6b8382fa923f7ca3ed0953b0bcde9cb98cb5df3903a5089",
     "FlockSoundness.slotPairs": "dd9b15e576661e87b297c2d9db848223c443fda31d5edf1b7272da9080c75786",
     "FlockSoundness.slotPairs._sparseCasesOn_1": "cd7eb9656a8a2f29fccab2de4070bc7449c56919afe36912013c4382dc852aff",
     "FlockSoundness.spanH": "063a48b2b5c72812e6ae42549ad2ed731550d4d151f88c343169f71aaefc0b8e",
-    "FlockSoundness.unitRows": "8fe7519ba88614a977ae11626ef0073862723ee564ecb3017e7216b60f3af0cf"
+    "FlockSoundness.unitRows": "f85d1a1654158c402e6c8c9d1e2cfa703829c57cea3f696cd6fdae30c279ac27",
+    "FlockSoundness.upos": "52d71aef541e0e5d2ea5ae0aaad936db12f513ec924d7fa726513d7781b1346f"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -56425,7 +56430,7 @@
    ]
   },
   "Proofs.Flock.Soundness.ExecRows": {
-   "digest": "af6eba9ce8fdf85ececaa87ba464f9db1fc85449e9d86db90e1f6403dc8ab3f0",
+   "digest": "545d7c069d32d83a66671f3cf5a0a0649b5300724784df7cc90de3b1524236de",
    "definitions": {
     "FlockSoundness.Built": "548f5cb7cc68be48e8bf183062c88ea8d4c8d1f5b00cc16dcf13911c3165b96f",
     "FlockSoundness.InputPadding": "90655896e0b69c43ed0b240ddf87726523d615239c50df90dd5355555681b779",
@@ -56436,7 +56441,11 @@
     "FlockSoundness.Rows.stackCol": "b8aea9d80292b824538cbc964879ce32882843ba4ce943d7c9387ec9f68eadd5",
     "FlockSoundness.Rows.stackRow": "fc1783c15783f9c1a33c229e2544a586e0db1c77252b0a8e3faae9f2588caf02",
     "FlockSoundness.Rows.stackW": "24e2cb50ee34d50023bf5eaa7eabb3717d42ac4e0e7bce52d5485eba4127b4df",
-    "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b"
+    "FlockSoundness.posInAt": "d2c0c12a0c86e10bbd7cd97347786b1ad595f7458a87105caf054e0091996cd3",
+    "FlockSoundness.stackCopy": "9a0808e97ccd920bab4fd0b27bcabb71af821add25fafad4f885e6b9e2f95a37",
+    "FlockSoundness.stackLocal": "80c84caa2ad2bf933038fcceaf7a19bdcd52df479ca3a6283a464a531dfb03fe",
+    "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b",
+    "FlockSoundness.stackPlaceAt": "0cb1b45b996faa565031d6498408b260e62206ad73af37905cde9d4bbc3f91f4"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
