@@ -38,7 +38,7 @@ def VerdictAccepts : Prop :=
     (verdict schemes trusted expected s c openings).accepted = true → Accepted schemes trusted expected s c openings
 
 def JudgeAccepts : Prop :=
-  ∀ (r : Judge.Record), Verdict.accepted <$> Judge.judge r = .ok true →
+  ∀ (r : Judge.JudgeInputs), Verdict.accepted <$> Judge.judge r = .ok true →
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧
       Accepted schemes r.trusted.toList r.expected.find r.signed r.commitment r.openings
 
@@ -185,7 +185,7 @@ forgery disjunct is at the record's own scheme parameters: a reader cites `euf-c
 record's scheme is `LMS` (`lms-sha512/n64-w1-h20/v0`) at its deployed parameters (`Lms.deployed`, Python
 `lms.DEPLOYED`). -/
 def JudgeSigned : Prop :=
-  ∀ (r : Judge.Record) (dev : Challengers), Verdict.accepted <$> Judge.judge r = .ok true →
+  ∀ (r : Judge.JudgeInputs) (dev : Challengers), Verdict.accepted <$> Judge.judge r = .ok true →
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧ SignedByDevice schemes r.trusted.toList r.signed dev
 
 end MemoryChallenger.Properties
