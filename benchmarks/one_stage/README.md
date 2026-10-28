@@ -73,13 +73,17 @@ negatives.
   registers its weights under its own key (`prove_path.py weights-registration`). Without a registration, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
   sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
-  circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
-  pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
-  `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
-  and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
-  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
-  gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
-  `out/verdicts.txt`.
+  circuit at each class of `CLASSES` (8,32,4,4,16 by default, the network certifier's w63k4 class), with its weight reads
+  counted registered at the registration's pins. The run needs every one of those counts. The class of record's count
+  follows them as a measurement under its own `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and
+  never fails the run. V3c commits the window as `V3C_CLASS`'s circuit (its scan state the network certifier's scan of the
+  warden run the certifier front kept), audits it and writes it as the certifier's period reads it (`period.json`). With
+  the certifier's piece split, `CERTIFIER_CHAIN_CMD` runs its chain before V3c's audit and `CERTIFIER_PERIOD_CMD` its period
+  check after it. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn
+  proof blocks and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its
+  piece where `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its
+  issue, and it gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is
+  in `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's

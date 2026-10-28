@@ -4,7 +4,8 @@ with its issue and given no verdict; and sampled proofs' accepted answer compose
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
 composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing. Its load, `serve_load.py --varied`, writes each
+CLASSES, and the class of record's count after them gates nothing. Its V3c step runs the split network certifier's chain
+after the window commit and its period check after V3c's period.json, and fails when no period.json is written. Its load, `serve_load.py --varied`, writes each
 request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
@@ -327,6 +328,109 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
+
+
+FAKE_V3C_PROVE_PATH = '''import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+out = Path(a[a.index("--out") + 1])
+assert a[a.index("--class") + 1] == "8,32,4,4,16"
+if a[0] == "window-circuit":
+    out.write_text("{}")
+    print(json.dumps({"bits": 772, "count": {"free": 3, "inputs": 10, "registered": 7, "units": 1}}))
+else:
+    assert a[0] == "window-commit"
+    out.mkdir(parents=True)
+    (out / "circuit.json").write_text(json.dumps({"run": "ab"}))
+    print(json.dumps({"units": 1}))
+'''
+FAKE_RECORDS_AUDIT = '''import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+out = Path(a[a.index("--out") + 1])
+if a[0] == "audit":
+    out.mkdir(parents=True)
+    (out / "summary.json").write_text("{}")
+    print("RECORDS " + json.dumps({"verdict": "accept"}))
+    sys.exit(0)
+assert a[0] == "period" and a[a.index("--audit") + 1] == str(out.parent / "audit")
+if os.environ.get("FAIL_PERIOD"):
+    print("records_audit.py period: the audit under it wrote no Program", file=sys.stderr)
+    sys.exit(1)
+out.write_text(json.dumps({"free": 0}))
+print("PERIOD " + json.dumps({"verdict": "accept"}))
+'''
+CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$3/chain.args"; echo "chain on window $2"'
+PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
+
+
+def _v3c(tmp_path: Path, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
+    """`served_verdicts.sh v3c` on window 0 of a toy serve dir, in a toy tree whose prove_path.py and records_audit.py
+    note each step they run, its builds stubbed and the split certifier's two commands set (``extra`` adds to or unsets
+    the environment, an empty value unsetting): the exit status, the verdict lines, the steps in order and the limits."""
+    tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
+    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
+              tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
+              d / "advice" / "w0" / "private", tmp_path / "row"):
+        p.mkdir(parents=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
+    (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(FAKE_RECORDS_AUDIT)
+    (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    for f in (d / "advice" / "w0" / "private" / "advice.bin", tmp_path / "row" / "manifest.json", tmp_path / "h.so",
+              tmp_path / "n.so"):
+        f.write_text("")
+    (d / "weights_registration.json").write_text("{}")
+    _write(d, "windows.jsonl", [{"window": 0, "run_root": "ab" * 64}])
+    # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
+    # shadow the installed verity
+    py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
+    for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py),
+                       (bin_ / "timeout", f'[ "$1" = -k ] && shift 2\necho "$1" >> {tmp_path}/limits; shift; exec "$@"'),
+                       (bin_ / "gpu-lease", "exit 99"), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "0",
+           "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "ROW": str(tmp_path / "row"),
+           "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"), "ORDER": str(tmp_path / "order"),
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD}
+    env = {k: v for k, v in {**env, **extra}.items() if v}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "v3c"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    read = lambda f: (tmp_path / f).read_text().split() if (tmp_path / f).exists() else []  # noqa: E731
+    return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
+
+
+def test_v3c_runs_the_certifiers_chain_before_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
+    """The window commit, then the split certifier's chain (it reads the commit's scan state), V3c's audit, its period.json
+    and the certifier's period check on it, each within its own limit; the check gets the serve dir, the window, the
+    certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there."""
+    rc, lines, order, limits = _v3c(tmp_path)
+    assert rc == 0, lines
+    assert order == ["window-circuit", "window-commit", "chain", "audit", "period", "period-check"]
+    assert limits == ["30m", "120m", "60m", "180m", "60m"]
+    vw, pieces = tmp_path / "serve" / "v3c-w0-8-32-4-4-16", tmp_path / "out" / "pieces" / "certifier"
+    assert (pieces / "chain.args").read_text().split() == [str(tmp_path / "serve"), "0", str(pieces), str(vw)]
+    assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
+    assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
+    assert [line.split(" (")[0].split(":")[0] for line in lines] == [
+        "WINDOW-CIRCUIT class 8,32,4,4,16", "WINDOW-COMMIT class 8,32,4,4,16", "WINDOW-CIRCUIT-HELD class 8,32,4,4,16",
+        "CERTIFIER-CHAIN", "V3C-AUDIT class 8,32,4,4,16", "V3C-PERIOD", "CERTIFIER-PERIOD"]
+    assert lines[2].endswith("PASS") and lines[5].endswith('PERIOD {"verdict": "accept"}')
+
+
+def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
+    rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
+    assert rc == 1 and order == ["window-circuit", "window-commit", "chain", "audit", "period"]
+    assert "the audit under it wrote no Program" in lines[-2] and lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
+    assert not (tmp_path / "out" / "pieces" / "certifier" / "answer.json").exists()
+
+
+def test_the_split_certifier_and_its_whole_piece_are_not_both_set(tmp_path):
+    rc, lines, order, _limits = _v3c(tmp_path, CERTIFIER_CMD="true", CERTIFIER_PERIOD_CMD="")
+    assert rc == 3 and order == []
+    assert lines == ["PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"]
 
 
 class _Response:

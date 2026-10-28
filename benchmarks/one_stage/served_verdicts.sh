@@ -22,20 +22,29 @@
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
-#     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
+#     pins: at each class of CLASSES (default 8,32,4,4,16, the network certifier's w63k4: 8 slots of 32 prompt ids and 4
+#     outputs, 4 lanes, a boundary every 16 buckets), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 2h), run last, after the record (step 5),
 #     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
 #     then gates here instead); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's. V3c proves the window circuit's own units at
-#     V3C_CLASS (default 4,32,4, which CLASSES must hold): `prove_path.py window-commit` commits the window as that class
-#     circuit's units, the weights it serves under the committer's key, so each served as registered has the registration's
-#     root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the class; then
-#     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) draws and proves its members.
+#     V3C_CLASS (default 8,32,4,4,16, which CLASSES must hold) in $D/v3c-w<K>-<class>: `prove_path.py window-commit` commits
+#     the window as that class circuit's units, the weights it serves under the committer's key, so each served as
+#     registered has the registration's root, and the scan state the network certifier's scan of the warden run the
+#     certifier front kept (else a stand-in); its circuit.json less its run fields is held to the verifier's own
+#     window-circuit record at the class; then `records_audit.py audit --circuit --registered` the registration (V3C_LAW,
+#     default subset:1) draws and proves its members, and `records_audit.py period` writes the audit as the network
+#     certifier's period reads it (period.json: the registration, the Program, its answer and its free inputs).
+#     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD runs its chain after the window-commit and
+#     before V3c's audit (within CERTIFIER_TIMEOUT, default 60m), and CERTIFIER_PERIOD_CMD its period check after V3c's
+#     period.json (within CERTIFIER_PERIOD_TIMEOUT, default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR
+#     $OUT/pieces/certifier, where the period check writes the certifier's answer.json; CERTIFIER_CMD is then left unset.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
+#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (the split certifier's, its period check's answer
+#     read where step 3 wrote it), else names it MISSING with its issue. No verdict is
 #     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
 #     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
@@ -73,7 +82,7 @@ HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_
 VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
-REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-8,32,4,4,16} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 if [ -n "${H1_GATE:-}" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
@@ -111,7 +120,7 @@ print(f"registered before the first request: {len(v)} weight parameters rooted (
 EOF
 )"
 }
-V3C=${V3C_CLASS:-4,32,4} v3c_ok=0; vtag=${V3C//,/-}
+V3C=${V3C_CLASS:-8,32,4,4,16} v3c_ok=0; vtag=${V3C//,/-}
 v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
   VW=$D/v3c-w$K-$vtag
   [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
@@ -156,6 +165,34 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   [ -n "$(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log")" ] \
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
   return $rc
+}
+v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
+  (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
+    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json") > "$OUT/v3c-audit/period.log" 2>&1
+  local rc=$?
+  [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
+  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"
+  return $rc
+}
+certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 3), if its command is set
+  local cmd lim dir=$OUT/pieces/certifier rc
+  if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-60m}
+  else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
+  [ -n "$cmd" ] || return 0
+  mkdir -p "$dir"
+  (cd "$TREE" && timeout -k 1m "$lim" bash -c "$cmd" _ "$D" "$K" "$dir" "$VW") > "$dir/$1.log" 2>&1
+  rc=$?
+  say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
+  return $rc
+}
+v3c_proved() {  # V3c's window committed and the build done: the certifier's chain, V3c's audit and period.json, the period check
+  local rc prc
+  certifier_step chain
+  v3c_audit; rc=$?
+  v3c_period; prc=$?
+  if [ "$prc" = 0 ]; then certifier_step period
+  elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
+  return $((rc ? rc : prc))
 }
 
 serve() {  # under the lease: the endpoint, the requests, every closed window sealed, the endpoint stopped
@@ -260,6 +297,10 @@ stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
   | tee "$OUT/machine.txt"
 for f in "$ROW/manifest.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
+if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
+  [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
+  export CERTIFIER_CMD=true
+fi
 command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
 mkdir -p "$D" "$ROOT/cache" "$FW"
 KEEP_WHY="VLLM-33 Wed 28: served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
@@ -289,7 +330,7 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
   wait "$BUILD"; rc=$?
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
   [ "$v3c_ok" = 1 ] || exit 16
-  v3c_audit; exit $?
+  v3c_proved; exit $?
 fi
 
 H1_COINS="PoUW H1: not served (no H1_GATE)"
@@ -384,7 +425,7 @@ circuits && wc_ok=1
 v3c_commit || true
 wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
-[ "$v3c_ok" = 1 ] && v3c_audit
+[ "$v3c_ok" = 1 ] && v3c_proved
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$OUT/sampled-proofs.log" 2>&1
 rc=$?
