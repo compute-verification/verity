@@ -3,7 +3,7 @@ import PousCheck.Randomness
 /-!
 # The decode an audit with verification flag bit 0 checks
 
-`p2/PROTOCOL.md` §3 and §4 (`reference.expand_prefix`, `stream`, `keys`, `d`, `sigma`, `decode`), at the spec's prefix
+P2 v4's maps and keys (`reference.expand_prefix`, `stream`, `keys`, `d`, `sigma`, `decode`), at the spec's prefix
 (the model commitment and the 32-byte setup salt):
 
 ~~~text

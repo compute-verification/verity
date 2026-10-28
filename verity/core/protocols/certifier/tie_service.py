@@ -1,4 +1,4 @@
-"""The ingress tie through the proof service: each bucket row of an ingress link-window of the warden's cells proved as
+"""The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
 `io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised link's
 requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md,
 "The ingress tie").
@@ -95,7 +95,7 @@ _STATICS = ("B", "L", "R")
 PUBLIC = (
     S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
     S.Public("window", "structure", "provenance: the ingress link-window's index, held to the registration's order"),
-    S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L·R cells each"),
+    S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L*R cells each"),
     S.Public(f"domain:{VALUE}", "structure", "the warden's domain (`warden_rows.domain`), which binds the session, the "
              "link, ingress and the window"),
     S.Public(VALUE, "commitment", "the warden's salted root over the window's bucket rows, its signed head's"),

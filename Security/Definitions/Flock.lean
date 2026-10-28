@@ -10,6 +10,7 @@ import Definitions.Flock.Sparse
 import Definitions.Flock.Merkle
 import Definitions.Flock.Circuit
 import Definitions.Flock.Audit.Law
+import Definitions.Flock.Audit.Window
 import Definitions.Flock.Defs
 import Definitions.Flock.Extract
 import Definitions.Flock.Audit.Harm

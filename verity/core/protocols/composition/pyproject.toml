@@ -21,7 +21,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # certifier program and the LMS verifier), PoUS's run check (with the memory challenger's Lean) and the remote bandwidth
 # session's. The reference runs the components' Python: PoUW's
 # `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`, the integrity profile, the
-# proof service) with its generators, PoUW's check cases, and the network certifier's period difftest (its mirror over
+# proof system) with its generators, PoUW's check cases, and the network certifier's period difftest (its mirror over
 # the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its generator, each from its own
 # suite's tests; and space's and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
@@ -34,4 +34,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean",
           "verity/core/service/sampled_proofs", "verity/core/service/flock", "verity/core/primitives/lms/lean",
-          "verity/core/primitives/identity", "verity/core/primitives/randomness"]
+          "verity/core/primitives/identity", "verity/core/primitives/randomness",
+          # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
+          # (`deploy.stream.Side`)
+          "verity/core/deploy", "verity/core/wire"]

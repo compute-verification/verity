@@ -1,7 +1,7 @@
 """The matmul chain's table, rendered on demand from a recorded run's ``chain.json`` (`chain.py`) and the code: nothing it
 prints is stored, in Git or the evidence store.
 
-  python render.py art:XXXXXXXX [--json]      the run's tree from the evidence store (``research data fetch``)
+  python render.py art:XXXXXXXX [--json]      the run's tree from the evidence store
   python render.py OUT/chain.json [--json]
 
 Per point and arm: the chain's time (the median over reps), its overhead over its divisor (`sweep.divisor`: the fastest native

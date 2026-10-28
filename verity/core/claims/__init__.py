@@ -218,6 +218,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
+    # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
+    # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
+    Entry("faithful", "assumption",
+          "Faithful p: the auditor party p runs its stated code on its true inputs, its own clock's readings and its own "
+          "coin source's draws among them, and its state persists: each step starts from the state the last one left, "
+          "never an earlier copy (NIST SP 800-208's no snapshot restore of a stateful hash-based key)", "Faithful party",
+          "standard"),
+    Entry("secret", "assumption",
+          "Secret p: the prover can neither read nor set the auditor party p's signing keys, its LMS leaf states or its "
+          "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
+    Entry("confined", "assumption",
+          "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
+          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "included, carries its state out", "Confined party", "standard"),
+    Entry("witness-path-private", "assumption",
+          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
+          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
+          "else; they travel unencrypted for now", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
@@ -266,9 +285,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
-    # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
-    # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
-    # and its sm_120 instances) read the verifier's clock in the cost model
+    # `Pouw.Assumptions.HonestClock`, stated once for both PoUW games: the premise by which the deadline guarantees
+    # (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline and its sm_120
+    # instances) read the verifier's clock in the cost model
     Entry("honest-clock", "assumption",
           "Honest clock: the cost behind a transcript the verifier receives by the deadline is spent after the salt's "
           "release and by the deadline, so the prover's computation stopped at the deadline outputs every transcript "
@@ -427,7 +446,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
           "binding is stated", "TS accepted live", "standard"),
     Entry("accounting-ts-window-law", "assumption",
-          "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
+          "The proof system's draws and audit coins are the window's live coins: at each round and proof, given what "
           "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
           "coins, fresh and uniform. This rests on five facts: a refused session is never rerun on a fresh draw (no "
           "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
@@ -497,6 +516,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
+    # `FlockSoundness.Assumptions.PinnedWindowDraws` (Security/Proofs/Flock/Soundness/Assumptions/WindowDraws.lean) is its
+    # Lean form, the premise of Flock.Guarantees.WindowBound_honest; falsified by hashing and parsing the recorded draw files
+    Entry("flock-window-draws-pinned", "assumption",
+          "The deployed sampling window's draw file and its three sessions' draw files, named by their SHA-512 digests, "
+          "read as recorded: the window's stratified draw of one unit from each of its three strata (units 421, 2824 "
+          "and 3270 of 3744), and the sessions' subset draws of one unit each (165 of 256, 328 of 512, 150 of 624)",
+          "Window draws pinned", "measured"),
 )}
 
 

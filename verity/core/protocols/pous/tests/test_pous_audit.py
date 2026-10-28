@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from pous_fakes import Clock
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.audit import (DEADLINE_NS, HonestResponder, UnsignedRounds, challenge_key, deadline_rounds, run_timed,
@@ -16,7 +17,8 @@ from verity.core.protocols.pous.oracle import PQuery, Tweak, pure
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.primitives import reference
 from verity.core.protocols.pous.scheme import encode
-from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash, node_hash, tree, verify_path
+from verity.core.protocols.pous.verifier import (MerkleTree, VerifierKey, leaf_hash, node_hash, path_length, tree,
+                                                 verify_path)
 
 PARAMS = Params(8, 64, 3, 3)
 PRIMS = reference(PARAMS)
@@ -57,9 +59,13 @@ def test_merkle_paths(count):
     assert t.root == _rfc6962_root(leaves)
     for i in range(count):
         assert verify_path(t.root, count, i, leaves[i], t.path(i))
+        assert path_length(count, i) == len(t.path(i))
         assert not verify_path(t.root, count, i, hashlib.sha512(b"x").digest(), t.path(i))
         if count > 1:
             assert not verify_path(t.root, count, (i + 1) % count, leaves[i], t.path(i))
+    for i in (-1, count):
+        with pytest.raises(ValueError):
+            path_length(count, i)
 
 
 def test_a_path_with_a_sibling_that_is_not_a_digest_is_refused():
@@ -111,14 +117,6 @@ def test_simulated_audit(world):
     assert not simulate(vk, Wrong(), PRIMS, key, k=3).accepted
 
 
-class FakeClock:
-    def __init__(self):
-        self.now = 0
-
-    def __call__(self):
-        return self.now
-
-
 def test_memory_challenger(world):
     _, _, enc, vk = world
     key = challenge_key(b"audit", vk)
@@ -127,7 +125,7 @@ def test_memory_challenger(world):
     assert run_timed(UnsignedRounds(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
 
     assert DEADLINE_NS == 500_000
-    clock = FakeClock()
+    clock = Clock()
     v = UnsignedRounds(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
     assert v.limit_ns == 540_000
     i = v.challenge()

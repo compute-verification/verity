@@ -55,7 +55,7 @@ for ea in ${EXTRA_ENGINE_ARGS:-}; do COMMON+=(--engine-arg "$ea"); done
 for ca in ${EXTRA_COMMIT_ARGS:-}; do COMMON+=("$ca"); done
 REQUIRED_MANIFEST=${REQUIRED_MANIFEST:-}
 if [ -z "$REQUIRED_MANIFEST" ] && [ "$TAPS" != kernels ] && [ -f "$D/build_request/instances.json.gz" ]; then
-  if "${PY%/*}/verity-vllm" manifest build --program "$D/build_request" --workload "$WL" --no-norm-scales --no-guarded-max --no-router-softmax \
+  if "${PY%/*}/verity-vllm" manifest build --program "$D/build_request" --workload "$WL" --no-norm-scales --no-router-softmax \
        --no-vocab-range --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
     REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest: $(tail -n 1 "$D/manifest.log")"
   fi

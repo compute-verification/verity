@@ -6,13 +6,22 @@ not read.  Lane text is what records how the tree got here or who is working on 
 
 * ``attribution``: a parenthetical holding a date, ``(Daniel, 18 Oct)``, ``(12 Oct 06:20Z)``, ``(2026-10-12)``, or a date
   that follows ``Daniel``;
-* ``date``: an ISO date, ``2026-10-12``;
+* ``date``: a date, ``2026-10-12``, ``27 Oct``, ``Oct 27``;
+* ``name``: a person named as a rule's source, ``Daniel's ruling``, ``per Daniel``, except the Asks for Daniel database and
+  its ``Waiting on Daniel`` status, and where AGENTS.md and the skills name the person who decides;
 * ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id, a Notion URL, a Linear issue id (``VLLM-136``, the workspace's
   team keys) or URL, and a pull request (``#1234``, or its GitHub URL);
 * ``agent``, ``slack``: a Cursor agent id (``bc-`` and hex) and a Slack timestamp or archive URL;
 * ``codename``: a worker's codename in prose: a board id (``M-1234``, ``F-r16``), a round (``R10``..``R19``), ``[lane `` or
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
-  as an owner.
+  as an owner;
+* ``run``: a research run id, ``r20261027-173640-ad3b``;
+* ``finding``: a red-team finding's id: ``RT`` and digits or a hyphenated id (``RT4``, ``RT2-LOGIC-1``), ``R-ACCEL``,
+  ``DS-12`` and ``DC-3``, but not a machine-model epoch, ``DS-`` or ``DC-`` and an SM's number (``DS-120``, ``SMS``);
+* ``host``: a machine's name: ``vy-`` and a name whose last part is a number (``vy-nebius-cpu-1``, ``vy-auditor-2``) or
+  that holds a GPU model (``vy-dc-h200``), one part ending in a digit (``vy-cpu2``), or one of ``HOSTS``; not the users,
+  groups and units the machines run (``vy-admin``, ``vy-lockout``).  AGENTS.md and the skills may name the machine a step
+  runs on.
 
 ``art:`` ids are allowed: they name evidence, which the store keeps.  Declared data isn't read at all (``*.json``, ``*.csv``
 and every other file not named above: ``fixtures/artifacts.json``, each ``lean-audit.json``'s records, the handle registry,
@@ -26,12 +35,14 @@ is found doesn't fail: the list can run ahead of a tree, as each area cleans its
 what this tree no longer finds.  A file that moves takes its entry with it, in the same change (``--move``).  The ratchet
 gate (``integrations/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, or that grows
 this list or leaves a renamed file's entry behind, and judges a change to this module by running it as the change's base
-has it on the change's tree.  So it imports only the standard library, ``test_no_new_lane_text`` takes no fixture, and the
+has it on the change's tree.  A change that makes it count more records the list in the same change, raising only the
+entries of files it leaves untouched (``--record``, taking the larger of each entry and what the tree finds, so an entry
+held for a change queued on ``next`` stays), which the gate takes from a change to this module.  So it imports only the standard library, ``test_no_new_lane_text`` takes no fixture, and the
 gate reads ``LEFT_OUT``, ``FIX``, ``holds``, ``sites`` and ``parse`` from the base's copy of this module.
 
     python3 tests/lint/test_repo_lane_text.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_lane_text.py --prune          # delete and lower what this tree no longer finds
-    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the gate holds a rise)
+    python3 tests/lint/test_repo_lane_text.py --record         # the list allows what this tree finds (the gate holds a rise)
 """
 from __future__ import annotations
 
@@ -61,10 +72,13 @@ SKIP = {
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")
 #: the files that hold no lane text and may have no entry
 PINNED = ("AGENTS.md", "ARCHITECTURE.md", "GLOSSARY.md", ".agents/skills/")
-#: where AGENTS.md and the skills name handles as owners
+#: where AGENTS.md and the skills name handles as owners, and the machines steps run on
 OWNERS = ("AGENTS.md", ".agents/skills/")
 FIX = ("Say what is true now, and put the rest where it lives: history in git (the commit message), work in Linear (the "
        "issue), rulings in Notion (the decisions log), results in the store (`research data put`, cited as `art:<id>`). "
+       "For a red-team finding, state the rule it established, not its id. A run or a machine is named by what it is (the "
+       "CPU pod, the run that measured it, cited as `art:<id>`), and one a tool reads goes in a data file it declares "
+       "(TOML or JSON), not in prose. "
        f"If the file moved, move its entry in the same change: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
 
 PY = (".py", ".pyi")
@@ -74,10 +88,17 @@ HASH = (".sh", ".bash", ".toml", ".yaml", ".yml", ".service", ".timer", ".conf",
 SLASH = (".rs", ".c", ".h", ".cc", ".cpp", ".hpp", ".cu", ".cuh", ".ts", ".js", ".go")
 
 MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
-DATE = rf"(?:\b\d{{1,2}} {MONTH}(?![\w-])|\b{MONTH} \d{{1,2}}\b(?!:)|\b20\d\d-[01]\d-[0-3]\d\b)"
+MONTH_WORD = (r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|June|July|August"
+              r"|September|October|November|December)")
+DATE = rf"(?:\b\d{{1,2}} {MONTH}(?![\w-])|\b{MONTH_WORD}\.? \d{{1,2}}\b(?!:)|\b20\d\d-[01]\d-[0-3]\d\b)"
 TEAMS = "TRN|CMP|TOP|CI|PRF|CIR|INF|NET|HASH|MEM|VLLM|LEAN|BENCH|COMM|CON|DAN|LAND"
 HANDLES = ("compute-accounting", "compute-research", "memory-accounting", "network-accounting", "benchmarks", "circuits",
            "soundness", "training", "console", "kernels", "proofs", "infra", "comms", "lean", "vllm", "top", "ci")
+#: the SMs whose machine-model epochs are named ``DS-`` or ``DC-`` and the SM's number (``DS-120``: a data file's name)
+SMS = "80|86|87|89|90|100|101|103|110|120|121"
+#: a GPU model in a host's name (``vy-dc-h200``), and the hosts no shape names
+GPUS = r"[abhl]\d{2,3}[a-z]?|\d{4}"
+HOSTS = r"control-verity|glm53-eu\d*|glm53-h\d+"
 WORD = re.compile(r"\w")
 #: (kind, pattern, the characters that may not precede a match): each pattern starts with a literal or a small class, which
 #: ``re`` searches for fast, so the tree reads in seconds; where two overlap, the one that starts first wins, then the one
@@ -86,6 +107,9 @@ PATTERNS = tuple((kind, re.compile(p), before and re.compile(before)) for kind, 
     ("attribution", rf"\((?:[^()\n]{{0,80}}?[\s,;:(])?{DATE}[^()\n]{{0,120}}\)?", None),
     ("attribution", rf"Daniel(?:'s)?\b[^()\n.]{{0,40}}?{DATE}", r"\w"),
     ("date", r"20\d\d-[01]\d-[0-3]\d\b", r"\w"),
+    ("date", rf"\d{{1,2}} {MONTH_WORD}\b", r"[\w.:]"),
+    ("date", rf"{MONTH_WORD}\.? \d{{1,2}}\b(?![:\d])", r"\w"),
+    ("name", r"(?<!Asks for )(?<!Waiting on )Daniel(?:'s)?\b", r"\w"),
     ("note", r"note:[0-9A-Za-z][\w.:-]*", r"\w"),
     ("notion", r"notion\.(?:so|site|com)\b\S*", None),
     ("linear", rf"(?:{TEAMS})-\d+\b", r"\w"),
@@ -99,6 +123,10 @@ PATTERNS = tuple((kind, re.compile(p), before and re.compile(before)) for kind, 
     ("codename", r"\[lane ", None),
     ("codename", r"[Ll]ane[: ]+`?[a-z][a-z0-9]*(?:-[a-z0-9]+)+", r"\w"),
     ("codename", rf"@(?:{'|'.join(HANDLES)})(?![\w-])", r"[\w.@/+-]"),
+    ("run", r"r\d{8}-\d{6}-[0-9a-f]{4}\b", r"\w"),
+    ("finding", rf"RT(?:\d+|-[A-Z][A-Z0-9]*)(?:-[A-Z0-9]+)*\b|R-ACCEL\b|D[SC]-(?!(?:{SMS})\b)\d+\b", r"[\w-]"),
+    ("host", rf"vy-(?:(?:[a-z0-9]+-)*(?:\d+(?![\w-])|(?:{GPUS})(?:-[a-z0-9]+)*\b)|[a-z]+\d+(?![\w-])|(?:{HOSTS})(?![\w-]))",
+     r"[\w-]"),
 ))
 HANDLE = re.compile(rf"^@(?:{'|'.join(HANDLES)})$")
 PY_LEX = re.compile(r'#[^\n]*|"""(?:[^"\\]|\\.|"(?!""))*"""|\'\'\'(?:[^\'\\]|\\.|\'(?!\'\'))*\'\'\''
@@ -137,7 +165,7 @@ def found_in(prose: list[tuple[int, str]], owners: bool = False) -> list[tuple[i
         at += len(chunk) + 1
     out, end = [], 0
     for start, _, stop, kind, what in sorted(hits):
-        if start < end or owners and kind == "codename" and HANDLE.match(what):
+        if start < end or owners and (kind in ("host", "name") or kind == "codename" and HANDLE.match(what)):
             continue
         i = bisect.bisect_right(starts, start) - 1
         out.append((prose[i][0] + text.count("\n", starts[i], start), f"{kind}: {what.strip()[:80]}"))
@@ -308,11 +336,37 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert sites("int x;  // INF-71 (Oct 12)\nchar *u = \"https://x\";\n", "k.cu") == [
         (1, "linear: INF-71"), (1, "attribution: (Oct 12)")]
     assert sites("x = 1  # (12 Oct)\n", "a.toml") == [(1, "attribution: (12 Oct)")]
+    named = "per Daniel. It landed 27 Oct (Oct 28 next); the Asks for Daniel database, Waiting on Daniel, Decision 3, 12:30Z, @daniel"
+    assert [w for _, w in sites(f"# {named}\n", "a.py")] == ["name: Daniel", "date: 27 Oct", "attribution: (Oct 28 next)"]
+    assert [w for _, w in sites(named, ".agents/skills/x/SKILL.md")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
     for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "integrations/vllm/tools/ratchet_gate.py").read_text()):
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []
     assert not holds("archive/x.md") and not holds("fixtures/a/README.md") and not holds("x/tests/fixtures/y.py")
     assert holds("x/tests/test_y.py") and holds("Security/A.lean") and not holds("x.csv")
+
+
+def test_run_ids_finding_ids_and_hosts_are_lane_text_and_their_near_misses_are_not() -> None:
+    def kinds(text: str, path: str = "a.md") -> list[str]:
+        return [w for _, w in sites(text, path)]
+
+    assert kinds("Measured in r20261027-173640-ad3b and (r20261021-070616-d06c).") == [
+        "run: r20261027-173640-ad3b", "run: r20261021-070616-d06c"]
+    assert kinds("v1.2.3, r2026.10.27, r20261027, r20261027-173640, xr20261027-173640-ad3b, r20261027-173640-AD3B") == []
+    assert kinds("RT2-LOGIC-1 and RT4-INT-40 broke it; RT4, RT-HOPPER-2, R-ACCEL, DS-12 and DC-3 too.") == [
+        "finding: RT2-LOGIC-1", "finding: RT4-INT-40", "finding: RT4", "finding: RT-HOPPER-2", "finding: R-ACCEL",
+        "finding: DS-12", "finding: DC-3"]
+    assert kinds("An RTX PRO 6000 (RTX-6000), RTT, RTL, RT alone, RT-safe, CRT2, DS-120's DS_smem, DC-90-ri, DC-100 "
+                 "and DS-R1.") == []
+    assert kinds("On vy-nebius-cpu-1, vy-dc-h200, vy-auditor-2, vy-night-cpu-1, vy-cpu2 and vy-control-verity.") == [
+        "host: vy-nebius-cpu-1", "host: vy-dc-h200", "host: vy-auditor-2", "host: vy-night-cpu-1", "host: vy-cpu2",
+        "host: vy-control-verity"]
+    assert kinds("vy-admin runs vy-lockout.service; vy-keeper-n1, vy-coord-t1, vy-nebius-1-data, vy-nebius-cpu-*, "
+                 "verity-vllm, heavy-1 and envy-2.") == []
+    assert kinds("x = 1  # on vy-nebius-2 (r20261027-173640-ad3b, RT4)\nh = 'vy-nebius-2'\n", "a.py") == [
+        "host: vy-nebius-2", "run: r20261027-173640-ad3b", "finding: RT4"]
+    assert kinds("Run it on vy-nebius-cpu-1 (RT4).", ".agents/skills/x/SKILL.md") == ["finding: RT4"]
+    assert kinds("art:87f1 is the run's output.") == []
 
 
 def test_pinned_files_hold_none() -> None:
@@ -358,6 +412,6 @@ if __name__ == "__main__":
     elif sys.argv[1:] == ["--prune"]:
         dump(allowed() & found())
     elif sys.argv[1:] == ["--record"]:
-        dump(Counter({f: n for f, n in found().items() if not pinned(f)}))
+        dump(allowed() | Counter({f: n for f, n in found().items() if not pinned(f)}))
     else:
         sys.exit(__doc__.rsplit("\n\n", 1)[-1])

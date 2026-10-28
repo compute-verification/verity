@@ -23,7 +23,7 @@ build, which writes no z or y and skips their MMA), into a staging buffer.  At t
 staging receipts into the plan's, which the receipt trees commit, unless the step's flags say no-write (F_NW_UNITS),
 and under F_FAULT flips bit FAULT_SHIFT of word 0 of unit 0's receipt of every call.  The side stream joins the serving
 stream at the forward's last call, and under piecewise graphs at every qkv call too (each piece's capture must join its
-forks, and a piece ends at an attention).  Between steps dither_one's Window builds the admit and z tables, the step
+forks, and a piece ends at an attention).  Between steps dither_one's DitherState builds the admit and z tables, the step
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
 is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
@@ -39,8 +39,8 @@ same on NA_MULTI A streams, call w's on stream w % NA_MULTI, since no call's tab
 counter is in its own prefix words), and a join waits on every A stream used since the last; ao="mn" (-aomn; hbk
 and hbr) is "ms" with each call's noise there too, after its seeds (kh_one_noise into a ring of NA_MULTI workspaces,
 the side stream's kh_one_units reading it), so the side stream runs the units alone.  With pt=True (-pt) the
-window builds the receipt trees and the admit tables between steps on streams of their own (`Window.tree_streams`).
-With ls=True (-ls) each step's seeds read the live salt of the round before it (`Window.step_salt`).
+window builds the receipt trees and the admit tables between steps on streams of their own (`DitherState.tree_streams`).
+With ls=True (-ls) each step's seeds read the live salt of the round before it (`DitherState.step_salt`).
 The round's leaves are a-step, admit-step, z-step, then y-step (under "zy") and receipt-step (`dither_one.ROUND_EXTRA`).
 Under "zy" the serving stream copies each call's served y, the bytes the next layer reads, into y records after its GEMM
 (`dithera_ycommit`, dq(0, +0, s_w) past m as the records'); between steps the window builds the served y's tables, whose
@@ -373,7 +373,7 @@ def _piecewise() -> bool:
 
 
 class Side:
-    """The serving stream's GEMM state and the side stream's units over a dither_one Window."""
+    """The serving stream's GEMM state and the side stream's units over a dither_one DitherState."""
 
     in_order = False
 
@@ -388,7 +388,7 @@ class Side:
     def label(self) -> dict:
         return F.form_of("dither-a", self.z, self.in_order, self.unadopted(), self.adopted())
 
-    def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
+    def __init__(self, win: DO.DitherState, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
         if ao not in AO or (ao in AO_SEEDS and unit == "h1r") or (ao == "mn" and unit not in KONE):
@@ -735,7 +735,7 @@ def zy_fields_of(window: str, s: int, w: int, module: str, t: int, n: int, unit:
             "order": "unit row block, then column block", "schema": CM.SCHEMA}
 
 
-def zy_fields(win: DO.Window, w: int, s: int, unit: tuple[int, int]) -> dict:
+def zy_fields(win: DO.DitherState, w: int, s: int, unit: tuple[int, int]) -> dict:
     return zy_fields_of(win.window, s, w, win.names[w], win.t, win.nk[w][0], unit)
 
 
@@ -744,7 +744,7 @@ def y_bytes(unit: tuple[int, int]) -> int:
     return 2 * unit[0] * unit[1]
 
 
-def y_fields(win: DO.Window, w: int, s: int, unit: tuple[int, int]) -> dict:
+def y_fields(win: DO.DitherState, w: int, s: int, unit: tuple[int, int]) -> dict:
     ur, uc = unit
     return {"window": win.window, "step": s, "linear": w, "module": win.names[w], "slots": win.t, "n": win.nk[w][0],
             "unit": [ur, uc], "record": f"y {ur}x{uc} bf16 LE row-major; past m dequant(0, +0, s_w)",
@@ -758,7 +758,7 @@ def y_rows(rec: torch.Tensor, t: int, n: int, unit: tuple[int, int]) -> torch.Te
     return rec.view(torch.int16).reshape(t // ur, n // uc, ur, uc).permute(0, 2, 1, 3).reshape(t, n)
 
 
-def zy_count(win: DO.Window, w: int, unit: tuple[int, int]) -> int:
+def zy_count(win: DO.DitherState, w: int, unit: tuple[int, int]) -> int:
     n = win.nk[w][0]
     if win.t % unit[0] or n % unit[1]:
         raise ValueError(f"linear {w}: T = {win.t}, N = {n}, not whole {unit[0]} x {unit[1]} units")
@@ -795,11 +795,11 @@ def side() -> Side:
         win = DO._window(torch.device("cuda"))
         win.step_salt = CONF["ls"]
         SIDE.append(Side(win, CONF["unit"], CONF["h1u"], CONF["z"], CONF["ao"], CONF["pt"]))
-        before = DO.Window.before
+        before = DO.DitherState.before
 
-        after = DO.Window.after
+        after = DO.DitherState.after
 
-        def before_a(self: DO.Window, m: int) -> None:
+        def before_a(self: DO.DitherState, m: int) -> None:
             before(self, m)
             if SIDE[0].unit in KONE:
                 self._put(SIDE[0].s_unit, torch.tensor([0, m, 0, 0], dtype=torch.int32))
@@ -812,7 +812,7 @@ def side() -> Side:
                         st.level.view(torch.uint8).fill_(DF.POISON)
                 torch.cuda.synchronize()
 
-        def after_a(self: DO.Window) -> None:
+        def after_a(self: DO.DitherState) -> None:
             cap, sd = self.cap, SIDE[0]
             after(self)
             if not sd.zy:
@@ -825,8 +825,8 @@ def side() -> Side:
                 self.caps[cap].update(zy=[x.clone() for x in sd.zy], ysv=[x.clone() for x in sd.ysv], y_root_bad=bad,
                                       y_roots=[unwords(self.pre["mid"].leaf(yi, w)) for w in range(self.L)],
                                       yu_roots=[unwords(sd.yuset.root(w)) for w in range(self.L)])
-        DO.Window.before = before_a
-        DO.Window.after = after_a
+        DO.DitherState.before = before_a
+        DO.DitherState.after = after_a
     return SIDE[0]
 
 
@@ -877,7 +877,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def stats(win: DO.Window):
+def stats(win: DO.DitherState):
     def doc() -> dict:
         return {**win.stats(), **arm_label(), "dither_a": SIDE[0].info() if SIDE else None}
     return doc
@@ -915,7 +915,7 @@ def table_root(dom, key: bytes, label: str, rows) -> bytes:
     return CM.levels(dom, [x for part in got for x in CM.split(part)])[-1][0]
 
 
-def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
+def check(win: DO.DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
           r_round: dict | None = None) -> dict:
     """`which`'s capture (`g`, else the window's) against references other than the served kernels (the module
     docstring's list).  `r_round` ({"s", "leaves", "root"}: dither_so's round s + D - 1) is the round that carries the

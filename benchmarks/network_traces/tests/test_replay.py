@@ -126,11 +126,12 @@ def test_a_session_late_past_every_sync_is_a_mismatch(tmp_path: Path) -> None:
     assert summary["committed_agrees"] and summary["runs_accepted"] == {"raw": 0, "committed": 0, "certified": 0}
 
 
-def test_the_certified_audit_gives_every_link_window_the_raw_audits_verdict(tmp_path: Path) -> None:
+def test_the_certified_audit_gives_every_link_window_the_raw_audits_verdict_but_a_status_no_certificate(
+        tmp_path: Path) -> None:
     """The difftest on traces: under each prover the replay offers, on the honest trace, the trace with a session late
     past every sync, and the honest trace with two requests per ingress bucket through a queue of one frame, the audit
     of network certificates gives every link-window the raw and the committed audits' verdict, acceptances and
-    rejections alike."""
+    rejections alike, except a window rejected on its status, which the issuer certifies nothing of: a `no-verdict`."""
     honest = trace()
     report = calibration.calibrate(honest)
     late = copy.deepcopy(honest)
@@ -149,9 +150,9 @@ def test_the_certified_audit_gives_every_link_window_the_raw_audits_verdict(tmp_
             (tmp_path / name / syncs).mkdir(parents=True)
             summary, rows = run(tmp_path / name / syncs, doc, rep_, "--syncs", syncs)
             assert summary["certified_agrees"] and summary["committed_agrees"] and not summary["disagreements"]
-            assert all(r["raw"] == r["committed"] == r["certified"] for r in rows)
-            verdicts.update(r["certified"] for r in rows)
-    assert {None, "mismatch", "status:overflow"} <= set(verdicts), verdicts
+            assert all(r["raw"] == r["committed"] and rep.certified_of(r["raw"]) == r["certified"] for r in rows)
+            verdicts.update((r["raw"], r["certified"]) for r in rows)
+    assert {(None, None), ("mismatch", "mismatch"), ("status:overflow", "no-verdict")} <= set(verdicts), verdicts
 
 
 def test_an_online_prover_declares_from_what_it_has_seen_and_carries_a_runs_history(tmp_path: Path) -> None:

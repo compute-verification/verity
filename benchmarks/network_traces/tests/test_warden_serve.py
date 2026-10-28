@@ -9,6 +9,7 @@ moves no tick in `serve`'s publisher process."""
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import importlib.util
 import json
 import math
@@ -243,6 +244,41 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     assert [x["ids"]["prompt"] for x in spread] == [x["ids"]["prompt"] for x in traffic]
     assert spread[0]["at"] == 0 and all(x["at"] < y["at"] for x, y in zip(spread, spread[1:]))
     assert "--prompts" not in A.warden_command({"requests": 7, "scan": True}, tmp_path, "u")
+
+
+def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_there_and_its_minutes_cover_it(tmp_path):
+    """`warden-rehearse --scan --bucket-ms MS` runs `rehearse` at `scan_zk.PARAMS` with the tick MS, which the scan's
+    class serves, and the gate counts its minutes and its key's sampling blocks at MS: for each tick it takes, in
+    100 ms steps up to its longest (a block of 128 s, past the minute `warden_minutes` counts for a shorter one), at
+    its lowest height, they cover every request count's id traffic (its last arrival, its tail, the rest of the block
+    it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
+    run."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    lo, hi = A.SCAN_BUCKET_MS
+    assert lo == sz.PARAMS.bucket_ms and hi * sz.PARAMS.window > 60_000
+    most = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+                         max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    height = A.REHEARSAL_HEIGHT[0]
+    for tick in range(lo, hi + 1, 100):
+        req = {"device": "warden", "requests": 7, "scan": True, "bucket_ms": tick}
+        args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+        params = ws._params(args)
+        assert params == dataclasses.replace(sz.PARAMS, bucket_ms=tick), tick
+        sz.CLASS.serves(params)
+        window_s = params.window * tick / 1000
+        assert A.warden_window_ms(req) == params.window * tick
+        for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
+            blocks = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s)
+            assert blocks * window_s + args.start_in + 30 <= A.warden_minutes(n, height, params.window * tick) * 60, \
+                (tick, n)
+            assert blocks <= A.warden_windows(n, bucket_ms=tick), (tick, n)
+        for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
+            for tokens in (1, 4, A.WARDEN_PROMPT_TOKENS[1]):
+                took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
+                assert took <= A.warden_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
 
 
 def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):
@@ -651,10 +687,10 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
     """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
-    (`monitor-unavailable`) and the check refuses it. In `serve`'s `PublisherProcess` the same commit runs in the
-    spawned process, which signs and commits from the rows released to it: every tick is on time, and the check
-    accepts every link-window, certified and registered. A commit that fails there fails `close`, and the warden's
-    process doesn't wait on it."""
+    (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
+    `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
+    it: every tick is on time, and the check accepts every link-window, certified and registered. A commit that fails
+    there fails `close`, and the warden's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     runs = {name: tmp_path / name for name in ("inline", "process", "refusing")}
@@ -664,8 +700,11 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     inline = _run(runs["inline"], tmp_path / "inline-key", requests, responses, windows=2, commit=slow_commit)
     late = [t for t, x in enumerate(inline.lateness) if x > inline.slack]
     assert late[0] == PARAMS.window and max(inline.lateness) > SLOW_COMMIT_S
-    problems = ws.check(runs["inline"])["problems"]
-    assert {f"{name} window 1: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED} <= set(problems)
+    result = ws.check(runs["inline"])
+    assert {f"{name} window 1 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+    assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 1} == \
+        {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
+    assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [1] * len(ws.CERTIFIED)
 
     process = _run(runs["process"], tmp_path / "process-key", requests, responses, windows=2, commit=slow_commit,
                    process=True)

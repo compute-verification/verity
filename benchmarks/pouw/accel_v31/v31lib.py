@@ -89,6 +89,7 @@ class Lib:
             "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
+            "v31_stream": ([vp, i], vp),
             "v31_destroy": ([vp], None),
             "v31_lt_create": ([i, i, i, vp, vp, vp, vp], vp),
             "v31_lt_run": ([vp] * 5, None),
@@ -106,7 +107,7 @@ class Lib:
 
 
 class Prover:
-    """One shape's GPU prover: m x n output cells at contraction k, noise period lp, segments of L, leaf rows of `row`
+    """One shape's GPU prover: m x n output cells at contraction k, noise tiles of lp, segments of L, leaf rows of `row`
     bytes, served calls or a filler's. `params_dir` keeps its CGP1 file (default a temporary one)."""
 
     def __init__(self, m: int, n: int, k: int, lp: int = 256, L: int = 4096, row: int = 1024, *, served: bool = False,
@@ -238,6 +239,14 @@ class Prover:
 
     def sync(self) -> None:
         self.lib.check(self.lib.sync(self.h))
+
+    def stream(self, which: int) -> int:
+        """The shared compute (0) or commit (1) stream's handle, for timing events: a call's compute is on the first,
+        and its commit and `levels_async`'s copies follow on the second."""
+        s = self.lib.stream(self.h, which)
+        if not s:
+            raise RuntimeError("v31_stream: called from a thread other than the binding's")
+        return int(s)
 
 
 call_seeds = v31.call_seeds

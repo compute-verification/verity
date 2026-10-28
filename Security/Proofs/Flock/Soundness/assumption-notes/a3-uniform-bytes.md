@@ -6,8 +6,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
 - **Why per test.** The every-event form is refutable at the deployed source. Linux's CRNG (5.18 and later,
   `drivers/char/random.c`) answers one read past 32 bytes with a ChaCha20 stream under a 256-bit key derived for that
   call, so the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at
-  `n` uniform bytes: any source with fewer outcomes than byte strings fails it
-  (note:proofs/20261018T1925Z-report-redteam-zk-server-os, P4). Its zero is an idealization, the CSPRNG taken as exactly
+  `n` uniform bytes: any source with fewer outcomes than byte strings fails it. Its zero is an idealization, the CSPRNG taken as exactly
   uniform; the true bound carries the CSPRNG's distinguishing advantage against the theorem's test, which is the per-test
   form's `η`. A salt is 192 bytes and a rep's draws are `drawBytes` bytes, so zero knowledge takes the per-test form.
   The unit draw still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.

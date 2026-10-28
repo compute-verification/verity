@@ -48,7 +48,7 @@ def ir_values(vs: int, start: int, tok: int) -> tuple[int, int, int]:
         _CALLS[key] = standalone_call(VR.shard_fn(vs, 2, start))
     prog, call = _CALLS[key]
     t: dict[int, int] = {}
-    evaluate_call(prog.circuit, call, [int(tok) & 0xFFFFFFFF] + [0] * (2 * vs), transcript=t)
+    evaluate_call(prog.circuit, call, [int(tok) & 0xFFFFFFFF] + [0] * (2 * vs), trace=t)
     local, ge, le = (t[call.lo + j] for j in VR.slots(vs, 2, start))
     return VR._s32(local), int(ge), int(le)
 

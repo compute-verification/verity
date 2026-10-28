@@ -11,11 +11,14 @@ def _boolean_roots() -> list[Any]:
     the GEMM at K = 32, N = 3, the E4M3 coordinate on
     the three FP8 steps at K = 64, the NVFP4 and MXFP4 coordinates at K = 128, the s8 accumulator and scaled coordinate at
     K = 64, the scaled coordinate on two rows an operand at K = 64 (and with the residual add in its epilogue), and the
-    scaled s8 linear at K = 64, N = 3."""
+    scaled s8 linear at K = 64, N = 3.  The coordinate at K = 64 and the GEMM at K = 32, N = 3 again on
+    `HopperBF16WgmmaDot16_v3`, which no served Program binds (``opt_in``), so no word Call's binding reaches it."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 
     return [
+        bind(BG.GemmCoordinate, K=64, DOT=BG.HopperBF16WgmmaDot16V3),
+        bind(BG.Gemm, K=32, N=3, DOT=BG.HopperBF16WgmmaDot16V3),
         bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE),
         bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
         bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE),

@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: `verity/flock-circuit` from PR #83 `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
+PROTOCOL.md §16.10: `verity/flock-circuit` from the circuit prover's `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
 the circuit: per VU, each input port's row is hashed by SHA-512 compressions in `sha512x3` slots (three per slot, chained from
 the prefix's midstate) and closed by an `hm96` slot (the padding compression, then `b ‖ c` from the row's private salt). Both
 slot circuits are sections of the circuit file, which must be the nets the verifier generates (`Flock.HmNets`). Every identity and binding digest is SHA-512: the circuit pin, the public
@@ -309,7 +309,7 @@ theorem lookup_index_test (n size : Nat) : (n != Nat.log2 size || 2 ^ n != size)
   · subst h; simp [Nat.log2_two_pow]
   · simp [h]
 
-/-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
+/-- The typed statement's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -383,7 +383,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
-  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words; a
+  -- a tail that returns the outputs (the circuit prover from 15260468): its last stage's only output group is the output words; a
   -- repeated last stage's (`out_net_ports` of `[slot, port]` pairs), under hidden outputs only, one port of a slot each
   let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
@@ -469,7 +469,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
 def slotOf (ps : Array (Nat × Nat)) (i : Nat) : Nat :=
   ((ps.toList.take i).filter (·.1 == (ps.getD i default).1)).length
 
-/-- A template's block with its parts placed (#273's `TypedBlock`), by position: `parse` puts the root's circuit first and
+/-- A template's block with its parts placed (the typed statement's `TypedBlock`), by position: `parse` puts the root's circuit first and
 then the placed layouts' in order, so placed layout `k`'s circuit is `1 + k`. Part `i` is its layout's circuit, its slot
 (`slotOf`, in item order) and its base. -/
 def blockOf (t : Typed.Template) : TypedBlock :=
@@ -523,7 +523,7 @@ theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj 
   simp only [List.filter_append, List.filter_cons, he, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
   omega
 
-/-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
+/-- A typed template's META keys that its block derives instead: stating one is refused. -/
 def TEMPLATE_DERIVED : List String :=
   ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"]
 
@@ -591,6 +591,16 @@ def outNetEntries (a : Array Json) : V (Array Nat × Option (Array Nat)) := do
       else throw "META: an out_net_ports entry is not a port or a [slot, port] pair"
     | x => do pure (0, ← J.asNat x "out_net_ports")
   pure (e.map (·.2), if a.any (fun x => x matches .arr _) then some (e.map (·.1)) else none)
+
+/-- How many of the last output ports META `pinned_outputs` names: its array's length, else 0. They have
+no output row, so the runs of `out_row_ports` cover the others; `HmOut.checkPinned` holds the key to its form. -/
+def pinnedCount (mj : Json) : Nat :=
+  match mj.getObjVal? "pinned_outputs" with
+  | .ok (.arr a) => a.size
+  | _ => 0
+
+/-- Why `ProvedScope.check` and `Stmt.setupTables` refuse a statement with pinned outputs (`pinnedCount`). -/
+def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet"
 
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
@@ -695,14 +705,14 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -852,14 +862,14 @@ the branch that reads it, which here is the last. -/
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -938,7 +948,7 @@ theorem parse_eq_fast : @parse = @parseFast := by
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
 A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
 unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
-derived wiring, and Δ in #273's order. The circuit carries its class (`Circuit.cls`). -/
+derived wiring, and Δ in the typed statement's order. The circuit carries its class (`Circuit.cls`). -/
 def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let (k, r) ← Typed.read tags bytes tables
   let c ← match r with
@@ -1057,7 +1067,7 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
       let dst := c.slotCol w.dst.1 g w.dst.2.1 + dc.1
       let src := c.slotCol w.src.1 g w.src.2.1 + sc.1
       for t in [0:dc.2] do d := d.push (dst + t, dst + t) |>.push (dst + t, src + t)
-  -- a typed template (#273), per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
+  -- a typed template, per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
   -- w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
   -- its parts' columns, A's in A and B's in B
   let some tb := c.typed | return (d, d)
@@ -1102,7 +1112,7 @@ def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
 /-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
 def Q_CALL : String × Nat := ("Q_call", 1)
 
-/-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
+/-- A `verity/partition/v1` object's form (`verity.ir.cut`'s canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
 query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
 `X`, an integer in 1..2^16). The query's name and version. -/
@@ -1270,8 +1280,8 @@ def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray)
 
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
-none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
-today every finding says the units were taken as stated, and why. -/
+none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet,
+so every finding says the units were taken as stated, and why. -/
 def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
   let part := (c.metaJ.getObjVal? "partition").toOption.getD Json.null
   let rule := (part.getObjValAs? String "rule").toOption.getD ""
@@ -1296,7 +1306,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
 
-/-- Header `shared_rows` (from PR #83 `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
+/-- Header `shared_rows` (from the circuit prover's `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
 that is not a non-negative integer counts as none, as upstream reads it); none for a per-instance file. -/
 def sharedRows (tags : Tags) (c : Circuit) (header : Json) : V (Option (Array Nat)) := do
   let .ok s := header.getObjVal? "shared_rows" | return none
@@ -1613,6 +1623,55 @@ def outGroup (c : Circuit) (j : Nat) : Nat × Nat × Nat × Nat :=
   let k := c.outRowPorts.getD j 0
   (first, k, (c.outPorts.extract 0 first).foldl (· + ·.2) 0, (c.outPorts.extract first (first + k)).foldl (· + ·.2) 0)
 
+/-- The output words past the rowed output ports: where the pinned ones (META `pinned_outputs`) start. -/
+def pinnedFrom (c : Circuit) : Nat :=
+  (c.outPorts.extract 0 (c.outPorts.size - HmRow.pinnedCount c.metaJ)).foldl (· + ·.2) 0
+
+/-- The pinned output ports' words. -/
+def pinnedWords (c : Circuit) : Nat :=
+  (c.outPorts.extract (c.outPorts.size - HmRow.pinnedCount c.metaJ) c.outPorts.size).foldl (· + ·.2) 0
+
+/-- Output word `o`'s first row in the net that computes it, `(net, row)`, 16 rows from it: the last stage's output port,
+or the unit's output group where the unit returns it (`outCol`'s column within its slot). -/
+def outRow (c : Circuit) (o : Nat) : Nat × Nat :=
+  if c.outNet != c.unitNet then
+    (c.outNet, ((portCols (c.nets.getD c.outNet default).2.outGroups).getD (c.outNetPorts.getD o 0) default).1)
+  else
+    let ret := (List.range c.upv).foldl (fun r u =>
+      ((c.leavesOut.getD u #[]).foldl (fun (r, q) o => (r.set! o (u, q), q + 1)) (r, 0)).1) (Array.replicate c.outWords (0, 0))
+    (c.unitNet, ((portCols #[c.unit.outGroups.getD 0 default]).getD (ret.getD o (0, 0)).2 default).1)
+
+def pinnedRefused : String :=
+  "META: pinned_outputs is not the last output ports' names, each once, at least one, of an untyped statement of bit rows (row_schemas) whose padding instance's pinned outputs are zero"
+
+def pinnedLinear : String :=
+  "META: a pinned output's bit is not a linear row (its B the constant alone), which its Δ copy of the forced-zero row pins to zero"
+
+/-- META `pinned_outputs`, as the prover's `Composite::parse` reads it: the names of the last output
+ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`, which makes every row a bit row; at least one row) whose padding instance's pinned
+output words are zero; and each pinned bit's row a linear row (its B the constant alone), so that Δ's copy of the forced-zero
+row onto it (`delta`) pins the bit and its linear form to zero. -/
+def checkPinned (c : Circuit) : V Unit := do
+  match c.metaJ.getObjVal? "pinned_outputs" with
+  | .error _ => pure ()
+  | .ok v =>
+    let k := HmRow.pinnedCount c.metaJ
+    let names : Option (Array String) := match v with
+      | .arr a => a.mapM fun x => x.getStr?.toOption
+      | _ => none
+    let w0 := pinnedFrom c
+    if k == 0 || k > c.outPorts.size || c.ports.size == 0 || c.ports.any (!·.v2) then
+      throw pinnedRefused
+    if names != some ((c.outPorts.extract (c.outPorts.size - k) c.outPorts.size).map (·.1))
+        || c.typed.isSome || c.cls.isSome || J.has c.metaJ "template" || !J.has c.metaJ "row_schemas"
+        || (List.range' w0 (pinnedWords c)).any (fun o => c.dummyOutputs.getD o 1 != 0) then
+      throw pinnedRefused
+    if (List.range' w0 (pinnedWords c)).any (fun o =>
+        let (n, r) := outRow c o
+        let net := (c.nets.getD n default).2
+        (List.range 16).any fun t => net.b.row (r + t) != #[net.constPos]) then
+      throw pinnedLinear
+
 /-- What makes the rows inputs then outputs: META `input_ports` is the rows before one output row per output port, each
 named after its port with its words zero-padded to whole SHA-512 blocks (a bit row of all their bits; a `sha512/row/v2`
 row may instead be exactly its port's words), or per run of output ports (META `out_row_ports`) a `sha512/row-seg/v1` row
@@ -1632,6 +1691,7 @@ def checkRows (c : Circuit) : V Unit := do
   let w := inWords c
   if c.leavesIn.any (·.any (· ≥ (w : Int))) || c.leafCuts.any (·.2.2 ≥ w) then
     throw "a unit's leaf or leaf cut reads an output row: units read the input rows only"
+  checkPinned c
 
 /-- Parse the circuit file as `HmRow.parse` (a typed one as `HmRow.parseTyped`) reads it, its rows every row, and check
 them (`checkRows`). `HmRow.checkTyped` holds a template's instance inputs to every row, so it reads the template with the
@@ -1677,7 +1737,7 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
-/-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
+/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
 its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
 net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
 `CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
@@ -1731,8 +1791,23 @@ def outCol (c : Circuit) : Nat → Nat → Nat :=
       let (u, q) := ret.getD o (0, 0)
       c.slotCol c.unitNet g u + (unitCols.getD q default).1
 
+/-- Δ's pairs on the pinned outputs (META `pinned_outputs`), which have no row: per VU each pinned output word's bit `t`,
+`(i, i)` and `(i, z)` at its column `i`, `z` the unit range's first slot's forced-zero row, on both sides. On a linear row
+(its B the constant alone, `checkPinned`) they make the row `(a·z + z_i)(1 + z_i) = z_i`, so `z_i = 0` and `a·z = 0`. -/
+def pinPairs (c : Circuit) : Array (Nat × Nat) := Id.run do
+  let forcedZero := c.unitRange.slot 0 + c.unit.useful
+  let col := outCol c
+  let w0 := pinnedFrom c
+  let mut d : Array (Nat × Nat) := #[]
+  for g in [0:c.g] do
+    for o in [0:pinnedWords c] do
+      for t in [0:16] do
+        d := d.push (col g (w0 + o) + t, col g (w0 + o) + t) |>.push (col g (w0 + o) + t, forcedZero)
+  return d
+
 /-- Δ: `HmRow.delta`'s, then per VU each output row's message bits: word `k` bit `t` (bit `t % 8` of row byte `2k + t / 8`) a
-copy of the output bit, zero (the unit range's first slot's forced-zero row) past its port's words. -/
+copy of the output bit, zero (the unit range's first slot's forced-zero row) past its port's words, then the pinned
+outputs' (`pinPairs`). -/
 def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) := Id.run do
   let (da, db) := HmRow.delta c pin
   let (_, where_) := rowSlots c.ports
@@ -1755,7 +1830,7 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
         for t in [0:16] do
           let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
           d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
-  return (da ++ d, db ++ d)
+  return (da ++ d ++ pinPairs c, db ++ d ++ pinPairs c)
 
 /-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
 def regions (c : Circuit) (pub : Public) : V (Array Region) := do
@@ -2042,6 +2117,30 @@ def checkOwn (pi : Ports) (pop : Public) (own : Option ByteArray) : V Unit := do
       let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
       throw s!"public input {pi.ports[k]!.1}: word {w - starts[k]!} of instance {i} is not the verifier's own recomputation (seed {s "seed"}, derivation {s "derivation"})"
 
+/-- Public input `k`'s group `G` when the verifier derives its words itself: seed `instance`, derivation `mod:G` (`G` as
+`toString` writes it, `0 < G ≤ 2^16`), one word, instance `i`'s word `i mod G` (a shared read's position, `checkReads`). -/
+def derivedGroup (pi : Ports) (k : Nat) : Option Nat :=
+  let pj := (pi.json.getArrVal? k).toOption.getD Json.null
+  let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
+  let d := s "derivation"
+  if s "seed" != "instance" || (pi.ports.getD k default).2 != 1 || !d.startsWith "mod:" then none
+  else ((d.drop 4).toString.toNat?).filter fun g => d == s!"mod:{g}" && 0 < g && g ≤ 2 ^ 16
+
+/-- The groups of a circuit with public inputs whose every port the verifier derives (`derivedGroup`), port `k`'s at `k`;
+none when a port's words are a recomputation the verifier is handed (`--public-inputs F`, `checkOwn`). -/
+def derivedGroups (pi : Ports) : Option (Array Nat) :=
+  if !pi.ports.isEmpty && (List.range pi.ports.size).all (derivedGroup pi · |>.isSome) then
+    some ((Array.range pi.ports.size).map fun k => (derivedGroup pi k).getD 0)
+  else none
+
+/-- The verifier's own derivation (`derivedGroups`, groups `gs`): every instance `i` of the population, its word of port `k`
+`i mod gs[k]`, one word a port. The public file's words must be these. -/
+def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
+  let (n, pw) := ((pop.population.map (·.1)).getD pop.n, pi.ports.size)
+  let words := (pop.population.map (·.2.2)).getD pop.outputs
+  if let some x := (List.range (n * pw)).find? (fun x => words.getD x 0 != x / pw % gs.getD (x % pw) 1) then
+    throw s!"public input {(pi.ports.getD (x % pw) default).1}: instance {x / pw}'s word is not its index mod {gs.getD (x % pw) 1} (the verifier's own derivation)"
+
 end HmIn
 
 /-! PROTOCOL.md §16.13 Linking: under a template query, with the verifier's own program, every cut wire between two units of
@@ -2216,6 +2315,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -2236,7 +2336,8 @@ comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
 draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, `closure` its
 own closure map, which a work draw's closure is held to, and `publicInputs` its own recomputation of the public input
-words (`HmIn.checkOwn`). -/
+words (`HmIn.checkOwn`). A table with pinned outputs (`HmRow.pinnedCount`) is refused, as `ProvedScope.check` refuses
+it, until a soundness theorem covers that form. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
@@ -2273,7 +2374,10 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
-    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+    if tags.hiddenOutputs then
+      let st ← Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
+      pure st
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
@@ -2368,6 +2472,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -2417,14 +2522,20 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
-    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+    if tags.hiddenOutputs then
+      let st ← Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
+      pure st
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
         throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   let setupOne := fun (d : Option Json) => do
-    if tags.hiddenOutputs then Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
+    if tags.hiddenOutputs then
+      let st ← Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
+      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
+      pure st
     else
       let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then

@@ -141,7 +141,7 @@ reference makes that explicit as one domain type per tree kind, built only from 
 |---|---|---|---|---|---|
 | C0 semantic | `SemanticDomain` | position leaf | path shape from (N, i); meaning = `unrank(i)` of the template | root (`u64 N`) | program, query_id, template, ctx, epoch |
 | native-host step, host path | `StepDomain(chunk=None)` | position leaf | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step), geo, layout |
-| native-host step, host path, hm96 (opt-in) | `StepDomain(chunk=None)` wrapped by `hm96.Hm96Sha256` | hm96 leaf over the position leaf: `SHA-256(leaf_prefix(key) ‖ b ‖ c)`, recomputed from the value and its salt | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step, and the scheme digest through `/leaf=`, §4), geo, layout |
+| native-host step, host path, hm96 (opt-in) | `StepDomain(chunk=None)`, each leaf an `hm96.HidingLayout` over its position leaf | hm96 leaf over the position leaf: `SHA-256(leaf_prefix(key) ‖ b ‖ c)`, recomputed from the value and its salt | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step, and the scheme digest through `/leaf=`, §4), geo, layout |
 | native-host step, GPU tree | `StepDomain(chunk=…)` | chunk leaf | chunk header's `chunk_index` = i, and the path | root (`u64 N`) | as above, plus the header fields |
 | `fa2h` stream | `StreamDomain` | chunk leaf | `chunk_index` = i, and the path | `stream_ctx` | layout, `launch_tag`, `src_mask`, `chunk_words` |
 | `fa2h` thread | `ThreadDomain` | thread leaf | header (slab, m_block, n_block, tidx) and i = `((slab·num_m_block + m_block)·NB + n_block)·128 + tidx` | `geo` only: N = HB·num_m_block·NB·128 | geo, `launch_tag`, `src_mask` |
@@ -316,8 +316,8 @@ this verifier-derived position, of this verifier-derived commitment. §5's injec
 
 ## 10. `vllm-v1-sha512`
 
-`vllm-v1` with SHA-512 in place of SHA-256 for every hash the scheme computes, for SHA-512 data commitments (Daniel, 2026-09-26:
-SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+`vllm-v1` with SHA-512 in place of SHA-256 for every hash the scheme computes, for SHA-512 data commitments
+(SHA-512 on every commitment path). It is opt-in:
 - every leaf, tree and root function takes `hash="sha512"`;
 - the domain types take a `hash="sha512"` field;
 - `VllmV1` over such domains is named `vllm-v1-sha512`, with `TREE_SHA512` as its bare tree rule.
@@ -343,7 +343,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
   `"hash": "sha512"`. That is the tagged-hash frame of `identity_digest`, through SHA-512, with prefix
   `verity/tagged-sha512/v1\0`. SHA-256 domain digests are unchanged.
 - **Thread trees.** Unvisited slots hold 64 zero bytes.
-- **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1` (`Hm96Sha512`). Under it, the §4 context suffix carries that rule's
+- **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1`. Under it, the §4 context suffix carries that rule's
   64-byte scheme digest.
 
 **Not covered.** Capture-v1 id leaves (`leaves.LeafTree`) stay SHA-256; they are a research capture format, not a serving tree.
@@ -388,7 +388,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
   step a root belongs to rests on SHA-256.
 - **What that means for Table 1.** Until then, a Table 1 row that cites `vllm-v1-sha512` cites `cr/sha-256` beside `cr/sha-512`.
 
-**The remaining SHA-256 dependency, for the re-baseline.** Daniel's rule is SHA-512 on every commitment path, and E4 extends to the
+**The remaining SHA-256 dependency, for the re-baseline.** The rule is SHA-512 on every commitment path, and it extends to the
 identity and domain digests at the re-baseline. What is left:
 1. the identity digests `ctx`, `geo` and `layout`, the integration's `template` and `names`, and `program`'s full 64 bytes;
 2. frame-v3's `binding` (frame-v3 §6).

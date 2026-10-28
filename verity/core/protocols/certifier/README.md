@@ -7,7 +7,7 @@ A spec-level reference for network accounting's timing channel:
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
   64-byte salt the certifier draws fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
   the ingress links' status check;
-- one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
+- one link-window's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
   against the digest its certificate signs), with a host-side verifier of record (no proof of the
@@ -37,7 +37,7 @@ A spec-level reference for network accounting's timing channel:
   start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
   what its size class or the prefix layer's counts can't express. It is the compile unit's core, between the committed
   decisions and `compile_steps`' Programs, and is held step for step to the replay
-  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-service Spec yet. It takes the circuits
+  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-system Spec yet. It takes the circuits
   and their evaluator from `verity`;
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
   served through the warden's egress, every cell of an egress link-window is opened, each a pad, the canonical event of
@@ -139,15 +139,15 @@ A spec-level reference for network accounting's timing channel:
   `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
   v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
-  in no proof-service Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
+  in no proof-system Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
 - the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hm96 rows,
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
   and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
   takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
 - the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O}` and `ChargeLink_v2{N, H, O}` charge advice
-  v1's window with its hits and order entries and their counts, coded as `code_v1` codes them, with the order's
-  position and rank added to the carry and chained under the value `window-charge` (`protocol/charge-chain.md`, "The
-  whole window"). It takes what `charge_chain` takes;
+  v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
+  `code_v1` codes them, with the order's position and rank added to the carry and chained under the value
+  `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
@@ -196,7 +196,7 @@ A spec-level reference for network accounting's timing channel:
   shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
   ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
   receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
-  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
+  runs on a single server: a server's ingress and egress carry only its inference
   blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
@@ -208,21 +208,25 @@ A spec-level reference for network accounting's timing channel:
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
   ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
-  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
-  first bucket's, starts from the empty state, constants of its circuit. Programs start at fixed slots a network
-  timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its window, with
-  `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a slot's
-  Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
-  `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
-  which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
+  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
+  occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Until each
+  due, occupied slot's entry is a wire from its Program's `SlotEntry_v1` unit, the read bit is the prover's word (an
+  entry of read 1 and no outputs passes), so the period check refuses every rows-form period of a link-window
+  (`NetworkCheck.Period`'s `unwired`);
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
+  fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
+  window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
+  slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
+  word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
+  ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
-  empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids
-  of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A
-  request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI` ids (1,024
-  at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a connection,
-  traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden
-  parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
+  empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (its read bit, n, u32,
+  and 64 ids of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the
+  egress). A request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI`
+  ids (1,024 at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a
+  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names
+  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
   link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
   scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
   registered read of the warden's egress row t, so the chains are wires through the registered roots;
@@ -264,7 +268,7 @@ A spec-level reference for network accounting's timing channel:
   source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
   pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
   certificates;
-- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
+- the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
   (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
@@ -273,8 +277,8 @@ A spec-level reference for network accounting's timing channel:
   advised link reads. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
-Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
+`tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
+Definition, and in `active` the proof system's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and `advised`
@@ -324,7 +328,7 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (Daniel's provisional call on ASK-70, 19 Oct). N3, the content check,
+the declared sync), beside the proved timing bound (provisional). N3, the content check,
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
@@ -335,7 +339,7 @@ the window's sync is declared. It reads no head, salt or sibling. `benchmarks/ne
 certifier-serve run's link-windows this way through the link's own stream, and scans what the verifier received. The
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
-  device, beside the proof service, whose public kinds have none for a trusted device's signature over a hiding
+  device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
@@ -349,7 +353,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   the registered Program and the drawn units with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
-  take as inputs what the proof service and the lowering give: the findings of the verifier's own C-Flock Lean run, the
+  take as inputs what the proof system and the lowering give: the findings of the verifier's own C-Flock Lean run, the
   sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
   advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
   which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.

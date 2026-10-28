@@ -1,5 +1,5 @@
 //! flock-circuit: `verity/flock-circuit` (`flock_live::circuit`), proved by the CPU prover or by Flock-CUDA (`--gpu`,
-//! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-circuit.
+//! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1).
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
@@ -2088,7 +2088,7 @@ fn eq256(r: &[flock_field::F256]) -> Vec<flock_field::F256> {
     (0..1usize << r.len()).map(|l| r.iter().enumerate().fold(F256::ONE, |a, (i, &ri)| a * if (l >> i) & 1 == 1 { ri } else { F256::ONE + ri })).collect()
 }
 
-/// Two linear functionals of one session's public transcript that span fields and both reps (red-team-m1-zk F1's), each a
+/// Two linear functionals of one session's public transcript that span fields and both reps, each a
 /// function of the witness alone if level 0's extra lanes or their padding were shared by the reps:
 /// - level 0: `D(q) = N·pc^0(q) + pc^1(q) + Σ_l u_l row_q[l]` at every level-0 position either rep opened, where `pc^r` is
 ///   rep r's `Enc(c·ybar ‖ ybar)`, `W^r` the F128 matrix of `(a, b) ↦ ρ^r_0 a + ρ^r_1 b`, `N = W^1 (W^0)^-1` and
@@ -2521,7 +2521,7 @@ fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
 /// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`, `OuterOne(k)` to a zerocheck outer coin
 /// `r_0 = 1` at rep 0's round `k` (the round that opens the outer coins, [`outer_round`]). The gated strategies decide on one
 /// message whether to continue for sure (half of those messages, "good") or only with probability `ε / 65536`:
-/// `CapGated(ε)` on the witness cap (red-team-m2-zk's; it stops at rep 0's first round), `LateGated(ε)` on rep 0's round
+/// `CapGated(ε)` on the witness cap (it stops at rep 0's first round), `LateGated(ε)` on rep 0's round
 /// that carries `T'` and `ybar` (it stops there). A simulator that reused messages across rewinds would fail against them.
 #[cfg(feature = "seed-injection")]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2978,7 +2978,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     }
 }
 
-/// `zkgk --zk --attempts A`: the rewinds are independent trials (red-team-m2-zk G1). For each gated V* (`cap-gated`,
+/// `zkgk --zk --attempts A`: the rewinds are independent trials. For each gated V* (`cap-gated`,
 /// `late-gated`, `--eps`), A real sessions give its completion rate; then, conditioned on an extraction run that reached the
 /// proofs with its gate "bad", A rewinds with a fresh dummy opening each (as `gk_simulate` does) must complete at the same
 /// rate, not at ε. `--reuse-dummy` also runs A rewinds on the extraction run's own dummy opening, the defect, to show the
@@ -3177,7 +3177,7 @@ struct Plan {
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
     zk_l0_tamper: u8,
-    /// both reps fold, sum and pad rep 0's pair of extra lanes (red-team-m1-zk F1's shared lanes; the verifier rejects rep 1)
+    /// both reps fold, sum and pad rep 0's pair of extra lanes (shared lanes; the verifier rejects rep 1)
     zk_shared_pair: bool,
     /// M1: whether the inner proof checks its batched constraint before it speaks (`zk_veil::SelfCheck`). Every honest plan
     /// stops; `Skip` is for the negative controls in `plan_of` whose witness or pads fail by design, so that their proofs
@@ -3664,7 +3664,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep))?) };
                 let tt = t.clone();
                 let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
-                    // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
+                    // both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
                     // opens anything (its openings would reveal id-0 salts over other leaves). A later table's rep 0 checks the
                     // root it committed the same way.
                     match &root0 {
@@ -4344,7 +4344,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                       "prover_stopped": r["prover_stopped"], "last_round": s["last_round"], "end": s["end"]});
     }
     if name == "zk_dummy_witness_passes_the_region_claims" {
-        // red-team-m1-zk F4: M2's extraction run is live, so the dummy witness carries the public region words; its region
+        // M2's extraction run is live, so the dummy witness carries the public region words; its region
         // claims' s_hat_v, sent before any coin opens, are the public ones, and only the inner proof rejects it
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         let (v, _) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
@@ -4377,7 +4377,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_session_relations_vary_with_the_seed" {
-        // red-team-m1-zk F1: under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
+        // under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
         // when the reps share level 0's extra lanes and their padding (a prover folding rep 0's pair in both reps, which the
         // verifier rejects); with a pair per rep they differ in every word. The level-1 functional exists only at the
         // positions both reps open at level 1, which the coins draw for each rep independently: on some statements
@@ -4608,7 +4608,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }
     if name == "leaf_salts_from_prover_seed_refused" || name == "leaf_key_witness_refused" {
-        // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (red-team-hm96 F6: a
+        // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (a
         // key chosen after commitment opens a leaf to any value), or chosen by the prover rather than the statement's constant
         let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
         let lines: Vec<String> = text.split('\n').map(str::to_string).collect();

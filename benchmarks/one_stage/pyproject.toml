@@ -17,21 +17,26 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
+# `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
+# serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
+# verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean, is under `verity`.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
-# `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
+# `demos/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
-# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
+# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `demos/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
-          "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
-          "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py",
-          "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
-          "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
-          "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
+          "demos/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
+          "benchmarks/prove_path/records_audit.py", "demos/vllm/serve_load.py",
+          "demos/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
+          "demos/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
+          "demos/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
-          "integrations/vllm/verity_vllm", "benchmarks/network_traces"]
+          "integrations/vllm/verity_vllm", "benchmarks/network_traces",
+          "benchmarks/pous/p2_v1", "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
+          "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py"]

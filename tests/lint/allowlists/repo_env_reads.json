@@ -147,7 +147,6 @@
     {"file": "benchmarks/torch_gpu/attn_bf16/attn.py", "count": 2},
     {"file": "benchmarks/torch_gpu/attn_bf16/fixture.py", "count": 1},
     {"file": "benchmarks/torch_gpu/attn_bf16/run.py", "count": 9},
-    {"file": "benchmarks/torch_gpu/attn_ref/attn_ref.py", "count": 1},
     {"file": "benchmarks/vllm_encoded/bench_arm.py", "count": 6},
     {"file": "benchmarks/vllm_encoded/compare.py", "count": 1},
     {"file": "benchmarks/vllm_encoded/serve.py", "count": 1},
@@ -334,7 +333,7 @@
     {"file": "verity/ml/flock/tests/test_universal_same_shape.py", "count": 1},
     {"file": "verity/ml/flock/tests/test_wired_links.py", "count": 3},
     {"file": "verity/ml/flock/verifier/ci.py", "count": 2},
-    {"file": "examples/h200/e2e_h200/engine.py", "count": 8},
-    {"file": "examples/h200/e2e_h200/percall.py", "count": 4}
+    {"file": "demos/h200/e2e_h200/engine.py", "count": 8},
+    {"file": "demos/h200/e2e_h200/percall.py", "count": 4}
   ]
 }

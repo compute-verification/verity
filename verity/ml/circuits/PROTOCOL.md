@@ -20,8 +20,8 @@ Indices are 0-based, `[a, b)` is half-open, and a *leaf* is one scalar position 
 ## 1. Canonical JSON and the program digests
 
 The canonical bytes of a JSON value are its RFC 8785 (JCS) serialization. A descriptor is held to a domain on which JCS is
-short to state and on which `codec.canonical_json` (Python's
-`json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`) writes exactly the JCS bytes:
+short to state and on which `codec.canonical_json` (Python's `json.dumps(v, sort_keys=True, separators=(",", ":"))`,
+its strings held to ASCII without DEL) writes exactly the JCS bytes:
 
 - values are objects with string keys, arrays, strings, integers, `true`, `false` and `null`;
 - every string, keys included, consists of the characters U+0000..U+007E (ASCII without DEL);
@@ -37,8 +37,9 @@ On this domain the bytes are:
   U+000D `\r`, any other character below U+0020 as `\u00xx` (lowercase hex), every other character (`/` included) as itself;
 - an integer is its decimal: `-` for a negative, no leading zeros, `0` for zero.
 
-Outside the domain Python and JCS differ: Python escapes non-ASCII and DEL as `\uXXXX` where JCS writes UTF-8, JCS writes
-2^53 + 1 as `9007199254740992` and 10^21 as `1e+21`, `1.0` is `1.0` against `1`, and non-BMP keys sort differently.
+`canonical_json` refuses a string outside ASCII without DEL, keys included, wherever it is (a `ValueError` naming its
+path), so its bytes are the same whether a writer escapes the rest or writes it as UTF-8. Outside the domain's numbers
+Python and JCS differ: JCS writes 2^53 + 1 as `9007199254740992` and 10^21 as `1e+21`, and `1.0` is `1.0` against `1`.
 `encode_program` and `decode_program` refuse a descriptor whose free-form parts leave the domain (`jcs_domain_error`): every
 top-level field but `definitions` and `annotations`, and each definition's key, `id`, `bindings`, `params`, `ret`, `ports`, and
 its body's `params` and `ret_type`. The rest of a descriptor is integers bounded by the program's own table sizes and leaf counts,
@@ -50,8 +51,8 @@ SHA-512 of the canonical bytes of the descriptor without `annotations`: the Buil
 to the port facts (§12). It carries no domain prefix (the
 partition object's digests do).
 
-Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
-refusal), `program_digest`.
+Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes or its refusal, the
+JCS bytes, the domain refusal), `program_digest`.
 
 ## 2. Types and leaves
 
@@ -435,8 +436,8 @@ are refused (`ValueError`).
 **Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least
 significant first), or a `Value<1>` that is not inside one. `elements(T)` lists the element widths in leaf order;
 `word_type(T)` replaces every element by `Value<w>`. The *word view* of a Boolean Definition is its signature under
-`word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
-the word view does not read it.
+`word_type`: the signature of the word Definition it computes. A port's number format is metadata
+(`verity/metadata/v0`), outside every digest; the word view does not read it.
 
 Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,

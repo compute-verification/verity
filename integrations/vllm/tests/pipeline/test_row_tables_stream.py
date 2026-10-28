@@ -1,5 +1,5 @@
 """A row-table window (`test_row_tables`' window: ScaledMmS8Coordinate chunks whose `x` ports link shared token rows of
-one table per engine step and linear) end to end through the proof service: its Spec declares every port's Value, the
+one table per engine step and linear) end to end through the proof system: its Spec declares every port's Value, the
 window's `row-table` port a tree over the step roots (`service.ROOTS`) over its tables' hiding leaves
 (`over=row_table.SCHEMA`), and one `Stream` over the window's template registers the window's record at the
 challenger's counts, draws from the auditor's challenger's coins, and runs each outcome by the Lean verifier of record,
@@ -32,7 +32,7 @@ from test_service import DELTA, Clock, _refused  # noqa: E402
 TEMPLATE = P.template_id(DEFN)
 
 
-def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
+def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
     ports = CS.expected_ports(mine)
     schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")

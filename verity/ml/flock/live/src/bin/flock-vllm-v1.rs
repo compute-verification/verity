@@ -1,6 +1,6 @@
 //! flock-vllm-v1: the Flock backend's relation over operands committed under `vllm-v1` (`flock_live::vllm_block`,
 //! `verity/flock-vllm-block/v1`), proved by the CPU prover or by Flock-CUDA (`--gpu`, feature `gpu`) in a flock-128-r2
-//! live session. The CLI and output lines are flock-pure-gpu's, so flock-backend's bench.py drives it.
+//! live session. The CLI and output lines are flock-pure-gpu's, so `flock-pure`'s bench.py drives it.
 //!
 //!   flock-vllm-v1 serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
 //!   flock-vllm-v1 prove    --verifier ADDR --instances FILE --netlist FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
