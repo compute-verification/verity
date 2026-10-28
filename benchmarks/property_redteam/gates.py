@@ -196,12 +196,12 @@ class Builder:
         i = len(self.prims)
         if not is_derived(kind) and (lo is None or hi is None):
             raise ValueError(f"{prim.id} is not derived: it needs a declared interval")
+        d = derive_op(prim, [self.ivs[j] for j in args], lo, hi)  # type: ignore[arg-type]
+        if lo is None or hi is None:
+            lo, hi = d
         self.prims.append(prim)
         self.kinds.append(kind)
         self.args.append(args)
-        d = derive(self, i, self.ivs) if is_derived(kind) else (int(lo), int(hi))  # type: ignore[arg-type]
-        if lo is None or hi is None:
-            lo, hi = d
         self.lo.append(int(lo))
         self.hi.append(int(hi))
         self.ivs.append(d)
@@ -230,18 +230,20 @@ class Builder:
             self._consts[c] = self.gate(op_const(c), ())
         return self._consts[c]
 
+    def _s32(self, prim: PrimitiveDefinition, args: tuple[int, ...]) -> int:
+        """Append a derived gate at its derived interval, refusing it (and appending nothing) outside s32."""
+        lo, hi = derive_op(prim, [self.ivs[j] for j in args], 0, 0)
+        assert S32_MIN <= lo and hi <= S32_MAX, f"{prim.kind} [{lo}, {hi}] outside s32"  # type: ignore[attr-defined]
+        return self.gate(prim, args, lo, hi)
+
     def affine(self, c: int, terms: list[tuple[int, int]]) -> int:
         """`c + Σ coeff·gate`, its declared interval the derived one (so `Proven`); asserts it within s32."""
-        i = self.gate(op_affine(c, tuple(cf for cf, _ in terms)), tuple(j for _, j in terms))
-        assert S32_MIN <= self.lo[i] and self.hi[i] <= S32_MAX, f"affine [{self.lo[i]}, {self.hi[i]}] outside s32"
-        return i
+        return self._s32(op_affine(c, tuple(cf for cf, _ in terms)), tuple(j for _, j in terms))
 
     def mma(self, head: int, a: list[int], b: list[int], fa: Iv, fb: Iv, sat: bool = True) -> int:
         """`head + Σ a_i·b_i`, its declared interval the derived one; asserts within s32."""
         assert len(a) == len(b)
-        i = self.gate(op_mma(fa, fb, len(a), sat), (head, *a, *b))
-        assert S32_MIN <= self.lo[i] and self.hi[i] <= S32_MAX, f"mma [{self.lo[i]}, {self.hi[i]}] outside s32"
-        return i
+        return self._s32(op_mma(fa, fb, len(a), sat), (head, *a, *b))
 
     def gather(self, idx: int, column: list[int], lo: int | None = None, hi: int | None = None,
                low: int | None = None) -> int:
@@ -436,10 +438,15 @@ def iv_join(a: Iv, b: Iv) -> Iv:
 
 
 def derive(C: Builder, i: int, ivs: list[Iv]) -> Iv:
-    """`Gate.derive` of gate `i` from the earlier gates' intervals `ivs`: a const's value, an affine map's or an s8-family
-    step's interval image, a gather's hull of its column's intervals and 0, and every other gate's declared interval."""
-    kind, p = C.kinds[i], C.prims[i]
-    a = [ivs[j] for j in C.args[i]]
+    """`Gate.derive` of gate `i` from the earlier gates' intervals `ivs`."""
+    return derive_op(C.prims[i], [ivs[j] for j in C.args[i]], C.lo[i], C.hi[i])
+
+
+def derive_op(p: PrimitiveDefinition, a: list[Iv], lo: int, hi: int) -> Iv:
+    """`Gate.derive` of a gate `p` over operands of intervals `a`, declared `[lo, hi]`: a const's value, an affine map's or
+    an s8-family step's interval image, a gather's hull of its column's intervals and 0, and every other gate's declared
+    interval."""
+    kind = getattr(p, "kind", "input")
     if kind == "const":
         return (p.c, p.c)  # type: ignore[attr-defined]
     if kind == "affine":
@@ -459,7 +466,7 @@ def derive(C: Builder, i: int, ivs: list[Iv]) -> Iv:
         for iv in a[1:]:
             acc = iv_join(acc, iv)
         return acc
-    return (C.lo[i], C.hi[i])
+    return (lo, hi)
 
 
 def intervals(C: Builder) -> list[Iv]:

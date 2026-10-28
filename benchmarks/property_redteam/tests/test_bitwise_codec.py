@@ -17,6 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import bitwise_codec as BC  # noqa: E402
 import free_codec as FC  # noqa: E402
+import gates as G  # noqa: E402
 import squaring as S  # noqa: E402
 
 # Security/Proofs/Accounting/Gates.lean's `codecRows`: (n, c, cs, K, τ, i, m, encodeWord).
@@ -45,16 +46,15 @@ def check_block(b, outs, x: dict, want: dict[int, list[int]]) -> None:
 def check_costs(b, n: int, rounds: int) -> None:
     """No budgeted gate, no run input, `Restricted` at every `B`, and `8·(k + 2)·n/8` units, by the builder's running
     count and by `units` itself (only gathers can have units, and every gather's units are scanned literally)."""
-    gates = b.gates
-    assert not any(g.op.kind == "budgeted" for g in gates)
-    assert not any(g.op.kind == "input" and g.op.binding == "run" for g in gates)
-    assert S.proven(gates) == [] and S.operand_bits(0, gates)
-    assert all(g.lo >= 0 and g.hi <= 1 for g in gates if g.op.kind in ("mma", "gather"))
+    assert "budgeted" not in b.kinds
+    assert "run" not in b.bindings.values()
+    assert G.proven(b) == [] and G.operand_bits(0, b)
+    assert all(b.lo[i] >= 0 and b.hi[i] <= 1 for i, k in enumerate(b.kinds) if k in ("mma", "gather"))
     want = 8 * (rounds + 2) * (n // 8)
     assert b.fixed_units == b.lean_units == want
-    dyn = S.dynamic(gates)
-    gathers = [i for i, g in enumerate(gates) if g.op.kind == "gather"]
-    assert sum(S.units(gates, i, fixed=True, dyn=dyn) for i in gathers) == want
+    dyn = G.dynamic(b)
+    gathers = [i for i, k in enumerate(b.kinds) if k == "gather"]
+    assert sum(G.units(b, i, fixed=True, dyn=dyn) for i in gathers) == want
 
 
 @pytest.mark.parametrize("rounds", [2, 3])
@@ -114,11 +114,11 @@ def test_nonlinear_units_charge_each_and(block8):
     `products` itself, so the block's nonlinear units grow with its words, no longer `8·(k + 2)·n/8` for any number."""
     n, c, k = 8, 5, 3
     one, _, _ = BC.encode_block(n, c, k, [1])
-    gates, dyn = one.gates, S.dynamic(one.gates)
-    ands = [g for g in gates if g.op.kind == "mma"]
-    assert all(g.op.k == 1 and g.lo >= 0 and g.hi <= 1 for g in ands)
-    assert one.products == S.products(gates) == sum(1 for g in ands if dyn[g.args[1]] and dyn[g.args[2]]) > 0
-    assert one.nonlinear_units == S.nonlinear(gates) == 8 * (k + 2) * (n // 8) + one.products
+    dyn = G.dynamic(one)
+    ands = [i for i, kind in enumerate(one.kinds) if kind == "mma"]
+    assert all(one.prims[i].k == 1 and one.lo[i] >= 0 and one.hi[i] <= 1 for i in ands)
+    assert one.products == G.products(one) == sum(1 for i in ands if dyn[one.args[i][1]] and dyn[one.args[i][2]]) > 0
+    assert one.nonlinear_units == G.nonlinear(one) == 8 * (k + 2) * (n // 8) + one.products
     eight, _, _ = block8
     assert eight.fixed_units == one.fixed_units and eight.products >= 8 * one.products
 
@@ -129,7 +129,7 @@ def test_bitwise_squaring_pays_its_partial_products():
     alone are 523,776 a squaring, far above `SquaringFloor`'s `e = 374`, so the counterexample to `EncodeChainHardness`
     pays more than `ChainSum`'s `E = 3 · 1021 · 374` a word."""
     for n, c in ((8, 5), (16, 17), (32, 5)):
-        b = S.Builder()
+        b = G.Builder()
         B = BC.Bits(b)
         F = BC.Field(B, n, c)
         xs = [bit for l in range(n // 8) for bit in B.byte_bits(b.inp(("a", l), 0, 255, binding="coin"))]
