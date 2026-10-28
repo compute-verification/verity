@@ -23,8 +23,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
   in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
   (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's), test's
-  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
-  test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
+  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and
+  its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
 * **A warden's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
   the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule (w63's:
