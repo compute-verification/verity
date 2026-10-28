@@ -55,6 +55,7 @@
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.RemoteAudit.Component",
+  "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
