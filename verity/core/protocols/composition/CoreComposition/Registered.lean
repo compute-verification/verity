@@ -57,6 +57,21 @@ decodes it; `none` when no component is `s` or its commitment doesn't decode. -/
 def committedBy (s : String) (cs : List Protocol) (ev : List Case) : Option ByteArray :=
   ((cs.zip ev).find? fun x => x.1.id == s).bind fun x => (x.1.commitment x.2.commitment).toOption.map x.1.digest
 
+/-- A tie between components: the value `what` that each component `s` of `names` reads off its commitment's bytes with
+its function, by its own decoder (`none` when they don't decode), must be one value. -/
+structure Tie where
+  what : String
+  names : List (String × (ByteArray → Option ByteArray))
+
+/-- Why the components of the tie `t` didn't all name one value on the cases `ev`: the first whose value isn't the first
+one's, with both; `none` when they all named it, or when one of them has no case or names nothing, its commitment not
+decoding, so that it rejects as a component. -/
+def Tie.strays (t : Tie) (ev : List Case) : Option String :=
+  match t.names.mapM fun (s, f) => ((ev.find? (·.id == s)).bind fun k => f k.commitment).map (s, ·) with
+  | some ((s, d) :: rest) => (rest.find? (·.2 != d)).map fun (u, d') =>
+    s!"{t.what}: {s} committed {Flock.hexOf d}, {u} committed {Flock.hexOf d'}"
+  | _ => none
+
 /-- Why a registered composition refuses when the registration check `r` checked the registration digest `d` and the
 component `s` committed to `d'`. -/
 def mismatch (r s : String) (d : ByteArray) (d' : Option ByteArray) : String :=
@@ -65,8 +80,9 @@ def mismatch (r s : String) (d : ByteArray) (d' : Option ByteArray) : String :=
 /-- The registration check `R` on the registration's entry `n` and case `k`, then `check` of the components `cs` on the
 rest under the binding `b`: a registration that isn't `R`'s, that `R` doesn't accept, or whose digest isn't `d` rejects
 before any component is run, and once the cases fit the composition, one that isn't the registration the component `s`
-committed to rejects whatever the components answer. -/
-def checkRegistered (id : String) (R : Protocol) (s : String) (cs : List Protocol) :
+committed to rejects whatever the components answer, and so do components of a tie of `ties` that didn't all commit to
+one value. -/
+def checkRegistered (id : String) (R : Protocol) (s : String) (cs : List Protocol) (ties : List Tie) :
     Named × List Named → ByteArray × ByteArray → Case × List Case → Outcome Keyed Keyed
   | (n, ps), (b, d), (k, ev) =>
     if n.id ≠ R.id then .reject s!"params: the registration is {R.id}'s, not {n.id}'s"
@@ -81,11 +97,15 @@ def checkRegistered (id : String) (R : Protocol) (s : String) (cs : List Protoco
     else match run cs ps ev with
       | .error r => .reject r
       | .ok answers =>
-        if committedBy s cs ev ≠ some d then .reject (mismatch R.id s d (committedBy s cs ev)) else judge id b answers
+        if committedBy s cs ev ≠ some d then .reject (mismatch R.id s d (committedBy s cs ev))
+        else match ties.findSome? (·.strays ev) with
+          | some r => .reject r
+          | none => judge id b answers
 
 /-- The composition `id` of the components `cs`, which must be listed in the order of their ids, each once, after the
-registration check `R`, on the registration the component `s` commits to. -/
-def registered (id : String) (R : Protocol) (s : String) (cs : List Protocol) : Protocol where
+registration check `R`, on the registration the component `s` commits to, with the components of each tie of `ties` on
+one value. -/
+def registered (id : String) (R : Protocol) (s : String) (cs : List Protocol) (ties : List Tie := []) : Protocol where
   id := id
   Params := Named × List Named
   Commitment := ByteArray × ByteArray
@@ -96,18 +116,17 @@ def registered (id : String) (R : Protocol) (s : String) (cs : List Protocol) : 
   commitment := decodeRegisteredCommitment
   evidence := decodeRegisteredEvidence
   digest c := c.1 ++ c.2
-  check := checkRegistered id R s cs
+  check := checkRegistered id R s cs ties
   publicJson := Json.mkObj
   profileJson := Json.mkObj
 
-/-- Why the components `ss` of `cs` didn't all commit to one record on the cases `ev`: the first whose digest isn't the
-first one's, with both; `none` when they all committed to it, or when one of them has no digest, its commitment not
-decoding, so that it rejects as a component. -/
-def strays (ss : List String) (cs : List Protocol) (ev : List Case) : Option String :=
-  match ss.mapM fun s => (committedBy s cs ev).map (s, ·) with
-  | some ((s, d) :: rest) => (rest.find? (·.2 != d)).map fun (t, d') =>
-    s!"record: {s} committed {Flock.hexOf d}, {t} committed {Flock.hexOf d'}"
-  | _ => none
+/-- The tie of the components `ss` of `cs` on one record: each one's commitment's digest, as it decodes it. -/
+def records (ss : List String) (cs : List Protocol) : Tie :=
+  ⟨"record", ss.map fun s =>
+    (s, fun b => (cs.find? (·.id == s)).bind fun P => (P.commitment b).toOption.map P.digest)⟩
+
+/-- Why the components `ss` of `cs` didn't all commit to one record on the cases `ev` (`records`' strays). -/
+def strays (ss : List String) (cs : List Protocol) (ev : List Case) : Option String := (records ss cs).strays ev
 
 /-- `check` of the components `cs`, except that once the cases fit, components `ss` that didn't all commit to one
 record reject whatever the components answer. -/

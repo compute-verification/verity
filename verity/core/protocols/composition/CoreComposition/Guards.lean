@@ -172,4 +172,28 @@ private def stray (x : Stubbed) : Stubbed := { x with root := ⟨(List.replicate
 #guard (answerS [accepts "a", accepts "b", { accepts "c" with root := ByteArray.empty }]).reason ==
   some "c reject: commitment: a root is 32 bytes, not 0"
 
+private def tiedToy : Protocol :=
+  registered "verity/toy/v3" (Stub.stub "r") "b" [Stub.stub "a", Stub.stub "b", Stub.stub "c"]
+    [⟨"store", (records ["a", "c"] [Stub.stub "a", Stub.stub "b", Stub.stub "c"]).names⟩]
+
+private def answerT (r : Stubbed) (xs : List Stubbed) (c : ByteArray := commitmentOf tiedToy xs ++ r.root) : Answer :=
+  Cases.answerRegistered tiedToy r.case (xs.map (·.case)) c
+
+-- a registered composition with a tie: `a` and `c` on one store leave the verdict to the components
+#guard (answerT (accepts "r") [accepts "a", accepts "b", accepts "c"]).verdict == .accept
+#guard (answerT (accepts "r") [accepts "a", undecided "b", accepts "c"]).verdict == .undecided
+-- on two stores it refuses once the cases fit, whatever the components answer, and publishes nothing
+#guard (answerT (accepts "r") [accepts "a", accepts "b", stray (accepts "c")]).reason ==
+  some s!"store: a committed {hex 7}, c committed {hex 9}"
+#guard (answerT (accepts "r") [undecided "a", accepts "b", stray (undecided "c")]).verdict == .reject
+#guard (answerT (accepts "r") [accepts "a", accepts "b", stray (accepts "c")]).published.isNone
+#guard (answerT (accepts "r") [accepts "a", stray (accepts "c")]).reason == some "params: b is missing"
+-- the registration's refusals come first, and a commitment that doesn't decode rejects as its component
+#guard (answerT other [accepts "a", accepts "b", stray (accepts "c")]).reason ==
+  some s!"registration: r checked {hex 9}, b committed {hex 7}"
+#guard (answerT (rejects "r") [accepts "a", accepts "b", stray (accepts "c")]).reason ==
+  some "registration: r reject: 1 of 2 drawn units failed"
+#guard (answerT (accepts "r") [accepts "a", accepts "b", { accepts "c" with root := ByteArray.empty }]).reason ==
+  some "c reject: commitment: a root is 32 bytes, not 0"
+
 end Core.Composition.Guards

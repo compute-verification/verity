@@ -112,6 +112,14 @@ one-stage audit each commit to the window record. At onsite the one-stage audit 
 commitment, so they join the check when each window's record names the registration log's head (`Core.Registration`,
 `../interface`), which then is the one every subprotocol names.
 
+A tie (`Tie`, `Registered.lean`) generalizes this: a value each named subprotocol reads off its own commitment's bytes
+with its own decoder, which must be one value once the cases fit (`Tie.strays`: `what: s committed D, t committed D'`),
+else the composition rejects whatever the subprotocols answer; a subprotocol whose commitment doesn't decode rejects as
+itself. `same`'s check is the tie `records` of its subprotocols' digests, and `registered id R s components ties` checks
+its ties after the registration. Onsite has one, `Core.Onsite.store`: PoUS and the remote bandwidth audit on one store,
+the root of `C*` PoUS's setup published (its commitment's `root`) and the payload root the bandwidth audit's
+registration names (its commitment's `payload_root`). Once the log exists, both read the store's hardware entry.
+
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
@@ -140,7 +148,11 @@ product accepts in the difftest until a v2 case with a proof does. Remote's case
 subprotocols on PoUW's record, which the one-stage audit refuses (PoUW's window reads registered values, outside v2's
 mirror), and the rest mostly on two records, which remote refuses;
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that refusal changes no other verdict of
-the product's. `test_a_reference_without_reject_dominance_is_caught`
+the product's. Onsite's bandwidth cases aimed at acceptance or undecided are, three times in four, its session on PoUS's
+store (`periods.OnStore`: it registers the root of PoUS's honest setup and stops before any window is verified), and the
+rest are on its own store, which onsite refuses beside an honest PoUS run;
+`test_onsite_refuses_two_stores_and_else_keeps_its_verdict` shows that refusal changes no other verdict.
+`test_a_reference_without_reject_dominance_is_caught`
 shows the difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a
 case where one subprotocol rejects and another is undecided.
 

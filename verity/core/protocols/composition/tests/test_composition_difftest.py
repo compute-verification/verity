@@ -16,6 +16,7 @@ integrity is undecided at best and no product accepts here."""
 from __future__ import annotations
 
 import collections
+import dataclasses
 import functools
 import hashlib
 import itertools
@@ -145,6 +146,8 @@ def component_case(draw, C, kind: str | None) -> dict:
     difftest's generator or its recorded cases, with its digest as its Python reads it on `BLOBS` (the case's own
     commitment when it doesn't decode, which a rejection never binds)."""
     kind = kind or draw(st.sampled_from(kinds(C)))
+    if C is R.BANDWIDTH and kind in (R.ACCEPT, R.UNDECIDED) and draw(st.integers(0, 3)) > 0:
+        kind = periods.SAME_STORE
     if isinstance(C, R.Recorded):
         case = C.cases[kind][0]
     elif C is R.POUW:
@@ -322,6 +325,9 @@ def reference(product: R.Product | R.Registered, seen: collections.Counter):
             seen["reject, no component rejected"] += 1
         if isinstance(product, R.Same) and (got := product.committed(case)) and None not in got:
             seen["two records" if len(set(got)) > 1 else "one record"] += 1
+        if isinstance(product, R.Registered):
+            for what, one in product.tied(case):
+                seen[f"one {what}" if one else f"two {what}s"] += 1
         return out
     return answer
 
@@ -425,7 +431,32 @@ def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
 
 @pytest.mark.slow
 def test_onsite_agrees(onsite_server, recorded):
-    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
+    """Onsite's verdicts, and PoUS and the bandwidth audit on one store (left to the components) and on two (refused),
+    each often."""
+    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, R.UNDECIDED, "reject, a component undecided",
+                                                       "reject, no component rejected", "one store", "two stores"))
+
+
+@pytest.mark.slow
+def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
+    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS and
+    the bandwidth audit committed to two stores, which it refuses: the tie changes no other verdict. Python only: the
+    difftest holds the Lean to it."""
+    untied = dataclasses.replace(R.ONSITE, ties=())
+    seen = collections.Counter()
+
+    @settings(max_examples=200, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(composite(R.ONSITE))
+    def check(case):
+        got, was = R.ONSITE.answer(case), untied.answer(case)
+        two = (R.STORE.what, False) in R.ONSITE.tied(case)
+        if two:
+            assert got["verdict"] == R.REJECT, got
+        else:
+            assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in was.items() if k != "reason"}
+        seen[f"was {was['verdict']}, two" if two else "same"] += 1
+    check()
+    assert seen["same"] > 20 and seen["was undecided, two"] > 0, dict(seen)
 
 
 class Trial(R.Product):
@@ -445,7 +476,7 @@ def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded)
     """The difftest tells the composition's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
     trial = R.Registered(R.ONSITE.id, R.ONSITE.registration, R.ONSITE.committer,
-                         Trial(R.ONSITE.id, R.ONSITE.product.components))
+                         Trial(R.ONSITE.id, R.ONSITE.product.components), R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
         D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
               server=onsite_server)

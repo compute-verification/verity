@@ -12,7 +12,9 @@ on what left the site), and the wipe by the memory challenger's streamed-label w
 or onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before composing, in its
 commit phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`, `verity/nci/v1`, a
 registration check and not a component): a registration it refuses refuses onsite, and so does one other than the
-registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
+registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`). Once the cases fit, PoUS and
+the remote bandwidth audit must also have committed to one store (`store`), else onsite rejects whatever the components
+answer.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
@@ -33,8 +35,17 @@ def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol, RemoteAudit.Protocol.protocol,
     SampledProofs.OneStageZk.protocol, MemoryChallenger.WipeProtocol.protocol]
 
+/-- PoUS and the remote bandwidth audit on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
+and the payload root the bandwidth audit's registration names (its commitment's `payload_root`), each read by its own
+decoder. -/
+def store : Tie :=
+  ⟨"store",
+    [(PousCheck.RunProtocol.protocol.id, fun b => (PousCheck.RunProtocol.decodeCommitment b).toOption.map (·.root)),
+      (RemoteAudit.Protocol.protocol.id,
+        fun b => (RemoteAudit.Protocol.decodeCommitment b).toOption.map (·.payloadRoot))]⟩
+
 def protocol : BlobProtocol :=
-  registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components
+  registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components [store]
 
 /-- A case its component's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=

@@ -44,13 +44,15 @@ theorem productB_on (id : String) (cs : List BlobProtocol) (blobs : Array ByteAr
 /-- The composition `id` of the components `cs`, which read the caller's blobs, after the registration check `R` on the
 registration the component `s` commits to: `registered` of the components without blobs, whose check on blobs `bs` is
 `registered`'s check of the components on `bs`. -/
-def registeredB (id : String) (R : Protocol) (s : String) (cs : List BlobProtocol) : BlobProtocol :=
-  { registered id R s (cs.map (·.toProtocol)) with
-    checkBlobs := fun ps c ev bs => checkRegistered id R s (cs.map (·.onBlobs bs)) ps c ev }
+def registeredB (id : String) (R : Protocol) (s : String) (cs : List BlobProtocol) (ties : List Tie := []) :
+    BlobProtocol :=
+  { registered id R s (cs.map (·.toProtocol)) ties with
+    checkBlobs := fun ps c ev bs => checkRegistered id R s (cs.map (·.onBlobs bs)) ties ps c ev }
 
 /-- On the caller's blobs a `registeredB` is `registered` of its components on them. -/
-theorem registeredB_on (id : String) (R : Protocol) (s : String) (cs : List BlobProtocol) (blobs : Array ByteArray) :
-    (registeredB id R s cs).on blobs = registered id R s (cs.map (·.onBlobs (Blobs.ofArray blobs))) := rfl
+theorem registeredB_on (id : String) (R : Protocol) (s : String) (cs : List BlobProtocol) (ties : List Tie)
+    (blobs : Array ByteArray) :
+    (registeredB id R s cs ties).on blobs = registered id R s (cs.map (·.onBlobs (Blobs.ofArray blobs))) ties := rfl
 
 /-- The composition `id` of the components `cs`, which read the caller's blobs, whose components `ss` must all commit
 to one record: `same` of the components without blobs, whose check on blobs `bs` is `same`'s check of the

@@ -391,16 +391,47 @@ class Same(Product):
 
 
 @dataclass(frozen=True)
+class Tie:
+    """`Core.Composition.Tie`: the value ``what`` that each component of ``names`` reads off its commitment's bytes
+    with its function must be one value."""
+
+    what: str
+    names: tuple = ()
+
+    def strays(self, answers: list[tuple[str, dict]], ev: list) -> str | None:
+        """`Core.Composition.Tie.strays`. A component's answer carries its digest exactly when its commitment decodes,
+        and then its commitment holds what its function reads; where it doesn't, the component rejects, and so does the
+        composition."""
+        digests, cases = dict(answers), {k[0]: k[2] for k in ev}
+        if any(digests.get(s, {}).get("commitment") is None or s not in cases for s, _ in self.names):
+            return None
+        (s, d), *rest = [(s, f(cases[s])) for s, f in self.names]
+        return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
+
+
+def _commitment_hex(key: str) -> Callable[[bytes], bytes]:
+    """A component's function reading the hex field ``key`` of its JSON commitment."""
+    return lambda b: bytes.fromhex(json.loads(b)[key])
+
+
+#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the bandwidth audit's registered payload root.
+STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
+                      ("verity/remote-bandwidth/v0", _commitment_hex("payload_root"))))
+
+
+@dataclass(frozen=True)
 class Registered:
-    """`Core.Composition.registeredB id R s components`: the registration check ``registration`` on the registration's
-    case first, a refusal refusing the whole, then ``product`` of the components on the rest and the caller's blobs,
-    under the commitment's first 64 bytes; the rest of the commitment is the registration's digest, which the component
-    ``committer`` must have committed to once the cases fit the composition (one registration digest in both)."""
+    """`Core.Composition.registeredB id R s components ties`: the registration check ``registration`` on the
+    registration's case first, a refusal refusing the whole, then ``product`` of the components on the rest and the
+    caller's blobs, under the commitment's first 64 bytes; the rest of the commitment is the registration's digest,
+    which the component ``committer`` must have committed to once the cases fit the composition (one registration
+    digest in both), and the components of each tie of ``ties`` must have committed to one value."""
 
     id: str
     registration: Ported
     committer: str
     product: Product
+    ties: tuple = ()
 
     def params(self, j: Any) -> tuple[tuple[str, str], list[tuple[str, str]]]:
         _exactly(j, ["components", "registration"], "the composition's params")
@@ -444,6 +475,8 @@ class Registered:
         got = next((x["commitment"] for i, x in answers if i == self.committer), None)
         if got != d.hex():
             return REJECT, f"registration: {R.id} checked {d.hex()}, {self.committer} committed {got or 'no digest'}"
+        if stray := next(filter(None, (t.strays(answers, ev) for t in self.ties)), None):
+            return REJECT, stray
         return self.product.check(ps, b, ev, blobs)
 
     def answer(self, case: Any) -> dict:
@@ -464,10 +497,25 @@ class Registered:
             return self.product.run(ps, ev, blobs)
         return fitted_verdicts(answers)
 
+    def tied(self, case: Any) -> list[tuple[str, bool]]:
+        """On a case whose components fit the composition, each tie whose components' commitments all decode, by what
+        it ties, and whether they committed to one value."""
+        ev: list = []
+
+        def answers():
+            c, blobs = Product.split(case)
+            _, ps = self.params(c["params"])
+            ev[:] = self.evidence(P.unhex(c["evidence"]))[1]
+            return self.product.run(ps, ev, blobs)
+        digests, cases = dict(fitted_answers(answers)), {k[0]: k[2] for k in ev}
+        return [(t.what, len({f(cases[s]) for s, f in t.names}) == 1) for t in self.ties
+                if all(digests.get(s, {}).get("commitment") is not None and s in cases for s, _ in t.names)]
+
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids: remote's two
 #: committing to one window record, onsite's after its registration check, NCI's, on the registration integrity
-#: (v2) commits to.
+#: (v2) commits to, with PoUS and the bandwidth audit on one store.
 REMOTE = Same("verity/remote/v0", (POUW, SAMPLED_PROOFS), (POUW.id, SAMPLED_PROOFS.id))
 ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,
-                    Product("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE)))
+                    Product("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE)),
+                    (STORE,))

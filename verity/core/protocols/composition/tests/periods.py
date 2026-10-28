@@ -3,12 +3,13 @@
 key at S1's deployed parameters, `mc_cases.deployed_signer`) honest, under a prover that answers every other round
 with zeros, and the honest run's case carrying another store's setup (a run committed to a different setup, refused by
 the setup tie); bandwidth's (`remote_bandwidth.period.run`, one window) honest, under a prover whose store dropped every
-other block, and stopped before its window is verified; and of each, its honest case with params or evidence that don't
-decode."""
+other block, stopped before its window is verified, and so stopped on PoUS's store, registering the root of PoUS's
+honest setup (`OnStore`: onsite's one store); and of each, its honest case with params or evidence that don't decode."""
 
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -35,6 +36,8 @@ POUS_K = 8
 OTHER_POUS_STORE = hashlib.shake_256(b"another tiny MLP's weights").digest(len(POUS_STORE))
 """Another store at the same point, whose honest setup the run of `POUS_STORE` is not committed to."""
 COINS = hashlib.sha512(b"the period's live coins").digest()
+SAME_STORE = "same-store"
+"""Bandwidth's case on PoUS's store (`OnStore`), undecided: the one that meets PoUS's honest run on one store."""
 
 
 def _mc_cases():
@@ -100,13 +103,40 @@ def build(tmp: Path) -> None:
                          "other-setup": _with_setup(honest.case, other.setup_case, (signer.public_key,))}
                         | _undecodable(R.POUS.id, honest.case, honest.answer["commitment"]))
     assert R.POUS.cases["other-setup"][1]["reason"] == "the run's commitment is not what its setup published"
+    root = bytes.fromhex(json.loads(bytes.fromhex(honest.case["commitment"]))["root"])
     honest, dropping, unverified = reads(), reads(cheat=_dropping), reads(verify=0)
+    c = Clock()
+    same = bandwidth.session("n0", OnStore(bandwidth.Local("n0", STORE, entropy=_entropy(b"salts")), root), COINS,
+                             windows=1, verify=0, clock=c, sleep_until=c.sleep_until)
+    assert json.loads(bytes.fromhex(same.case["commitment"]))["payload_root"] == root.hex()
     R.BANDWIDTH.cases.update({R.ACCEPT: (honest.case, honest.answer), R.REJECT: (dropping.case, dropping.answer),
-                              R.UNDECIDED: (unverified.case, unverified.answer)}
+                              R.UNDECIDED: (unverified.case, unverified.answer), SAME_STORE: (same.case, same.answer)}
                              | _undecodable(R.BANDWIDTH.id, honest.case, honest.answer["commitment"]))
     for C in (R.POUS, R.BANDWIDTH):
         got = {k: a["verdict"] for k, (_, a) in C.cases.items()}
-        assert all(v == (k if k in (R.ACCEPT, R.REJECT, R.UNDECIDED) else R.REJECT) for k, v in got.items()), (C.id, got)
+        want = {SAME_STORE: R.UNDECIDED} | {k: k for k in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+        assert all(v == want.get(k, R.REJECT) for k, v in got.items()), (C.id, got)
+
+
+class OnStore:
+    """A bandwidth prover that registers PoUS's store, `root` (the root of `C*` PoUS's setup published), in place of its
+    own payload root: its session stops before any window is verified, so nothing it opens is checked against it, and it
+    ends undecided on PoUS's store."""
+
+    def __init__(self, prover: bandwidth.Local, root: bytes) -> None:
+        self.prover, self.root = prover, root
+
+    def register(self) -> tuple[int, bytes]:
+        return self.prover.register()[0], self.root
+
+    def hold(self, registration, commitment) -> None:
+        self.prover.hold(dataclasses.replace(registration, payload_root=self.prover.register()[1]), commitment)
+
+    def run(self, challenge, t: int, i: int, previous: bytes) -> bytes:
+        return self.prover.run(challenge, t, i, previous)
+
+    def open(self, t: int, draws) -> list:
+        return self.prover.open(t, draws)
 
 
 def _entropy(label: bytes):
