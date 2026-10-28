@@ -392,13 +392,11 @@ class H1Windows:
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
     coins). ``closer`` (a `worker`) runs each window's release off the engine loop, and
-    `close` hands back its outcome's `Future`; None: on the loop, the outcome itself. ``draws`` is serve-openai's
-    draw-gated release (`serve_release.Draws`), into which each window's release puts its draw under `DRAWER`
-    (`drawn`) when it waits for one. ``clock`` times each part."""
+    `close` hands back its outcome's `Future`; None: on the loop, the outcome itself. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
-                 sessions: GateSessions | None = None, closer: Any = None, draws: Any = None,
+                 sessions: GateSessions | None = None, closer: Any = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
@@ -410,7 +408,6 @@ class H1Windows:
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
         self.closer, self.clock = closer, clock
         self.draws: Any = None
-        self.drawing(draws)
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
         self.layers = PHK.layers(model, pouw.linear_types())
