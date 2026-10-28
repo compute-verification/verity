@@ -9,7 +9,9 @@ encoded and holds (`benchmarks/pous/served_piece.py`, `held_bandwidth.py`), whic
 answer and summary to ``DIR`` (``answer.json``, ``bandwidth.json``) and its case to ``SERVE_DIR/private/bandwidth``; the
 composed run starts PoUS's piece before this one (`served_verdicts.PIECES`), so ``collect`` only reads what it wrote:
 
-    BANDWIDTH_CMD='python benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
+    BANDWIDTH_CMD='"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
+
+(`served_verdicts.sh`'s default once POUS_CMD is set).
 
 An answer that isn't window K's is replaced by an undecided one saying whose it is, and where the PoUS piece wrote none
 nothing is written, so the record names the bandwidth audit missing (`served_verdicts.piece_row`). Exit 0 on accept, 1 on

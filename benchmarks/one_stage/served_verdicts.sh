@@ -38,8 +38,8 @@
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
 #     made for a piece that didn't run. PoUS's piece (POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"') runs the
 #     bandwidth session over the store it holds and writes its answer where the bandwidth piece's goes, which
-#     BANDWIDTH_CMD='python benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
-#     collects. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
+#     BANDWIDTH_CMD='"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
+#     collects (its default once POUS_CMD is set). A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
 #     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
 #     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'), serve() calls it in TREE, under the serve's lease
@@ -307,11 +307,14 @@ if [ -n "${H1_GATE:-}" ]; then
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under TOP-84's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
 fi
+if [ -n "${POUS_CMD:-}" ]; then
+  export BANDWIDTH_CMD=${BANDWIDTH_CMD:-"$PY benchmarks/one_stage/served_bandwidth.py collect --serve-dir \$1 --window \$2 --out \$3"}
+fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
   say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS; the bandwidth" \
-      "verifier on vy-auditor-2 (10.96.0.36:7952) is INF-263, due Tue 27 Oct 18:00Z"
+      "audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 fi
 
 # 1-2. the endpoint and its requests, under the GPU lease
