@@ -18,7 +18,7 @@ runtime takes for it and its transcript keeps.
 Besides its peers' messages and its sources', the runtime tells a party that a channel closed (`Closed`) or that a frame
 on it was refused (`Refused {name, detail}`, after which the party is finished refused by that name unless it finishes
 first). A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
-so its transcript (`transcript.Transcript`) replays it exactly, and the same code runs live, simulated or replayed. What
+so its transcript (`transcript.PartyLog`) replays it exactly, and the same code runs live, simulated or replayed. What
 the runtime gives it in `Identity` is its own device: its name, the configuration's hash, its key and its state directory.
 """
 
