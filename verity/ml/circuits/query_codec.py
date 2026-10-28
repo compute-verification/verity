@@ -12,8 +12,9 @@ from __future__ import annotations
 import hashlib
 
 from .codec import canonical_json
-from .query_ast import (Concat, Default, Each, Group, Instances, Inter, Label, Members, Minus, NameSel, Nodes, NodeSel, Override,
-                      Path, Pred, Query, QueryError, Rest, Root, Table, Union, Where, Zip, group, label, members, table)
+from .query_ast import (Concat, Default, Each, Frontier, Group, Instances, Inter, Label, Members, Minus, NameSel, Nodes, NodeSel,
+                      Override, Path, Pred, Query, QueryError, Rest, Root, Table, Union, Where, Zip, frontier, group, label,
+                      members, table)
 
 SCHEMA = "verity-ir/query/v1"
 
@@ -41,6 +42,8 @@ def to_json(q) -> dict:
         return {"op": "rest", "base": None if q.base is None else to_json(q.base)}
     if isinstance(q, Default):
         return {"op": "default", "w": q.w}
+    if isinstance(q, Frontier):
+        return {"op": "frontier", "w": q.w}
     if isinstance(q, Override):
         return {"op": "override", "base": to_json(q.base), "cases": [{"path": str(p), "query": to_json(g)} for p, g in q.cases]}
     if isinstance(q, Where):
@@ -106,6 +109,8 @@ def _decode(doc: dict) -> Query:
         return Rest(None if b is None else from_json(b))
     if op == "default":
         return Default(int(doc["w"]))
+    if op == "frontier":
+        return frontier(doc["w"])
     if op == "override":
         return Override(from_json(doc["base"]), tuple((Path.parse(c["path"]), from_json(c["query"])) for c in doc["cases"]))
     if op == "where":
