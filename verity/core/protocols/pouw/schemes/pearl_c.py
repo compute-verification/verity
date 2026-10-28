@@ -80,6 +80,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
@@ -100,7 +101,7 @@ PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
 TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
-LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
+LABELS = {"seed-A": domains.PEARL_C_SEED_A.encode(), "seed-B": domains.PEARL_C_SEED_B.encode()}
 #: The hashing formats this scheme implements, of the one table (`verity.core.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
 #: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
@@ -465,14 +466,14 @@ class PearlC:
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
                  hashing: str = "h0", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
-            raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
+            raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")
         if forming == "v0" and device != H100:
-            raise ValueError(f"forming v0 is #311's H100 port; {device.name} takes v1")
+            raise ValueError(f"forming v0 is the H100 port's; {device.name} takes v1")
         if hashing not in HASHINGS:
             raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h3 (SHA-512, per-row seeds)")
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
-            raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
+            raise ValueError(f"forming v0 is the H100 port's, priced on the H100 only, not {prices.device}")
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
@@ -484,8 +485,8 @@ class PearlC:
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
-        allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
-                     "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
+        allowance = ("forming v0 is the H100 port's (FP10 decode and exact norms depend on A alone and are skippable); "
+                     "pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
                      "forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"
