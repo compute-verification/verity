@@ -39,7 +39,7 @@
   read.
 * `dither`: Dither v3.2's served unit (`dither/PROTOCOL.md`), its proof blocks' Definitions, a call's committed layout and
   its CPU reference; `dither_c2o`: the C2-O served form beside it, with its own shape rule; `dither_amax`: down's A′
-  amax, bound to its row by a committed argmax.
+  amax, bound to its row by its gate blocks' committed maxima.
 * `admit`: a window's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
   the window.
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name

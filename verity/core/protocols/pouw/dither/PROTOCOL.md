@@ -516,19 +516,22 @@ ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2o.py` holds its
 
 Down's A is A′ = requant(h, amax) of gate-up's output, one byte a cell, with h = SiLU·mul of the two dequantized halves
 (vLLM's merged [gate ‖ up] layout, column j with j + I) and amax the row's max |h|. Down's dequant reads the same amax.
-`circuit/dither_amax.py` holds the check that binds amax to the row. It is experimental and in no Lean lock.
-- **What is committed.** Per row, beside its A′ bytes, a record of two u16 words: amax (bf16) and k, one column where
-  |h| = amax. Nothing else per cell.
-- **The gate block** of each sampled gate cell checks |h| ≤ amax, a NaN h aside (`PouwAmaxBound_v2`), beside its
-  A′ = requant(h, amax) check.
-- **The down block** of row i recomputes h at k from gate-up's row and B's rows k and k + I, and checks k < I, amax no NaN
-  and |h| = amax with one 16-bit equality (`PouwDitherAmax_v1{K, I}`).
-- **Why it binds.** An amax above the row's maximum is attained at no k, so the down block fails. One below it leaves the
-  true maximum's cell above it, and that cell's gate block fails. A row whose every h is NaN has no k: open.
-- **Cost.** About 11.7k + 11.6k · K/32 ANDs a down block, 1.49 M at K = 4,096: two full 32-bit dots, two dequants, one
-  SiLU·mul and the compare, beside about 12 M for C2-O's 8-cell down block at K = 14,336.
-- **SiLU·mul** is the served `SiluMulBf16_v2`, restated as `PouwSiluMulBf16` because PoUW's verifier imports nothing from
-  `verity.ml.definitions`. Its tests hold it to the served word on every gate.
+`circuit/dither_amax.py` holds the checks that bind amax to the row. It is experimental and in no Lean lock.
+- **What is committed.** Gate-up's h columns fall in gate blocks of W columns of one row, N = I / W a row. Per row i,
+  beside its A′ bytes and amax_i, each gate block b commits m_i,b = max |h| over its W cells, a value under its hiding leaf
+  (2 / W bytes a cell). No position is committed or opened.
+- **The gate block** (i, b) proves m_i,b exactly: the fmaxf fold from +0 of its cells' |h|, a NaN h skipped, equals m_i,b
+  (`PouwAmaxBlock_v1{W}`, one 16-bit max a cell and one equality), beside its A′ = requant(h, amax_i) check.
+- **The down block** of row i reads row i's N maxima at positions the layout fixes and checks amax_i = max_b m_i,b
+  (`PouwAmaxRow_v1{N}`), inside its proof.
+- **Why it binds.** If every m_i,b is right, their max is the row's amax. So a wrong amax_i passes down only beside a wrong
+  m_i,b, which fails gate block (i, b) whenever that block is drawn: the usual sampled-block soundness. A row whose every h
+  is NaN has amax +0, as the served fold gives it.
+- **Cost.** 368 ANDs a gate block at W = 8, against 8 · 31 for the old bound alone (`PouwAmaxFold_v2` is 47). 57,327 ANDs
+  a down block at I = 14,336 and W = 8 (1,791 `PouwAmaxMax_v2` of 32 and one `PouwAmaxEq_v2`), beside about 12 M for
+  C2-O's 8-cell down block.
+- **SiLU·mul** is the served `SiluMulBf16_v2`, restated as `PouwSiluMulBf16` for the gate block's h because PoUW's verifier
+  imports nothing from `verity.ml.definitions`. Its tests hold it to the served word on every gate.
 - **The fallback** commits h itself, 2 bytes a cell, and derives amax and A′ in-circuit from the full row.
 
 ## Open

@@ -6,11 +6,9 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """`PouwDitherAmax_v1` at K = 32 (one `PouwDitherOutDot0_v2` a dot) and K = 64 (then one `PouwDitherOutDot_v2`), at Llama
-    3.1 8B's I = 14,336 and at a toy I = 64: its two dots, two `PouwZyDequant_v2`, one `PouwSiluMulBf16_v2` and
-    `PouwAmaxAt_v2`. The served K = 4,096 is 128 steps a dot, past the whole-Definition lowering budget, and grows linearly
-    in K / 32, which it is priced by. `PouwAmaxBound_v2`, the gate block's bound, is bound alone."""
-    from verity.ml.circuits.defs import bind
+    """`PouwAmaxBlock_v1` at W = 8, C2-O's 8-cell blocks of one row (eight `PouwAmaxFold_v2` and `PouwAmaxEq_v2`), and
+    `PouwAmaxRow_v1` at Llama 3.1 8B's I = 14,336 in those blocks (N = 1,792: N - 1 `PouwAmaxMax_v2` and `PouwAmaxEq_v2`)
+    and at a toy N = 64. `PouwSiluMulBf16_v2`, the gate block's h, is bound alone."""
     from verity.core.protocols.pouw.circuit import dither_amax as AM
 
-    return [bind(AM.PouwDitherAmax, K=k, I=i) for k, i in ((32, 14336), (64, 64))] + [AM.PouwAmaxBound]
+    return [AM.gate_definition(8), AM.row_definition(14336, 8), AM.row_definition(512, 8), AM.PouwSiluMulBf16]

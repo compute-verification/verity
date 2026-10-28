@@ -1,5 +1,5 @@
-"""Down's A′ check beside C2-O (`circuit.dither_amax`): the served SiLU·mul restated, a row's record, the two check leaves,
-and the down block on bits against the reference, with an amax shrunk or grown refused."""
+"""Down's A′ check beside C2-O (`circuit.dither_amax`): the served SiLU·mul restated, the max leaves, a gate block's max and
+the down block's amax on bits against the reference, with a block max or amax shrunk or grown refused."""
 from __future__ import annotations
 
 import functools
@@ -50,32 +50,32 @@ def test_silu_mul_on_bits_is_its_word():
         assert _evaluate(AM.PouwSiluMulBf16, g, u) == AM.silu_mul(g, u), (hex(g), hex(u))
 
 
-def test_the_check_leaves_on_bits_are_their_words():
+def test_the_max_leaves_on_bits_are_their_words():
     rng = random.Random(6)
     mags = [0, 1, 0x3F80, AM.MAG_MAX - 1, AM.MAG_MAX, AM.MAG_MAX + 1, 0x7FC0, 0x7FFF]
-    for h in mags + [m | 0x8000 for m in mags] + [rng.randrange(1 << 16) for _ in range(40)]:
-        for amax in mags + [h & 0x7FFF, (h & 0x7FFF) + 1, (h & 0x7FFF) - 1 & 0xFFFF, h | 0x8000]:
-            amax &= 0xFFFF
-            assert _evaluate(AM.PouwAmaxBound, h, amax) == AM.PouwAmaxBoundWord.evaluate(h, amax)
-            for k, n in ((0, 1), (13, 13), (12, 13), (0xFFFF, 14336), (14335, 14336)):
-                assert _evaluate(AM.PouwAmaxAt, k, n, h, amax) == AM.PouwAmaxAtWord.evaluate(k, n, h, amax)
+    words = mags + [m | 0x8000 for m in mags] + [rng.randrange(1 << 16) for _ in range(40)]
+    for h in words:
+        for acc in mags + [h & 0x7FFF, (h & 0x7FFF) + 1, (h & 0x7FFF) - 1 & 0xFFFF, h | 0x8000, 0xFFFF]:
+            acc &= 0xFFFF
+            assert _evaluate(AM.PouwAmaxFold, acc, h) == AM.PouwAmaxFoldWord.evaluate(acc, h)
+            assert _evaluate(AM.PouwAmaxMax, acc, h) == max(acc, h)
+            assert _evaluate(AM.PouwAmaxEq, acc, h) == int(acc == h)
 
 
-def test_a_rows_record_is_its_amax_and_first_argmax():
-    hs = [0x3F80, 0xC000, 0x7FC0, 0x4000, 0xBF80]
-    assert AM.record_of(hs) == (0x4000, 1) and AM.abs_max(hs) == 0x4000
-    assert AM.record_bytes(0x4000, 1) == bytes([0x00, 0x40, 0x01, 0x00]) and len(AM.record_bytes(0, 0)) == AM.RECORD
-    assert AM.record_of([0x8000, 0x0000]) == (0, 0)
-    with pytest.raises(ValueError, match="every h is NaN"):
-        AM.record_of([0x7FC0, 0xFFFF])
+def test_a_blocks_max_is_the_served_fold():
+    hs = [0x3F80, 0xC000, 0x7FC0, 0x4000, 0xBF80, 0xFF80, 0x0001, 0x8000]
+    assert AM.abs_max(hs) == 0x7F80 and AM.block_maxes(hs, 4) == [0x4000, 0x7F80] and AM.block_maxes(hs, 8) == [0x7F80]
+    assert AM.abs_max([0x7FC0, 0xFFFF]) == 0 and AM.check_gate([0x7FC0, 0xFFFF], 0) == 1
+    with pytest.raises(ValueError, match="tile"):
+        AM.block_maxes(hs, 3)
 
 
-K, I = 64, 64
+K, I, W = 64, 64, 8
 
 
 @functools.cache
 def _row():
-    """Gate-up's row 3 of a served call at S = 1 (n = 2I), its h, record, scales and the down block's honest inputs."""
+    """Gate-up's row 3 of a served call at S = 1 (n = 2I), its h and its scales."""
     sh = O.C2OShape(128, 128, K)
     rng = np.random.default_rng(11)
     A, B = rng.integers(-128, 128, size=(sh.m, K)).tolist(), rng.integers(-128, 128, size=(2 * I, K)).tolist()
@@ -83,51 +83,52 @@ def _row():
     sa = F.bits_of(np.float32(0.0123))
     sw = [F.bits_of(np.float32(x)) for x in rng.uniform(0.001, 0.01, size=2 * I)]
     hs = [AM.act_h(Z[3][j], Z[3][j + I], sa, sw[j], sw[j + I]) for j in range(I)]
-    amax, k = AM.record_of(hs)
-    da, db = D.dithers(sh, SEEDS, "A", [3])[0], D.dithers(sh, SEEDS, "B", range(2 * I))
-
-    def inputs(k_: int, amax_: int):
-        return AM.block_inputs(A[3], da, B[k_ % (2 * I)], B[(k_ + I) % (2 * I)], db[k_ % (2 * I)], db[(k_ + I) % (2 * I)],
-                               sa, sw[k_ % (2 * I)], sw[(k_ + I) % (2 * I)], k_, amax_)
-
-    return Z, hs, amax, k, sa, sw, inputs
+    return Z, hs, sa, sw
 
 
 def test_h_is_the_served_epilogue_then_silu_mul():
-    Z, hs, *_, sa, sw, _ = _row()
+    Z, hs, sa, sw = _row()
     assert hs[0] == AM.silu_mul(H.dequant(Z[3][0], sa, sw[0]), H.dequant(Z[3][I], sa, sw[I]))
     assert len(set(hs)) > 1
 
 
-def test_the_reference_refuses_a_shrunk_or_grown_amax_and_a_k_past_i():
-    _, hs, amax, k, *_, inputs = _row()
-    assert AM.check_block(inputs(k, amax), I) == 1
-    assert AM.check_block(inputs(k, amax - 1), I) == 0 and AM.check_block(inputs(k, amax + 1), I) == 0
-    others = [j for j in range(I) if AM.magnitude(hs[j]) != amax]
-    assert others and all(AM.check_block(inputs(j, amax), I) == 0 for j in others)
-    assert AM.check_block(inputs(k + I, AM.magnitude(hs[k])), I) == 0
-    shrunk = AM.magnitude(sorted(hs, key=AM.magnitude)[-2])
-    assert AM.PouwAmaxBoundWord.evaluate(hs[k], shrunk) == 0
+def test_a_wrong_amax_passes_down_only_beside_a_wrong_block_max():
+    _, hs, *_ = _row()
+    ms, amax = AM.block_maxes(hs, W), AM.abs_max(hs)
+    assert len(ms) == I // W and max(ms) == amax and AM.check_row(amax, ms) == 1
+    assert all(AM.check_gate(hs[b * W:(b + 1) * W], m) == 1 for b, m in enumerate(ms))
+    assert AM.check_row(amax - 1, ms) == 0 and AM.check_row(amax + 1, ms) == 0
+    top = ms.index(amax)
+    for wrong in (amax - 1, amax + 1):
+        forged = ms[:top] + [wrong] + ms[top + 1:]
+        assert AM.check_row(max(forged), forged) == 1 and AM.check_gate(hs[top * W:(top + 1) * W], wrong) == 0
 
 
-@pytest.mark.slow
-def test_the_down_block_on_bits_is_the_reference():
-    """Honest, a shrunk amax, a k past I, and one bit of each port flipped: the Definition agrees with the reference."""
-    _, hs, amax, k, *_, inputs = _row()
-    d = AM.block_definition(K, I)
+def test_the_gate_and_down_checks_on_bits_are_the_reference():
+    """Honest, each block max and the amax shrunk and grown, one h bit flipped in each cell, and an all-NaN block."""
+    _, hs, *_ = _row()
+    ms, amax = AM.block_maxes(hs, W), AM.abs_max(hs)
+    gate, row = AM.gate_definition(W), AM.row_definition(I, W)
     rng = random.Random(9)
-    cases = [inputs(k, amax), inputs(k, amax - 1), inputs(k + I, amax)]
-    for port, width in enumerate((8, 1, 8, 8, 1, 1, 32, 32, 32, 16, 16)):
-        bad = [list(v) for v in inputs(k, amax)]
-        bad[port][rng.randrange(len(bad[port]))] ^= 1 << rng.randrange(width)
-        cases.append(bad)
-    want = [AM.check_block(c, I) for c in cases]
+    cases = [(hs[b * W:(b + 1) * W], m + e & 0xFFFF) for b, m in enumerate(ms) for e in (0, -1, 1)]
+    for b in range(I // W):
+        cell = list(hs[b * W:(b + 1) * W])
+        cell[rng.randrange(W)] ^= 1 << rng.randrange(16)
+        cases.append((cell, ms[b]))
+    cases.append(([0x7FC0, 0xFFFF, 0x7F81, 0xFFC1, 0x7FFF, 0xFF81, 0x7FC0, 0xFFFF], 0))
+    want = [AM.check_gate(h, m) for h, m in cases]
+    assert sum(want) >= I // W + 1 and 0 in want
+    assert [list(evaluate(gate, AM.bits(h), AM.bits([m])))[0] for h, m in cases] == want
+    rows = [(amax + e & 0xFFFF, ms) for e in (0, -1, 1)] + [(amax, ms[:b] + [ms[b] ^ 1 << rng.randrange(16)] + ms[b + 1:])
+                                                             for b in range(0, I // W, 3)]
+    want = [AM.check_row(a, m) for a, m in rows]
     assert want[:3] == [1, 0, 0]
-    assert [list(evaluate(d, *AM.block_bits(c)))[0] for c in cases] == want
+    assert [list(evaluate(row, AM.bits([a]), AM.bits(m)))[0] for a, m in rows] == want
 
 
-@pytest.mark.parametrize("params", [dict(K=48, I=8), dict(K=D.K_LIMIT, I=8), dict(K=32, I=0), dict(K=32, I=1 << 16),
-                                    dict(K=32, I=True)])
-def test_the_down_block_refuses_bad_statics(params):
+@pytest.mark.parametrize("make", [lambda: AM.gate_definition(0).signature(), lambda: AM.gate_definition(1 << 16).signature(),
+                                  lambda: bind(AM.PouwAmaxRow, N=True).signature(), lambda: AM.row_definition(64, 0),
+                                  lambda: AM.row_definition(64, 7), lambda: AM.row_definition(1 << 16, 1).signature()])
+def test_the_checks_refuse_bad_statics(make):
     with pytest.raises(ValueError):
-        bind(AM.PouwDitherAmax, **params).signature()
+        make()

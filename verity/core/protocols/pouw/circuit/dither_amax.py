@@ -1,4 +1,4 @@
-"""Down's A′ check beside C2-O: the row amax that down's A′ is quantized under, bound to the row by one committed argmax.
+"""Down's A′ check beside C2-O: the row amax that down's A′ is quantized under, bound to the row by its gate blocks' maxima.
 It is experimental, beside `dither_c2o`, and nothing of it is in a Lean lock.
 
 **A′.** Gate-up's call (vLLM's merged [gate ‖ up] layout, n = 2I) gives each row i of the token batch
@@ -10,40 +10,33 @@ with O = (A + d_A)(B + d_B)ᵀ exact (`dither_c2o`'s served call: v3.2's dithers
 (`h1zy.dequant`, `PouwZyDequant_v2`) and requant the served per-row quantizer, whose scale is
 RN32(max(amax_i, RN32(1e-30)) / 127). A′ is down's A. Down's dequant reads the same committed amax_i.
 
-**The record.** A′ stays at one byte a cell. Per row the producer commits only a record of two u16 words, amax_i (the bf16
-word of max_j |h_ij|, an fmaxf fold from +0 that skips a NaN h) and k_i, one column where |h_ik| = amax_i (`record_of`,
-`RECORD`). Nothing per cell is committed beyond A′.
+**What is committed.** A′ stays at one byte a cell. Gate-up's h columns fall in gate blocks of W columns of one row
+(N = I / W a row). Each gate block b commits, per row i, m_i,b = max |h_ij| over its W cells (`block_max`: the bf16 word of
+an fmaxf fold from +0 that skips a NaN h), a value under its hiding leaf, beside the row's amax_i. That is 2 / W bytes a
+cell beyond A′. Nothing about a position is committed, so no proof opens a position that a value chooses.
 
 **The checks.** Two blocks hold amax_i to the row:
 
-* each sampled gate cell's block checks |h_ij| ≤ amax_i, a NaN h aside (`PouwAmaxBound_v2`, beside its A′ = requant(h,
-  amax) check);
-* the sampled down block of row i recomputes h at k_i from gate-up's row i and B's rows k_i and k_i + I, and checks k_i < I
-  and |h_ik| = amax_i with one 16-bit equality, amax_i no NaN (`PouwDitherAmax_v1`).
+* gate block (i, b) checks m_i,b exactly, by one 16-bit max a cell and one equality: m_i,b = the fold of its cells' |h|
+  (`PouwAmaxBlock_v1{W}`, beside its A′ = requant(h, amax_i) check). Every |h| ≤ m_i,b, and one cell attains it, or
+  m_i,b = +0 when every cell is NaN;
+* the sampled down block of row i reads row i's N maxima, at positions the layout fixes, and checks amax_i = max_b m_i,b
+  (`PouwAmaxRow_v1{N}`), N - 1 16-bit maxima and one equality.
 
-An amax_i above the row's maximum is attained by no column, so the down block fails at every k_i. One below it is passed
-by the true maximum's cell, whose gate block then fails. Rounding can't hide the gap, because the bound is on the bf16
-magnitudes, not on the codes. A row whose every h is NaN has no k_i, since its amax is +0. That edge is open.
+If every m_i,b is right, their max is the row's amax, so a wrong amax_i passes the down block only beside a wrong m_i,b.
+The wrong m_i,b fails gate block (i, b) whenever that block is drawn: the usual sampled-block soundness, with no position
+in the clear. Rounding can't hide the gap, because the checks are on the bf16 magnitudes, not on the codes. A row whose
+every h is NaN has amax_i = +0, as the served fold gives it.
 
-**The down block** `PouwDitherAmax_v1{K, I}`:
+**The fallback** commits h itself, 2 bytes a cell, and derives amax and A′ in-circuit from the full row.
 
-    (a: Array<K, i8>, da: Array<K, bit>, bg, bu: Array<K, i8>, dbg, dbu: Array<K, bit>, sa, swg, swu: f32,
-     k: u16, amax: bf16) -> ok
-
-over gate-up's row i of A and its dither, B's rows k_i (gate) and k_i + I (up) and their dithers, the three scales and the
-row's record. Its sums run through `dither.PouwDitherOutDot0_v2` and `PouwDitherOutDot_v2` (full 32-bit, exact below
-`dither.K_LIMIT`), each dequant through `h1zy.PouwZyDequant_v2`, SiLU·mul through `PouwSiluMulBf16_v2`, and the check
-through `PouwAmaxAt_v2` against the constant I. Its only output is the pass bit. The opened B rows' positions are k_i and
-k_i + I, which the openings hold to the record.
-
-`PouwSiluMulBf16` is the served `SiluMulBf16_v2` (vLLM `_C.silu_and_mul`, ``f / (1 + expf(-f))``) restated here because
-PoUW's verifier imports nothing from `verity.ml.definitions`. Its Boolean form is that Definition's
+`PouwSiluMulBf16` is the served `SiluMulBf16_v2` (vLLM `_C.silu_and_mul`, ``f / (1 + expf(-f))``), the gate block's h,
+restated here because PoUW's verifier imports nothing from `verity.ml.definitions`. Its Boolean form is that Definition's
 (`SiluMulBf16_v4`), and the tests hold its word view to the served one on every gate word.
 """
 from __future__ import annotations
 
 import math
-import struct
 from functools import lru_cache
 from typing import Any, Sequence
 
@@ -56,14 +49,11 @@ from verity.ml.circuits.ops import fp32 as F
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Value
 
-from . import dither as D
 from . import h1zy as H
 
 BIT = BL.BIT
-I8, U16, BF16, F32 = Array(8, BIT), Array(16, BIT), Array(16, BIT), Array(32, BIT)
+U16, BF16 = Array(16, BIT), Array(16, BIT)
 M16, M32 = (1 << 16) - 1, (1 << 32) - 1
-#: a row's record: amax (bf16), then k (u16), little-endian
-RECORD = 4
 #: the largest bf16 magnitude that is no NaN (+inf)
 MAG_MAX = 0x7F80
 ONE_BF16 = 0x3F80
@@ -111,35 +101,24 @@ def magnitude(h: int) -> int:
 
 
 def abs_max(hs: Sequence[int]) -> int:
-    """The served amax on bf16 words: the bf16 word of max |h| over the row, a fold from +0 that skips a NaN."""
+    """The served amax on bf16 words: the bf16 word of max |h|, a fold from +0 that skips a NaN."""
     return max((magnitude(h) for h in hs if magnitude(h) <= MAG_MAX), default=0)
 
 
-def record_of(hs: Sequence[int]) -> tuple[int, int]:
-    """Row i's record (amax_i, k_i): `abs_max` and the first column attaining it. A row whose every h is NaN has none."""
-    amax = abs_max(hs)
-    for k, h in enumerate(hs):
-        if magnitude(h) == amax:
-            return amax, k
-    raise ValueError("a row whose every h is NaN has no column attaining its amax (+0)")
+@primitive("PouwAmaxFold", 1, [("acc", Value(16)), ("h", Value(16))], Value(16), conformance="protocol-defined")
+def PouwAmaxFoldWord(acc: int, h: int) -> int:
+    """One step of `abs_max`: max(acc, |h|), or acc when h is NaN."""
+    return acc & M16 if magnitude(h) > MAG_MAX else max(acc & M16, magnitude(h))
 
 
-def record_bytes(amax: int, k: int) -> bytes:
-    """A record's `RECORD` bytes: amax, then k."""
-    return struct.pack("<2H", amax & M16, k & M16)
+@primitive("PouwAmaxMax", 1, [("a", Value(16)), ("b", Value(16))], Value(16), conformance="protocol-defined")
+def PouwAmaxMaxWord(a: int, b: int) -> int:
+    return max(a & M16, b & M16)
 
 
-@primitive("PouwAmaxAt", 1, [("k", Value(16)), ("n", Value(16)), ("h", Value(16)), ("amax", Value(16))], Value(1),
-           conformance="protocol-defined")
-def PouwAmaxAtWord(k: int, n: int, h: int, amax: int) -> int:
-    """1 when k < n, amax is no NaN and |h| = amax: the down block's check of row i's record at its k."""
-    return int(k & M16 < n & M16 and amax & M16 <= MAG_MAX and magnitude(h) == amax & M16)
-
-
-@primitive("PouwAmaxBound", 1, [("h", Value(16)), ("amax", Value(16))], Value(1), conformance="protocol-defined")
-def PouwAmaxBoundWord(h: int, amax: int) -> int:
-    """1 when |h| ≤ amax or h is NaN: a gate cell's bound under its row's amax."""
-    return int(magnitude(h) <= amax & M16 or magnitude(h) > MAG_MAX)
+@primitive("PouwAmaxEq", 1, [("a", Value(16)), ("b", Value(16))], Value(1), conformance="protocol-defined")
+def PouwAmaxEqWord(a: int, b: int) -> int:
+    return int(a & M16 == b & M16)
 
 
 # -- SiLU·mul on bits --------------------------------------------------------------------------------------------------------------
@@ -229,100 +208,116 @@ def _silu_mul_bits(C, g, u):
     return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(s), fp.bf16_to_f32(up)), F.BF16_NAN_F2FP)
 
 
-def _amax_at_bits(C, k, n, h, amax):
-    _, lt = sub(C, k, n, 16)
-    _, nan = sub(C, const_bits(MAG_MAX, 16), amax, 16)
-    eq = and_reduce(C, [NOT(x ^ y) for x, y in zip(list(h[:15]) + [ZERO], amax)])
-    return [C.AND(C.AND(lt, NOT(nan)), eq)]
+# -- the max leaves on bits --------------------------------------------------------------------------------------------------------
 
-
-def _amax_bound_bits(C, h, amax):
+def _fold_bits(C, acc, h):
     mag = list(h[:15]) + [ZERO]
-    _, over = sub(C, amax, mag, 16)
     _, nan = sub(C, const_bits(MAG_MAX, 16), mag, 16)
-    return [OR(C, NOT(over), nan)]
+    _, up = sub(C, acc, mag, 16)
+    take = C.AND(up, NOT(nan))
+    return [a ^ C.AND(take, a ^ m) for a, m in zip(acc, mag)]
+
+
+def _max_bits(C, a, b):
+    _, up = sub(C, a, b, 16)
+    return [x ^ C.AND(up, x ^ y) for x, y in zip(a, b)]
+
+
+def _eq_bits(C, a, b):
+    return [and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])]
 
 
 PouwSiluMulBf16 = definition("PouwSiluMulBf16", 2, _silu_mul_bits, (("g", BF16), ("u", BF16)), BF16, word=PouwSiluMulBf16Word,
                              conformance="protocol-defined",
                              doc="The served SiluMulBf16_v2 on bits (SiluMulBf16_v4's form): PouwSiluMulBf16_v1")
-PouwAmaxAt = definition("PouwAmaxAt", 2, _amax_at_bits, (("k", U16), ("n", U16), ("h", BF16), ("amax", BF16)), BIT,
-                        word=PouwAmaxAtWord, conformance="protocol-defined",
-                        doc="k < n, amax no NaN and |h| = amax on bits: PouwAmaxAt_v1")
-PouwAmaxBound = definition("PouwAmaxBound", 2, _amax_bound_bits, (("h", BF16), ("amax", BF16)), BIT, word=PouwAmaxBoundWord,
-                           conformance="protocol-defined", doc="|h| <= amax or h NaN on bits: PouwAmaxBound_v1")
+PouwAmaxFold = definition("PouwAmaxFold", 2, _fold_bits, (("acc", U16), ("h", BF16)), U16, word=PouwAmaxFoldWord,
+                          conformance="protocol-defined", doc="max(acc, |h|), acc when h is NaN, on bits: PouwAmaxFold_v1")
+PouwAmaxMax = definition("PouwAmaxMax", 2, _max_bits, (("a", U16), ("b", U16)), U16, word=PouwAmaxMaxWord,
+                         conformance="protocol-defined", doc="max(a, b) of two u16 on bits: PouwAmaxMax_v1")
+PouwAmaxEq = definition("PouwAmaxEq", 2, _eq_bits, (("a", U16), ("b", U16)), BIT, word=PouwAmaxEqWord,
+                        conformance="protocol-defined", doc="a = b of two u16 on bits: PouwAmaxEq_v1")
 
 
-# -- the down block ----------------------------------------------------------------------------------------------------------------
+# -- the gate block's and the down block's checks ------------------------------------------------------------------------------------
 
-def _signature(S: Any) -> tuple:
-    D._length("PouwDitherAmax", "K", S.K)
-    if not isinstance(S.I, int) or isinstance(S.I, bool) or not 0 < S.I < 1 << 16:
-        raise ValueError(f"PouwDitherAmax: I, gate-up's half width, is in [1, 2^16), not {S.I!r}")
-    row, dither = Array(S.K, I8), Array(S.K, BIT)
-    return (("a", row), ("da", dither), ("bg", row), ("bu", row), ("dbg", dither), ("dbu", dither), ("sa", F32),
-            ("swg", F32), ("swu", F32), ("k", U16), ("amax", BF16)), BIT
+def _count(name: str, what: str, v: Any) -> None:
+    if not isinstance(v, int) or isinstance(v, bool) or not 0 < v < 1 << 16:
+        raise ValueError(f"{name}: {what} is in [1, 2^16), not {v!r}")
 
 
-def _dot(B: Any, K: int, a, da, b, db) -> Any:
-    acc = B.call(D.PouwDitherOutDot0, a[0:32], da[0:32], b[0:32], db[0:32])
-    for q in range(32, K, 32):
-        acc = B.call(D.PouwDitherOutDot, acc, a[q:q + 32], da[q:q + 32], b[q:q + 32], db[q:q + 32])
-    return acc
+def _block_signature(S: Any) -> tuple:
+    _count("PouwAmaxBlock", "W, a gate block's h cells of one row", S.W)
+    return (("h", Array(S.W, BF16)), ("m", BF16)), BIT
 
 
-def _body(B: Any, S: Any, a, da, bg, bu, dbg, dbu, sa, swg, swu, k, amax) -> Any:
-    hg = B.call(H.PouwZyDequant, _dot(B, S.K, a, da, bg, dbg), sa, swg)
-    hu = B.call(H.PouwZyDequant, _dot(B, S.K, a, da, bu, dbu), sa, swu)
-    h = B.call(PouwSiluMulBf16, hg, hu)
-    bit = [B.call(BL.constant(v)).refs[0] for v in (0, 1)]
-    n = Coll(U16, TR._refs([bit[S.I >> e & 1] for e in range(16)]))
-    return B.call(PouwAmaxAt, k, n, h, amax)
+def _block_body(B: Any, S: Any, h, m) -> Any:
+    zero = B.call(BL.constant(0)).refs[0]
+    acc = Coll(U16, TR._refs([zero] * 16))
+    for c in range(S.W):
+        acc = B.call(PouwAmaxFold, acc, h[c])
+    return B.call(PouwAmaxEq, acc, m)
 
 
-PouwDitherAmax = CompositeDefinition(
-    "PouwDitherAmax", 1, ("K", "I"), _signature, _body, conformance="protocol-defined",
-    doc="Down's A' check of one row (`circuit.dither_amax`): gate-up's row a with its dither da, B's gate row bg and up row "
-        "bu (at columns k and k + I) with their dithers, the scales sa, swg, swu and the row's record (k, amax), to 1 exactly "
-        "when k < I, amax is no NaN and |SiluMulBf16_v2(dequant(zg, sa, swg), dequant(zu, sa, swu))| = amax, zg and zu the "
-        "exact sums sum_j (a_j + da_j)(b_j + db_j).")
+def _row_signature(S: Any) -> tuple:
+    _count("PouwAmaxRow", "N, a row's gate blocks", S.N)
+    return (("amax", BF16), ("m", Array(S.N, BF16))), BIT
 
 
-def block_definition(K: int, I: int) -> Any:
-    """The down block's A′ check of a gate-up call at contraction K and half width I: `PouwDitherAmax_v1{K, I}`."""
-    return bind(PouwDitherAmax, K=K, I=I)
+def _row_body(B: Any, S: Any, amax, m) -> Any:
+    acc = m[0]
+    for b in range(1, S.N):
+        acc = B.call(PouwAmaxMax, acc, m[b])
+    return B.call(PouwAmaxEq, acc, amax)
 
 
-# -- a block in the reference ------------------------------------------------------------------------------------------------------
+PouwAmaxBlock = CompositeDefinition(
+    "PouwAmaxBlock", 1, ("W",), _block_signature, _block_body, conformance="protocol-defined",
+    doc="A gate block's max (`circuit.dither_amax`): its W cells' h of one row and the row's committed block max m, to 1 "
+        "exactly when m is the fmaxf fold from +0 of their |h| that skips a NaN h.")
 
-def block_inputs(a: Sequence[int], da: Sequence[int], bg: Sequence[int], bu: Sequence[int], dbg: Sequence[int],
-                 dbu: Sequence[int], sa: int, swg: int, swu: int, k: int, amax: int) -> list[list[int]]:
-    """The down block's inputs, as word lists: the K int8 entries and K dither bits of a, bg and bu, the three f32 scales,
-    k and amax."""
-    K = len(a)
-    if not (len(da) == len(bg) == len(bu) == len(dbg) == len(dbu) == K):
-        raise ValueError(f"a, its dither and B's two rows and theirs are K = {K} entries each")
-    return [D._int8s(a), [x & 1 for x in da], D._int8s(bg), D._int8s(bu), [x & 1 for x in dbg], [x & 1 for x in dbu],
-            [sa & M32], [swg & M32], [swu & M32], [k & M16], [amax & M16]]
+PouwAmaxRow = CompositeDefinition(
+    "PouwAmaxRow", 1, ("N",), _row_signature, _row_body, conformance="protocol-defined",
+    doc="Down's A' amax check of one row (`circuit.dither_amax`): the row's committed amax and its N gate blocks' committed "
+        "maxima m, to 1 exactly when amax = max_b m_b.")
 
 
-def block_bits(ins: Sequence[Sequence[int]]) -> list[list[int]]:
-    """`block_inputs` on bits, as the Definition reads them (each word least significant bit first)."""
-    return [[(v >> e) & 1 for v in words for e in range(n)]
-            for words, n in zip(ins, (8, 1, 8, 8, 1, 1, 32, 32, 32, 16, 16), strict=True)]
+def gate_definition(W: int) -> Any:
+    """A gate block's max check over W h cells of one row: `PouwAmaxBlock_v1{W}`."""
+    return bind(PouwAmaxBlock, W=W)
 
 
-def _sum(a, da, b, db) -> int:
-    return sum((D._sx8(x) + (p & 1)) * (D._sx8(y) + (q & 1)) for x, p, y, q in zip(a, da, b, db, strict=True))
+def row_definition(I: int, W: int) -> Any:
+    """The down block's amax check of a gate-up call at half width I, in gate blocks of W columns: `PouwAmaxRow_v1{N}`,
+    N = I / W."""
+    if not isinstance(W, int) or isinstance(W, bool) or W < 1 or not isinstance(I, int) or isinstance(I, bool) or I % W:
+        raise ValueError(f"gate blocks of W = {W!r} columns tile gate-up's half width I = {I!r}")
+    return bind(PouwAmaxRow, N=I // W)
 
 
-def check_block(ins: Sequence[Sequence[int]], I: int) -> int:
-    """`PouwDitherAmax`'s pass bit on `block_inputs`, in the clear."""
-    a, da, bg, bu, dbg, dbu, (sa,), (swg,), (swu,), (k,), (amax,) = ins
-    h = act_h(_sum(a, da, bg, dbg), _sum(a, da, bu, dbu), sa, swg, swu)
-    return PouwAmaxAtWord.evaluate(k, I, h, amax)
+# -- the reference ----------------------------------------------------------------------------------------------------------------
+
+def block_maxes(hs: Sequence[int], W: int) -> list[int]:
+    """Row i's committed m_i,b: `abs_max` of each gate block's W columns."""
+    if W < 1 or len(hs) % W:
+        raise ValueError(f"gate blocks of W = {W} columns tile a row of {len(hs)}")
+    return [abs_max(hs[b:b + W]) for b in range(0, len(hs), W)]
 
 
-__all__ = ["MAG_MAX", "PouwAmaxAt", "PouwAmaxBound", "PouwDitherAmax", "PouwSiluMulBf16", "RECORD", "abs_max", "act_h",
-           "block_bits", "block_definition", "block_inputs", "check_block", "magnitude", "record_bytes", "record_of",
-           "silu_f32", "silu_mul"]
+def check_gate(hs: Sequence[int], m: int) -> int:
+    """`PouwAmaxBlock`'s pass bit, in the clear."""
+    return int(abs_max(hs) == m & M16)
+
+
+def check_row(amax: int, ms: Sequence[int]) -> int:
+    """`PouwAmaxRow`'s pass bit, in the clear."""
+    return int(max(m & M16 for m in ms) == amax & M16)
+
+
+def bits(words: Sequence[int], n: int = 16) -> list[int]:
+    """Words as a Definition reads them, each least significant bit first."""
+    return [(w >> e) & 1 for w in words for e in range(n)]
+
+
+__all__ = ["MAG_MAX", "PouwAmaxBlock", "PouwAmaxEq", "PouwAmaxFold", "PouwAmaxMax", "PouwAmaxRow", "PouwSiluMulBf16",
+           "abs_max", "act_h", "bits", "block_maxes", "check_gate", "check_row", "gate_definition", "magnitude",
+           "row_definition", "silu_f32", "silu_mul"]
