@@ -186,6 +186,12 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
     assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    ep = json.loads(Path(steps.endpoint).read_text())
+    Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
+    served = cr.report(steps)
+    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.WARDEN_SERVED_STUBBED)
+    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
+    Path(steps.endpoint).write_text(json.dumps(ep))
 
     def refused(name: str, edit, why: str) -> None:
         doc = json.loads(Path(getattr(steps, name)).read_text())

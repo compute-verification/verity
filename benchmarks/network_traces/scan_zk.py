@@ -80,7 +80,7 @@ session of the auditor's challenger of its own (``--challenger``, `round_coins`)
   (`coins_outcome`), and the session's evidence held by `round_coins.Session.held`; for the honest round each altered
   evidence (`a5_coins.negatives`, the evidence for another window) is also refused by the Lean's run. ``local`` is a
   development session on this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is
-  vy-challenger-1's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
+  the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
   ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the synthetic run's
   registrations carry fresh salts, so each synthetic run has roots of its own). A round whose session doesn't open, or
   whose evidence doesn't hold, fails; the summary's ``coins`` names each round's session, and each Flock session's

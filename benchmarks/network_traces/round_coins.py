@@ -4,8 +4,8 @@ never the verifier's own randomness.
 
 * **The challenger** (``--challenger``): ``local``, a development session on this machine (`a5_coins.Local`: the auditor
   host's own service on a scratch root, under an LMS key of its own, so it shows the path, not an auditor's coins: the
-  dry runs'); ``loopback:HOST:PORT``, the same on the challenger party's host; ``gate:USER@HOST``, vy-challenger-1
-  through infra's gate, the network certifier's machine, with ``--peer`` (this node as the gate's /etc/vy/peers names
+  dry runs'); ``loopback:HOST:PORT``, the same on the challenger party's host; ``gate:USER@HOST``, the auditor's
+  challenger through infra's gate, on the network certifier's machine, with ``--peer`` (this node as the gate's /etc/vy/peers names
   it, whose 127.0.0.1 the gate's coin link serves), ``--challenger-key`` (the deployment's challenger-key/v1 record) and
   ``--gate-key`` (the lane's gate key). ``--main`` is the verifier's own copy of main's first-parent history, on which
   the session's pin must be. Tests run ``local`` on live_challenger's stub of the Lean's coins
@@ -61,7 +61,7 @@ def root(base: str, step: str, name: str) -> str:
 def add_args(p, what: str) -> None:
     """The challenger's flags on parser `p`; `what` names the draws they take."""
     p.add_argument("--challenger", help=f"{what} on the auditor's challenger's coins, a session a round: {KINDS} "
-                   "(vy-challenger-1 through its gate, with --peer and --challenger-key)")
+                   "(the auditor's challenger through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this node as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's coin link serves")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its "
