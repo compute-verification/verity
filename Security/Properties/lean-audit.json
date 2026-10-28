@@ -7151,7 +7151,6 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.completeRows",
@@ -7387,7 +7386,6 @@
     "Flock.Draw.workTableOfJson._sparseCasesOn_7": "e1c5d286ad2918af56c64eb00aed16daa57590a93e7f925915ca8639130417cc"
    },
    "guarantees": [
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.drawShape",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
@@ -7499,7 +7497,6 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -7641,7 +7638,6 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -7735,7 +7731,6 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
@@ -9586,62 +9581,6 @@
     "Properties.NetworkRecords.noGridMeans"
    ]
   },
-  "PousCheck.Certificate": {
-   "digest": "bdcb1248cdaeb1a49cabb8a7d72cfc246f65f76268eede5dbd65a09e0272a8bd",
-   "definitions": {
-    "PousCheck.Certificate.CERT_BLOCKS": "527a535310faba8aa56f092321903ed2e63717da90fc818c5d33f64adf2ee150",
-    "PousCheck.Certificate.CERT_K": "0e598d7eecf34d7a14549ca1d5ad7c92eb232b00a0277a0cf35a96e83595ba9b",
-    "PousCheck.Certificate.Certificate": "604658f843ec0093a6310e2664632a68be3dfb5c39db36798b92fed46eb59a43",
-    "PousCheck.Certificate.Certificate.callNs": "550681d4a4d89ceec5e2388034eebbca3cb94eb9c47e2318ce203130a42fb8f7",
-    "PousCheck.Certificate.Certificate.claims": "d79b90c40f9fb3bcc1f09930d1993a04938ab8e25e1f8dbfd223566f3f5db5bf",
-    "PousCheck.Certificate.Certificate.cliff": "bab886d6563736cce086d94f19fb992a083ef6825f1a2a593ba38324f572e8cf",
-    "PousCheck.Certificate.Certificate.delta": "eba4dab9779f8b891215275ed7de1ccba3f001bbd992f1ce80a3ea770019a0f5",
-    "PousCheck.Certificate.Certificate.effectiveRounds": "b1f72131b16030be8d323c30d415a9ab83b2a6caee2b74b47f25fc19be014886",
-    "PousCheck.Certificate.Certificate.epsLog2": "b0c7b76affc867d29e6b75a78e1ce8add85c61b40c7bca96b0df0c75063b142a",
-    "PousCheck.Certificate.Certificate.hypotheses": "2d5177f97ed420cdeb56c0aa6ac1f21829364c3f5da45d3eda771bcf57dbc144",
-    "PousCheck.Certificate.Certificate.k": "3ac2ebaaca5eb5ac1940eda72c10f1abcf03c8b40dea77164567e65b572c85c1",
-    "PousCheck.Certificate.Certificate.refusals": "ead5e7963f1c6e0285203dc876f937142a7e45b35561346f9995a88d150a0eab",
-    "PousCheck.Certificate.Certificate.rho": "b1b4c200387a4a7407967adb9b497b5135bfab6e7485851e60c71cb8dcff3cfa",
-    "PousCheck.Certificate.Certificate.rounds": "a4b9a384a4c381885a6bddd0900f786e7791ddded3166f0f768e264ce133300d",
-    "PousCheck.Certificate.Certificate.segments": "4023e84408afaee02bd7791f4f2f29adbce870e5f6d1f52517a9a07d8f84243b",
-    "PousCheck.Certificate.Certificate.theoremName": "e1b7c26cea5c089d72124fdac5350177de24a18f10a6b9420c30f5e4de514444",
-    "PousCheck.Certificate.Certificate.toJson": "ef53507643ae6824dc73f94b0d5d37d3086191aa021adf25c3eae04dcaff932a",
-    "PousCheck.Certificate.Certificate.work": "f6e82409fa073b9ee41086c36c43d43a2c9ebdb6725efd9b9e604637b5a857d0",
-    "PousCheck.Certificate.DELTA_NS": "4b84567ed5f9dd0ab146197e2b350a7db560485b2cf171eb688efa94523856fc",
-    "PousCheck.Certificate.EXPANDER": "8ad0c71b473db38ddea742e5af358ab62af97d7c4eb4748c2c6471396dc697fb",
-    "PousCheck.Certificate.EXPERIMENTAL": "a730548391c11e720bb37368e46efc73b777fd3778e10f13a4e6f11c38ffad4f",
-    "PousCheck.Certificate.P2_CLAIMS": "bf841bc90163ebe6435f0f12b88577035246cd584f4f25c8cf562b7d9fbaf805",
-    "PousCheck.Certificate.POINT": "37763dd35b0ebb14b2e10cf745c68af7037b1bfb6e3c0ffa60dc31a1aa0ff93a",
-    "PousCheck.Certificate.ROOT_CALL_NS": "36506525f90c759c0282adfdceb7c3e1a4eb9c0c58b0427895755abe6fdcaa94",
-    "PousCheck.Certificate.RTT_ALLOWANCE_CAP_NS": "d52a9ee75015071fb87984490579465a67ae22651112bcd0e379a59423053846",
-    "PousCheck.Certificate.Store": "1aa5614bfaae01183367ba10920cad3b5dc59e3d33bcdba3c56b993746a7852b",
-    "PousCheck.Certificate.Store.blocks": "126fa27ed6b150abfb5e7bf797c25569ea615ece1afd590f3aef9d6c68f85021",
-    "PousCheck.Certificate.Store.blocksPerSegment": "8f4d36d824654227935704ee5042341a600b4f19227941a4c541cdc69a66afef",
-    "PousCheck.Certificate.Store.c0": "424a36ce3705110a3b812698320777db8574a7769e10ac59b8d99c1992a9e403",
-    "PousCheck.Certificate.Store.manifest": "18d5d703f08262e661fc52d9b723f938a938c6a736334a41bc2990132c98ba80",
-    "PousCheck.Certificate.Store.manifestRepr": "94cb89b4ed9a88990fde7d194c4ade9ae65142fedb24b8f353c7be66f235d329",
-    "PousCheck.Certificate.Store.manifestRepr._sparseCasesOn_1": "e379a2ea0534b7ba5a089e9e5a0fc71537aebdcbcc80a02bf475676eae97ba65",
-    "PousCheck.Certificate.Store.name": "7a0ff5ee9bb4c431a06cad63acaf9646d6ff38eac5a751aa3570cc782a6bebe1",
-    "PousCheck.Certificate.Store.profile": "79cacbf114dd24019227d856d259eb98713eccdb90c42562322a14414a5ba693",
-    "PousCheck.Certificate.Store.segments": "1ba0d24fe83e9454966e84090f6b37a0f36cb637b614b7e7d2bb540f89a5fad4",
-    "PousCheck.Certificate.Store.w": "74eb9a149109a8bdde7c172d721cb2257e5dbe95095c5f0dc324f24e4c7de6c2",
-    "PousCheck.Certificate.deadlineRefusals": "7a9265a702e5be57cf94a85d8c856db402aee22ff2a5467d70cb35b129cbd395",
-    "PousCheck.Certificate.gate": "e2d1cb5acd78580c9191694864963bf9ec620ba6cc1f0a1735e67206daeb796b",
-    "PousCheck.Certificate.nat": "9150ee5d64144ceffe2620aa99f3211b0adcc2b244f4f4d708faedd9193ea122",
-    "PousCheck.Certificate.opt": "0d5034142ec90f733a2f7cabd07c8d6839137a2e242755c84f33d09a8403d381",
-    "PousCheck.Certificate.p2": "7503cdb899cc5dc14f0b454b88d111cf6dc638db3f98994a03397df4dc092c28",
-    "PousCheck.Certificate.profileJson": "dc1c033fa1bc4d0379df74bb170b762b0a857c3c42713a6a7470f87ef332b1ed",
-    "PousCheck.Certificate.strs": "11800377a10bc5580521885b71fed1cbcf948c01ddc69a1d364543341fb6bdbe"
-   },
-   "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
-  },
-  "PousCheck.Challenge": {
-   "digest": "c85d778a47d9c1fb2d13846432c2991e5f97d3a5aa557155e4d8aafe87cbbb6e",
-   "definitions": {
-    "PousCheck.Challenge.index": "4b3e18527dbf69127d61dac98273a272163a21cfbf0aa361c00d20e2d474fd1b"
-   },
-   "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
-  },
   "PousCheck.Commit": {
    "digest": "7f23c4826e435037cacbc01d6a157745c8addcb648c1c1413b2eeaa2daad434a",
    "definitions": {
@@ -9725,8 +9664,7 @@
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
-    "PousCheck.Properties.SecurityProofs.publishesRoot",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
   },
   "PousCheck.P2": {
@@ -9839,30 +9777,6 @@
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
   },
-  "PousCheck.Randomness": {
-   "digest": "c905b3f6142f2b9d069984668f3104ad69e4c2748f6ea8057b34e4a3354e7313",
-   "definitions": {
-    "PousCheck.Randomness.DERIVE": "c1cddb39aa5f6473535ab84616eceaae856c2fcdcf3b8bb7464bcad7d976efcd",
-    "PousCheck.Randomness.Part": "059d8167b4d55532d444b064b292f06e44e5a9c2e2d0fe92c22d4c2eb2ec634e",
-    "PousCheck.Randomness.Part.bytes": "557b280b50257115f740feef91a5ff65b8693d82fc8d635d6bd9e5cd6c172c8b",
-    "PousCheck.Randomness.Part.casesOn": "fa65bb84d91d0b932e6b358c16672a4c355a3b81860ed87dba999ec0d17cc4a1",
-    "PousCheck.Randomness.Part.int": "825db36c5dea036ff999cd74fb9625dab54bc186079286967b8a8ead09e0ada7",
-    "PousCheck.Randomness.Part.rec": "ba4a2dcd7f621169150cc1d211148a41272fc755b45c55ba6c272feff5f060a2",
-    "PousCheck.Randomness.Part.str": "3e5bd5651aebe1dd2f0c56856512d971a7bde630851ce3547fb864a663f73e38",
-    "PousCheck.Randomness.STREAM": "a1bf6ceaf7b319a9b8cd5dfba5973e7b6c786e08a4b4e05df5a6c84b94903945",
-    "PousCheck.Randomness.be8": "f6e79025dff5dc12a9133b3908143380376dd83080d6d8ed9e04957dbb4596e1",
-    "PousCheck.Randomness.block": "55af99d80264b8112259b0c74b39a6f7731aedbd2c1ad49457e9c58025ef049b",
-    "PousCheck.Randomness.derive": "783d7b99145014899d9645b84fd9a5c5d842303d5e406e5b4f57aebc422cc096",
-    "PousCheck.Randomness.frame": "ce49708f380e16c228d6dc3b64c69bae60f7d0b830e25ed49cb98217463b9695",
-    "PousCheck.Randomness.frames": "b115f18f75eb62577d6d7327c6954526ac5f4aec8effa809cc7e241ebe15d81b",
-    "PousCheck.Randomness.natBytes": "0ea0859cb70a513ccba7e99e6c2d29f99d1752dfa75b37f56132ca2bc5211f79",
-    "PousCheck.Randomness.stream": "84fc2a6cccba9a79d9c6ae21970428c1c50cfbea90c0d84830fb90e4c5e395d5",
-    "PousCheck.Randomness.uniform": "568a760a323b22e21355e9df4c18e81929b79cf1f6ea71e71bfc73b9f1789eca",
-    "PousCheck.Randomness.uniform.go": "22101815c37142a768086f47b05679b4a985cc73d330d111befff0acce8546a9",
-    "PousCheck.Randomness.uniformOn": "5d41373b8ed1c5731f10dc832e0b896f7dd86b89447931fdb6d880dc0e211963"
-   },
-   "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
-  },
   "PousCheck.Run": {
    "digest": "2aba88b1aa23c71237efa10736a8f8bfb2cd84f0d1600458aade2dcf315ecb11",
    "definitions": {
@@ -9970,26 +9884,6 @@
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
-  },
-  "PousCheck.TimedAudit": {
-   "digest": "13878c59d65a7335748ad83bd560c5f29cbf8e21e20d73113af7043c81e7d640",
-   "definitions": {
-    "PousCheck.TimedAudit.CHALLENGES": "f05fa22a5e8f7e019fc5dd023f9d816ba7689ec260f3ad3820fd62268838cafd",
-    "PousCheck.TimedAudit.CHALLENGE_DOMAIN": "4c7cb4f705ddc564577d84957e19899dc600b0a7ad13eba363f26cfc740c318c",
-    "PousCheck.TimedAudit.MANIFEST_KEYS": "a92abe19e10800ea394d5a50c29204b268db399e563ba4f7b8dc8cdfe9d5c5bd",
-    "PousCheck.TimedAudit.R": "b4ab4f0ce860d3b932c87fe778ac9a439bbba4fdd4cf4ed36e6739f245d4f058",
-    "PousCheck.TimedAudit.SALT": "16f29511c7f71d77551521568642d417e247cd074da828616b956ee65428ef7e",
-    "PousCheck.TimedAudit.audit": "dfa50005d4c96142308a0fe90bdd9bdd80c262773e02f43b05f708001a6cad62",
-    "PousCheck.TimedAudit.field": "eb0b2bc0315d581b66d0937e84df8ce3eef06c49029367a63cce0d2a451c6ba1",
-    "PousCheck.TimedAudit.hexOf'": "cdc7ba0ba475836353c635ed79ce86a68ddcfa88614ef4be462a9afb77e0acf7",
-    "PousCheck.TimedAudit.natOf": "cd0cb102fb8d43d9e7d106d624b28fa235d7183fdfdc3750ce60b364db55183d",
-    "PousCheck.TimedAudit.need": "420703bf9e294c00d7822011b9b0ea2d03d1822ffa1176e6377f3d73457c3593",
-    "PousCheck.TimedAudit.store": "563756434c33db5d22d6498408023852c82275eb44402ee2929bdc90b9af12df",
-    "PousCheck.TimedAudit.strOf": "f26043549b9ca39945dbdfe888dccab2e88f5504123dede14b7a5f1eb3444208",
-    "PousCheck.TimedAudit.verdict": "9c38c2dd9b86f74e214d46a5b90b0b25f2dc3f11563686c84a5242638af585aa",
-    "PousCheck.TimedAudit.verdictOf": "21c0d254fe889b3fea8a57e14ec15568f15687bd0be3386c3bd3056e5f386a92"
-   },
-   "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
   },
   "PouwCheck.Check": {
    "digest": "5ee41d3249ebeb1c925e21538618805431c9d23350dad366eeeacb8538adf8cd",
@@ -11688,7 +11582,7 @@
    ]
   },
   "Properties.Pous": {
-   "digest": "2b441606eaf35a16f58580f22b4c696d510069ff5f239ad65067aa5a5e26caf3",
+   "digest": "6aee43cc042551b4387851a395f171a98da02f53ac7d7e2f243d29a01b42cea5",
    "definitions": {
     "PousCheck.Properties.AcceptsDecodes": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e",
     "PousCheck.Properties.BlockDecodes": "8c536b03ff9ac621c61703738f25bf6d3b679e9cb6a0ca1d8f1de949ad6e1ad9",
@@ -11697,7 +11591,8 @@
     "PousCheck.Properties.Deployed": "64310ef44823daae5664c18e7a537912c42a490dacf9dc239b731d09176d2275",
     "PousCheck.Properties.Published": "30dfb737497d31a45a4a96e73adf800180afb431a979d66037a0e5fc92e96d16",
     "PousCheck.Properties.PublishesRoot": "680e12cbfc7b08535e30f388ece5bc8eb694ff263ca847a79d27cb403177b59c",
-    "PousCheck.Properties.leaves": "e61904c6a66752a477d96b3e0d26722603e21234f8467472407cd45e0a83174f"
+    "PousCheck.Properties.leaves": "e61904c6a66752a477d96b3e0d26722603e21234f8467472407cd45e0a83174f",
+    "PousCheck.Properties.nodeInputs": "4d70aaae7fa3830050e17ff4529d28e88fcc04c8f9af8217e690227d37d5ece9"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
@@ -11713,8 +11608,7 @@
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.deployed",
-    "PousCheck.Properties.SecurityProofs.publishesRoot",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
   },
   "Properties.Pous.EndToEnd": {
@@ -11948,34 +11842,6 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial"
-   ]
-  },
-  "Properties.Pous.TimedAudit": {
-   "digest": "9d8c8364c8dcd1bd2ac7f8dfc27b0e41a6b43e3099d7575508555948d12f5440",
-   "definitions": {
-    "PousCheck.Properties.HexAt": "ca427b4c34c7354c29fb3c13ec0c79dcc676a1bd8bc6b0bc7a4bf7fd603ff671",
-    "PousCheck.Properties.NatAt": "717808a7a31fbe2a1a6500a6e50825a4c588e815c20f40ba5591257f9950ff0d",
-    "PousCheck.Properties.TimedAuditAccepted": "a6bb3399783ea9af9415afe483815a610ebee073f0e082baf0eecadc60766c3e",
-    "PousCheck.Properties.TimedAuditAccepts": "fcdbec38efd90863e91de669a023d882a03821f4e05cc6a461ba4929c8ecf6ac",
-    "PousCheck.Properties.TimedAuditAnswers": "7efb79788bf42d08d66652efa90672e12e87168f1e35896e4d8e72dc2ed9b894",
-    "PousCheck.Properties.challenged": "413020266c4c1cda862081848fdd8f53ed0dd7b8781c954167b213cd47610fcc",
-    "PousCheck.Properties.challengesOf": "b3c016f0414e752e89eae925a6a1bef1707eed6238830750197ccb1e13c1d5c0",
-    "PousCheck.Properties.fileLeaves": "015031fad5396985aec6e1062f80499bbdea040a53d35fc7c4bc4ec4defcb2b2",
-    "PousCheck.Properties.nodeInputs": "4d70aaae7fa3830050e17ff4529d28e88fcc04c8f9af8217e690227d37d5ece9",
-    "PousCheck.Properties.runStrings": "f34261036fb3997ade21148495d219eaadde9e4bf9fa30b1138115bb50f96ad1"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
-    "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
-    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
-    "Pous.Period.SecurityProofs.obligationHeld",
-    "Pous.Period.SecurityProofs.periodCapacity",
-    "Pous.Period.SecurityProofs.periodHeld",
-    "Pous.Period.SecurityProofs.periodHeldAt",
-    "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial",
-    "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
   "Properties.Pouw": {
