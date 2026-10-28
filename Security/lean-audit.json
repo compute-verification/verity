@@ -1404,11 +1404,11 @@
   },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
-   "digest": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d"
+   "digest": "62f82eba9f91483f35eab17a19cf22ee550284110cc8d842ab72baf860d5dc28"
   },
   "Nci.Ldl.Assumptions.EvaluatesBlocks": {
    "owner": "@training",
-   "digest": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
+   "digest": "68a447606a0399fde28cc5342dc3b39798fe30313c091888ad611230a0528d54"
   },
   "Nci.Ldl.CKPartition": {
    "owner": "@training",
@@ -1425,10 +1425,6 @@
   "Nci.Ldl.ReadCap": {
    "owner": "@training",
    "digest": "dc4f188e7f069c705d437d426cb8590cf8dce1c8a077fd0605245aead3b834aa"
-  },
-  "Nci.Ldl.Registration.Consistent": {
-   "owner": "@training",
-   "digest": "cfe2768cfcfa9e2204f8d61aa2e83924bc37d4eff6124472a5ac2e264f28ec8a"
   },
   "Nci.Small": {
    "owner": "@lean",
@@ -22846,6 +22842,8 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.LocalBoundsStated",
     "Nci.SecurityProofs.PartitionCovers",
@@ -26634,10 +26632,10 @@
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
   },
   "Definitions.Nci.Assumptions.Ldl": {
-   "digest": "b8f07c106255f52731a8f34ff1eb09359980259b8dc298a85845e35e882db025",
+   "digest": "421cc33b37346b5d8e11433c422b899287a8d06c9e167b45793cded9782e5012",
    "definitions": {
-    "Nci.Ldl.Assumptions.ActivationRate": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d",
-    "Nci.Ldl.Assumptions.EvaluatesBlocks": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
+    "Nci.Ldl.Assumptions.ActivationRate": "62f82eba9f91483f35eab17a19cf22ee550284110cc8d842ab72baf860d5dc28",
+    "Nci.Ldl.Assumptions.EvaluatesBlocks": "68a447606a0399fde28cc5342dc3b39798fe30313c091888ad611230a0528d54"
    },
    "guarantees": ["Nci.Ldl.SecurityProofs.BlockDescription", "Nci.Ldl.SecurityProofs.FanOutBound"]
   },
@@ -27258,11 +27256,11 @@
    ]
   },
   "Definitions.Nci.Guarantees.Ldl": {
-   "digest": "1bf0a41e00d30c513184e404334391a23fdf592b84f556b702343ce7112cdbb4",
+   "digest": "0f15177347639b314ea496536577ed3abce7414ad970a9aa8e8dd37fcb36376e",
    "definitions": {
-    "Nci.Ldl.Guarantees.BlockDescription": "dccf2ea2af37dcf7b6aef97c8b100ecff7a6f7095d0ec7cc2e153b61777e3968",
+    "Nci.Ldl.Guarantees.BlockDescription": "452ec6fd9e56851abb88c5aad07088a2880bc136fcaa5990c0501a79d0094694",
     "Nci.Ldl.Guarantees.Counting": "ad03ea31ea21f0e489c0860b567bf59d0ab8ca3435c5321486a585a6775e9a84",
-    "Nci.Ldl.Guarantees.FanOutBound": "ee0978a22e21f240c2e6db730be048647031ff243ee2e9fb43da937806579318"
+    "Nci.Ldl.Guarantees.FanOutBound": "ed4a188041fd5cc1a6b7d278b11af71aeb06abe4bddf8021916f986bdaf44534"
    },
    "guarantees": [
     "Nci.Ldl.SecurityProofs.BlockDescription",
@@ -27405,7 +27403,7 @@
    ]
   },
   "Definitions.Nci.Ldl": {
-   "digest": "5108d33cb38cd23f8637606e96adfde5054a0c71c12ce109d6a96eef8eb45e6a",
+   "digest": "a8f39d2c36e48cf69b8c369a1e43c4e75334bd5fbb936b57f0bbe9a2d0217c19",
    "definitions": {
     "Nci.Ldl.CKPartition": "3d7b0910224d34fe886ee78be5ec5b263947f09a07ecadbffd2b639965dd2862",
     "Nci.Ldl.Decoder": "eec32b66db064e5ad49d36e7254ffe9c9eac43eb3603be9fc4b1d60fcc468f83",
@@ -27418,11 +27416,7 @@
     "Nci.Ldl.Products.acts": "5477f53ea9260cefd6772f7bd7299796ea8f45b4c11241252f7836a56365904e",
     "Nci.Ldl.Products.inBlock": "d8396a2558211107151e1ee99131edc202ed8d43c94ab351bcf72805a0bbec11",
     "Nci.Ldl.Products.rep": "516d6953d8e6138c3703186490e941bc62bfe989bf8e6e6fe54f907ad395d066",
-    "Nci.Ldl.ReadCap": "dc4f188e7f069c705d437d426cb8590cf8dce1c8a077fd0605245aead3b834aa",
-    "Nci.Ldl.Registration": "88057ecfc6688e631529bb6f5af65d4f676acbcbe77213adf6719afa76bc6e05",
-    "Nci.Ldl.Registration.Consistent": "cfe2768cfcfa9e2204f8d61aa2e83924bc37d4eff6124472a5ac2e264f28ec8a",
-    "Nci.Ldl.Registration.P": "7b900ced66112207200c315b4bf8982461bcc0111ea67c91970d2888ec2dc6eb",
-    "Nci.Ldl.Registration.val": "e479729d304367f4f37d420ae56c1b226737c4dc25a0ddf1643477dcfbecd320"
+    "Nci.Ldl.ReadCap": "dc4f188e7f069c705d437d426cb8590cf8dce1c8a077fd0605245aead3b834aa"
    },
    "guarantees": [
     "Nci.Ldl.SecurityProofs.BlockDescription",
