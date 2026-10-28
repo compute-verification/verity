@@ -84,11 +84,15 @@ the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpo
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors. Its records are
-published as an artifact without `requests.jsonl`, whose prompt ids stay on the served node, and with
-`request_users.jsonl`, each engine request's `engine_id` and its warden user in `requests.jsonl`'s order. `chain`
-rebuilds `requests.jsonl` from that map and the kept warden run's certified I/O in a 0700 directory beside the kept
-fetch, so the endpoint step checks the endpoint's trace against the certified I/O. The session's fetch, with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
+(prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
+endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
+and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
+in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
+warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
+unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
+finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
 `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
 session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
