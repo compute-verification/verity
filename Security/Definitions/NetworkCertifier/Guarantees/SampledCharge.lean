@@ -73,9 +73,9 @@ public only where something binds them, as the registration's commitment binds t
 def SampledLeakAccepted : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ)
+      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ)
       (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : Stmt → Finset ℕ) (β : Stmt → ℕ)
+      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ)
       (Dj : ℕ) (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
       KSLinOn H D.V (ScopeAcc D lay k)
           (RLeak H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj)
@@ -98,9 +98,9 @@ def SampledLeakRegistered : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ)
-      (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : Stmt → Finset ℕ)
-      (ops : Stmt → List (Opening Bool)) (β : Stmt → ℕ) (Dj : ℕ)
+      (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
+      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
+      (ops : AuditStatement → List (Opening Bool)) (β : AuditStatement → ℕ) (Dj : ℕ)
       (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
       (∀ x, ScopeAcc D lay k x → (∀ s, D.parse x = some s → RegOpens H D.commit s (reg s) (ops s)) →
         ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),

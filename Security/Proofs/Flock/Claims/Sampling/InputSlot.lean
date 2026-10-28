@@ -24,7 +24,7 @@ namespace Claims.Sampling.InputSlot
 open Claims.Sampling
 
 /-- **An input slot is faulty exactly when its value is unopened.** -/
-theorem faulty_input_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit} {v p : ℕ}
+theorem faulty_input_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v p : ℕ}
     (hv : P.rus[v]? = some [[p]]) (hp : s.prog.gates[p]? = some .input) :
     Faulty H Cm s P w v ↔ w.val H Cm s p = none := by
   have hcorr : ∀ ι : ℕ → Bool,
@@ -94,7 +94,7 @@ theorem withInputs_getElem?_input (P : Partition) (C : Prog) {i g : ℕ} (hi : (
   simp [hi]
 
 /-- **An input slot of `withInputs P s.prog` is faulty exactly when its gate's value is unopened.** -/
-theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit} {i g : ℕ}
+theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {i g : ℕ}
     (hi : (inputsAt s.prog)[i]? = some g) :
     Faulty H Cm s (withInputs P s.prog) w (P.rus.length + i) ↔ w.val H Cm s g = none :=
   faulty_input_iff (withInputs_getElem?_input P s.prog hi) (mem_inputsAt.1 (List.mem_of_getElem? hi))
