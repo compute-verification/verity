@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' workload dirs, for PROVE-PATH's served
 # windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench workload's Commit of record's
-# committer and acquire sources, built from its manifest ROW/manifest.json and taps HIDDEN_SO, NORM_TAP_SO: hm96-sha512 rows in
-# frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window, closed at the engine's
-# idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
-# --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
+# committer and acquire sources, built from its Build of record's manifest PRED/manifest.json and taps HIDDEN_SO, NORM_TAP_SO:
+# hm96-sha512 rows in frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window,
+# closed at the engine's idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run
+# (`prove_path.py compiler --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds
+# each registration to),
 # a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
 # committed under salts drawn from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
 # check against the checkpoint's manifest; each window's registration records its roots, one a weight parameter, so the window
@@ -21,7 +22,7 @@
 # admission order, else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
 # `verity example vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
 # CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the workload's REPO, REV and ROW (the Commit of record's
-# workload dir) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
+# workload dir, named by the workload's id) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
 # WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
@@ -29,6 +30,10 @@
 # PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to the network certifier's id requests, for a
 # certifier in front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the certifier's
 # shim and probes) as vllm does.
+# Before it serves, `verity-vllm predict row` writes the workload's Build of record from its declared inputs alone into PRED
+# ($D/predicted): its request Programs, GP-01's workload and the manifest. `predict compare ROW --predicted PRED` holds it to
+# ROW, the Commit of record's traced workload dir, the cross-check, and the endpoint serves only when they agree (else exit 17
+# or 18).
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (workload dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
@@ -45,7 +50,7 @@ mkdir -p "$D" "$ROOT/cache"
 export PY=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/examples/vllm/workloads
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 # A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB, past the
@@ -90,11 +95,21 @@ keep_records() {
 }
 under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free on $ROOT; not serving"; exit 15; }
 
+PRED=$D/predicted
+vv predict row --row "${ROW##*/}" --out "$PRED" > "$OUT/predict_row.json" 2> "$OUT/predict_row.err" \
+  || { tail -5 "$OUT/predict_row.err"; echo "PREDICT-ROW refused: no Build of record to serve under"; exit 17; }
+cp "$PRED/predicted.json" "$OUT/"
+CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/predicted.json")
+vv predict compare "$ROW" --row "${ROW##*/}" --config "$CONFIG" --predicted "$PRED" --out "$OUT/predict_compare.json" \
+  > "$OUT/predict_compare.log" 2>&1 \
+  || { tail -5 "$OUT/predict_compare.log"; echo "PREDICT-COMPARE: predict's Build of record is not ROW's traced Build"; exit 18; }
+echo "PREDICT-COMPARE $(tail -1 "$OUT/predict_compare.log")" | tee -a "$OUT/steps.txt"
+
 # the server's own pid (not a function's subshell), so a stop's SIGTERM reaches its handler: it writes summary.json and
 # finishes the pending seals
 "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin \
   --run-id "${RESEARCH_RUN_ID:-local}" \
-  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" \
+  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" \
   --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "$DISK_FLOOR_GB" \
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \

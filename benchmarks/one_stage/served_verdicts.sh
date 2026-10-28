@@ -3,8 +3,9 @@
 # verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
 #  0. B: `verity-vllm predict row` writes the H200 int8 row's Build of record (ROW_ID, default ROW's name) from its declared
 #     inputs alone into PRED ($D/predicted), before the lease and on the CPU: its request Programs, GP-01's workload and the
-#     manifest. `predict compare ROW --predicted PRED` holds it to the traced Build ROW, the cross-check: PREDICT-COMPARE,
-#     every Program digest and the manifest's digest, Program digest and identities, gates the serve.
+#     manifest. A row whose file isn't the integration's is found in VERITY_WORKLOADS (a relative dir is TREE's: the vLLM
+#     example's run.sh passes its workloads/). `predict compare ROW --predicted PRED` holds it to the traced Build ROW, the
+#     cross-check: PREDICT-COMPARE, every Program digest and the manifest's digest, Program digest and identities, gates the serve.
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
 #     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO); B-OF-RECORD says each sealed window's record names
@@ -90,6 +91,11 @@ PRED=${PRED:-$D/predicted}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+# a relative VERITY_WORKLOADS dir is TREE's (the vLLM example's run.sh passes its workloads/), whatever dir a step runs in
+if [ -n "${VERITY_WORKLOADS:-}" ]; then
+  VERITY_WORKLOADS=$(IFS=:; for d in $VERITY_WORKLOADS; do [[ $d = /* ]] || d=$TREE/$d; printf '%s\n' "$d"; done | paste -sd:)
+  export VERITY_WORKLOADS
+fi
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
