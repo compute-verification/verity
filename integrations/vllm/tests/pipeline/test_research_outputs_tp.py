@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from verity_vllm.pipeline import research_outputs as ro
-from verity_vllm.pipeline import research_result
+from verity_vllm.pipeline import research_result, serve_commit
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
 COMMIT_SH = Path(__file__).resolve().parents[4] / "examples" / "vllm" / "commit.sh"
@@ -18,6 +18,10 @@ PRIVATE_FILES = {"match/capture/tokens.json": {"prompt_token_ids": [[1, 2]], "ge
                  "match_stoch.json": {"rows": [{"served": 3, "recomputed": 3}]},
                  "commit/sampled_replay_p0.json": {"facts_of_record": {"served": [3]}},
                  "commit/sampled_replay.json": {"facts_of_record": {"served": [3]}},
+                 "serve/requests.jsonl": '{"engine_id": "0", "prompt_ids": [1, 2], "output_ids": [3]}\n',
+                 "serve/step_trace.jsonl": '{"step": 0, "rows": {"0": 2}}\n',
+                 "serve/advice_trace.jsonl": '{"kind": "arrive", "request": "0", "prompt": 2, "params": {"seed": 1}}\n',
+                 "load.jsonl": '{"user": "u", "prompt": 2, "response": {"ids": [3]}}\n', "rep-0/load-1.jsonl": "{}\n",
                  "match/capture/topology.json": {"ranks": [{"pid": 7, "cuda_visible_devices": "0"}]},
                  "match/control/topology.json": {"driver_pid": 8}, "build/rank0/build_step/topology.json": {"build_s": 1.0},
                  "timeline.jsonl": '{"utc": "2026-10-28T00:00:00Z", "pod": "computeinstance-x"}\n', "timeline_report.json": {}}
@@ -268,6 +272,7 @@ def test_no_stage_publishes_request_values_placement_or_timing(tmp_path):
         assert "evidence/match/run.json" in doc["artifacts"]
         assert not {f.removeprefix("evidence/") for f in doc["artifacts"]} & set(PRIVATE_FILES), doc["artifacts"]
     assert [rel for rel in PRIVATE_FILES if not ro.private(rel)] == [] and [r for r in research_result.RECORDS if ro.private(r)] == []
+    assert [n for n in serve_commit.MIRRORED if ro.private(n)] == [], "a served run's $OUT gets no request value"
 
 
 def test_the_example_commit_publishes_its_stages_records_and_none_of_its_private_files(tmp_path):

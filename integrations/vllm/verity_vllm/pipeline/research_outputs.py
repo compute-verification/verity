@@ -35,6 +35,8 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
   (`sampled_replay*.json`);
+- a served run's requests (`requests.jsonl`), its step traces (`step_trace.jsonl`, `advice_trace.jsonl`: each request's prompt
+  length, sampling parameters, rows a step and emitted ids) and the load's client records (`load*.jsonl`);
 - where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
   `timeline_report.json`).
 A check that reads them runs where they are: the regression harness takes such a candidate as row dirs, not as Attempts.
@@ -74,7 +76,8 @@ KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm
 #: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values
 KEPT_APART = ("replay_bundle_p", "replay_slim_p")
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "topology.json", "timeline.jsonl", "timeline_report.json")
+PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.jsonl",
+           "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
