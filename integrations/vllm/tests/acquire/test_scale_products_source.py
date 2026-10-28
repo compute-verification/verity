@@ -41,7 +41,7 @@ def _ir(xs: list[int], ws: list[list[int]]) -> list[int]:
 
     prog, call = standalone_call(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     t: dict[int, int] = {}
-    evaluate_call(prog.circuit, call, [0] * K + xs + [0] * (N * K) + [w for row in ws for w in row], transcript=t)
+    evaluate_call(prog.circuit, call, [0] * K + xs + [0] * (N * K) + [w for row in ws for w in row], trace=t)
     return [t[call.lo + j] for j in SP.slots(K, N, G)]
 
 
