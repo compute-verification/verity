@@ -492,31 +492,15 @@ per-replica bound, in Lean, under the premises below.
 Pooled over the replicas, and with each replica's periods as one sequence (POOL-THM, not yet proved), RT-POOL's run D
 gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e26 and 7.32e26 at RTX PRO 6000 V4.
 
-## The C2-T filler form
-
-C2-T is a filler form beside v3.2's unit, from BYTE-CELL's C2. It is experimental: it rests on SAKHigh-T, a claim Daniel
-hasn't ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2t.py` holds its shape, leaves, reference and Definition.
-- **What is committed.** A filler call's noise and coins are v3.2's. It commits no O and no 16-bit word. For each cell and
-  segment it commits only a window, ⌊T_s/2^R⌋ mod 2^W, of the segment's own noised sum T_s = Σ_seg X W′ᵀ. BYTE-CELL's
-  window is bit 9 alone.
-- **Its shape rule is its own.** t = min(L, K)/L′ is at most 16, because the separation route (0.886 + 3/t of the int8
-  GEMM at A = 0) reaches the GEMM at t ≈ 26. The window must cover bit 9, the bit SAKHigh-T is stated for, so the low byte,
-  which the orbit over Z/2^8 passes, is refused. Segments are equal. The served unit keeps t ≤ 8.
-- **Its proof block** is 8 adjacent cells of one row in one segment, `PouwDitherFillC2T_v1`. Its only output is the pass
-  bit.
-- **Each form's dispatch refuses the other's shapes.** `dither.block_definition` takes only a served `Shape`, and
-  `dither_c2t.block_definition` only a `C2TShape`.
-- **Open:** compute-research's FILLER-C2 spec (the window, the K and t, the coins' expansion and the leaf layout) and
-  SAKHigh-T's statement.
-
 ## The C2-O served form
 
 C2-O is a served form at S = 1, from BYTE-CELL's C2-O. It is experimental: it rests on SAKHigh-O, a claim Daniel hasn't
 ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2o.py` holds its shape, reference and Definition.
 - **What is committed.** A call computes O = (A + d_A)(B + d_B)ᵀ with v3.2's dithers and no noise: no U, V or π, and so no
   peel. Its value root holds only a window of O at full width, ⌊O/2^R⌋ mod 2^W. BYTE-CELL's window is bit 9 alone, 1 bit
-  a cell. Down's A′ stays in up's value root, as in v3.2. The leaves are C2-T's at one segment, under
-  `verity/pouw/dither/c2o/v1`.
+  a cell. Down's A′ stays in up's value root, as in v3.2. Per tile, the cells' windows are packed least significant bit
+  first and cut into rows of hiding leaves, under `verity/pouw/dither/c2o/v1`, so a block's windows are W bytes of one
+  row.
 - **Its shape rule.** The window must cover bit 9, the bit SAKHigh-O is stated for, and B must be pinned by registration.
   With weights the prover chooses, d_A's count times B's mean passes 80% of cells.
 - **Its proof block** is 8 adjacent cells of one row, `PouwDitherServedC2O_v1`, over A's whole row, B's 8 rows and their
@@ -524,7 +508,8 @@ ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2o.py` holds its
 - **Credit.** An accepted call is credited at pub_O, not at the int8 GEMM: about 0.90 of it on the H200 with B pinned
   (0.903 on the served Llama 3.1 8B int8 weights, against BYTE-CELL's 0.886 on random B), the price of Strassen at depth 1
   with its sparse corrections. It rises with a correction's cost, which the fused kernel measures.
-- **Each form's dispatch refuses the others' shapes.** `dither_c2o.block_definition` takes only a `C2OShape`.
+- **Each form's dispatch refuses the other's shapes.** `dither.block_definition` takes only a served `Shape`, and
+  `dither_c2o.block_definition` only a `C2OShape`.
 - **Open:** compute-research's C2-O spec, the check of down's A′ beside the block (up's cells through SiLU·mul and the
   requant), and SAKHigh-O's statement.
 

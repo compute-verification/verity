@@ -1,5 +1,5 @@
 """Dither's C2-O served form (`circuit.dither_c2o`): its shape rule, the committed windows of un-noised O and their leaves,
-the Definition on bits against the reference, and each form's dispatch refusing the others' shapes."""
+the Definition on bits against the reference, and each form's dispatch refusing the other's shapes."""
 from __future__ import annotations
 
 import functools
@@ -9,12 +9,12 @@ import random
 import numpy as np
 import pytest
 
+from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
 from verity.core.protocols.pouw.circuit import dither as D
 from verity.core.protocols.pouw.circuit import dither_c2o as O
-from verity.core.protocols.pouw.circuit import dither_c2t as T
 
 SEEDS = D.seeds(hashlib.sha512(b"call coin").digest(), hashlib.sha512(b"operand-root receipt").digest(), 0)
 KS = hashlib.sha512(b"prover's salt key").digest()
@@ -26,7 +26,7 @@ def _call(sh: O.C2OShape = SH):
     rng = np.random.default_rng(7)
     A, B = rng.integers(-128, 128, size=(sh.m, sh.k)).tolist(), rng.integers(-128, 128, size=(sh.n, sh.k)).tolist()
     V = O.values(sh, SEEDS, A, B)
-    return A, B, V, T.commit(sh, T.values_buffer(sh, V), D.salts(KS, 1 << 33))
+    return A, B, V, O.commit(sh, O.values_buffer(sh, V), D.salts(KS, 1 << 33))
 
 
 def test_o_is_the_dithered_product_and_its_window_bit_9():
@@ -35,7 +35,7 @@ def test_o_is_the_dithered_product_and_its_window_bit_9():
     da, db = np.array(D.dithers(SH, SEEDS, "A", range(SH.m))), np.array(D.dithers(SH, SEEDS, "B", range(SH.n)))
     full = (np.array(A) + da) @ (np.array(B) + db).T
     assert (np.array(O.outputs(SH, SEEDS, A, B)) == full).all()
-    assert (np.array(V[0]) == (full >> 9) & 1).all() and (full < 0).any()
+    assert (np.array(V) == (full >> 9) & 1).all() and (full < 0).any()
 
 
 @pytest.mark.parametrize("r, w", [(0, 8), (10, 1), (9, 24), (9, 0)])
@@ -63,11 +63,18 @@ def test_a_blocks_windows_are_one_rows_byte_and_open():
         i, j0 = rng.randrange(SH.m), 8 * rng.randrange(SH.n // 8)
         pos, off = SH.block(i, j0)
         row, salt, path = cm.open(pos)
-        assert T.block_words(SH, row, off) == V[0][i][j0:j0 + 8]
+        assert O.block_words(SH, row, off) == V[i][j0:j0 + 8]
         assert D.opens(cm.dom, cm.root, SH.leaves, pos, row, salt, path)
+        assert not D.opens(cm.dom, cm.root, SH.leaves, pos, row[:off] + bytes([row[off] ^ 1]) + row[off + 1:], salt, path)
     with pytest.raises(ValueError, match="multiple of 8"):
         SH.block(5, 3)
-    assert SH.domain() != T.C2TShape(128, 128, 256, lp=32, row=1024).domain()
+    byte = O.C2OShape(128, 128, 256, r=8, w=8, row=1024)
+    A, B, *_ = _call()
+    Vb = O.values(byte, SEEDS, A, B)
+    pos, off = byte.block(77, 40)
+    assert (byte.tile_bytes, byte.leaves, off % 8) == (16384, 16, 0)
+    assert O.block_words(byte, O.values_buffer(byte, Vb)[pos * 1024:(pos + 1) * 1024], off) == Vb[77][40:48]
+    assert byte.domain() != SH.domain()
 
 
 @pytest.mark.slow
@@ -76,7 +83,7 @@ def test_the_definition_on_bits_is_the_reference():
     and a flipped committed window bit always fails."""
     sh = O.C2OShape(128, 128, 32, row=1024)
     A, B, V, _ = _call(sh)
-    honest = O.block_inputs(sh, SEEDS, A[77], B[40:48], 77, 40, V[0][77][40:48])
+    honest = O.block_inputs(sh, SEEDS, A[77], B[40:48], 77, 40, V[77][40:48])
     d = O.block_definition(sh)
     assert O.check_block(honest, sh.r, sh.w) == 1 and list(evaluate(d, *O.block_bits(honest, sh.w))) == [1]
     rng = random.Random(3)
@@ -104,15 +111,13 @@ def test_a_dropped_dither_fails_almost_every_block():
 
 
 def test_each_forms_dispatch_refuses_the_others_shapes():
-    c2t, served = T.C2TShape(128, 128, 256, lp=32, row=1024), D.Shape(128, 128, 256, lp=32, L=256, row=1024)
-    for other in (c2t, served):
-        with pytest.raises(ValueError, match="C2-O's blocks are a C2OShape's"):
-            O.block_definition(other)
+    served = D.Shape(128, 128, 256, lp=32, L=256, row=1024)
+    with pytest.raises(ValueError, match="C2-O's blocks are a C2OShape's"):
+        O.block_definition(served)
     with pytest.raises(ValueError, match="C2-O call's"):
         D.block_definition(SH, 1)
-    with pytest.raises(ValueError, match="for C2-O"):
-        T.block_definition(SH, 1)
     assert O.block_definition(SH).bindings == {"K": 256, "CELLS": 8, "R": 9, "W": 1}
+    assert D.block_definition(served, 1).bindings == {"K": 256, "L": 256}
 
 
 @pytest.mark.parametrize("params", [dict(K=48, CELLS=8, R=9, W=1), dict(K=D.K_LIMIT, CELLS=8, R=9, W=1),
@@ -120,3 +125,12 @@ def test_each_forms_dispatch_refuses_the_others_shapes():
 def test_the_definition_refuses_bad_statics(params):
     with pytest.raises(ValueError):
         bind(O.PouwDitherServedC2O, **params).signature()
+
+
+def test_each_word_primitive_is_its_definitions_word_view():
+    for d in (O.PouwDitherBitEq, O.PouwDitherBitEqAnd):
+        params, ret = d.signature({})
+        assert ([BL.word_type(t) for _, t in params], BL.word_type(ret)) == ([t for _, t in d.word.params], d.word.ret)
+        for v in range(1 << len(params)):
+            bits = [[(v >> e) & 1] for e in range(len(params))]
+            assert list(evaluate(d, *bits)) == [d.word.evaluate(*(b[0] for b in bits))]

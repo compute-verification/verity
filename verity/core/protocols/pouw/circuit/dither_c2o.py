@@ -1,5 +1,5 @@
-"""Dither's C2-O served form: BYTE-CELL's C2-O, a unit kind beside `dither`'s `PouwDitherBlock_v1` and `dither_c2t`'s filler,
-with its own shape rule. It is experimental and rests on SAKHigh-O, a claim Daniel hasn't ruled on, so nothing of it is in a
+"""Dither's C2-O served form: BYTE-CELL's C2-O, a unit kind beside `dither`'s `PouwDitherBlock_v1`, with its own shape
+rule. It is experimental and rests on SAKHigh-O, a claim Daniel hasn't ruled on, so nothing of it is in a
 Lean lock.
 
 **A served call** at S = 1 computes O = (A + d_A)(B + d_B)ᵀ over the integers with `dither`'s 1-bit dithers and no noise:
@@ -32,36 +32,41 @@ CELLS, R, W}`:
 
 over A's row, B's CELLS rows, their dithers (public, from the coins) and the CELLS committed windows. It is 1 exactly when
 each cell's window of sum_k (a_k + da_k)(b_ck + db_ck) is w_c. The sums run through `dither.PouwDitherOutDot0_v2` and
-`PouwDitherOutDot_v2`, and each window bit is checked by `dither_c2t`'s `PouwDitherBitEq_v2` and `PouwDitherBitEqAnd_v2`.
+`PouwDitherOutDot_v2`, and each window bit is checked by `PouwDitherBitEq_v2` (the block's first) and
+`PouwDitherBitEqAnd_v2` (the rest, one AND each).
 The check of down's A′ beside it (up's cells, through SiLU·mul and the requant) is open.
 
-**The leaves** are `dither_c2t`'s at one segment, under `TAG`: per tile, its cells' W-bit windows packed least significant bit
-first, cut into rows of `row` bytes. So a block's windows are W bytes of one row, and `dither_c2t.values_buffer`, `commit`
-and `block_words` serve this form too.
+**The leaves** (`C2OShape`): per tile (128 × 128 cells, tile tm (n / 128) + tn, cells row-major), its cells' windows packed
+W bits a cell, least significant bit first (cell c's at bits [c W, (c + 1) W) of the tile), 2 W KiB a tile; the tiles in
+order, cut into rows of `row` bytes, the last zero-padded. A block's windows are W consecutive bytes of one row. Each row
+is a `dither.leaf_h` hiding leaf in one binary frame-v3-sha512 tree a call, under `TAG` and salted as `dither.salts`.
 
-`block_definition` is the verifier's dispatch for this form: it takes only a `C2OShape`. `dither.block_definition` takes
-only a `dither.Shape`, and `dither_c2t.block_definition` only a `C2TShape`.
+`block_definition` is the verifier's dispatch for this form: it takes only a `C2OShape`, and `dither.block_definition` only
+a `dither.Shape`, so neither form's proof block is checked by the other's Definition.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from operator import mul
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean.forms import NOT
+from verity.ml.circuits.boolean.trace import definition
+from verity.ml.circuits.defs import CompositeDefinition, bind, primitive
+from verity.ml.circuits.types import Array, Value
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
 from . import dither as D
-from . import dither_c2t as T
 
 TAG = "verity/pouw/dither/c2o/v1"
-CELLS = T.CELLS
+#: the cells of one row a proof block checks
+CELLS = 8
 #: the bit SAKHigh-O is stated for: a committed window covers it
 PREMISE_BIT = 9
-BIT = T.BIT
+BIT = BL.BIT
 I8 = D.I8
 TILE = D.TILE
 
@@ -132,6 +137,11 @@ class C2OShape:
 Rows = list[list[int]]
 
 
+def window(x: int, r: int, w: int) -> int:
+    """floor(x / 2^r) mod 2^w of a signed integer x."""
+    return (x >> r) & ((1 << w) - 1)
+
+
 def _dithered(sh: C2OShape, seeds: Mapping[str, bytes], rows: Sequence[Sequence[int]], side: str,
               idx: Sequence[int]) -> Rows:
     return [[x + d for x, d in zip(D._row(f"{side}'s row {r}", v, sh.k), ds)]
@@ -147,12 +157,64 @@ def outputs(sh: C2OShape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]]
     return [[sum(map(mul, x, y)) for y in Bd] for x in Ad]
 
 
-def values(sh: C2OShape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], B: Sequence[Sequence[int]]) -> list[Rows]:
-    """The call's committed windows, as `dither_c2t.values_buffer` takes them (one segment × m × n)."""
-    return [[[T.window(x, sh.r, sh.w) for x in row] for row in outputs(sh, seeds, A, B)]]
+def values(sh: C2OShape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], B: Sequence[Sequence[int]]) -> Rows:
+    """The call's committed windows (m × n): `window` of each `outputs` entry at the shape's (r, w)."""
+    return [[window(x, sh.r, sh.w) for x in row] for row in outputs(sh, seeds, A, B)]
 
 
-# -- the Definition --------------------------------------------------------------------------------------------------------------
+def values_buffer(sh: C2OShape, V: Sequence[Sequence[int]]) -> bytes:
+    """The call's leaf rows end to end: per tile, its cells' windows, W bits a cell, least significant first, cells
+    row-major, the last row zero-padded."""
+    bits = bytearray(sh.tiles * D.CELLS * sh.w)
+    p = 0
+    for tm in range(sh.m // TILE):
+        for tn in range(sh.n // TILE):
+            for r in range(tm * TILE, (tm + 1) * TILE):
+                for v in V[r][tn * TILE:(tn + 1) * TILE]:
+                    for e in range(sh.w):
+                        bits[p] = (int(v) >> e) & 1
+                        p += 1
+    out = bytearray(sh.leaves * sh.row)
+    for q, b in enumerate(bits):
+        out[q >> 3] |= b << (q & 7)
+    return bytes(out)
+
+
+def commit(sh: C2OShape, buf: bytes, salt: Callable[[int], bytes]) -> D.Tree:
+    """The call's windows (`values_buffer`) under its value root."""
+    if len(buf) != sh.leaves * sh.row:
+        raise ValueError(f"the call's windows are {sh.leaves * sh.row} bytes, not {len(buf)}")
+    return D.tree(sh.domain(), [buf[p * sh.row:(p + 1) * sh.row] for p in range(sh.leaves)], salt)
+
+
+def block_words(sh: C2OShape, row: bytes, off: int) -> list[int]:
+    """The CELLS windows a block's W bytes hold, at byte `off` of its opened row."""
+    x = int.from_bytes(row[off:off + sh.w], "little")
+    return [(x >> (c * sh.w)) & ((1 << sh.w) - 1) for c in range(CELLS)]
+
+
+# -- the Definitions -------------------------------------------------------------------------------------------------------------
+
+@primitive("PouwDitherBitEq", 1, [("x", Value(1)), ("w", Value(1))], Value(1), conformance="protocol-defined")
+def PouwDitherBitEqWord(x: int, w: int) -> int:
+    """1 when x = w: a block's first window bit."""
+    return int((x ^ w) & 1 == 0)
+
+
+@primitive("PouwDitherBitEqAnd", 1, [("ok", Value(1)), ("x", Value(1)), ("w", Value(1))], Value(1),
+           conformance="protocol-defined")
+def PouwDitherBitEqAndWord(ok: int, x: int, w: int) -> int:
+    """1 when ok and x = w: the block's pass bit so far, and one more window bit."""
+    return int(ok & 1 and (x ^ w) & 1 == 0)
+
+
+PouwDitherBitEq = definition("PouwDitherBitEq", 2, lambda C, x, w: [NOT(x[0] ^ w[0])], (("x", BIT), ("w", BIT)), BIT,
+                             word=PouwDitherBitEqWord, conformance="protocol-defined",
+                             doc="x = w on bits: PouwDitherBitEq_v1")
+PouwDitherBitEqAnd = definition("PouwDitherBitEqAnd", 2, lambda C, ok, x, w: [C.AND(ok[0], NOT(x[0] ^ w[0]))],
+                                (("ok", BIT), ("x", BIT), ("w", BIT)), BIT, word=PouwDitherBitEqAndWord,
+                                conformance="protocol-defined", doc="ok and x = w on bits: PouwDitherBitEqAnd_v1")
+
 
 def _signature(S: Any) -> tuple:
     D._length("PouwDitherServedC2O", "K", S.K)
@@ -174,7 +236,7 @@ def _body(B: Any, S: Any, a, da, b, db, w) -> Any:
             acc = B.call(D.PouwDitherOutDot, acc, a[q:q + 32], da[q:q + 32], b[c][q:q + 32], db[c][q:q + 32])
         for e in range(S.W):
             x, y = acc[S.R + e], w[c][e]
-            ok = B.call(T.PouwDitherBitEq, x, y) if ok is None else B.call(T.PouwDitherBitEqAnd, ok, x, y)
+            ok = B.call(PouwDitherBitEq, x, y) if ok is None else B.call(PouwDitherBitEqAnd, ok, x, y)
     return ok
 
 
@@ -188,10 +250,9 @@ PouwDitherServedC2O = CompositeDefinition(
 
 def block_definition(sh: C2OShape) -> Any:
     """A C2-O call's proof block Definition: `PouwDitherServedC2O_v1` at the shape's K, `CELLS` and window. Any other form is
-    refused: v3.2's blocks are `dither.block_definition`'s and C2-T's `dither_c2t.block_definition`'s."""
+    refused: v3.2's blocks are `dither.block_definition`'s."""
     if not isinstance(sh, C2OShape):
-        raise ValueError(f"C2-O's blocks are a C2OShape's, not a {type(sh).__name__}'s: v3.2's are `dither.block_definition`'s "
-                         f"and C2-T's `dither_c2t.block_definition`'s")
+        raise ValueError(f"C2-O's blocks are a C2OShape's, not a {type(sh).__name__}'s: v3.2's are `dither.block_definition`'s")
     return bind(PouwDitherServedC2O, K=sh.k, CELLS=CELLS, R=sh.r, W=sh.w)
 
 
@@ -223,10 +284,11 @@ def check_block(ins: Sequence[Sequence[int]], r: int, w: int) -> int:
     x = [D._sx8(p) + (q & 1) for p, q in zip(a, da, strict=True)]
     for c, want in enumerate(words):
         y = [D._sx8(p) + (q & 1) for p, q in zip(b[c * K:(c + 1) * K], db[c * K:(c + 1) * K], strict=True)]
-        if T.window(sum(map(mul, x, y)), r, w) != want:
+        if window(sum(map(mul, x, y)), r, w) != want:
             return 0
     return 1
 
 
-__all__ = ["CELLS", "C2OShape", "PREMISE_BIT", "PouwDitherServedC2O", "TAG", "block_bits", "block_definition", "block_inputs",
-           "check_block", "outputs", "values"]
+__all__ = ["CELLS", "C2OShape", "PREMISE_BIT", "PouwDitherBitEq", "PouwDitherBitEqAnd", "PouwDitherServedC2O", "TAG",
+           "block_bits", "block_definition", "block_inputs", "block_words", "check_block", "commit", "outputs", "values",
+           "values_buffer", "window"]
