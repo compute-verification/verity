@@ -68,6 +68,9 @@ ALLOWED = {
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
+    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
+    # views a protocol reads. Its digests are canonical JSON's, the wire's.
+    "core.site": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
@@ -77,8 +80,9 @@ ALLOWED = {
                                       "ml.randomness", "core.protocols.profile"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's.
-    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
-                            "ml.randomness"},
+    # The wipe's memory challenger reads the memory leaves and links the Site registers.
+    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "core.site", "ml.circuits", "ml.commitments",
+                            "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
@@ -86,9 +90,10 @@ ALLOWED = {
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof service's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
-    # Its node's figures are the Site's, read off the node's cards (`hardware.node`).
+    # It audits a node's registered store, the Site's node and its memory tiers; the node's figures are its devices'
+    # cards (`hardware.node`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs", "core.protocols.pous", "hardware"},
+                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.site", "hardware"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
@@ -96,7 +101,9 @@ ALLOWED = {
                             "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
+    # The network check's boundary is the Site's: its boundary links and the certifiers splitting them.
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs",
+                                 "core.site"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
