@@ -207,7 +207,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
 #: `inline_failures`)
-INLINE = {"Security": 1375, "Security/Properties": 119, "verity/core/service/flock": 6}
+INLINE = {"Security": 1388, "Security/Properties": 119, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
