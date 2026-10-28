@@ -108,8 +108,8 @@ def test_precheck_passes_with_matching_verity_tree_and_sha(env_form):
 
 def test_negative_second_tree_on_sys_path_fails_by_name(tmp_path):
     """tp's vector: `sys.path.insert(0, <default tree>)` while the release tree's verity_vllm runs.  Here the second tree is sys.path[0]
-    (the interpreter's cwd under -m, exactly where hidden_gpu.py used to insert the tree variable or its default) and the tree of record follows on
-    PYTHONPATH -> `verity` resolves from the second tree, verity_vllm from the tree of record: PRECHECK_FAIL_SOURCE_IDENTITY naming verity."""
+    (the interpreter's cwd under -m) and the tree of record follows on PYTHONPATH ->
+    `verity` resolves from the second tree, verity_vllm from the tree of record: PRECHECK_FAIL_SOURCE_IDENTITY naming verity."""
     other = _other_tree(tmp_path)
     out = tmp_path / "source_identity.json"
     r = _run("--tree", str(REPO), "--out", str(out), cwd=other)

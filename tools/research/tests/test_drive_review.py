@@ -103,13 +103,13 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
-def test_an_unreviewed_or_held_member_stops_the_prefix_below_it(world, monkeypatch):
+def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     h.review(1)
     h.review(3)
-    assert h.tick().startswith("landed #1"), world.logs
+    assert h.tick().startswith("landed #1"), world.logs        # the lift moves only what `next` held before the sync
     assert _subject(world, "main").startswith("Queue: #1")
     h.review(2)
     h.review(2, "hold", by="other", ref="reads a stale fixture")
@@ -657,7 +657,7 @@ def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_
     assert h.tick().startswith("landed #3"), world.logs
     assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
     assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)] and h.cancelled == []
-    assert any("#2 #3 (reviewed, no Lean change) go to the bottom" in x for x in world.logs), world.logs
+    assert any("#2 #3 #1 (reviewed) go to the bottom" in x for x in world.logs), world.logs
     world.gh.put(4, world.change({"c.txt": "4\n"}))
     h.review(4)
     assert not h.tick().startswith("landed")
@@ -696,6 +696,88 @@ def test_a_lift_leaves_an_unreviewed_member_a_pr_stacked_on_the_lean_change_and_
     h.review(2)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2, 3] and len(h.launched) == 1, world.logs
+
+
+def test_an_unreviewed_member_below_reviewed_ones_no_longer_stops_them_landing(world, monkeypatch):
+    """A member with no land verdict held every reviewed member above it, deep in `next`.  The members with a land verdict
+    go below those waiting for one, and land that tick; the one waiting holds only itself."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3]
+    h.review(2)
+    h.review(3)
+    assert h.tick().startswith("landed #3"), world.logs
+    assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1]
+    assert any("#2 #3 (reviewed) go to the bottom" in x for x in world.logs), world.logs
+    h.review(1)
+    assert h.tick().startswith("landed #1") and _main(world) == _tip(world)
+
+
+def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(world, monkeypatch):
+    """Nothing moves past a held member: what is below it lands, past an unreviewed one, and what is above it waits."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3, "hold", by="other", ref="reads a stale fixture")
+    h.review(4)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4]
+    out = h.tick()
+    assert out.startswith("nothing reviewed lands: #1"), out
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4] and _subject(world, "main").startswith("Queue: #2")
+
+
+def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monkeypatch):
+    """A reviewed PR stacked on an unreviewed one stays above it; one stacked on a reviewed one goes down after it."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}, base=world.gh.prs[1].head))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4]
+    for n in (2, 3, 4):
+        h.review(n)
+    assert h.tick().startswith("landed #4"), world.logs
+    assert _subject(world, "main").startswith("Queue: #4") and _subject(world, "main^1").startswith("Queue: #3")
+    assert [m.pr for m in h.q.chain()] == [1, 2]
+    h.review(1)
+    assert h.tick().startswith("landed #2") and _main(world) == _tip(world)
+
+
+def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3)
+    reviews = h.d.reviews
+
+    def stale(pr, head):
+        if pr == 3:
+            raise QueueError(f"STALE: the labels of pr:3@{head} weren't pulled from the store's remote")
+        return reviews(pr, head)
+
+    h.d.reviews = stale
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3]
+    assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
+
+
+def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
+    h = Review(world, monkeypatch, reviewed_first=False)
+    for n, f in ((1, "a.txt"), (2, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 2]
 
 
 @pytest.mark.parametrize("fault", ["enospc", "after-audit"])

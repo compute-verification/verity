@@ -514,7 +514,7 @@ def test_the_device_id_is_the_drivers_uuid():
 
 
 def test_s_chip_counts_every_on_chip_store():
-    """`S` on the RTX PRO 6000 (`device.json` of run r20261012-001813-b2be): 128 MiB of L2, and for each of 188 SMs its
+    """`S` on the RTX PRO 6000 (its measured `device.json`): 128 MiB of L2, and for each of 188 SMs its
     256 KiB of registers, 128 KiB of L1 and shared memory and 160 KiB of other stores, then 1 MiB at the chip level."""
     device = {"l2_bytes": 134_217_728, "sms": 188, "regs_per_sm": 65_536}
     assert summarize.s_chip_bytes(device) == 208_142_336 + 188 * 160 * 1024 + (1 << 20) == 239_992_832

@@ -10,7 +10,7 @@ draw flock-verify sets up under hidden outputs, the table is `stmtOf` of the `St
 `flock_headline_hidden` is that instance for any program `p`, outputs `outs`, places `pp`, constant and zero gates and
 binding (`lay`, `rs`, `hHm`) at those tables. What it leaves open is named in its hypotheses:
 
-* `hdec` (`DecodesOn`, R11b, at the law's draws only), as in #828's `flock_headline_exec`, at the hidden tables;
+* `hdec` (`DecodesOn`, R11b, at the law's draws only), as in `flock_headline_exec`, at the hidden tables;
 * `pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm` at the hidden tables: what [wave2-hidden] establishes about
   `setupHidden`'s statements (the program's places in `stmtOf` of the hidden statement, its constant and zero
   columns, and the binding of each drawn unit's rows, outputs included, through the rows' `b ‖ c`), through its
