@@ -37,6 +37,8 @@
   each linear's B rows registered once for all its calls; its template-instance partition derives its units, and
   `unit_reads` the rows each unit reads: the Program a served path registers its trees under, a mixed-K window in one
   read.
+* `dither`: Dither v3.2's served unit (`dither/PROTOCOL.md`), its proof blocks' Definitions, a call's committed layout and
+  its CPU reference; `dither_c2t`: the C2-T filler form beside it, with its own shape rule.
 * `admit`: a window's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
   the window.
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name

@@ -492,6 +492,23 @@ per-replica bound, in Lean, under the premises below.
 Pooled over the replicas, and with each replica's periods as one sequence (POOL-THM, not yet proved), RT-POOL's run D
 gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e26 and 7.32e26 at RTX PRO 6000 V4.
 
+## The C2-T filler form
+
+C2-T is a filler form beside v3.2's unit, from BYTE-CELL's C2. It is experimental: it rests on SAKHigh-T, a claim Daniel
+hasn't ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2t.py` holds its shape, leaves, reference and Definition.
+- **What is committed.** A filler call's noise and coins are v3.2's. It commits no O and no 16-bit word. For each cell and
+  segment it commits only a window, ⌊T_s/2^R⌋ mod 2^W, of the segment's own noised sum T_s = Σ_seg X W′ᵀ. BYTE-CELL's
+  window is bit 9 alone.
+- **Its shape rule is its own.** t = min(L, K)/L′ is at most 16, because the separation route (0.886 + 3/t of the int8
+  GEMM at A = 0) reaches the GEMM at t ≈ 26. The window must cover bit 9, the bit SAKHigh-T is stated for, so the low byte,
+  which the orbit over Z/2^8 passes, is refused. Segments are equal. The served unit keeps t ≤ 8.
+- **Its proof block** is 8 adjacent cells of one row in one segment, `PouwDitherFillC2T_v1`. Its only output is the pass
+  bit.
+- **Each form's dispatch refuses the other's shapes.** `dither.block_definition` takes only a served `Shape`, and
+  `dither_c2t.block_definition` only a `C2TShape`.
+- **Open:** compute-research's FILLER-C2 spec (the window, the K and t, the coins' expansion and the leaf layout) and
+  SAKHigh-T's statement.
+
 ## Open
 
 - **The pooled bound over replicas** is POOL-THM's (CMP-152): tier A on the accepted set, weighted by each W_reg,u, with

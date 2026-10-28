@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "PouwDitherBitEqAnd_v2": {
+   "and": 1,
+   "type": "b978e19452c4972fbe64d8e7864e27e549c56340ff8623b47243893c1c8e6bee8892e0ab6dc42950c752b47a075786ccb17ef3e6fe3fdff682cff68cff7007f9"
+  },
+  "PouwDitherBitEq_v2": {
+   "and": 0,
+   "type": "56ad7b7f53ba901f1de9e91f6df7d3157b7dac2fabdf4cde11775b5b87682675ae29b109027f5908752820d3c9f36be5e51a0ea9f87960ec4bf0841acd7f07ff"
+  },
+  "PouwDitherFillC2T_v1{L=32,CELLS=8,R=8,W=8}": {
+   "and": 34471,
+   "type": "27fbb7cb23daae92cb75a71312441887d11232718e98f191954e34964975ee51122ad713a0b55023bc0023a09091e541403e021fdc74b313f65b41623bf4023d"
+  },
+  "PouwDitherFillC2T_v1{L=32,CELLS=8,R=9,W=1}": {
+   "and": 23815,
+   "type": "064a447c9bf190942a898a6c238c4ca09ba164599db6b8c0a5ae3fc0a0aacff85cacb81ba2588a1dd63052427bcac818910fcf72f704be35a3e1fc4fc7020f92"
+  },
+  "PouwDitherFillC2T_v1{L=64,CELLS=2,R=9,W=1}": {
+   "and": 12259,
+   "type": "3d67f23362f35d72ed5ab81021353a9773a9cde7e5ffd359132915543f097d1a8f7c2908dd3caaec3c0e3d550049764eb0825df9796685bfb49600b0e3d98dcb"
+  }
+ }
+}
