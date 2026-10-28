@@ -16,7 +16,7 @@ from verity.ml.windows import rows as CS
 __all__ = ["check_row_tables", "registered_reads", "reported_reads"]
 
 
-def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Mapping[str, str | bytes],
+def check_row_tables(window: CS.Binding, publics: Mapping[str, bytes], roots: Mapping[str, str | bytes],
                      segment_roots: Mapping[int, bytes] | None = None) -> dict[str, str]:
     """The verifier's tie between the row tables, their linked members and the recorded segment roots: each segment's root
     recomputed from the linked members' public ``x`` strings (``publics[member]``, their public bodies, which the leaf layer
@@ -53,7 +53,7 @@ def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Map
     return bad
 
 
-def registered_reads(window: CS.Window, publics: Mapping[str, bytes], *, registered: Any) -> dict[str, dict[str, Any]]:
+def registered_reads(window: CS.Binding, publics: Mapping[str, bytes], *, registered: Any) -> dict[str, dict[str, Any]]:
     """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, in the format of ``registered``,
     core's ``one_stage.registered``, by member key): its ``x`` port reads its one row table, under the table's root recomputed
     from the members' public strings (the root ``check_row_tables`` ties to the registration and the segment roots, so call it
@@ -93,7 +93,7 @@ def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str
     return {"ok": all(c["ok"] for c in chunks.values()), "chunks": chunks}
 
 
-def _linked_strings(window: CS.Window, publics: Mapping[str, bytes]) -> tuple[list[list[bytes | None]], dict[str, str]]:
+def _linked_strings(window: CS.Binding, publics: Mapping[str, bytes]) -> tuple[list[list[bytes | None]], dict[str, str]]:
     """Each row table's strings as the linked members' public ``x`` strings give them (None where no member links a row), and
     ``{key: why}`` for a member whose body is short or a table two members' strings disagree on."""
     strings: list[list[bytes | None]] = [[None] * t.n for t in window.row_tables]
