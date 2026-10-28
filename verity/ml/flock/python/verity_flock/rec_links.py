@@ -79,7 +79,7 @@ def table(links: Sequence[Link]) -> list[bytes]:
 
 def register(links: Sequence[Link], salts: Sequence[bytes] | None = None) -> advice.Registration:
     """The table committed as advice; its root and row count are what goes public."""
-    return advice.register(table(links), 8 * ROW_BYTES, BINDING, salts)
+    return advice.commit(table(links), 8 * ROW_BYTES, BINDING, salts)
 
 
 def decode(row: bytes) -> Link | None:
