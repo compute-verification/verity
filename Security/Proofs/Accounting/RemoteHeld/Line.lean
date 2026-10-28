@@ -107,7 +107,8 @@ theorem lineOf_ok {node : Setup} {r : Record} {l : Line} (h : lineOf node r = .o
       ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen = .ok (gs, ws) ∧ r.groups node = gs ∧
       line gs node.per sm.blocks node.blockBytes node.chipBytes node.nodeBytes ws node.delta node.rates = .ok l := by
   unfold lineOf at h
-  rcases hi : node.inputs with why | x <;> rcases hsm : r.summary node with _ | sm <;> simp only [hi, hsm] at h
+  rcases hi : node.inputs with why | x <;> rcases hsm : r.summary node with _ | sm <;>
+    simp only [hi, hsm, reduceCtorEq] at h
   obtain ⟨gs, ws, hs, hl⟩ := lineOfRecordAt_ok h
   exact ⟨sm, gs, ws, rfl, hs, by simp only [Record.groups, hsm, hs], hl⟩
 
