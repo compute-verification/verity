@@ -90,7 +90,11 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
             "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def grind_eps(L, delta_log2=DELTA.denominator.bit_length() - 1, t_log2=128, d=128):
+#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (PoUW's `credit.DELTA`).
+DELTA_LOG2 = DELTA.denominator.bit_length() - 1
+
+
+def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
     """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""
