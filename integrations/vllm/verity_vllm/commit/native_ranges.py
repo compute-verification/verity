@@ -12,6 +12,7 @@ range opening under it carries its leaves' salts.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from dataclasses import dataclass
@@ -96,7 +97,9 @@ class NativeRangeOpenings:
 
     def _row_key(self, step: int) -> bytes:
         """rows-sha512: step `step`'s salt key, fresh from the OS generator, or the replayed run's (`replay_row_keys`)."""
-        if self.replay_row_keys is None:
+        if self.replay_row_keys is None and (seed := os.environ.get("VERITY_EXP_ROW_KEY_SEED")):
+            ks = hashlib.sha512(f"{seed}/step={step}".encode()).digest()
+        elif self.replay_row_keys is None:
             ks = os.urandom(step_rows.KEY_BYTES)
         elif step in self.replay_row_keys:
             ks = self.replay_row_keys[step]

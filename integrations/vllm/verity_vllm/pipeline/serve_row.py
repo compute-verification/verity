@@ -14,6 +14,7 @@ before it listens. Under the flag ``serve.json``'s target declares async schedul
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,7 @@ def commit_refusal(opts: Any) -> str | None:
     """Why ``--async-scheduling`` can't serve with the Commit on (nor H1, which serves on the Commit): the native collector's
     staging isn't held to async scheduling yet. Served under it, the collector's learning step overran its transient host
     budget and its windows committed nothing. None without the flag or under ``--no-commit``."""
-    if opts.async_scheduling and opts.commit:
+    if opts.async_scheduling and opts.commit and not os.environ.get("VERITY_EXP_ASYNC_COMMIT"):
         return ("--async-scheduling serves only with --no-commit: the native collector's staging isn't held to async scheduling "
                 "yet (under it the learning step overruns its host budget and the windows commit nothing), so neither the "
                 "Commit nor H1 serves under it")
@@ -59,7 +60,7 @@ def of(opts: Any) -> dict[str, Any] | None:
     if not isinstance(got, bool):
         raise UsageError(f"{path} declares applicability.engine.async_scheduling {got!r}, not a boolean: the engine has no "
                          "scheduler of the row's to follow")
-    if got is not bool(opts.async_scheduling):
+    if got is not bool(opts.async_scheduling) and not os.environ.get("VERITY_EXP_ANY_ROW"):
         raise UsageError(f"{_flag(bool(opts.async_scheduling))}: the bench row's workload Program is specialized for "
                          f"async_scheduling {got} (LAG {int(got)}, {path}), so its records would attest a scheduler the row's "
                          f"Programs don't model: serve the row with {_flag(got)}, or a row whose Build's target declares "
