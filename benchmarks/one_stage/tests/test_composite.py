@@ -1,7 +1,7 @@
 """composite.py: onsite's and remote's case from their subprotocols' private cases and answers, in the formats the
 composition's Lean reads (params and evidence canonical, the subprotocols in the order of their ids, the commitment `bind`
-of their digests), the product's check run on it, and the output split so the public part holds
-no case's evidence or params."""
+of their digests), the product's check run on it, and the output split so the public part holds no case's evidence or
+params."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import composite as C
 
 V2 = "verity/sampled-proofs/one-stage/v2"
 POUW = "verity/pouw/v1"
+POLICY = "verity/inference-only/v0"
 
 
 def put(d: Path, id: str, params: dict, commitment: bytes, evidence: bytes, digest: bytes | None,
@@ -35,12 +36,18 @@ def outs(tmp_path: Path, name: str = "") -> list[str]:
     return ["--private-out", str(tmp_path / f"private{name}"), "--public-out", str(tmp_path / f"public{name}")]
 
 
-def onsite_cases(tmp_path: Path) -> list[str]:
-    """A case for each of onsite's subprotocols, as ``--cases`` arguments."""
+def onsite_cases(tmp_path: Path, without: str | None = None) -> list[str]:
+    """A case for each of onsite's subprotocols but ``without``, as ``--cases`` arguments."""
     args = []
     for n, id in enumerate(C.COMPONENTS["onsite"]):
-        args += ["--cases", str(put(tmp_path / f"p{n}", id, {}, bytes([n]), b"{}", bytes([n]) * 64))]
+        if id != without:
+            args += ["--cases", str(put(tmp_path / f"p{n}", id, {}, bytes([n]), b"{}", bytes([n]) * 64))]
     return args
+
+
+def policy(tmp_path: Path) -> Path:
+    """The inference-only policy's case, accepted."""
+    return put(tmp_path / "policy", POLICY, {"g": 1}, b"\x03", b"{}", b"\xcc" * 64, verdict="accept")
 
 
 def lean(tmp_path: Path, line: dict, rc: int) -> str:
@@ -55,17 +62,19 @@ def lean(tmp_path: Path, line: dict, rc: int) -> str:
 def test_remote_case_orders_by_id_and_binds_the_digests(tmp_path):
     v2 = put(tmp_path / "v2", V2, {"delta": "1/100"}, b"\x01" * 3, b'{"e":1}', b"\xaa" * 64, ["/c.txt", "/p.bin"])
     pw = put(tmp_path / "pouw", POUW, {"k": 2}, b"\x02", b"{}", b"\xbb" * 64)
-    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), *outs(tmp_path)]) == 0
+    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), "--cases", str(policy(tmp_path)),
+                   *outs(tmp_path)]) == 0
     out = tmp_path / "private"
     assert (out / "params.json").read_bytes() == \
-        b'{"components":[{"id":"verity/pouw/v1","params":{"k":2}},{"id":"verity/sampled-proofs/one-stage/v2",' \
-        b'"params":{"delta":"1/100"}}]}'
-    body = ('{"components":[{"commitment":"' + "bb" * 64 + '","id":"verity/pouw/v1"},{"commitment":"' + "aa" * 64 +
+        b'{"components":[{"id":"verity/inference-only/v0","params":{"g":1}},{"id":"verity/pouw/v1","params":{"k":2}},' \
+        b'{"id":"verity/sampled-proofs/one-stage/v2","params":{"delta":"1/100"}}]}'
+    body = ('{"components":[{"commitment":"' + "cc" * 64 + '","id":"verity/inference-only/v0"},{"commitment":"' +
+            "bb" * 64 + '","id":"verity/pouw/v1"},{"commitment":"' + "aa" * 64 +
             '","id":"verity/sampled-proofs/one-stage/v2"}]}')
     assert (out / "commitment.bin").read_bytes() == hashlib.sha512(b"verity/remote/v0\0" + body.encode()).digest()
     e = json.loads((out / "evidence.json").read_bytes())
-    assert [x["id"] for x in e["components"]] == [POUW, V2]
-    assert e["components"][1] == {"commitment": "010101", "evidence": b'{"e":1}'.hex(), "id": V2,
+    assert [x["id"] for x in e["components"]] == [POLICY, POUW, V2]
+    assert e["components"][2] == {"commitment": "010101", "evidence": b'{"e":1}'.hex(), "id": V2,
                                   "params": {"delta": "1/100"}}
     assert (out / "blobs.txt").read_text() == "/c.txt\n/p.bin\n"
 
@@ -77,13 +86,15 @@ def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     assert [c["id"] for c in json.loads((tmp_path / "private" / "params.json").read_bytes())["components"]] == [POUW, V2]
 
 
-def test_onsite_has_no_registration_and_an_nci_case_is_a_piece_for_lean_to_refuse(tmp_path):
-    nci = put(tmp_path / "nci", "verity/nci/v1", {"n": 1}, b"\x03", b"{}", b"\xcc" * 64, verdict="accept")
-    assert C.main(["onsite", *onsite_cases(tmp_path), "--cases", str(nci), *outs(tmp_path)]) == 0
+def test_onsite_takes_the_policy_as_one_of_its_subprotocols(tmp_path):
+    assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path)]) == 0
     out = tmp_path / "private"
     assert len((out / "commitment.bin").read_bytes()) == 64
-    assert "registration" not in json.loads((out / "params.json").read_bytes())
-    assert "verity/nci/v1" in [c["id"] for c in json.loads((out / "params.json").read_bytes())["components"]]
+    params = json.loads((out / "params.json").read_bytes())
+    assert list(params) == ["components"]
+    assert [c["id"] for c in params["components"]] == list(C.COMPONENTS["onsite"])
+    assert POLICY in C.COMPONENTS["onsite"] and POLICY in C.COMPONENTS["remote"]
+    assert "NOT_ESTABLISHED" not in (tmp_path / "public" / "verdicts.txt").read_text()
 
 
 def test_a_case_whose_commitment_did_not_decode_stands_in_its_own_commitment(tmp_path):
@@ -123,12 +134,14 @@ def test_a_v2_answer_whose_query_is_a_digest_its_evidence_carries_stays_private(
     (v2 / "answer.json").write_text(json.dumps(answer))
     pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64, verdict="accept")
     exe = lean(tmp_path, {"profile": profile, "protocol": "verity/remote/v0", "verdict": "accept"}, 0)
-    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), *outs(tmp_path), "--exe", exe]) == 0
+    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), "--cases", str(policy(tmp_path)), *outs(tmp_path),
+                   "--exe", exe]) == 0
     public = b"".join(f.read_bytes() for f in sorted((tmp_path / "public").iterdir()))
-    for body in (partition.encode(), b"profile", b"query", b"programs"):
+    for body in (partition.encode(), b"\"profile\"", b"\"query\"", b"\"programs\""):
         assert body not in public
     assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines() == [
-        f"PIECE {POUW} accept", f"PIECE {V2} accept", "VERDICT verity/remote/v0 accept"]
+        f"PIECE {POLICY} accept", f"PIECE {POUW} accept", f"PIECE {V2} accept", "VERDICT verity/remote/v0 accept",
+        f"EXCEPTION {C.EXCEPTIONS[POLICY]}"]
     assert partition in (tmp_path / "private" / "pieces" / "0.answer.json").read_text()
     assert partition in (tmp_path / "private" / "answer.json").read_text()
 
@@ -139,9 +152,11 @@ def test_a_refusal_is_public_by_its_name_only(tmp_path):
              reason=f"proofs: unit opened {secret.hex()}")
     pw = put(tmp_path / "pouw", POUW, {}, b"\x02", secret, b"\xbb" * 64, verdict="reject",
              reason=f"unit {secret.hex()[:32]} opened")
-    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), *outs(tmp_path)]) == 0
+    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), "--cases", str(policy(tmp_path)),
+                   *outs(tmp_path)]) == 0
     assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines() == [
-        f"PIECE {POUW} reject refused", f"PIECE {V2} reject proofs"]
+        f"PIECE {POLICY} accept", f"PIECE {POUW} reject refused", f"PIECE {V2} reject proofs",
+        f"EXCEPTION {C.EXCEPTIONS[POLICY]}"]
     assert secret.hex()[:16].encode() not in b"".join(f.read_bytes() for f in (tmp_path / "public").iterdir())
 
 
@@ -169,15 +184,17 @@ def test_a_missing_case_is_left_out_and_lean_s_verdict_stands(tmp_path, capsys):
     v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
     exe = lean(tmp_path, {"protocol": "verity/remote/v0", "verdict": "reject",
                           "reason": "params: verity/pouw/v1 is missing"}, 1)
-    assert C.main(["remote", "--cases", str(v2), *outs(tmp_path), "--exe", exe]) == 1
-    assert [c["id"] for c in json.loads((tmp_path / "private" / "params.json").read_bytes())["components"]] == [V2]
+    assert C.main(["remote", "--cases", str(v2), "--cases", str(policy(tmp_path)), *outs(tmp_path), "--exe", exe]) == 1
+    assert [c["id"] for c in json.loads((tmp_path / "private" / "params.json").read_bytes())["components"]] == \
+        [POLICY, V2]
     lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
-    assert lines == [f"PIECE {V2} accept", "NOT_ESTABLISHED missing verity/pouw/v1",
-                     "VERDICT verity/remote/v0 reject params"]
-    assert capsys.readouterr().out.splitlines()[1:4] == lines
+    assert lines == [f"PIECE {POLICY} accept", f"PIECE {V2} accept", "NOT_ESTABLISHED missing verity/pouw/v1",
+                     "VERDICT verity/remote/v0 reject params", f"EXCEPTION {C.EXCEPTIONS[POLICY]}"]
+    assert capsys.readouterr().out.splitlines()[1:6] == lines
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
     assert record["missing"] == [POUW]
     assert record["verdict"] == {"id": "verity/remote/v0", "verdict": "reject", "refusal": "params"}
+    assert record["exceptions"] == [C.EXCEPTIONS[POLICY]]
     assert "is missing" in (tmp_path / "private" / "answer.json").read_text()
 
 
@@ -193,14 +210,16 @@ def test_a_case_without_its_answer_is_missing(tmp_path):
     v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64)
     pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)
     (pw / "answer.json").unlink()
-    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), *outs(tmp_path)]) == 0
-    assert "NOT_ESTABLISHED missing verity/pouw/v1" in (tmp_path / "public" / "verdicts.txt").read_text()
+    assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), "--cases", str(policy(tmp_path)),
+                   *outs(tmp_path)]) == 0
+    assert "NOT_ESTABLISHED missing verity/pouw/v1\n" in (tmp_path / "public" / "verdicts.txt").read_text()
 
 
-def test_onsite_with_every_component_is_established(tmp_path):
-    assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path)]) == 0
-    assert len((tmp_path / "private" / "commitment.bin").read_bytes()) == 64
-    assert "NOT_ESTABLISHED" not in (tmp_path / "public" / "verdicts.txt").read_text()
+def test_onsite_without_the_policy_leaves_it_out_for_lean_to_refuse(tmp_path):
+    assert C.main(["onsite", *onsite_cases(tmp_path, without=POLICY), *outs(tmp_path)]) == 0
+    params = json.loads((tmp_path / "private" / "params.json").read_bytes())
+    assert POLICY not in [c["id"] for c in params["components"]]
+    assert "NOT_ESTABLISHED missing verity/inference-only/v0\n" in (tmp_path / "public" / "verdicts.txt").read_text()
 
 
 def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(tmp_path):

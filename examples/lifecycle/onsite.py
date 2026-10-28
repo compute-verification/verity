@@ -1,9 +1,9 @@
-"""The onsite composite (`verity/onsite/v0`: the network certifier, PoUS, PoUW, the bandwidth audit and sampled proofs) on
-the lifecycle, as a deployment of four parties: the developer and three of the auditor's, the verifier, the network
-certifier splitting the site's uplink and the memory challenger at the end of its link to the node. Where the auditor's
-devices sit is part of the site's `Layout`, and the hardware registration's checks hold every boundary link to a
-certifier splitting it (`uncertified`) and every host holding the prover's memory to a challenger's link
-(`challenger-reach`).
+"""The onsite composite (`verity/onsite/v0`: the network certifier, the inference-only policy, PoUS, PoUW's period, the
+bandwidth audit, sampled proofs and the wipe) on the lifecycle, as a deployment of four parties: the developer and three
+of the auditor's, the verifier, the network certifier splitting the site's uplink and the memory challenger at the end of
+its link to the node. Where the auditor's devices sit is part of the site's `Layout`, and the hardware registration's
+checks hold every boundary link to a certifier splitting it (`uncertified`) and every host holding the prover's memory to
+a challenger's link (`challenger-reach`).
 
 - The network certifier is the outside world's only way in: it carries each request to the developer and its response
   back, commits to every frame it sees under its own salts, and signs each declaration period's view
@@ -12,7 +12,8 @@ certifier splitting it (`uncertified`) and every host holding the prover's memor
 - The memory challenger opens a round once a declaration's values are committed: on its own coins it picks theta rows,
   asks the developer for their openings, and times the answer on its own clock. PoUS holds the openings to theta's
   registered commitment; the bandwidth audit holds the time to its link's latency and the data sheets' rate, both from
-  the layout.
+  the layout. The wipe is a stand-in: on its first round the challenger fills the node's memory with labels from its own
+  seed (`Fill`), and each round reads some back with the theta rows; the wipe holds each label read to the fill.
 """
 
 from __future__ import annotations
@@ -21,13 +22,12 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from lifecycle import (CERTIFIER, CHALLENGER, D, DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, THETA_ROWS,
+from lifecycle import (CERTIFIER, CHALLENGER, D, DEVELOPER, IDS, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, THETA_ROWS,
                        VERIFIER, Developer, Layout, Link, Loc, Tape, Verifier, answer, body, digest, frame,
-                       frame_commitment, load_of, msg, opens, products, schema, theta_of)
+                       frame_commitment, label, load_of, msg, opens, products, schema, theta_of)
 from verity.core.deploy import runtime
 from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Send
-from verity.core.protocols.sampled_proofs.parties import IDS
 from verity.core.wire import Message
 from verity.ml.circuits import codec
 from verity.ml.crypto import lms
@@ -51,9 +51,12 @@ LAYOUT = replace(NODE, locs=(*NODE.locs, Loc(CERT, "certifier", "site0", "audito
 certifier, certifier to the outside), and the memory challenger with its link to the node."""
 ROWS = 2
 """Theta rows the memory challenger asks for a round."""
+FILL, READS, SEED = 64, 2, 64
+"""The wipe stand-in: the labels the memory challenger fills the node's memory with, the labels a round reads back, and
+the bytes of its seed."""
 
 ONSITE = (schema("Go", "structure"), schema("Ingress", "private"), schema("Egress", "private"), schema("Mark", "private"),
-          schema("View", "commitment"), schema("Open", "structure"), schema("Challenge", "coins"),
+          schema("View", "commitment"), schema("Open", "structure"), schema("Fill", "coins"), schema("Challenge", "coins"),
           schema("Answer", "private"), schema("Report", "output"))
 
 
@@ -113,12 +116,14 @@ def certified(I: bytes, view: Mapping[str, Any], direction: str) -> bytes:
 
 
 class Challenger:
-    """The memory challenger: one round a committed declaration, on its own coins and clock."""
+    """The memory challenger: one round a committed declaration, on its own coins and clock; the first also fills the
+    node's memory for the wipe."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.queue: list[dict[str, Any]] = []
         self.round: dict[str, Any] | None = None
         self.rounds = 0
+        self.seed: str | None = None
         return []
 
     def on(self, r: Received) -> list[Any]:
@@ -133,28 +138,36 @@ class Challenger:
             for b in m.body[:ROWS]:
                 rows.append(picks.pop(b % len(picks)))
             self.round["rows"] = rows
-            return [Send("clock", Message("ClockRead"))]
+            self.round["reads"] = [b % FILL for b in m.body[ROWS:ROWS + READS]]
+            out = []
+            if self.seed is None:
+                self.seed = m.body[ROWS + READS:].hex()
+                out.append(Send(DEVELOPER, msg("Fill", self.round["k"], {"seed": self.seed, "n": FILL})))
+            return [*out, Send("clock", Message("ClockRead"))]
         if r.channel == "clock":
             self.round["sent"] = m.fields["ns"]
-            return [Send(DEVELOPER, msg("Challenge", self.round["k"], {"rows": self.round["rows"]}))]
+            return [Send(DEVELOPER, msg("Challenge", self.round["k"], {"rows": self.round["rows"],
+                                                                        "reads": self.round["reads"]}))]
         if m.type == "Answer":
             return self._report(r.at, body(m))
         return []
 
     def _begin(self) -> list[Any]:
         self.round = self.queue.pop(0)
-        return [Send("coins", Message("CoinsDraw", {"n": ROWS}))]
+        return [Send("coins", Message("CoinsDraw", {"n": ROWS + READS + (0 if self.seed else SEED)}))]
 
     def _report(self, at: int, a: Mapping[str, Any]) -> list[Any]:
         rd, self.round = self.round, None
         self.rounds += 1
         got = a.get("rows", [])
         ok = [o.get("position") for o in got] == rd["rows"] and all(opens(rd["theta"], o) for o in got)
+        wiped = a.get("labels") == [label(self.seed, i) for i in rd["reads"]]
         elapsed = at - rd["sent"]
         bound = 2 * rd["latency_ticks"] + -(-ROWS * D * 8 // rd["bw_bits_per_tick"])
         report = {"rows": rd["rows"], "pous": None if ok else "an answer doesn't open theta's registered commitment",
                   "elapsed_ticks": elapsed, "bound_ticks": bound,
-                  "bandwidth": None if elapsed <= bound else f"answered in {elapsed} ticks, over the link's {bound}"}
+                  "bandwidth": None if elapsed <= bound else f"answered in {elapsed} ticks, over the link's {bound}",
+                  "reads": rd["reads"], "wipe": None if wiped else "a label read back isn't the fill's"}
         return [Send(VERIFIER, msg("Report", rd["k"], report)), *(self._begin() if self.queue else ())]
 
 
@@ -171,6 +184,8 @@ def theta_reach(layout: Layout, store: str) -> tuple[int, int]:
 class OnsiteVerifier(Verifier):
     """The verifier, with the onsite components: the certifier's signed view of each declaration period, and the memory
     challenger's report."""
+
+    work = IDS["pouw-period"]
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.views: dict[int, dict[str, Any]] = {}
@@ -221,7 +236,9 @@ class OnsiteVerifier(Verifier):
                 IDS["pous"]: answer(IDS["pous"], "reject" if rp["pous"] else "accept", rd, rp["pous"],
                                     {"rows": rp["rows"]}),
                 IDS["bandwidth"]: answer(IDS["bandwidth"], "reject" if rp["bandwidth"] else "accept", rd, rp["bandwidth"],
-                                         {"elapsed_ticks": rp["elapsed_ticks"], "bound_ticks": rp["bound_ticks"]})}
+                                         {"elapsed_ticks": rp["elapsed_ticks"], "bound_ticks": rp["bound_ticks"]}),
+                IDS["wipe"]: answer(IDS["wipe"], "reject" if rp["wipe"] else "accept", rd, rp["wipe"],
+                                    {"reads": rp["reads"]})}
 
 
 MS = CHAL_LINK.lat // 1_000_000
@@ -238,7 +255,7 @@ MANIFEST = Manifest(
               Channel(VERIFIER, CERTIFIER, ("Go", "Done")),
               Channel(VERIFIER, CHALLENGER, ("Open", "Done")),
               Channel(CHALLENGER, VERIFIER, ("Report",)),
-              Channel(CHALLENGER, DEVELOPER, ("Challenge",), MS, carries_coins=True),
+              Channel(CHALLENGER, DEVELOPER, ("Fill", "Challenge"), MS, carries_coins=True),
               Channel(DEVELOPER, CHALLENGER, ("Answer",), MS)),
     messages=SHARED + ONSITE)
 PROTOCOL = runtime.ProtocolDef(MANIFEST, {DEVELOPER: Developer, VERIFIER: OnsiteVerifier, CERTIFIER: Certifier,
