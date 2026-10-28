@@ -2,7 +2,7 @@ import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
-# The chain cap at a device record with the honest kernel's `W_ref` (the price-twins lane's file; definitions only,
+# The chain cap at a device record with the honest kernel's `W_ref` (definitions only,
 staged)
 
 `pearlCProtocolDevChainCap` and `pearlCTilesDevChainCap` with `W_ref` (and the tiles' credited rows' `W_ref`) at
