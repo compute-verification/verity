@@ -50,7 +50,7 @@ Then it audits, the same way, every package whose guarantees' records read PKG's
 reports under `requirer-<path>/` beside PKG's. A change to what another package's pinned guarantees read
 (`Security/Properties`' when `Security` changes) fails here, not at a train's check. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update` (and `--moved`), so one run regenerates every
-lock the change moved (LEAN-133); one failing for any other reason fails. The exit status is the first failure's. A tree
+lock the change moved; one failing for any other reason fails. The exit status is the first failure's. A tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
 dependencies there drops the rest first.
 

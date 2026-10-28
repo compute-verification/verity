@@ -2287,7 +2287,7 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
 
 
 def test_a_requirer_whose_record_the_run_regenerated_is_vouched_for_only_at_the_commit_of_that_record(world, capsys):
-    """LEAN-133: `--records PKG --update` also updates a requirer that failed only on record differences, and its pass is
+    """`--records PKG --update` also updates a requirer that failed only on record differences, and its pass is
     then on the record it wrote (`record/<path>/`), not the head's lock: the head is refused for it, and the commit of both
     records is vouched for by that one run."""
     world.with_store_remote()

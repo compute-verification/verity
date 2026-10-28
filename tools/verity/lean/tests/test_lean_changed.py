@@ -6,7 +6,7 @@ updated `lean-audit.json` is restored to the committed bytes by the next require
 explicit keep the record a lane must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
 only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way. Two
-stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records (LEAN-133)."""
+stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records."""
 from __future__ import annotations
 
 import importlib.util
@@ -225,9 +225,9 @@ def pair(tmp_path, monkeypatch):
 @pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
 def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_and_its_commit_runs_nothing(
         pair, tmp_path, monkeypatch, hold):
-    """LEAN-133: `--records Security --update` failed `Security/Properties`, whose records read Security's build, and a second
-    run had to regenerate its lock. One run now regenerates and keeps both, each audited on the records regenerated before
-    it, and keeps each pass under the regenerated locks, so a commit of both records needs no run of either package."""
+    """A change to what both `Security`'s and `Security/Properties`' guarantees read moves both locks: one `--records
+    Security --update` run regenerates and keeps both, each audited on the records regenerated before it, and keeps each
+    pass under the regenerated locks, so a commit of both records needs no run of either package."""
     root, calls, _ = pair
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
     run_dir = tmp_path / "run"
