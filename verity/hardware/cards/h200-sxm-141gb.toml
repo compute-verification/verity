@@ -78,3 +78,69 @@ turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 23173
 priority_turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo: as turbo" }
 priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo" }
 ops = { value = 7.471104e14, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), HOST-PEAK's 7.471e14" }
+
+# The energy floors against the in-kernel SM clock (Accel.Power), each section rows of a clock and a floor on its
+# readings. Readings fall in clock bands; a row's clock is the highest in-kernel clock of its band's readings, rounded
+# up. A static floor is the least idle reading at or above its band; a class floor the least, over its band's readings
+# and the rows above it, of (power - the static floor at the row's clock) / rate. Floors are rounded down. A reading is
+# one kernel on every SM at a locked clock (or the default clocks under the 700 W cap): resident and idle, s8 wgmma on
+# zero operands (mac) and on uniformly random ones (mac_decl), SHA-512 on its cheapest message (comp). Read on one
+# card at 34 to 66 C. The script that derives these rows from the runs named below is in art:9ae509bf329def5c8807cf080e5828534ce3f76750c95562ab54054019ec09aa.
+[energy]
+lean = "Security/Definitions/Core/Accel/H200Power.lean"
+tensor_clock = { value = 1830, unit = "MHz", mark = "measurement", source = "the in-kernel SM clock with s8 wgmma on every SM, at a lock of 1980 MHz or the default clocks: 1830.0 (r20261027-045621-da10 lgc1980-wgmma-0), 1830.0 (r20261027-220336-dfa1 zero r0 tensor-alone), 1829.9 (r20261027-220336-dfa1 u2 r0 tensor-alone); the data sheet's tensor boost clock (Accounting.TS.Sheets.H200 A3)" }
+alu_clock = { value = 1980, unit = "MHz", mark = "measurement", source = "the in-kernel SM clock with SHA-512 alone on every SM at the default clocks: 1980.0 (r20261027-041220-a93a sha-0), 1980.0 (r20261027-220336-dfa1 u2 r0 hash-alone), 1980.0 (r20261027-220336-dfa1 zero r0 hash-alone); clock.sm" }
+
+[energy.static.row1]
+clock = { value = 903.9, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 80.78, unit = "W", mark = "measurement", source = "the least sleep reading at or above its band (SMs resident and idle), rounded down" }
+r1 = { value = 80.78, unit = "W", mark = "measurement", source = "r20261027-045621-da10 lgc900-sleep: 80.78 W at 903.9 MHz (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 80.82, unit = "W", mark = "measurement", source = "r20261027-041220-a93a lgc900-sleep: 80.82 W at 903.4 MHz (NVML's energy counter over a 10 s steady window)" }
+r3 = { value = 81.52, unit = "W", mark = "measurement", source = "r20261027-060100-151d lgc900-sleep: 81.52 W at 902.1 MHz (NVML's energy counter over a 10 s steady window)" }
+
+[energy.static.row2]
+clock = { value = 1500, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 102.72, unit = "W", mark = "measurement", source = "the least sleep reading at or above its band (SMs resident and idle), rounded down" }
+r1 = { value = 102.72, unit = "W", mark = "measurement", source = "r20261027-041220-a93a lgc1500-sleep: 102.72 W at 1499.6 MHz (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 103.17, unit = "W", mark = "measurement", source = "r20261027-045621-da10 lgc1500-sleep: 103.17 W at 1499.6 MHz (NVML's energy counter over a 10 s steady window)" }
+
+[energy.static.row3]
+clock = { value = 1830, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 120.17, unit = "W", mark = "measurement", source = "the least sleep reading at or above its band (SMs resident and idle), rounded down" }
+r1 = { value = 123.27, unit = "W", mark = "measurement", source = "r20261027-045621-da10 lgc1980-sleep: 123.27 W at 1829.4 MHz (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 124.07, unit = "W", mark = "measurement", source = "r20261027-041220-a93a lgc1980-sleep: 124.07 W at 1829.3 MHz (NVML's energy counter over a 10 s steady window)" }
+r3 = { value = 120.17, unit = "W", mark = "measurement", source = "r20261027-060100-151d cap-sleep: 120.17 W at 1979.4 MHz (NVML's energy counter over a 10 s steady window)" }
+
+[energy.mac.row1]
+clock = { value = 903.9, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 0.08019, unit = "pJ", mark = "measurement", source = "the least of its readings' (power - static floor at its clock) / rate and the rows above it, rounded down" }
+r1 = { value = 0.08019, unit = "pJ", mark = "measurement", source = "r20261027-050755-1b54 lgc900-wgmma-0: 119.77 W at 900.3 MHz, 4.862003e+14 op/s, less the static floor 80.78 W (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 0.08024, unit = "pJ", mark = "measurement", source = "r20261027-045621-da10 lgc900-wgmma-0: 119.8 W at 903.9 MHz, 4.862826e+14 op/s, less the static floor 80.78 W (NVML's energy counter over a 10 s steady window)" }
+r3 = { value = 0.08094, unit = "pJ", mark = "measurement", source = "r20261027-060100-151d lgc900-wgmma-0: 120.15 W at 901.0 MHz, 4.863510e+14 op/s, less the static floor 80.78 W (NVML's energy counter over a 10 s steady window)" }
+
+[energy.mac.row2]
+clock = { value = 1830, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 0.15495, unit = "pJ", mark = "measurement", source = "the least of its readings' (power - static floor at its clock) / rate and the rows above it, rounded down" }
+r1 = { value = 0.15495, unit = "pJ", mark = "measurement", source = "r20261027-060100-151d cap-wgmma-0: 272.16 W at 1815.0 MHz, 9.808559e+14 op/s, less the static floor 120.17 W (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 0.15508, unit = "pJ", mark = "measurement", source = "r20261027-050755-1b54 cap-wgmma-0: 272.19 W at 1815.0 MHz, 9.802645e+14 op/s, less the static floor 120.17 W (NVML's energy counter over a 10 s steady window)" }
+r3 = { value = 0.16004, unit = "pJ", mark = "measurement", source = "r20261027-045621-da10 cap-wgmma-0: 277.14 W at 1815.0 MHz, 9.807943e+14 op/s, less the static floor 120.17 W (NVML's energy counter over a 10 s steady window)" }
+
+[energy.mac_decl.row1]
+clock = { value = 903.9, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 0.30803, unit = "pJ", mark = "measurement", source = "the least of its readings' (power - static floor at its clock) / rate and the rows above it, rounded down" }
+r1 = { value = 0.30803, unit = "pJ", mark = "measurement", source = "r20261027-045621-da10 lgc900-wgmma-1: 230.59 W at 901.8 MHz, 4.863361e+14 op/s, less the static floor 80.78 W (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 0.30839, unit = "pJ", mark = "measurement", source = "r20261027-060100-151d lgc900-wgmma-1: 230.77 W at 903.8 MHz, 4.863594e+14 op/s, less the static floor 80.78 W (NVML's energy counter over a 10 s steady window)" }
+
+[energy.mac_decl.row2]
+clock = { value = 1724, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 0.62979, unit = "pJ", mark = "measurement", source = "the least of its readings' (power - static floor at its clock) / rate and the rows above it, rounded down" }
+r1 = { value = 0.62979, unit = "pJ", mark = "measurement", source = "r20261027-045621-da10 cap-wgmma-1: 686.94 W at 1717.6 MHz, 9.276370e+14 op/s, less the static floor 102.72 W (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 0.63123, unit = "pJ", mark = "measurement", source = "r20261027-220336-dfa1 rand r0 tensor-alone: 690.45 W at 1722.7 MHz, 9.310800e+14 op/s, less the static floor 102.72 W (nvidia-smi's median from 1 s into the arm (power_cap.py))" }
+r3 = { value = 0.63202, unit = "pJ", mark = "measurement", source = "r20261027-060100-151d cap-wgmma-1: 688.48 W at 1716.7 MHz, 9.267942e+14 op/s, less the static floor 102.72 W (NVML's energy counter over a 10 s steady window)" }
+
+[energy.comp.row1]
+clock = { value = 1980, unit = "MHz", mark = "measurement", source = "the highest in-kernel SM clock of the readings in its band, rounded up" }
+floor = { value = 52.0811, unit = "nJ", mark = "measurement", source = "the least of its readings' (power - static floor at its clock) / rate and the rows above it, rounded down" }
+r1 = { value = 52.0811, unit = "nJ", mark = "measurement", source = "r20261027-041220-a93a sha-0: 370.81 W at 1980.0 MHz, 4.812494e+09 op/s, less the static floor 120.17 W (NVML's energy counter over a 10 s steady window)" }
+r2 = { value = 59.554, unit = "nJ", mark = "measurement", source = "r20261027-041220-a93a sha-1: 406.9 W at 1979.7 MHz, 4.814619e+09 op/s, less the static floor 120.17 W (NVML's energy counter over a 10 s steady window)" }
+r3 = { value = 62.7305, unit = "nJ", mark = "measurement", source = "r20261027-220336-dfa1 u2 r0 hash-alone: 418.41 W at 1980.0 MHz, 4.754300e+09 op/s, less the static floor 120.17 W (nvidia-smi's median from 1 s into the arm (power_cap.py))" }

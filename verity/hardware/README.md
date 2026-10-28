@@ -16,6 +16,12 @@ Every card has the same sections: `sm`, `clock`, `power`, `store`, `rate` (each 
 `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor units a MAC of each format uses),
 `model` (`Accel.Card`'s `exact` and code space) and `host` (the node's CPUs).
 
+A card may also have `energy`: its energy floors against the in-kernel SM clock (`Accel.Power`), the H200's held to
+`Security/Definitions/Core/Accel/H200Power.lean`. Each of `static`, `mac`, `mac_decl` and `comp` is rows, each a
+`clock`, a `floor` and the two or three readings it rests on (`tests/test_cards.py` holds each floor to its readings).
+A floor is the opposite of a ceiling: a `measurement` there is the least the card was read to draw, so a program may
+draw less, and the premise that takes the floors says it doesn't.
+
 ~~~python
 from verity.hardware import load, skus
 skus()                                          # ['h200-sxm-141gb', 'rtx-pro-6000-server']

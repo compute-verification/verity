@@ -2,7 +2,8 @@
 
 Every number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that
 SKU and firmware exceeds it: what the model's premises need), ``measurement`` (a measured value, so only a lower bound
-on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document, a run id or an ``art:`` id.
+on the ceiling, and under ``energy``, whose numbers are floors, only an upper bound on the floor) or ``placeholder``
+(neither: open). ``source`` names a data sheet, a document, a run id or an ``art:`` id.
 The Lean card tables (``Security/Definitions/Core/Accel``) are held to these files number by number
 (``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
 

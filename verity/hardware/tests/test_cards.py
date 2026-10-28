@@ -39,9 +39,32 @@ def test_every_number_is_sourced_and_marked(sku: str) -> None:
 
 
 def test_one_schema_across_cards() -> None:
-    """A reader can take any number from any card by the same key."""
-    keys = {sku: sorted(entries(load(sku))) for sku in skus()}
+    """A reader can take any number from any card by the same key, apart from the energy rows, which are at each card's
+    own clocks."""
+    keys = {sku: sorted(k for k in entries(load(sku)) if not k.startswith("energy.")) for sku in skus()}
     assert len({tuple(k) for k in keys.values()}) == 1, keys
+
+
+ENERGY = ("static", "mac", "mac_decl", "comp")
+
+
+@pytest.mark.parametrize("sku", [s for s in skus() if "energy" in load(s)])
+def test_energy_rows_rest_on_readings(sku: str) -> None:
+    """Each energy row is a clock and a floor on two or three readings in the floor's unit. A static floor is the least
+    of its readings; a class floor the least of its readings and the floors at higher clocks, so no floor falls as the
+    clock rises."""
+    energy = load(sku)["energy"]
+    for kind in ENERGY:
+        rows = sorted(energy[kind].values(), key=lambda r: Fraction(str(r["clock"]["value"])))
+        assert rows and all(r["clock"]["unit"] == "MHz" for r in rows), kind
+        floors = []
+        for row in rows:
+            got = [e for k, e in row.items() if k not in ("clock", "floor")]
+            assert 2 <= len(got) <= 3 and {e["unit"] for e in got} == {row["floor"]["unit"]}, (kind, row)
+            floors.append((Fraction(str(row["floor"]["value"])), min(Fraction(str(e["value"])) for e in got)))
+        for k, (floor, least) in enumerate(floors):
+            assert floor == (least if kind == "static" else min([least] + [f for f, _ in floors[k + 1:]])), (kind, k)
+        assert all(a <= b for (a, _), (b, _) in zip(floors, floors[1:])), kind
 
 
 @pytest.mark.parametrize("sku", skus())

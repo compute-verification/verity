@@ -4,6 +4,8 @@ Each card file names its Lean table (``lean``). Its ``clock`` and ``card`` defin
 (``^`` a power, ``/`` exact, and a natural-number field refused where Lean's division would truncate) and each arm is
 compared with what the card file gives, for every store, resource and format the envelope ISA declares
 (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
+A card file with energy rows names their Lean table too (``energy.lean``), whose ``power`` rows are compared the same
+way, each clock in Hz and each floor in W or J.
 """
 
 from __future__ import annotations
@@ -137,6 +139,47 @@ def test_a_changed_number_is_a_disagreement() -> None:
         f"weight {f}" for f in ("b1", "e2m1", "e4m3", "e5m2", "s8", "u8")]
     dropped = text.replace("    | .l2 => 188 * 5 * clock\n", "")
     assert disagreements(card, dropped) == ["ρ l2: Lean has no arm"]
+
+
+POWER = {"static": "static", "mac": "mac", "macDecl": "mac_decl", "comp": "comp"}
+SI = {"W": Fraction(1), "pJ": Fraction(1, 10 ** 12), "nJ": Fraction(1, 10 ** 9)}
+
+
+def power_table(text: str) -> dict[str, list[tuple[Fraction, Fraction]]]:
+    """The Lean energy table's ``power`` rows, each field's ``(clock in Hz, floor in W or J)``, as exact rationals."""
+    body = re.search(r"^def power : Power where\n(.*?)\n\nend ", text, re.M | re.S)
+    assert body, "the Lean energy table has no `def power : Power where …`"
+    fields = re.findall(r"^  (\w+) := \[(.*?)\]$", body.group(1), re.M | re.S)
+    return {f: [(evaluate(a), evaluate(b)) for a, b in re.findall(r"\(([^,()]+), ([^,()]+)\)", rows)] for f, rows in fields}
+
+
+def power_disagreements(card: dict, text: str) -> list[str]:
+    """Every row on which the Lean energy table ``text`` and the card file's ``energy`` rows differ."""
+    got = power_table(text)
+    out = [f"Lean's fields {sorted(set(got) - set(POWER))} are no `Power` field"] if set(got) - set(POWER) else []
+    for field, key in POWER.items():
+        want = sorted((number(r["clock"]) * 10 ** 6, number(r["floor"]) * SI[r["floor"]["unit"]])
+                      for r in card["energy"][key].values())
+        if got.get(field) != want:
+            out.append(f"{field}: Lean {got.get(field)}, card file {want}")
+    return out
+
+
+@pytest.mark.parametrize("sku", [s for s in skus() if "energy" in load(s)])
+def test_lean_energy_table_agrees_with_the_card_file(sku: str) -> None:
+    card = load(sku)
+    found = power_disagreements(card, (ROOT / card["energy"]["lean"]).read_text(encoding="utf-8"))
+    assert not found, (f"{card['energy']['lean']} and verity/hardware/cards/{sku}.toml's energy rows disagree; change the "
+                       "card file first, then its Lean table to match:\n" + "\n".join(found))
+
+
+def test_a_changed_energy_row_is_a_disagreement() -> None:
+    card = load("h200-sxm-141gb")
+    text = (ROOT / card["energy"]["lean"]).read_text(encoding="utf-8")
+    assert power_disagreements(card, text) == []
+    first = re.search(r"^  static := \[\n    \(([^,()]+), ", text, re.M)
+    moved = text.replace(f"({first.group(1)}, ", f"({first.group(1)} + 1, ", 1)
+    assert [m.split(":")[0] for m in power_disagreements(card, moved)] == ["static"]
 
 
 def test_a_truncating_nat_division_is_refused() -> None:
