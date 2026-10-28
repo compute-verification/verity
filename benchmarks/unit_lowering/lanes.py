@@ -11,6 +11,19 @@ import sys
 from pathlib import Path
 
 
+def stage(kind: str, k: int, r: int, c: int, scratch: Path, tree: Path):
+    """``kind``'s `UnitStager` at K on the R x C leaf, its circuit written under ``scratch``, with whatever staging this process
+    has installed."""
+    spec = importlib.util.spec_from_file_location("h1_lanes_run", tree / "benchmarks" / "pouw" / "h1_lanes" / "run.py")
+    L = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(L)
+    L.RC = (r, c)
+    ctx = L.Ctx(scratch, "unit-lowering", k, 0)
+    ctx.wp = 2 * L.LL.words(k)
+    setattr(ctx, kind, L.derived(L.window(L.tile(k), k), k, kind))
+    return L.stager(ctx, kind)
+
+
 def main(kind: str, k: int, r: int, c: int, path: Path, tree: Path, staging: str) -> None:
     pouw = tree / "benchmarks" / "pouw"
     sys.path.insert(0, str(pouw / "h1_prove"))
@@ -18,14 +31,7 @@ def main(kind: str, k: int, r: int, c: int, path: Path, tree: Path, staging: str
     if staging == "fast":
         import fast_stage
         fast_stage.install(path.parent / f".scratch-{kind}-k{k}")
-    spec = importlib.util.spec_from_file_location("h1_lanes_run", pouw / "h1_lanes" / "run.py")
-    L = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(L)
-    L.RC = (r, c)
-    ctx = L.Ctx(path.parent, "unit-lowering", k, 0)
-    ctx.wp = 2 * L.LL.words(k)
-    setattr(ctx, kind, L.derived(L.window(L.tile(k), k), k, kind))
-    L.stager(ctx, kind).circuit.rename(path)
+    stage(kind, k, r, c, path.parent, tree).circuit.rename(path)
 
 
 if __name__ == "__main__":

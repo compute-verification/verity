@@ -1,10 +1,10 @@
-"""Where the H1 unit's flat lowering holds its memory, at one shape: each phase's peak RSS and wall time, a census of the
-live objects by type, and (with ``--frames``) the allocation sites holding the bytes, at the two points the peak can be.
+"""Where an H1 statement's flat lowering holds its memory, at one shape: each phase's peak RSS and wall time, a census of
+the live objects by type, and (with ``--frames``) the allocation sites holding the bytes, at the two points the peak can be.
 
-    python mem_profile.py --k K --tile R,C --scratch DIR --out DIR [--frames N]
+    python mem_profile.py --k K --tile R,C [--unit tile|lane|combine] --scratch DIR --out DIR [--frames N]
 
-It runs `pouw_h1_circuits._lower`'s build in this process, `fast_stage` installed as `run.py`'s child installs it, with
-`PHASES` wrapped. A phase's peak is the process's VmHWM over the phase, reset at each phase's start (``/proc/self/clear_refs``),
+It runs the tile's build (`pouw_h1_circuits._lower`'s) or a leaf's lane or combine staging (`lanes.stage`) in this process,
+`fast_stage` installed as `run.py`'s child installs it, with `PHASES` wrapped. A phase's peak is the process's VmHWM over the phase, reset at each phase's start (``/proc/self/clear_refs``),
 so a phase's peak includes its sub-phases'. The census and the allocation sites are taken at the exit of `CENSUS`'s phases:
 ``ir_lower.lower_gates`` (the unit circuit and every IR gate's output word, ``wires``, alive) and
 ``fast_stage.ands_layout`` (the circuit and its layout alive, the words freed). `tracemalloc` (``--frames``) slows the build
@@ -118,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--k", type=int, required=True)
     ap.add_argument("--tile", type=lambda v: tuple(int(x) for x in v.split(",")), required=True, metavar="R,C")
+    ap.add_argument("--unit", choices=("tile", "lane", "combine"), default="tile")
     ap.add_argument("--scratch", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--frames", type=int, default=0, help="tracemalloc's frames a trace (0: no tracemalloc)")
@@ -132,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
 
-    out: dict = {"k": a.k, "tile": list(a.tile), "frames": a.frames, "sites": {}}
+    out: dict = {"unit": a.unit, "k": a.k, "tile": list(a.tile), "frames": a.frames, "sites": {}}
 
     def at_exit(phase: str) -> dict:
         t = time.monotonic()
@@ -168,9 +169,14 @@ def main(argv: list[str] | None = None) -> int:
     threading.Thread(target=sample, daemon=True).start()
     if a.frames:
         tracemalloc.start(a.frames)
-    import h1unit as U
-    path = a.scratch / f"k{a.k}.circuit.txt"
-    st = phases.wrap("stager", lambda: U.Shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND))()
+    if a.unit == "tile":
+        import h1unit as U
+        path = a.scratch / f"k{a.k}.circuit.txt"
+        st = phases.wrap("stager", lambda: U.Shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND))()
+    else:
+        import lanes
+        st = phases.wrap("stager", lambda: lanes.stage(a.unit, a.k, *a.tile, a.scratch, ROOT))()
+        path = st.circuit
     stop.set()
     rss.close()
     counts = getattr(st.low.layout, "counts", {})
@@ -180,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     path.unlink(missing_ok=True)
     (a.out / "profile.json").write_text(json.dumps(out, indent=1) + "\n")
     ands = out["ands"] or 1
-    print(f"## K={a.k} tile={a.tile[0]}x{a.tile[1]}: {out['ands']:,} unit ANDs, peak {out['peak'] / GIB:.2f} GiB "
+    print(f"## {a.unit} K={a.k} tile={a.tile[0]}x{a.tile[1]}: {out['ands']:,} unit ANDs, peak {out['peak'] / GIB:.2f} GiB "
           f"({out['peak'] / ands:.0f} B an AND), file {out['bytes']:,} B\n")
     print("| phase | depth | peak GiB | B/AND at peak | RSS in -> out GiB | seconds |\n| --- | --- | --- | --- | --- | --- |")
     for f in out["phases"]:
