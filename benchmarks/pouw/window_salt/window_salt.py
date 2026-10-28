@@ -14,10 +14,10 @@ its H1 tiles under the salt, then its registration with those same entries. The 
 coin follows it, so activations committed after the salt name another X, whose R no session was opened on.
 
 `gate` is `a5_coins.Local` (a development session on this machine, under a key made there: tests and demos) or
-`a5_coins.Gate` (the challenger host, through infra's gate); `local(root, main)` makes the first. `main` is the
-verifier's own copy of main's first-parent history (``git rev-list --first-parent origin/main``, newest first).
-`anchors(weights, activations)` is the ``rec`` of a window whose weights are registered values (the torch loop's pinned
-``w`` and ``sw``). """
+`a5_coins.Gate` (vy-challenger-1 through infra's gate); `local(root, main)` makes the first. `main` is the verifier's own
+copy of main's first-parent history (``git rev-list --first-parent origin/main``, newest first). `anchors(weights,
+activations)` is the ``rec`` of a window whose weights are registered values (the torch loop's pinned ``w`` and ``sw``).
+"""
 from __future__ import annotations
 
 import importlib.util
