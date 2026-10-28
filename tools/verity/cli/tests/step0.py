@@ -1,4 +1,4 @@
-"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the six
+"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
 `verity.core.protocols.sampled_proofs.parties`) on a machine (`Machine`).
@@ -95,6 +95,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
               needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
+    Component("inference-only", SP.IDS["inference-only"], parties=_VERIFIER, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
     Component("certifier", SP.IDS["certifier"], parties=(Role("network-certifier", "auditor"), *_VERIFIER),
