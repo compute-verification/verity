@@ -788,10 +788,11 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
 def test_the_joint_rounds_stream_holds_its_registration_to_the_generator_form():
     """The joint round's stream (`RoundStream` at the round's ``(nb, every)``; stand-in templates with the scan's
     parameters) builds its own Program in the generator form (`scan_root`) at the counts `register` takes, so
-    one-stage's registration check holds the round's registration to it, where `service.Stream`'s own copy, the mixed
-    population, refuses it (`R2-program`); a registration of the generator form at other boundaries is refused, as are
-    counts that aren't N. Without ``scan`` the stream's Program is the mixed one. Python's check alone: the stream's
-    registration runs the Lean's (`verifier.check`) too, which the dry run's honest and chain rounds hold."""
+    one-stage's registration check holds the round's registration to it and its proof blocks are in order (`register`'s
+    `population-order`), where `service.Stream`'s own copy, the mixed population, refuses it (`R2-program`); a
+    registration of the generator form at other boundaries is refused, as are counts that aren't N. Without ``scan``
+    the stream's Program is the mixed one. Python's check alone: the stream's registration runs the Lean's
+    (`verifier.check`) too, which the dry run's honest and chain rounds hold."""
     cls = SimpleNamespace(NR=2, EVERY=2, KO=1, IDB=1)
     G, T, NE, k = 1, 8, sz.IS.entry_bits(cls), 4
     nb = G * T // cls.EVERY
@@ -825,7 +826,7 @@ def test_the_joint_rounds_stream_holds_its_registration_to_the_generator_form():
     own = stream._program(n, given)
     rec = record(pg.program)
     assert sz.PA.program_digest(own) == rec["program"] == sz.PA.program_digest(pg.program)
-    assert check(rec, own) == ()
+    assert check(rec, own) == () and sz.PA.in_order(own, query, n)
     mixed = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)._program(n, given)
     assert "R2-program" in check(rec, mixed)
     assert "R2-program" in check(record(root(2 * cls.EVERY)), own)
