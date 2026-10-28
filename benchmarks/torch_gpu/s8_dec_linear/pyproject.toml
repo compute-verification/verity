@@ -10,4 +10,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
-          "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/vectors.json", "verity/core/protocols/record.py"]
+          "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/vectors.json"]
