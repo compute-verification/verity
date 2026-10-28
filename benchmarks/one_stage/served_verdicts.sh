@@ -241,11 +241,14 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
     mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"
   fi
-  for _ in $(seq 1 450); do     # every closed window's seal line
-    c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
-    [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
-    sleep 2
-  done
+  c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
+  if [ "$LOAD" != front ] || [ "$rc" = 0 ]; then  # a front that failed sent the run's only requests, so none will close
+    for _ in $(seq 1 450); do     # every closed window's seal line
+      c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
+      [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
+      sleep 2
+    done
+  fi
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   say "SERVE stopped (exit $?): $c window(s) closed, $s sealed"
