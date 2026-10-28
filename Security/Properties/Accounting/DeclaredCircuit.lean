@@ -64,7 +64,7 @@ def ScheduledRequirement : Prop :=
     (appended sent : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Array (ℕ × ℕ))
     {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
     (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
-    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Layout V)
+    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store.Placement V)
     (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
     (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
     (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)
