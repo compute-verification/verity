@@ -32,6 +32,9 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other.
 
+`AcceptInferenceOnlyBy` and `AcceptsAll` put another check in remote's place, so that the proofs can show that no check
+accepting every input has the property.
+
 `Γ` and `α = num / den` are the verifier's own: the parameters the composite names for the policy. No statement takes an
 assumption: the digests are those the code computes and compares, so that PoUW and the one-stage audit read the policy's
 record is up to a SHA-512 collision between two records the run carries, which the statements leave to their readers.
@@ -101,22 +104,37 @@ def StageHeld (k : Case) : Prop :=
     (canonicalJson k.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
     SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.base.verifier
 
+/-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
+policy's `kI`, PoUW's `kW` and the one-stage audit's `kS`; the three commitments decode, each under its own
+subprotocol's decoder, to one digest `r`, the run's record's; the policy's case is `CaseHeld`: the record names the
+registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
+declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
+and every declaration the registered circuit lays out, with the declared division, meets the policy; and the one-stage
+audit's case is `StageHeld`: its record names, by its SHA-512, the program the audit verifies the sessions against. -/
+def InferenceOnlyHeld (ev : List Case) : Prop :=
+  ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
+    Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
+    Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some r ∧
+    Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some r ∧
+    CaseHeld kI ∧ StageHeld kS
+
 /-- **Remote's acceptance gives the inference-only policy on the registered circuit.** On every input remote's check
-accepts, on any blobs: the evidence is the three subprotocols' cases in order, the policy's `kI`, PoUW's `kW` and the
-one-stage audit's `kS`; the three commitments decode, each under its own subprotocol's decoder, to one digest `r`, the
-run's record's; the policy's case is `CaseHeld`: the record names the registered circuit by its SHA-512, θ holds what
-the log's first record registers, the instance checked has a parse, a declaration the registered circuit lays out and a
-division, every parse carries the policy's `program`, `Γ` and `α`, and every declaration the registered circuit lays
-out, with the declared division, meets the policy; and the one-stage audit's case is `StageHeld`: its record names, by its SHA-512, the program the audit verifies
-the sessions against. -/
+accepts, on any blobs, its cases are `InferenceOnlyHeld`. -/
 def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
-    (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof →
-      ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
-        Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
-        Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some r ∧
-        Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some r ∧
-        CaseHeld kI ∧ StageHeld kS
+    (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof → InferenceOnlyHeld ev
+
+/-! ## Another check in remote's place -/
+
+/-- `AcceptInferenceOnly` with the check `v` in place of remote's on the blobs: `v`'s acceptance establishes what the
+property says remote's does. -/
+def AcceptInferenceOnlyBy (v : List Named → ByteArray → List Case → Outcome Keyed Keyed) : Prop :=
+  ∀ (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
+    v ps c ev = .accept pub prof → InferenceOnlyHeld ev
+
+/-- `v` accepts every input, whatever it publishes. -/
+def AcceptsAll (v : List Named → ByteArray → List Case → Outcome Keyed Keyed) : Prop :=
+  ∀ (ps : List Named) (c : ByteArray) (ev : List Case), ∃ pub prof, v ps c ev = .accept pub prof
 
 /-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes. On every input
 remote's check accepts, the evidence is the three subprotocols' cases in order, the policy's case decodes to the

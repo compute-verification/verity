@@ -243,71 +243,166 @@ theorem stage_registered {p : SampledProofs.OneStageZk.Params} {c : SampledProof
       exact hreg.2.1
     · simp_all
 
+/-- The ids of remote's subprotocols, and the subprotocols on the blobs `bs`, in their order. -/
+abbrev ids : List String := ["verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"]
+abbrev parts (bs : Blobs) : List Protocol :=
+  [NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol.onBlobs bs]
+
+/-- Remote's acceptance, split into its three subprotocols' cases: each decodes to what its own check accepts, under
+the parameters the composite names for it, and no record strays. -/
+theorem remote_parts {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
+    (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
+    ∃ (kI kW kS : Case) (nI nW nS : Named), ev = [kI, kW, kS] ∧ kI.params = nI.params ∧ kS.params = nS.params ∧
+      Properties.Composition.DecodedAccepted NciCheck.Protocol.protocol nI.params.toUTF8 kI.commitment kI.evidence ∧
+      Properties.Composition.DecodedAccepted PouwCheck.protocol nW.params.toUTF8 kW.commitment kW.evidence ∧
+      Properties.Composition.DecodedAccepted (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs))
+        nS.params.toUTF8 kS.commitment kS.evidence ∧
+      strays ids (parts (Blobs.ofArray blobs)) [kI, kW, kS] = none := by
+  rw [remote_check] at h
+  obtain ⟨hcheck, hstrays⟩ := checkSame_accept h
+  obtain ⟨⟨h1, h2, -, hpar⟩, hacc, -⟩ := Properties.Composition.acceptMeans _ _ _ _ _ _ _ hcheck
+  have hlen : ev.length = 3 := by simpa using congrArg List.length h2
+  have hlenp : ps.length = 3 := by simpa using congrArg List.length h1
+  obtain ⟨kI, kW, kS, rfl⟩ : ∃ a b d, ev = [a, b, d] := by
+    match ev, hlen with
+    | [a, b, d], _ => exact ⟨a, b, d, rfl⟩
+  obtain ⟨nI, nW, nS, rfl⟩ : ∃ a b d, ps = [a, b, d] := by
+    match ps, hlenp with
+    | [a, b, d], _ => exact ⟨a, b, d, rfl⟩
+  have m1 : (NciCheck.Protocol.protocol, nI, kI) ∈
+      Properties.Composition.triples (parts (Blobs.ofArray blobs)) [nI, nW, nS] [kI, kW, kS] := by
+    simp [Properties.Composition.triples, parts]
+  have m2 : (PouwCheck.protocol, nW, kW) ∈
+      Properties.Composition.triples (parts (Blobs.ofArray blobs)) [nI, nW, nS] [kI, kW, kS] := by
+    simp [Properties.Composition.triples, parts]
+  have m3 : (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs), nS, kS) ∈
+      Properties.Composition.triples (parts (Blobs.ofArray blobs)) [nI, nW, nS] [kI, kW, kS] := by
+    simp [Properties.Composition.triples, parts]
+  exact ⟨kI, kW, kS, nI, nW, nS, rfl, hpar _ m1, hpar _ m3, hacc _ m1, hacc _ m2, hacc _ m3, hstrays⟩
+
+theorem onBlobs_params (P : BlobProtocol) (bs : Blobs) : (P.onBlobs bs).params = P.params := rfl
+theorem onBlobs_commitment (P : BlobProtocol) (bs : Blobs) : (P.onBlobs bs).commitment = P.commitment := rfl
+theorem onBlobs_digest (P : BlobProtocol) (bs : Blobs) : (P.onBlobs bs).digest = P.digest := rfl
+theorem onBlobs_check (P : BlobProtocol) (bs : Blobs) (p : P.Params) (c : P.Commitment) (e : P.Evidence) :
+    (P.onBlobs bs).check p c e = P.checkBlobs p c e bs := rfl
+
+theorem policy_params : NciCheck.Protocol.protocol.params = NciCheck.Protocol.paramsOf := rfl
+theorem policy_commitment : NciCheck.Protocol.protocol.commitment = NciCheck.Protocol.commitmentOf := rfl
+theorem policy_evidence : NciCheck.Protocol.protocol.evidence = NciCheck.Protocol.evidenceOf := rfl
+theorem policy_check : NciCheck.Protocol.protocol.check = NciCheck.Protocol.check := rfl
+theorem stage_params : SampledProofs.OneStageZk.protocol.params = SampledProofs.OneStageZk.paramsOfJson := rfl
+theorem stage_commitment : SampledProofs.OneStageZk.protocol.commitment = SampledProofs.OneStage.commitmentOf := rfl
+theorem stage_checkBlobs : SampledProofs.OneStageZk.protocol.checkBlobs = SampledProofs.OneStageZk.checkBlobs := rfl
+
+/-- The policy's case decodes, under the policy's own decoders, to what its check accepts. -/
+theorem policy_decoded {a b e : ByteArray}
+    (h : Properties.Composition.DecodedAccepted NciCheck.Protocol.protocol a b e) :
+    ∃ (p : NciCheck.Protocol.Params) (c : NciCheck.Protocol.Commitment) (ev : NciCheck.Protocol.Evidence),
+      (canonicalJson a >>= NciCheck.Protocol.paramsOf) = .ok p ∧ NciCheck.Protocol.commitmentOf b = .ok c ∧
+      NciCheck.Protocol.evidenceOf e = .ok ev ∧ ∃ pub prof, NciCheck.Protocol.check p c ev = .accept pub prof := by
+  obtain ⟨p, c, ev, hp, hc, he, pub, prof, hk⟩ := h
+  rw [policy_params] at hp
+  rw [policy_commitment] at hc
+  rw [policy_evidence] at he
+  rw [policy_check] at hk
+  exact ⟨p, c, ev, hp, hc, he, pub, prof, hk⟩
+
+/-- The one-stage audit's case decodes, under the audit's own decoders, to what its check on the blobs accepts. -/
+theorem stage_decoded {bs : Blobs} {a b e : ByteArray}
+    (h : Properties.Composition.DecodedAccepted (SampledProofs.OneStageZk.protocol.onBlobs bs) a b e) :
+    ∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment)
+      (ev : SampledProofs.OneStageZk.Evidence),
+      (canonicalJson a >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
+      SampledProofs.OneStage.commitmentOf b = .ok c ∧
+      ∃ pub prof, SampledProofs.OneStageZk.checkBlobs p c ev bs = .accept pub prof := by
+  obtain ⟨p, c, ev, hp, hc, -, pub, prof, hk⟩ := h
+  rw [onBlobs_params, stage_params] at hp
+  rw [onBlobs_commitment, stage_commitment] at hc
+  rw [onBlobs_check, stage_checkBlobs] at hk
+  exact ⟨p, c, ev, hp, hc, pub, prof, hk⟩
+
+theorem policy_digest (c : NciCheck.Protocol.Commitment) : NciCheck.Protocol.protocol.digest c = c.digest := rfl
+theorem stage_digest (bs : Blobs) (c : SampledProofs.OneStage.Commitment) :
+    (SampledProofs.OneStageZk.protocol.onBlobs bs).digest c = c.digest := rfl
+
+theorem committed_policy {bs : Blobs} {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
+    (hc : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI) :
+    committedBy "verity/inference-only/v0" (parts bs) [kI, kW, kS] = some cI.digest := by
+  simp [committedBy, parts, id_policy, hc, Except.toOption, policy_digest]
+
+theorem committed_pouw {bs : Blobs} {kI kW kS : Case} {cW : PouwCheck.protocol.Commitment}
+    (hc : PouwCheck.protocol.commitment kW.commitment = .ok cW) :
+    committedBy "verity/pouw/v1" (parts bs) [kI, kW, kS] = some (PouwCheck.protocol.digest cW) := by
+  simp [committedBy, parts, id_policy, id_pouw, hc, Except.toOption]
+
+theorem committed_stage {bs : Blobs} {kI kW kS : Case} {cS : SampledProofs.OneStage.Commitment}
+    (hc : SampledProofs.OneStage.commitmentOf kS.commitment = .ok cS) :
+    committedBy "verity/sampled-proofs/one-stage/v2" (parts bs) [kI, kW, kS] = some cS.digest := by
+  have hc' : (SampledProofs.OneStageZk.protocol.onBlobs bs).commitment kS.commitment = .ok cS := by
+    rw [onBlobs_commitment, stage_commitment]; exact hc
+  simp [committedBy, parts, id_policy, id_pouw, id_oneStage, hc', Except.toOption, stage_digest]
+
+/-- With no stray, the three records' digests are the policy's record's. -/
+theorem tie {bs : Blobs} {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment} {cW : PouwCheck.protocol.Commitment}
+    {cS : SampledProofs.OneStage.Commitment}
+    (hcI : NciCheck.Protocol.commitmentOf kI.commitment = .ok cI)
+    (hcW : PouwCheck.protocol.commitment kW.commitment = .ok cW)
+    (hcS : SampledProofs.OneStage.commitmentOf kS.commitment = .ok cS)
+    (hs : strays ids (parts bs) [kI, kW, kS] = none) :
+    Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some cI.digest ∧
+      Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some cI.digest ∧
+      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some cI.digest := by
+  have hcI' : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := by rw [policy_commitment]; exact hcI
+  have hm : ids.mapM (fun s => (committedBy s (parts bs) [kI, kW, kS]).map (s, ·)) =
+      some [("verity/inference-only/v0", cI.digest), ("verity/pouw/v1", PouwCheck.protocol.digest cW),
+        ("verity/sampled-proofs/one-stage/v2", cS.digest)] := by
+    simp [ids, committed_policy hcI', committed_pouw hcW, committed_stage hcS]
+  have htie := strays_none hm hs
+  have hdW : PouwCheck.protocol.digest cW = cI.digest := htie _ (by simp)
+  have hdS : cS.digest = cI.digest := htie _ (by simp)
+  have hcS' : SampledProofs.OneStageZk.protocol.toProtocol.commitment kS.commitment = .ok cS := by
+    rw [← stage_commitment] at hcS; exact hcS
+  refine ⟨?_, ?_, ?_⟩
+  · simp [Properties.Composition.digestOf, hcI', Except.toOption, policy_digest]
+  · simp [Properties.Composition.digestOf, hcW, Except.toOption, hdW]
+  · have e : SampledProofs.OneStageZk.protocol.toProtocol.digest cS = cS.digest := rfl
+    simp [Properties.Composition.digestOf, hcS', Except.toOption, e, hdS]
+
 /-- What remote's acceptance gives: the three cases in order, one digest for their records, and the policy's case
 decoding to what the policy's check accepts. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
     (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
     ∃ (kI kW kS : Case) (pI : NciCheck.Protocol.Params) (cI : NciCheck.Protocol.Commitment)
       (eI : NciCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
-      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some cI.digest ∧
+      Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some cI.digest ∧
+      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some cI.digest ∧
       (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI ∧
       NciCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
       (∃ pub' prof', NciCheck.Protocol.check pI cI eI = .accept pub' prof') ∧ StageHeld kS := by
-  rw [remote_check] at h
-  obtain ⟨hcheck, hstrays⟩ := checkSame_accept h
-  obtain ⟨⟨h1, h2, -, hpar⟩, hacc, -⟩ := Properties.Composition.acceptMeans _ _ _ _ _ _ _ hcheck
-  have hlen : ev.length = 3 := by simpa using congrArg List.length h2
-  have hlenp : ps.length = 3 := by simpa using congrArg List.length h1
-  rcases ev with _ | ⟨kI, _ | ⟨kW, _ | ⟨kS, _ | ⟨_, _⟩⟩⟩⟩ <;> simp at hlen
-  rcases ps with _ | ⟨nI, _ | ⟨nW, _ | ⟨nS, _ | ⟨_, _⟩⟩⟩⟩ <;> simp at hlenp
-  have hI := hacc (NciCheck.Protocol.protocol, nI, kI) (by simp [Properties.Composition.triples])
-  have hW := hacc (PouwCheck.protocol, nW, kW) (by simp [Properties.Composition.triples])
-  have hS := hacc (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs), nS, kS)
-    (by simp [Properties.Composition.triples])
-  have hpI : kI.params = nI.params := hpar (NciCheck.Protocol.protocol, nI, kI) (by simp [Properties.Composition.triples])
-  obtain ⟨pI, cI, eI, hpI', hcI, heI, pubI, profI, hchkI⟩ := hI
-  obtain ⟨pW, cW, eW, -, hcW, -, -⟩ := hW
-  have hpS : kS.params = nS.params := hpar (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs), nS, kS)
-    (by simp [Properties.Composition.triples])
-  obtain ⟨pS, cS, eS, hpS', hcS, -, pubS, profS, hchkS⟩ := hS
-  have hpS'' : (canonicalJson nS.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) = .ok pS := hpS'
-  have hcS₀ : SampledProofs.OneStage.commitmentOf kS.commitment = .ok cS := hcS
-  have hchkS' : SampledProofs.OneStageZk.checkBlobs pS cS eS (Blobs.ofArray blobs) = .accept pubS profS := hchkS
-  have hstage : StageHeld kS :=
-    ⟨pS, cS, by rw [hpS]; exact hpS'', hcS₀, stage_registered hchkS'⟩
-  have hcI' : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hcI
-  have hcW' : PouwCheck.protocol.commitment kW.commitment = .ok cW := hcW
-  have hcS' : (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)).commitment kS.commitment = .ok cS := hcS
-  have hpI'' : (canonicalJson nI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := hpI'
-  have heI' : NciCheck.Protocol.evidenceOf kI.evidence = .ok eI := heI
-  have hchkI' : NciCheck.Protocol.check pI cI eI = .accept pubI profI := hchkI
-  have hm : ["verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"].mapM
-      (fun s => (committedBy s [NciCheck.Protocol.protocol, PouwCheck.protocol,
-        SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)] [kI, kW, kS]).map (s, ·)) =
-      some [("verity/inference-only/v0", NciCheck.Protocol.protocol.digest cI),
-        ("verity/pouw/v1", PouwCheck.protocol.digest cW),
-        ("verity/sampled-proofs/one-stage/v2",
-          (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)).digest cS)] := by
-    simp [committedBy, id_policy, id_pouw, id_oneStage, hcI', hcW', hcS', Except.toOption]
-  have htie := strays_none hm hstrays
-  have hdW : PouwCheck.protocol.digest cW = NciCheck.Protocol.protocol.digest cI := htie _ (by simp)
-  have hdS : (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)).digest cS =
-      NciCheck.Protocol.protocol.digest cI := htie _ (by simp)
-  have hcS'' : SampledProofs.OneStageZk.protocol.toProtocol.commitment kS.commitment = .ok cS := hcS
-  have hdS' : SampledProofs.OneStageZk.protocol.toProtocol.digest cS = NciCheck.Protocol.protocol.digest cI := hdS
-  have hp : (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI''
-  refine ⟨kI, kW, kS, pI, cI, eI, rfl, ?_, ?_, ?_, hp, hcI', heI', ⟨pubI, profI, hchkI'⟩, hstage⟩
-  · simp [Properties.Composition.digestOf, hcI', Except.toOption]
-  · simp [Properties.Composition.digestOf, hcW', Except.toOption, hdW]
-  · simp [Properties.Composition.digestOf, hcS'', Except.toOption, hdS']
+  obtain ⟨kI, kW, kS, nI, nW, nS, rfl, hpI, hpS, hI, hW, hS, hs⟩ := remote_parts h
+  obtain ⟨pI, cI, eI, hp, hcI, heI, hk⟩ := policy_decoded hI
+  obtain ⟨_, cW, _, _, hcW, _⟩ := hW
+  obtain ⟨pS, cS, _, hpS', hcS, _, _, hkS⟩ := stage_decoded hS
+  obtain ⟨d1, d2, d3⟩ := tie hcI hcW hcS hs
+  refine ⟨kI, kW, kS, pI, cI, eI, rfl, d1, d2, d3, by rw [hpI]; exact hp, hcI, heI, hk, ?_⟩
+  exact ⟨pS, cS, by rw [hpS]; exact hpS', hcS, stage_registered hkS⟩
 
 theorem acceptInferenceOnly : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, ⟨pub', prof', hchk⟩, hstage⟩ := remote_accept h
-  exact ⟨kI, kW, kS, NciCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,
-    hstage⟩
+  exact ⟨kI, kW, kS, cI.digest, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩, hstage⟩
+
+theorem acceptInferenceOnly_by :
+    AcceptInferenceOnly ↔ ∀ blobs, AcceptInferenceOnlyBy (Core.Remote.protocol.on blobs).check := Iff.rfl
+
+/-- **No check that accepts every input has `AcceptInferenceOnly`'s property** (its nontrivial lemma): such a check
+accepts no cases at all, `ev = []`, which are not the three subprotocols' cases. -/
+theorem acceptInferenceOnly_nontrivial : ∀ v, AcceptsAll v → ¬ AcceptInferenceOnlyBy v := by
+  intro v hall h
+  obtain ⟨pub, prof, hv⟩ := hall [] ByteArray.empty []
+  obtain ⟨kI, kW, kS, r, hev, -⟩ := h [] ByteArray.empty [] pub prof hv
+  cases hev
 
 theorem acceptComplies : AcceptComplies := by
   intro blobs ps c ev pub prof h
