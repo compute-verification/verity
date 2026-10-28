@@ -293,7 +293,8 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     wins = records(out, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1, 2] and all(w["seal"] == {"row_dir": str(out / "windows" / f"w{w['window']}"),
                                                                       "off_loop": True} for w in wins)
-    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", "requests.jsonl")) == 3
+    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", sc.REQUEST_USERS)) == 3
+    assert not (tmp_path / "OUT" / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
     assert not s.windows.summary()["passed"] and s.windows.summary()["seals"]["awaiting"] == 3
     held.set()
     sealer.close()
@@ -680,20 +681,22 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
 def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
-    (src / "requests.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
+    (src / "windows.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
     (src / "serve.json").write_text("{}")
+    (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
     m = sc.Mirror(src, dst)
     m()
-    assert (dst / "requests.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
-    with open(src / "requests.jsonl", "ab") as f:
+    assert (dst / "windows.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
+    with open(src / "windows.jsonl", "ab") as f:
         f.write(b'2}\n{"c": 3}\n')
     m()
-    assert (dst / "requests.jsonl").read_bytes() == (src / "requests.jsonl").read_bytes()
-    (src / "requests.jsonl").write_bytes(b'{"d": 4}\n')
+    assert (dst / "windows.jsonl").read_bytes() == (src / "windows.jsonl").read_bytes()
+    (src / "windows.jsonl").write_bytes(b'{"d": 4}\n')
     m()
-    assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
+    assert (dst / "windows.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
     assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
-    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
+    assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "seals.jsonl").exists()
+    assert not (dst / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
 
 
 def test_the_records_mirror_drains_the_step_traces_writer_before_it_copies(tmp_path):

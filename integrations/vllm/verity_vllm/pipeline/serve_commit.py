@@ -88,12 +88,13 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
 #: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
-#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+#: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
-#: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
-            "advice_trace.jsonl", "pauses.jsonl", "summary.json", "remote_session.json", "memory_map.jsonl")
+#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
+#: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
+MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
+            "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
