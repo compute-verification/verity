@@ -25,6 +25,7 @@ namespace CertifierDevice.IssuerDifftest
 open Lean Flock
 open NetworkCertifier (Reason Status)
 open NetworkCheck (Direction)
+open NetworkCheck.Check (Certificate)
 open CertifierDevice.Difftest (hexJson bytesOf arrOf paramsOf syncSetOf syncOf syncJson)
 
 def reasons : List Reason :=
@@ -42,7 +43,7 @@ def slotOf : Json → Except String (Option ByteArray)
   | .null => pure none
   | j => some <$> bytesOf j
 
-def recordOf (j : Json) : Except String Record := do
+def recordOf (j : Json) : Except String BlockGrid := do
   let grid ← (← j.getObjValAs? (Array Json) "grid").mapM fun row => do (← arrOf row).mapM slotOf
   pure { link := ← j.getObjValAs? String "link", window := ← j.getObjValAs? Nat "window", grid,
          status := ← statusOf (← j.getObjVal? "status") }

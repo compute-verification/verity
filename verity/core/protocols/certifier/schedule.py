@@ -20,7 +20,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Certifier, fill, released
+from verity.core.protocols.certifier.grid import Grid, GridParams, BlockGrid, Certifier, fill, released
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -127,7 +127,7 @@ def run_shaper(
     ready: Sequence[int],
     syncs: Sequence[ClockSync],
     certifier: Certifier,
-) -> list[Record]:
+) -> list[BlockGrid]:
     """An honest sender's shaper driving a certifier over len(syncs) windows.
 
     Frame k is handed at its logical bucket h(k), or later if it wasn't ready by then. A late frame delays those behind

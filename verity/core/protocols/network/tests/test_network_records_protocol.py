@@ -2,7 +2,7 @@
 with the grid compared and without it) against `audit.py`, through the difftest harness.
 
 The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
-(`KINDS`): all raw (`grid.Record`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
+(`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
 and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
 record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
 changed, and a committed status in the clear that disagrees with its digest either way. The reference decodes the
@@ -27,7 +27,7 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import CertifiedRecord
 from verity.core.protocols.certifier.commitment import CommittedRecord, commit, record_digest
-from verity.core.protocols.certifier.grid import COMPLETE, Reason, Record, Status
+from verity.core.protocols.certifier.grid import COMPLETE, Reason, BlockGrid, Status
 from verity.core.protocols.certifier.lean_audit import encode
 from verity.core.protocols.certifier.schedule import expected_grids
 
@@ -86,7 +86,7 @@ def records(b: bytes) -> tuple[list, bytes]:
                         raise D.Reject(f"slot tag {t}")
                     row.append(btake(bbe(4)) if t else None)
                 grid.append(tuple(row))
-            out.append(Record(link, window, tuple(grid), status))
+            out.append(BlockGrid(link, window, tuple(grid), status))
         elif kind == 1:
             link, window, status = btext("a link"), bbe(8), bstatus()
             out.append(CommittedRecord(link, window, btext("a digest"), status))
@@ -194,7 +194,7 @@ def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | N
     at = next((i for i, lw in enumerate(lws) if lw == aim), None) if m in RAW or m in COMMITTED else None
     if at is not None:
         r, n = published[at], d.n
-        if m == "raw-slot" and isinstance(r, Record):
+        if m == "raw-slot" and isinstance(r, BlockGrid):
             rows = [list(row) for row in r.grid]
             t, s = n % len(rows), n % len(rows[0])
             f = rows[t][s]
@@ -203,7 +203,7 @@ def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | N
             grid = draw(st.sampled_from([tuple(map(tuple, rows)), r.grid[:-1], r.grid + (r.grid[0],),
                                          (r.grid[0] + (None,),) + r.grid[1:]]))
             published[at] = dataclasses.replace(r, grid=grid)
-        elif m == "raw-other-link" and isinstance(r, Record):
+        elif m == "raw-other-link" and isinstance(r, BlockGrid):
             published[at] = dataclasses.replace(r, link=draw(st.sampled_from(["zz", *d.egress, *d.params["ingress"]["links"]])))
         elif isinstance(r, CommittedRecord):
             raw, g = d.raws[aim]
