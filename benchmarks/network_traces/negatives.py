@@ -32,6 +32,9 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   profile's row, and its record digest under the certifier's salt the certificate's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
+- ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
+  (`certificate.Issuer`, which lists the link-window in `refused`), so the window has no certified record and the
+  link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
   row of the warden's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
   carry-in, are its connection's pads and canonical id-request cells, leaving its carry-out, on the verifier's lanes
@@ -130,6 +133,7 @@ TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advi
 #: upstream (`tie_suite`): extra's one event past a response's end is a data cell no committed output is
 TIE_RUN_PARTS = {"extra": "content"}
 CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
+ISSUER_REFUSED = "Issuer.refused"
 ENDS = ("egress", "ingress")
 
 
@@ -602,9 +606,9 @@ class Negative:
 
 
 NEGATIVES = {n.name: n for n in [
-    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window",
-             "N2's head check (the record's status)", f"{HEAD}.fields", shim("late"),
-             also=("audit.status:coverage-never-established",)),
+    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window "
+             "and certifies none of it", "the certifier (it certifies no incomplete status)", ISSUER_REFUSED,
+             shim("late")),
     Negative("extra", "io", "plan", "the shim writes one event more than the endpoint sent; certified",
              "N2's counts against the profile", f"{HEAD}.counts", shim("extra"), served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",
@@ -1415,7 +1419,8 @@ def n2(run: Path, clock=time.monotonic) -> dict:
     """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof system's stream as
     `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
-    link-window's codes (`codes`), and their union."""
+    link-window's codes (`codes`), and their union. The link stops at the first window without both certified records,
+    whose code is `ISSUER_REFUSED` when the certifier listed it as refused, else ``no-certified-record``."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
@@ -1424,7 +1429,8 @@ def n2(run: Path, clock=time.monotonic) -> dict:
     for w in range(plan["windows"]):
         pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
         if None in pair:
-            rows.append({"window": w, "accepted": False, "codes": ["no-certified-record"]})
+            code = ISSUER_REFUSED if any(r[2] == w for r in refused) else "no-certified-record"
+            rows.append({"window": w, "accepted": False, "codes": [code]})
             break
         opening = lw.commit(w, *pair)
         reg = lw.register(st, lw.registration(opening, previous))

@@ -225,11 +225,14 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose egress counts no profile holds, and on a warden link, whose counts are its schedule's);
-    extra, egress heads fail their counts alone, on one window or more; late, egress heads
-    fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
+    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
+    extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
+    faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
+    `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
+    if name == "late":
+        return not xs and any(w == 0 for *_, w in rd.issuer_refused)
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
         return False
@@ -242,7 +245,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
         signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
         want = ["signed"] if signed else ["counts", "signed"]
         return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
-    allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
+    allowed = {"extra": ([], ["counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
 
