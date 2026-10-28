@@ -33,8 +33,8 @@ def parse_server_md(text: str) -> dict[int, str]:
 
 
 def resolve_gpu(arg: str, env: dict[str, str]) -> int:
-    """`--gpu`: an index, or `lease`, the one index a lease put in `CUDA_VISIBLE_DEVICES` (node 2's `gpu-lease 1` takes the
-    first free GPU, so the index is known only inside the lease)."""
+    """`--gpu`: an index, or `lease`, the one index a lease put in `CUDA_VISIBLE_DEVICES` (the RTX PRO 6000 node's
+    `gpu-lease 1` takes the first free GPU, so the index is known only inside the lease)."""
     if arg != "lease":
         return int(arg)
     cvd = (env.get("CUDA_VISIBLE_DEVICES") or "").strip()
@@ -57,9 +57,9 @@ def expected_for(gpu_arg: str, expect_uuid: str | None, server_md: str | None, e
 def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_uuid: str | None,
           pod: bool = False) -> dict:
     """Refuses the run unless it is on GPU `gpu` alone and that GPU is `expected_uuid`. `expected_uuid` may list several,
-    comma-separated: a queue job that can't pin an index (node 2's Kueue queue gives a one-GPU job whichever GPU is free, as
-    index 0) passes the node's UUIDs and records which one it got. On a single-GPU pod (`pod`), which has no server table,
-    the UUID is recorded and matched only when one is given."""
+    comma-separated: a queue job that can't pin an index (the RTX PRO 6000 node's Kueue queue gives a one-GPU job
+    whichever GPU is free, as index 0) passes the node's UUIDs and records which one it got. On a single-GPU pod
+    (`pod`), which has no server table, the UUID is recorded and matched only when one is given."""
     cvd = env.get("CUDA_VISIBLE_DEVICES")
     if cvd is None or cvd.strip() != str(gpu):
         raise IdentityError(f"CUDA_VISIBLE_DEVICES must be exactly {gpu!r}, is {cvd!r}")
