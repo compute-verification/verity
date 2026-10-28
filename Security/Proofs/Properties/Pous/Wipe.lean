@@ -28,7 +28,7 @@ import Mathlib.Tactic.DefEqTransformations
   `1 ≤ batch ≤ k` (`params_check_k`), so at least one read.
 * **What `check` publishes** (`check_accept`, `certify_certified`): an accepted `check` publishes `certify` of the
   commitment's parameters, and a certified one has `k ≤ MAX_READS`, `memory_bits` the declared tiers' bits,
-  `eps = 1/2^128` and `foreign_bits = foreignBits p (ratio k) + egress_mib · 2^23`. At most `MAX_READS` reads and no
+  `eps = 1/2^128` and `foreign_bits = foreignBits p (ratio k) + egress_mib · 2^23`. From 1 to `MAX_READS` reads and no
   egress, `certify` certifies (`certify_zero`).
 * **The honest and nontrivial lemmas** (`wipeSurvivorBoundHonest`, `wipeSurvivorBoundNontrivial`): the honest strategy
   reads back what it wrote; the cheating strategy keeps the published `foreign_bits` of foreign content in the store
@@ -253,14 +253,15 @@ theorem certify_certified {p : StreamedWipe.Params} {e egressMib : Int} {eps : C
     exact ⟨hk', rfl, rfl, by simp [WipeProtocol.ratioOf, hk']⟩
   · simp at h
 
-/-- At most `MAX_READS` reads and no egress, `certify` certifies, at `eps = 1/2^128` and `foreign_bits` the threshold at
-`r = ratio k`. -/
-theorem certify_zero {q : StreamedWipe.Params} (hk : q.k ≤ WipeProtocol.MAX_READS) :
+/-- From 1 to `MAX_READS` reads and no egress, `certify` certifies, at `eps = 1/2^128` and `foreign_bits` the threshold
+at `r = ratio k`. -/
+theorem certify_zero {q : StreamedWipe.Params} (hk0 : 1 ≤ q.k) (hk : q.k ≤ WipeProtocol.MAX_READS) :
     WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, WipeProtocol.foreignBits q (WipeProtocol.ratio q.k), q.k,
       WipeProtocol.memoryBits q, WipeProtocol.ratio q.k⟩ := by
+  have h0 : q.k ≠ 0 := by omega
   have h1 : ¬ WipeProtocol.MAX_READS < q.k := not_lt.mpr hk
   have hg : WipeProtocol.gaps q 0 = [] := by
-    simp [WipeProtocol.gaps, h1, StreamedWipe.EGRESS_MAX_UNITS]
+    simp [WipeProtocol.gaps, h0, h1, StreamedWipe.EGRESS_MAX_UNITS]
   unfold WipeProtocol.certify
   rw [hg]
   simp [WipeProtocol.ratioOf, hk]
@@ -389,7 +390,7 @@ theorem honestRead_honestFill {ι : Type} {d : Accounting.Device ι} {n : ℕ} (
   · omega
 
 theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
-  refine ⟨fun q hk => certify_zero hk, ?_⟩
+  refine ⟨fun q hk0 hk => certify_zero hk0 hk, ?_⟩
   intro ι d C B s b n k h carry
   refine ⟨rfl, ?_, fun σ L c => ⟨fun i => ?_, le_rfl⟩⟩
   · show (Finset.univ : Finset (Fin 0 → Bool)).card ≤ 2 ^ 0
@@ -439,6 +440,10 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
   · exact absurd (h.trans_eq key) (not_le.mpr hε)
   · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 
+theorem segment_reads_pos : 1 ≤ segmentParams.k := by
+  show 1 ≤ 2152
+  norm_num
+
 theorem segment_reads : segmentParams.k ≤ WipeProtocol.MAX_READS := by
   show 2152 ≤ 2 ^ 17
   norm_num
@@ -450,7 +455,7 @@ theorem segment_foreign_le :
   have hr : WipeProtocol.ratio segmentParams.k = 24 := by decide +kernel
   have hm : WipeProtocol.memoryBits segmentParams = 2 ^ 28 := by decide +kernel
   have hl : Nat.log2 2152 < 12 := (Nat.log2_lt (by norm_num)).2 (by norm_num)
-  rw [certify_zero segment_reads]
+  rw [certify_zero segment_reads_pos segment_reads]
   simp only [WipeProtocol.foreignBits, WipeProtocol.outsideBits, WipeProtocol.fillBits, hr, hm]
   show 64 * 8 * ((2 ^ 19 + 24 - 1) / 24 - 1) + 2 ^ 19 + Nat.log2 2152 + 130 + (2 ^ 28 - 2 ^ 19 * 64 * 8) + 0 ≤
     2 ^ 19 * 512
@@ -461,7 +466,7 @@ theorem segment_foreign_le :
 /-- The segment's published `eps` is below 1. -/
 theorem segment_eps_lt :
     ((WipeProtocol.certify segmentParams 0).eps.num : ℝ≥0∞) / (WipeProtocol.certify segmentParams 0).eps.den < 1 := by
-  rw [certify_zero segment_reads]
+  rw [certify_zero segment_reads_pos segment_reads]
   show ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) < 1
   rw [Nat.cast_one, one_div, ENNReal.inv_lt_one]
   exact_mod_cast (by norm_num : (1 : ℕ) < 2 ^ 128)
