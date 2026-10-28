@@ -907,7 +907,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                session_roots: dict, served: list[int]) -> None:
     """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
     (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
-    audit's as an exact ratio), in ``out/case.json``, and today's Python on it (`replay.python`) in
+    audit's as an exact ratio), in ``out/case.json``, and the current Python on it (`replay.python`) in
     ``out/case-python.json``."""
     try:
         import replay as RP
