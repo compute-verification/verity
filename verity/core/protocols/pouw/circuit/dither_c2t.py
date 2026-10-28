@@ -285,7 +285,7 @@ def block_definition(sh: C2TShape, s: int) -> Any:
     window. Any other form is refused: a served call's blocks are `dither.block_definition`'s."""
     if not isinstance(sh, C2TShape):
         raise ValueError(f"C2-T's blocks are a C2TShape's, not a {type(sh).__name__}'s: a served call's are "
-                         f"`dither.block_definition`'s")
+                         f"`dither.block_definition`'s, or `dither_c2o.block_definition`'s for C2-O")
     a, b = sh.seg(s)
     return bind(PouwDitherFillC2T, L=b - a, CELLS=CELLS, R=sh.r, W=sh.w)
 

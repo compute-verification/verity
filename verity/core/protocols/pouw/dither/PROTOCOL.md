@@ -509,6 +509,24 @@ hasn't ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2t.py` ho
 - **Open:** compute-research's FILLER-C2 spec (the window, the K and t, the coins' expansion and the leaf layout) and
   SAKHigh-T's statement.
 
+## The C2-O served form
+
+C2-O is a served form at S = 1, from BYTE-CELL's C2-O. It is experimental: it rests on SAKHigh-O, a claim Daniel hasn't
+ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2o.py` holds its shape, reference and Definition.
+- **What is committed.** A call computes O = (A + d_A)(B + d_B)ᵀ with v3.2's dithers and no noise: no U, V or π, and so no
+  peel. Its value root holds only a window of O at full width, ⌊O/2^R⌋ mod 2^W. BYTE-CELL's window is bit 9 alone, 1 bit
+  a cell. Down's A′ stays in up's value root, as in v3.2. The leaves are C2-T's at one segment, under
+  `verity/pouw/dither/c2o/v1`.
+- **Its shape rule.** The window must cover bit 9, the bit SAKHigh-O is stated for, and B must be pinned by registration.
+  With weights the prover chooses, d_A's count times B's mean passes 80% of cells.
+- **Its proof block** is 8 adjacent cells of one row, `PouwDitherServedC2O_v1`, over A's whole row, B's 8 rows and their
+  dithers. Its only output is the pass bit.
+- **Credit.** An accepted call is credited at pub_O, not at the int8 GEMM: about 0.886 of it on the H200 with B pinned,
+  the price of Strassen–Winograd at A = 0 with its sparse corrections.
+- **Each form's dispatch refuses the others' shapes.** `dither_c2o.block_definition` takes only a `C2OShape`.
+- **Open:** compute-research's C2-O spec, the check of down's A′ beside the block (up's cells through SiLU·mul and the
+  requant), and SAKHigh-O's statement.
+
 ## Open
 
 - **The pooled bound over replicas** is POOL-THM's (CMP-152): tier A on the accepted set, weighted by each W_reg,u, with

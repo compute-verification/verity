@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "PouwDitherServedC2O_v1{K=32,CELLS=8,R=9,W=1}": {
+   "and": 27175,
+   "type": "b421ca42fbefc283858b9a6292c6fd2fdcf26a1965eee3b61558cee5c890a1d633866fe654d4a24f4b457623b7524e325eaa59903c8f448e9e0cf3b88222d50c"
+  },
+  "PouwDitherServedC2O_v1{K=64,CELLS=2,R=8,W=8}": {
+   "and": 21863,
+   "type": "8bb744382ecf536fda22090e016773b166751decde07b9feae5024e7366be7d2e786cdd898de418104691ee947149b6473d354efaa37d8005658d6789e60754e"
+  },
+  "PouwDitherServedC2O_v1{K=64,CELLS=2,R=9,W=1}": {
+   "and": 13603,
+   "type": "a88402f8283e293a8ba03d8fa112e75818dbcad4915e1c0353bd0975e6f3b9ced36739b75edfa6494aafa3b44617be05cfe9bdbc44f1c03870d27d66ad3e0f21"
+  }
+ }
+}
