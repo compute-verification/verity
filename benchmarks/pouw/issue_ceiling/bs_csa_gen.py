@@ -1,6 +1,6 @@
 """Generate (and verify) the BS-CSA chunk reducer for bs_csa.cu.
 
-BS-CSA (csa_sim.py, art:3d8c4200...): C = X@Y, X,Y in {+-1}; x=(-1)^a, y=(-1)^b; C_ij = K - 2*#{k: a_ik != b_kj}.
+BS-CSA (csa_sim.py): C = X@Y, X,Y in {+-1}; x=(-1)^a, y=(-1)^b; C_ij = K - 2*#{k: a_ik != b_kj}.
 A lane word holds b_kj of 32 output columns (one bit-plane per k). Per row a Harley-Seal carry-save counter counts
 the planes (Y_k XOR A_ik), A_ik all-ones if a_ik else 0; a warp-uniform branch on (a_ik1, a_ik2) picks the
 first-level full adder's LOP3 immediates so the XOR is free (2.00 LOP3 a raw term-plane = 16 MACs a lane LOP3).

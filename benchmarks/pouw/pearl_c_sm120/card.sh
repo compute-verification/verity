@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # run.py on one leased RTX PRO 6000, from build.sh's OUT sent as a tarball, on the leased GPU's NUMA node:
 #   tar -cf ship.tar -C <build.sh's OUT> .
-#   research run --on vy-nebius-2 --project verity --campaign C --source <tree> --cwd source --env GPU_LEASE_WHO=<id> \
+#   research run --on vy-nebius-2 --project verity --campaign C --source <tree> --cwd source --env GPU_LEASE_WHO=LANE \
 #     [--env GPUS=2,3] [--env SHAPES="8x4096x4096 ..."] [--env REPS=20] --send ship.tar --send numabind.py \
 #     -- bash benchmarks/pouw/pearl_c_sm120/card.sh
 # First the check alone on both variants (OUT/check.jsonl), then the check and the timing at SHAPES on VARIANTS (default
 # sm120, the served one; OUT/run.jsonl); each run's summary in OUT/<name>.txt, and the job's exit code the first failure's.
 # GPUS: the GPUs the lease may take (gpu-lease --on); MAX_MIN the lease (15); GPU_LEASE_TIMED=1 for a row taken inside a
-# booked clean window (gpu-lease --timed). numabind.py is #3395's (benchmarks/hash/dither/numabind.py); without it run.py
+# booked clean window (gpu-lease --timed). numabind.py is benchmarks/hash/dither/numabind.py; without it run.py
 # runs unbound. The node's load (loadavg and the leases) before and after each part is OUT/load.txt. Scratch, the unpacked
 # ship, is one mktemp -d directory.
 set -euo pipefail
