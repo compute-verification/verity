@@ -2,7 +2,7 @@ import Proofs.Pouw.Dither
 import Proofs.Pouw.ShaRealize
 
 /-!
-# `WorkSound`'s premises hold together (RT-LEAN L7, RT-LEAN-2 L38)
+# `WorkSound`'s premises hold together
 
 The headline isn't vacuous: on the witness machine, round and period below, every premise of
 `Definitions.Pouw.Guarantees.Dither.WorkSound` holds at once, at `k = 2` rounds and the non-uniform prices
@@ -13,8 +13,8 @@ prover (`witness`). `witness_freed` is the headline's conclusion there, from `Wo
   any function with its use and its oracle calls, each call a step that uses a hash unit (G3, `callUse = (0, 1, 0)`).
   The machine's laws (`TAlg`) charge it a MAC unit for each word cell it outputs that varies over its inputs, a hash
   unit for each root cell that varies, and a round's work (dither in, state and root out) both for each root cell
-  that varies. A cell that is constant over every input is free: a program can guess a word or a root cell at no cost
-  (L38). No law reads an answer's output, so answers are free.
+  that varies. A cell that is constant over every input is free: a program can guess a word or a root cell at no cost.
+  No law reads an answer's output, so answers are free.
 * `twNF`, `twRound`: the witness round, a no-fold round with two words (`n = 2`, `n' = nb = L = 1`). The noise is the
   word: word `i` is the dither's `d i`, one of 16 values, so a guessed word passes its check with probability
   `p = 1/16`. The check draws one of the two words (`s = 1`). The root is transparent: root cell `i` is word `i`
@@ -27,7 +27,7 @@ prover (`witness`). `witness_freed` is the headline's conclusion there, from `Wo
   `H = H_mm + H_sha + H_o = 4 + 2 + 1` and the public bests are the honest ones (`pub_mm = 4`, `pub_sha = 2`), so
   `C = 14`.
 
-**The rate and free guesses (L38).** A words program charged for `j` varying words costs at least `2 j` at `μ`, falls
+**The rate and free guesses.** A words program charged for `j` varying words costs at least `2 j` at `μ`, falls
 short of `pub_mm = 4` by at most `4 − 2 j`, and passes the check with probability at most `(j + (2 − j) p)/2`. At rate
 `η_mm` a unit of priced cost its moment is at most 1 for every `j` iff `e^{2 η_mm} (1 + p)/2 ≤ 1` (`j = 1`) and
 `e^{4 η_mm} p ≤ 1` (`j = 0`), so `η_mm ≤ ln(2/(1 + p))/2`: about `0.316` at `p = 1/16`, and `ln(4/3)/2` for one-bit
@@ -729,7 +729,7 @@ theorem twε_lt (A : Prover tw twRound 2) : twε A < 1 := by
 theorem twκ_lt (A : Prover tw twRound 2) : twκ A < 1 := by
   norm_num [twκ, twδ]
 
-/-- **The witness statement** (RT-LEAN L7, RT-LEAN-2 L38): every premise of `WorkSound`, in its order, at the witness
+/-- **The witness statement**: every premise of `WorkSound`, in its order, at the witness
 machine `tw`, round `twRound` and period `twPd`, with `k = 2`, `Reg` every instance, `μ = (2, 1, 1)`,
 `H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1`, `η = 1/7`, `δ = 1/2`, `β = K = κ_S = 0`, the cap `Q = 8`,
 `κ_dmm = κ_dsha = 0`, and for every prover `B_adv = |Adv|`, `ξ = 0`, `κ_x = 0` and `κ_sha = 0`; then the

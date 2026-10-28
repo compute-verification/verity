@@ -52,7 +52,7 @@ def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
 
 def test_mistral_role_resolves_to_a_derived_module_without_an_allowlist_entry():
     assert profile_module_for_case("MISTRAL7B") == "derived_MISTRAL7B"
-    mod = importlib.import_module("verity_vllm.observe.fold.profiles.dense_MISTRAL7B")          # the X-07 name recorded runs cite: the same module
+    mod = importlib.import_module("verity_vllm.observe.fold.profiles.dense_MISTRAL7B")          # the name recorded runs cite: the same module
     p = mod.PROFILE
     assert p.id == profile_for_case("MISTRAL7B").id and p.config == profile_for_case("MISTRAL7B").config   # two module names, one derivation
     assert p.notes["case"] == "MISTRAL7B" and p.id == "vllm-d9105ea80-sm89-eager-bf16-mistral7b"
