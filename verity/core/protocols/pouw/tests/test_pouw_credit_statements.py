@@ -389,7 +389,7 @@ def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> di
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, tmp_path, verifier):
-    """RT-ALGO-16: a J10-R window's unit's public row is today's, then its ``call``, its call's first position u0 (the
+    """A J10-R window's unit's public row is today's, then its ``call``, its call's first position u0 (the
     one its seed_c is drawn at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
     t % (n/C)) at the call's slot M, its K and the tile: credit derives both from the committed layout, as it builds
     the rest of the row. A statement whose units drew their noise at another unit's blocks, at another call's u0, or at
