@@ -2,7 +2,7 @@
  "schema": "verity-pouw/pearl-c-u-vectors/v1",
  "status": "cpu-pinned",
  "status_detail": "equal to pearl-c-h100's CPU reference and, on these cells, to the H100 kernel's gate fixture; silicon confirmation waits for the joint H100 request's B1 capture",
- "module": "verity/core/protocols/pouw/schemes/pearl_c_u.py",
+ "module": "verity/ml/protocols/pouw/schemes/pearl_c_u.py",
  "problem": {
   "shape": [256, 384, 1024],
   "case": "gpu-check",
