@@ -1,13 +1,18 @@
 # Network certification's Lean checks (`verity/core/protocols/network`)
 
-The auditor's checks of what the network certifiers sign, as executable Lean, and the suite that holds each to its
-Python reference in `verity/core/protocols/certifier/`. A network certifier is an auditor-trusted device on a node's
-uplink. For each sampling block of transfer blocks it carries on a link (the code's *link-window*, over one sampling
-period) it signs a network certificate. A certification period is m consecutive link-windows on one link under one
-signed root (`NetworkCheck.Period`). The identifiers keep the names `window` and `LinkWindow` until a format version
-(the Glossary's older names).
+`NetworkCheck` is the Lean verifier of the network certifiers' records and of the certification period's check, with
+the suite that holds each check to its Python reference in `verity/core/protocols/certifier/`.
 
-The inference-only policy's check is the separate package in `nci/`, with its own README.
+A network certifier is an auditor-trusted device on a node's uplink. For each sampling block of transfer blocks it
+carries on a link (the code's *link-window*, over one sampling period) it signs a network certificate. A certification
+period is m consecutive link-windows on one link under one signed root (`NetworkCheck.Period`). The identifiers keep the
+names `window` and `LinkWindow` until a format version (the Glossary's older names).
+
+- `verity/core/protocols/certifier/`: the network certifier itself (its relay, records, certificates and the Python
+  audit), and in its README the protocol.
+- `nci/`: the inference-only policy's check, a separate package with its own README.
+- `Security/Proofs/NetworkCertifier/README.md`: the guarantees and proofs about the certifier's timing channel, which
+  bound `K` (below).
 
 ## What runs
 
@@ -20,11 +25,14 @@ Each check is a `Core.Protocol`, so each executable has the interface's three co
 `check PARAMS COMMITMENT EVIDENCE` and `serve` (`verity/core/protocols/interface/README.md`). The module docstring of
 each check states its parameters, commitment and evidence byte for byte.
 
+The Python references below are in `verity/core/protocols/certifier/` except `tests/period_case.py`, which is this
+package's.
+
 | executable | protocol id | module | what it decides | its Python reference |
 | --- | --- | --- | --- | --- |
 | `network-check` | `verity/network-certificate/v4` | `NetworkCheck.Check` | one spatial unit's certified link-windows: every egress link in order, then every ingress link, under the certifier's LMS key in its session | `audit.py`'s `Audit` (`check_link`, `check_ingress_link`) |
 | `network-records` | `verity/network-records/v3` | `NetworkCheck.Records` | the same audit over raw, committed and certified records, with the egress grid compared or not | `audit.py`'s `Audit` |
-| `network-period` | `verity/certifier/v0` | `NetworkCheck.Period` | a certification period, onsite's communication component (below) | `tests/period_case.py` |
+| `network-period` | `verity/certifier/v0` | `NetworkCheck.Period` | a certification period, the onsite composite protocol's communication component (below) | `tests/period_case.py` |
 | `network-check-difftest` | none | `NetworkCheck.Difftest` | that `certificate.py`'s encodings are `NetworkCheck.Certificate`'s, byte for byte | `certificate.py` |
 
 The other modules:
@@ -52,14 +60,21 @@ It accepts when every link-window passes its form's check and every compute audi
 bits a covert sender in the server can move through the network certifier in the period, as
 `NetTiming.Guarantees.PeriodLeakAccepted` counts them (`Security/Proofs/NetworkCertifier/README.md`).
 
-## Who calls it
+## Who runs it
 
-- `verity/core/protocols/certifier/lean_audit.py`: `lean_audit.Audit` is `audit.Audit` with every verdict taken from
-  `network-records verdicts`. It builds the executable with `lake build network-records`.
-- `benchmarks/network_traces/certifier_piece.py`: the certifier piece builds `network-period` and checks each period
-  with it.
-- The onsite protocol (`verity/core/protocols/onsite`) composes `verity/certifier/v0` as its communication component
-  (`Core.Onsite.components`). The composition's difftest takes the period's mirror and cases from `tests/period_case.py`.
+| executable | run by |
+| --- | --- |
+| `network-records` | `verity/core/protocols/certifier/lean_audit.py` (`lean_audit.Audit`) and `service.py`'s link-window verdict (`verdicts`' `link-window`); the records' runners (`benchmarks/network_e2e/run.sh`, `benchmarks/network_traces/chain_record.sh`) build it and pass it on |
+| `network-period` | `benchmarks/network_traces/certifier_piece.py`, `block_certifier.py` and `scan_period.sh` |
+| `network-check-difftest` | the Lean check, on the vectors below |
+| `network-check` | only its own test, `tests/test_network_check_protocol.py`; the records run `network-records` |
+
+- `lean_audit.Audit` is `audit.Audit` with every verdict taken from one `network-records verdicts` process.
+  `VERITY_NETWORK_RECORDS_EXE` names a built executable; without it, the first request runs `lake build
+  network-records` here.
+- The onsite composite protocol (`verity/core/protocols/onsite`) composes `verity/certifier/v0` as its communication
+  component (`Core.Onsite.components`). The composition's difftest takes the period's mirror and cases from
+  `tests/period_case.py`.
 
 ## Tests
 
