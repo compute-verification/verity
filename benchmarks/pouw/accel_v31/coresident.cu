@@ -15,7 +15,9 @@
 //   flags  res: the operands resident in one stage of shared memory, the consumers free-running (no barriers);
 //          bar: the producer warp hands the stages over on gemm_r5's full and empty mbarriers, loading nothing;
 //          load: the producer loads each k-tile with TMA from A (M x K) and B (N x K), tiles in gemm_r5's static
-//          schedule (every gridDim.x-th, rows then columns);
+//          schedule (every gridDim.x-th, rows then columns), or with RASTER = G in bands of G rows, columns within,
+//          so the CTAs at work share their operands in L2 (rows then columns give each CTA a B tile of its own, BN x K
+//          bytes, 2 MiB at K 8,192, and 132 of them don't fit in L2's 50 MB);
 //          epi: at each tile's end (K / 128 k-tiles), wgmma.wait_group 0 and gemm_r5's direct O stores (s32, int2 a
 //          pair) into an M x N buffer;
 //          ns (resident only): the operands as the co-issue probe's unswizzled 8 x 16-byte core matrices in place of
@@ -100,6 +102,7 @@ struct alignas(128) Prm {
   int* O;
   Stamp* st;
   int M, N, K, groups, nhw, hreps;
+  int raster;   // loaded tiles' order: 0, gemm_r5's (rows, then columns); G, G rows of units at a time, columns within
   u32 mask;   // each operand byte's: 0xFF random int8, 0x03 the 2-bit values 0..3
 };
 
@@ -171,8 +174,14 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
   const int groups = FL & LOAD ? my_tiles * TK : p.groups;
   auto tile = [&](int g, int& tm, int& tn) {
     const int u = (u0 + (g / TK) * ustep) % units;
-    tm = u / tiles_n * CL + rank;
+    int ur = u / tiles_n;
     tn = u % tiles_n;
+    if (p.raster > 0) {
+      const int band = p.raster * tiles_n, w = u % band;
+      ur = u / band * p.raster + w % p.raster;
+      tn = w / p.raster;
+    }
+    tm = ur * CL + rank;
   };
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) {
@@ -407,6 +416,7 @@ int main(int argc, char** argv) {
     return 2;
   }
   const std::string sel = getenv("CFGS") ? getenv("CFGS") : "", opl = getenv("OPS") ? getenv("OPS") : "s8";
+  const int raster = getenv("RASTER") ? atoi(getenv("RASTER")) : 0;
   std::vector<std::pair<std::string, u32>> kinds;   // the operands' kinds, each a byte mask
   for (size_t i = 0; i <= opl.size();) {
     const size_t j = std::min(opl.find(',', i), opl.size());
@@ -430,8 +440,8 @@ int main(int argc, char** argv) {
   const double peak = nsm * 4096.0 * PEAK_MHZ * 1e6;
   gk::Nvml nv(0);
   printf("{\"device\": \"%s\", \"sms\": %d, \"M\": %d, \"N\": %d, \"K\": %d, \"groups\": %d, \"hreps\": %d, \"item_ms\": %.0f, "
-         "\"ops\": \"%s\", \"nvml\": %s, \"energy\": %s}\n",
-         dp.name, nsm, M, N, K, groups, hreps, item_ms, opl.c_str(), nv.ok() ? "true" : "false",
+         "\"ops\": \"%s\", \"raster\": %d, \"nvml\": %s, \"energy\": %s}\n",
+         dp.name, nsm, M, N, K, groups, hreps, item_ms, opl.c_str(), raster, nv.ok() ? "true" : "false",
          nv.energy_mj() ? "true" : "false");
   uint8_t *A, *B;
   int* O;
@@ -463,6 +473,10 @@ int main(int argc, char** argv) {
     cudaFuncAttributes fa;
     CK(cudaFuncGetAttributes(&fa, c.k));
     const int cl = cluster_of(c.fl);
+    if (raster < 0 || (raster > 0 && (c.fl & LOAD) && M / (64 * c.nm) / cl % raster)) {
+      fprintf(stderr, "%s: RASTER is 0 or divides the %d rows of units\n", c.name, M / (64 * c.nm) / cl);
+      return 2;
+    }
     if (cl > 1) {
       const cudaLaunchConfig_t lc = config(c, nsm);
       int nc = 0;
@@ -488,7 +502,7 @@ int main(int argc, char** argv) {
     p.bp = tmap(B, K, N, bn / cluster_of(c.fl));
     p.O = O;
     p.st = st;
-    p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps; p.mask = mask;
+    p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps; p.mask = mask; p.raster = raster;
     return p;
   };
   auto launch = [&](const Cfg& c, int g, int nhw) {
