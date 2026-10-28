@@ -89,7 +89,7 @@ def analyze(run: Path) -> dict:
                             "mhz": f_b, "alone_gbps": b["alone_gbps"], "beside_gbps": b["hash_gbps"], "kappa": b["kappa_window"],
                             "gemm_slowdown": b["gemm_slowdown_total"], "delta_ms": b["gemm_delta_ms"], "overlapped": b["overlapped"],
                             "h_beside": round(ruler_b * b["gemm_delta_ms"] * 1e-3 / b["bytes"], 1),
-                            "bytes_per_fwd": round(b["hash_gbps"] * 1e9 * b["loop_alone_ms"] / b["n_fwd"] * 1e-3)})
+                            "bytes_per_fwd": b.get("chunk_bytes") or round(b["hash_gbps"] * 1e9 * b["loop_alone_ms"] / b["n_fwd"] * 1e-3)})
                 if "aa_ms" in b:   # A-B-A runs: the median |A' - A| and B's delta range over reps, in h
                     pts[-1].update(h_noise=round(ruler_b * b["aa_ms"] * 1e-3 / b["bytes"], 1),
                                    h_range=[round(ruler_b * d * 1e-3 / b["bytes"], 1) for d in b["delta_ms_range"]])
@@ -100,7 +100,7 @@ def analyze(run: Path) -> dict:
             out["rows"][f"{form}:{rb}"] = row
     out.update(phases=res.get("phases", "4"), form_kind=res.get("form", "split"), stride0=res.get("stride0", False),
                gemm_priority=res.get("gemm_priority", -100), step=res.get("step", False), gap_cycles=res.get("gap_cycles", 0),
-               gemm_kind=res.get("gemm_kind", "triton"))
+               gemm_kind=res.get("gemm_kind", "triton"), gap_first=res.get("gap_first", False))
     return out
 
 

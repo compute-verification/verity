@@ -13,7 +13,7 @@ h is in MAC-times a committed byte (hash_cost_h.py). For each T and row size rb:
   h_cycles     the same with the clock's fall beside the hash taken out (NVML in each leg), the per-clock figure
 A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data launches a leaf batch) and CTAs a launch. Each loop
 is its own key: T for the bare GEMM loop, T:step for the loop shaped like the served step (T:step:nogap without the host gap), and
-:wgmma after either for the persistent wgmma GEMM.
+:wgmma after either for the persistent wgmma GEMM, :gapfirst for a step loop whose leaves start at each forward's end (GAP_GB).
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def collect(runs: list[Path]) -> dict:
             continue
         rid = next((p for p in run.parts if p.startswith("r2026")), str(run))
         loop = (f"{a['T']}" + (":step" if a["step"] else "") + (":nogap" if a["step"] and not a["gap_cycles"] else "")
-                + (":wgmma" if a["gemm_kind"] == "wgmma" else ""))
+                + (":wgmma" if a["gemm_kind"] == "wgmma" else "") + (":gapfirst" if a["gap_first"] else ""))
         for key, row in a["rows"].items():
             e = by.setdefault(loop, {}).setdefault(str(row["row_bytes"]), {"alone": [], "tree": [], "points": []})
             src = {"run": rid, "arm": run.name, "form": row["form"], "phases": a["phases"], "kind": a["form_kind"]}

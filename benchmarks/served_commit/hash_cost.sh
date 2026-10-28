@@ -3,7 +3,7 @@
 # (Llama-3.2-1B at T 8,192) at a range of hash shares, the SM clock sampled beside it all. The libraries are built before the lease.
 # Measurement only. cwd: the source tree's root.
 #   VERITY_BENCH_VENV (the node's torch + triton environment), CUDA_HOME (/usr/local/cuda-13.0), LEASE_MIN (20), and hash_cost.py's
-#   ROWS, TOTAL_GB, THREADS, WARPS, T, HASH_MS, REPS, STEP, GAP_CYCLES.
+#   ROWS, TOTAL_GB, THREADS, WARPS, T, HASH_MS, REPS, STEP, GAP_CYCLES, GEMM, GAP_GB.
 set -uo pipefail
 . benchmarks/harness/env.sh
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -83,6 +83,12 @@ if has wgmma; then
         w64k:$D,ROWS=65536,VERITY_ROWS_PHASES=64,CAPS=16+66+264+0
         ws16k:$D,STEP=1,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+132+396+0
         ws16k_p4:$D,STEP=1,ROWS=16384,CAPS=132+0"
+fi
+# ARMSET=gapfirst: the step loop with each forward's GAP_GB released at its last linear's end, into the host gap, whole grid
+if has gapfirst; then
+  D=THREADS=256,TREE=0,STEP=1,CAPS=0
+  ARMS="${ARMS:-} f4k:$D,ROWS=4096,GAP_GB=1.5+3+4.5+6 f16k:$D,ROWS=16384,GAP_GB=2+4+6+8 f64k:$D,ROWS=65536,GAP_GB=2+4.5+7+9
+        f16k_p64:$D,ROWS=16384,VERITY_ROWS_PHASES=64,GAP_GB=2+4+6+8"
 fi
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"

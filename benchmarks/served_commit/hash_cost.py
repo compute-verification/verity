@@ -227,11 +227,12 @@ class Gemm:
     captured once into a CUDA graph.  step: shaped like the served step instead, each layer's GEMMs between stand-ins sized to
     HASH-56's per-class times at T 8,192 (two bf16 passes a norm, a rope pass, torch's causal flash attention at 1,024-token sequences
     and hd64, silu x mul), and gap_cycles of one spinning thread after each forward for the host gap between forwards.
-    wgmma: each linear on int8_fused.pick_wgmma's persistent wgmma kernel instead (a tree with engine/int8_wgmma.py)."""
+    wgmma: each linear on int8_fused.pick_wgmma's persistent wgmma kernel instead (a tree with engine/int8_wgmma.py).
+    gap_outside: the graph ends at the last linear and the loop runs the gap after each replay (beside's gap-first hashing)."""
 
-    def __init__(self, T: int, step: bool = False, gap_cycles: int = 0, wgmma: bool = False) -> None:
+    def __init__(self, T: int, step: bool = False, gap_cycles: int = 0, wgmma: bool = False, gap_outside: bool = False) -> None:
         from verity_vllm.engine import int8_fused as F
-        self.step, self.gap_cycles, self.wg = step, gap_cycles, None
+        self.step, self.gap_cycles, self.wg, self.gap_outside = step, gap_cycles, None, gap_outside
         if wgmma:
             from verity_vllm.engine import int8_wgmma
             self.wg = int8_wgmma
@@ -301,7 +302,7 @@ class Gemm:
                 half = self.gu.shape[1] // 2
                 torch.mul(torch.nn.functional.silu(self.gu[:, :half]), self.gu[:, half:], out=self.act)
             self.mm(down)
-        if self.gap_cycles:
+        if self.gap_cycles and not self.gap_outside:
             torch.cuda._sleep(self.gap_cycles)
 
     def norm(self) -> None:
@@ -313,15 +314,19 @@ class Gemm:
 
 
 def beside(R: Rows, P, data: torch.Tensor, rb: int, n_rows: int, lv: torch.Tensor, scratch: torch.Tensor, cap: int, G: Gemm,
-           n_fwd: int, hs: torch.cuda.Stream, gs: torch.cuda.Stream, reps: int, clk: Clock) -> dict[str, Any]:
+           n_fwd: int, hs: torch.cuda.Stream, gs: torch.cuda.Stream, reps: int, clk: Clock, chunks: int = 0) -> dict[str, Any]:
     """The GEMM loop (n_fwd forwards, an event after each) on gs and n_rows leaves on hs, released by one event; medians over reps.
     Each rep runs the loop alone (A), beside the hash (B), and alone again (A'), each behind the same spin, so the power-capped clock
-    starts each leg alike: B's baseline is (A + A') / 2, and A' - A is the noise floor (aa_ms)."""
+    starts each leg alike: B's baseline is (A + A') / 2, and A' - A is the noise floor (aa_ms).
+    chunks (gap first; G.gap_outside, n_fwd > chunks): the leaves in that many launches of n_rows / chunks, the i-th released when
+    forward i's last linear ends, so it runs in the gap after it and, past the gap, beside the next forward."""
     main = torch.cuda.current_stream()
+    per = n_rows // chunks if chunks else n_rows
 
     def leg(hashing: bool) -> tuple[float, dict[str, Any] | None, dict[str, Any]]:
         e0, eh, eh0, eg0 = (torch.cuda.Event(enable_timing=True) for _ in range(4))
         ef = [torch.cuda.Event(enable_timing=True) for _ in range(n_fwd)]
+        efw = [torch.cuda.Event() for _ in range(n_fwd)]
         torch.cuda.synchronize()
         with clk.leg(SPIN_S) as c:
             torch.cuda._sleep(60_000_000)
@@ -331,12 +336,21 @@ def beside(R: Rows, P, data: torch.Tensor, rb: int, n_rows: int, lv: torch.Tenso
                 eg0.record(gs)
                 for i in range(n_fwd):
                     G.replay()
+                    if G.gap_outside:
+                        efw[i].record(gs)
+                        torch.cuda._sleep(G.gap_cycles)
                     ef[i].record(gs)
             if hashing:
-                hs.wait_event(e0)
+                hs.wait_event(efw[0] if chunks else e0)
                 with torch.cuda.stream(hs):
                     eh0.record(hs)
-                    R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, hs, cap)
+                    if chunks:
+                        for i in range(chunks):
+                            if i:
+                                hs.wait_event(efw[i])
+                            R.leaves(P, data[i * per * rb:], rb, per, per, lv[i * per:], scratch[i * per * 192:], hs, cap)
+                    else:
+                        R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, hs, cap)
                     eh.record(hs)
             torch.cuda.synchronize()
         done = [e0.elapsed_time(e) for e in ef]
@@ -363,10 +377,11 @@ def beside(R: Rows, P, data: torch.Tensor, rb: int, n_rows: int, lv: torch.Tenso
                    mhz=[ca["mhz"], cb["mhz"], ca2["mhz"]], w=[ca["w"], cb["w"], ca2["w"]], clock_n=[ca["n"], cb["n"], ca2["n"]])
         rows.append(row)
     med = {k: statistics.median(x[k] for x in rows) for k in ("hash_ms", "gemm_ms", "hash_start_ms", "gemm_start_ms", "fwd_in_hash_window")}
-    H = n_rows * rb
+    H = (per * chunks if chunks else n_rows) * rb
     loop_ms = statistics.median((x["loop_a_ms"] + x["loop_a2_ms"]) / 2 for x in rows)
     delta = statistics.median(x["delta_ms"] for x in rows)
     return {"cap": cap, "n_rows": n_rows, "bytes": H, "n_fwd": n_fwd, "loop_alone_ms": round(loop_ms, 4),
+            **({"chunks": chunks, "chunk_bytes": per * rb} if chunks else {}),
             "overlapped": all(x["overlapped"] for x in rows),
             "hash_gbps": round(H / (med["hash_ms"] - med["hash_start_ms"]) * 1e-6, 2), "gemm_delta_ms": round(delta, 4),
             "kappa_window": round(statistics.median(x["kappa"] for x in rows), 4),
@@ -402,22 +417,30 @@ def main() -> None:
     step = os.environ.get("STEP", "0") == "1"
     gap_cycles = int(float(os.environ.get("GAP_CYCLES", "16.8e6" if step else "0")))   # HASH-56: 9.6 ms at 1,750 MHz
     wgmma = os.environ.get("GEMM", "triton") == "wgmma"
+    gap_gbs = [float(x) for x in os.environ.get("GAP_GB", "").replace("+", " ").split()]   # gap-first GB a forward (STEP with a gap)
+    assert not gap_gbs or (step and gap_cycles), "GAP_GB needs STEP=1 and a gap"
     build_dir = Path(os.environ.get("BUILD_DIR") or tempfile.mkdtemp(prefix="hash-cost-"))
     prop = torch.cuda.get_device_properties(0)
     arch, sms = f"{prop.major}{prop.minor}", prop.multi_processor_count
     res: dict[str, Any] = {"device": prop.name, "sms": sms, "arch": arch, "total_bytes": total, "T": T,
                            "phases": os.environ.get("VERITY_ROWS_PHASES", "4"), "form": os.environ.get("VERITY_ROWS_FORM", "split"),
                            "stride0": stride0, "gemm_priority": gprio, "step": step, "gap_cycles": gap_cycles,
-                           "gemm_kind": "wgmma" if wgmma else "triton", "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
+                           "gemm_kind": "wgmma" if wgmma else "triton", "gap_first": bool(gap_gbs), "cuda_cflags": list(CUDA_CFLAGS),
+                           "forms": {}, "clock_marks": []}
 
     def mark(tag: str) -> None:
         res["clock_marks"].append([tag, time.time()])
 
     hs, gs = torch.cuda.Stream(priority=0), torch.cuda.Stream(priority=gprio)   # -100: clamped to the highest
     mark("gemm_build")
-    G = Gemm(T, step, gap_cycles, wgmma)
+    G = Gemm(T, step, gap_cycles, wgmma, gap_outside=bool(gap_gbs))
     clk = Clock()
-    fwd_ms = timed(lambda s: G.replay(), max(reps, 9), gs)
+
+    def fwd(s: torch.cuda.Stream) -> None:
+        G.replay()
+        if G.gap_outside:
+            torch.cuda._sleep(G.gap_cycles)
+    fwd_ms = timed(fwd, max(reps, 9), gs)
     res["gemm"] = {"macs_per_forward": G.macs, "configs": G.cfgs, "spot_check_close": G.close, "forward_ms": round(fwd_ms, 4),
                    "tmacs_per_s": round(G.macs / fwd_ms * 1e-9, 1), "nvml": clk.nv is not None}
     mark("gemm_alone")
@@ -479,23 +502,37 @@ def main() -> None:
                 alone_ms = timed(lambda s: R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, s, cap), reps, hs)
                 entry["capped_alone"][cap] = {"n_rows": n_rows, "ms": round(alone_ms, 4), "gbps": round(n_rows * rb / alone_ms * 1e-6, 2)}
                 n_fwd = max(2, math.ceil(2.5 * alone_ms / fwd_ms))
-                mark(f"t{threads}:{rb}:cap{cap}:beside")
-                for _ in range(3):
-                    r = beside(R, P, data, rb, n_rows, lv, scratch, cap, G, n_fwd, hs, gs, reps, clk)
-                    if r["overlapped"]:
-                        break
-                    n_fwd = max(2 * n_fwd, math.ceil(1.5 * r["hash_ms"] / fwd_ms))   # beside, the hash can run 10x slower than alone
-                r["alone_gbps"] = entry["capped_alone"][cap]["gbps"]
-                entry["beside"].append(r)
-                print(f"t{threads} rows {rb} cap {cap}: alone {r['alone_gbps']} GB/s, beside {r['hash_gbps']} GB/s, kappa "
-                      f"{r['kappa_window']}, delta {r['gemm_delta_ms']} ms over {r['n_fwd']} fwd, overlapped {r['overlapped']}", flush=True)
+                rs = []
+                if gap_gbs:
+                    # gap first: GAP_GB a forward, in up to 6 chunks (the stream allowing), one forward more than chunks
+                    for g in gap_gbs:
+                        per = max(1, int(g * 1e9 / rb))
+                        if cap:
+                            per = max(chunk, per - per % chunk)
+                        nch = max(1, min(6, m // per))
+                        mark(f"t{threads}:{rb}:cap{cap}:gap{g}:beside")
+                        rs.append(beside(R, P, data, rb, nch * per, lv, scratch, cap, G, nch + 1, hs, gs, reps, clk, chunks=nch))
+                else:
+                    mark(f"t{threads}:{rb}:cap{cap}:beside")
+                    for _ in range(3):
+                        r = beside(R, P, data, rb, n_rows, lv, scratch, cap, G, n_fwd, hs, gs, reps, clk)
+                        if r["overlapped"]:
+                            break
+                        n_fwd = max(2 * n_fwd, math.ceil(1.5 * r["hash_ms"] / fwd_ms))   # beside, the hash can run 10x slower than alone
+                    rs.append(r)
+                for r in rs:
+                    r["alone_gbps"] = entry["capped_alone"][cap]["gbps"]
+                    entry["beside"].append(r)
+                    print(f"t{threads} rows {rb} cap {cap}: alone {r['alone_gbps']} GB/s, beside {r['hash_gbps']} GB/s, kappa "
+                          f"{r['kappa_window']}, delta {r['gemm_delta_ms']} ms over {r['n_fwd']} fwd, overlapped {r['overlapped']}"
+                          + (f", {r['chunks']} chunks of {r['chunk_bytes'] / 1e9:.2f} GB" if "chunks" in r else ""), flush=True)
             mark(f"t{threads}:{rb}:done")
             print(f"t{threads} rows {rb}", json.dumps({k: v for k, v in entry.items() if k not in ("beside",)}), flush=True)
             lv = scratch = P = None
             torch.cuda.empty_cache()
             (out_dir / "hash_cost.json").write_text(json.dumps(res, indent=1))
     mark("end")
-    res["gemm"]["forward_ms_end"] = round(timed(lambda s: G.replay(), max(reps, 9), gs), 4)
+    res["gemm"]["forward_ms_end"] = round(timed(fwd, max(reps, 9), gs), 4)
     (out_dir / "hash_cost.json").write_text(json.dumps(res, indent=1))
 
 
