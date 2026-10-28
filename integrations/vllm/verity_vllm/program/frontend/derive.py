@@ -211,7 +211,7 @@ class Ctx:
         self.current: Any = None  # fx node being translated
         #: set while `relabel.rank_report` re-emits a node: `call` hands it each call instead of appending to `B` (the template's slot)
         self.emit_into: Callable[..., Coll] | None = None
-        # [R15 moe GATE-PATH] every path a module of the source is registered under -> its first registration (`stack_path`)
+        # every path a module of the source is registered under -> its first registration (`stack_path`)
         self._module_paths, self._canonical_path = module_registrations(module)
         #: unrooted stack entries that resolved under NO registered path (kept bare) -> bare path -> occurrences; recorded in the
         #: derive provenance (`unresolved_module_paths`) so the merged-name failure mode is visible at derive, not first at Commit coverage
@@ -547,7 +547,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
     prov["weight_roles"] = ctx.weight_roles
-    prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
+    prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual
     prov["applications"] = ctx.applications
     prov["mutation_effects"] = ctx.mutation_effects
     prov["returned_inputs"] = ctx.returned_inputs
