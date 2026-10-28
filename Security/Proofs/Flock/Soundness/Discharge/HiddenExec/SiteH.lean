@@ -62,8 +62,8 @@ theorem outNetU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (ho : c.ou
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
   exact ho
 
-theorem rowsFitU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (hrf : Hidden.Any.RowsFitS c) :
-    Hidden.Any.RowsFitS a.st.c := by
+theorem rowsFitU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (hrf : Hidden.Any.RowsFitP c) :
+    Hidden.Any.RowsFitP a.st.c := by
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
   exact hrf
 
