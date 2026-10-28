@@ -5,7 +5,7 @@ A leaf at position ``pos`` of an n-leaf domain (rank = position) is ``rowleaf.ro
 "hm96-sha512/row/v2")`` with ``h = hm96.SHA512.tree_leaf(key, b || c)``, ``b || c = hm96.SHA512.commit_string(key, x,
 salt)`` and ``x = rowleaf.sha512_row_v2_digest(row, n_bits)`` (in ``seg`` mode ``x = rowleaf.sha512_row_seg_digest(row,
 n_bits)`` under ``"hm96-sha512/row-seg/v1"``); the levels are ``merkle.tree_levels``.  The domain is the e2e
-slice's operand domain (benchmarks/e2e_slice/commit.py on cursor/e2e-slice-ea24): ``CommitmentDomain(identity_digest_sha512(
+slice's operand domain: ``CommitmentDomain(identity_digest_sha512(
 BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.  The tile modes commit an m x k int8
 operand's :func:`permute` rows, leaf pos the block of r rows x 32 values at (pos % ceil(m/r), pos // ceil(m/r)), so the
 spot check's 128-row tile at one 32-step is the 128/r adjacent leaves :func:`tile_leaves` names.
@@ -63,7 +63,7 @@ def label(n: int) -> dict:
 
 
 def domain(n: int, tree: str | None = None) -> CommitmentDomain:
-    """The operand domain of n leaves; with ``tree``, its label also names the tree (stage_ovl's receipts: ``R-<stage>``)."""
+    """The operand domain of n leaves; with ``tree``, its label also names the tree (a stage's receipts: ``R-<stage>``)."""
     lab = label(n) if tree is None else {**label(n), "tree": tree}
     return CommitmentDomain(identity_digest_sha512(BINDING_TAG, lab), OWNER, RangeIndexedDomain(0, n), hash="sha512")
 
@@ -333,9 +333,9 @@ def cases(kind: str) -> list[tuple]:
 
 
 def verify_dump(work: str, openings: int = 64) -> dict:
-    """A committed tile operand dumped by a consumer (stage_ovl's ovl.cu): ``work`` holds params.bin (derived salts),
+    """A committed tile operand dumped by a consumer: ``work`` holds params.bin (derived salts),
     operand.bin (m x k int8), levels.bin (every level, leaves first, as ``check`` writes them) and dump.json (m, k, r).
-    With ``row_bytes`` in dump.json (stage_ovl's receipts), operand.bin is the rows themselves, row_bytes each, in the
+    With ``row_bytes`` in dump.json (a stage's receipts), operand.bin is the rows themselves, row_bytes each, in the
     domain whose label names dump.json's ``tree``. Every level must equal the reference's, so the root and every opening
     path are its; sampled openings go through the reference verifier, and a changed leaf digest fails."""
 
