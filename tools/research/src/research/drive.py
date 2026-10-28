@@ -42,8 +42,10 @@ Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` ab
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
---circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
+time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
+its base the last verified `main` (the baseline's: `main`'s first parent), below the tip, for ratchet-gate to judge the
+landings above, `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target
+ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
 earlier in a ~4 h run leaves the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
@@ -212,14 +214,16 @@ def authed(auth: tuple[str, ...]):
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
-                 detached: bool = False, circuit_cache: bool = False) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail); ``detached``,
-    started in the background (`detach`) from a copy of train.sh, which reads nothing by its own path (``$0`` only for its
-    usage) and finds the tree from its working directory, and returned at once as the record `launched` reads.  Git never
-    prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a password at the tty)."""
+                 detached: bool = False, circuit_cache: bool = False, base: str | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--base BASE]` from the queue's clone: (the run ids it printed, its output's
+    tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its own path
+    (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record `launched`
+    reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a password at
+    the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
             *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
-            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else [])]
+            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
+            *(["--base", base] if base else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
         return detach(repo, argv, env, script=argv[1])
@@ -701,9 +705,10 @@ class Driver:
         #: the after-landing run on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
-            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False:
+            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
+                    base=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
-                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache))
+                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, base=base))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
@@ -1298,8 +1303,8 @@ class Driver:
             return
         pl["steps"] = list(AFTER_LANDING)
         steps = ",".join(pl["steps"])
-        # the run checks `main` against itself, so it sends the upstream build only when told to: when the landings since
-        # the last verified `main` change what lean-agreement checks; lean-changed has no cache to compare with under --no-cache;
+        # it sends the upstream build when the landings since the last verified `main` change what lean-agreement checks (as
+        # check.py finds against that base); lean-changed has no cache to compare with under --no-cache;
         # lean-audit fails on a record difference, since nothing commits a regenerated record after landing; circuit-check
         # reuses its per-target passes all the same, since a cold `--all` (~4 h) outlasts an after-landing run
         from .merge import required_steps
@@ -1307,11 +1312,15 @@ class Driver:
         extra = {"agreement": base or "lean-agreement" in required_steps(self.repo, pl["verified"], main, "check"),
                  "no_cache": self.after_landing_no_cache, "circuit_cache": self.after_landing_no_cache, "no_regenerate": True}
         skip = [s for s, off in (("lean-agreement", not extra["agreement"]), ("lean-changed", extra["no_cache"])) if off]
-        flags = "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
+        # ratchet-gate judges the landings above the run's base and fails one at or above the tip: the baseline's tip is the
+        # verified `main` itself, so its base is the tip's first parent
+        below = (pl["verified"] if pl["verified"] != main else
+                 _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
+        flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}{flags}")
             return
-        rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, **extra))
+        rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
         if rec is None:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags} registered no "
                                                           f"run: {tail}")
@@ -1712,12 +1721,13 @@ class Driver:
 
     def _bisect_step(self, drive: dict) -> None:
         """Bisect the landings a failed after-landing run implicates (`_postland_failed`, `postland["bisect"]`): check the commit
-        of the middle one not yet judged with the failed steps alone (`--deferred STEPS`, the run's flags), each that passes
-        clearing it and those below, each that fails blaming it and those above, until one fails and the one below it passes
-        (or `verified` did): that PR is reverted (`_revert_landed`).  When even the newest passes, none of them broke it:
-        nothing is reverted, `CI` is told.  A run fails a landing only when it failed one of those steps; one never started or
-        stopped runs again, and one that ends otherwise (killed, lost, exit 0 without their records, a failure elsewhere) runs
-        once more, then ends the bisection with nothing reverted."""
+        of the middle one not yet judged with the failed steps alone (`--deferred STEPS`, the run's flags, `--base` where they
+        last passed, below every landing it judges), each that passes clearing it and those below, each that fails blaming it
+        and those above, until one fails and the one below it passes (or `verified` did): that PR is reverted
+        (`_revert_landed`).  When even the newest passes, none of them broke it: nothing is reverted, `CI` is told.  A run
+        fails a landing only when it failed one of those steps; one never started or stopped runs again, and one that ends
+        otherwise (killed, lost, exit 0 without their records, a failure elsewhere) runs once more, then ends the bisection
+        with nothing reverted."""
         if not (pl := drive.get("postland")) or not (b := pl.get("bisect")):
             return
         cands, tip, base = [Member(*x) for x in b["cands"]], b["tip"], b["base"]
@@ -1782,7 +1792,7 @@ class Driver:
         if self.dry_run or self.q.shadow:
             self.q.log(f"research queue drive: would launch train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} to bisect")
             return
-        rec, tail = self._started(self.launch_postland(self.repo, c, self.on, ",".join(b["steps"]), **extra))
+        rec, tail = self._started(self.launch_postland(self.repo, c, self.on, ",".join(b["steps"]), base=base, **extra))
         if rec is None:
             self.refuse(drive, f"launch:bisect:{c}", f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} registered no "
                                                      f"run: {tail}")
