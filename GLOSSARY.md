@@ -44,27 +44,28 @@ changes here and the older name gets a row under Older names, in the same change
 - **Execution**: for each **declared advice** a_j (declaring is the developer's), B outputs the **execution block** E_j,
   its partition 𝓘_j into inference blocks, and its placement loc_j on the site's registered devices. B also outputs the
   cut into proof blocks, which validation checks against public rules (outputs of at most 16 bits, size classes, a
-  count cap). 𝓘_j and loc_j are private; only their padded counts are public. For network traffic loc_j carries when:
-  B predicts each transfer's send tick, and a_j corrects it. a_j is charged only by its length, a public budget per
-  execution period, and is committed after its period ends and before that period's challenge. PoUW's own compile is
-  not part of B. The **declared circuit** is D = E_1 ‖ … ‖ E_n, the one use of "declared". The **actual circuit** A is everything the hardware
+  count cap). The site is public; a_j, 𝓘_j and loc_j (where on the site each part of the workload runs) are private,
+  and only their padded counts are public. For network traffic loc_j carries when: B predicts each transfer's send
+  tick, and a_j corrects it. a_j is charged only by its length, a public budget per execution block, and is committed
+  after E_j runs and before E_j's challenge. PoUW's own compile is not part of B. The **declared circuit** is D = E_1 ‖ … ‖ E_n, the one use of "declared". The **actual circuit** A is everything the hardware
   computed, hidden work included, each gate placed at a device and a tick (`Accounting.Placed`).
 - **Verification** follows each execution in four steps, in order: **commitment**, **challenge** (live coins),
   **proof** and **validation**, where the verifier checks the proofs, and the inference-only policy checks each E_j.
   Every commitment is bound before any challenge. Execution and verification loop.
 - **Accounting**, once per monitoring period, turns what verification established into the bound (The bound, below).
 
-**Periods**
+**Time and blocks**
 
-- **Period**: a span of time, nested monitoring ⊃ execution ⊇ sampling ⊃ tick (`Verity.MonitoringPeriod`,
-  `Verity.ExecutionPeriod`, `Verity.TickSpan`, a span of ticks). The **monitoring period** is what a result is about;
-  results are given for a week, a month and a year, against the adversary resource model. An **execution period** is one
-  execution block's span. A **sampling period** is one sampling block's span (the certifier's is T ticks, about 3.2 s).
-  A **tick** is one step of a device's clock. PoUW's **Commit period** and network certification's **certification
-  period** (m sampling periods on one link under one signed root, `NetworkCheck.Period`) are projections of these.
+- **Monitoring period**: the one word for a span of time (`Verity.MonitoringPeriod`, over `Verity.TickSpan`, a span of
+  ticks). It is what a result is about; results are given for a week, a month and a year, against the adversary
+  resource model. A **tick** is one step of the one clock. Every other span is a block's: an execution block, a sampling
+  block (the network certifier's is T ticks, about 3.2 s), a server block. A block occupies ticks, and its span is said
+  as the block's ("E_j's span"), never as a period or a window of its own. The network certifier's timestep (SLOTS
+  execution blocks every EVERY ticks) is a parameter, not a period.
 - **Horizon** means a monitoring period. A bound over it has two readings: per sampling block, each at its own δ,
   summed; and **pooled**, the total at one δ, since each sampling block draws its own coins. The pooled reading is the
-  result: its sampling term doesn't grow with the period, while a per-tick term such as a link's capacity does.
+  result: its sampling term doesn't grow with the monitoring period, while a per-tick term such as a link's capacity
+  does.
 - **Session**: one run of a subprotocol, with its own coins and record. **Run**: one execution of the protocol or a
   circuit (a circuit's run is its trace). "Stage" survives only in "one-stage".
 - **Adversary resource model**: the compute the adversary is taken to have, the world's: the census entry
@@ -246,7 +247,7 @@ count every gate.
 | A[X, J], Φ_X | A's operation gates at location X during ticks J; X's capacity, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s a server's, Φ_total the fleet's, M_s a server's memory. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
 | V(X, J), U(X, J) | The verified compute at X during J, as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
 | s_× | The fewest gates of a counted operation: U free gates complete at most U/s_× of them. | not yet in Lean |
-| monitoring ⊃ execution ⊇ sampling ⊃ tick | The periods, a span of ticks being a tick span. | `Verity.MonitoringPeriod`, `Verity.ExecutionPeriod`, `Verity.TickSpan`, not yet in Lean |
+| monitoring period, tick | The one span of time, and the one clock's step; every other span is a block's. | `Verity.MonitoringPeriod`, `Verity.TickSpan`, not yet in Lean |
 
 **The physical model**
 
@@ -348,7 +349,8 @@ Older names stay where a digest, a fixture, a recorded field or a pinned vector 
 | "netlist"; `verity/flock-netlist/…` tags, `flock-netlist/v1` | a private circuit, or the circuit's description |
 | "trusted text" in `layers` reasons | spec |
 | "horizon", "accounting period"; `*Horizon*` and `*Period*` names (`HorizonSampling`, `ComposePeriod`), PoUB's `horizon` field | monitoring period; "pooled" for a reading pooled over several |
-| "declaration block", "declaration period", "the declaration" for one stretch of declaring | execution block, execution period; "declaring" and "declared advice" stay |
+| "declaration block", "declaration period", "the declaration" for one stretch of declaring | execution block; "declaring" and "declared advice" stay |
+| "execution period", "sampling period", "certification period", "Commit period"; `Verity.ExecutionPeriod`, `NetworkCheck.Period` | the block's span (E_j's, a sampling block's); monitoring period for time |
 | R = (θ, D, 𝓘) for the registration; the programs and the proof system as registered | R = (site, θ, B); the subprotocols' Programs and the proof system are the protocol's own |
 | π for a placement | loc |
 | "commit phase", "challenge phase", "response phase" | commitment, challenge, proof and validation |
@@ -370,7 +372,7 @@ Older names stay where a digest, a fixture, a recorded field or a pinned vector 
 | "row" for a server's window or a workload; vLLM's `row.py`, `RowConfig`, row ids, "row of record" | server block; workload, a workload of record |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes; pub(μ°), μ°, W_reg, W_b; `CircuitWork*`, `Price`; "κ/2" | size, in AND gates; U/s_×. `WorkSound` keeps its name |
 | "link-window"; `window`, `LinkWindow`, `LinkWindowAcceptMeans` | a sampling block of transfer blocks |
-| "window" for a span of time; `Verity.Window`, `verity.ml.windows`; "Commit window" | period, tick span; Commit period |
+| "window" for a span of time; `Verity.Window`, `verity.ml.windows`; "Commit window" | monitoring period, or the block's span; tick span in Lean |
 | "deploy", `verity deploy`, "deployment file" | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol; `accel/`, `verity/pouw-accel/<kind>/v1`; "the accelerator model", "the machine model" | Dither; the ACCEL model |
 | `ShaSpeed`, `ServiceSound` | `SAKSha`, `ProofSystemSound` |
