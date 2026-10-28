@@ -568,22 +568,20 @@ def test_the_pieced_live_program_is_each_rounds_pieces_of_its_one_template(T, S,
     """The pieced live Program's partition is S·P units, unit s·P + j round s's piece j on rows [s T + j R, s T + (j + 1) R)
     of the slots, the first R headers and caps, row s of m and round and row j of base (j R), so it evaluates to each
     piece's ok at its unit."""
-    prog, P = L.program_rows(T, S, "h1/", R), T // R
+    prog, k = L.program_rows(T, S, "h1/", R), L.pieces(T, R)
     params, ret = prog.fn.signature()
-    assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES_ROWS] and ret.leaves == S * P
-    assert P.__class__ is int and P == L.pieces(T, R)
-    assert __import__("verity.core.protocols.sampled_proofs.one_stage.partition", fromlist=["evaluate"]).evaluate(
-        prog, L.query_rows(T, R)).population == S * P
+    assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES_ROWS] and ret.leaves == S * k == S * T // R
+    assert P.evaluate(prog, L.query_rows(T, R)).population == S * k
     rng = random.Random(T * S * R)
     rounds = [_prefill(rng, T, R) for _s in range(S)]
     req, cap = rounds[0][1], rounds[0][4]
     rounds = [(slot if s == 0 else [0] * T, 0 if s else m) for s, (slot, _r, m, _s, _c) in enumerate(rounds)]
     want = [L.rows_ok(slot[j * R:(j + 1) * R], req[:R], m, s, j * R, cap[:R], T)
-            for s, (slot, m) in enumerate(rounds) for j in range(P)]
+            for s, (slot, m) in enumerate(rounds) for j in range(k)]
     args = (sum((_b(v) for slot, _m in rounds for v in slot), []), sum((_b(x) for h in req for x in h), []),
             sum((_b(m) for _slot, m in rounds), []), sum((_b(s) for s in range(S)), []),
-            sum((_b(j * R) for j in range(P)), []), sum(map(_b, cap), []))
-    assert list(evaluate(prog.fn, *args)) == want == [1] * (S * P)
+            sum((_b(j * R) for j in range(k)), []), sum(map(_b, cap), []))
+    assert list(evaluate(prog.fn, *args)) == want == [1] * (S * k)
 
 
 def test_a_pieces_live_file_reads_its_rows_the_first_headers_and_caps_and_the_known_m_round_base_and_ok_rows():
@@ -592,7 +590,7 @@ def test_a_pieces_live_file_reads_its_rows_the_first_headers_and_caps_and_the_kn
     T, S, R = 8, 2, 4
     prog, window, session, regs = _window(T, S, random.Random(9))
     roots = {v: r.root.hex() for v, r in regs.items()}
-    u, s, j = 3, 1, 1
+    u, j = 3, 1
     doc = LR.reads_file_rows(prog, T, S, R, u, roots, window, session, 2, [5, 2], "h1/")
     ports = doc["ports"]
     assert sorted(ports) == sorted([p for p, *_ in LR.statement_rows_pieces(R)] + [LR.OK_PORT])
