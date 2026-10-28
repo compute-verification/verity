@@ -2026,6 +2026,72 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     assert inline_codes(pol | {"shape": {"inline": ["P.t"]}}, grown) == ["shape.inline-form"]
 
 
+WHY = "inline when the rule came"
+
+
+def renamed_inline(was, now, consts, constants, moves=None):
+    """(policy, facts): `P.t`'s `shape.inline` lists ``was``, and its build takes ``now`` instead, naming ``consts``; the
+    build holds ``constants`` ({name: its kind, or (its kind, the text its SHA-256 is of)}) and was read with ``moves``."""
+    pol, f = inlined(premise(now, "Eq") | {"consts": consts})
+    table = {n: {"kind": k} if isinstance(k, str) else {"kind": k[0], "sha256": sha(k[1])} for n, k in constants.items()}
+    return pol | {"shape": {"inline": {"P.t": {was: WHY}}}}, f | {"constants": table, "moves": moves or {}}
+
+
+def test_a_grandfathered_inline_premise_pairs_with_no_other_premise_than_itself_renamed():
+    """An entry takes a premise's place only through renamed declarations, so each of these fails and `--update` drops
+    the entry: a predicate for another that is still declared, a constructor for its sibling (kept or gone), a bound for
+    another with both declared, or the old one gone while the lock read the new one, a type for another with both
+    declared, swapped projections (alone or beside a rename), a rename beside another change or with another field
+    after it, a field of a bound variable for a declaration, two declarations for one, a new name `constants` doesn't
+    hold, and a gone name in facts that hold no constants (an older audit tool's)."""
+    cases = [("P.ok g", "P.bad g", ["P.bad"], {"P.ok": ("def", "ok"), "P.bad": ("def", "bad")}),
+             ("g = P.Gate.and", "g = P.Gate.or", ["P.Gate.or"], {"P.Gate.and": "constructor", "P.Gate.or": "constructor"}),
+             ("g = P.Gate.and", "g = P.Gate.or", ["P.Gate.or"], {"P.Gate.or": "constructor"}),
+             ("x ≤ P.lo", "x ≤ P.hi", ["P.hi"], {"P.lo": ("def", "0"), "P.hi": ("def", "10")}),
+             ("Op", "IntOp", ["IntOp"], {"Op": "inductive", "IntOp": "inductive"}),
+             ("p.1 < p.2", "p.2 < p.1", [], {}),
+             ("P.Old.lt p.1 p.2", "P.New.lt p.2 p.1", ["P.New.lt"], {"P.New.lt": ("def", "lt")}),
+             ("P.Old.lo < x", "P.New.lo ≤ x", ["P.New.lo"], {"P.New.lo": ("def", "lo")}),
+             ("P.Old.δ.floor ≤ x", "P.New.δ.ceil ≤ x", ["P.New.δ"], {"P.New.δ": ("def", "δ")}),
+             ("P.ok x.f", "P.ok P.c", ["P.ok", "P.c"], {"P.ok": ("def", "ok"), "P.c": ("def", "c")}),
+             ("P.a ≤ P.b", "P.c ≤ P.c", ["P.c"], {"P.c": ("def", "c")}),
+             ("P.a ≤ P.c", "P.c ≤ P.c", ["P.c"], {"P.c": ("def", "c")}),
+             ("x ≤ P.Old.lo", "x ≤ P.New.lo", ["P.New.lo"], {})]
+    for was, now, consts, constants in cases:
+        pol, f = renamed_inline(was, now, consts, constants)
+        assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, now)
+        assert A.inline_failures(pol, f)[1] == {}, (was, now)
+    pol, f = renamed_inline("x ≤ P.lo", "x ≤ P.hi", ["P.hi"], {"P.hi": ("def", "10")})
+    assert inline_codes(pol, f) == []
+    read = pol | {"reads": {"P.Defs": {"definitions": {"P.hi": sha("10")}, "guarantees": ["P.t"]}}}
+    assert inline_codes(read, f) == ["guarantees.inline-hypothesis"]
+    older = {k: v for k, v in f.items() if k != "constants"}
+    assert inline_codes(pol, older) == ["guarantees.inline-hypothesis"]
+
+
+def test_a_grandfathered_inline_premise_follows_its_declarations_renames_and_update_rekeys_it():
+    """A premise that is a grandfathered entry with names renamed takes the entry's place: a declaration `--moved` moved (a
+    namespace's constructor too, and one whose old name is still declared otherwise), one whose old name is gone from the
+    build within its root namespace (with the fields printed after it unchanged), and a definition with the same SHA-256
+    as the old name's. `--update` keys the entry by the premise as printed, with its reason."""
+    cases = [("P.Old.ok g", "P.New.ok g", ["P.New.ok"], {"P.Old.ok": ("def", "ok"), "P.New.ok": ("def", "new")},
+              {"P.Old": "P.New"}),
+             ("List.instMembership.mem t.items (Flock.Firewall.Item.coins k)",
+              "List.instMembership.mem t.items (Flock.Gate.Item.coins k)", ["List.instMembership", "Flock.Gate.Item.coins"],
+              {"Flock.Gate.Item.coins": "constructor", "List.instMembership": ("def", "mem")}, {"Flock.Firewall": "Flock.Gate"}),
+             ("Real.instLE.le (P.Old.size s).cast P.Old.δ.cast", "Real.instLE.le (P.New.size s).cast P.New.δ.cast",
+              ["Real", "Real.instLE", "P.New.size", "P.New.δ"], {"P.New.size": ("def", "size"), "P.New.δ": ("def", "δ")},
+              None),
+             ("P.ok g", "P.ok' g", ["P.ok'"], {"P.ok": ("def", "ok"), "P.ok'": ("def", "ok")}, None)]
+    for was, now, consts, constants, moves in cases:
+        pol, f = renamed_inline(was, now, consts, constants, moves)
+        assert inline_codes(pol, f) == [], (was, now)
+        assert A.inline_failures(pol, f)[1:] == ({"P.t": {now: WHY}}, {"P.t": [now]})
+        assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
+    pol, f = renamed_inline("P.Old.ok g", "P.New.ok g", ["P.New.ok"], {"P.Old.ok": ("def", "ok"), "P.New.ok": ("def", "new")})
+    assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], "without the move, both declared and different"
+
+
 INLINE_G = "import Control.Defs\n\ndef Control.Guarantees.G : Prop := ∀ n : Nat, 0 < n → Control.double n = 5 → True\n"
 INLINE = """import Control.Assumptions
 import Control.Guarantees
@@ -2052,11 +2118,15 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
     family (`∀ i, 0 ≤ w i`), and a named assumption, bare and under a leading `∀ ω`, pass; a bound against a term, an
     equation split out of a conjunction and one under `∀ ω` fail, and so does the equation a guarantee lifted into a
     `Guarantees` definition takes, which the hypotheses rule never sees (its statement as written binds nothing); that
-    definition taken inside a conjunct is another listed guarantee's statement."""
+    definition taken inside a conjunct is another listed guarantee's statement. Each premise names the constants its text
+    shows, and the build reports those and the names of the lock's `shape.inline` texts it declares, with a definition's
+    SHA-256 blind to its name: an entry under a name the build lacks, or under a definition the same as the printed one,
+    takes its premise's place; one under another declared definition doesn't."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     src = pkg / "Control" / "Assumptions.lean"
-    src.write_text(src.read_text().replace("end Control", "def Fits (n : Nat) : Prop := n < 100\n\nend Control"))
+    src.write_text(src.read_text().replace("end Control", "def Fits (n : Nat) : Prop := n < 100\n\n"
+                                           "def twice (n : Nat) : Nat := 2 * n\n\nend Control"))
     (pkg / "Control" / "Guarantees.lean").write_text(INLINE_G)
     (pkg / "Control" / "Inline.lean").write_text(INLINE)
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Inline\n")
@@ -2077,6 +2147,22 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
     assert len(offenders["Control.SecurityProofs.G"]) == 1 and "5" in offenders["Control.SecurityProofs.G"][0]
     fails = [x for x in A.judge(policy, f, A.lean_modules(pkg))[0] if x.code == "guarantees.inline-hypothesis"]
     assert sorted(x.entry for x in fails) == ["Control.SecurityProofs.G", "Control.offends"]
+
+    held = policy | {"shape": {"inline": {"Control.offends": {"Eq (Control.twice n) 4": WHY,
+                                                              "∀ (ω : Nat), Eq (Control.Small ω) n": WHY},
+                                          "Control.SecurityProofs.G": {"Eq (Control.thrice n) 5": WHY}}}}
+    f = A.facts_of(pkg, held, tmp_path)
+    assert [p["consts"] for p in f["pins"]["Control.offends"]["inline"]][1:] == \
+        [["Control.double", "Eq"], ["Nat", "instLTNat"], ["Control.double", "Eq", "Nat"]]
+    c = f["constants"]
+    assert c["Control.twice"]["sha256"] == c["Control.double"]["sha256"] != c["Control.Small"]["sha256"]
+    assert c["Control.double"]["kind"] == "def" and "Control.thrice" not in c and c["Eq"] == {"kind": "inductive"}
+    fails = [x for x in A.judge(held, f, A.lean_modules(pkg))[0] if x.code == "guarantees.inline-hypothesis"]
+    assert [x.entry for x in fails] == ["Control.offends"] and fails[0].startswith(
+        "guarantees: Control.offends takes (Int.instLEInt.le x (instHMul.hMul 2 y)); (∀ (ω : Nat), Eq (Control.double ω) "
+        "n): an inline hypothesis")
+    assert A.judge(held, f, A.lean_modules(pkg), update=True)[1]["shape"]["inline"] == {
+        "Control.SecurityProofs.G": {"Eq (Control.double n) 5": WHY}, "Control.offends": {"Eq (Control.double n) 4": WHY}}
 
 
 def test_a_lifted_guarantee_is_witnessed_as_the_statement_it_lifts():

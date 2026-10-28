@@ -74,7 +74,8 @@ environment extension loaded, so none of the package's code runs), and replays t
     inline       a `Prop` a guarantee takes, its `Guarantees` definition unfolded once, past a leading `∀` over data and
                  split at `∧`, is neither a named assumption the lock lists, another listed guarantee's statement nor a
                  plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
-                 `shape.inline`, which only shrinks, lists it (`inline_failures`); its size is the AUDIT line's inline debt
+                 `shape.inline`, which only shrinks, lists it (`inline_failures`), or did under names a rename changed
+                 (`paired`); its size is the AUDIT line's inline debt
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
@@ -1008,19 +1009,24 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
     also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
-    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`)."""
+    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`), and so does each definition and theorem
+    of `constants` (the names of the lock's `shape.inline` texts, and those its premises print, that the build holds), for
+    `paired`, which reads ``moved`` as `moves`."""
     out, canon = work / "facts.json", work / "canon.jsonl"
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
+    inline = (policy.get("shape") or {}).get("inline")
+    texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
+    asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
-                                  "moved": sorted([new, old] for old, new in (moved or {}).items()),
+                                  "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
@@ -1050,6 +1056,10 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     for es in facts.get("assumption_reads", {}).values():
         for r in es:
             r["sha256"] = hashes[f"read:{r['name']}"]
+    for c, e in facts.get("constants", {}).items():
+        if f"const:{c}" in hashes:
+            e["sha256"] = hashes[f"const:{c}"]
+    facts["moves"] = dict(moved or {})
     return facts
 
 
@@ -1971,6 +1981,45 @@ def printed(text: str) -> str:
     return " ".join(text.split())
 
 
+#: a name as a premise prints it: a dotted identifier, not one after a `.` (a field, `(f x).g`; a projection, `p.1`)
+NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
+
+
+def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str]) -> bool:
+    """Whether the premise ``now`` prints (``consts``: the constants it names) is the grandfathered ``was`` under renames:
+    the two texts split alike at their names (`NAMES`), and each name that differs is, in ``now``, a declaration with the
+    fields after it that ``was`` has after the old name, one new name for each old one, neither kept elsewhere in the
+    text; and the old name `--moved` moved to the new one, or is gone from the build (`constants`) and shares the new
+    one's root namespace while the lock read no definition of the new name (``known``), or is a definition or theorem
+    with the new one's SHA-256. A constructor is renamed only by `--moved`, and a field or projection never."""
+    a, b, constants = NAMES.split(was), NAMES.split(now), facts.get("constants")
+    if len(a) != len(b) or a[::2] != b[::2] or constants is None:
+        return False
+    subst, kept = {}, set()
+    for o, n in zip(a[1::2], b[1::2]):
+        parts = n.split(".")
+        i = next((i for i in range(len(parts), 0, -1) if ".".join(parts[:i]) in consts), 0)
+        c, tail, op = ".".join(parts[:i]), parts[i:], o.split(".")
+        if o == n:
+            kept.add(c)
+        elif not c or len(op) <= len(tail) or op[len(op) - len(tail):] != tail or \
+                subst.setdefault(".".join(op[:len(op) - len(tail)]), c) != c:
+            return False
+    if not subst or len(set(subst.values())) < len(subst) or kept & (set(subst) | set(subst.values())):
+        return False
+    for o, n in subst.items():
+        x, y = constants.get(o), constants.get(n)
+        if renamed(o, facts.get("moves") or {}) == n:
+            continue
+        if y is None or "constructor" in (y.get("kind"), (x or {}).get("kind")):
+            return False
+        gone = x is None and "." in o and o.split(".")[0] == n.split(".")[0] and n not in known
+        same = x is not None and x.get("sha256") is not None and x["sha256"] == y.get("sha256")
+        if not (gone or same):
+            return False
+    return True
+
+
 def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dict[str, list[str]]]:
     """(failures, the `shape.inline` an `--update` writes, every offender: {guarantee: its inline hypotheses as
     printed}, those `shape.inline` lists among them). Every `Prop` binder a lock-listed guarantee takes, its
@@ -1993,7 +2042,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
     still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
     the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
-    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
+    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses). A premise no entry lists
+    takes the place and reason of one of its guarantee's entries that no longer offends when the two are one premise under
+    renames (`paired`), and `--update` keys the entry by the premise as printed."""
     spec = policy.get("shape") or {}
     allow = spec.get("inline", {})
     if not isinstance(allow, dict) or not all(isinstance(v, dict) and v and all(isinstance(w, str) and w.strip()
@@ -2007,6 +2058,7 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     lifts = {g: (facts["pins"].get(g) or {}).get("lift") or {} for g in guarantees}
     statements = {v["head"]: g for g, v in lifts.items() if v.get("head") and spec_module(v.get("module") or "")}
     fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
+    known = {d for r in (policy.get("reads") or {}).values() if isinstance(r, dict) for d in definitions(r)}
     for g in sorted(guarantees):
         pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}
         if g in held:
@@ -2034,9 +2086,17 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
             and statements.get(p.get("head"), g) == g))
         if bad:
             offenders[g] = bad
-        if still := {b: old[b] for b in bad if b in old}:
+        consts: dict[str, set[str]] = {}
+        for p in pin["inline"]:
+            consts.setdefault(printed(p["type"]), set()).update(p.get("consts") or [])
+        gone, rekeyed = [o for o in old if o not in bad], {}
+        for b in [b for b in bad if b not in old]:
+            if (o := next((o for o in gone if paired(o, b, consts[b], facts, known)), None)) is not None:
+                rekeyed[b] = old[o]
+                gone.remove(o)
+        if still := {b: old[b] for b in bad if b in old} | rekeyed:
             kept[g] = still
-        if new := [b for b in bad if b not in old]:
+        if new := [b for b in bad if b not in old and b not in rekeyed]:
             fails.append(Failure("guarantees.inline-hypothesis", g, f"guarantees: {g} takes "
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
                                  f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "
@@ -2808,8 +2868,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     for _, f, _ in sources:
         for a, es in f.get("assumption_reads", {}).items():
             walked.setdefault(a, es)
+    tables = [f.get("constants") for _, f, _ in sources]
+    constants = None if None in tables else {c: e for t in tables for c, e in t.items()}
     return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own,
-                                  "assumption_reads": walked}, by
+                                  "assumption_reads": walked, "constants": constants}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
