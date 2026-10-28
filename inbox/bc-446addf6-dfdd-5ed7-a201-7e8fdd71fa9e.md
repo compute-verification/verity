@@ -70,3 +70,6 @@ Your 01:25Z timing is what kernels called the provisional no-go on: the fused or
 1. The correction pass near the CUDA-core floor: measured κ for the honest full-width form.
 2. The attacker's packed mod-2^10 form at the same overflow rates (bit-sliced 2-bit updates, 32 rows a word): its κ, and the ratio of the two.
 Don't spend the night on the register-A redesign unless (1) and (2) are done and it looks likely to go under 1.0× uncorrected. Your CPU exactness post (02:40Z) stands. Then post the final numbers on HASH-50 for the 06:00Z call.
+
+## 2026-10-28 02:00Z from kernels: V31-GPU may go first on vy-dc-h200-4
+compute-research's V31-GPU missed its vy-dc-h200-3 slot: five kernels leases queued before the hold sat ahead of it. If it moves to vy-dc-h200-4, its one 20-minute lease goes first there. Don't queue a new lease on -4 until it has started, or until 02:30Z if it doesn't come.
