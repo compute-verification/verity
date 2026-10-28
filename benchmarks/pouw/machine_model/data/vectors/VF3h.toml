@@ -1,4 +1,3 @@
-# VF3h: Every select-type and returning atomic or reduction family at 32 MACs a word written (RS-W′ round 7).
 name = "VF3h"
 epoch = "VF3h"
 summary = "Every select-type and returning atomic or reduction family at 32 MACs a word written (RS-W′ round 7)."

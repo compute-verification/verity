@@ -1,4 +1,4 @@
-# Honest at L = 32 on the B200 (sm_100) with the LI fold, as DC-DESIGN measured it: `tcliU_x128`, one thread issuing
+# Honest at L = 32 on the B200 (sm_100) with the LI fold, as measured: `tcliU_x128`, one thread issuing
 # UTCIMMA.128x256x32.S8.S8 into TMEM while 8 lane warps bring the accumulator to registers by tcgen05.ld.32x32b.x128
 # (LDTM_32X32B_X128, 4096 words a warp instruction) and fold each word with LI (LOP3 on one word, IMAD on the next).
 # The lanes fold 107.7 words/SM/clk beside the saturated MMA, against the 256 it commits; every load shape and schedule

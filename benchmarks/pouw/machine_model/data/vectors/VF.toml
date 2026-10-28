@@ -1,4 +1,3 @@
-# VF: V-H plus JI2, MOV on the issue row (rs-machine-model §12).
 name = "VF"
 epoch = "VF"
 summary = "V-H plus JI2, MOV on the issue row (rs-machine-model §12)."

@@ -1,4 +1,3 @@
-# VF3c: VF3 with one head credit for every 32-bit word an instruction writes (§15).
 name = "VF3c"
 epoch = "VF3c"
 summary = "VF3 with one head credit for every 32-bit word an instruction writes (§15)."

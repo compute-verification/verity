@@ -1,4 +1,3 @@
-# VF3j-8: VF3j with every register load at 8 MACs a word.
 name = "VF3j-8"
 epoch = "VF3j-8"
 summary = "VF3j with every register load at 8 MACs a word."

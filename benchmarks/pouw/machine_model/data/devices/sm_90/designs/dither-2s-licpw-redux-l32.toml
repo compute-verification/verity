@@ -3,7 +3,7 @@
 # at L = 32 on the H200 (sm_90): two-sided dither serving the last checked word and P·V's peel, LI receipts on every
 # committed word and ffill's filler (benchmarks/pouw/dc/ffill.cuh: an IMAD and two FFMA on 3 of a thread's 128 words a
 # MMA, 0.0703 a word, its receipt recomputed bit for bit). The noise is dither-2s-l32's, and ε_skip is this design's own
-# at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's: LI binds honest on the H200's lane
+# at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are the LI designs': LI binds honest on the H200's lane
 # facet, so output counting closes the lane route.
 name = "dither-2s-licpw-redux-l32"
 title = "Dither-2S, LI-CP-W redux, ffill (0.0703 a word), L = 32"

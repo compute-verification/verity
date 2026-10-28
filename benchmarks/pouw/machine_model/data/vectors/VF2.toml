@@ -1,4 +1,3 @@
-# VF2: VF with the uniform datapath priced as a kind of its own and JI refitted on ISSUE round 3 (§13).
 name = "VF2"
 epoch = "VF2"
 summary = "VF with the uniform datapath priced as a kind of its own and JI refitted on ISSUE round 3 (§13)."

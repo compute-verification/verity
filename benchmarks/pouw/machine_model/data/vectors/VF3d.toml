@@ -1,4 +1,3 @@
-# VF3d: VF3c audited for how many merges one instruction does, and for copies (RS-W′ round 3).
 name = "VF3d"
 epoch = "VF3d"
 summary = "VF3c audited for how many merges one instruction does, and for copies (RS-W′ round 3)."

@@ -1,4 +1,3 @@
-# VF3i: Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector.
 name = "VF3i"
 epoch = "VF3i"
 summary = "Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector."

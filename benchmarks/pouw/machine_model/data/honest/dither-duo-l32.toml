@@ -1,5 +1,5 @@
-# The honest edited GEMM a MMA: Dither with duo receipts at L = 32 (decision 45's served GEMM). Provisional: the counts
-# are the design's, not ncu's, with no overhead beyond operands and address math. The designs read PROFILE's measured
+# The honest edited GEMM a MMA: Dither with duo receipts at L = 32 (the served GEMM). Provisional: the counts
+# are the design's, not ncu's, with no overhead beyond operands and address math. The designs read the measured
 # kernel (e-l7qs.toml); this one stays for the tests' hand arithmetic.
 name = "dither-duo-l32"
 status = "provisional"
