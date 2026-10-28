@@ -1,4 +1,4 @@
-"""``flock-ir-tmpl/v2`` (``Flock.Tmpl`` in the Lean verifier, PRF-133): a flat ``flock-ir-unit/v2`` unit written as
+"""``flock-ir-tmpl/v2`` (``Flock.Tmpl`` in the Lean verifier): a flat ``flock-ir-unit/v2`` unit written as
 Definitions and placed copies, so its text is O(description) where the flat form is O(unrolled).
 
 :func:`emit` reads the structure off the flat unit itself, whatever lowering wrote it. It works level by level: at each
