@@ -2731,10 +2731,11 @@
     "Definitions.Hash.Basic",
     "Definitions.Core.Game",
     "Definitions.Core.Draw",
+    "Definitions.Core.Rewinding",
     "Definitions.Flock"
    ],
    "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean); a Merkle collision is the hash area's (Definitions.Hash.Basic); the game's uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Draw)"
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean); a Merkle collision is the hash area's (Definitions.Hash.Basic); its games, with their uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Rewinding, Definitions.Core.Draw)"
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
    "imports": [
