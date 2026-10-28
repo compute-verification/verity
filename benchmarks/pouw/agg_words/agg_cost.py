@@ -97,6 +97,19 @@ def main(out: str) -> None:
                 res["breakeven"][f"{per_mac_key}_g{g}_{f_key}"] = {
                     "steps_a_window_for_aggregation_to_win": (d_prove / d_serve) if d_serve > 0 else None,
                     "J_prove_one_step": [w1["J_prove"], wg["J_prove"]], "J_serve": [w1["J_serve_hidden_f"], wg[f_key]]}
+    res["row_sensitivity"] = {}
+    for a_row in (2048, 4096, 16384):
+        for b_row in (2048, 16384, None):
+            key = f"A{a_row}_B{b_row or 'public'}"
+            b1 = block(1, L, K, a_row, b_row, 1024, V["ands_per_mac"])
+            bg = block(128, L, K, a_row, b_row, 1024, V["ands_per_mac"])
+            w1, wg = window(1, L, K, 1, b1, 1, cells), window(128, L, K, 1, bg, 1, cells)
+            d_serve = w1["J_serve_hidden_f"] - wg["J_serve_hidden_f"]
+            res["row_sensitivity"][key] = {
+                "per_cell_ands": b1["ands"], "g128_ands": bg["ands"], "g128_tile": bg["tile"], "g128_fits": bg["fits_2^27"],
+                "ratio": bg["ands"] / b1["ands"], "prove_s": [w1["prove_GPU_s_a_window"], wg["prove_GPU_s_a_window"]],
+                "breakeven_steps_f_hidden": (wg["J_prove"] - w1["J_prove"]) / d_serve}
+            print(key, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in res["row_sensitivity"][key].items()})
     res["g_min_bytes"] = {S: math.ceil(cells * 2 * (S - 1) / (V["free_pouw_GB_at_80"] * 1e9)) for S in (2, 4, 8)}
     res["g_max_cap"] = {f"L{L_}": {k: int(V["cap"] // (L_ * V[k])) for k in ("ands_per_mac", "ands_per_mac_cal")}
                         for L_ in (256, 512, 1024, 2048)}

@@ -11,8 +11,9 @@ W = Σ f(z) mod 2^16 over the group, instead of one word a cell. Nothing in `ver
 - `agg_attacks.py`: linear collapse, low-bit structure, separation and truncation, exact on `dither.py`'s coins.
 - `agg_entropy.py`, `agg_partial.py`, `agg_partial2.py`: guessing with nothing computed, with each cell's dither
   product skipped, and with that product's group sum computed by the collapse.
+- `agg_line.py`: the cells known up to one direction (g − 1 linear statistics), exact over the 2^16 values left.
 - `agg_cost.py`: the proof block each g implies, its ANDs, proving GPU-s a window and the serve-time bytes, for
-  Llama-3.2-1B at T 8,192.
+  Llama-3.2-1B at T 8,192, with its sensitivity to the opened rows' sizes.
 
 `uv run python benchmarks/pouw/agg_words/run_all.py OUT [step ...]` writes each step's JSON under OUT. The findings are
-`note:compute-research/<UTC>-report-gd-agg` in the notes store.
+`note:compute-research/20261028T1945Z-report-gd-agg` in the notes store.

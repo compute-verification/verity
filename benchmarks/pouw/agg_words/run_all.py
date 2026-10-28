@@ -1,5 +1,6 @@
 """Every analysis of aggregated PoUW words, each writing its JSON under OUT (default $OUT): the AND counts, the spectra,
-the exact attacks on Dither's coins, the guessing and partial-computation measurements, and the cost model."""
+the exact attacks on Dither's coins, the guessing, partial-computation and one-direction measurements, and the cost
+model. `run_all.py OUT [step ...]` runs only the steps named."""
 from __future__ import annotations
 
 import os
@@ -12,12 +13,13 @@ import agg_ands  # noqa: E402
 import agg_attacks  # noqa: E402
 import agg_cost  # noqa: E402
 import agg_entropy  # noqa: E402
+import agg_line  # noqa: E402
 import agg_partial  # noqa: E402
 import agg_partial2  # noqa: E402
 import agg_spec  # noqa: E402
 
 STEPS = (("ands", agg_ands.main), ("cost", agg_cost.main), ("attacks", agg_attacks.main), ("partial", agg_partial.main),
-         ("partial2", agg_partial2.main), ("spec", agg_spec.main), ("entropy", agg_entropy.main))
+         ("partial2", agg_partial2.main), ("line", agg_line.main), ("spec", agg_spec.main), ("entropy", agg_entropy.main))
 
 
 def main() -> None:
