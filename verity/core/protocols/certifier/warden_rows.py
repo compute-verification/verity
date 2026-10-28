@@ -99,7 +99,7 @@ from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.core.protocols.certifier.active import HEADER
 from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
-from verity.core.protocols.certifier.grid import Record
+from verity.core.protocols.certifier.grid import BlockGrid
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.sampled_proofs.one_stage import produced
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -126,7 +126,7 @@ def row_bytes(params: WardenParams) -> int:
     return params.grid.allocation * params.cell_bytes
 
 
-def window_rows(record: Record, params: WardenParams) -> list[bytes]:
+def window_rows(record: BlockGrid, params: WardenParams) -> list[bytes]:
     """The link-window's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
     grid = params.grid
     if len(record.grid) != grid.buckets or any(len(row) != grid.allocation for row in record.grid):
@@ -204,7 +204,7 @@ class Wiring:
         return out
 
 
-def wiring(record: Record, params: WardenParams, salt: bytes | None = None) -> Wiring:
+def wiring(record: BlockGrid, params: WardenParams, salt: bytes | None = None) -> Wiring:
     """The link-window's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
     (default: 64 bytes fresh from the operating system); ValueError when the record's cells aren't where the schedule
     puts them."""
@@ -347,7 +347,7 @@ class Cells:
         return cls(link, direction, window, params, bytes(session), rows, salts, wiring)
 
     @classmethod
-    def of(cls, link: str, direction: Direction, record: Record, params: WardenParams, session: bytes,
+    def of(cls, link: str, direction: Direction, record: BlockGrid, params: WardenParams, session: bytes,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> Cells:
         """`record`'s rows and wiring committed as `link`'s link-window in `direction`."""
         return cls.commit(link, direction, record.window, window_rows(record, params),
@@ -417,7 +417,7 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
     return [blob[i:i + SALT_BYTES] for i in range(0, rows, SALT_BYTES)], blob[rows:]
 
 
-def attest(issuer: Issuer, record: Record, params: WardenParams, direction: Direction,
+def attest(issuer: Issuer, record: BlockGrid, params: WardenParams, direction: Direction,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> tuple[Cells, Certificate | None]:
     """The link-window's rows and wiring committed and their head signed by `issuer` (None when its signer refuses)."""
     cells = Cells.of(record.link, direction, record, params, issuer.session, salts, wiring_salt)
