@@ -1,5 +1,5 @@
-"""B1 served with `tensor_parallel_size=2`: TA1's typed serving program with the tensor-parallel functions
-written as compositions of ordinary functions (coverage wave axis 2, lane TP).
+"""B1 served with `tensor_parallel_size=2`: the typed B1 serving program (`b1.py`) with the tensor-parallel functions
+written as compositions of ordinary functions.
 
 Nothing in `b1.py` is modified. The TP=2 configuration is a different static configuration
 (`B1_TP2_CONFIG`) whose layer functions replace the unsharded `Gemm` calls by
@@ -13,7 +13,7 @@ Nothing in `b1.py` is modified. The TP=2 configuration is a different static con
 
 The rank axis is an ordinary `batch` axis: "rank r" is member r of a batched call, and the operands that
 differ per rank are static views of the unsharded weight collections (`rank_rows`, `rank_cols`) — no gate
-is added for sharding. Weights keep TA1's unsharded types, so the program has exactly one `Input` gate per
+is added for sharding. Weights keep `b1.py`'s unsharded types, so the program has exactly one `Input` gate per
 checkpoint scalar (one-producer rule): a rank's weight shard is a projection of those gates, and a weight
 both ranks hold (norms, cos/sin) is one value with two authentication locations.
 
@@ -228,7 +228,7 @@ def _sig_layer_pre_tp2(S):
 def LayerPreTP2(B, S, h, res, w, cs):
     """Norm (replicated on both ranks), column-parallel qkv_proj (rank r: heads r*NH/TP.., kv head r),
     per-rank bias add and RoPE. Returns q as [rank][head][D]; k, v as [kv head = rank][D].
-    Conformance: every leaf exact except TA1's recorded `RMSNormFusedCuda` tie-rounding class (2 words of
+    Conformance: every leaf exact except the recorded `RMSNormFusedCuda` tie-rounding class (2 words of
     248,832 compared across the TP=2 run, both on rank 0 with rank 1's copy bit-equal)."""
     C = S.C
     H, NH, KVH, D, TP = C["H"], C["NH"], C["KVH"], C["D"], C["TP"]
@@ -266,7 +266,7 @@ def _sig_attention_tp2(S):
 
 @composite("AttentionTP2", 1, ["T", "C"], _sig_attention_tp2, conformance="exact-model-tested")
 def AttentionTP2(B, S, q, kc, vc):
-    """Heads split across ranks: rank r runs TA1's `Attention{T, NH/TP, KVH=1}` on its heads against its kv
+    """Heads split across ranks: rank r runs `b1.py`'s `Attention{T, NH/TP, KVH=1}` on its heads against its kv
     head's cache rows — a `batch` over ranks; no communication.
     Conformance: 88/88 per-rank 6-head attention outputs exact, T = 1 ... 527."""
     C = S.C
@@ -290,9 +290,9 @@ def _sig_layer_post_tp2(S):
 @composite("LayerPostTP2", 1, ["C"], _sig_layer_post_tp2, conformance="exact-model-tested")
 def LayerPostTP2(B, S, attn, res, w):
     """Row-parallel o_proj + AllReduce2, fused norm (replicated), column-parallel gate_up_proj, per-rank
-    SiluMul, row-parallel down_proj + AllReduce2. Returns (mlp output, residual) as TA1's LayerPost.
+    SiluMul, row-parallel down_proj + AllReduce2. Returns (mlp output, residual) as `b1.py`'s LayerPost.
     Conformance: partials exact per rank, AllReduce2 exact, gate_up/SiluMul exact per rank; the fused norm
-    carries TA1's recorded tie-rounding class (see LayerPreTP2)."""
+    carries the same recorded tie-rounding class (see LayerPreTP2)."""
     C = S.C
     H, NH, D, I, TP = C["H"], C["NH"], C["D"], C["I"], C["TP"]
     Q = NH * D
@@ -332,7 +332,7 @@ def FinalTP2(B, S, h, res, norm_w, lm_head):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the server: TA1's Serve with the TP=2 layer functions (same signature, same root call names)
+# the server: `b1.py`'s Serve with the TP=2 layer functions (same signature, same root call names)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -366,8 +366,8 @@ def _forward_positions_tp2(B, C: dict, toks: Coll, weights: Coll, T0: int, n_pos
            lambda S: ((("prompt", Array(S.LP, I32)), ("weights", weights_type(S.C))), Array(S.STEPS + 1, I32)),
            conformance="model-untested")
 def ServeTP2(B, S, prompt, weights):
-    """Greedy serving of one request on the TP=2 server: TA1's `Serve` shape (prefill of LP tokens, STEPS
-    decode steps, STEPS+1 selections) over the TP=2 layer functions. Root call names are TA1's
+    """Greedy serving of one request on the TP=2 server: `b1.py`'s `Serve` shape (prefill of LP tokens, STEPS
+    decode steps, STEPS+1 selections) over the TP=2 layer functions. Root call names are `b1.py`'s
     (`t=<t>/embed`, `t=<t>/layers.<L>/pre|attn|post`, `t=<t>/final`)."""
     C, LP, STEPS = S.C, S.LP, S.STEPS
     caches, finals = _forward_positions_tp2(B, C, prompt, weights, 0, LP, None)
