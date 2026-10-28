@@ -56,8 +56,10 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 
 A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too, since the trusted base is the compiled Lean
 verifier, which parses bytes of untrusted provenance, and Python is never trusted: the verifier's process holds the
-registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request and every
-root and openings line as sent, and checks each opened unit's four blocks on the registered vk root
+registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request, refused
+unless it restates the auditor's session parameters (its pinned `P2Session.SESSION`, `p2_party.SESSION`, unless the
+auditor's party names a toy's), and every root and openings line as sent, and checks each opened unit's four blocks
+on the registered vk root
 (`lean/RemoteAudit/P2Session.lean`); C* is too large to read whole, and an opening is what is checked of it.
 `p2.Session` keeps the books beside it and can only veto: an event, a held store or an answer on which the two differ
 rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the coins the challenger

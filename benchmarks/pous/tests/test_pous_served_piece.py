@@ -475,11 +475,13 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                                                                                          monkeypatch, case_exe):
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
-    PoUS's store (`p2_case.same_store` against the run's case), and `remote-audit-p2-protocol` answers it as the session
-    did; the public answer, which the composed run reads as the bandwidth piece's, names none of the store. It encodes
-    ``C*`` at the registered point (about 25 s on the CPU), the only point a P2 registration names."""
+    PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, the
+    piece judging without `--bw-case-exe`); `remote-audit-p2-protocol` refuses it, a toy party's session, naming each
+    value off the auditor's (`p2_party.SESSION`). The public answer, which the composed run reads as the bandwidth
+    piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
+    a P2 registration names."""
     s = registered
-    answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
+    answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path))
     assert answer["verdict"] == "accept", answer["reason"]
     public = s.out.parent / "bandwidth"
     bw = json.loads((public / "answer.json").read_text())
@@ -499,7 +501,13 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
         assert stat.S_IMODE((private / f).stat().st_mode) == 0o600
     pous_case = json.loads((s.private / "case.json").read_text())
     assert p2_case.same_store(case, pous_case) is None and p2_case.store_root(case).hex() == published["root"]
-    assert p2_case.serve(case_exe, [case]) == [own] and own["verdict"] == "accept"
+    toy = SP.HB.p2_party.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
+                                    deadline_ns=10 ** 6)
+    assert case["params"]["request"] == toy and own["verdict"] == "accept"
+    lean, = p2_case.serve(case_exe, [case])
+    why = "; ".join(f"the request's {k} is not the auditor's ({toy[k]}, not {v})"
+                    for k, v in SP.HB.p2_party.SESSION.items())
+    assert lean == own | {"profile": None, "public": None, "reason": f"the request is refused: {why}", "verdict": "reject"}
     assert own["commitment"] == p2_case.digest(case).hex() and own["profile"]["units"] == 2
     assert _jsonl(tmp_path / "parties" / "bw" / "private" / "cases.jsonl") == [case]
     assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
