@@ -41,7 +41,7 @@ verity-exact-kit = { workspace = true }
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
 # before and after vllm's layout move (#3854).
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
