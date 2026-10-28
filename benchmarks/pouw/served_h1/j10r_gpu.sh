@@ -6,7 +6,10 @@
 #           (TIME_ARGS its extra flags), into $OUT/junit.xml and $OUT/j10r_time.json
 #   window  a served Llama-3.1-8B int8 window over J10-R's tile unit with each call's receipt@<c> from the units kernel
 #           (pouw_h1_gpu.py --workload fill --served --commit --negatives --receipts --j10r; DECLARE its --declare,
-#           RECEIPTS=cubin noise.cu's torch chain in the units kernel's place, NOISE=v1 the window over v1's unit)
+#           RECEIPTS=cubin noise.cu's torch chain in the units kernel's place, NOISE=v1 the window over v1's unit,
+#           COMMIT=0 the fill window alone, without --commit --negatives, WINDOW_ARGS its extra flags: --ks 2048 H1 over
+#           the linears at K 2048 alone, --base-role LLAMA32_1B --role LLAMA32_1B_INT8 --repo
+#           verity-int8/Llama-3.2-1B-INT8 serve-openai's model)
 #
 #   research run --on MACHINE --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
 #     -- bash benchmarks/pouw/served_h1/j10r_gpu.sh
@@ -53,10 +56,12 @@ case "${JOB:-tests}" in
     [ "${RECEIPTS:-units}" = cubin ] && so="$S/noise.cubin"
     j10r=--j10r
     [ "${NOISE:-j10r}" = v1 ] && j10r=
+    commit="--commit --negatives"
+    [ "${COMMIT:-1}" = 0 ] && commit=
     cd integrations/vllm
     # shellcheck disable=SC2086
-    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served --commit --negatives --receipts "$so" $j10r \
-      --declare "${DECLARE:-32,3,32,4}" --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
+    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served $commit --receipts "$so" $j10r \
+      --declare "${DECLARE:-32,3,32,4}" ${WINDOW_ARGS:-} --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
       | tee "$OUT/window.log"
     exit "${PIPESTATUS[0]}" ;;
   *) echo "j10r_gpu: JOB is tests or window, not ${JOB}"; exit 2 ;;
