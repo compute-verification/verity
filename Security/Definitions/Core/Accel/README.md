@@ -11,7 +11,7 @@ Sources:
   10.0 to 12.0, sm_120 among them).
 - **PTX**: PTX ISA 9.0.
 - **Sheet**: the machine model's device sheets for sm_90 and sm_100.
-- **Census**: the DS-120 and DC-90 SASS census.
+- **Census**: the sm_120 and sm_90 SASS census (`benchmarks/pouw/sass_census/`).
 
 Marks:
 - **covered**: the same semantics at the same or fewer units;
