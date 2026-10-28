@@ -63,7 +63,10 @@
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
 # session of its own on vy-challenger-1, once `served_verdicts.py gate` finds no period of lane H1_LANE (default vllm,
-# the lane on H1_GATE's key's line) open (a reserve would join it).
+# the lane on H1_GATE's key's line) open (a reserve would join it). H1_PROTOCOLS_CONFIG (a JSON object or file; unset,
+# none) is serve-openai's --protocols-config, given to it and to `served_verdicts.py program` alike, so the offline
+# Program is the one it declares: {"pouw": {"unit": "j10r", "ks": [2048]}} declares J10-R's tile unit over the
+# linears at K 2,048 alone, the form a period's guarantee covers. SERVE_ARGS carries no --protocols-config of its own.
 # PoUW's piece (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session,
 # ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line: MAIN_FILE's (a file, kept as
 # $OUT/main.txt; the gate's pin is a commit of `next`, so give `git rev-list --first-parent` of it), else MAIN_SHA's
@@ -203,9 +206,10 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
   mkdir -p "$D" "$OUT/serve"
   cd "$TREE/integrations/vllm" || return 9
-  local h1=()
+  local h1=() pc=()
+  [ -n "${H1_PROTOCOLS_CONFIG:-}" ] && pc=(--protocols-config "$H1_PROTOCOLS_CONFIG")
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
-                           --challenger-peer "$H1_PEER")
+                           --challenger-peer "$H1_PEER" "${pc[@]}")
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
     mkdir -p "$OUT/pieces/wipe"
@@ -217,7 +221,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   if [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ]; then  # before serve-openai, whose startup reserves window 0's
     # session (`serve_h1.arm_of`): a reserve joins only a period already open, so it's opened on the offline Program
     say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" program "$D/h1" --model "$REPO" --rows "$T" \
-      --steps "$WINDOW_STEPS" 2>&1 | tail -1)"
+      --steps "$WINDOW_STEPS" "${pc[@]}" 2>&1 | tail -1)"
     (cd "$TREE/integrations/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/ml/flock/python "$PY" -m tests.protocols.pouw_h1_circuits \
       --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}") \
       > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"
