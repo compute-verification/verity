@@ -144,7 +144,7 @@ def logged(node: bytes, root: bytes, item: dict | None = None, store_bytes: int 
            device: bool = False) -> log.View:
     """The view of a remote site's registration log holding the node's store, `store`: a memory leaf in the node (or
     in a device of it), and θ's value for its payload (`audit.payload_item`, or `item`)."""
-    n, card = node.decode(), log.Card("a card", 1, 1, 1, 1 << 40)
+    n, card = node.decode(), log.Card("a card", 1, (1, 1, 1, 1, 1), 1, 1, 1 << 40)
     parent = [log.Loc("gpu", "device", n, card=card.digest())] if device else []
     site = log.Hardware(cards=(card,), locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"), *parent,
                                              log.Loc("store", "memory", "gpu" if device else n, tier="hbm" if device else

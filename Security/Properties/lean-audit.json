@@ -37,6 +37,7 @@
   "Properties.Pous.PeriodDeployed",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
+  "Properties.Attest",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins",
@@ -51,7 +52,8 @@
   "Properties.RemoteAudit.Component",
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Pous.WipeSigned"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -74,6 +76,22 @@
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@compute-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+  },
+  "Accounting.Assumptions.Parties.Confined": {
+   "owner": "@memory-accounting",
+   "digest": "4baa7d4cf7feea9d9b3aa14840b4567972a9b07482305a4d7da4c843b404949b"
+  },
+  "Accounting.Assumptions.Parties.Faithful": {
+   "owner": "@memory-accounting",
+   "digest": "a55fd7568be21fc26d7215347fde10b58ec3a85fd8bdc9486d40494c4c2b0851"
+  },
+  "Accounting.Assumptions.Parties.Secret": {
+   "owner": "@memory-accounting",
+   "digest": "b30ca1da8b01036e855776b3312b906339c106c4321bce2f51729133210a9781"
+  },
+  "Accounting.Assumptions.Parties.WitnessPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f"
   },
   "Accounting.Assumptions.SketchHashBudget": {
    "owner": "@compute-accounting",
@@ -238,10 +256,6 @@
   "Properties.Pouw.PeriodJ10R.TileServiceSound": {
    "owner": "@compute-accounting",
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
-  },
-  "Properties.RemoteAudit.ScheduleLayoutGap": {
-   "owner": "@memory-accounting",
-   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -317,6 +331,7 @@
   "PousCheck",
   "Properties.Pous.MemoryChallenger",
   "MemoryChallenger",
+  "Properties.Attest",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
   "Properties.RemoteAudit",
@@ -517,9 +532,9 @@
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": ["Definitions.Accounting", "RemoteAudit", "Properties.RemoteAudit"],
    "except": [],
-   "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+   "why": "the schedule check (`RemoteAudit.Schedule`) and the verifier's layout (`sessionLayout`, where `checkOpening` checks each block under `Properties.RemoteAudit.receipterOf`) are stated against the code and the layout vocabulary they feed (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -534,7 +549,7 @@
   "Properties.Accounting.DeclaredCircuit": {
    "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
    "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and the verifier's layout (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
@@ -575,6 +590,17 @@
    "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
    "except": [],
    "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
+  },
+  "Properties.Attest": {
+   "imports": [
+    "Mathlib",
+    "MemoryChallenger.Attest",
+    "Properties.Pous.MemoryChallenger",
+    "Definitions.Claims",
+    "Definitions.Accounting.Assumptions.Parties"
+   ],
+   "except": [],
+   "why": "a party's signed periods are stated over the code that checks them (MemoryChallenger.Attest, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
   }
  },
  "reads_exempt": {
@@ -616,6 +642,49 @@
    "assumptions": [],
    "type_hash": "eaf5442abb4e631e913657b8c2d54421f389fe557fed648067ff77e673c620da"
   },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton :",
+    "  MemoryChallenger.Attest.Properties.AuditorSeesSkeleton"
+   ],
+   "assumptions": [],
+   "type_hash": "5f543624826a0a7f7fce71b5a459334a857d48a8c65f11e80d3e455ac9e61068"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree :",
+    "  MemoryChallenger.Attest.Properties.LivenessContentFree"
+   ],
+   "assumptions": [],
+   "type_hash": "72180736ea436b3748451909b98f3bf3669d02b58f00725817b8b0eda68cb055"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned : MemoryChallenger.Attest.Properties.PeriodSigned"
+   ],
+   "assumptions": [],
+   "type_hash": "b5bacea572fa620de0934d04bb17bf5973ceea4b5ea8512a20cbaa34904b991b"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound : MemoryChallenger.Attest.Properties.PeriodSound"
+   ],
+   "assumptions": [],
+   "type_hash": "250f6026262a888db9a868c8cdfe9c036963a7f559e188ff1b96d67108172d77"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages :",
+    "  MemoryChallenger.Attest.Properties.ProverSeesMessages"
+   ],
+   "assumptions": [],
+   "type_hash": "31dfb317464e66bf40c956c6769bddc6efded5ab00c80d53e76557816ea0c0df"
+  },
   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
    "owner": "@memory-accounting",
    "signature": ["MemoryChallenger.Properties.SecurityProofs.judgeAccepts : MemoryChallenger.Properties.JudgeAccepts"],
@@ -639,6 +708,72 @@
    "signature": ["MemoryChallenger.Properties.SecurityProofs.verdictSigned : MemoryChallenger.Properties.VerdictSigned"],
    "assumptions": [],
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
+   "owner": "@memory-accounting",
+   "signature": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned : MemoryChallenger.Properties.WipeSigned"],
+   "assumptions": [],
+   "type_hash": "d6470f687cf2a253da6d169a327aadd13e2a197fa938232b5b1606f612f44561"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "  (check :",
+    "    MemoryChallenger.WipeProtocol.Params →",
+    "      MemoryChallenger.StreamedWipe.Commitment →",
+    "        MemoryChallenger.WipeProtocol.Evidence →",
+    "          Core.Outcome MemoryChallenger.WipeProtocol.Public (Prod MemoryChallenger.StreamedWipe.Params Int))",
+    "  (hall :",
+    "    ∀ (p : MemoryChallenger.WipeProtocol.Params) (c : MemoryChallenger.StreamedWipe.Commitment)",
+    "      (e : MemoryChallenger.WipeProtocol.Evidence),",
+    "      Exists fun out => Exists fun prof => Eq (check p c e) (Core.Outcome.accept out prof)) :",
+    "  Not",
+    "    (∀ (p : MemoryChallenger.WipeProtocol.Params) (c : MemoryChallenger.StreamedWipe.Commitment)",
+    "      (e : MemoryChallenger.WipeProtocol.Evidence) (out : MemoryChallenger.WipeProtocol.Public)",
+    "      (prof : Prod MemoryChallenger.StreamedWipe.Params Int) (dev : MemoryChallenger.Properties.Challenger),",
+    "      Eq (check p c e) (Core.Outcome.accept out prof) → MemoryChallenger.Properties.WipeRanAccepted dev p c e)"
+   ],
+   "assumptions": [],
+   "type_hash": "0969d0b3d0e6dfbfa3ce5e2da9cc3da00190bde35b39c5045e998b486d7ae8c8"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun K =>",
+    "      Exists fun c =>",
+    "        Exists fun k =>",
+    "          Exists fun sig =>",
+    "            Exists fun out =>",
+    "              Exists fun prof =>",
+    "                And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                  (Eq",
+    "                    (MemoryChallenger.WipeProtocol.protocol.check",
+    "                      (MemoryChallenger.Properties.measuredWipeParams k.publicKey)",
+    "                      MemoryChallenger.Properties.measuredCommitment",
+    "                      {",
+    "                        signed :=",
+    "                          Option.some",
+    "                            (MemoryChallenger.Properties.measuredSession",
+    "                              (MemoryChallenger.Properties.measuredDigest K c) k.publicKey sig) })",
+    "                    (Core.Outcome.accept out prof))"
+   ],
+   "assumptions": [],
+   "type_hash": "8444018ed4b4885c77516844f88829fea72a93829d82c0a829d28a94b1388a60"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial :",
+    "  Not",
+    "    (MemoryChallenger.Properties.WipeRanAccepted MemoryChallenger.Properties.idleChallenger",
+    "      MemoryChallenger.Properties.unencodedParams MemoryChallenger.Properties.measuredCommitment",
+    "      { signed := Option.some MemoryChallenger.Properties.unencoded })"
+   ],
+   "assumptions": [],
+   "type_hash": "e4d7d2b8de22df378d0f33f6efe0c752254c307a497c0f9536c9998eeebe6058"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -2126,6 +2261,54 @@
    "assumptions": [],
    "type_hash": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb"
   },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.codeLayoutTiles : Properties.RemoteAudit.CodeLayoutTiles"],
+   "assumptions": [],
+   "type_hash": "2515137ac93d73406859ea8ad9ce731b4149fbcd172ee882f68ee2f394c75a61"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_honest :",
+    "  And",
+    "    (Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "      (Option.some (RemoteAudit.Plan.whole 130023424)))",
+    "    (And (Eq (Properties.RemoteAudit.runBlocks (RemoteAudit.Plan.whole 130023424).runs).length 130023424)",
+    "      (∀ (i : Nat),",
+    "        instLTNat.lt i 130023424 →",
+    "          Eq (Properties.RemoteAudit.tileAt 130023424 List.nil.toArray (RemoteAudit.Plan.whole 130023424).runs i)",
+    "            (Option.some { fst := 0, snd := i })))"
+   ],
+   "assumptions": [],
+   "type_hash": "f483e5157c582feaed1b998d0e5b38dd1d1c99b07763afe2a4f4a7d7b6d45930"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.tileAt 1 List.nil.toArray",
+    "        (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray (Fin.val 1))",
+    "      (Option.some",
+    "        {",
+    "          fst :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).fst.val,",
+    "          snd :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).snd.val }))"
+   ],
+   "assumptions": [],
+   "type_hash": "b1a0e78990ee83a63f36e10f8ae596b94b433ee6264e4d5c1c8493885235fd30"
+  },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"],
@@ -2156,6 +2339,48 @@
    "assumptions": [],
    "type_hash": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310"
   },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.opensAtPosition : Properties.RemoteAudit.OpensAtPosition"],
+   "assumptions": [],
+   "type_hash": "111150eaa0d138025444b31c09ae5104f3f91a425059fdd7a751a2787faa2bbe"
+  },
+  "Properties.RemoteAudit.opensAtPosition_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun o =>",
+    "        And",
+    "          (Eq",
+    "            (RemoteAudit.Registration.make? (RemoteAudit.zeros 1) 130023424 reg.payloadRoot",
+    "              (RemoteAudit.zeros RemoteAudit.Codec.SEED_BYTES)",
+    "              { field := RemoteAudit.Codec.P1024, rounds := 3, masked := Bool.true } RemoteAudit.Kind.sketch Bool.false",
+    "              RemoteAudit.LAYOUT 16)",
+    "            (Except.ok reg))",
+    "          (And (Eq w.passes.size 1)",
+    "            (And (Eq (Array.instGetElem?NatLtSize.getElem! w.passes 0).plan (RemoteAudit.Plan.whole 130023424))",
+    "              (Eq",
+    "                (RemoteAudit.checkOpening reg reg.digest List.nil.toArray w (Properties.RemoteAudit.receipterOf reg w 0)",
+    "                  0 0 o)",
+    "                Option.none)))"
+   ],
+   "assumptions": [],
+   "type_hash": "114cbe4a14ae93089cb3c545b9839e5a831f14b3b5aea949a3d3c5f47b46483a"
+  },
+  "Properties.RemoteAudit.opensAtPosition_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_nontrivial (t : Nat) :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.position 130023424 List.nil.toArray ((RemoteAudit.Plan.whole 130023425).block 130023424))",
+    "      (Option.some { fst := t, snd := (RemoteAudit.Plan.whole 130023425).block 130023424 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "4f579a80bcf7a45d83f0c6f86981146cbffb177eda129678a174a259fbad350e"
+  },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.passesChained : Properties.RemoteAudit.PassesChained"],
@@ -2173,6 +2398,43 @@
    "signature": ["Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"],
    "assumptions": [],
    "type_hash": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.planBlocks : Properties.RemoteAudit.PlanBlocks"],
+   "assumptions": [],
+   "type_hash": "b52f9ab9527953b5d6389d4e21022197366698223b4ae485749e62cf43ba2f73"
+  },
+  "Properties.RemoteAudit.planBlocks_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_honest :",
+    "  Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "    (Option.some (RemoteAudit.Plan.whole 130023424))"
+   ],
+   "assumptions": [],
+   "type_hash": "93e2a89f675e16240675c6e4e5ca1336dd56105c8ade41ddff2dbcd1f6c806ee"
+  },
+  "Properties.RemoteAudit.planBlocks_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_nontrivial :",
+    "  Not",
+    "    (And",
+    "      (Eq { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length",
+    "        (Properties.RemoteAudit.runBlocks",
+    "            { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs).length)",
+    "      (∀ (p : Nat),",
+    "        instLTNat.lt p { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length →",
+    "          Eq",
+    "            (List.instGetElem?NatLtLength.getElem?",
+    "              (Properties.RemoteAudit.runBlocks",
+    "                { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs)",
+    "              p)",
+    "            (Option.some ({ blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.block p))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6e294008319128d1b11fc0e7d900c08ce145b23f97af56ee6ecb5879fe06844b"
   },
   "Properties.RemoteAudit.planReadsDistinct": {
    "owner": "@memory-accounting",
@@ -2226,10 +2488,7 @@
    "owner": "@memory-accounting",
    "signature": [
     "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
-    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
-    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  {dflt : Pfx → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))} {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
     "  (checked :",
     "    ∀ (c : Pfx) (y : Y),",
     "      Exists fun sc =>",
@@ -2238,10 +2497,40 @@
     "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
     "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
     "                (Option.some (sent c y)))) :",
-    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+    "  Exists fun steer =>",
+    "    Accounting.Assumptions.SteeredLayout (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) steer"
    ],
    "assumptions": [],
-   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
+   "type_hash": "2128e84650a110e23a0c5b93de13ce647bc6798406445b474795a55a3f76c04b"
+  },
+  "Properties.RemoteAudit.steered_of_checked_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_honest :",
+    "  Exists fun sc =>",
+    "    Exists fun passes =>",
+    "      Exists fun b =>",
+    "        And (Eq (RemoteAudit.Schedule.check sc 130023424 792 passes List.nil.toArray) (Except.ok b))",
+    "          (∀ (s : Nat),",
+    "            instLTNat.lt s 96 →",
+    "              Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes s))",
+    "                (Option.some (RemoteAudit.Plan.whole 130023424).runs))"
+   ],
+   "assumptions": [],
+   "type_hash": "aec9d714beaf2c3410bc927cd5f6042b6c2e4b7a21b4d06b2b5b1db87f3ebe6c"
+  },
+  "Properties.RemoteAudit.steered_of_checked_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_nontrivial (steer : Unit → Fin 3 → Pous.Bits (instHAdd.hAdd 0 1)) :",
+    "  Not",
+    "    (Accounting.Assumptions.SteeredLayout",
+    "      (Properties.RemoteAudit.sessionLayout 3 (fun x => { toFun := fun x => { fst := 0, snd := 0 }, inj' := ⋯ })",
+    "        (fun x x_1 => List.nil.toArray) fun x y => (List.cons { fst := y.val, snd := 1 } List.nil).toArray)",
+    "      steer)"
+   ],
+   "assumptions": [],
+   "type_hash": "7e684951741d0df3f61602dc3f52764b1aa99754df33d776ada8c890c1b1e9cb"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
@@ -2452,8 +2741,7 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Schedule"
+   "Properties.RemoteAudit.Line.Premises"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -3566,6 +3854,50 @@
    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
+    "function": "MemoryChallenger.Attest.check",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
+    "function": "MemoryChallenger.Attest.check",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {
+    "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
+    "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
+    "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
+   },
+   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
+    "function": "MemoryChallenger.WipeProtocol.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.planBlocks": {
+    "conjuncts": [
+     {
+      "function": "RemoteAudit.Plan.make?",
+      "outcome": "accept"
+     },
+     {
+      "function": "RemoteAudit.Plan.whole",
+      "outcome": "none"
+     }
+    ]
+   },
+   "Properties.RemoteAudit.codeLayoutTiles": {
+    "function": "RemoteAudit.Plan.make?",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.opensAtPosition": {
+    "function": "RemoteAudit.checkOpening",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3585,7 +3917,7 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) at the verifier's layout (Properties.RemoteAudit.sessionLayout) with SteeredLayout replaced by, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at J10-R's tile stratum s_T of the sampling block's stratified draw (N_p = |stratum sigma s_T|, padded with wordless fillers, K_d = k s_T), with PouwCheck.Credit.window as the verdict, H1's lucks 7/8 and 1/2, a = b = 1, wmax = 1 and Lambda = j10rRate (k s_T) rho = 8(1 + K rho)/(rho K) from SplitRateClosed (8 + 8/k s_T at the demo shape's rho = 1); the pin is pinnedAt, the unit's tile at its public-row noise and keys (#2352's pin, one description), from SaltIsLiveCoin; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, decided by lane (Asks for Daniel, Decided by lane, A: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340), each listed under assumptions: TileDrawIsCoin, a code fact once CMP-126's verifier draws the tiles inside the stratified draw (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin); TileServiceSound, a fact to prove (C-Flock's soundness at each drawn unit under live coins); SharedNoiseLucks, a claim, computational (Theorem O's one slot, its form FOLD-LUCK's, CMP-134); RegisteredBeforeDraw, as H1CheckedCreditPeriod's (a deployment gap). SaltIsLiveCoin as H1CheckedCreditPeriod's; UnitFixed to be made provable from the code (ASSUMPTION-AUDIT). TileStratumEscape, the stratum's hypergeometric escape of the tile coordinate, is a lemma to prove with STRATJOINT's per-stratum projection (LEAN-56). Proved from CircuitCreditPeriod at tileRun (Proofs.Pouw.PeriodJ10R).",
    "Properties.Pouw.PeriodJ10R.TileStratumEscape": "unstated: a lemma to prove, not a premise: the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, which STRATJOINT's per-stratum projection of Law.stratified (LEAN-56) gives; no guarantee states it until that projection is exported and stratum moves to Definitions (Core/Draw.lean). Card: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340.",
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises and RingDevice, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
@@ -3602,7 +3934,10 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
-   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest)."
+   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest": "completeness: WipeSigned's honest lemma: at S1's deployed LMS parameters a key Lms.keygen derives signs the honest session at r20261026-094403-bb5f's parameters (2^24 labels, k = 2152 reads one at a time, 20 ms each) and clock readings (each read at the slowest round trip measured, 1.40 ms), and the wipe's compiled check of the period that trusts the key accepts it, so WipeSigned's hypothesis holds at the honest deployed instance",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial": "lemma: WipeSigned's nontrivial lemma: WipeRanAccepted fails at a session with a batch no record encodes, under the empty key, for the challengers that ran nothing: it is no run of theirs, and the collision finder and the forger built from it output nothing, so the break is not always true",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "lemma: WipeSigned with a check that accepts everything in place of the wipe's compiled check is false, at the session of wipeSigned_nontrivial"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4281,6 +4616,9 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -4342,6 +4680,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
     "Properties.NetworkPeriod.clockKBoundsCount",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.Pouw.Check.acceptMeans",
@@ -4397,6 +4738,43 @@
     "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.Parties": {
+   "digest": "ddf58c99af57305d5139e16510933e8baf1ef8baf24a6604bda387052f5da2aa",
+   "definitions": {
+    "Accounting.Assumptions.Parties.Code": "47ecaf1dfd12d625f95320b89122b9a3ebda511f361bc1e6af718df2d7741045",
+    "Accounting.Assumptions.Parties.Code.init": "806fddd24efef801c29db2dd90c6297cc08c86a65cc8de70c47f276c04ef542d",
+    "Accounting.Assumptions.Parties.Code.messages": "e8662666a413526f59f2c1e40461e888beb0b3163fd8a2e00c6c8d3a4541ce3a",
+    "Accounting.Assumptions.Parties.Code.step": "68178e8f6f7bb0a7ebc677b272a3570f6d1a1fd00a5fe4f5335ba790c00042b8",
+    "Accounting.Assumptions.Parties.Code.trace": "b492837d1318e6759396884bc4a148d5cd139957b822ca662f563e53a704bac7",
+    "Accounting.Assumptions.Parties.Confined": "4baa7d4cf7feea9d9b3aa14840b4567972a9b07482305a4d7da4c843b404949b",
+    "Accounting.Assumptions.Parties.Dest": "a69733dfd52b43a7820eaa4757af73447a7e87a0febf58b48d0112109a3c6620",
+    "Accounting.Assumptions.Parties.Dest.casesOn": "9b8443f27debffface89d646f87b77efa18c73d21a29fbdd72b1a2c2a2259162",
+    "Accounting.Assumptions.Parties.Dest.clear": "88a0ed3e897a67c0b05f63f42ea8ac77efacc85541bfbbb7bb40b63960ac5440",
+    "Accounting.Assumptions.Parties.Dest.ctorIdx": "65c04d0b55d08227fba0b8c9869b32a92b242c148019f584422d61fed33b2752",
+    "Accounting.Assumptions.Parties.Dest.rec": "5ebb6ecf732b7ad08cb202d2d17231f38695abe551828b31957e1ecd9fdd6a42",
+    "Accounting.Assumptions.Parties.Dest.witness": "f271c665d1dfc73b5bae58cd079f9195d4a9ee9d89bc9c7c7070e335a1358887",
+    "Accounting.Assumptions.Parties.Faithful": "a55fd7568be21fc26d7215347fde10b58ec3a85fd8bdc9486d40494c4c2b0851",
+    "Accounting.Assumptions.Parties.Run": "8de75960199730a0f707bda5c43f008b21aa6286295748761fb9159f19314706",
+    "Accounting.Assumptions.Parties.Run.access": "5bfec54911020ed73ab2824ea2ccd5ff3255e0c97c121ed25420ba830aa6c56d",
+    "Accounting.Assumptions.Parties.Run.coins": "6ff4bac03c33589b6b36dc9f7bfbfe68d9628228b950b3bcbf76b6fcb8910db0",
+    "Accounting.Assumptions.Parties.Run.emitted": "381e0cacad561f107387501ca5eb9a9f1e8cee1fe14530becf9fc53c21727ea8",
+    "Accounting.Assumptions.Parties.Run.overheard": "0daef849c8973d19a42f01905393a12a3d1aefd9aefc860a67ce0a4591f2f084",
+    "Accounting.Assumptions.Parties.Run.sent": "0a02541af6f4f05f4d61e238db9831d4c4b1d1190f1395c7b95f15d67f012e2e",
+    "Accounting.Assumptions.Parties.Run.states": "7892df685053cc0d142a4e536b5c6738657cde5b55eb6673e49397abf75a20fa",
+    "Accounting.Assumptions.Parties.Run.taken": "cd83c92eff005bc55ec5cacf0b35136ae707f976e3c476512b8947e09a898355",
+    "Accounting.Assumptions.Parties.Run.truth": "96e674b72044166c2b9081999c9dcdb01c44965aacaf5c24e40c7231a87d9c24",
+    "Accounting.Assumptions.Parties.Secret": "b30ca1da8b01036e855776b3312b906339c106c4321bce2f51729133210a9781",
+    "Accounting.Assumptions.Parties.WitnessPathPrivate": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f",
+    "Accounting.Assumptions.Parties.auditorView": "1faf41a64c9621e686654f6323fbc5731e8a5152404c5c708332723b81515a7c",
+    "Accounting.Assumptions.Parties.instDecidableEqDest": "61e136b9a49994b396b042b7e1e3cd73d0a096577ec2f88703a0d0047c7b07f5",
+    "Accounting.Assumptions.Parties.proverView": "732215da4056b571853e835638c7e246ae32fb46655581cae92cd4b2b3cccfcf"
+   },
+   "guarantees": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages"
    ]
   },
   "Definitions.Accounting.Assumptions.RateAuditDeployed": {
@@ -4467,7 +4845,8 @@
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.TS": {
@@ -5540,11 +5919,22 @@
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
   "Definitions.Claims": {
-   "digest": "4c89bb9e29a36a5684af69a69f2a713a3757cca256ab843a79183e6a3ec68de9",
+   "digest": "574fdd7b1cdcd6df4e7a1fc94424855ab51ad5bc73c35f4f79cb14be430144bd",
    "definitions": {
-    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d"
+    "Claims.Collision": "684d79c833f61a382736de6bea1d4837fddfeb6034c8b058487e8be7cf2d85ba",
+    "Claims.Finder": "2c5c863ab2f4038487d9df359f7002207b9f7e4c49ed437cfe2437a71f7cbe32",
+    "Claims.Finder.Pr": "dd2f1f6763dbbdfbcda827509bf2c4748a5dc264d47bce6f0137c160acfc4f9c",
+    "Claims.Finder.S": "504b05057f5366f634351cdff7ea218ad75f23f52c3151b5e5d6bfd6aa89143c",
+    "Claims.Finder.fin": "1b06b4fe8a3ad95a1a707b4e6b8cd1621884d7da8a367f1a224894e00fec2675",
+    "Claims.Finder.out": "1f2e96ba2d94703b13797de2b60b1089e0014df7842a3a3beef4d8d4d62558e2",
+    "Claims.Msg": "cd27efe28dbe63e955675e914b64015f9a4bae60206675844abf0897070d4cbe",
+    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d",
+    "Claims.findColl": "91eb2cda582aad3ff3bebd649ad71847502a9b4ba4ab58b7917d2dea8856884c"
    },
-   "guarantees": ["Properties.SampledProofs.SecurityProofs.drawMisses"]
+   "guarantees": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "Properties.SampledProofs.SecurityProofs.drawMisses"
+   ]
   },
   "Definitions.Claims.Sampling": {
    "digest": "cb889f65181508a0d3b86284cdebc8d7c096132ae943c0d2e6f69500480aa2a5",
@@ -6404,6 +6794,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -6428,7 +6821,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCoversSession",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -6551,11 +6945,19 @@
    ]
   },
   "Definitions.Pous.Model.StreamedWipe": {
-   "digest": "2ff54dfa0d796c5ec2e58b96c15ca10cc455b5f5fbace670ccb3c4de72f01daa",
+   "digest": "1f45ea57f21e8fc85b081183474fae2f2c74aa924028c007cc6ba5a22adfc5a5",
    "definitions": {
-    "Pous.StreamedWipe.prfAdvantage": "5b873d7283308dd0f21716d00f9da70aba099053846bda69f50ed9690e50924c"
+    "Pous.StreamedWipe.Accepts": "6dba3997a1d31914b4fad7a11dee65a34946b12fdae60391d3ee5bf41a6ea9c6",
+    "Pous.StreamedWipe.Prover": "3ee3eda544016b9aadb0873d8ff9d9ab27f02346773831efbacd4292a8a02411",
+    "Pous.StreamedWipe.Prover.answer": "81b99dd89ff56d9bc604a57a7006aadd2b8d6a88ef28898171a6369f003cba6a",
+    "Pous.StreamedWipe.Prover.fill": "61206db5e07feba3c1db58d84667e97ce32e8cb8ec8f4913089d9427fcb2ddfe",
+    "Pous.StreamedWipe.prfAdvantage": "5b873d7283308dd0f21716d00f9da70aba099053846bda69f50ed9690e50924c",
+    "Pous.StreamedWipe.revealed": "ffc4256d9422da0050a4d5eef39015a9a90ad157591aac8756428c5bb4d5432c"
    },
    "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
@@ -7120,10 +7522,19 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -7233,6 +7644,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7273,6 +7686,8 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -7438,6 +7853,114 @@
     "Properties.SampledProofs.bernoulliBounds"
    ]
   },
+  "Flock.FV3": {
+   "digest": "4940b923a3edcebf1e9ae6d48d5c34b80cc4fed5db24bef847cbe4a5cb4172c6",
+   "definitions": {
+    "Flock.FV3.Domain": "36a9410f0bb424a2c38165b764ed69a1207ee86948fa393f705d1ddc0fbdd692",
+    "Flock.FV3.Domain.climb": "99fcc386553517f89ea585cbe1cc9a8cee9e5fb19434a237ebb775106fb7ddeb",
+    "Flock.FV3.Domain.count": "00669812938e079ede9a7f6b3b9b14592e8fb0f67ce48711b87bef352ea79042",
+    "Flock.FV3.Domain.emptyRoot": "425cd197b05f5e48d715b28d544bac3e501e329debca58dea7169404493d775a",
+    "Flock.FV3.Domain.id": "2eee3f9e5b49a1eef6d3f76063bf50d9eb72902041e6512ca5b82719f43d8cd3",
+    "Flock.FV3.Domain.leaf": "fd8ff419c4f1c4b1e068239aabe7b98afbe568eef31144c501a12d81f27f9701",
+    "Flock.FV3.Domain.levels": "5bfab251a2a33a8481316c39a170361702127d84a3e2399b341afcb5d94f9ffd",
+    "Flock.FV3.Domain.make": "fe6a3da637a0319c1c47b4521b8e26f6ae6be1d77ac38b5c25c9e7bb099b2232",
+    "Flock.FV3.Domain.node": "e8f4cf0542a2f4dc4321fb5aaf576640e0c3efab9129fd2266d7922aa7a240c3",
+    "Flock.FV3.Domain.pad": "9d44af71884f37c849c22724fe66af4da40f22eac80fcae49d8ca19e29139f48",
+    "Flock.FV3.Domain.root": "f90c58b7ee255b2124723e8121c06a08c4fa871093ed9df8d4ccfa93b4ecdc9b",
+    "Flock.FV3.Domain.start": "690b3c8c8cbd58c869736902c0081bdc21ef24e5ab5194be41de7a655d9d3333",
+    "Flock.FV3.Domain.verifyOpening": "3f2d192672170e31c74412b452cd6a0551687e18e36d729de0684b517ae09c75",
+    "Flock.FV3.FRAME": "7a59c990468cab7e2b8010a7dcb24e3ed28bce0494751048f05c32a61f8a71e8",
+    "Flock.FV3.Scheme": "b9471a025ee99b233e91e250387ac09fd73e64a90e740c9a1cfc9b61f19586e1",
+    "Flock.FV3.Scheme.H": "aaa2508a9b3d14dbc6eb6b08591310cde599443c2e547cc7d5a29bff221d4c4f",
+    "Flock.FV3.Scheme.bytes": "487644863c8e6d3a60aa01fb248012cf91c276a9266ac24884974305df1c4f9b",
+    "Flock.FV3.Scheme.climbL": "6ff4a7ee77835ac6473c730a0f047dc4e6e78563e67c08ad8071f04798ba0517",
+    "Flock.FV3.Scheme.hash": "7d3ee1761c38b7a2fd4e4e0b2bf23a9cfe25c13f97f2df8588b05cfc34d84957",
+    "Flock.FV3.Scheme.node": "87ffb1b5f55b1abd9fb17713ac7c8edfe21d77ecee4d230b37e3922e996dae1a",
+    "Flock.FV3.Scheme.rangeIdentity": "b67480470c212359652b8e44ecc938081dc1685d97e8eb94533e97997eac54a8",
+    "Flock.FV3.Scheme.tagged": "41b70083c747476a997118599a4bbde8d8d200b4121b7927aff145507d61ef46",
+    "Flock.FV3.Sha512.Domain": "f8d773c717e66f7707a46c038770723800014d820c457bccf529fb3d090ada5e",
+    "Flock.FV3.Sha512.Domain.make": "49e79738d506d2dd17a440c763c0acc6baf8772bbef117b2931e89d131105cea",
+    "Flock.FV3.Sha512.TAGGED": "0060c2dc6a0f1e1a0892285612b4245c4d6bfe1681632815167c80f73d48820b",
+    "Flock.FV3.Sha512.climbL": "c86d47654ff71acb0a5784241b7d31c41ccbf72b7ec22ecf1aedbc7ecfc73eab",
+    "Flock.FV3.Sha512.leafAs": "b0f201a7ace51ea5c4e9c2cf9b4abd20feb7efe774025a43fca5d29e44e3730c",
+    "Flock.FV3.Sha512.node": "2b5a1399f0c3465babd3baa43fcd702f9e6b625f22297197a46124a1881ec695",
+    "Flock.FV3.Sha512.scheme": "0a2e745f691ffb3b648a322d3e45fb092e0e8cb428f54f10f1cbe498f488dffc",
+    "Flock.FV3.Sha512.taggedSha512": "7ce543bed847ab1a41082253496f3001a227e9eb208cb74f462b08fcc3a80355",
+    "Flock.FV3.hash": "cc9e4c8cff49884c029e2dcd72eacfcff412be1262f7605a1340423d22de694c",
+    "Flock.FV3.input": "40f6284bef69a01c2183abb181d134f0933c86d920af89dbdd6287181a68493c",
+    "Flock.FV3.leaf": "4b7af71c043502c3b39a0c104b4738a7d793224b9a774a8f16ab9bd06cab139f",
+    "Flock.FV3.root": "6a22de22bbca2178bc03fcea105a21368f1b0b34dd561c136c085d25319ad51f",
+    "Flock.FV3.uint": "1ac23222e67f6d80d0114374a4088da24daf3d7b1315e5239d849bb2606fce47"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide",
+    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
+    "Pous.Period.SecurityProofs.obligationHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
+    "Pous.Period.SecurityProofs.periodHeldAt",
+    "Pous.Period.SecurityProofs.periodHeldDemo",
+    "Pous.Period.SecurityProofs.periodHeldDeployed",
+    "Pous.Period.SecurityProofs.periodHeldHonest",
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
+    "Properties.RemoteAudit.Component.acceptIsVerified",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
+    "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
+    "Properties.RemoteAudit.acceptOpensDraws",
+    "Properties.RemoteAudit.acceptedMinPasses",
+    "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.liveIsRun",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.passesChained",
+    "Properties.RemoteAudit.passesReadDistinct",
+    "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.receiptsBelowLimit",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.SampledProofs.acceptMeans",
+    "Properties.SampledProofs.bernoulliBounds"
+   ]
+  },
   "Flock.Firewall": {
    "digest": "67e89a35e85f43280ae6335718660c1edcea2769c64851ff860d9328f3d5e970",
    "definitions": {
@@ -7468,10 +7991,19 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -7580,6 +8112,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7634,6 +8168,9 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -7697,6 +8234,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7735,6 +8274,9 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -7782,8 +8324,30 @@
     "Flock.nextPow2": "672248e8c4c082f39e900d47584890b871bb09171798a196ac4378253b873524"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide",
+    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
+    "Pous.Period.SecurityProofs.obligationHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
+    "Pous.Period.SecurityProofs.periodHeldAt",
+    "Pous.Period.SecurityProofs.periodHeldDemo",
+    "Pous.Period.SecurityProofs.periodHeldDeployed",
+    "Pous.Period.SecurityProofs.periodHeldHonest",
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -7801,6 +8365,30 @@
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
+    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
+    "Properties.RemoteAudit.Component.acceptIsVerified",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
+    "Properties.RemoteAudit.acceptChecksOpenings",
+    "Properties.RemoteAudit.acceptDrawsOpenable",
+    "Properties.RemoteAudit.acceptOpensDraws",
+    "Properties.RemoteAudit.acceptedMinPasses",
+    "Properties.RemoteAudit.appendsInOrder",
+    "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.liveIsRun",
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.passesChained",
+    "Properties.RemoteAudit.passesReadDistinct",
+    "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.receiptsBelowLimit",
+    "Properties.RemoteAudit.recordKeptAfterDraw",
+    "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -8054,49 +8642,16 @@
     "Flock.FV3.uint": "f00ede6b3df22859c2566c85b1665172f6061ba7a25333f7f96b23c90f52252c"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
-    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
-    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
-    "Pous.EndToEnd.SecurityProofs.endToEndRing",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide",
-    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
-    "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
-    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
-    "Pous.Period.SecurityProofs.obligationHeld",
-    "Pous.Period.SecurityProofs.periodCapacity",
-    "Pous.Period.SecurityProofs.periodHeld",
-    "Pous.Period.SecurityProofs.periodHeldAt",
-    "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial",
-    "Properties.Pouw.Check.acceptMeans",
-    "Properties.Pouw.Check.acceptedDraw",
-    "Properties.Pouw.Check.acceptedInRange",
-    "Properties.Pouw.Check.acceptedIsTheService's",
-    "Properties.Pouw.Check.commitmentKeepsBytes",
-    "Properties.Pouw.Check.digestIsOneStage's",
-    "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.liveCoinBinding",
-    "Properties.Pouw.LiveSalt.onePair",
-    "Properties.Pouw.LiveSalt.oneRoot",
-    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
-    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
-    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
-    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBounds"
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Flock.Qcall": {
@@ -8184,9 +8739,9 @@
    ]
   },
   "Flock.RegKnown": {
-   "digest": "03dd02d51b0318874b2d95edeb116c4a9d3a5024af9aab4d734c24a6c0908ec6",
+   "digest": "c714852356886956b1d9207103ab285ca45469eef8cc741766470ccf08cab11a",
    "definitions": {
-    "Flock.Registered.knownLeaves": "37eac096d195d8c2dc553213bbd82f0c10be65282622562250b1d3cabc0a9a5e",
+    "Flock.Registered.knownLeaves": "56754a91c70e1be2fc4f3461f28d8f91183c891495975048c52a92560ed9cff0",
     "Flock.Registered.knownPayload": "95c0f843bbe9566de2422e1406f3d155ee6bad1c6b6b210f8019b330838a6cf4",
     "Flock.Registered.rowBytesV2": "affced86a8e5d0b9ad7afc24bef4a37c01a20bf1001100e3ea46cba35528988c"
    },
@@ -8208,23 +8763,6 @@
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
-    "Properties.Pouw.Check.acceptMeans",
-    "Properties.Pouw.Check.acceptedDraw",
-    "Properties.Pouw.Check.acceptedInRange",
-    "Properties.Pouw.Check.acceptedIsTheService's",
-    "Properties.Pouw.Check.commitmentKeepsBytes",
-    "Properties.Pouw.Check.digestIsOneStage's",
-    "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.liveCoinBinding",
-    "Properties.Pouw.LiveSalt.onePair",
-    "Properties.Pouw.LiveSalt.oneRoot",
-    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
-    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
-    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
@@ -8413,8 +8951,40 @@
     "Properties.Pouw.Commit.frameSizes"
    ]
   },
+  "Lms.Hss": {
+   "digest": "04296fe4aea5b80ed8d71c461aee35b1e5f00e847b700244338cfb368ce9e2f0",
+   "definitions": {
+    "Lms.DEPLOYMENT_BYTES": "c3ba551720ef42857658c53678fcbbe30d20e524cde6f3ebc5f2446edc318e7a",
+    "Lms.HssSignature": "91e2b6a5e03e2ca45b4be0523fc4d4d0b553980178a2a79f79184fda86ebc100",
+    "Lms.HssSignature.certificate": "1738cd8c706e14f8d34c52f0e990ad6458cb976511371f2fef6eb54032803491",
+    "Lms.HssSignature.lower": "0a858db32e39bec00fa6c5f488358184c58eabd816b4350c7e79d6cdbb4ee159",
+    "Lms.HssSignature.signature": "a03db237b40c7a25c740cfdccb6a74ffabd150b0983874d9190079f77e3a7732",
+    "Lms.LIVENESS_TAG": "02e1a1c2f98673de81c21527a405c20c6d829328cf7c6522780f0eb1520cf509",
+    "Lms.PARTY_KEY_TAG": "67ff95a239991d53f771030a23139969a04b051ad9b3d6b4d96f39fe4b98a0ea",
+    "Lms.PERIOD_ROOT_TAG": "488e1aa7d246a5c084cdec0f80fe349a835677b01dde8b74439d5aae91c04301",
+    "Lms.hssVerify": "08cf30f4cadb1c350d61d94e8426480c374359f9bf313a5bdb722f4d128d5d8e",
+    "Lms.lenField": "435353b985c7c0bb7f0d363ecb89fe131536813c16c6ba4287948a0412cdeae6",
+    "Lms.livenessContext": "5b8bfde5822dcc843878e4ed61479049c77ccbf4d5acaa34131e05dc6289ba06",
+    "Lms.livenessMessage": "a4b36ca1f40dd988ca9a04a38267eb746aca0fa47e9d320ed2da4994d80502ae",
+    "Lms.partyContext": "53a66dd29ae1215a3e42823c8e365054a79ffa765fd84da548b2c26f563caebe",
+    "Lms.partyKeyMessage": "1d3bab62ab57486602e2c1ba421ac98fdea96fdf15c47fa374bdf0eab404c9eb",
+    "Lms.periodContext": "9a14b16b1235840ec46cc030683f03480fcef233633099a80f0b051466bab3bf",
+    "Lms.periodRootContext": "c462930d6eba3932c04cf5ed6fad28a4ec2917ca985fc277e355d23a6bfa5ac5",
+    "Lms.periodRootMessage": "92ed51c64f62e63506bb74d58356d7c933e9f82b0dceda8543ceeb7031c34092",
+    "Lms.roleDigest": "c000eb3f30ea871f66fa60e3fb287e086a32e91c897e2b38720f9dc3682c0afc",
+    "Lms.u64": "59c2338deb47fc107042f227a6ba16ba36ec5b42f08fa5cad5fa9defce42aea2",
+    "Lms.verifyCertificate": "f27eeebd66c8f1dd7f61b32ae99439402ed80d50ddceda4ce2d19b2bffa1b41e"
+   },
+   "guarantees": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages"
+   ]
+  },
   "Lms.Sign": {
-   "digest": "96eb58a389918cfc649eb17256720f6099c039b007aec02d4602bb3ab2523fd6",
+   "digest": "f6e10ef47fefa358085bf2d5b291473c17021723097b193beae00de769babaab",
    "definitions": {
     "Lms.PrivateKey": "610ab62a51e32cfa20ed698c418c68534ac34dca46b720a0bb0825984c3908a4",
     "Lms.PrivateKey.I": "341233069ea8e1618ff0a033ab088477387913dcb80fba9c2b56c2ff11774d0e",
@@ -8424,11 +8994,13 @@
     "Lms.PrivateKey.tree": "79ad5937c23216b87306d5882473d160a1071120812699517915251818ee07a9",
     "Lms.Signature.encode": "af378b331eb5e1720515539aeda39d39a4bb28e5fe0831bee6be5e3b5da644c0",
     "Lms.key": "3e2bf9383c8fcabed31a2c1809f9fb40eb4f55eecab15f6cd50b74f1ae846234",
+    "Lms.keygen": "de8c2aac656cfd13ee2f8d1c155f2b7128be235e2cf57bfd716d1491712bf9b4",
     "Lms.leaves": "bc88fcd12f78f2d0de245dcf171e48240194be4911324b99f6418917208fef8d",
     "Lms.secret": "9a1da7b4c316ba2ca43100102095dd447d344070d90383de37ae74d4c191c504",
     "Lms.signAt": "013e60d1e8eb98aa9cfcd9569309b9601fd53dee8fad48b90c5afb7632463676"
    },
    "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -8479,10 +9051,19 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -8526,6 +9107,36 @@
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
+  "MemoryChallenger.Attest": {
+   "digest": "0a71d4ce90579e3b5b42eeff30b354ba0ec5ac0f7e4f3a1ad4cc6d6dd1ca3eb5",
+   "definitions": {
+    "MemoryChallenger.Attest.PERIOD_BINDING": "dd0a061d8c4fa133087df93841ffafe13ce26cb77e3f0a6cd7d0f75661e42041",
+    "MemoryChallenger.Attest.PERIOD_SCHEMA": "dd2fde54eb652050de88c768734a93bda9f1edecceeee9a2c935a5facce3a24b",
+    "MemoryChallenger.Attest.Read": "09780f807561057e939877401cb689029d692a4209489341db3c79917d2ef006",
+    "MemoryChallenger.Attest.Read.path": "2581f8c9b8576c1aea38d20f86aeccc7333727439e89f9e1bc589426040ce80a",
+    "MemoryChallenger.Attest.Read.position": "8be80db327fe3f18bae46b17051d6814607eb7118e67e78d6bf098dbc57edda3",
+    "MemoryChallenger.Attest.Read.record": "6f655fae01b502ad3dce90616b66695f79b8234fc85b1476661b183e3ffac7c7",
+    "MemoryChallenger.Attest.SignedRoot": "6c494a57ece1ce4fdba24ac11472d214555695f5ebe9fc5740ce7f3acba52f22",
+    "MemoryChallenger.Attest.SignedRoot.attachment": "f9eb7e6f410bd1cfe4c2cb8c219a194e5354d802f2b0c39622b463f8d8029ce0",
+    "MemoryChallenger.Attest.SignedRoot.count": "cf001d13d0a7cf52cc376ab74f25bb664da36b3c325a3ccb7d6c3e8cfedbce22",
+    "MemoryChallenger.Attest.SignedRoot.link": "0bcd9059bbe0a1b69a973d6f5ee16018628d5cfc5360956c7db2630111b999dc",
+    "MemoryChallenger.Attest.SignedRoot.message": "a052696b57812dca864e8f4352aaeae84af3200d0c22f5d528f810791eb92450",
+    "MemoryChallenger.Attest.SignedRoot.period": "e90a0dff8bf29fe78cf36f45a11afd92ed9da145e05279c130d3fa9c6d333a4d",
+    "MemoryChallenger.Attest.SignedRoot.root": "5edd558cdb1e193be0466bae84a78daa19c3f61dfd345af6751409c76a1dea9f",
+    "MemoryChallenger.Attest.SignedRoot.signature": "1fdb8eb81f45b3fb84a313da6827e367da0e280b3f5b268bf4fc64eb871ed751",
+    "MemoryChallenger.Attest.check": "0f8389ac87c17c0b0563787b782a3e7012bf173d3e22645907b2b351c74eaf64",
+    "MemoryChallenger.Attest.leaves": "0f1db052bed63f62a220b3d2c79cbec717848e07cbceac7ab0eb739183143aed",
+    "MemoryChallenger.Attest.periodDomain": "dc3dbd81798c4b744d13007aa6ad0a7e295f5ce8bd9f7f310244d24ea3fdf977",
+    "MemoryChallenger.Attest.root": "3a18a29876098b19850f8c7703112b17342fd88220b084b4b988f751eaccedc8"
+   },
+   "guarantees": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages"
+   ]
+  },
   "MemoryChallenger.FrameV3": {
    "digest": "64cd898fd4b23076f22a644547e6ffea2d1a3550aa4013e8f551494604e0538a",
    "definitions": {
@@ -8549,28 +9160,15 @@
     "FrameV3Sha512.verifyOpening": "68443bea98b29f3788ed3c094dc42608ed23c0167463aaee4cdf6f8aa2d5d847"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
-    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
-    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
-    "Pous.EndToEnd.SecurityProofs.endToEndRing",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide",
-    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
-    "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
-    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
-    "Pous.Period.SecurityProofs.obligationHeld",
-    "Pous.Period.SecurityProofs.periodCapacity",
-    "Pous.Period.SecurityProofs.periodHeld",
-    "Pous.Period.SecurityProofs.periodHeldAt",
-    "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
    ]
   },
   "MemoryChallenger.Judge": {
@@ -8592,18 +9190,24 @@
    ]
   },
   "MemoryChallenger.Protocol": {
-   "digest": "038dd1a36c1c54edd3c42b163360563d654f514480145d4d25faaf7dbe7f6406",
+   "digest": "01cf85754009a1dbd648642952c9dcb8df0f5bd0d9a31eaaa39348d4d9ce1f21",
    "definitions": {
     "MemoryChallenger.Digests": "9f5fa02321f5051365a0261249653d12cff78b4aa12fb0b50604175a58399f88",
-    "MemoryChallenger.Digests.find": "214e718e77fb761e5bb139201e52328f23a349b37ecb89cb9f47a1e06a88e7f3"
+    "MemoryChallenger.Digests.find": "214e718e77fb761e5bb139201e52328f23a349b37ecb89cb9f47a1e06a88e7f3",
+    "MemoryChallenger.exactly": "adaee847e1fa4e160a956f3d4d5835651a87a8867fe8647f2c666da554b48a12",
+    "MemoryChallenger.hexArr": "be4679771077afb63bce01a4049b23f3bc6907d71be6daf6a98086bc55a66363",
+    "MemoryChallenger.hexField": "7a200b743ced0f99b1ae9cc3e36a5f77a9b6a3a53ea2d96e04b4aebd6a83d591",
+    "MemoryChallenger.objs": "f0f7bf9b526c51942d05d62d62077c01abeb098c7c851d7c131b4b3033925820"
    },
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.judgeSigned"
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"
    ]
   },
   "MemoryChallenger.Records": {
-   "digest": "8dd851e22ad536c9f5ae02c29116b0844bddb6a56004d05056f9fb18fd467986",
+   "digest": "35f74d2496f089fe7ac7b46796314db8191c1e329ddccbd8d4966f28837236ac",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -8621,7 +9225,7 @@
     "MemoryChallenger.CoinTree.indices": "0e2a5a6b2f1d9384d8c065719db0a803e4ed76eda6d8c4007bee243d8838ec18",
     "MemoryChallenger.CoinTree.k": "0fe8aeeeb3186fb5063b393791f98f4236d413ca3dc958078ddf4a6e7e85e332",
     "MemoryChallenger.CoinTree.key": "e8816d917e1f7c0ccc43c08d439e4ad304c904862440adbfc63920be73f80a8d",
-    "MemoryChallenger.CoinTree.make": "06457228e741e539236e6dded33047f3cf722d129749e30a1b3f8479a82350ce",
+    "MemoryChallenger.CoinTree.make": "ecdcaed9b38f54aea78987c8574779aa108bb975e03a5bb48d289a05b9a242fa",
     "MemoryChallenger.CoinTree.root": "6100657735795727f4f3c969337fe4da8714f3aecbc95171fdd107ee517664e2",
     "MemoryChallenger.CoinTree.session": "c904b761372eb2eb6541aeaa462b3d624c67d24df9b4b358d0c7fc360701a82b",
     "MemoryChallenger.DRAW_BYTES": "68f85e41afb606989e1aaa0bbfe522d5c78ce32c0feecfbd531c263925303fe0",
@@ -8660,14 +9264,14 @@
     "MemoryChallenger.checkSalt": "cc42b89d219c740d96658b23eb20db1a9e4fc240e277f6d3124913a2c7c56d89",
     "MemoryChallenger.coinDigest": "4814d323b560f93002ba8f631d107cd91365e0abc842d9a4931b7b90ecd6d313",
     "MemoryChallenger.coinLeaf": "b92b27544101b114982988807d3be3e188f15bc03724759b5ce66d4915a0d54f",
-    "MemoryChallenger.domain": "b7395945620dbab5fa075c85c1d78f00dad1313da86f401fff6b27ff9f3aacde",
+    "MemoryChallenger.domain": "42eaa94424c7162105e649f89d10488cb7b9f958b6fc4347f9ee4592c5312c58",
     "MemoryChallenger.header": "ba8ba493a6e94b378f7d5986e48ccac0461e2ae75b030f4defdb1227c8ba007d",
     "MemoryChallenger.instBEqSessionCommitment": "4b71f394bba101b8137e4b85a4480ae521fdf8901a68c3c1a6e6e7efba43b454",
     "MemoryChallenger.instBEqSessionCommitment.beq": "fc559134d62c8328730d4711c4732821d8255538575ae507ddf54f792ff45c86",
     "MemoryChallenger.message": "c7f4d39c27b0c2b6d78b2e86ccd054863dff64347b17493c7816933ef495434b",
     "MemoryChallenger.pyJsonStr": "4b73401b7a9b129fc9ebbea967e554592113d2094c19b2745d3f71528320dbbd",
-    "MemoryChallenger.recordsRoot": "353ee7187b7be14be7af950c97c84e69644730673bceab8a16a323e8a037bbec",
-    "MemoryChallenger.verifyCoin": "a3b04234b41536e4a8e3a47567d8e62c55a94f2903327a4c8133d8d415fce492",
+    "MemoryChallenger.recordsRoot": "90f3e00d61b117fa9267b6ae255d6961e49bff72c66246feb92d6b0ce8d61970",
+    "MemoryChallenger.verifyCoin": "c54685a7ce7f1a0bf9512d57bdc070e3791de5a50a379ec02d0eec7ff72d9ac9",
     "_private.MemoryChallenger.Records.0.MemoryChallenger.hex4": "80136896de271de3b068aef00e4ff59d3d632b8b23fc484a59e049fdf9584d45"
    },
    "guarantees": [
@@ -8676,6 +9280,10 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -8710,6 +9318,10 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -8719,6 +9331,82 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial"
+   ]
+  },
+  "MemoryChallenger.StreamedWipe": {
+   "digest": "627a270fcabe841b61aa2cbd38ed5b2a79891052a66d8f26ab68fd5bb18a634c",
+   "definitions": {
+    "MemoryChallenger.StreamedWipe.Batch": "c41fb834ea7b752afa45114c300050fe7328c6ed51abb498123e584d9ffdf6af",
+    "MemoryChallenger.StreamedWipe.Batch.b": "721183a276bad453e26b8c0e2453c4b40f5eaf062b9f6113542e38dbc6762b07",
+    "MemoryChallenger.StreamedWipe.Batch.count": "e7da6c1ca2d41dbc1193ae80c4f8cc317c359e51d982008cbee2a08c1bdf4f69",
+    "MemoryChallenger.StreamedWipe.Batch.digest": "746fb699b71cff60940f128a8e9dc48fa08fcaf8f7739ccdf33d2e72f571f807",
+    "MemoryChallenger.StreamedWipe.Batch.elapsedNs": "4d1a92d8da3375adc723ae7ae92b09ac23f14cdcc24d64cb6e4eac1caaf04ca2",
+    "MemoryChallenger.StreamedWipe.Batch.first": "d26f77cd247d11af3f931d63046807aabbf01080d0212aa117503d1b9f1a1fc4",
+    "MemoryChallenger.StreamedWipe.Batch.receiptNs": "30dc4961d4e061476be6b202835c680fc54d235acb3bcf4ed94fad3b60c791b8",
+    "MemoryChallenger.StreamedWipe.Batch.sendNs": "e4fd754e53dc9724c7e1cc55dbb88df0b2925ef1b03d9fac43374e0cdaf8cff5",
+    "MemoryChallenger.StreamedWipe.Batch.value": "f45e7dcbbe5d6404e9c957227f657e7da860401e19181b660565c36f29490c88",
+    "MemoryChallenger.StreamedWipe.Batch.wrong": "9847fe2c51f5fa77eea58411f716e0bcc923515f26e25f68e73b5e0a3913f63c",
+    "MemoryChallenger.StreamedWipe.COMPLETE": "1d2d336e1407d724b0d02cce9f782355267399e5971c7bba385eaf6720a02928",
+    "MemoryChallenger.StreamedWipe.Commitment": "b3701cfabf1d5f9ff1be0429b19a43baab4a67cbf6ca3c78de4d31ccff82f8c4",
+    "MemoryChallenger.StreamedWipe.Commitment.casesOn": "a5b125bbf36f21871504d50fe535b6eef69e6f95c9e792939eff0550688999c4",
+    "MemoryChallenger.StreamedWipe.Commitment.headerFields": "57117b81cc03f953ad1f40ccc1336f42c267760785ce9dab8f0fa97f61da85f4",
+    "MemoryChallenger.StreamedWipe.Commitment.params": "e9e530aa066265d26b817a014d70807af1651944ca9cba66529f105d411fdf21",
+    "MemoryChallenger.StreamedWipe.Commitment.rec": "4b7e6d703fba700e42e78766ceec083d8f10ea48f36d21b0c4c2ca2fde2cecce",
+    "MemoryChallenger.StreamedWipe.Commitment.server": "bbbebc508bea4eefc6b84b32f742d61352e15ff36b2efdd18431d805aa98e21e",
+    "MemoryChallenger.StreamedWipe.Commitment.session": "528ffc655f8c844e7aa0820ae186db219a65acc1a0f6d2e2bed57951efc46a49",
+    "MemoryChallenger.StreamedWipe.EGRESS_MAX_UNITS": "fd66233b7d1103a2562cad2658882e12d4000001bd3d52633fc352ed9be0e61d",
+    "MemoryChallenger.StreamedWipe.EGRESS_UNIT_BITS": "e268270910b8070cc6773c9fed9c1d061fbf78630f54fed92dbf1cad65756a5c",
+    "MemoryChallenger.StreamedWipe.LABEL_BYTES": "22927ca68fabffe8ed8e5754f79631934cdb8fe6874392905532236dce12e447",
+    "MemoryChallenger.StreamedWipe.PROTOCOL": "4ca98b1a15c347981fad755bab8e18609d6ed793d0a5b26bd16cba15bbbbf972",
+    "MemoryChallenger.StreamedWipe.Params": "c11aa781bc20b607fbda0cde159d297aa89b74ed55243d48d54f35addf63841e",
+    "MemoryChallenger.StreamedWipe.Params.batch": "9df978bb0957d7ec33abc28fa1a954d4407075754a1394c2775a9300f899eb0c",
+    "MemoryChallenger.StreamedWipe.Params.batches": "05d1a6b2b644b4252266f9b242fc38a0d8a4be4b7fe247cefab1a7cdfcdca31c",
+    "MemoryChallenger.StreamedWipe.Params.casesOn": "f16593a74c5a65666418fce29c2ac4d770363f85e1a57e6aa0d6afb51c006fa1",
+    "MemoryChallenger.StreamedWipe.Params.check": "02ab2104a738a4cd91d1f2db487de2cfde257c4913a7a980d002fb7fc0241c22",
+    "MemoryChallenger.StreamedWipe.Params.covered": "bcfdeedc15c138a0d1f1c83a9c68fbe59f2915ee446525bf0fe5a49378958124",
+    "MemoryChallenger.StreamedWipe.Params.k": "6cc29c61114cf70871490e57aae494570c77c86c3e6916aa4480f1e92fd1b75a",
+    "MemoryChallenger.StreamedWipe.Params.labels": "99ab2c2146a0174c76d08dc9b7374b37f762ee0330ea4e1652d12956b0163530",
+    "MemoryChallenger.StreamedWipe.Params.limitNs": "9460945c56248c91a66f039922b866eda1a6537885684084e51eb3f432177676",
+    "MemoryChallenger.StreamedWipe.Params.rec": "25570541bc746ce4cd2fd5cdecd4cee6c625317856dd4409c0bdf16b8508aeff",
+    "MemoryChallenger.StreamedWipe.Params.tiers": "092830343be9a7a26cffffd4acef87a10e5d3e688c1bc76a2669169ca172fd48",
+    "MemoryChallenger.StreamedWipe.RECORDS_TREE": "85e93016b7d575cddbe28b851b2a5cca7a5319086ecf0e8a88bf9b42ba9f200e",
+    "MemoryChallenger.StreamedWipe.RECORD_BINDING": "613255ae0532debbc21ee3e67f2874c45e18f1eefaf167f50e04107222636b28",
+    "MemoryChallenger.StreamedWipe.RECORD_SCHEMA": "4a31071823cc6bfd4048c1a948d819e6618858ab93632a4ee77f6f65dda0b117",
+    "MemoryChallenger.StreamedWipe.SESSION_TAG": "23aac4602b161b7dbc0c7403bb677f551e822106121d7d3a540cf48dcaf3e8d4",
+    "MemoryChallenger.StreamedWipe.Signed": "a52d9086c2537e7f1b53f2e5cc90eb60a01e551769316de3a66c31afd8af79cc",
+    "MemoryChallenger.StreamedWipe.Signed.batches": "43dc705a5a64efc44c0ca0c5e55a79a4c745d0cd504bacdb4b6a07e548597aa8",
+    "MemoryChallenger.StreamedWipe.Signed.commitment": "192658f6b35c771dfb4109ce440f80db8c693e6913aec66153b8f117465ba885",
+    "MemoryChallenger.StreamedWipe.Signed.egressBits": "291cc876dfdefa677fbc7f2c55260bca284215fb808ec62ef69c2c13b7b186ec",
+    "MemoryChallenger.StreamedWipe.Signed.ended": "4bef46e7d59ba47c4d549fc1d5fc92a85419e9416cf733c0dbb2d6f09c49889f",
+    "MemoryChallenger.StreamedWipe.Signed.fillEndNs": "b0343bc2c2c79f321813a56abfffaa7080078fe6bdc4e9c3701e151ea09494b6",
+    "MemoryChallenger.StreamedWipe.Signed.fillStartNs": "beee0751814bb27d7fc2c9b0351290dee0fe6dc38d124eef9db558c6d72bd756",
+    "MemoryChallenger.StreamedWipe.Signed.message": "66756927db4bcf1847a4d9610907440215c6f4db409f0a0c8db7e95f6bd366bb",
+    "MemoryChallenger.StreamedWipe.Signed.publicKey": "9eab0b73dbf1724534a8c1d243f8b9336457936add4f5dcdfb9d800965ed1d85",
+    "MemoryChallenger.StreamedWipe.Signed.scheme": "6bd8a02cff3b60ad6bcc66fec59e231c34fb91915bf292f4973a3d120c0de286",
+    "MemoryChallenger.StreamedWipe.Signed.signature": "ccb3862ecf7aa29d4219315c82ee713ef708f0f9d06d154f1bce5c1725dab539",
+    "MemoryChallenger.StreamedWipe.Verdict": "e22913de59c491efe4250ef7b71bdde03757483b0afb2f4e1a898abe471b534b",
+    "MemoryChallenger.StreamedWipe.Verdict.accepted": "dd2f4801bca7c10f9c63a48828dda4d37eac69b965cf7f2075e8fed373b2edff",
+    "MemoryChallenger.StreamedWipe.Verdict.egressMib": "e8471df45988bfa81235a890110115dba16e5284fd46ee5496eb64e2285a0f0b",
+    "MemoryChallenger.StreamedWipe.Verdict.reasons": "fd956469f1b0f34972ca71424dd7a0e6cf53bd744347b704aedc754cacca1db3",
+    "MemoryChallenger.StreamedWipe.beInt": "91b6bfde81c18973d6c59892f7196bf6ab32592bc4e171e119b13197efa99f21",
+    "MemoryChallenger.StreamedWipe.egressUnits": "dd77626d710790013e5d6771e231d252e4cf0b5f5f7168c8f962f959c5aef14a",
+    "MemoryChallenger.StreamedWipe.header": "d0b7e6413811fa2b2d9b85aa87885153a0db7fcbb2b38c5d633ba980c919ef59",
+    "MemoryChallenger.StreamedWipe.instBEqCommitment": "928e36b1efcf4cb3c6bdcb4704984c18608a16cf64288d829cdd34fe13892545",
+    "MemoryChallenger.StreamedWipe.instBEqCommitment.beq": "5d6b46183b384fca49bf17a748e388e5f75d759c017182f408b1f4ed907e8a8e",
+    "MemoryChallenger.StreamedWipe.instBEqParams": "4053d49dc7f63f5f8a3c2d6a306008b0e5b75e9350c7c7ade57e8166f0560097",
+    "MemoryChallenger.StreamedWipe.instBEqParams.beq": "91bf11e29a2dda9fc4f35ebf322ab90976a627ae0520adc2effef991fede7149",
+    "MemoryChallenger.StreamedWipe.instInhabitedBatch": "5c2d8b61b6ea73103c380ac985b2c0318e77e252941ad0e8bafa93d99f87b8f8",
+    "MemoryChallenger.StreamedWipe.instInhabitedBatch.default": "096b3cf9ae85a128177007f43ff5eb970890324baa3a2f6008a88d6b4be43101",
+    "MemoryChallenger.StreamedWipe.message": "a9758ed2dfc566bc89fd24e8141c75c778cfd6bfe3f66353dbf70133f7b584f9",
+    "MemoryChallenger.StreamedWipe.recordsRoot": "b40ac959e3c677d7e79301ce9c6874d7d9fd0d7abe8410761402eb05e533d8c7",
+    "MemoryChallenger.StreamedWipe.verdict": "3b29d81a36d99642e4476a2d3ac3aa087b5433bb50877ad5d8301095993d39bf",
+    "_private.MemoryChallenger.StreamedWipe.0.MemoryChallenger.StreamedWipe.tiersJson": "c49a13e43342b426ef848318c4864e6d6195f068dc7010a8784907dae2daf9a9"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
    ]
   },
   "MemoryChallenger.Verdict": {
@@ -8751,6 +9439,10 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -8761,6 +9453,79 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial"
+   ]
+  },
+  "MemoryChallenger.WipeJudge": {
+   "digest": "a3890554afd61f36afd683be17a055c128c10603144c8f87a7069b48c2566872",
+   "definitions": {
+    "MemoryChallenger.StreamedWipe.Batch.ofJson": "18299b08a8f2c16d63386d60e7a8fa727a27538ee0af5a8499d02011b5b5fa16",
+    "MemoryChallenger.StreamedWipe.Batch.toJson": "4ec6a8077c7ca846ff9c160ef6455d103d63cfb4c2b6d21f1ec22706741da75e",
+    "MemoryChallenger.StreamedWipe.Commitment.ofJson": "dede4791ba7c433bd40af746fb48f499f331f01cca23ce064779dfe5a611b164",
+    "MemoryChallenger.StreamedWipe.Commitment.toJson": "e376bb4eeca970ce1f20193d115a40d5c14d955fad89240dbaf4196d1ea28d68",
+    "MemoryChallenger.StreamedWipe.Signed.ofJson": "44dffeb6b125ed0936b08b3bd876155e2b8eb389e7b0ddb6300b28f2183e63aa",
+    "MemoryChallenger.StreamedWipe.Signed.toJson": "a1e5e86913eb2aee8b40b1abe660c96da97e0c1ca176e0c5ebc74326ce9a0fd2",
+    "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.hexJ": "d762bfacb778ace058f6c070c88fab74270d40ef5af392759046c7831cc08c31",
+    "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.intField": "32c10d81a0a819f13293677617643a6115c4ab63f52052d720e1334899088cf8",
+    "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.intJ": "83089091dfa1e2ec4c839299fa798acf5057ae5648cfda7f318bf7bc40d0f888",
+    "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.natJ": "aae9e67ce6fad22524532dee9f859a6fb9b2f4935cf892a569e7769c81bbf1d6"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"
+   ]
+  },
+  "MemoryChallenger.WipeProtocol": {
+   "digest": "5b7a293c18d51c3d52439568286f9261be47a8004d05e9252780a942a4bd0e63",
+   "definitions": {
+    "MemoryChallenger.WipeProtocol.EPS": "3531a8db9b9865dca0216151f8cd12d96646f4f742bffc1f22bcf747a9ab0383",
+    "MemoryChallenger.WipeProtocol.EXPERIMENTAL": "dda750b69b6a3dce5216ff99221e1a320df9f6ebbc871ff9f1a844fcd1e41ab0",
+    "MemoryChallenger.WipeProtocol.Evidence": "5ddd3ec888e055bcdc0385948ada000a27b53b67cfe10812e5f128d2374d62b1",
+    "MemoryChallenger.WipeProtocol.Evidence.signed": "36a3eb1978c22d1cae8c104ca1b10392f19eb059a350d5d12a47bbcb457bd884",
+    "MemoryChallenger.WipeProtocol.Evidence.toJson": "3b5a8ec67ee2beb603706c89f7307f6556c64c8d43989ba46239e351d3838c8b",
+    "MemoryChallenger.WipeProtocol.ID": "5e0991bb3801b583e04c379edb41b61b81ee77e15cc5cc1bb9ae17ea098cb11a",
+    "MemoryChallenger.WipeProtocol.MAX_READS": "8af5a750e886c09459339aedd2975d185c38bc245b03ce658f42fbac3abc521c",
+    "MemoryChallenger.WipeProtocol.Params": "685abdfda10157070d82a5c2c36fc420263a31f8ad2dc82815352b741c9c849b",
+    "MemoryChallenger.WipeProtocol.Params.server": "f20f46eab435381a5096411c609da400ed8c471a0bff60ab23775463933ab581",
+    "MemoryChallenger.WipeProtocol.Params.session": "0c7b260b0f7b5c301cac716efdbac6c7758b151b00443717a318b62920e8f598",
+    "MemoryChallenger.WipeProtocol.Params.toJson": "061df5990b353855d1ccbb54b5549ea7a67114da5397a4347b5dff05c455927e",
+    "MemoryChallenger.WipeProtocol.Params.trusted": "b0eaa4bafb6cb723f6209d32f75d818328eb535497e901089d0bddb5d0cb3233",
+    "MemoryChallenger.WipeProtocol.Public": "52443519c55d37287d451360b5107c8115217129bc4199490014090192d96adb",
+    "MemoryChallenger.WipeProtocol.Public.certified": "88b7186273e3db4555691b4fcd12a5d2916f129ecdaa02dc47c2f579972d411e",
+    "MemoryChallenger.WipeProtocol.Public.egressMib": "e080b8f5397b0d95b04ac5f96a862330cdcf7473bcc0565daaea825c9b952fe5",
+    "MemoryChallenger.WipeProtocol.Public.eps": "fe7105ef6c49c8c807500c9037884af132e22d6bc5d4640050a52ee2f6915e08",
+    "MemoryChallenger.WipeProtocol.Public.foreignBits": "571a2986c0fb070551d9593b8792a2b167d62b24b4220e722aadeda7fb931617",
+    "MemoryChallenger.WipeProtocol.Public.k": "15b6467e6cfbb745d17e3f2912d9e9ab9b20b2f3163949b8bc5b0b6d987550f3",
+    "MemoryChallenger.WipeProtocol.Public.memoryBits": "5f3ca4524cdae5871f4742067a4719f77e5ee94d05fa8168e1dc56a2c1367ea2",
+    "MemoryChallenger.WipeProtocol.Public.r": "6c1d8bbd0f515e8cf7d8ec06bb0c767c4a420f7247d99f94f79d09f677ef97c4",
+    "MemoryChallenger.WipeProtocol.Public.toJson": "2d56369132b68dddb856b3e5b42dad607562ee5f31a4fdb2ccbc01ad006e5be3",
+    "MemoryChallenger.WipeProtocol.UNIT_BITS": "c4b7d4e610401af58c38eda64d2115b264377f918ad6ecfaa4372534dcda1ba8",
+    "MemoryChallenger.WipeProtocol.certify": "072ab9c2de8386c35209c9cde07faef7acffe6fe24cf7b643ba447c1edfe6c8a",
+    "MemoryChallenger.WipeProtocol.check": "4412a8341059ff7bf37a9ec4383b9ff241046fb40d2e743def0edc0726bba545",
+    "MemoryChallenger.WipeProtocol.decodeCommitment": "70a5253e2776f0a06ea1a8fe30555ae0f605646a6a1cf1bbacbf9d218b0d278f",
+    "MemoryChallenger.WipeProtocol.decodeEvidence": "681656deda645f6002c72d604cba71a7e995d4d27c4b380b5c3bc9745e1378e5",
+    "MemoryChallenger.WipeProtocol.decodeEvidence._sparseCasesOn_1": "59d891df5f8f548d7b75a101c44a978531a47cbea72f3155a3d176edebb1d525",
+    "MemoryChallenger.WipeProtocol.decodeParams": "893750fef1fb7a4ad238fac7bc4e864fc226fba03048b40b6c6fb183faf57676",
+    "MemoryChallenger.WipeProtocol.digest": "d9caf6f75a0a5ed9286b92cdfecd6e590a1ec306464ff86131c03301348c8656",
+    "MemoryChallenger.WipeProtocol.fillBits": "2e0c25f793835b270b0a7b5cf2ac43531072cd93754991996be96b14a9cfa45a",
+    "MemoryChallenger.WipeProtocol.foreignBits": "8ddc228413957f7732e20f7b4c1eba7efc73fc6f5559af4896e54edca10b8ab4",
+    "MemoryChallenger.WipeProtocol.gaps": "cb6573f90cca7340b2c64ffeaca1e97b0195a60f34915df3d27f0d812a3327bc",
+    "MemoryChallenger.WipeProtocol.memoryBits": "e3db7869d85dbda0befcefa074fb025c0ad1904bffb010fa10348a96b74260c7",
+    "MemoryChallenger.WipeProtocol.mkProtocol": "1ef346d63f26cc061cfa2480be577c0d42d709d5818508427afbe5abcf072714",
+    "MemoryChallenger.WipeProtocol.outsideBits": "ff895eefb5cb61ce41e8ea0e9ecba4149e6cc022c53cbbfbe419fa2fc8b504df",
+    "MemoryChallenger.WipeProtocol.profileJson": "3480fcf39b657785a920a0f0c82415ed0c9b957e7a9dfc8a364365ca18c02f37",
+    "MemoryChallenger.WipeProtocol.protocol": "bf874585a67c80848e44e7fc4749789d46e55bd571c5490488b00b8b8b81c174",
+    "MemoryChallenger.WipeProtocol.ratio": "c777dbab595c379dcb0f151dfc26f99db623ed03640bfffac3e44ef11a319248",
+    "MemoryChallenger.WipeProtocol.ratioOf": "ead0d9b00b59e4cbd2917faf07df7214127f4fd9d9db0f0d0aa7246f28db7f44",
+    "MemoryChallenger.WipeProtocol.ratioSearch": "594894da11c038ce3658eee5177321e1baf6dacf9cada0502ea06d3bf0033417",
+    "MemoryChallenger.WipeProtocol.samples": "7a145ac3840232f5e62e20ad5f71db9989984c8bc67b8f5d18d1db9c447713e0",
+    "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.hexJ": "d1ca30893491681448632d04d8023bdb929531cf409e6162a2124e8a2d1deb9f",
+    "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.natJ": "e8727017f342ed9865812bb9541059197bd40dd29953092439507393e12349aa"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
    ]
   },
   "NciCheck.Baseline": {
@@ -11030,9 +11795,9 @@
    ]
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "digest": "5a07e7caa5ece91d7f8a943f3fd8fd2d0490b83058311c04e31db0b99bea87b7",
+   "digest": "5e817906295d75ee69f0ecd9157a62e4d9fadbd9ad8b00d9e3021d05f2540268",
    "definitions": {
-    "Properties.DeclaredCircuit.ScheduledRequirement": "d17f830b0dbf055985c0f27e56d833b8ed4d9e2f5f7a6273c7bde51929d157d0"
+    "Properties.DeclaredCircuit.ScheduledRequirement": "f85dc949bfb7ffc8c6600e714b1afe2934cf7fae7b48ff4817ddd00d919946ee"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
@@ -11120,6 +11885,83 @@
     "Properties.Requirement.stepRegion",
     "Properties.Requirement.storeMatches",
     "Properties.Requirement.topological"
+   ]
+  },
+  "Properties.Attest": {
+   "digest": "d5849cf267bf41153282b2b7df26b2c622326f81436a8a510ee4600359353156",
+   "definitions": {
+    "MemoryChallenger.Attest.Properties.AuditorSeesSkeleton": "2fe5332448c3914fbb9c5046322f2b03c328730f1897de4f11b18f9057db6510",
+    "MemoryChallenger.Attest.Properties.Break": "414bcb2d1ec43fe0ec86789d7434344507e442db9eb25b4fd2f1646f221432da",
+    "MemoryChallenger.Attest.Properties.Ch": "9abfdb0aff74c0c21478719db653cad29602f7b46530b4112bfe27fbb9363ace",
+    "MemoryChallenger.Attest.Properties.Ch.casesOn": "fe1d3474f00fe5ff413740ef14de3f83bffdccfa2534ef39c9729079d8f14796",
+    "MemoryChallenger.Attest.Properties.Ch.liveness": "60b41af4fb4d5531472f658e1f4a5c352e15ffb0fdaea28cc2ceac5f0c8eb45a",
+    "MemoryChallenger.Attest.Properties.Ch.rec": "a323ad57f79fefa2e4dd33ef8252d8569fbb54f31180f83b1e27020a0047e4e7",
+    "MemoryChallenger.Attest.Properties.Ch.record": "ba48a69412f915a72c636b80ca0244050ffabf29a6c68971eab943da32026d58",
+    "MemoryChallenger.Attest.Properties.Ch.root": "3bf3d3fbce576ac8cbd3cf29b1540037bcd13796fd68fb42163cd36a1b6a727c",
+    "MemoryChallenger.Attest.Properties.Closed": "6576b79ee7c9900e7a7b4de36685a47997349d34f37189f272a5d2ba686e30c4",
+    "MemoryChallenger.Attest.Properties.Closed.attachment": "387e59227a1fdefdce5d4ddaab9eef5da587c8cf22e57a107315da2ee59db95c",
+    "MemoryChallenger.Attest.Properties.Closed.deployment": "8edb0de6426683ad501e739cbc33091965523fa3be1c6d5889e74dcce6c5cb3f",
+    "MemoryChallenger.Attest.Properties.Closed.link": "10cfc1c21506db47f63e47281ecb20befb0342f3fcf731bdebf14cc53c43051a",
+    "MemoryChallenger.Attest.Properties.Closed.message": "26bd48743c45846f692b71581c5d7af07c1d0f2593b761d62c0b6408041f38f9",
+    "MemoryChallenger.Attest.Properties.Closed.party": "22f0ff67c4431d51551a7f76dd43dca4a81e7efecc242bad348798ad2906a88d",
+    "MemoryChallenger.Attest.Properties.Closed.period": "6c23ed79eda5ada70a5b5f3272a62a48196d412c3d66ab290ec0cc9722ea74d3",
+    "MemoryChallenger.Attest.Properties.Closed.records": "13e73ba65ac1b71e5b79550d11eccb81e07961f14150356c9dfecf8be1b3dd7a",
+    "MemoryChallenger.Attest.Properties.Device": "960bc696714a89eb0a946fd4189c082c953a9c5b0ca635b364016eebf4cb07e0",
+    "MemoryChallenger.Attest.Properties.Device.closed": "bfdd069d4111c2f12c6c2069abec637179891d85e9311abd05289e0df1f5e583",
+    "MemoryChallenger.Attest.Properties.Device.issued": "e8a79123e653a9bd105e1ddff9ecbc16cd31e27bf6f106869655c9f40ad34a71",
+    "MemoryChallenger.Attest.Properties.Device.live": "18dca884b6e3d5d84d4535e6ec70c126117fdb0ec93b2e6dcefec3d353b8d0b0",
+    "MemoryChallenger.Attest.Properties.Forges": "54a891a8115bd35a78607691d2394ba96b0b5f23c9f0c34ce3067e2f8f013c8f",
+    "MemoryChallenger.Attest.Properties.Issued": "0ff3322c0980e0523f445dc78b7a0e6fb068ecf7086bf0f23c2c1507cbd27beb",
+    "MemoryChallenger.Attest.Properties.Issued.deployment": "4d205c6dee9d8979829441ee0119590bd45a68723d6d81f6f27ce48abee0a2a8",
+    "MemoryChallenger.Attest.Properties.Issued.lower": "2e4f20f3902a9c61e6ba5476da758b719849b501ff394e77b9ccdaa5ed42c3de",
+    "MemoryChallenger.Attest.Properties.Issued.party": "441e18dd7bd9f249422284050be02e1b61406f272cc563e555fdc8b71816c2ff",
+    "MemoryChallenger.Attest.Properties.Live": "eb5d626599bd761bfe7b68c051b58a314a9f6755f74fcae075f21aeafc41f3f3",
+    "MemoryChallenger.Attest.Properties.Live.attachment": "e430c48a83b70a1e01cb04b9efe246190bee62524bd8640b32c29a5b671fa8aa",
+    "MemoryChallenger.Attest.Properties.Live.block": "65ed954b16986c21d22def484b8d3eb1bc633e12935650e3d1a6dbb63b7d1ca2",
+    "MemoryChallenger.Attest.Properties.Live.deployment": "94ab360710d3f9bb14c57f28a86bdfabf3fdce97db9c56459dc0828bd6128024",
+    "MemoryChallenger.Attest.Properties.Live.link": "0b9ae78f68978655b845ec6f504f2564345fec5734d4f4a733073f7068521740",
+    "MemoryChallenger.Attest.Properties.Live.party": "4927783210b5697009344a156d7f678114ad609ac35a56fb478cb39e639688ba",
+    "MemoryChallenger.Attest.Properties.Live.period": "d05cc49af32516acc3c3c320be9c482cd877d32d317a12253e3a9f69f11e1d92",
+    "MemoryChallenger.Attest.Properties.LivenessContentFree": "d7254431abc64a16823f0509d67d6d4a8bae86aaf70d319173f3547e407bb47b",
+    "MemoryChallenger.Attest.Properties.OfDevice": "abc1b92267cb4ecbe065f2ce62760d8c07f103adaff6960f28d532aeb7a87217",
+    "MemoryChallenger.Attest.Properties.PeriodRun": "d65c66ff36785106ed3caf2adcae63f374afd08d4654c7ba5fc2d77d661017dd",
+    "MemoryChallenger.Attest.Properties.PeriodRun.deployment": "d51856b7adfe2e1bd5e401c61664a87a9618b8d855ae5e7bbb1847b5c9b54d2b",
+    "MemoryChallenger.Attest.Properties.PeriodRun.dev": "18f2a374ff42a02f63a6cc9abf3f5b9e3610c8bbf45690b6ce9d116ca0d67e50",
+    "MemoryChallenger.Attest.Properties.PeriodRun.identity": "052359178d2e927b0158349448036314b4794d512a52a8ec6c130de44411480f",
+    "MemoryChallenger.Attest.Properties.PeriodRun.party": "4dc059f4cb7a006a6f977b96a4a27fb3439700b8229e62d5a7e678664a28c241",
+    "MemoryChallenger.Attest.Properties.PeriodRun.reads": "3c0fa2fe0f115cc7dbfc94b016f2871ff727f9fa78963ece7300d3448cbfc5c3",
+    "MemoryChallenger.Attest.Properties.PeriodRun.root": "c1004857940f1519a19616bb5d3f6df38d76954e76d9a9fb8a1074515ccce38e",
+    "MemoryChallenger.Attest.Properties.PeriodSigned": "1c46cf2f08e3246ec2f813dee531eb939944836d343adb311f2ab422289cf8b8",
+    "MemoryChallenger.Attest.Properties.PeriodSound": "b84c8d88fc687e41b29c17a07d86525eab14aed97eea48936734b985e617c9a0",
+    "MemoryChallenger.Attest.Properties.ProverSeesMessages": "8d01b209d9edcc94da6ad54b77dd15eedb00e5ebb95662232c9a71accb7cce6e",
+    "MemoryChallenger.Attest.Properties.Signed": "d607b07e0dc651083a044d4bf50e8dfea77792b95ae93d017a6da7bbf02b70bd",
+    "MemoryChallenger.Attest.Properties.Step": "f411b526608d6e085a7829517690521f3b2c1b298a1f2cc94eddc84d79da7f4e",
+    "MemoryChallenger.Attest.Properties.Step.block": "eef9972970f2b8f43e96c732da959623963f17138b85ba98a6bf15fad1a80393",
+    "MemoryChallenger.Attest.Properties.Step.casesOn": "49e357e3035629ff55fd291a14005e1c8ead4ef6687ac5f8394e35f26cb75ea4",
+    "MemoryChallenger.Attest.Properties.Step.close": "2bcee16e8d5158a3986aa51dfa8cc90d7214625100ea8e7ffa4b0d77c784e52d",
+    "MemoryChallenger.Attest.Properties.Step.rec": "defc5cd78d64c5cea0fa1bc0eb8f1fd3e54e6d608cdf63ad0ca3f850a6b7bff4",
+    "MemoryChallenger.Attest.Properties.Step.skeleton": "1697d3e4ffe87def132caeca018868ab65033d12cc57ee359da663ab55922da3",
+    "MemoryChallenger.Attest.Properties.climbInputs": "8929982830ebdd4cf7860242f2314fe8696dd6fae2d0eeb6fa1d8de85fa5295c",
+    "MemoryChallenger.Attest.Properties.climbStrings": "5eed221b184296692811d0db43c4ac23c1e3509b7ce2c5511a2244552f2c36d2",
+    "MemoryChallenger.Attest.Properties.code": "2893f810fcd4e0c300b62ff1027acacd85270a0208f6ef1179b329ce855679b5",
+    "MemoryChallenger.Attest.Properties.collisionFinder": "0ac39861ab8f9c8dc4c106c0e52110936c43a9c5a0e55d515f4d411edd51de1f",
+    "MemoryChallenger.Attest.Properties.dest": "bbad536907b069b9731d41c86ed35b78a93c163e5da82dd43dc748bfb5e5b766",
+    "MemoryChallenger.Attest.Properties.forger": "bbde14362a03c9cc1faef06c9b96af38d648079f343323c81ade3d374dc6e53c",
+    "MemoryChallenger.Attest.Properties.forgeryPr": "1305f5fe7f14e82a2b09536c1f715df24cb92a81cd0ec978ff3e903738e7c596",
+    "MemoryChallenger.Attest.Properties.inClear": "f53fe323f24e12cd4b9ea5f80c4cb9cf3637880dfe9ef3620842cd8d8659bb9c",
+    "MemoryChallenger.Attest.Properties.keyStrings": "bf8141253d186cba4a3cb4e9e4c86943c5a85a3024b80dab457397459f608140",
+    "MemoryChallenger.Attest.Properties.roleInput": "86740450a57a02270b1a56de6326a732bdc5c8e166317916db71612491c64670",
+    "MemoryChallenger.Attest.Properties.roleStrings": "eb61310672493be5fc0d4aac1c496c2ef25de517990daeaef606d46b9153bec1",
+    "MemoryChallenger.Attest.Properties.runStrings": "71d0e85a768a985bf21fa3a5c1c4491dfd8975a94b88f4a4180014ac4192cf98",
+    "MemoryChallenger.Attest.Properties.sha512": "3a7afea3f21cf14d4687dffb5a365675800c4f6607e25ab67e81804dc1528ff3",
+    "MemoryChallenger.Attest.Properties.treeStrings": "c8a87988e1f4595c4660e7a62458530bea2da47cff88068f1203720ae88075fd"
+   },
+   "guarantees": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages"
    ]
   },
   "Properties.CertifierDevice": {
@@ -11827,7 +12669,7 @@
    ]
   },
   "Properties.Pous.MemoryChallenger": {
-   "digest": "7ab2387564d85203baa2360ee6e621e017acc8efaad5a9e4581f071c374f793c",
+   "digest": "31dbae4335f4a0125b35990d5d77282b4838681cc546ec8cfdb3b4bf4f0ce4ee",
    "definitions": {
     "MemoryChallenger.Properties.Accepted": "812d273231ae986d14633bee1380b0e4876b7c6f00ee1a7ac3fb1d49ec5b9d45",
     "MemoryChallenger.Properties.Device": "ed4511488da53c85b9b883e3e5507cc6d495c8c85a88bed7b19b97e66c8bc6e8",
@@ -11859,14 +12701,19 @@
     "MemoryChallenger.Properties.runStrings": "2c9c3fd897d472e33860e5f09784fa44bbc7653916fa29ebc4512d8a9d35ee06",
     "MemoryChallenger.Properties.sessionMessage": "5b6a2bc60aa00caaaa6084b68bb84cf6b1dc305635e267cdeff47e130f8b2e48",
     "MemoryChallenger.Properties.sessionStrings": "d1cde6b26ffce139133bf1f1b50c00cbaa5f01b3bf43295c918556c878599ab0",
-    "MemoryChallenger.Properties.treeStrings": "adf666085371fdb2aac7db464982153cbe44290dec3ceff2f676e1ae6b104db8"
+    "MemoryChallenger.Properties.treeStrings": "3d99dea70208f39c41d1968350b39acae0c06cca6efe071224abeae848f97f27"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned",
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -11988,6 +12835,75 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
+   ]
+  },
+  "Properties.Pous.WipeSigned": {
+   "digest": "d5420fe9e086845bce755b1f72424f1826fa781457ccd294f606a8dbdd1b750f",
+   "definitions": {
+    "MemoryChallenger.Properties.Challenger": "5f708c1c3a71fff23d5aea2cd0c788a3c91f738a80b480bb9b10d9d043e15fe5",
+    "MemoryChallenger.Properties.Challenger.Signed": "2d1541e78ffc46d4f1c32f5b5f140d2a6ff31a4b8fcba37c1777c315b2cc4226",
+    "MemoryChallenger.Properties.Challenger.device": "42740e8142a510166e83cb133fba93b800b89cf16945ecf43fbbb44d9a5c9ed5",
+    "MemoryChallenger.Properties.Challenger.wipes": "0ec4d51d0c79a98e000bbe12ef2e0abc707f79c27c710ee755634c051492f626",
+    "MemoryChallenger.Properties.MEASURED_EGRESS_BITS": "a5cedea294294629272e09ae5051e98db5ab16ed83d5fbb68e888e12c246b3fe",
+    "MemoryChallenger.Properties.MEASURED_FILL_END_NS": "e9b8fff79a59d3484c385ed9ee9014b7815c399308b2cc1360a9a16dfc5d1229",
+    "MemoryChallenger.Properties.MEASURED_FILL_START_NS": "b4c262a91e14db7b20e357778d21dd11022324bc6bd81742e065f12a9b8778bf",
+    "MemoryChallenger.Properties.MEASURED_FIRST_SEND_NS": "a578a66cb2737d348661fae1e12046a80c0af0e07579e851127b183a63e3f27c",
+    "MemoryChallenger.Properties.MEASURED_MAX_READ_NS": "980c1c7051d80d220a667b694d9415868c74f88c3afbe3f11c88f491f65757cc",
+    "MemoryChallenger.Properties.MEASURED_SERVER": "a4722fd9956aa6d1af68e3913982ea5b8e114c17c849448d95fa37b6f31e678f",
+    "MemoryChallenger.Properties.MEASURED_SESSION": "4b716c186e14731ecd312b05a27f89cd65930dad8cfb42d0385b6179677aa7c6",
+    "MemoryChallenger.Properties.WIPE_LABEL_TAG": "c659a85525b66e6f2552fb11e122fd990ac036c3bbb4bcbb01c7fbe2de66be98",
+    "MemoryChallenger.Properties.WIPE_WRONG": "b1cb06614b24df31f9fedb54f3eb49179a167ba5e253ebdaffea19fe9b536432",
+    "MemoryChallenger.Properties.WipeBreak": "177f019cda5edadb4b56996afc6cae786b3a7b0a72383e9d6eaa73c413dd99ea",
+    "MemoryChallenger.Properties.WipeObserved": "55f5ee40192d6838f4088cb4c4162f77cf0bd154f753b3d6cb85764c1bfe7bb8",
+    "MemoryChallenger.Properties.WipeObserved.answer": "bc19157ac2958261938c8ae42f715b51f9921d384311703dd257282eaa03c6b4",
+    "MemoryChallenger.Properties.WipeObserved.receiptNs": "4b147e6f2e75e936a7aeca5de83ad9ab05ba7208a32ead83fe27e07d46ac17cc",
+    "MemoryChallenger.Properties.WipeObserved.sendNs": "5c1d2ab892ad3b74ba1a8636ea6e908ec259decdf26d29f51db9655009e5cdff",
+    "MemoryChallenger.Properties.WipeRanAccepted": "8ecea8f078635d2edf2eb7e6e82cef157abc3c86ca714b7b953e9f070f93a22c",
+    "MemoryChallenger.Properties.WipeRecorded": "b7226a7b0ef00865c636e0e394850e517ac3dd557df12f604215705590f8d418",
+    "MemoryChallenger.Properties.WipeRecorded.answers": "5aa9ad74fb3effef2f22b9e1a90dd8f9f48a35ed6ae929269fda6430f62bb7dd",
+    "MemoryChallenger.Properties.WipeRecorded.batches": "2eec5352b18d2afaff8f1f79df6471f5c0e7827c342904c99189179f546c7740",
+    "MemoryChallenger.Properties.WipeRecorded.ended": "93b8660487605521382e81cfb5b9cf215f210c62c66be096be4019d70e6aafdb",
+    "MemoryChallenger.Properties.WipeRun": "08e33445d87c84fde3b54de8e26ae38c1d56590ca6e98c9f6a0a000729ce4dc7",
+    "MemoryChallenger.Properties.WipeRun.Accepted": "1288b015da5b9075a145b6ac21d6c830cf5fab3114c4db7922d614f871a9c0ae",
+    "MemoryChallenger.Properties.WipeRun.Plays": "5b24be0019ae820eccc6190a9ae6025923268852362544040c6edc1dba51bfe5",
+    "MemoryChallenger.Properties.WipeRun.commitment": "c754a59535586591c6625198fa7daba0071af70e49d9d410d0d4f247426d8709",
+    "MemoryChallenger.Properties.WipeRun.egressBits": "32dbd4a282ed58c7a9e038fe50ecb50ae5b739ceb5477a696a59f0b72870aee2",
+    "MemoryChallenger.Properties.WipeRun.fillEndNs": "f2817e010cf164cfb9c8e5b9f659a15e446b214307c8f4219244749ce7f5d145",
+    "MemoryChallenger.Properties.WipeRun.fillStartNs": "863ee910a2bf8d90cb3341c9926f0a932f14dc7bb1e27252f1195687f7750c37",
+    "MemoryChallenger.Properties.WipeRun.key": "5b4ce8493e6b73fe9ec0602f53a7b23a1fe1f632dbd59722a329add537efee8d",
+    "MemoryChallenger.Properties.WipeRun.labels": "8134aef8501b88b13ba381c370aaa3211571b704211189c0f09b9000d555d313",
+    "MemoryChallenger.Properties.WipeRun.message": "987217330c850d1889acf3e6b77fc9d64d6823a99a2967b127ebb0425aca5649",
+    "MemoryChallenger.Properties.WipeRun.observed": "6ed5bdb28bbb9773cc801e5960ad65d5c28edfeef8c328851c446a42cc37afe5",
+    "MemoryChallenger.Properties.WipeRun.reads": "c79ca5b02a9836e084ddafb86a523ba6ef8bebe4dba812e1a767f9b907eac8e3",
+    "MemoryChallenger.Properties.WipeRun.recorded": "bfb3595b72f764d80162b67e08567a1d394ad349fdcfaa0796a18e5fdd5a5ea9",
+    "MemoryChallenger.Properties.WipeRun.step": "a3f73fa6a919e39e935e72393cdde0277e10a6f38f9aeeae67e57a144a5ce488",
+    "MemoryChallenger.Properties.WipeSigned": "2c525e13f5e226e28f3bcd7157e66af9e09eea7ba9816fe4f01c3998c9178b80",
+    "MemoryChallenger.Properties.bits512": "d48adaa8f63b9e6ae67539ed52dec2aca23e469a9efe324f6c9f03974aaaeccf",
+    "MemoryChallenger.Properties.collisionIn": "ab9c16401fd783e9c49a5d82d1f459aa2790a984c4c66b2ea1b3b862f73d3fac",
+    "MemoryChallenger.Properties.idleChallenger": "7593b0521074381326b24ba28da684406d693dc178d96d81d86132dfb3032aef",
+    "MemoryChallenger.Properties.measuredBatch": "db7db4678220566355a6d7a0eda93e092c0e187cb73bdde8d983c05ff2317235",
+    "MemoryChallenger.Properties.measuredCommitment": "809e6a56eebfda4b72bb0bdc1af0ce6c818724cccff896b0e704c87b51ddb061",
+    "MemoryChallenger.Properties.measuredDigest": "60468ff96d4b1be43d49631af11f60e8da2a128134c485582e4a94ab667e5f5f",
+    "MemoryChallenger.Properties.measuredParams": "e47fc34f3e6105d75b46b899193bdf4f9ff45886482903ff85080d5a208f5921",
+    "MemoryChallenger.Properties.measuredSession": "f24bc2baf52a271166c584ce63faff74a6b25560db055784750af20cb37670a2",
+    "MemoryChallenger.Properties.measuredWipeParams": "7666c43c8b2155b93ffe903e07af5135f6d6c34641cf7cd1bb230905a13afa0d",
+    "MemoryChallenger.Properties.unencoded": "9e994b91bab99529f9663419702c88295c9d68fbf3985eb396ff64e70ed96ff5",
+    "MemoryChallenger.Properties.unencodedBatch": "dbd5ad0f331c1c0bae6d6679a25ebb161d650ab452896cb3eac1ec57fb25575b",
+    "MemoryChallenger.Properties.unencodedParams": "985152fcb2eceefe1fbab0c388e54184acb9fb3dbb2a56bd957f128323b58689",
+    "MemoryChallenger.Properties.wipeBatchDigest": "ae972199f5ebd36f71886af202d53bcc0c5d1f5a430cc0b02f43eb23716f677d",
+    "MemoryChallenger.Properties.wipeFinder": "b1279d2a18bf86f1340e20ea0ac934cdc9be8595c7be91351bce3729cb344c80",
+    "MemoryChallenger.Properties.wipeForger": "e5a4eb8f23450aa8d03abd91777b4e4df1b9827a1dd1f756b4ad0a6d91fca7f1",
+    "MemoryChallenger.Properties.wipeLabel": "40c0925fb64520c4230567ad87f7b69ee78942277edbea3ad15df8580db93b2a",
+    "MemoryChallenger.Properties.wipeMessage": "dc9af60d1e23bb691bac5504214f9a4ff28de0a6d12608ee0886c7610f55b96b",
+    "MemoryChallenger.Properties.wipeRunStrings": "466112367c174f42c04826f3fd25d0364e6956c2ec69261f2a1b7554b8956d4c",
+    "MemoryChallenger.Properties.wipeSessionStrings": "901847e5f259aa16645bd4d2b64a0203351d3f04642e9396ed9da8595b1a1b84",
+    "MemoryChallenger.Properties.wipeTreeStrings": "290aa224bfee9e31bd5e515bd7f88378c2bdeb61bf0bc94f58434f02cf0c10b4"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
    ]
   },
   "Properties.Pouw": {
@@ -12321,7 +13237,7 @@
    ]
   },
   "Properties.RemoteAudit": {
-   "digest": "8531603ba2a937e1ae811faaaf8a06c0ded6d2d92c9a75c3cd6f3dae407fc4c0",
+   "digest": "b7de1f552ec6f9430d7c698df71d2eebfb9b230b365dad68a839953933137071",
    "definitions": {
     "Properties.RemoteAudit.AcceptChecksOpenings": "0bf65e9aef5437ddc1cadafde1c35cb3b71402356b5c1001458d589e75da7505",
     "Properties.RemoteAudit.AcceptOpensDraws": "0f8c70ad6ebf0dd5463cc5001e3a6e8b9b1bea586dc30addfe41469203af1da7",
@@ -12331,7 +13247,7 @@
     "Properties.RemoteAudit.ChunkedIsWhole": "7bba0ca9052ae3fce19ceba644f14980fc38492973da7594bcb4b462085f5ed6",
     "Properties.RemoteAudit.DrawIsSubset": "3d4a3c6996d19773d00c33844deabed1798001dfec004031c0aab6136bf92e9f",
     "Properties.RemoteAudit.LifetimeCapped": "8aef5477936822360b90e4a360c65023821725b344d83358210716419fa6717c",
-    "Properties.RemoteAudit.OpeningPasses": "159cde812ad154b56d78fe42ce1a10ba0ee07fa8b1212f44aca9d62dce9d7a4c",
+    "Properties.RemoteAudit.OpeningPasses": "ea782a94ae9d73ee988dc3f2ec7a9142445970bf7bea8b24ece8b4873a416b08",
     "Properties.RemoteAudit.PassesChained": "ea715c2456f65e362fb37dd397810e6b7d9750bc063d42d2c5663e6fdc67466f",
     "Properties.RemoteAudit.PassesReadDistinct": "3ee1fc7cc3e41d62cc0b7b3c0d3bebb56bb4588fcd83adadca1f759d1c4337d5",
     "Properties.RemoteAudit.PassesStepped": "d0b4d1bb980b52e49d85797e0f92f03aa41d8ff17254d49e616fac0a148cd078",
@@ -12358,6 +13274,8 @@
     "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12527,17 +13445,32 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
+   "digest": "737bccd347c065400fb41d6dec896ea63441bd434e3f621389763bc59fbe2cb2",
    "definitions": {
+    "Properties.RemoteAudit.CodeLayoutTiles": "12d06228aaab191a537794fa70fe03a6fc88ec418e409e8ecc0dcd61a7724916",
+    "Properties.RemoteAudit.OpensAtPosition": "9609d5c175a05d640bd4595bc01ceee1a1530db4e3c6579eb393981171742b12",
+    "Properties.RemoteAudit.PlanBlocks": "a6eab2f0c4c70872e2f9c4048cee9990921cd552e36be388d9225616ee9c8aed",
     "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
     "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
-    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+    "Properties.RemoteAudit.codeLayout": "2e5766f796ecf020ed2349c3728c585c33da43bee7c76906516362d2f6d4b62d",
+    "Properties.RemoteAudit.position": "c6d4e9fa887e96917fb1e560c653cba6810e2c8672f34216733fa3924735c12d",
+    "Properties.RemoteAudit.runBlocks": "c861e9121d65c5458cc0881e6e7177a02f546e08239d951ef67edf5351293b62",
+    "Properties.RemoteAudit.sessionLayout": "7e672a14fbaaec746a56e8d39032fe644767be17e5d0a442e6e492d5a24507e8",
+    "Properties.RemoteAudit.tileAt": "2bb40254f89138644670e928ab397b45fc2cbe726eb025846cd843c94c84c75d"
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Properties.RemoteAudit.Shared": {
@@ -12693,6 +13626,7 @@
     "RemoteAudit.zeros": "fd9a64c40e28d26bd8336e9fd795177ad085b47bfd67c280c321d125bb5c7565"
    },
    "guarantees": [
+    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -12711,17 +13645,27 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "RemoteAudit.Codec": {
@@ -12793,6 +13737,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12960,16 +13906,25 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_honest",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Pooled": {
@@ -13038,7 +13993,7 @@
    ]
   },
   "RemoteAudit.Receipts": {
-   "digest": "a8eac003b744e47151af64db092362f750e38639c505338a597adcc0e03ffbb6",
+   "digest": "f8700d56ccb4c0c8877cec567ae69b203939b360c7888ea3287c3c8b65a3297d",
    "definitions": {
     "RemoteAudit.APPENDS_DOMAIN": "2b166138902859bc94cc8e9e904e194f5b309ec600d0c099da1ef655f5e74c08",
     "RemoteAudit.CHAINED_DOMAIN": "25494f754865049cbc11e58b7f9ca62fd1d50eb9942d66846f5b0caac5889948",
@@ -13076,8 +14031,8 @@
     "RemoteAudit.seed": "7df340f6163af393af2e3dcd6659c47863451d594e3c6f8be3b1c8ebbef01b92",
     "RemoteAudit.signBits": "aa2c9c434d06c7e0af0eb033c348c5f6950cf1052053a29c90b1e905374bbd7e",
     "RemoteAudit.sketch": "1ad8b9d7cc0b52ce3fc74ceb114b516aabc9529efa5053500cd456a829be80c8",
-    "RemoteAudit.treeDomain": "693596aac7b8440e5d8e9ad2647a6c8645ab36bc330aca7cf470c06a184d2d86",
-    "RemoteAudit.verifyLeaf": "f57dd442052ab1a65120b2e9c45b7d2320ee534f4e4e37930a53010683a56f47",
+    "RemoteAudit.treeDomain": "d8654cadfde3f08fd0a6ddd5b6ea1d2db17e2492aca8f66d1141d5c65aa2161b",
+    "RemoteAudit.verifyLeaf": "3bd052db5fc4a9c9a1d1c4da8998e9d806689cacdf7e86943c5ff2c7231082e8",
     "_private.RemoteAudit.Receipts.0.RemoteAudit.int8": "2114b38fdafbbc67fd7ad41804515b6ea6392c15c33a79a135ff50d8050a0ff7"
    },
    "guarantees": [
@@ -13101,6 +14056,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -13139,7 +14096,8 @@
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Session": {
@@ -13316,7 +14274,7 @@
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
   },
   "RemoteAudit.Window": {
-   "digest": "42edde30bd799f38406d3c48db489afeb4274d6c6cd17a0cc05f6bc17c23b0d7",
+   "digest": "6e40aa82a446beceab5fb2d0c88a9230ee41a9fbf4c4b1bd53f797db3d0b742a",
    "definitions": {
     "RemoteAudit.APPEND_DOMAIN": "a6604c74aef32ccdec542c5fecc103a1660e0ff141fb68613846fb35472b3103",
     "RemoteAudit.Append": "ccd67ec7f7f0426061b78ed18c4d6500de3ff3ad539add283f9f43bf3f3ae9c6",
@@ -13371,7 +14329,7 @@
     "RemoteAudit.Registration.key": "abeb3fe7befd5cdd227c54403ea2dba2b6af55b7baa29825d38b4d127bf0a969",
     "RemoteAudit.Registration.make?": "c9e3050cbbc6801b59da8de553f6d55afefb7f8490d5fbb56da185fa274915c4",
     "RemoteAudit.Registration.node": "34c0552145492e10b45385c2df9629286e619c9a268aecfe54ab2f18d5bf9586",
-    "RemoteAudit.Registration.payloadDomain": "4d00ce0f00bf1e4e4deabccafb2fa3fc08c99efaf45eb2919ee059bff39b59a8",
+    "RemoteAudit.Registration.payloadDomain": "26ff40c54e800dbdda6daea21c95b344ee573536859ec99972e0305773663a0f",
     "RemoteAudit.Registration.payloadRoot": "c7423b55b028b4c1d274faafc86255f9ac9fa4e853b275613ad0c46e93ed2e8c",
     "RemoteAudit.Registration.receipt": "eeb23df7f572ba063f2aa78910cb6f1ea20029904cca37fbbd1d450eb3cce60a",
     "RemoteAudit.Registration.rows": "9c272ea7629e74e3fd4cce93a43b102c0c8d49cd385f64b49af3b044e50cbda2",
@@ -13388,9 +14346,9 @@
     "RemoteAudit.WindowRecord.previous": "900ed2bc41d9fcc4e4c6551dcb3fab0c970050fb40a1ad419be99c9af9b4d0f0",
     "RemoteAudit.WindowRecord.previousOf": "6cbe551ce64a42dedced2d5d1a754cb34700c459edea4e23c66dc17a1b4eae1b",
     "RemoteAudit.WindowRecord.seedOf": "a4639ca5afedfbc45620b84c0ffca575862af0c6e75cd3ee8e5f96465206fff5",
-    "RemoteAudit.appendDomain": "0f587e17ef62d9b22fa96f45a5ffac9c827dca6c72e61c9740795d18b2612a13",
+    "RemoteAudit.appendDomain": "4eef34327740429bfbd8fc7fd7c9ed0e85259b2a0c532cc9ccb51ce6816f0d4a",
     "RemoteAudit.appendOf": "f5fd3cb2f37a92a67148004f9de9ccc6d6923ddf9afc710617e1e89ca6470ae7",
-    "RemoteAudit.checkOpening": "90f6b3b6fe83de7f9190026efe65e1d206787be4e3ef2cd8ab2d5fa3f68198ce",
+    "RemoteAudit.checkOpening": "3e0a9a3483a27ccb99c67a128dfa195ad2c3c6b98a873350f7a298c335268646",
     "RemoteAudit.checkOpening._sparseCasesOn_3": "ef1137b1eb2bcc7019043983896ecd27181e92a35f69f6eb06b9ec64c95455b1",
     "RemoteAudit.checkWindow": "e591335b9a06c750f734466f88d1d42a08a0ffa1bb119ec72a9c234208203aab",
     "RemoteAudit.checkWindowChunked": "5c1b54436795d6a53a4eadb6ad262a296bfa89f95e278b3be563b38abc787b58",
@@ -13406,6 +14364,7 @@
     "RemoteAudit.instInhabitedPassRecord": "2f9f7f261b12a41ba2ef8454383169e835f7e5627e91f9c34bf42aa15478d82f",
     "RemoteAudit.instInhabitedPassRecord.default": "4aa3bab51a1782112304eb69e11d681f3c53af6ebbcfcd6f290e69e8e674b292",
     "RemoteAudit.instReprFailure.repr.match_1": "9c370c8a7072abbfa9228173fcd4096587ee5988bae95c6ecefa8484d83c332b",
+    "RemoteAudit.payloadDomain": "74818257df8609ffcfca40854c8e80809b20bf79b4d2a3d553f9e569f7246fb3",
     "RemoteAudit.subsetExact": "207f3f825371442339a4f7c2b72d902a179047c00c4ee715dd5453c811f4d934",
     "RemoteAudit.subsetExact._sparseCasesOn_1": "9e57c6d3a974f71465c3160d5a8a945af5da7ccdf38a0dbacd4ed00b6a27d502",
     "RemoteAudit.verifyWindow": "8f212324e329f2b7a48bb2295d9e3fd277360d56b1eea0f2f2d7cfe9cacfa55f"
@@ -13432,6 +14391,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -13479,7 +14440,7 @@
    "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Challenger": {
-   "digest": "f9474d8499cbbece869311aa15d49ee5eebd46a15c9a38a66196b42d4d56b806",
+   "digest": "be7c5adc1a2a1002a686e516fa0b14213c0d8fe67bf5f2dc6512e217fc6c8b6d",
    "definitions": {
     "SampledProofs.Challenger.BINDING": "5cc8f14e789f08372d0a970d2b51c45917d91f04d60547b3c10379afe3852d94",
     "SampledProofs.Challenger.COIN_BYTES": "fc2580dbc92c23ecd327225ea230e1e004b913f18923e3612e08d70f0bace371",
@@ -13519,7 +14480,7 @@
     "SampledProofs.Challenger.layoutOf._sparseCasesOn_6": "959b7c294a159498a270c1aeccbae387a30066fff72891277445406377c9700c",
     "SampledProofs.Challenger.liveDomain": "c073d661e06adbb34895375347162b989b7e15f059bb61ffe50539df2bdabfc5",
     "SampledProofs.Challenger.liveLeaf": "319b6dc6b483ed269d9e7473eb7232758bdef6ab59a428c34f4eba32a6a61d7d",
-    "SampledProofs.Challenger.liveReason": "d84a448100c4c0ab328fedf052d8cddbf2d62f9ccbe40eb7685a973af1ae4feb",
+    "SampledProofs.Challenger.liveReason": "3b380b5b725137c4869ec3ed37e351f9747a2a99f0ab75767dc599592294b924",
     "SampledProofs.Challenger.taggedSha512": "ebd8e51f692df8a3180deb4ecf52f844fcb7c1a31238dd981b8ccc3fcba0e8d3",
     "SampledProofs.Challenger.total": "bb2b44d506387f8f22635e8350313bcab57c3ca10cc25378fbb22c1a4381f609",
     "_private.SampledProofs.Challenger.0.SampledProofs.Challenger.hexAt": "955c0a2b26794035e957cb274044856fa7c1eda21739edc30fc526203c50aa7a"
@@ -14340,5 +15301,203 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
+   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
+   "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
+   "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
+  },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "honest": ["Properties.RemoteAudit.opensAtPosition_honest"],
+   "nontrivial": "Properties.RemoteAudit.opensAtPosition_nontrivial"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "honest": ["Properties.RemoteAudit.planBlocks_honest"],
+   "nontrivial": "Properties.RemoteAudit.planBlocks_nontrivial"
+  },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "honest": ["Properties.RemoteAudit.steered_of_checked_honest"],
+   "nontrivial": "Properties.RemoteAudit.steered_of_checked_nontrivial"
+  }
+ },
+ "unwitnessed": {
+  "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263",
+  "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "b5df1631d6de9f44fb5a1e710b018846b0292957df4809e64c54ceeda837320f",
+  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "8e473fef8f065ddce579a5caca0e4e7ce35b129bbd576c43ef682e628f4a1de3",
+  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200": "eaf5442abb4e631e913657b8c2d54421f389fe557fed648067ff77e673c620da",
+  "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": "606a2e4fac1660a70473857cbb34860a5460f7308c5769766de8a0e7c386fd9e",
+  "MemoryChallenger.Properties.SecurityProofs.judgeSigned": "18e0948e93d4aeb7c724cb5e480d3ee21588058eecdfa3567bfd45c38abb31b9",
+  "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": "e110607354acc6d4bf6477fd72ec62960d286708f367dc42da6d9ed2bec3e907",
+  "MemoryChallenger.Properties.SecurityProofs.verdictSigned": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2",
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "0969d0b3d0e6dfbfa3ce5e2da9cc3da00190bde35b39c5045e998b486d7ae8c8",
+  "NciCheck.Properties.SecurityProofs.AcceptsExactly": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
+  "NciCheck.Properties.SecurityProofs.BaselineProvenance": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
+  "NciCheck.Properties.SecurityProofs.CheckAccepts": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5",
+  "NciCheck.Properties.SecurityProofs.CheckRefuses": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a",
+  "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": "a8bd41ed9bc36f1c11a7c3e6a0e82a2e56542cacb7779adabd2c4101002bf833",
+  "NciCheck.Properties.SecurityProofs.Decodes": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd",
+  "NciCheck.Properties.SecurityProofs.DescAgrees": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
+  "NciCheck.Properties.SecurityProofs.DescReports": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b",
+  "NciCheck.Properties.SecurityProofs.DescThrottles": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e",
+  "NciCheck.Properties.SecurityProofs.DescThrottlesDark": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2",
+  "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
+  "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
+  "NciCheck.Properties.SecurityProofs.DescWitnesses": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
+  "NciCheck.Properties.SecurityProofs.RejectsExactly": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
+  "NciCheck.Properties.SecurityProofs.Reports": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
+  "NciCheck.Properties.SecurityProofs.Throttles": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
+  "NciCheck.Properties.SecurityProofs.ThrottlesDark": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d",
+  "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7",
+  "NciCheck.Properties.SecurityProofs.ThrottlesSlots": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263",
+  "NciCheck.Properties.SecurityProofs.Witnesses": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
+  "Pous.Component.SecurityProofs.runAccepts": "1f62adc1d401e89ae7fd1e127eddd0626124b177506be24f96f20e82cb2d9f2b",
+  "Pous.Component.SecurityProofs.runAccepts_by": "4a75b839bf771d49dde5409e73b4d3df4c807a730fd4bc285d3fa8f71c25b1c6",
+  "Pous.Component.SecurityProofs.runAccepts_complete": "4bdbbc1dafa32086e3fe354f8e3b7d3441554445b2e54eceda3b9059ad17c1db",
+  "Pous.Component.SecurityProofs.runAccepts_fails": "01950969f54875465e0aee46dc84f3ac02d53c4f0ec7ecad8307ae34d599426f",
+  "Pous.Component.SecurityProofs.runAccepts_meets": "cd61625db90b44d5204d4f2e3dac303dd17c84d397cc9fe8ec503d5d4d141d5c",
+  "Pous.Component.SecurityProofs.runBinds": "f1c66a8d1f3f6164547133133fdcdd331c75d520758f4137a313b1ee437b83d8",
+  "Pous.Component.SecurityProofs.runBinds_by": "cae0d8833e038b335902ce17da54fae64182d90fa7eb297d659fe5aa0656d2e6",
+  "Pous.Component.SecurityProofs.runBinds_fails": "a859641de48e9964059f341fffb59ef357e85595aea2c1e18ce8e70527328030",
+  "Pous.Component.SecurityProofs.runBinds_meets": "996ede9861ffa68932a6361f2af0db59b33f5c674880e399726dac212672321d",
+  "Pous.Component.SecurityProofs.runDigest": "5352d76b5127b71a69055d8fcbec89fb2c610ef636bce7be7fc5f56bae480cd3",
+  "Pous.Component.SecurityProofs.wipeAccepts": "4d618aa961b5a75a729863911c1a74a6814ce6e7b6f25377db57255a3822f06a",
+  "Pous.Component.SecurityProofs.wipeAccepts_by": "ac58b689636e0d20bd6762b4bc1d74cdaab80e83e47008fc243e140e639364ce",
+  "Pous.Component.SecurityProofs.wipeAccepts_complete": "512194c71d7ab9ea466852fe314d7cbc69530028b4f45f8471329223b5f9b90f",
+  "Pous.Component.SecurityProofs.wipeAccepts_fails": "bd724c9b075b560f379cd86659ac6fe4fc3312c2280f631d26995143f62ff7c5",
+  "Pous.Component.SecurityProofs.wipeAccepts_meets": "2d86adbf1b0e618863617c0c79ba56b0969ae3131084736a7c151e36e1ad428f",
+  "Pous.Component.SecurityProofs.wipeDigest": "c9473b1d1c22ef5238edb88fc8bdeef656b28d1b9bc55599428c71b6be9f3127",
+  "Pous.EndToEnd.SecurityProofs.runCheckAccepts": "71902a65dd8a9adc2df40323be3e5de079a94eea74277938847d0dceba81ecad",
+  "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": "d739e355c470adec077c55bcab72e4f9643a5c3b0a930e25382fb477cd500d78",
+  "Pous.Period.SecurityProofs.obligationHeld": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
+  "Pous.Period.SecurityProofs.periodCapacity": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
+  "Pous.Period.SecurityProofs.periodHeld": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309",
+  "Pous.Period.SecurityProofs.periodHeldAt": "0654ba44ddb9ce5cd0016e31b85a2b00599c4b03a263febd27ff5faeb4681907",
+  "Pous.Period.SecurityProofs.periodHeldDemo": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d",
+  "Pous.Period.SecurityProofs.periodHeldDeployed": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
+  "Pous.Period.SecurityProofs.periodHeldNontrivial": "2cfa1eed4accb530e3f5570ec5d41e4f81c6a09f60324b20fc5d5da711a012e2",
+  "PousCheck.Properties.SecurityProofs.acceptsDecodes": "147702d45231f61ee43eef6d3a0f8e063948e0d0f874124c5542abf5dfbc8e67",
+  "PousCheck.Properties.SecurityProofs.publishesRoot": "9e37b17a2c12a29fe835857c63299bb9b88aff6578a04e0d53da2bb680c0ce16",
+  "PousCheck.Properties.SecurityProofs.timedAuditAccepts": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
+  "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": "c149bb063996cfd7747078d73e0e18672f15cd3c9580fec061994328bb9d7f9b",
+  "Proofs.NetworkCertifier.encardAcceptedObservationsLe": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd",
+  "Properties.CertifierDevice.issuerVerifies": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b",
+  "Properties.Composition.acceptMeans": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320",
+  "Properties.Composition.answerAccepts": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2",
+  "Properties.NetworkCertifier.acceptedRowsAreProgramRows": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
+  "Properties.NetworkCertifier.acceptsLinkWindows": "a374000c189ed27fa1b6cc18a391c22904be180eff3e1a897574253e30383a90",
+  "Properties.NetworkCertifier.acceptsOneRecordEach": "d42de92f7820044006cc71b9e70572f5e891cf1517633894a1af4134899c7cf5",
+  "Properties.NetworkCertifier.answerAccepts": "ccee8d59f116f6aff96f10a3791ea371bd9e98f7fd0f39ca6aa03076a266a384",
+  "Properties.NetworkCertifier.decodeRefusals": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df",
+  "Properties.NetworkCertifier.linkWindowAcceptMeans": "85902942cc3dbf037e927cde2de8d79125f28d06c78d5eafdc3fa83578d150b1",
+  "Properties.NetworkCertifier.malformedEvidenceRejects": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953",
+  "Properties.NetworkCertifier.undecidedPending": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
+  "Properties.NetworkCertifier.undigestedParamsReject": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5",
+  "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
+  "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
+  "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
+  "Properties.NetworkRecords.noGridMeans": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee",
+  "Properties.Pouw.Check.acceptMeans": "545ca67099062d0dd1c98c4469e8dc936d2200557cb1cf253be4196afe8f360e",
+  "Properties.Pouw.Check.acceptedDraw": "5f9f29337f12c4f3ebedddade268afd4f5256e64f1177e1ee333437f0cefae9e",
+  "Properties.Pouw.Check.acceptedInRange": "278636f5197f185a387db819593f8554ba9bf66cdfabbfe82122f96236923355",
+  "Properties.Pouw.Check.acceptedIsTheService's": "4bbb525fc1112475ad5ad614cb28e55a2d79ac80ab513db40f6e3e1da768db7f",
+  "Properties.Pouw.Check.commitmentKeepsBytes": "ac05a786e1a5c2a3c155575f091a80cf244aa534361f3b3133e47b7808a17090",
+  "Properties.Pouw.Check.digestIsOneStage's": "7f35fb22b84c04ee517a37f3a246486f5a3fc4dc0736958050ae088fdc45acd7",
+  "Properties.Pouw.Check.neverNull": "4d3318d61bae44d61571509ec5bb2c448b2439bff3c26001f1ab41f31c262925",
+  "Properties.Pouw.Check.undecidedOnlyFromService": "bc2e50263838b4ba091dd8a089002f4fb04f5a55999dee3790fe39b0a015502e",
+  "Properties.Pouw.Commit.coinAccepts": "d53750168ca3e888be828d67ddf06ec2fce971334aab1109e34a6229fe8b556e",
+  "Properties.Pouw.Commit.coinBinding": "9881ce35860920a62862ad709801881a1d1ed754df2a5f433a78dc21e07d29ac",
+  "Properties.Pouw.Commit.coinRaises": "2b5075ad8ae93629bac87f1ffdca90b1d18a30d172ee6b84d8080115d68da6bf",
+  "Properties.Pouw.Commit.domainRefusals": "3027f3c9a6bed6a9a79e76b844ba678bcb31f3a8001b6b67436a898a30e7583b",
+  "Properties.Pouw.Commit.drawCoinAccepts": "94d38a0225cde06f3731a9af9350f6b5d174a69e88a3bb9db608658d77be19a1",
+  "Properties.Pouw.Commit.drawShape": "a9b27ef9d784124ffefdc3f62ee866098fa0560ff916a4dfa2c1b28e149e9239",
+  "Properties.Pouw.Commit.epochSaltAccepts": "552e94e629015560964a7134592c5c3b699c681120641a55554dac260e91fe1c",
+  "Properties.Pouw.Commit.frameInjective": "55203d8399261f28172ad062cee20d71b2dff7c11cff480c9d93e90eec22c625",
+  "Properties.Pouw.Commit.frameSizes": "2fcbf326a4d9e4cbe51b6dd8ccd56bf540629951fe22d1650ead90a10658f4fd",
+  "Properties.Pouw.Commit.keyRefusals": "fb2ac3684a0c5eba4fe7b1320a4738377c2e55fb9081a2784423875b97cd074f",
+  "Properties.Pouw.Commit.keySize": "8417ce6814230e1eabe8e5c5d56bce6165a4c858b09664e5f694138c601d9195",
+  "Properties.Pouw.Commit.leafRefusals": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33",
+  "Properties.Pouw.Commit.saltRefusals": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac",
+  "Properties.Pouw.Commit.saltSize": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
+  "Properties.Pouw.Credit.SecurityProofs.epsAtSound": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
+  "Properties.Pouw.Credit.SecurityProofs.establishedSound": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
+  "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
+  "Properties.Pouw.LiveSalt.acceptMeans": "08ffebe48af4af15238fe6dff6acba886d81b463b52ce075c4ac2481e6477319",
+  "Properties.Pouw.LiveSalt.epochRootBinding": "a689e7512d811f97c080ab5920d02bea4bec2633b2a6d4ec515d7d7e183daf52",
+  "Properties.Pouw.LiveSalt.liveCoinBinding": "6a4f2a38e49ed53c55f4d4ef8cac841394717eaeb553b22fa833e793abacb403",
+  "Properties.Pouw.LiveSalt.onePair": "57869adb3ff29c03998916c610afca59953d0f995b5afeef79df776645a3b476",
+  "Properties.Pouw.LiveSalt.oneRoot": "abbe54e38c4154054c2447d5e6952206cbe7635ce6145e379905a461377a40a0",
+  "Properties.Pouw.LiveSalt.rowSeedBinding": "1a019f5616cb2c5552794b56c5cc73bb24cc6a061d261b53936cf95fcbd956bb",
+  "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "9760d3f0de8b2e011d055cb27ac03744c5ba66617c21c1e80df0b8673106c567",
+  "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
+  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
+  "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
+  "Properties.Pouw.Served.SecurityProofs.servedWork": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
+  "Properties.Pouw.Strata.strataTile": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566",
+  "Properties.Pouw.Window.bucketCost": "d8d24f0d8121d7c9d0c53aaa3197391b2491522ee3c3498598ba7f64330b6be4",
+  "Properties.Pouw.Window.bucketCost3": "d576553bc5479500276cb0a46dc9f2c1e7b7df255d7222456baa0fc54834001a",
+  "Properties.Pouw.Window.bucketCredits": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f",
+  "Properties.Pouw.Window.bucketRefuses": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd",
+  "Properties.Pouw.Window.drawMisses": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
+  "Properties.Pouw.Window.floorPointGreatest": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1",
+  "Properties.Pouw.Window.floorPointRefuses": "973981d8d98b28c9c2a51aa25b7fc3e7d0e30419e2c784c52b5e901c289a9385",
+  "Properties.Pouw.Window.kPrimeLeast": "5490be2a87fb8935e8d06c8e5adf1656ae9203186a8aa1fb02f9aa650d865aa9",
+  "Properties.Pouw.Window.kPrimeRefuses": "39670eae87e2d8d90b32f391473aba88a7b1652ed97adb56987e0410d318ef78",
+  "Properties.Pouw.Window.levelRefuses": "1c478133e352d4990c32d730d66228a533bb886955dc937373f14325e31b42b2",
+  "Properties.Pouw.Window.levelsCount": "adead606c9dfc7cebaa2c7f141e8009da48e039db74a6250f919b14e30a3a510",
+  "Properties.Pouw.Window.levelsRefuses": "78c7744cee711526988fd65aa01432d39c9e1d71cf8518faeeea35dc6988b5f8",
+  "Properties.Pouw.Window.padLeast": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e",
+  "Properties.Pouw.Window.padRefuses": "2c2d22f4c1189a576da9882358b50af1699c2d28f7dee2443267d52fe37f67ca",
+  "Properties.Pouw.Window.pointRefuses": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
+  "Properties.Pouw.Window.workAtRefuses": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
+  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
+  "Properties.RemoteAudit.Component.acceptIsVerified": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f",
+  "Properties.RemoteAudit.Line.lineChecked": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
+  "Properties.RemoteAudit.Line.lineRegistered": "dc010c6f5a9aaf0fbc666592ae5a47a0f427bba6f06b16b6e290c6305ccda1ee",
+  "Properties.RemoteAudit.Line.stretchBound": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680",
+  "Properties.RemoteAudit.Shared.acceptDrawsOpenable": "0b743610595de5577ff9f84574ecfc2bbf1e882858d572dac4296642b8419bb8",
+  "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": "94daa863d90847df9a5df134d7e03726912631b5d730377f941ba6a25e0b9197",
+  "Properties.RemoteAudit.Shared.drawIsSubset": "254aaf81436f73958b6d16fb3bbe114b0eec2ae6b35b35134e46339aaa03b8aa",
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": "183d024d49347ffdd47478d21385093afa15cb34036387386fad9590e1904208",
+  "Properties.RemoteAudit.Shared.recordKeptAfterDraw": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae",
+  "Properties.RemoteAudit.Shared.sessionDrawsRecords": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773",
+  "Properties.RemoteAudit.acceptChecksOpenings": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad",
+  "Properties.RemoteAudit.acceptDrawsOpenable": "df20335f7f7d6e988e24076b706a7e1237000b99f240aec19fdcf97cc70df7cb",
+  "Properties.RemoteAudit.acceptOpensDraws": "e1d6123278d7730f4b3dcbef749274c3828901a8a55a9acbf9964735a446cae8",
+  "Properties.RemoteAudit.acceptedMinPasses": "0d529f21b51d610996e67758bd106ab06354a700bbb13590c9f87df83e25cb88",
+  "Properties.RemoteAudit.appendsInOrder": "f20737a675f5169f62fdfab84b3bbc63fe698266617504348fba5178463cd97a",
+  "Properties.RemoteAudit.changedReadsDistinct": "3fa28ce2488ed71727f4bb8023747125b95abe20a9a494fa45e5a29c21b0aada",
+  "Properties.RemoteAudit.chunkedIsWhole": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb",
+  "Properties.RemoteAudit.drawIsSubset": "f8c3a7d75200e11be1cf3c4a8cc96730a7ee020faa4020075d9ef3deb7b6f7d4",
+  "Properties.RemoteAudit.lifetimeCapped": "81238c57be0d96899fa06e143efbd005767864b21d0ba703b1341cb980a9a0d7",
+  "Properties.RemoteAudit.lineCoversSession": "a509370ffb2c6bc2f0bb6e80eabd220919f09ce302bef13de612d0e53c96a49d",
+  "Properties.RemoteAudit.liveIsRun": "f590e7328b4bf6c7dbfb8362da3e8a235c1e21eed5f61a86e741e80cdda95ec5",
+  "Properties.RemoteAudit.openingsUnreadUntilDrawn": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310",
+  "Properties.RemoteAudit.passesChained": "18a77f61543a7fe37e2288837a3854e9bea3524905d25b92dca9b06d4b3bed57",
+  "Properties.RemoteAudit.passesReadDistinct": "90eed93483409e786c68ecf37861604fbc03d72f97d7d1ed12f66bfe5990779e",
+  "Properties.RemoteAudit.passesStepped": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea",
+  "Properties.RemoteAudit.planReadsDistinct": "9071e783cf3cfda7e59180292d7380a8d105a2c9411f27877df8bdc87bee8691",
+  "Properties.RemoteAudit.pooledCovers": "4e42619c9a38980ce0cbfba9b6dcfeef984a6c3755f7e7dac1e64a52a7536e03",
+  "Properties.RemoteAudit.pooledCoversSession": "c426dc59633ca4f41787f55f427a54e99c5c0909bd08720e02ce311bd3e2055b",
+  "Properties.RemoteAudit.receiptsBelowLimit": "80b7bc07dd0a13d6afe9f84c7dbeddf1510a7f018442f3fc995a863b3c69d1d1",
+  "Properties.RemoteAudit.recordKeptAfterDraw": "4dea8a6ffab48be464b58e4001bb9086128588986c213b5fcc464b66dbca14b0",
+  "Properties.RemoteAudit.releasedStayOut": "9a969c04fe8d92c87062758f2b1063d15e60fe0db11e774427db2f8f9d45b6ce",
+  "Properties.RemoteAudit.scheduleChecked": "7d24cf63d2813c8aadbbcdeb5bcb4efc9f33c59451af0dae591fd359ca0e8e1e",
+  "Properties.RemoteAudit.scheduleFixesLayout": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e",
+  "Properties.SampledProofs.SecurityProofs.designWellFormed": "82f731f8e60afaa767b56880491e41c6465a0158b3520999c7e4c6fb29546c8a",
+  "Properties.SampledProofs.SecurityProofs.drawMisses": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
+  "Properties.SampledProofs.acceptMeans": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
+  "Properties.SampledProofs.bernoulliBounds": "e3a8add316d4cc582418009f5a507de3cf4393c4712c5ca61ea1fbefa554eb1b",
+  "Properties.SampledProofs.digestIsRecord's": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70",
+  "Properties.SampledProofs.fleetHaltIsFinal": "a17a42db87754384c41caa410b493a44f749f71b39aabe166aeb090ccfcb22fc",
+  "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
+  "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
+  "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  }
 }
