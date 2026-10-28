@@ -154,7 +154,7 @@ def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_ju
     assert E([7, 7, 99], 4, 1, {99})[0] == [1, 2, 3, 4]                         # EOS at slot C - 1: the lag slot is the cap slot
     assert E([7, 7, 7, 99], 4, 1, {99})[0] == [1, 2, 3, 4]                      # EOS at the cap slot: nothing after
     assert E([7, 99, 5, 99], 6, 1, {99})[0] == [1, 2, 3]                        # the FIRST EOS rules; a later one is on a non-executed slot
-    assert E([7, 7], 4, 1, None)[0] is None and "F-pm-24" in E([7, 7], 4, 1, None)[1]["unjudged"]
+    assert E([7, 7], 4, 1, None)[0] is None and "cannot be read as an EOS stop" in E([7, 7], 4, 1, None)[1]["unjudged"]
     assert E([7, 7, 7, 7], 4, 1, None)[0] == [1, 2, 3, 4]                       # undeclared EOS but the cap is reached: judged on the cap
     assert E([7, 99], 4, None, {99})[0] is None and "unattested" in E([7, 99], 4, None, {99})[1]["unjudged"]
 
@@ -172,7 +172,7 @@ def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)
     pad = CT.expected_draw_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
     assert pad["slots"] == exp and pad["n"] == 4 and pad["lag_positions"] == [pad["positions"][-1]]
-    assert pad["positions"] == ours, (pad["positions"], ours)      # pad 2304c56ea / 35408bbe9: the two maps AGREE (slot 1 at L - 1); the ledger takes pad's field
+    assert pad["positions"] == ours, (pad["positions"], ours)      # the two maps AGREE (slot 1 at L - 1); the ledger takes the padding's field
     cmp = CT.compare_draw_positions(ours, ours + [13])
     assert cmp["ok"] is False and cmp["extra"] == [13] and "RNG advanced without r_t" in cmp["problems"][0]
 
