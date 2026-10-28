@@ -216,7 +216,8 @@ theorem root_law_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
   have hs0 : s ≠ 0 := hs.ne'
   have ht0 : t ≠ 0 := ht.ne'
   have hd : A * s + A * (t * t) / s - (A * t + A * (t * t) / t) = A * ((s - t) ^ 2 / s) := by
-    first | (field_simp; ring) | field_simp
+    field_simp
+    ring
   have : 0 ≤ A * ((s - t) ^ 2 / s) := mul_nonneg hA (div_nonneg (sq_nonneg _) hs.le)
   linarith
 
@@ -238,9 +239,10 @@ theorem ServedGranularityChoice : Guarantees.ServedGranularityChoice := by
   have hcommit : ∀ x : ℝ, x ≠ 0 → w * (F / x * β * h) = F / C * (o * Λ) * (t * t) / x := by
     intro x hx
     rw [htt]
-    first | (field_simp; ring) | field_simp
+    field_simp
   rw [hcommit s hs.ne']
-  rcases (Real.sqrt_nonneg _ : (0 : ℝ) ≤ t).eq_or_lt with h0 | h0
+  have ht0 : (0 : ℝ) ≤ t := Real.sqrt_nonneg _
+  rcases ht0.eq_or_lt with h0 | h0
   · rw [← h0]
     have : 0 ≤ o * s * (F / C * Λ) := mul_nonneg (mul_nonneg ho.le hs.le) (mul_nonneg hFC hΛ.le)
     simp only [mul_zero, zero_mul, div_zero, zero_div, add_zero]
