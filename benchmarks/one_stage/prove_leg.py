@@ -20,7 +20,7 @@ head-check units and the I/O tie's units all ride it.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the draw.
 * **The draw** (``coins``): ``"lean"``, the verifier's Lean on its own OS coins (`flock-verify draw --stratified K`, A3);
-  a mapping ``{member: [unit, ...]}`` of each member's drawn units, a draw the proof service made on live coins; or a
+  a mapping ``{member: [unit, ...]}`` of each member's drawn units, a draw the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the firewall
   (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``) when `Tools.firewall` names one.
@@ -444,7 +444,7 @@ def refused(leg: dict, member: str | None = None) -> bool:
 
 def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     """Member ``a``'s honest session checked as member ``b``'s: the auditor's committed circuit for ``b``'s stratum is
-    ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof service's own check, `proofs.verify`'s
+    ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof system's own check, `proofs.verify`'s
     ``circuit``), and Lean verifies ``a``'s session against ``b``'s circuit file."""
     if "_staged" not in honest:
         return {"refused": False, "skipped": "the honest leg has no session (refused before the draw)"}

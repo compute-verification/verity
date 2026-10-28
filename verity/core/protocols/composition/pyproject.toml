@@ -21,7 +21,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # certifier program and the LMS verifier), the inference-only policy's check (`nci_check`), PoUS's run check (with the
 # memory challenger's Lean), the remote bandwidth session's and the memory challenger's wipe. The reference runs the
 # subprotocols' Python: PoUW's `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`,
-# the integrity profile, the proof service) with its generators, PoUW's check cases, the network certifier's period
+# the integrity profile, the proof system) with its generators, PoUW's check cases, the network certifier's period
 # difftest (its mirror over the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its
 # generator, the wipe's protocol (`wipe_protocol_case`, its mirror and signed wipes), and the inference-only policy's
 # difftest (`nci_reference` and θ's provenance difftest's declarations), each from its own suite's tests; and space's
