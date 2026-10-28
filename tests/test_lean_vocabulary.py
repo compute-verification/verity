@@ -97,7 +97,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Law": (f"{CORE}Draw.lean::Verity.Law", f"{FLOCK}Draw.lean::Flock.Draw.Law",
             "verity/core/protocols/sampled_proofs/service.py::Law"),
     "Layout": (),
-    "Ledger": (),
+    "Ledger": ("verity/core/protocols/sampled_proofs/challenger.py::Ledger",),
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
