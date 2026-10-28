@@ -70,7 +70,7 @@ def checkRecord (spec : Spec) (nonce : String) (ct : Json) : V String := do
     throw "S2: coin_tree.spec is not the verifier's"
   return key
 
-/-- **The session key is fresh** (the red team's condition on #245): never reused. Refuse a key that one of the sessions
+/-- **The session key is fresh** (the red team's condition on the session key): never reused. Refuse a key that one of the sessions
 verified before this one used. -/
 def checkFresh (seen : Array String) (key : String) : V Unit :=
   if seen.contains key then throw "S2: coin_tree.key is an earlier session's; a session key is never reused" else pure ()

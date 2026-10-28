@@ -1,6 +1,6 @@
 /-
-PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`, PR #131) over the
-verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`, PR #120) as far as they need:
+PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
+verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 
 `Q_template_instance` v0 (`{template}`) and `Q_template_instances` v0 (`{templates}`): every root node other than an input must

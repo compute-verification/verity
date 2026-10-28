@@ -3,7 +3,7 @@
 
 The firewall is the developer's only path from the workers to the auditor; the inner phase's is the program
 `Flock.Firewall.run` (`Flock/Firewall.lean`). This file is the property every firewall's sessions must have, stated over
-what it sends. Its contract (Daniel's draft, "Why the auditor learns nothing"): before release, every outbound value is one
+what it sends. Its contract: before release, every outbound value is one
 of three things.
 
 * (a) A commitment under a salt the workers never see, drawn from the tape and used for no other commitment:

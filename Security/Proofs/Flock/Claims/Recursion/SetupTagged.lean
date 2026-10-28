@@ -135,9 +135,12 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
+       try (simp only [hhid, ↓reduceIte] at hx
+            obtain ⟨_, hx, -⟩ := ebind_ok' hx
+            refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
        try (refine mapM_range_ne_ok (by omega) (fun a ha => ?_) hx
             simp only [hhid, ↓reduceIte] at ha
+            obtain ⟨_, ha, -⟩ := ebind_ok' ha
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
     | (rw [ite_ok] at hs

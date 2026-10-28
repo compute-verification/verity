@@ -22,7 +22,7 @@ structure StreamRec where
 
 /-- What the verifier configures about a session (§4); nothing here comes from the record. -/
 structure SessionSpec where
-  /-- the session's tables, in table order (one, or #306's several: `Stmt.setupTables`) -/
+  /-- the session's tables, in table order (one, or several: `Stmt.setupTables`) -/
   tables : Array String
   /-- a table's rep stream domain -/
   domain : String → Nat → String
@@ -36,7 +36,7 @@ structure SessionSpec where
   a table's part) and its instance count -/
   unitDraw : Option Json := none
   instances : Nat := 0
-  /-- the record's digests are SHA-512 under `_sha512` keys (PR #83's `SessionConfig::sha512_digests`), else SHA-256 -/
+  /-- the record's digests are SHA-512 under `_sha512` keys (the circuit prover's `SessionConfig::sha512_digests`), else SHA-256 -/
   sha512Digests : Bool := false
   /-- the verifier's keyed coin tree (`coin-tree/hm96-sha512/v2`), when its `Hello` names one: R7 takes the prover's nonce -/
   coinTree : Option CoinTree.Spec := none

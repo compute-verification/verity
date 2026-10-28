@@ -15,8 +15,9 @@ reading earlier columns and the constant. In the circuit it is one gate, `Op.row
 * `Rows` and `Rows.Sat`; `Partition.IsRowsUnit`: a unit of a partition is an instance of a template's rows when its
   gates are those rows, read through a wiring of the unit's columns to the circuit's gates, with its `decode`.
 * `Placement`: unit `u`'s rows placed in block `o` of a statement (the block matrices' rows at the unit's computed
-  columns read exactly its rows' columns, and its constant's rows read the pin). `UnitPlace` bundles a drawn unit's
-  place in a table: its rows, its instance, its block and its columns.
+  columns read exactly its rows' columns, and its constant's rows read the pin); `PlacedSat`, placed up to the
+  matrices, in a statement every witness of the table satisfies. `UnitPlace` bundles a drawn unit's place in a table:
+  its rows, its instance, its block and its columns.
 * `Prog`: a program of units, each a template's rows appended after the gates it reads, with its circuit
   (`Prog.circuit`), partition and rows, and `Prog.RowsWire`, the wiring that makes each unit an `IsRowsUnit`
   (`rowsWire_snoc`, `rowsWire_last`). The lemmas these constructions carry as proofs (`topo`, `input_iff`, the
@@ -106,6 +107,14 @@ structure Placement (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLo
   hA₁ : ∀ j, S.A₀ (col R.one) j = if j = S.pin then 1 else 0
   hB₁ : ∀ j, S.B₀ (col R.one) j = if j = S.pin then 1 else 0
 
+/-- **A unit's rows placed in a statement up to its matrices**: they are placed (`Placement`) in a statement with the
+same blocks, pin and regions and other matrices `A`, `B`, which every witness satisfying `S` satisfies. A pinned
+output's row is one: its Δ copies, which no row of the unit holds, are in `S` and not in `A`, `B`. -/
+def PlacedSat (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : Prop :=
+  ∃ A B : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2),
+    Placement { S with A₀ := A, B₀ := B } R col ∧
+      ∀ z : Witness S.m, S.Satisfies z → ({ S with A₀ := A, B₀ := B } : Statement).Satisfies z
+
 /-- **A drawn unit's place in a table**: its template's rows, its instance in the circuit, and the
 block and columns where the table's statement holds its rows. The unit's input columns on one gate
 carry one value in every witness satisfying the statement (`aliased`): they copy one source's
@@ -115,7 +124,7 @@ structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : State
   inst : P.IsRowsUnit u R
   o : Fin (2 ^ S.nbl)
   col : Fin R.w → Fin (2 ^ S.kLog)
-  placed : Placement S R col
+  placed : PlacedSat S R col
   aliased : ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn →
     ∀ z : Witness S.m, S.Satisfies z → S.block z o (col c) = S.block z o (col c')
 

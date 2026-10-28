@@ -205,7 +205,7 @@ pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
 }
 
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
-/// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves). `salt_source` names
+/// pins it (`verity_flock.circuit.LEAF_SCHEME`: the current id and the `hm96-sha256/v1` room it reserves). `salt_source` names
 /// `zk_hooks::LeafSalts`'s OS reads, as the Lean verifier pins the object (`Flock/Tags.lean`'s `leafSchemeHm96Os`).
 pub fn leaf_scheme() -> Value {
     let (id, salt) = if cfg!(feature = "sha512") { ("hm96-sha512/v1", 192) } else { ("flock-leaf/sha256-unsalted", 0) };
