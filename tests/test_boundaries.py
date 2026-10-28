@@ -70,10 +70,10 @@ ALLOWED = {
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
-    "core.deploy": {"core.wire"},
     # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
     # views a protocol reads. Its digests are canonical JSON's, the wire's.
     "core.site": {"core.wire"},
+    "core.deploy": {"core.wire"},
     # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
     # and SHA-512 only, so it reaches no ml.
     "core.protocols.registration": {"core.wire"},
@@ -87,9 +87,8 @@ ALLOWED = {
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
-    # The wipe's memory challenger reads the memory leaves and links the Site registers.
-    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "core.site", "ml.circuits",
-                            "ml.commitments", "ml.crypto", "ml.randomness"},
+    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+                            "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
@@ -111,9 +110,7 @@ ALLOWED = {
                             "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
     # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
-    # The network check's boundary is the Site's: its boundary links and the certifiers splitting them.
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs",
-                                 "core.site"},
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
