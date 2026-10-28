@@ -25,7 +25,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, given, seed, settings
 from hypothesis import strategies as st
 
 import periods
@@ -400,11 +400,13 @@ def test_remote_agrees(remote_server):
 def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
     """On drawn cases remote's verdict is its product's without the record check (`Core.Composition.product`,
     remote before it), except where its components committed to two records, which it refuses: the check changes no
-    other verdict. Python only: the difftest holds the Lean to it."""
+    other verdict. Python only: the difftest holds the Lean to it. Drawn from a fixed seed, as `verity_difftest.run` draws,
+    so the counts it asks of the draw are the generator's, not a run's luck."""
     product = R.Product(R.REMOTE.id, R.REMOTE.components)
     seen = collections.Counter()
 
-    @settings(max_examples=200, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @seed(0)
+    @settings(max_examples=200, database=None, deadline=None, derandomize=True, suppress_health_check=list(HealthCheck))
     @given(composite(R.REMOTE))
     def check(case):
         got, was = R.REMOTE.answer(case), product.answer(case)
