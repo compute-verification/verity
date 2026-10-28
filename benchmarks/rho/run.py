@@ -1,9 +1,9 @@
-"""`verity bench rho`: the overhead for every scenario, how it moves, and where it falls below a target.
+"""`verity bench rho`: the slowdown for every scenario, how it moves, and where it falls below a target.
 
     uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]
 
-Each scenario gets one overhead number, its lower bound (every bound met at once): the hardware multiple over the
+Each scenario gets one slowdown number, its lower bound (every bound met at once): the hardware multiple over the
 reference training algorithm at its MFU, with its status, where its premises stand and the padded size ratio `|A| / T_0`
 it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
 own, a construction beside the bound rather than an end of it.
@@ -67,7 +67,7 @@ def best_attack(r: Result) -> tuple[FamilyResult, Estimate] | None:
 
 
 def setter(f: FamilyResult) -> Estimate | None:
-    """The bound that sets the lower bound: of those it admits, the one with the most overhead alone at a standing
+    """The bound that sets the lower bound: of those it admits, the one with the most slowdown alone at a standing
     short of refuted."""
     met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in f.combined.excluded]
     return max(met, key=lambda e: e.rho, default=None)
@@ -114,7 +114,7 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
     else:
         what = f"its largest term, `{t.name}`"
     straddle = straddles(f)
-    return (f"**The lower bound rests on** {what}: {t.share:.1%} of the overhead's rate, and the overhead ≤ "
+    return (f"**The lower bound rests on** {what}: {t.share:.1%} of the slowdown's rate, and the slowdown ≤ "
             f"{fmt(t.ceiling)} while it remains" + (f"; and on `{'`, `'.join(straddle)}`" if straddle else "") + ".")
 
 
@@ -181,7 +181,7 @@ def estimates_md(f: FamilyResult) -> list[str]:
     def cut(e: Estimate) -> str:
         return ", ".join(f"{k}: {v.cut}" for k, v in e.overhead.serving.items())
 
-    out = ["| bound | status | premises | overhead | padded size ratio | g | overhead in one inference block | "
+    out = ["| bound | status | premises | slowdown | padded size ratio | g | overhead in one inference block | "
            "binding cut |", "|---|---|---|---|---|---|---|---|"]
     for e in f.bounds:
         if e.overhead is None:
@@ -196,7 +196,7 @@ def estimates_md(f: FamilyResult) -> list[str]:
     if c.excluded:
         out += [(f"Left out of the lower bound at the block that binds, their premises refuted there: "
                  f"{', '.join(c.excluded)}."), ""]
-    out += ["| attack | status | overhead | padded size ratio | g | overhead in one inference block | layout |",
+    out += ["| attack | status | slowdown | padded size ratio | g | overhead in one inference block | layout |",
             "|---|---|---|---|---|---|---|"]
     for e in f.attacks:
         if e.overhead is None:
@@ -226,19 +226,19 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                if st.s_times == REFERENCE else f"{gates} gates")
     premise = f", under {', '.join(st.cites())}." if st.cites() else ", which needs no straddling premise."
     sets = setter(best) if best else None
-    claim = (f"**Overhead ≥ {fmt(r.lo)}** ({best.combined.status}; premises {best.combined.premise or '—'}), "
+    claim = (f"**Slowdown ≥ {fmt(r.lo)}** ({best.combined.status}; premises {best.combined.premise or '—'}), "
              f"the hardware multiple over the reference training algorithm at MFU₀ = {fmt(s.mfu)}: every bound met at "
              f"once"
-             + (f", set by {sets.argument}" if sets else "") if best else "**Overhead:** no family")
+             + (f", set by {sets.argument}" if sets else "") if best else "**Slowdown:** no family")
     attack = best_attack(r)
-    attack_md = (f"**Best known attack:** {attack[1].argument} on {attack[0].family} ({attack[1].status}) at overhead "
+    attack_md = (f"**Best known attack:** {attack[1].argument} on {attack[0].family} ({attack[1].status}) at slowdown "
                  f"{fmt(attack[1].rho)}, {when(s, attack[1].rho)} to the target: a construction, beside the bound."
                  if attack else "**Best known attack:** none applies.")
     out = [f"## {s.name}", "", setting, "",
-           (f"{claim}. **Time to the target ≥ {when(s, r.lo)}** (wall-clock, the overhead times "
+           (f"{claim}. **Time to the target ≥ {when(s, r.lo)}** (wall-clock, the slowdown times "
             f"`T_0 / (MFU₀ Φ_total)`, the reference's own time). **Inference overhead:** {inference(s)}."),
            "",
-           (f"The overhead is Lean's `hardwareMultiple`, at least 1, so no protocol gives 1; under a bound it is "
+           (f"The slowdown is Lean's `hardwareMultiple`, at least 1, so no protocol gives 1; under a bound it is "
             f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteDampener`), with the dark leaves `s` "
             f"training like the reference and the rest `x` counted at capacity. It comes from the padded size ratio "
             f"`|A| / T_0` = {fmt(padded(r))}, the actual circuit's size over the reference's with each serving block "
@@ -251,7 +251,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
             f"crypto: {by or 'none'}."), "",
            "The lower bound from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
-           "What sets the overhead (each part's share of its rate, `s + x/MFU₀`, and the most it can be while it "
+           "What sets the slowdown (each part's share of its rate, `s + x/MFU₀`, and the most it can be while it "
            "remains): "
            + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
            f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
@@ -267,12 +267,12 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
 
 
 def crossings(ds: list[analysis.Danger]) -> str:
-    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (overhead {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
+    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (slowdown {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
 
 
 def below_md(name: str, base: float, by_status: dict[str, float], corner: analysis.Corner,
                dangers: dict[float, list[analysis.Danger]], rescues: dict[float, list[analysis.Danger]]) -> list[str]:
-    out = [f"### {name} (overhead ≥ {fmt(base)} today)", ""]
+    out = [f"### {name} (slowdown ≥ {fmt(base)} today)", ""]
     if corner.path:
         prev, steps, rest = base, [], 0
         for k, v in corner.path:
@@ -282,7 +282,7 @@ def below_md(name: str, base: float, by_status: dict[str, float], corner: analys
                 rest += 1
             prev = v
         more = f", and {rest} more that each move it under 0.5%" if rest else ""
-        out.append(f"- **Corner:** overhead ≥ {fmt(corner.rho)} with every ranged parameter at the worse end of its "
+        out.append(f"- **Corner:** slowdown ≥ {fmt(corner.rho)} with every ranged parameter at the worse end of its "
                    f"range at once; one at a time, worst first: {', '.join(steps)}{more}"
                    + ("." if corner.joint == corner.rho else f" (all at once: {fmt(corner.joint)})."))
     else:
@@ -293,23 +293,23 @@ def below_md(name: str, base: float, by_status: dict[str, float], corner: analys
                 found = f"falls below it within a plausible range: {crossings(dangers[t])}."
             else:
                 found = ("no single parameter's plausible range takes it below; "
-                         + (f"the corner does (overhead ≥ {fmt(corner.rho)})." if corner.rho < t
+                         + (f"the corner does (slowdown ≥ {fmt(corner.rho)})." if corner.rho < t
                             else "nor does the corner."))
             weaker = [st for st, v in by_status.items() if v < t]
             if weaker:
-                found += (f" From only {weaker[-1]} or stronger bounds and cuts, overhead ≥ "
+                found += (f" From only {weaker[-1]} or stronger bounds and cuts, slowdown ≥ "
                           f"{fmt(by_status[weaker[-1]])}.")
         else:
             found = "already below it today; " + (f"lifted above it by: {crossings(rescues[t])}." if rescues[t]
                                                   else "no single parameter's plausible range lifts it there.")
-        out.append(f"- **Overhead {fmt(t)}:** {found}")
+        out.append(f"- **Slowdown {fmt(t)}:** {found}")
     return out + [""]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", action="append", help="scenario names (default: all)")
-    ap.add_argument("--target", action="append", type=float, help="overhead targets for the danger scan "
+    ap.add_argument("--target", action="append", type=float, help="slowdown targets for the danger scan "
                     "(default: 10, 100)")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
     ap.add_argument("--out", default=os.environ.get("OUT"), help="write rho.md, rho.json and figures/ here ($OUT)")
@@ -323,25 +323,25 @@ def main() -> None:
     targets = sorted(args.target or [10.0, 100.0])
 
     md: list[str] = []
-    head = ("| scenario | overhead ≥ | status, premises | set by | padded size ratio | inference overhead | "
+    head = ("| scenario | slowdown ≥ | status, premises | set by | padded size ratio | inference overhead | "
             "time to the target ≥ | from conditional or stronger bounds and cuts | on monitored gates | rests on | "
             "at the corner |")
-    summary = ["# The overhead", "",
-               ("The overhead is the hardware multiple over the reference training algorithm at its MFU, MFU₀: the "
+    summary = ["# The slowdown", "",
+               ("The slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀: the "
                 "adversary's GPU-hours to the target over the reference's, at least 1 (Lean's `hardwareMultiple`), so "
                 "no protocol gives 1. The claim is its lower bound, every bound met at once; a bound whose premises "
                 "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted. The "
                 "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each serving block "
                 "padded to capacity, is the intermediate it comes from. The time to the target, wall-clock, is at "
-                "least the overhead times `T_0 / (MFU₀ Φ_total)`."), "", head,
+                "least the slowdown times `T_0 / (MFU₀ Φ_total)`."), "", head,
                "|---|---|---|---|---|---|---|---|---|---|---|"]
     attacks = ["## Attacks", "",
                ("The best known attack on each scenario: a construction, and the time it takes, beside the lower bound "
                 "rather than an end of it. A bound whose padded size ratio is above its is a contradiction: one of the "
                 "bound's premises is false there."), "",
-               "| scenario | attack | family | status | overhead | time to the target | contradictions |",
+               "| scenario | attack | family | status | slowdown | time to the target | contradictions |",
                "|---|---|---|---|---|---|---|"]
-    below = ["## Where the overhead falls below target", ""]
+    below = ["## Where the slowdown falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
         r = analysis.result(reg, name)
@@ -352,7 +352,7 @@ def main() -> None:
         md += scenario_md(r, by_status, terms, points, faulty_md(reg, fo))
         swings = analysis.tornado(reg, name)
         md += ["Tornado (the lower bound at each parameter's plausible ends):", "",
-               "| parameter | low | high | overhead ≥ at low | overhead ≥ at high | decades |",
+               "| parameter | low | high | slowdown ≥ at low | slowdown ≥ at high | decades |",
                "|---|---|---|---|---|---|"]
         md += [f"| {s.key} | {fmt(s.low)} | {fmt(s.high)} | {fmt(s.at_low)} | {fmt(s.at_high)} | "
                f"{fmt(s.size)} |" for s in swings[:12]]
@@ -376,7 +376,7 @@ def main() -> None:
                        + f" | {', '.join(contradictions) or 'none'} |")
         policy = s.context.policy
         record["scenarios"][name] = {
-            "overhead": r.lo, "status": best.combined.status if best else None,
+            "slowdown": r.lo, "status": best.combined.status if best else None,
             "premise": best.combined.premise if best else None, "set_by": sets.argument if sets else None,
             "excluded": list(best.combined.excluded) if best else [], "padded": padded(r), "mfu": s.mfu,
             "inference_overhead": {"value": policy.inference_overhead,
@@ -392,11 +392,11 @@ def main() -> None:
             "delta": s.regime.delta(s.context).json(),
             "certified": certified(s),
             "seconds": s.seconds(r.lo),
-            "overhead_by_status": by_status,
+            "slowdown_by_status": by_status,
             "attribution": [vars(t) for t in terms], "monitored": monitored(r),
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
             "faulty_outputs": {"capacity_bits": fo.capacity, "detect": dict(fo.detect)},
-            "families": {f.family: {"overhead": f.lo, "attack": f.attack, "excluded": list(f.combined.excluded),
+            "families": {f.family: {"slowdown": f.lo, "attack": f.attack, "excluded": list(f.combined.excluded),
                                     "contradictions": list(f.contradictions),
                                     "bounds": [row(e) for e in f.bounds], "combined": row(f.combined),
                                     "attacks": [row(e) for e in f.attacks]}

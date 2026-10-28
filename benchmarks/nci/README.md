@@ -13,11 +13,11 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 (`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
 (`Security/Definitions/Nci/Guarantees/Contained.lean`).
 
-The overhead lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one overhead calculator.
-`tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the overhead on them is rho's
+The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
+`tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
 `rho.theorem.multiple_bound`, Lean's `Nci.Dampener.remoteDampener` at the reference's MFU, which `statement.py`, `fit.py`
-and `figures.py` read. At `tiers.py`'s defaults it is 1, which bounds nothing; rho's remote scenario at the H200 gives
-1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
+and `figures.py` read. Hosts carry no compute (`GLOSSARY.md`), so `host_share` is 0: at `tiers.py`'s defaults it is
+1.21, and rho's remote scenario at the H200 gives 1.22 (1 and 1.12 without the hosts assumption). The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 
 ## Files
@@ -42,7 +42,7 @@ and `figures.py` read. At `tiers.py`'s defaults it is 1, which bounds nothing; r
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
-| `figures.py` | `tiers.py`'s talk figures, with the overhead from rho's `multiple_bound`, to the evidence store |
+| `figures.py` | `tiers.py`'s talk figures, with the slowdown from rho's `multiple_bound`, to the evidence store |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
 

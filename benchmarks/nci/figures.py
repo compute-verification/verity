@@ -54,7 +54,7 @@ GRAY = "#6b6b6b"
 LADDER = [
     ("Today", "Today", "deployed"),
     ("PoUW's floor credit", "PoUW's\nfloor\ncredit", "specified"),
-    ("Floor credit, attested clock and EPYC hosts", "+ attested\nclock,\nEPYC hosts", "specified"),
+    ("Floor credit and attested clock", "+ attested\nclock", "specified"),
     ("Best plausible PoUW design", "Best\nPoUW\ndesign", "modelled"),
     ("Streamed-label wipes, 13 GB", "Streamed-\nlabel wipes,\n13 GB", "conditional"),
     ("Streamed-label wipes, 6 GB", "Streamed-\nlabel wipes,\n6 GB", "conditional"),
@@ -351,7 +351,7 @@ def phase(out: Path) -> dict:
         if r["r_hat"] > 0:
             assert math.isclose(_phase_cell((r["r_hat"], r["R_wipe_gb"])), d, rel_tol=1e-6), r["name"]
         pts[r["name"]] = (r["r_hat"], r["R_wipe_gb"], d, STATUS[r["status"]], one_line(r["label"]))
-    place = {"Today": (-14, -20), "PoUW's floor credit": (-14, -52), "Floor credit, attested clock and EPYC hosts":
+    place = {"Today": (-14, -20), "PoUW's floor credit": (-14, -52), "Floor credit and attested clock":
              (-14, -84), "Best plausible PoUW design": (16, -16), "Streamed-label wipes, 13 GB": (-16, 0),
              "Streamed-label wipes, 6 GB": (-16, 0), "Power removal, 1 GB": (-16, 0), "Floor (r̂ = 0, 4 GB)": (16, 0)}
     for name, (x, y, d, c, label) in pts.items():
@@ -551,7 +551,7 @@ def memory(out: Path) -> dict:
                rf"×{ROUTED:g} routed mixtures ($N^*/2$), void above {routed_edge:.1f} GB"],
               loc="lower right", fontsize=17, frameon=True, facecolor="white", edgecolor="none", framealpha=0.92)
     names = {"PoUW's floor credit": "PoUW's floor credit",
-             "Floor credit, attested clock and EPYC hosts": "floor credit + attested clock, EPYC hosts",
+             "Floor credit and attested clock": "floor credit + attested clock",
              "Best plausible PoUW design": "best PoUW design", FLOORS[0]: "the floor"}
     levels = [(free_share(r["p"]), r["r_hat"], names[r["name"]]) for r in rungs() if r["name"] in names]
     for y, rh, txt in levels:
@@ -594,7 +594,7 @@ def memory(out: Path) -> dict:
         f"low w_e ({num(F.BOUNDARY['low'])}, higher cap); it holds while a one-period window holds fewer than N* "
         f"weights, below {EDGE_GB:.1f} GB. Dashed: routed mixtures at x{ROUTED:g} (N*/2), void above "
         f"{routed_edge:.1f} GB. Memory caps where mu is below what a rung leaves, r = r̂ + eps' plus the verdict lag "
-        "and nu (gray lines: the floor credit, the floor credit with an attested clock and EPYC hosts, the best PoUW "
+        "and nu (gray lines: the floor credit, the floor credit with an attested clock, the best PoUW "
         f"design, and the floor's r̂ = 0, where only eps', the lag and nu are left, {num(levels[-1][0])}); the fit "
         f"bound crosses the floor's line at {num(floor_cross)} GB. Markers: the fit bound at the streamed-label rungs' "
         "13 and 6 GB, the floor's 4 GB and power removal's 1 GB. Fit bound (closed form at d = "

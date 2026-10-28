@@ -32,7 +32,7 @@ def test_the_gpus_read_the_accel_models_card_table():
     assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
     assert T.DEFAULTS["clock_share"] == 0.0
     assert T.DEFAULTS["node_flops"] == pytest.approx(7.4848666e15, rel=1e-8)
-    assert T.DEFAULTS["host_share"] == pytest.approx(0.12608, rel=1e-4)
+    assert T.DEFAULTS["host_share"] == 0.0
 
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
@@ -151,7 +151,7 @@ def test_proof_of_space_rounds_set_the_slack():
 def test_unbounded_ingress_makes_wipes_cap_nothing():
     """Until the count check is in the ZK flow, declared ingress is bounded only by line rate,
     and then even a small wipe residual caps nothing."""
-    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
+    tight = T.DEFAULTS | {"residual": 0.9, "pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
     assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_residual"]
     assert not T.evaluate(tight | {"intake_x": 1.3e6}, T.TIERS["T3"])["memory_caps_residual"]
 

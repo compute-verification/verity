@@ -22,8 +22,8 @@ STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 RUNGS = {
     "Today": {"residual": 1.0},
     "PoUW's floor credit": {},
-    "Floor credit, attested clock and EPYC hosts": {"residual": 0.213, "clock_share": 0, "host_share": 0.0021},
-    "Best plausible PoUW design": {"residual": 0.01, "host_share": 0.0021, "clock_share": 0, "eps_w": 0.0025},
+    "Floor credit and attested clock": {"residual": 0.213, "clock_share": 0},
+    "Best plausible PoUW design": {"residual": 0.01, "clock_share": 0, "eps_w": 0.0025},
 }
 #: PoUW's deficit at the floor, the best design's: at r̂ = 0 all of C is certified, so the deficit is ε_W C
 EPS_W = RUNGS["Best plausible PoUW design"]["eps_w"]
@@ -47,15 +47,19 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
     assert S.dampener(P | {"residual": 1.0}, "T1") == 1.0
 
 
-def test_the_remote_dampener_at_the_defaults_is_1_as_lean_states_it():
-    """At tiers' server (the floor credit, host CPUs at 12.6% of the GPUs) the residual alone, counted at peak, is above
-    MFU_0, so ``Nci.Guarantees.DampenerRemote``'s rho = max(1, 1/(s + x/MFU_0)) is 1 at every tier; 1/eta, the same
-    bound against a reference at capacity (rho at MFU_0 = 1), is 2.2."""
+def test_the_remote_dampener_at_the_defaults_is_lean_remote_dampener():
+    """At tiers' server (the floor credit; hosts carry no compute) the residual counted at peak is x = 0.33, below MFU_0,
+    so ``Nci.Guarantees.DampenerRemote``'s rho = max(1, 1/(s + x/MFU_0)) is 1.21 at T1 to T4; 1/eta, the same bound
+    against a reference at capacity (rho at MFU_0 = 1), is 3.04. Without the hosts assumption (host CPUs at 12.6% of the
+    GPUs) x = 0.45 is above MFU_0 and rho is 1."""
     for t in T.TIERS:
         _, x = T.remote_terms(P, T.evaluate(P, T.TIERS[t]))
-        assert x > P["mfu"] and S.dampener(P, t) == 1.0
+        assert x < P["mfu"] and S.dampener(P, t) == pytest.approx(P["mfu"] / x, rel=1e-9)
+    assert S.dampener(P, "T1") == pytest.approx(1.215, abs=1e-3)
     t1 = T.evaluate(P, T.TIERS["T1"])
-    assert 1 / t1["efficiency"] == pytest.approx(2.20, abs=0.01)
+    assert 1 / t1["efficiency"] == pytest.approx(3.04, abs=0.01)
+    hosts = P | {"host_share": 0.12608}
+    assert all(S.dampener(hosts, t) == 1.0 for t in T.TIERS)
 
 
 def quantities(items: list[dict]) -> dict:
@@ -73,7 +77,7 @@ def test_the_ladder_is_evaluate_at_the_rungs():
 
 
 def test_d_is_the_hardware_multiple_of_the_binding_terms():
-    """D = MFU_0 / (r + nu + Delta/H) where the residual binds, MFU_0 / mu where the memory cap does."""
+    """D = MFU_0 / (r + nu + Delta/H) where the residual binds (as at power removal's 1 GB, where mu > 1)."""
     rows = {r["rung"]: r for r in S.ladder()}
     best = T.residual_share(P | RUNGS["Best plausible PoUW design"])
     assert rows["Best plausible PoUW design"]["D"]["T1"] == pytest.approx(P["mfu"] / (best + X.nu(P) + LAG), rel=1e-4)
@@ -81,7 +85,8 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(P["mfu"] / (floor + LAG), rel=1e-4)
     assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(P["mfu"] / (floor + 60 / H), rel=1e-4)
     one = P | S.streamed(1.0)
-    assert rows["Power removal, 1 GB"]["D"]["T3"] == pytest.approx(max(1.0, P["mfu"] / min(X.mu(one), 1.0)), rel=0.01)
+    assert X.mu(one) > 1 and rows["Power removal, 1 GB"]["D"]["T3"] == pytest.approx(
+        P["mfu"] / (T.residual_share(one) + X.nu(P) + LAG), rel=1e-3)
     fl = quantities(S.floor())
     assert fl["MFU_0 / (ν + ε_W + ε′), the floor's limit as the verdict lag goes to 0"] == P["mfu"] / floor
     assert fl["MFU_0 / ν, the same as ε_W and ε′ go to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)

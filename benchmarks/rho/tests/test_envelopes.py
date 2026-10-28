@@ -36,8 +36,8 @@ def tiers_context(registry: Registry = REG) -> Context:
 
 
 def tiers_params(ctx: Context) -> dict:
-    """tiers' DEFAULTS with the host share its server's CPUs give (0.12608, which tiers computes the same way)."""
-    return T.DEFAULTS | {"host_share": ctx.location.host_phi / ctx.location.phi}
+    """tiers' DEFAULTS with the host share remote's PoUW envelope counts: 0, hosts carry no compute."""
+    return T.DEFAULTS | {"host_share": envelopes.regime(REG, "remote").pouw.host * ctx.location.host_phi / ctx.location.phi}
 
 
 def field(regime, name: str):
@@ -50,7 +50,8 @@ def test_the_remote_envelopes_numbers_are_tiers_defaults():
     for ours, theirs in TIERS_KEYS.items():
         assert field(r, ours) == pytest.approx(T.DEFAULTS[theirs], rel=1e-12), ours
     ctx = tiers_context()
-    assert ctx.location.host_phi / ctx.location.phi == pytest.approx(T.DEFAULTS["host_share"], rel=1e-3)
+    assert envelopes.regime(REG, "remote").pouw.host == T.DEFAULTS["host_share"] == 0.0
+    assert ctx.location.host_phi / ctx.location.phi == pytest.approx(0.12608, rel=1e-3)
     assert (ctx.units.flops(ctx.location.phi), ctx.fleet.count, ctx.fleet.mfu_train) == pytest.approx(
         (T.DEFAULTS["node_flops"], T.DEFAULTS["nodes"], T.DEFAULTS["mfu"]))
     assert (ctx.policy.gamma, ctx.policy.k) == (T.DEFAULTS["Gamma"], T.DEFAULTS["K"])
@@ -105,11 +106,11 @@ REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
-    """The remote overhead is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤ hardwareMultiple MFU₀`, at the
-    reference training algorithm's MFU (0.4), not at `MFU₀ = 1`. At tiers' server the residual alone (`x = 0.45`)
-    outruns that developer, so `ρ = 1`, as `benchmarks/nci`'s compute dampener reads it; at the H200 (host CPUs 2.9% of
-    the GPUs, not 12.6%) `ρ = 1.12`, where the padded size ratio, the same bound against the reference at capacity, is
-    2.80."""
+    """The remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤ hardwareMultiple MFU₀`, at the
+    reference training algorithm's MFU (0.4), not at `MFU₀ = 1`. Hosts carry no compute, so tiers' server and the H200
+    give the same `x = 0.33` and `ρ = 1.22`, as `benchmarks/nci`'s compute dampener reads it, where the padded size
+    ratio, the same bound against the reference at capacity, is 3.04. Without the hosts assumption tiers' server
+    (host CPUs 12.6% of the GPUs) has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "Security" / "Definitions" / "Nci"
     assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
@@ -120,16 +121,22 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     ctx = tiers_context()
     t1 = T.evaluate(tiers_params(ctx), T.TIERS["T1"])
     x = t1["residual"] + t1["declared"] + t1["cheat"]
-    assert x / T.DEFAULTS["mfu"] > 1 and multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x) == 1.0
-    assert evaluate_named(REG, "remote-tiers-kimi").lo == 1.0
+    assert x / T.DEFAULTS["mfu"] < 1
+    # tiers counts no dark share (s = 0) where rho's fleet has 0.1%
+    lo = evaluate_named(REG, "remote-tiers-kimi").lo
+    assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x), rel=5e-3)
+    assert lo == pytest.approx(1.218, abs=1e-3)
+    hosts = REG.override({"regime.remote.host": 1.0})
+    assert evaluate_named(hosts, "remote-tiers-kimi").lo == 1.0
+    assert evaluate_named(hosts, "remote-h200-kimi").lo == pytest.approx(1.120, abs=1e-3)
 
     r = evaluate_named(REG, "remote-h200-kimi")
     ctx, remote = r.scenario.context, r.scenario.regime
     s, u = ctx.fleet.eps_dark, remote.uncertified(ctx)
     assert r.scenario.mfu == ctx.fleet.mfu_train == 0.4
-    assert r.lo == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-4) == pytest.approx(1.120, abs=1e-3)
+    assert r.lo == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-4) == pytest.approx(1.218, abs=1e-3)
     assert r.families[0].combined.padded == pytest.approx(multiple_bound(1.0, s, (1 - s) * u), rel=1e-4) \
-        == pytest.approx(2.796, abs=1e-3)
+        == pytest.approx(3.040, abs=1e-3)
 
 
 def test_the_inference_blocks_are_the_certified_work_that_ran():
@@ -281,7 +288,7 @@ def test_onsite_w63_beside_the_reference():
     a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
     lower bound's padded size ratio, which a dark share of 1% caps near 100, rises from 53.6 to 99.8, with the best
     attack's at 249 and 250: W63's day is under one layer's update, so the fan-out bound still caps it, and the
-    reference's is past it, where the pair bound sets it. At line rate both fall to remote's (2.75, at the card table's
+    reference's is past it, where the pair bound sets it. At line rate both fall to remote's (2.99, at the card table's
     clock). The cadence feeds the serving this package credits only if outputs outnumber prompts more than 20:1, so it
     isn't the default."""
     reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
@@ -296,7 +303,7 @@ def test_onsite_w63_beside_the_reference():
     at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
     remote = evaluate_named(reg, "reference-remote-h200")
     assert all(r.lo == pytest.approx(remote.lo, rel=1e-9) for r in at_line)
-    assert round(remote.families[0].combined.padded, 2) == 2.75
+    assert round(remote.families[0].combined.padded, 2) == 2.99
 
 
 def test_four_servers_as_one_location_have_four_times_a_servers_budget():
@@ -317,7 +324,7 @@ def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_on
     """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 1.0705e15
     MACs/s (the ACCEL card table: 4,096 a SM-clock, 132 SMs, at the clock's 1,980 MHz ceiling) over its 12.60 s (served
     3.78, its commit 0.42, PoUW's units 5.59 and their commit 2.81). J10-R credits words, and C counts the card at its
-    ceiling, so the clock term is 0. With the hosts (2.9% of the location), `r̂` is 0.987. onsite-today's twin carries
+    ceiling, so the clock term is 0. Hosts carry no compute, so `r̂` is the residual, 0.958. onsite-today's twin carries
     the same PoUW envelope, and both differ from remote's in three keys."""
     remote, today = envelopes.regime(REG, "remote-h200-pouw"), envelopes.regime(REG, "onsite-today-h200-pouw")
     assert today.pouw == remote.pouw and today.wipe == envelopes.regime(REG, "onsite-today").wipe
@@ -328,7 +335,7 @@ def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_on
     assert dataclasses.replace(envelopes.regime(REG, "remote").pouw, residual=p.residual, clock_share=p.clock_share,
                                host=p.host) == p
     loc = context("reference-h200").location
-    assert p.audited(loc) == pytest.approx(p.residual + loc.host_phi / loc.phi, rel=1e-12) == pytest.approx(0.987, abs=5e-4)
+    assert p.host == 0 and p.audited(loc) == p.residual == pytest.approx(0.958, abs=5e-4)
     assert evaluate_named(REG, "reference-remote-h200-pouw").lo < 1.02
 
 

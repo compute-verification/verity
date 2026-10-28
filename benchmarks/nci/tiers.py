@@ -79,8 +79,6 @@ CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
 GPU_FLOPS = 2 * CARD["sms"] * CARD["tensor"] * CARD["clock_hz"]
 NODE_FLOPS = 8 * GPU_FLOPS
-#: two Xeon 6776Ps at their INT8 AMX datasheet peak: 128 cores x 2,048 ops per cycle x 3.6 GHz
-HOST_OPS = 128 * 2048 * 3.6e9
 
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max,
 #: 1 - ((1 - phi)/q_sched + phi)/q_clock = 0.323: honest kernels run 1.72x the floor at the nodes' locked clock,
@@ -89,8 +87,9 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (CircuitCredit);
 #: the GPU clock above what PoUW credits, 0: PoUW credits 2,430 MHz, the card table's ceiling, which every
 #: card on vy-nebius-1 reports as its maximum, application, default and boost SM clock;
-#: the host CPUs at their INT8 AMX datasheet peak (``HOST_OPS``: 12.6% of the GPUs' FP8 rate at
-#: the card table's peak); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) at the card table's peak for a
+#: the host CPUs at 0: hosts carry no compute (GLOSSARY.md, the device model), a server's compute is its accelerators'
+#: (two Xeon 6776Ps at their INT8 AMX datasheet peak, 12.6% of the GPUs' FP8 rate, is the sensitivity without that
+#: assumption); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) at the card table's peak for a
 #: year;
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
@@ -101,7 +100,7 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.323, "host_share": HOST_OPS / NODE_FLOPS,
+    "unmonitored": 0.0, "residual": 0.323, "host_share": 0.0,
     "clock_share": 1 - CREDITED_CLOCK_HZ / CARD["clock_hz"], "eps_w": 0.00744,
     "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -125,7 +124,7 @@ SPEC = [
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum, CMP-165; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
-    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute at the card table's peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
+    {"key": "host_share", "label": "Host CPUs' compute, as a share of server compute at the card table's peak: 0 under hosts carry no compute; without that assumption, at datasheet peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
@@ -306,8 +305,8 @@ def ingress(p: dict, mech: dict) -> float:
 
 
 def audited_residual(p: dict) -> float:
-    """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward
-    it until something credits or bounds them."""
+    """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs (0: hosts carry no
+    compute)."""
     return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
 
 

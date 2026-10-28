@@ -33,9 +33,9 @@ from rho.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
-ATTESTED = {"residual": 0.213, "clock_share": 0.0, "host_share": 0.0021}
+ATTESTED = {"residual": 0.213, "clock_share": 0.0}
 #: the C7 dossier's eight conditions for a 1% residual include PoUW's deficit at most 0.25%
-BEST = {"residual": 0.01, "host_share": 0.0021, "clock_share": 0.0, "eps_w": 0.0025}
+BEST = {"residual": 0.01, "clock_share": 0.0, "eps_w": 0.0025}
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 
 
@@ -46,11 +46,11 @@ def streamed(gb: float, base: dict | None = None) -> dict:
     return over | {"unfilled_gb": gb - X.wipe_residual(T.DEFAULTS | over | {"unfilled_gb": 0.0}) / T.GB}
 
 
-FLOOR = streamed(4.0, BEST | {"residual": 0.0, "host_share": 0.0})
+FLOOR = streamed(4.0, BEST | {"residual": 0.0})
 RUNGS = {
     "Today": TODAY,
     "PoUW's floor credit": {},
-    "Floor credit, attested clock and EPYC hosts": ATTESTED,
+    "Floor credit and attested clock": ATTESTED,
     "Best plausible PoUW design": BEST,
     "Streamed-label wipes, 13 GB": streamed(13.0),
     "Streamed-label wipes, 6 GB": streamed(6.0),
@@ -97,7 +97,7 @@ def r_wipe_gb(p: dict, unfilled: float) -> float:
 
 #: section 6's parameters: the key searched, its overrides on the scenario, and each view of an edge
 THRESHOLD_ROWS: list[tuple[str, dict, list[tuple[str, Callable[[dict, float], float]]]]] = [
-    ("residual", {"host_share": 0.0, "clock_share": 0.0}, [("r̂ (the GPU residual, host CPUs and clock at 0)", same)]),
+    ("residual", {"clock_share": 0.0}, [("r̂ (the GPU residual, the clock at 0)", same)]),
     ("disk_gb", {}, [("unwiped disk, GB", same)]),
     ("intake_x", {}, [("declared intake, multiple of αF", same)]),
     ("sigma", {}, [("side channels σ, bit/s", same)]),
@@ -210,10 +210,9 @@ def symbols() -> list[dict]:
         ("MFU_0", "the unconstrained developer's model-FLOP utilization", p["mfu"]),
         ("m", "recipe multiplier, central", p["m"]),
         ("m", "recipe multiplier, adversarial", X.RANGES["m"][1]),
-        ("r̂", "under the floor credit: GPU + clock + host CPUs", r),
+        ("r̂", "under the floor credit: GPU + clock (hosts carry no compute)", r),
         ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
-        ("r̂ host", "host CPUs at INT8 AMX peak", p["host_share"]),
         ("ε_W", "PoUW's deficit, a share of certified work (CircuitCredit)", p["eps_w"]),
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
@@ -222,7 +221,6 @@ def symbols() -> list[dict]:
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
-        ("host / r̂", "share of r̂", p["host_share"] / r),
         ("r̂", "at the best plausible PoUW design", T.audited_residual(p | BEST)),
         ("K", "novel bits per inference block", p["K"]),
         ("Γ", "gates per inference block", p["Gamma"]),
