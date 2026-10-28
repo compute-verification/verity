@@ -122,9 +122,9 @@ def dither (lo : ℤ) (w m : ℕ) (v : ℚ) (R : Fin (2 * m + 2)) : ℤ := clamp
 /-- The hull of a column's words and 0, the value outside it of a gather whose fill is 0. -/
 def hull0 (T : List ℤ) : Iv := (T.foldr min 0, T.foldr max 0)
 
-/-- The LUT softmax's element: a floor, a min and an 8-bit gather (the model's `Op.gather`, fill 0) into the table
+/-- The LUT softmax's element: a floor, a min and an 8-bit gather (the model's `IntOp.gather`, fill 0) into the table
 `T`. -/
-def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (Op.gather none 0 : Op Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
+def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (IntOp.gather none 0 : IntOp Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
 
 /-! ## The exact-int8 profile's primitives (`verity_vllm/program/registry/int8_exact.py`) -/
 
