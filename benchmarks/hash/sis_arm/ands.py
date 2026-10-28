@@ -35,13 +35,14 @@ MASK = (1 << 32) - 1
 WEIGHTS_INT8 = [1 << t for t in range(7)] + [(-128) & MASK]
 
 
-def compress(native: np.ndarray) -> np.ndarray:
-    """ANDs to sum one row's addend bits mod 2^32; native[..., k] is the count of bits of weight 2^k."""
+def compress(native: np.ndarray, width: int = 32) -> np.ndarray:
+    """ANDs to sum one row's addend bits mod 2^width; native[..., k] is the count of bits of weight 2^k."""
+    native = np.concatenate([native, np.zeros((*native.shape[:-1], max(0, width - native.shape[-1])), np.int64)], -1)
     ands = np.zeros(native.shape[:-1], dtype=np.int64)
     carry = np.zeros_like(ands)
-    for k in range(32):
+    for k in range(width):
         cells = (native[..., k] + carry) // 2
-        if k < 31:
+        if k < width - 1:
             ands += cells
         carry = cells
     return ands
@@ -111,6 +112,45 @@ def anf(a: np.ndarray, g: int, sample: int = 64) -> tuple[np.ndarray, float, flo
     return ands, groups * ((1 << g) - g - 1), float(np.mean(fanins))
 
 
+def projection(m: int, p_bits: int = 61, rng=None) -> dict:
+    """The live-coin projection check, per byte: with D = A x over Z committed at serve time and a coin rho drawn after
+    the opening's witness is fixed, the circuit checks sum_j c_j x_j = rho . D mod p with c = rho^T A mod p public.
+    `const`: c as gate constants (a circuit per coin), NAF partial products. `var`: c as public input words, so each bit
+    of x ANDs each bit of c. Both sum into one integer of p_bits + 8 + log2 m + 1 bits; the reduction mod p and the
+    rho . D side are per row, not per byte, and `opening_projection` adds them."""
+    rng = rng or np.random.default_rng(61)
+    width = p_bits + 8 + int(np.ceil(np.log2(m))) + 2
+    c = rng.integers(0, 1 << p_bits, size=(1, m), dtype=np.uint64)
+    xh = c >> np.uint64(1)
+    x3 = c + xh
+    d = xh ^ x3
+    digits = sum(np.stack([((part >> np.uint64(k)) & np.uint64(1)).sum(axis=-1) for k in range(64)], -1)[0]
+                 for part in (x3 & d, xh & d)).astype(np.int64)
+    native = np.zeros((1, width), dtype=np.int64)
+    for t in range(8):
+        native[0, t:t + 64] += digits[:width - t]
+    const = float(compress(native, width)[0]) / m + width / m
+    pp = 8 * p_bits
+    native_var = np.zeros((1, width), dtype=np.int64)
+    for t in range(8):
+        native_var[0, t:t + p_bits] += m
+    var = (m * pp + float(compress(native_var, width)[0])) / m
+    return {"p_bits": p_bits, "m": m, "width": width, "const_ands_per_byte": round(const, 1),
+            "var_ands_per_byte": round(var, 1)}
+
+
+def opening_projection(n: int, m: int, h: float, p_bits: int = 61) -> dict:
+    """A projected opening of one row: h m, plus per row rho . D over the n committed 54-bit integers D_i (NAF partial
+    products of 61-bit constants, about p_bits / 3 addends a bit), the reduction mod p, SHA-512 over the 7n-byte D and
+    hm96."""
+    rho_d = round(n * 54 * p_bits / 3)
+    digest = SHA512_ANDS * ceil((7 * n + 17) / 128)
+    total = h * m + rho_d + 4 * p_bits + digest + HM96_ANDS
+    sha = HM96_ANDS + SHA512_ANDS * ceil((m + 17) / 128)
+    return {"n": n, "m": m, "per_byte_ands": round(h * m), "rho_d_ands": rho_d, "digest_sha_ands": digest,
+            "total": round(total), "sha512_row_ands": sha, "ratio_vs_sha512_row": round(total / sha, 2)}
+
+
 def check_naf_circuit(trials: int = 200, m: int = 24) -> int:
     """Builds pp-naf's addend bits for one row and runs its full and half adders on bits, counting ANDs; asserts the
     result is a x mod 2^32 for random int8 x and the count is `compress`'s. Returns the trials run."""
@@ -169,7 +209,7 @@ def main() -> None:
     rng = np.random.default_rng(20261028)
     m_sample = 2048
     rows = []
-    for n in (96, 128, 160, 192, 224, 256):
+    for n in (96, 128, 160, 192, 208, 224, 256):
         a = rng.integers(0, 1 << 32, size=(n, m_sample), dtype=np.uint64)
         for name, f in (("pp-bin", lambda a: pp_bin(a, WEIGHTS_INT8)), ("pp-naf", lambda a: pp_naf(a, WEIGHTS_INT8))):
             per_row = f(a)
@@ -193,8 +233,14 @@ def main() -> None:
     checked = check_naf_circuit()
     openings = [{"encoding": r["encoding"], "construction": r["construction"], **opening(r["n"], m, r["ands_per_byte"])}
                 for r in rows for m in (4096, 16384)]
+    proj = [projection(m) for m in (4096, 16384)]
+    proj_open = [{"variant": v, **opening_projection(n, p["m"], p[f"{v}_ands_per_byte"])}
+                 for p in proj for v in ("const", "var") for n in (192, 208, 224, 256)]
     json.dump({"seed": 20261028, "m_sample": m_sample, "sha512_ands_per_byte": SHA512_PER_BYTE,
-               "naf_circuit_checked": checked, "rows": rows, "openings": openings}, open(out, "w"), indent=1)
+               "naf_circuit_checked": checked, "rows": rows, "openings": openings, "projection": proj,
+               "projection_openings": proj_open}, open(out, "w"), indent=1)
+    for p in proj:
+        print(f"projection m={p['m']}: const {p['const_ands_per_byte']} ANDs/B, var {p['var_ands_per_byte']} ANDs/B")
     print(f"pp-naf circuit evaluated on bits against a x mod 2^32, and its AND count against compress(): {checked} trials")
     for r in rows:
         print(f"{r['encoding']:6} {r['construction']:7} n={r['n']:4}  {r['ands_per_byte']:9.1f} ANDs/B"
