@@ -1,0 +1,99 @@
+"""`served_util.py` on a toy Nsight Systems export and step trace: the steady state is the run of full steps, its Tensor
+Active mean is the tensor-busy share of the whole step (idle time counting as zero), and the losses (kernels by category,
+idle split by the copy running) sum to 100 less that mean."""
+from __future__ import annotations
+
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+import served_util as U  # noqa: E402  (a script beside the suite, importable only once its dir is on the path)
+
+Z = 1_000 * 10**9                                      # the report's timeline zero, UTC ns
+MS = 10**6
+
+
+def _report(p: Path) -> Path:
+    """Six 10 ms spans; in each, an int8 GEMM for 6 ms at 90% tensor, an RMS norm for 2 ms at 0%, then 2 ms with no kernel,
+    a device-to-host copy over its first half. Samples every 0.5 ms."""
+    db = sqlite3.connect(p)
+    db.executescript("""
+        CREATE TABLE TARGET_INFO_SESSION_START_TIME (utcEpochNs INTEGER);
+        CREATE TABLE TARGET_INFO_GPU_METRICS (typeId INTEGER, metricId INTEGER, metricName TEXT);
+        CREATE TABLE GPU_METRICS (timestamp INTEGER, typeId INTEGER, metricId INTEGER, value REAL);
+        CREATE TABLE StringIds (id INTEGER, value TEXT);
+        CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER, end INTEGER, shortName INTEGER, demangledName INTEGER);
+        CREATE TABLE CUPTI_ACTIVITY_KIND_MEMCPY (start INTEGER, end INTEGER, copyKind INTEGER, bytes INTEGER);
+    """)
+    db.execute("INSERT INTO TARGET_INFO_SESSION_START_TIME VALUES (?)", (Z,))
+    db.executemany("INSERT INTO TARGET_INFO_GPU_METRICS VALUES (0, ?, ?)", [(1, "Tensor Active [Throughput %]"), (2, "SM Active [Throughput %]")])
+    db.executemany("INSERT INTO StringIds VALUES (?, ?)", [(1, "int8_gemm_kernel"), (2, "rms_norm_kernel"), (3, "device_kernel"),
+                                                           (4, "void cutlass::device_kernel<Sm90GemmTile>()")])
+    for s in range(6):
+        b = 10 * s * MS
+        db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 1, 1)", (b, b + 6 * MS))
+        db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 2, 2)", (b + 6 * MS, b + 8 * MS))
+        db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_MEMCPY VALUES (?, ?, 2, ?)", (b + 8 * MS, b + 9 * MS, 10**9))
+    for j in range(120):
+        t = j * MS // 2 + MS // 4
+        off = t % (10 * MS)
+        db.execute("INSERT INTO GPU_METRICS VALUES (?, 0, 1, ?)", (t, 90.0 if off < 6 * MS else 0.0))
+        db.execute("INSERT INTO GPU_METRICS VALUES (?, 0, 2, ?)", (t, 100.0 if off < 8 * MS else 0.0))
+    db.commit()
+    return p
+
+
+def _trace(p: Path, T: int = 8) -> Path:
+    """Step k ends at 10 (k + 1) ms; step 0 is not full, steps 1 to 4 are, step 5 is not; one arrival before them."""
+    recs = [{"kind": "header", "schema": "verity-vllm/step-trace/v1"}, {"kind": "arrive", "request": "a", "t": (Z + 5 * MS) / 1e9}]
+    recs += [{"kind": "step", "step": k, "T": T if 1 <= k <= 4 else T // 2, "t": (Z + 10 * (k + 1) * MS) / 1e9} for k in range(6)]
+    p.write_text("".join(json.dumps(r) + "\n" for r in recs))
+    return p
+
+
+def test_steady_state_mean_and_losses(tmp_path):
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, sent_s=(Z + 5 * MS) / 1e9)
+    w = got["queued"]
+    assert (w["steps"], w["first_step"], w["last_step"]) == (4, 1, 4)
+    assert w["step_wall_ms"]["mean"] == pytest.approx(10.0, abs=1e-3)
+    assert w["tensor_active_pct"] == pytest.approx(54.0)
+    assert w["gpu_busy_pct"] == pytest.approx(80.0)
+    assert w["copies"]["d2h"]["GB"] == pytest.approx(4.0) and w["copies"]["d2h"]["busy_pct"] == pytest.approx(10.0)
+    loss = {r["label"]: r["loss_pts"] for r in w["losses"]}
+    assert loss == pytest.approx({"elementwise": 20.0, "idle, D2H copy": 10.0, "idle, no GPU work": 10.0, "gemm": 6.0})
+    assert sum(loss.values()) == pytest.approx(100 - w["tensor_active_pct"])
+    assert w["other_metrics_mean"]["SM Active [Throughput %]"] == pytest.approx(80.0)
+    gaps = {g["us"]: (g["gaps"], g["time_pct"]) for g in w["idle_gaps"]}
+    assert gaps["2000-20000"] == (4, pytest.approx(20.0)) and gaps["0-20"] == (0, 0.0)
+    assert got["all"]["steps"] == 4
+
+
+def test_queued_starts_once_the_last_request_is_sent(tmp_path):
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, sent_s=(Z + 25 * MS) / 1e9)
+    assert (got["queued"]["steps"], got["queued"]["first_step"]) == (2, 3)
+    assert "queued" not in U.analyse(tmp_path / "prof.sqlite", tmp_path / "advice_trace.jsonl", 8)
+    timings = tmp_path / "main.timings.json"
+    timings.write_text(json.dumps({"start_unix": 1000.0, "requests": [{"send_s": 0.002}, {"send_s": 0.025}, {"send_s": None}]}))
+    assert U.last_send(timings) == pytest.approx(1000.025)
+
+
+def test_generic_short_names_go_by_their_demangled_name(tmp_path):
+    db = sqlite3.connect(_report(tmp_path / "prof.sqlite"))
+    db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 3, 4)", (70 * MS, 71 * MS))
+    db.commit()
+    names = {n for _, _, n in U.kernels(db)}
+    assert "void cutlass::device_kernel<Sm90GemmTile>()" in names
+    assert U.category("void cutlass::device_kernel<Sm90GemmTile>()") == "gemm"
+    fa3 = "void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdSm90<flash::CollectiveMainloopFwdSm90<"
+    assert [U.category(n) for n in ("sha512_rows_kernel", "h1_noise_fold", "fa3_matReqG_tap", fa3, "reshape_and_cache_flash_kernel")] \
+        == ["commit", "pouw", "tap", "attention", "copy"]
+
+
+def test_too_few_full_steps_is_said(tmp_path):
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8)
+    assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]
