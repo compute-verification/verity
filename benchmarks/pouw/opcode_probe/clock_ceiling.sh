@@ -5,7 +5,7 @@
 # (power.cu --calib: clock64 cycles over the host's steady_clock, and over %globaltimer), sustains the clock kernels at
 # the settings that clock highest, and puts the node's settings back on exit. From a pushed commit:
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
+#   research run --on vy-nebius-2 --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/clock_ceiling.sh
 #
 # $OUT gets trials.jsonl (each knob's command, rc and output), states.jsonl (clocks.py state after each), calib.jsonl,
