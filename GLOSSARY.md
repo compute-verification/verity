@@ -87,7 +87,7 @@ circuit's, and they meet in verified compute; gates on unregistered hardware are
 
 Credit and all reporting are in circuit size, counted in AND gates (tentative).
 
-- **Size** is a circuit's or a region's AND-gate count. AND gates are what C-Flock pays for, so size is the lingua franca
+- **Size** is a circuit's or a region's AND-gate count. AND gates are what Flock pays for, so size is the lingua franca
   every protocol credits in and every result reports computation in, in place of work, FLOPs, MAC-times and pricing.
   U/s_× (above) replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
@@ -97,7 +97,7 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   no-fold receipt, which takes none. PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee
   beside it is the size credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
-  verified compute (products the declared circuit computes anyway, through inference-block yields) as well as free
+  verified compute (products the registered circuit computes anyway, through inference-block yields) as well as free
   compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
   compute can do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split
   between the two. Onsite q_S is the smaller term, the fresh-input budget being small; remotely the other is: inference
@@ -128,10 +128,11 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | Old name, where it stays | Term |
 |---|---|
 | "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | the archived proof systems A-GKR, B-Ligero |
-| the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not C-Flock) |
+| the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not Flock) |
+| "C-Flock"; the stored candidate label `C-Flock`, backend ids `C-interactive`, `C-fs` | Flock (Succinct's is "upstream Flock") |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
-| "backend", "backend family", "configured backend" for C-Flock; `backends/` (C-Flock's directory before the platform layout), `verity_flock.backend`, `BACKENDS` | the proof system |
+| "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's directory before the platform layout), `verity_flock.backend`, `BACKENDS` | the proof system |
 | "IR", "Verity IR", "IR primitives", "IR evaluator"; `verity.ir` | circuit, Program; `verity.ml.circuits` |
 | "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, `instances_per_second` | input, input set |
 | "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a proof system and a statement |
@@ -139,14 +140,14 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/verity/lean/Facts.lean`'s facts | guarantee |
 | "law", "draw law"; `law` identifiers and record keys (`parse_law`, `same_law`, `law_object`, a registration's `law`), the Lean's `Law` | sampling design |
 | "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
-| "proof unit", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of C-Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block |
+| "proof unit", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block |
 | "wrong unit", "incorrect unit", "faulty unit"; the Lean's `wrong`, the audit record's `wrong_units` | faulty proof block |
 | "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
 | "verifier of record" | the verifier: the one whose verdict counts and that the guarantees are proved about. Other code that checks the same thing is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean verifier replaces it |
 | "δ_link", "the link term"; the Lean's `LinkSound` and `δlink` | ε_bind, the binding error |
-| "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block (C-Flock's statement layout keeps VU in its own sense: Narrower senses) |
-| "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
-| "M1", "M2" (elsewhere in the code these also name unrelated things) | C-Flock ZK |
+| "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block (Flock's statement layout keeps VU in its own sense: Narrower senses) |
+| "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
+| "M1", "M2" (elsewhere in the code these also name unrelated things) | Flock ZK |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
@@ -180,7 +181,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
-| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until they are restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the overhead lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
+| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the overhead lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
@@ -218,7 +219,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "post-landing run", "postland" | after-landing run |
 | "train" for a batch of PRs landed on one check | none: drive lands the reviewed prefix of `next` |
 | "draw" (noun, verb), "drawn proof block", "drawn unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
-| "components", "product" for a composite's parts and their joining; the Lean's and the wire format's `components`, `product` | subprotocols; composition |
+| "components", "product" for a composite's parts and their joining, and the Lean's and wire format's names | subprotocols; composition |
 | "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
@@ -261,19 +262,19 @@ Some words keep a different, narrower sense:
 
 - A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is that protocol's own skipped share of
   what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
-- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout and a `GateSelection` is a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay. `verity.ml.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
+- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout, a `GateSelection` a set of its gates, and its query `Family` an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both serialized names stay. Its gates are word-level, each outputting one `Value<w>` of w bits, as are the Lean model's in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
   runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value. Circuit hiding is
-  recursion (C-Flock's `--hide`), not the universal unit.
+  recursion (Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- C-Flock's statement layout (`verity/ml/flock/verifier/PROTOCOL.md` §16) nests three levels inside one proof:
+- Flock's statement layout (`verity/ml/flock/verifier/PROTOCOL.md` §16) nests three levels inside one proof:
   - a **unit copy** is one copy of the statement's unit circuit in one slot of the unit range (the spec's "unit",
     `units_per_vu` ≥ 1 of them per VU);
   - a **VU** is one instance's share of the witness: the slots that lay out one sampled proof block, with its rows' digests,
     its unit copies and its outputs (a padding VU lays out none);
   - an **R1CS block** is one diagonal block of the statement's block R1CS, 2^{k_log} witness bits holding
-    G = `vus_per_block` VUs, a power of two (the spec's "block"; a statement has 2^{nbl} of them). **C-Flock's block
+    G = `vus_per_block` VUs, a power of two (the spec's "block"; a statement has 2^{nbl} of them). **Flock's block
     size limit** is k_log ≤ 27, at most 2^27 witness bits (`MAX_K_LOG`; the range the soundness bound covers,
     `Stmt.InRange`, with at most 1024 regions and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one
     R1CS block can't be proved as one.
@@ -281,7 +282,7 @@ Some words keep a different, narrower sense:
   So "at least one unit per VU and a power of two of VUs per block" reads "at least one unit copy per VU and a power of
   two of VUs per R1CS block". An R1CS block is never a proof block, and the identifiers (`units_per_vu`,
   `vus_per_block`, `blocks_real`) keep their names.
-- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not C-Flock.
+- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`); it is not a phase or a run.
 - In a kernel, a **warp** is CUDA's 32 threads that issue together, and a **lane** is one thread's index among them.
@@ -311,7 +312,7 @@ Vocabulary that one area uses:
 
 - **Slot**: one sequence of a served batch, one row of a step's activations; a step at batch 4,096 commits 4,096 slots
   (`commit_slots`).
-- **Wire**: an edge from a gate to a gate that reads it; it carries its source gate's value and has none of its own.
+- **Wire**: an edge from a gate to one that reads it, carrying its source gate's value and none of its own.
 - **Port** and **element**: a port is a named array of fixed-width elements on a circuit definition's boundary, one of its
   parameters or results, bound by each call to gates of the caller; under `Q_call`, a Call whose result ports fit in X bits
   is one proof block. An element is one member, such as 16 bits. A leaf serializes whole elements, but a partition counts
@@ -337,7 +338,7 @@ Vocabulary that one area uses:
   hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records; the other statuses are
   hypothesis and unprobed. A pinned value or root is another sense: one fixed before the run, which a check compares to.
 - **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of the steps whose role is served
-  (`Accounting.Gates.Census.servedMacs`, the census's `served_macs`). It is not size: credit and reports count AND gates.
+  (`Accounting.Gates.Census.servedMacs`, the census's `served_macs`). It is not size, which counts AND gates.
 - **Binding unit** (circuit-check's cache, `circuit_check.cache` and `targets.BINDINGS`): one unit of a binding file, a
   root function, a `_model_roots` entry or a `TEMPLATE_PARAMS` entry; a target's cached pass holds the digest of each
   binding unit whose roots reach it.

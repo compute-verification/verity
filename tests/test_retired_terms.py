@@ -77,7 +77,6 @@ ALLOWED: dict[str, str] = {
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
     "report-proof-service-": "a cited note's id",
-    "products the declared circuit computes anyway": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
 }
 
