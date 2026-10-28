@@ -437,7 +437,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                         clock=time.monotonic)
     # the firewall rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
     # FIREWALL-REFUSED otherwise), as a8's fw arm does
-    env = {**Z.firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
+    env = {**Z.zk_server_env(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)

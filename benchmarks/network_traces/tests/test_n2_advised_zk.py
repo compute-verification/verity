@@ -319,7 +319,7 @@ def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_bu
         f"head {end} {w} @2208" for end in n2.ENDS for w in range(n2.WINDOWS)}
 
 
-def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
     argv = ["prove", "--out", "o", "--dry"]
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1

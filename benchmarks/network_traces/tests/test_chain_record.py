@@ -201,7 +201,7 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     assert got["why"].startswith("honest: the control (the prover's own prover-instances.bin) holds 57 of 337")
 
 
-def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path):
+def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_path):
     ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
     steps = _steps(tmp_path, ok)
     draw = {"selection": "sampled", "law": "subset:2", "k": 2, "population": 4}

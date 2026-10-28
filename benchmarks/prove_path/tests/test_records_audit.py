@@ -13,7 +13,7 @@
   (`declared_count`);
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any draw without them;
-* `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
+* `source` and the negatives refuse what the records don't bind, and `fixed_before_sample` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
@@ -537,16 +537,16 @@ def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
     assert e.value.code == 2 and "--run" in capsys.readouterr().err
 
 
-def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):
+def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it(written):
     import a5 as A5
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
     receipt = {"registration": R.digest(rec), "verifier": A5.VERIFIER, "received": 1}
-    assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
-    assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
-    assert RA.fixed_before_draw(receipt, rec, written.bound, "challenger")["codes"] == ["after-the-draw"]
-    assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
+    assert RA.fixed_before_sample(receipt, rec, written.bound)["ok"]
+    assert RA.fixed_before_sample({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
+    assert RA.fixed_before_sample(receipt, rec, written.bound, "challenger")["codes"] == ["after-the-draw"]
+    assert RA.fixed_before_sample(receipt, rec, None)["codes"] == ["compiler", "advice"]
     late = RA.after_draw(receipt, rec, held)
     assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
 
@@ -582,7 +582,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
                     "peer": "vy-nebius-1", "key_record": "key.json"}
 
 
-def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_path, monkeypatch):
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a draw needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
@@ -645,7 +645,7 @@ held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok
 assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
 receipt = {{"registration": R.digest(rec), "verifier": A5.VERIFIER}}
-assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
+assert RA.fixed_before_sample(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm")))
 """
     p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

@@ -147,7 +147,7 @@ theorem pr_disjoint_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (draw : 
     exact pow_le_pow_left₀ (by linarith) (by linarith) _
 
 /-- The draw's hypotheses are satisfiable: the coins that are the `k`-subsets themselves. -/
-theorem drawUniform_val (n k : ℕ) :
+theorem sampleUniform_val (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.val.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
         (univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.val = S).card * n.choose k =

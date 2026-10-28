@@ -116,7 +116,7 @@ def test_a_buckets_order_carries_nothing():
     assert {IT.parse_cell(c).kind for c in commit(one, link, 0).cells[one.R:]} == {DATA, IT.END}
 
 
-def test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison():
+def test_a_payload_in_m_cells_is_refused_and_the_samples_price_is_the_comparison():
     """Every cell is opened, so a payload in any m cells is refused. The K-draw tie measured the changed share: what
     passed K draws at δ was m < N·ln(1/δ)/K cells, each free to carry log2 V bits; at the served shape's busiest window
     (N = 35,386) and K = 20 a window, δ = 2^−40 let about 49,000 cells over a link (Σ_w ε_w·N_w), 844 kbit at

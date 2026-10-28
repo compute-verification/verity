@@ -43,7 +43,7 @@ def pollNs : Nat := 200000
 
 /-- The salt source of `c`'s salt, if on: one salt of its bits for every PoUW window of the run, from the device's own
 coins. -/
-def drawSalts (w : Core.World Out) (c : Config) : IO Config := do
+def freshSalts (w : Core.World Out) (c : Config) : IO Config := do
   let some s := c.salt | return c
   let k := max s.pouwWindow 1
   let values ← (List.range ((c.windows + k - 1) / k)).toArray.mapM fun _ => w.coins (s.bits / 8)
@@ -51,7 +51,7 @@ def drawSalts (w : Core.World Out) (c : Config) : IO Config := do
 
 /-- **The driver**, for a proxy that starts at window `start` with its first egress frame at `position`. -/
 def run (w : Core.World Out) (c : Config) (start position : Nat := 0) : IO Unit := do
-  let c ← drawSalts w c
+  let c ← freshSalts w c
   match c.check start with
   | .error e => throw (IO.userError e)
   | .ok () => pure ()

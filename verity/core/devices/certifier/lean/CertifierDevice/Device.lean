@@ -131,7 +131,7 @@ structure SaltSource where
   bits : Nat := 512
   pouwWindow : Nat := 1
 
-/-- `_draw_salt`'s frame: at a PoUW window's first certifier window `w`, the certifier's own frame of `B` bytes, the
+/-- `_fresh_salt`'s frame: at a PoUW window's first certifier window `w`, the certifier's own frame of `B` bytes, the
 placeholder's. -/
 def SaltSource.first (s : SaltSource) (B w : Nat) : Option ByteArray :=
   if w % s.pouwWindow = 0 then saltFrame (w / s.pouwWindow) placeholder B else none
