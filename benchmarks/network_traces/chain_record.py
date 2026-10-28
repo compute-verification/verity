@@ -676,7 +676,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     count, the pooled form `HorizonLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in the
     generator reading of the scan's statement: log2 #Ss = 0, the fail cell's
     position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
-    registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
+    registered, an entry's 33 + KO·IDB bits a request if ``prog`` were an input only at its anchored entries,
+    `ingress_scan.entry_layout`), no faulty term with
     every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
@@ -693,7 +694,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                          f"drawn (scan_zk --draw {units})")
     NS, NP, NV = IS.state_bits(cls), IS.prog_bits(cls), IS.view_bits(cls)
     cap = math.log2(params.egress_cells + 1)
-    anchored = 32 + cls.KO * cls.IDB
+    anchored = sum(w for _, w in IS.entry_layout(cls))
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     free = {"registered": {"link_window": T * NP, "request": 0}, "anchors": {"link_window": 0, "request": anchored}}
