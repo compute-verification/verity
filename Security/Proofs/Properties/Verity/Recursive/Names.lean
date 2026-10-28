@@ -42,7 +42,7 @@ open FlockDeploy (jsonOf)
 open Lean (Json)
 
 /-- The coins the compiled part's session is set up on: the `--zk` keyed coin tree of one table. -/
-def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
+def partCoins (tags0 : Tags) : Flock.Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
 
 /-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
 def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=

@@ -1328,9 +1328,10 @@ theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hpart] at hpart'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
   obtain ⟨rfl, rfl, rfl⟩ := hpart'
-  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hnet
-  have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
-      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
+  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid (L.built_flat P.tmpl) hnet
+  have hcp : (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nIn +
+      (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nComp =
+      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one (L.built_flat P.tmpl)
   have hsm := FlockVBridge.OfVStar.part_small hpart
   have hR : RecResiduals.RES_OUT_WORDS = 128 := rfl
   obtain ⟨hqv', hsize⟩ := v_idx hu hrows hqv
