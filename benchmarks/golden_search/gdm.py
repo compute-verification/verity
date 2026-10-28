@@ -142,6 +142,8 @@ GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["coarse"].items()}
 #: the coarse grid at the engineering levers every coarse optimum takes, for the sensitivity sweeps
 GRIDS["oat"] = {**GRIDS["coarse"], "seal": ("roots",), "host": ("fixed",), "kernels": ("bar",), "corun": (True,),
                 "law": ("achievability",), "vtile": ((1, 1), (1, 8))}
+#: the oat grid less the knobs the coarse optimum never moves on (vtile 1 x 1; bits 16 or 8), for a sweep on a few cores
+GRIDS["oat-lite"] = {**GRIDS["oat"], "bits": (16, 8), "vtile": ((1, 1),)}
 GRIDS["fine"] = {**GRIDS["coarse"],
                  "bits": (16, 12, 10, 8),
                  "row": (1024, 2048, 4096, 8192, 16384),
