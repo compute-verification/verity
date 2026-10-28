@@ -1,5 +1,4 @@
 import PouwCheck
-import Flock.WindowRecord
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
