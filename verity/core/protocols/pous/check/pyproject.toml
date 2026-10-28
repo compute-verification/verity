@@ -37,4 +37,7 @@ inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/error
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
           "verity/core/protocols/pous/p2/PROTOCOL.md", "benchmarks/pous/band_gpu/__init__.py",
           "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py",
-          "verity/core/devices/memory_challenger/lean", "verity/core/primitives/lms/lean"]
+          "verity/core/devices/memory_challenger/lean", "verity/core/primitives/lms/lean",
+          # the deployment layer and its wire, which the period hook's memory challenger is started through
+          # (`deploy.stream.Side`) and runs on
+          "verity/core/deploy", "verity/core/wire"]

@@ -7,8 +7,13 @@ a protocol with no rounds: the developer registers R = (θ, D, 𝓘), and the ve
 and the registered information alone. In Lean it is `Nci.Complies`, in an older form (below), and its check is
 `NciCheck`.
 
-The inference-only policy is not yet a subprotocol of the composites: neither onsite nor remote
-(`verity/core/protocols/composition`) runs its check today.
+The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/core/protocols/composition`):
+`NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
+interface. Its params are the declared circuit, the budgets and the registration log before the run; its commitment is
+the run's own registration record, which must name the declared circuit and which each composite requires to be the
+record sampled proofs commits to (`Core.Composition.same`); its evidence is the declared division with θ and θ's
+provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
+proof yet.
 
 ## Why it separates inference from training
 
@@ -44,8 +49,12 @@ nothing else but Lean core.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
+- `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`
+  (`NciCheck.Protocol`), the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`.
+  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`;
+  `../tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
+  decoders.
 
 The check stays experimental until its agreement with `Nci.Complies` is proved. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.

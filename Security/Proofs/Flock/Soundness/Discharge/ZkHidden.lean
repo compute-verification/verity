@@ -10,6 +10,9 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
+import Proofs.Flock.Soundness.Discharge.ZkHidden.RunsJP
+import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
