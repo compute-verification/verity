@@ -8,7 +8,6 @@ import argparse
 import asyncio
 import itertools
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -249,7 +248,8 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
                                                                                                        window_steps):
     """served_session's endpoint step on a serve dir whose requests.jsonl and advice_trace.jsonl stay there: its copy's
     requests.jsonl, rebuilt from the users map and the certified I/O, is the endpoint's own record, and the advice on it
-    is bound to the certified requests and rebuilt from them, across a carry too; the art is the report, windows.jsonl
+    (`verity-vllm advice` at a fixed compiler digest in place of the tree's code identity) is bound to the certified
+    requests and rebuilt from them, across a carry too; the art is the report, windows.jsonl
     and serve.json, with no prompt's ids or request-valued field, and the chain's report reads it as the served
     node's. The stand-in's windows.jsonl and serve.json take serve-openai's form: its row count as ``served_rows`` and
     the session's flags."""
@@ -257,7 +257,7 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
     import served_session as SS
     from verity_vllm.pipeline import advice as ADV
 
-    ep, out = tmp_path / "ep", tmp_path / "out"
+    ep, out = tmp_path / "ep", tmp_path / "run" / "out"
     ep.mkdir()
     _served_with_records(ep, window_steps)
     prompts = S.prompts(7)
@@ -277,7 +277,8 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
         "deployment": {"run_id": "w-run", "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},
         "io": {"accepted": True, "requests": 7, "tokens": sum(len(r["output"]) for r in io), "violations": [],
                "records": io}}))
-    monkeypatch.setenv("PYTHONPATH", os.environ.get("PYTHONPATH", ""))
+    monkeypatch.setenv("PYTHONPATH", "")  # endpoint sets it; this restores it after the test
+    monkeypatch.setattr(CR, "ADVICE_CLI", [*CR.ADVICE_CLI, "--compiler-digest", "ab" * 64])
     assert SS.main(["endpoint", "--from", str(ep), "--io", str(tmp_path / SS.CERTIFIED), "--out", str(out),
                     "--eos-ids", str(S.VOCAB)]) == 0
     kept = tmp_path / "ep.endpoint" / "records"

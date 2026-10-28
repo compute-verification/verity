@@ -217,7 +217,7 @@ def _stub_step(monkeypatch, report: dict | None = None) -> dict:
                           "chain": {"bits": {"bound": True, "rebuilt": True,
                                              "commit_windows": [{"bound": True, "rebuilt": True}]}}}
     monkeypatch.setattr(CR, "served_endpoint", step)
-    monkeypatch.setenv("PYTHONPATH", os.environ.get("PYTHONPATH", ""))
+    monkeypatch.setenv("PYTHONPATH", "")  # endpoint sets it; this restores it after the test
     return seen
 
 
@@ -242,9 +242,9 @@ def test_endpoint_runs_the_step_on_the_served_nodes_records_and_publishes_only_i
     import chain_record as CR
     seen = _stub_step(monkeypatch)
     ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
-    src, out, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "out", tmp_path / "run"
+    src, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "run"
+    out = run / "out"
     listing = sorted(p.name for p in src.iterdir())
-    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
     sent = _certified(run / "inputs", ps)
     assert SS.main(["endpoint", "--from", str(src), "--io", str(sent), "--out", str(out)]) == 0
     keep = tmp_path / "serve.endpoint"
@@ -273,7 +273,8 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
     it would publish, or in the step's report, and nothing is written."""
     seen = _stub_step(monkeypatch)
     ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
-    src, out = _serve_dir(tmp_path / "serve", ps), tmp_path / "out"
+    src, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "run"
+    out = run / "out"
     io = _certified(tmp_path / "kept", ps)
     argv = ["endpoint", "--from", str(src), "--io", str(io), "--out", str(out)]
     windows = (src / "windows.jsonl").read_text()
@@ -309,11 +310,10 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
     (src / "serve.json").write_text(json.dumps(serve))
     assert SS.main([*argv[:-1], str(SS.TREE / "endpoint-out")]) == 2 and "is in the tree" in capsys.readouterr().err
     assert not (SS.TREE / "endpoint-out").exists()
-    run = tmp_path / "run"
-    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
-    sent = _certified(run / "inputs", ps)
-    assert SS.main([*argv[:3], "--io", str(sent), "--out", str(out), "--keep", str(out / "keep")]) == 2
-    assert "is inside --out" in capsys.readouterr().err and not sent.exists() and not out.exists()
+    for keep, what in ((out / "keep", "is inside --out,"), (run / "keep", "is inside --out's directory, the run dir")):
+        sent = _certified(run / "inputs", ps)
+        assert SS.main([*argv[:3], "--io", str(sent), "--out", str(out), "--keep", str(keep)]) == 2
+        assert what in capsys.readouterr().err and not sent.exists() and not out.exists() and not keep.exists()
     for f in ("advice_trace.jsonl", "requests.jsonl"):
         (src / f).rename(tmp_path / f)
         assert SS.main(argv) == 2 and f"no {f}" in capsys.readouterr().err

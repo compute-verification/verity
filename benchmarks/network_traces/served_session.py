@@ -53,7 +53,8 @@ request's max_tokens, at most KO.
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
   serve.json and `USERS` to ``--keep`` (0700, by default SERVE_DIR.endpoint beside the serve dir) with requests.jsonl
   rebuilt there from `USERS` and the certified I/O (``--io``: ``io``'s file, or ``-`` for stdin; a file under the run
-  dir is moved to ``--keep`` first, since custody publishes the run dir), runs `chain_record.served_endpoint` on that
+  dir, ``--out``'s directory as research run's ``$OUT`` is, is moved to ``--keep`` first, since custody publishes the
+  run dir), runs `chain_record.served_endpoint` on that
   copy (`verity-vllm advice`, then the advice bound to the certified I/O and rebuilt from it), and writes to ``--out``
   its report.json and `RECORDS`. It writes nothing unless serve.json shows the endpoint served with `ENDPOINT`'s flags
   and no published file holds a request's prompt ids, a trace's arrive, step or finish record, or a request-valued
@@ -560,13 +561,13 @@ def valued(data: bytes, marks: list[bytes]) -> str | None:
 def endpoint(a: argparse.Namespace) -> int:
     src, out = a.src.resolve(), a.out.resolve()
     keep = (a.keep or src.with_name(src.name + ".endpoint")).resolve()
-    run = Path(os.environ["RESEARCH_RUN_DIR"]).resolve() if os.environ.get("RESEARCH_RUN_DIR") else None
+    run = out.parent
     given = None if a.io == "-" else Path(a.io).resolve()
 
     def within(p: Path, d: Path | None) -> bool:
         return d is not None and (p == d or d in p.parents)
 
-    for d, what in ((out, "--out"), (run, "the run dir"), (TREE, "the tree")):
+    for d, what in ((out, "--out"), (run, "--out's directory, the run dir"), (TREE, "the tree")):
         if within(keep, d):
             if given is not None and within(given, run):
                 given.unlink()
@@ -590,9 +591,8 @@ def endpoint(a: argparse.Namespace) -> int:
         raise Refused(f"--io: the warden run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
     eos = [int(t) for t in a.eos_ids.split(",")]
     ep = rebuild(src, keep / "records", io["records"], eos)
-    paths = [str(TREE), str(TREE / "integrations" / "vllm")]
-    sys.path[:0] = [*paths, str(HERE)]
-    os.environ["PYTHONPATH"] = os.pathsep.join([*paths, *filter(None, [os.environ.get("PYTHONPATH")])])
+    sys.path[:0] = [str(TREE), str(TREE / "integrations" / "vllm"), str(HERE)]
+    os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, sys.path))
     import chain_record as CR
     rep = CR.served_endpoint(dep, io, ep, eos) | {"at": CR.SERVED_NODE}
     step = CR.warden_endpoint_step(rep)
@@ -669,7 +669,9 @@ def parser() -> argparse.ArgumentParser:
     q = sub.add_parser("endpoint")
     q.add_argument("--from", dest="src", type=Path, required=True, help="the endpoint's serve dir, serve-openai's --out")
     q.add_argument("--io", required=True, help=f"io's {CERTIFIED}, or - for stdin")
-    q.add_argument("--out", type=Path, required=True)
+    q.add_argument("--out", type=Path, required=True,
+                   help="the run's $OUT: its directory, the run dir, is published, so --keep and an --io in it are refused "
+                        "and moved out")
     q.add_argument("--eos-ids", default="128001")
     q.add_argument("--port", type=int, default=PORT)
     q.add_argument("--keep", type=Path, help="private, 0700: by default SERVE_DIR.endpoint beside the serve dir")
