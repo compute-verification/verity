@@ -18,9 +18,9 @@ N, L = 32, 16
 NODE, SOURCE = b"opening-node", b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
 #: C-Flock's ``b || c`` (`verity_flock.circuit._commit_strings`) of the plan row 64..127 of 1,024 bits under `SALT`
-PLAN_BC = ("12f7869e085f13e475ea68ff04f83289655b686aa1c56da778cc299af82f355882e4e6870600f12fa17ba27a530593488ad2df0e5745cf04c3"
-           "f28e1caf352a9f425fcf1a31e3f75bce33b749894811a7b0ded5eed561fc3e18dee59b0f24f0806e3369646067a9612ea4ff35315e63e53bf4"
-           "fbe9f2bce4d0b79f9cffa203ecd4")
+PLAN_BC = ("8ad2daad98d5ea3ef06644a3709c70c0d66d58f85a1d5a5fef2706eca945900d736d79d29add45efc41d6038196de267c8937de6c71f9665e304"
+           "7c27f390fb8735c710124a95b92f8278b204c6f51fdc2135e304891f771e1aa45bc7fa886356b6d93bb21724406c84a4ad09f097df17028ddba2"
+           "8aae7f77c8b7bd480d88b3eb")
 SALT = hashlib.shake_256(b"verity/poub/opening/test plan salt").digest(receipts.SALT_BYTES)
 
 
