@@ -23,7 +23,8 @@ Per shape (N x K at M rows; default 8B's qkv, o and gate-up at M = 16,384):
 Arms: `lt`, `int_mm`, `wgmma`, `cutlass_128x256`, `cutlass_128x256_c2`, `cutlass_128x128` (plain); `forms_a`, `forms_b`,
 `batched`, `assemble`, `fused` (the orbit's parts, forms prepared); `unfused` (forms_a + batched + assemble), `orbit`
 (forms_a + fused, uncorrected); `corr` (the honest corrections, full s32 updates of O), `corr_b` (B's carries only),
-`corr_nostore` and `corr_b_nostore` (the same, O untouched: their compute), `corr4` (B's carries' corrections mod 4,
+`corr_nostore` and `corr_b_nostore` (the same, O untouched: their compute; `corr_b_nostore_r4` on corr_kernel's 4 rows
+a thread rather than corr16's 16), `corr4` (B's carries' corrections mod 4,
 bit-sliced 32 rows a word: what O's bit 9 alone needs), `rmw_o` (one s32 read-modify-write of O); `exact` (forms_a +
 fused + corr) and `orbit_call` (forms_b + exact: ext_gemm.h's call, whose load runs every served call; B's lists and
 exact forms, built at load from forms_b's carry plane, aren't in it).
