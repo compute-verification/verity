@@ -4,11 +4,11 @@
 # and the core interface (`core_protocol`, for `NciCheck.Protocol`): no Mathlib and nothing of Security. The difftest
 # holds it to the Python reference in `scripts/nci_reference.py`.
 # `nci-check` runs `NciCheck.Desc`, the check at the size of the description, then θ's provenance (`NciCheck.Baseline`),
-# and `nci-check --unrolled` the reference. `nci` is the same check as the core protocol `verity/nci/v1`
-# (`NciCheck.Protocol`), onsite's registration check.
+# and `nci-check --unrolled` the reference. `inference-only` is the same check as the core protocol
+# `verity/inference-only/v0` (`NciCheck.Protocol`), the inference-only policy's subprotocol of onsite and remote.
 name = "nci_check"
 defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
-  "nci-check", "nci"]
+  "nci-check", "inference-only"]
 
 [leanOptions]
 autoImplicit = false
@@ -50,5 +50,5 @@ name = "nci-check"
 root = "NciCheck.CheckMain"
 
 [[lean_exe]]
-name = "nci"
+name = "inference-only"
 root = "NciCheck.ProtocolMain"

@@ -14,7 +14,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
-* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
+* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof system's draw of record, with
   ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
   the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
   carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
@@ -462,13 +462,13 @@ def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
 
 class WindowLocate:
     """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Window.locate(step, slot, family, index, port)``
-    (circuits' interface on CIR-115, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
+    (circuits' interface, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
     order: ``Segment(step, slot, row, offset, nbytes)`` (bytes of a committed row, ``row`` its index in the slot: a `Read`),
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Window.locate` names CMP-160's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Window.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.Layout, weights: Mapping[str, Any] | None = None,
@@ -1106,7 +1106,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
     return bad
 
 
-#: a step's commit-slots roots registered before a coin draws its proof blocks (PRF-172's M3): the draw's population is
+#: a step's commit-slots roots registered before a coin draws its proof blocks (M3): the draw's population is
 #: every (slot, layout unit) of the step, and each drawn block is proved from a one-member window of its own. ``steps``
 #: (optional, `STEPS_KEY`) names the root of every step of the block a drawn block can read (attention's K and V rows at
 #: steps 0 .. the drawn step), ``[{step, root}]``; a registration without it holds every read to the drawn step

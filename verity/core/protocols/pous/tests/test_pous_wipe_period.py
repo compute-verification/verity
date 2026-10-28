@@ -6,7 +6,8 @@ vacuous when the egress is uncounted, a prover keeping one label past it and a l
 left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
 is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
-(the links leaving the node, the undeclared tiers, an uncounted egress), the reads and the session's window."""
+(the links leaving the node, the undeclared tiers, an uncounted egress, what a joint store's disks leave outside the
+boundary), the reads and the session's window."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from pathlib import Path
 import pytest
 
 import pous_test_signer as ts
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -176,16 +178,16 @@ def test_the_split_wipe(how: str) -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = WP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
-    assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for the wipe"):
-        WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
-                    "vy-nebius-cpu-4", tmp_path)
-    wired = WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"wipe": {
-        "command": ["vy-verifier-gate", "wipe"], "address": "127.0.0.1:7962"}}}, "vy-nebius-cpu-4", tmp_path,
+    local = WP.side_of({}, "cpu-node", tmp_path)
+    assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for the wipe"):
+        WP.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
+                   "cpu-node", tmp_path)
+    wired = WP.side_of({"challenger_host": "auditor-host", "challenger": {"wipe": {
+        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", tmp_path,
         ("--streamer", "build"))
-    assert wired == WP.Party("vy-auditor-1", ("vy-verifier-gate", "wipe"), ("127.0.0.1", 7962))
-    native = WP.Party.of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
+    assert wired == Side("auditor-host", ("gate", "wipe"), ("127.0.0.1", 7962))
+    native = WP.side_of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
     assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ") and WP.placement("n0", "n0")["kind"] == "prover-node"
     assert WP.placement("n0", "a")["kind"] == "own-host"
@@ -195,7 +197,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         WP.placement("n0", "a", simulated=True)
 
 
-CONTROL = {"name": "control", "to": "outside", "via": "eth0 10.0.0.13: ssh"}
+CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
 def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
@@ -204,8 +206,8 @@ def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": wipe}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     return period
 
 
@@ -252,9 +254,8 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
     """`wipe.reads` starts a challenger on this node with `--reads`; one on its own host chooses its own (here
     `wipe_side.py`'s default), and the leg refuses a session at another count."""
     period = _side(tmp_path, monkeypatch, {"reads": 5231})
-    extras, of = [], WP.Party.of
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): extras.append(extra) or of(
-        doc, node, d, extra)))
+    extras, of = [], WP.side_of
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
     with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
         W.leg(period, "n0", tmp_path / "out")
     assert extras == [("--reads", "5231")]
@@ -287,22 +288,87 @@ def test_what_the_bound_does_not_cover() -> None:
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
 
 
-def test_the_disks_are_the_block_device_filesystems_once(tmp_path) -> None:
-    st = os.statvfs(tmp_path)
-    mounts = tmp_path / "mounts"
-    mounts.write_text("\n".join([f"/dev/x {tmp_path} ext4 rw 0 0", f"/dev/y {tmp_path} ext4 rw 0 0",
-                                 f"/dev/loop3 {tmp_path} squashfs ro 0 0", f"tmpfs {tmp_path} tmpfs rw 0 0",
-                                 "/dev/z /nonexistent/wipe-period ext4 rw 0 0"]) + "\n")
-    assert W.disks(mounts) == st.f_blocks * st.f_frsize
-    assert W.disks(tmp_path / "missing") == 0
+def test_what_a_joint_store_and_its_disks_leave_out() -> None:
+    """A joint store declares each part at its own bytes: DRAM outside a host-dram part, nothing of a device declared
+    whole; a virtual disk's backing store, a drive's undeclared spare area and buffered I/O are named."""
+    disk = {"tier": "disk", "total_bytes": 10 ** 12, "spare_bytes": 0, "direct": True,
+            "disks": {"vda": {"bytes": 10 ** 12, "driver": "virtio_blk"}, "nvme0n1": {"bytes": 10 ** 12, "driver": "nvme"}}}
+    joint = {"tier": "disk+host-dram", "parts": [disk, {"tier": "host-dram", "bytes": 100}]}
+    dram = W.undeclared("disk+host-dram", 10 ** 12 + 100, joint)[0]
+    assert dram == {"tier": "host-dram", "bytes": os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") - 100,
+                    "what": "the host's DRAM outside the declared tier"}
+    gpu = {"tier": "disk+gpu-hbm", "parts": [disk, {"tier": "gpu-hbm", "total_bytes": 1000, "bytes": 900}]}
+    assert [u["tier"] for u in W.undeclared("disk+gpu-hbm", 0, gpu) if u["tier"] == "gpu-hbm"] == []
+    gaps = W.disk_gaps(joint)
+    assert gaps == [
+        "disk nvme0n1: its spare area and cache are undeclared (spare_bytes 0), so M doesn't count what they keep",
+        "disk vda: a virtual disk (virtio_blk), its backing store the hypervisor's: a snapshot or replica the cloud keeps "
+        "of it is outside the boundary, which Covered assumes away"]
+    assert W.disk_gaps(disk | {"spare_bytes": 7, "direct": False}) == [gaps[1], (
+        "disk: buffered I/O, not O_DIRECT: the page cache can answer a read the disk doesn't keep")]
+    where = WP.placement("n0", "auditor", store=joint, links=[])
+    assert W.uncertified(where, None)[-2:] == gaps and W.disk_gaps(None) == []
+
+
+def test_an_unmounted_block_device_no_target_is_on_is_undeclared_whole(tmp_path, monkeypatch) -> None:
+    """Every `/sys/block` device, mounted or not (vy-dc-h200-2's 1 MiB `vdb`, the cloud's seed disk, is on no mount),
+    but loop and RAM devices, an empty one and a device-mapper device over a disk counted itself; the declared disks
+    are left out."""
+    block = tmp_path / "block"
+    for name, sectors in (("vda", 1 << 20), ("vdb", 2048), ("nvme0n1", 1 << 21), ("dm-0", 1 << 21), ("loop0", 8),
+                          ("ram0", 8), ("zram0", 8), ("sr0", 0)):
+        (block / name / "slaves").mkdir(parents=True)
+        (block / name / "size").write_text(f"{sectors}\n")
+    (block / "dm-0" / "slaves" / "nvme0n1").touch()
+    assert W.disks(block) == {"nvme0n1": 1 << 30, "vda": 1 << 29, "vdb": 1 << 20}
+    with pytest.raises(FileNotFoundError):
+        W.disks(tmp_path / "missing")
+    real = W.disks
+    monkeypatch.setattr(W, "disks", lambda skip=(): real(block, skip))
+    disk = {"tier": "disk", "total_bytes": 1 << 29, "bytes": 1 << 28, "spare_bytes": 0, "direct": True,
+            "disks": {"vda": {"bytes": 1 << 29, "driver": "virtio_blk"}}}
+    joint = {"tier": "disk+host-dram", "parts": [disk, {"tier": "host-dram", "bytes": 100}]}
+    got = [u for u in W.undeclared("disk+host-dram", 0, joint) if u["tier"] == "disk"]
+    assert got == [{"tier": "disk", "bytes": 1 << 30, "what": "the host's block device nvme0n1, outside the declared disks"},
+                   {"tier": "disk", "bytes": 1 << 20, "what": "the host's block device vdb, outside the declared disks"}]
+    where = WP.placement("n0", "auditor", store=joint, links=[], undeclared=got)
+    assert ("tier disk: the host's block device vdb, outside the declared disks (1048576 bytes) is undeclared: the fill "
+            "doesn't cover it and M doesn't count it") in W.uncertified(where, None)
+
+
+def test_the_dram_a_fill_can_take_is_memavailable(tmp_path) -> None:
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:  100 kB\nMemFree:  10 kB\nMemAvailable:  75 kB\n")
+    assert W.dram_available(meminfo) == 75 * 1024 and W.dram_available(tmp_path / "missing") > 0
 
 
 def test_the_config_and_the_device_fit() -> None:
     assert W.config({}) == W.CONFIG and W.config({"wipe": {"store": "cuda"}})["store"] == "cuda"
     with pytest.raises(ValueError, match="unknown keys"):
         W.config({"wipe": {"segment": 4}})
-    with pytest.raises(ValueError, match="store is python, host or cuda"):
+    with pytest.raises(ValueError, match="store is python, host, cuda or disk"):
         W.config({"wipe": {"store": "tpu"}})
+    disk = W.config({"wipe": {"store": "cuda", "disk": {"paths": ["/scratch"], "spare_bytes": 7}}})["disk"]
+    assert disk == W.DISK | {"paths": ["/scratch"], "spare_bytes": 7}
+    for bad in ({"store": "disk"}, {"disk": {"paths": ["/scratch"]}},
+                {"store": "host", "tier": "x", "disk": {"paths": ["/scratch"]}}):
+        with pytest.raises(ValueError, match="store disk takes wipe.disk"):
+            W.config({"wipe": bad})
+    for bad in ({"paths": []}, {"paths": "/scratch"}, {"paths": ["/s"], "bytes": 0}, {"paths": ["/s"], "direct": 1},
+                {"paths": ["/s"], "spare_bytes": -1}):
+        with pytest.raises(ValueError, match="wipe.disk: paths a list"):
+            W.config({"wipe": {"store": "disk", "disk": bad}})
+    with pytest.raises(ValueError, match="wipe.disk takes"):
+        W.config({"wipe": {"store": "disk", "disk": {"paths": ["/s"], "size": 1}}})
+    assert W.config({"wipe": {"store": "cuda", "dram": {"bytes": 1 << 30}}})["dram"] == W.DRAM | {"bytes": 1 << 30}
+    for bad in ({"store": "host", "dram": {}}, {"dram": {}}, {"store": "cuda", "tier": "x", "dram": {}}):
+        with pytest.raises(ValueError, match="wipe.dram joins a cuda or disk store"):
+            W.config({"wipe": bad})
+    for bad in ({"bytes": 0}, {"bytes": "1"}, {"reserve_bytes": -1}):
+        with pytest.raises(ValueError, match="wipe.dram: bytes null"):
+            W.config({"wipe": {"store": "cuda", "dram": bad}})
+    with pytest.raises(ValueError, match="wipe.dram takes"):
+        W.config({"wipe": {"store": "cuda", "dram": {"size": 1}}})
     for bad in ({"foreign_bytes": -1}, {"foreign_bytes": "f"}, {"foreign_bytes": 1.5}, {"placement": "far"},
                 {"egress_bits": -1}, {"egress_bits": "0"}):
         with pytest.raises(ValueError, match="foreign_bytes is a byte count"):
@@ -327,6 +393,9 @@ def test_the_config_and_the_device_fit() -> None:
     assert W.segments_of(c | {"segments": 9}, Free(0)) == 9 and W.segments_of(W.CONFIG, WS.HostMemory()) == W.SEGMENTS
     with pytest.raises(RuntimeError, match="less than one segment"):
         W.segments_of(c, Free(W.SEGMENT_BYTES))
+    h200_after_context = Free(149_557_477_376)
+    assert W.segments_of(W.config({"wipe": {"store": "cuda"}}), h200_after_context) * W.SEGMENT_BYTES == 148_478_361_600
+    assert W.segments_of(W.config({"wipe": {"store": "cuda", "reserve_bytes": 64 << 20}}), h200_after_context) == 4455
 
 
 @pytest.mark.parametrize("k", [W.READS, 5231])

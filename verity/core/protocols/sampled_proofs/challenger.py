@@ -1,4 +1,4 @@
-"""The proof service's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
 `SampledProofs.Challenger`, `verity/core/service/sampled_proofs`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
