@@ -22,10 +22,14 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
                 multiple of 16 and the build has it, CUTLASS's GEMM as vLLM calls it and on the transposed product
                 (`cutlass_swapped`); and triton_scaled_mm's kernel at each tile a traced engine freezes (FROZEN_TILES)
                 against its per-call tile
-plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
-(stock's differences are findings, not failures).
+plus the PTX of both kernels (`exactlin.ptx_check`).  With `--zy` also
+    zy          `int8_fused.product_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, H1's fused z/y check) at its served
+                config over T = M rounded up to 32 slots: y equal, the records byte-identical to `int8_exact.scaled_mm_zy`'s,
+                and its PTX
+`--shapes prefill` runs M across the prefill rows' edges (4,096 to 32,768; 4,097, 8,193 and 16,385 masked).  `gate()`
+returns the document; `ok` is the fused path's verdict (stock's differences are findings, not failures).
 
-    python kgate.py --out OUT [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump]
+    python kgate.py --out OUT [--shapes all|decode|prefill] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump] [--zy]
 """
 from __future__ import annotations
 
@@ -51,7 +55,8 @@ LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)
 DECODE_MS = (1, 32, 256)
 # the gate's Ms: every exactlin.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
-GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256)}
+GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256),
+           "prefill": (4096, 4097, 8192, 8193, 16384, 16385, 32768)}
 
 
 def shapes_of(models: tuple[str, ...], ms: tuple[int, ...]) -> list[tuple[int, int, int, list[str]]]:
@@ -239,10 +244,27 @@ def dump_replay(path: Path, x, xq, s, w, s_w, y) -> None:
              y=y[:, :DUMP_N].contiguous().view(torch.int16).cpu().numpy().view(np.uint16))
 
 
+def zy_doc(xq, s, w, s_w, y_ref) -> dict:
+    """The served zy op body (`int8_fused.product_zy`, at its own `_plan`) against `int8_exact.scaled_mm_zy`."""
+    from verity_vllm.engine import int8_fused as F
+    e = E()
+    m, n, k = xq.shape[0], w.shape[0], w.shape[1]
+    rows = -(-m // e.UNIT[0]) * e.UNIT[0]
+    y, zy = F.product_zy(xq, s, w, s_w, rows)
+    torch.cuda.synchronize()
+    zy_ref = e.scaled_mm_zy(xq, s, w, s_w.reshape(-1), rows)[1]
+    cfg = F.pick(m, n, k)
+    doc = {"rows": rows, "cfg": str(cfg), "y_diff": diff(y, y_ref), "records_diff": diff(zy, zy_ref)}
+    yy, zz = torch.empty_like(y), torch.empty_like(zy)
+    doc["ptx"] = F.ptx_check(F.scaled_mm_zy(xq, s, w, s_w.reshape(-1), yy, zz, rows, cfg, work()))
+    doc["ok"] = doc["y_diff"] == 0 and doc["records_diff"] == 0 and doc["ptx"]["ok"]
+    return doc
+
+
 def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None,
-        dump: Path | None = None) -> dict:
+        dump: Path | None = None, zy: bool = False) -> dict:
     """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
-    graph replay's outputs (`dump_replay`)."""
+    graph replay's outputs (`dump_replay`); `zy` adds the served zy op body's check (`zy_doc`)."""
     e = E()
     cfg = cfg or X.pick(m, n, k)
     wk = work()
@@ -304,6 +326,9 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
                  and doc["workspace_zero_after"] == 0
                  and all(v == 0 for v in doc["graph"].values()) and all(v > 0 for v in doc["control"].values())
                  and doc["alloc_eager_bytes"] == 0 and doc["alloc_capture_bytes"] == 0 and all(p["ok"] for p in doc["ptx"]))
+    if zy:
+        doc["zy"] = zy_doc(xq_ref, s_ref, w, s_w, y_ref)
+        doc["ok"] = doc["ok"] and doc["zy"]["ok"]
     if with_stock:
         doc["stock"] = stock_doc(x, w, s_w, xq_ref, s_ref, y_ref)
     del x, w, s_w, xq_ref, s_ref, y_ref, xq, s, y, y2
@@ -312,12 +337,12 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
 
 
 def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019,
-         models: tuple[str, ...] = ("llama-3.1-8b",), dump: Path | None = None) -> dict:
+         models: tuple[str, ...] = ("llama-3.1-8b",), dump: Path | None = None, zy: bool = False) -> dict:
     """`dump` gets each M <= 32 shape's outputs (`one`)."""
     ms = GATE_MS[shapes]
     rows = []
     for n, k, m, names in shapes_of(models, ms):
-        d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None)
+        d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None, zy=zy)
         rows.append(d)
         print(json.dumps({k: v for k, v in d.items() if k not in ("ptx", "special")}), flush=True)
     return {"ok": all(r["ok"] for r in rows), "shapes": len(rows), "models": list(models), "poison": f"{POISON:#04x}",
@@ -331,10 +356,12 @@ def main() -> int:
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(MODELS)}")
     ap.add_argument("--no-stock", action="store_true")
     ap.add_argument("--dump", action="store_true", help="OUT/replay/*.npz, the M <= 32 outputs replay.py checks")
+    ap.add_argument("--zy", action="store_true", help="also check the served zy op body (int8_fused.product_zy)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")), dump=out / "replay" if a.dump else None)
+    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")), dump=out / "replay" if a.dump else None,
+               zy=a.zy)
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"gate_ok": doc["ok"], "shapes": doc["shapes"]}), flush=True)
     return 0 if doc["ok"] else 4
