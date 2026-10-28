@@ -82,8 +82,8 @@ the rate audit's code computes. -/
 def RateAudit : Prop :=
   ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Prover N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **Completeness of `RateAudit`: an honest device that reads every word once is accepted on every coin.** For every
@@ -123,9 +123,9 @@ Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model
 def RateAuditWindows : Prop :=
   ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Devices n N b h ρ S L q s),
     (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
-        (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
-          (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F) ∧
-        ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc < (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
+        (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
+          (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F) ∧
+        ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
       ≤ (n : ℝ≥0∞) * ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam)
 
 /-- **The rate audit as a joint run's bandwidth guarantee, with the rebuilds charged as compute.** For any run on any
@@ -191,8 +191,8 @@ def RateAuditInteractiveRO : Prop :=
   ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **The rate audit with interactive side sources, in the random-oracle model.** For every `InteractiveProver` of
@@ -223,8 +223,8 @@ Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model o
 def RateAuditInteractive : Prop :=
   ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveProver N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
