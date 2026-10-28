@@ -34,15 +34,16 @@ if [ "${1:-}" != leased ]; then
   exit "$rc"
 fi
 
-variant_env() {
+# a variant -> "KNOB_ENV|FLAGS": the kernels' own knobs as environment (read by the extension), hash_prof.py's flags
+variant() {
   case $1 in
-    fold) echo "FORM=fold" ;;
-    window) echo "FORM=window" ;;
-    fold16) echo "FORM=fold FOLD_MB=16" ;;
-    fold256) echo "FORM=fold FOLD_MB=256" ;;
-    nolevels) echo "LEVELS=0" ;;
-    phases1) echo "FORM=fold VERITY_ROWS_PHASES=1" ;;
-    fused) echo "FORM=fold VERITY_ROWS_FORM=fused" ;;
+    fold) echo "|--form fold" ;;
+    window) echo "|--form window" ;;
+    fold16) echo "|--form fold --fold-mb 16" ;;
+    fold256) echo "|--form fold --fold-mb 256" ;;
+    nolevels) echo "|--levels 0" ;;
+    phases1) echo "VERITY_ROWS_PHASES=1|--form fold" ;;
+    fused) echo "VERITY_ROWS_FORM=fused|--form fold" ;;
     *) return 1 ;;
   esac
 }
@@ -54,17 +55,19 @@ nvidia-smi --query-gpu=timestamp,clocks.sm,utilization.gpu,temperature.gpu --for
 smi=$!
 trap 'kill $smi 2>/dev/null' EXIT
 for v in ${VARIANTS:-fold window fold16 fold256 nolevels phases1 fused}; do
-  ve=$(variant_env "$v") || { say "variant $v unknown"; continue; }
+  spec=$(variant "$v") || { say "variant $v unknown"; continue; }
+  ve=${spec%%|*}; va=${spec#*|}
   # shellcheck disable=SC2086
-  env LABEL="$v" $ve python "$PROG" > "$OUT/run.$v.log" 2>&1
+  env $ve python "$PROG" --out "$OUT" --label "$v" --knobs "$ve" $va > "$OUT/run.$v.log" 2>&1
   say "variant $v rc $?: $(grep -c '"T"' "$OUT/run.$v.log") steps"
 done
 NSYS=$CUDA_HOME/bin/nsys
 nv=${NSYS_VARIANT:-fold}
-if [ -x "$NSYS" ] && ve=$(variant_env "$nv"); then
+if [ -x "$NSYS" ] && spec=$(variant "$nv"); then
+  ve=${spec%%|*}; va=${spec#*|}
   # shellcheck disable=SC2086
-  env LABEL="nsys-$nv" REPS=1 $ve "$NSYS" profile -t cuda,nvtx -s none --cpuctxsw=none -f true -o "$OUT/$nv" python "$PROG" \
-    > "$OUT/run.nsys.log" 2>&1
+  env $ve "$NSYS" profile -t cuda,nvtx -s none --cpuctxsw=none -f true -o "$OUT/$nv" python "$PROG" --out "$OUT" --label "nsys-$nv" \
+    --reps 1 --knobs "$ve" $va > "$OUT/run.nsys.log" 2>&1
   say "nsys $nv rc $?"
   for r in cuda_gpu_kern_sum cuda_gpu_mem_time_sum nvtx_sum; do
     "$NSYS" stats --report "$r" --format csv -o "$OUT/nsys" "$OUT/$nv.nsys-rep" > /dev/null 2>&1
@@ -74,9 +77,10 @@ fi
 NCU_BIN=$CUDA_HOME/bin/ncu
 if [ "${NCU:-1}" = 1 ] && [ -x "$NCU_BIN" ]; then
   # one window of 65,536 rows (width 65,536, no pad window), in the window form: its salt and data kernels and the window's levels
-  LABEL=ncu CHECK=0 FORM=window TOKENS=256 BYTES_PER_TOKEN=1048576 REPS=1 "$NCU_BIN" --kernel-name regex:rows_ --launch-count 12 \
+  "$NCU_BIN" --kernel-name regex:rows_ --launch-count 12 \
     --section SpeedOfLight --section Occupancy --section LaunchStats --section SchedulerStats --section WarpStateStats \
-    --section ComputeWorkloadAnalysis -f -o "$OUT/window" python "$PROG" > "$OUT/run.ncu.log" 2>&1
+    --section ComputeWorkloadAnalysis -f -o "$OUT/window" python "$PROG" --out "$OUT" --label ncu --no-check --form window \
+    --tokens 256 --bytes-per-token 1048576 --reps 1 > "$OUT/run.ncu.log" 2>&1
   say "ncu rc $?"
   "$NCU_BIN" --import "$OUT/window.ncu-rep" --page details --csv > "$OUT/ncu_details.csv" 2> "$OUT/ncu_import.log"
   say "ncu import rc $? ($(wc -l < "$OUT/ncu_details.csv") lines)"

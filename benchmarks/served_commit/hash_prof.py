@@ -1,22 +1,22 @@
 """The served Commit's hashing alone on one GPU: one step of T tokens' rows-sha512 windows through the collector's own extension
-(`native_ext.ext()`: native_collect.cpp's StepHasher over native_rows.cu), in the calls and order `NativeCollectCommitter.
+(`ext()`: native_collect.cpp's StepHasher over native_rows.cu), in the calls and order `NativeCollectCommitter.
 _commit_step_windowed` makes for a plan-hit step: per window its leaves (`rows_leaves`), held and folded into the windows' top nodes
 (`rows_tree_window` over many windows at once; a step that keeps levels folds at ROWS_FOLD_BYTES, its levels copied to pinned host on
-a copy stream), the pad windows up to the tree's width, then the tree over the windows' top nodes (`rows_tree`).  FORM=window is the
-worker before the held folds: each window's subtree on its own, its levels copied on the hashing stream and one event sync a window.
-Every window is ready at once, so this is the hashing's own rate, not what serving lets it reach.  Each step's root is checked against
-the first step's, and a small step's levels and root against `step_rows.levels`, in both forms.  Measurement only; JSON to
-$OUT/hash_prof.<LABEL>.json.
+a copy stream), the pad windows up to the tree's width, then the tree over the windows' top nodes (`rows_tree`).  `--form window` is
+the worker before the held folds: each window's subtree on its own, its levels copied on the hashing stream and one event sync a
+window.  Every window is ready at once, so this is the hashing's own rate, not what serving lets it reach.  Each step's root is
+checked against the first step's, and a small step's levels and root against `step_rows.levels`, in both forms.  Measurement only;
+JSON to OUT/hash_prof.LABEL.json.
 
-    python benchmarks/served_commit/hash_prof.py    (TOKENS: T values, default 8192 16384 32768; BYTES_PER_TOKEN, default 1.73e6;
-                                                     WINDOW_MB, default 256; REPS, default 3; LEVELS: 1 keeps levels (retain host or
-                                                     sample), 0 keeps none (retain none); FORM: fold (default) or window; FOLD_MB:
-                                                     a step that keeps levels folds at this many MiB of leaves instead; CHECK=0 skips
-                                                     the small step's check; LABEL; the kernels' own knobs VERITY_ROWS_FORM and
-                                                     VERITY_ROWS_PHASES pass through)
+    python benchmarks/served_commit/hash_prof.py --out DIR [--label L] [--tokens T ...] [--bytes-per-token B] [--window-mb W]
+        [--reps N] [--levels 1|0] [--form fold|window] [--fold-mb M] [--no-check] [--knobs TEXT]
+
+--levels 1 keeps levels (retain host or sample), 0 none (retain none); --fold-mb: a step that keeps levels folds at this many MiB of
+leaves instead; --knobs records the kernels' own knobs (VERITY_ROWS_FORM, VERITY_ROWS_PHASES) as the caller set them.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import statistics
@@ -27,8 +27,7 @@ from typing import Any
 import torch
 from verity.ml.commitments.merkle import merkle_depth
 from verity_vllm.commit import step_rows as R
-from verity_vllm.commit.committer.native_collect import ROWS_FOLD_BYTES, ROWS_HOLD_BYTES
-from verity_vllm.commit.committer.native_ext import ext
+from verity_vllm.commit.committer.native_collect import ROWS_FOLD_BYTES, ROWS_HOLD_BYTES, ext
 
 C = R.ROW_BYTES
 PD, CTX, GEO = b"p" * 32, b"c" * 32, b"g" * 32
@@ -176,16 +175,22 @@ def check_small(X: Any, H: Any, side: torch.cuda.Stream, tn: torch.Tensor) -> di
 
 
 def main() -> None:
-    out_dir = Path(os.environ.get("OUT") or os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out"))
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--label", default="fold")
+    ap.add_argument("--tokens", type=int, nargs="+", default=[8192, 16384, 32768])
+    ap.add_argument("--bytes-per-token", type=float, default=1.73e6)
+    ap.add_argument("--window-mb", type=int, default=256)
+    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--levels", type=int, choices=(0, 1), default=1)
+    ap.add_argument("--form", choices=("fold", "window"), default="fold")
+    ap.add_argument("--fold-mb", type=int, default=0)
+    ap.add_argument("--no-check", action="store_true")
+    ap.add_argument("--knobs", default="")
+    a = ap.parse_args()
+    out_dir, label, tokens, bpt, reps, form = a.out, a.label, a.tokens, a.bytes_per_token, a.reps, a.form
     out_dir.mkdir(parents=True, exist_ok=True)
-    label = os.environ.get("LABEL", "served")
-    tokens = [int(x) for x in os.environ.get("TOKENS", "8192 16384 32768").split()]
-    bpt = float(os.environ.get("BYTES_PER_TOKEN", "1.73e6"))
-    W = int(os.environ.get("WINDOW_MB", "256")) << 20
-    reps = int(os.environ.get("REPS", "3"))
-    keep = os.environ.get("LEVELS", "1") == "1"
-    form = os.environ.get("FORM", "fold")
-    fold_bytes = int(os.environ.get("FOLD_MB", "0")) << 20
+    W, keep, fold_bytes = a.window_mb << 20, a.levels == 1, a.fold_mb << 20
     X = ext()
     H = X.StepHasher()
     side = torch.cuda.Stream()
@@ -193,8 +198,8 @@ def main() -> None:
     prop = torch.cuda.get_device_properties(0)
     res: dict[str, Any] = {"label": label, "device": prop.name, "sms": prop.multi_processor_count, "window_bytes": W, "keep_levels": keep,
                            "form": form, "fold_bytes": fold_bytes or None, "bytes_per_token": bpt, "row_compressions": ROW_COMPRESSIONS,
-                           "env": {k: os.environ.get(k) for k in ("VERITY_ROWS_FORM", "VERITY_ROWS_PHASES")}, "steps": {}}
-    checks = check_small(X, H, side, tn) if os.environ.get("CHECK", "1") == "1" else None
+                           "knobs": a.knobs, "steps": {}}
+    checks = None if a.no_check else check_small(X, H, side, tn)
     res["matches_step_rows"] = all(checks.values()) if checks else None
     res["matches_step_rows_by_form"] = checks
     print(label, "matches_step_rows", checks, flush=True)
