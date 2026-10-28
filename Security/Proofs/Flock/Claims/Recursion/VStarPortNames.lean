@@ -400,12 +400,14 @@ theorem innerUnit_sizes {S : _root_.VStar.RepS} {name : String} {u} (h : _root_.
 
 theorem checkParsed_unit {s : _root_.VStar.Stmt} {c : Circuit} (h : (RecVStar.checkParsed s c).isOk = true) :
     ∃ u, s.unit = .ok u := by
-  cases hu : s.unit with
-  | ok u => exact ⟨u, rfl⟩
+  cases hcp : RecVStar.checkParsed s c with
   | error e =>
-    unfold RecVStar.checkParsed at h
-    rw [hu] at h
-    split at h <;> cases h
+    rw [hcp] at h
+    first | cases h | simp [Except.isOk, Except.toBool] at h
+  | ok r =>
+    cases r
+    obtain ⟨u, hu, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hcp
+    exact ⟨u, hu⟩
 
 /-- **A statement of the list tagged `.inner` holds one of V\*'s parts**: one of `parts (specOf vsh holo)`. -/
 theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVStar.statements i = .ok vs) {s j : ℕ}
