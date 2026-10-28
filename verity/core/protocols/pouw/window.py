@@ -355,10 +355,10 @@ ROW_STEP = 16
 
 @dataclass(frozen=True)
 class Entry:
-    """One entry of the window root, as its committed bit row holds it (`PouwWindow.Entry`): its kind, its tile range
-    [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and where the call
-    sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.  `row` and
-    `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
+    """One entry of the sampling block's root, as its committed bit row holds it (`PouwWindow.Entry`): its kind, its
+    tile range [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and
+    where the call sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.
+    `row` and `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
 
     kind: str
     lo: int = 0
