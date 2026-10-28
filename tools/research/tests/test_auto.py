@@ -20,7 +20,7 @@ def share(free: int = 0, waiters: int = 0, size: int = 48, fits: bool | None = N
     return {"share": {"share": size, "claims": 2, "waiters": waiters, "free": free, "fits": free >= 4 if fits is None else fits}}
 
 
-def slot(name: str, cpus: str = "8-19", mem: int = 40, held: bool = False, blocked: str | None = None, trains: bool = False) -> dict:
+def slot(name: str, cpus: str = "8-19", mem: int | None = 40, held: bool = False, blocked: str | None = None, trains: bool = False) -> dict:
     return {"name": name, "cpus": cpus, "mem": mem, "trains": trains, "holder": {"pid": 1} if held else None, "blocked": blocked}
 
 
@@ -46,6 +46,17 @@ def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
     target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("b4", cpus="0-15", mem=48))}, 4, 16)
     assert target == (cpu3, "research") and why.endswith("a slot is free there now")
+
+
+def test_a_slot_without_mem_takes_a_job_of_any_size():
+    """slot.py raises a slot's reservation to what the run asks, so a slot with no mem= fits any --mem-gb. Reading no mem= as
+    0 GB skipped every such pool for every job."""
+    bare = slot("b4", cpus="0-15", mem=None)
+    target, why = auto.choose({N2: share(waiters=5), CPU1: pool(slot("r0", held=True), waiters=9), CPU5: pool(bare)}, 4, 16)
+    assert target == (CPU5, "research") and why.endswith("a slot is free there now")
+    assert auto.choose({N2: share(waiters=5), CPU5: pool(bare)}, 4, 150)[0] == (CPU5, "research")
+    target, why = auto.choose({N2: share(waiters=5), CPU5: pool(bare)}, 32, 16)
+    assert target is None and f"{CPU5}'s research pool skipped: no slot of" in why, "CPUs still bound a bare slot"
 
 
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
