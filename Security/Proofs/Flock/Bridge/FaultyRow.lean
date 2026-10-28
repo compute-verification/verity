@@ -20,7 +20,7 @@ variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
 
 /-- **What `witRows` opens at a wire's position is its value**, through an opening that passes there. -/
 theorem witRows_val_some {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
-    {v : Fin C.N → Bool} {s : Claims.Sampling.Stmt} (hs : s.roots = roots) {g : Fin C.N} {b : Bool}
+    {v : Fin C.N → Bool} {s : Claims.Sampling.AuditStatement} (hs : s.roots = roots) {g : Fin C.N} {b : Bool}
     (h : (witRows C Cm H roots v).val H Cm s (posOf C g) = some b) :
     b = v g ∧ ∃ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true := by
   unfold Wit.val at h

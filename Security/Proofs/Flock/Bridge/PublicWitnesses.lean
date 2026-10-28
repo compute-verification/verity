@@ -32,7 +32,7 @@ namespace Flock.Bridge
 open Claims.Sampling
 
 /-- A commitment that opens nothing gives every position no value. -/
-theorem wit_val_none {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool} {s : Claims.Sampling.Stmt}
+theorem wit_val_none {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool} {s : Claims.Sampling.AuditStatement}
     (h : ∀ o, Cm.Opens H s.roots o = false) (w : Claims.Sampling.Wit) (g : ℕ) : w.val H Cm s g = none := by
   unfold Claims.Sampling.Wit.val
   rw [List.find?_eq_none.2 fun o _ => by simp [h o]]

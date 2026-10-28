@@ -82,7 +82,7 @@ def rejCm : Commitment Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
 def toyProg : Prog := ⟨[.input], [0]⟩
 
 /-- The program, drawn `all`. -/
-def toyStmt : Stmt := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
 /-- One class of one stratum of one replay unit, the proof unit `{0}`. -/
 def toyPart : Partition := ⟨[[[[[0]]]]]⟩
