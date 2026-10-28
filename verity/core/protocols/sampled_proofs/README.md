@@ -50,7 +50,7 @@ only: no `.lean` file defines either.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
    verdict, and, when everything accepted, the integrity profile.
 
-**The proof service** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
+**The proof system** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
 - what it commits;
 - its selection rule;
 - the check, as a public Program;
@@ -78,7 +78,7 @@ has at most `2^-40`. The proof system adds, per proof block, its knowledge-sound
 Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
 plus a term for which proof blocks are faulty, and compute security by their work.
 
-Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
+Everything is committed at serve time: the proof system has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
@@ -151,7 +151,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
-  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
+  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
   `plan` holds verification plans over IR Programs. `optimize`, `candidates` and
   `costfit` plan a sampling design (`benchmarks/sampling_plan`).
@@ -223,7 +223,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `verifier`: the verifier: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
   `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
   Python; `RECORD_VERDICT` names whose is the record's.
-- `proofs`: the proof service's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
+- `proofs`: the proof system's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
@@ -245,113 +245,76 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
+## The registration
+
+### The registration record
+
+A registration fixes everything a drawn proof block's statement can depend on before the verifier draws. Its record,
+`verity/registration/v1` (`one_stage.registration.record`), names the program, query and partition digests, the
+population, the sampling design expanded over the verifier's program and query, the commitment scheme, each port's root
+with its leaf count and domain, the leaf layer, the anchors, the window (its provenance, `served` or `stand-in`, and the
+stream and prover it is bound to) and `previous`, the digest of this prover's last record. A record that registers values
+is `verity/registration/v2`: the same keys and `registered` (below), so v1's bytes are unchanged. Its digest is
+`SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical JSON (RFC 8785, `verity.ml.circuits.codec.canonical_json`).
+
+The verifier holds the record to its own copies with R1 to R7 (`check`):
+
+- R1: the format, the protocol, the sampling design and the window's kind;
+- R2: the program, query and partition digests and the population;
+- R3: the scheme, and each port's root, leaf count and domain;
+- R4: the leaf layer;
+- R5: the anchors;
+- R6: `previous`, one record a window, and the window's stream and prover;
+- R7: the registered values.
+
+It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then draws. It also holds its own public
+file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The Lean
+verifier runs the same check (`SampledProofs.Registration.check`), and `Properties.SampledProofs.R1` to `R7`
+state what it accepts. `verity/core/service/sampled_proofs/tests/test_difftest.py` holds the Python to the Lean. The
+challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
+stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
+docstring.
+
+Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
+
+### Registered values
+
+A program's weights, constants and tables are values: committed once, under hiding leaves, and read only inside a proof
+(`one_stage.registered`, the Lean `SampledProofs.Registered`, and C-Flock's `Flock.Registered`).
+
+- **The commitment.** Row r of a registered value is `words` leaves of `word_bits` bits (16 or 32). It is committed as
+  the circuit statement commits that port's row, in the port's row format (`hm96-sha512/row/v1`, or the bit rows
+  `hm96-sha512/row/v2` and `hm96-sha512/row-seg/v1`), with a salt drawn once. The root is the frame-v3-sha512 root over
+  the rows under the value's registered-value domain (`registered.domain`). The prover keeps the rows and salts
+  (`Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
+  `"word_bits"` when it is not 16 (`Registered.entry`).
+- **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
+  root it already has, when it has one: its pinned root (`pinned`: the weights' root recorded before the salt), the root
+  an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the
+  earlier record's port or entry (`outputs`).
+- **Per-window values.** Given the window's open root R, from the challenger's signed open of the window, every value's
+  domain binds R, except the ones the verifier holds across windows (`held`, and its pinned, supplied and output values).
+  So a window's values are held to no earlier window's roots. A verifier that names no R refuses its own inputs when a
+  value it doesn't hold across windows would be held to an earlier window's root (`unwindowed`).
+- **Supplied values.** These are values the verifier fills itself, from the record's roots, positions after the log's,
+  its window salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
+  recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
+  (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
+- **Reads.** The verifier derives every proof block's reads from its own program (`reads`). C-Flock's Lean verifier
+  checks each registered port's rows, paths and positions against the `--registered` file the verifier writes
+  (`reads_file`; `verity/ml/flock/verifier/PROTOCOL.md` §16.10).
+- **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
+  returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
+  premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
+- **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
+  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`).
+
+Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/ml/flock/tests/test_lean_registered_reads.py`.
+
 ## Not yet in Lean
 
 The rules below are normative, and no Lean states them yet: the Python is their reference, pinned by the tests and vectors
 named with each. A rule leaves this list in the change whose Lean states it.
-
-### The registration record
-
-`verity/registration/v1` (`one_stage.registration`) is what a window is committed to, fixed before the verifier draws:
-the program, query and partition digests, the population, the sampling design expanded, the scheme, the roots with their
-leaf counts and domains, the leaf layer, the anchors, the window (provenance only: `served` or `stand-in`) and
-`previous`. Its digest is `SHA-512("verity/registration/v1\0" ‖ canon(record))`, canon being canonical JSON (RFC 8785,
-`verity.ml.circuits.codec.canonical_json`). The verifier checks R1 to R6 (`check`) against its own copies, writes a
-receipt with its own clock, and only then draws, and it holds its own public file to the record (`matches_public`),
-which the Lean guarantee `FailClosed.flock_verify_public_ties` ties to the proved rows. The format, each check, the
-receipt and the window domains (`window_domain`, its tag's bytes still `served-domain`) are in `one_stage.registration`'s
-docstrings.
-
-Pinned by `tests/test_one_stage.py` (the registration, receipt, window, served-domain and R1 tests), and the served
-domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
-
-### Registered values
-
-A program's weights, constants and tables are values: committed once, at registration, under hiding leaves, and read
-only inside a proof (`one_stage.registered`).
-
-- A registered value is a root parameter of the program, as rows of `words` leaves in the parameter's leaf order, each
-  leaf `word_bits` bits: its leaf width rounded up to whole u16 words, 16 or 32 (`width`). Row `r` is committed as the
-  circuit statement commits that port's row: `hm96-sha512/row/v1` over `sha512/row/v1` of its u16 words (`row_words`:
-  each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 chunks, as a C-Flock port row and
-  its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
-  used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
-  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
-  {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
-  and salts. A value a bit-row port reads is committed in that port's format (`Registered.commit`'s `schema`):
-  `hm96-sha512/row/v2` over `sha512/row/v2`, or `hm96-sha512/row-seg/v1` over `sha512/row-seg/v1`, of its leaves' bit
-  row (`row_words` unpadded), each leaf framed under that schema, under the same domain.
-- `verity/registration/v2` is v1 with `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (plus
-  `"word_bits"` when it is not 16), digest `SHA-512("verity/registration/v2\0" ‖ canon(record))`. A record is v2 exactly
-  when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
-  words}`): the values are exactly the verifier's, each with a SHA-512 hex root and the verifier's integer leaf count,
-  words, width (`R7-word_bits`, which also refuses a `"word_bits": 16` written out) and domain (`registered_entries`,
-  from its own program), and a value an earlier record of the log registered under the domain it takes now keeps that
-  record's root (`held_roots`, keyed by value and domain): the log is the only place the verifier holds roots, so a
-  value is committed once a domain whatever the caller passes. 16 is the default, so a 16-bit value's domain, entry and
-  root are what they were before `word_bits`.
-- Per-window values (`check(..., window_root=, held=)`, `register_served`'s too): a window-independent Program
-  registers each window's values under the same names. The verifier takes the window's open root R from the
-  challenger's signed open of that window (never from the record), and every registered value's domain binding adds
-  `"window": R` (`registered.domain`, Lean `Registered.domainAt`) but the ones it holds across windows: `held` (the
-  weights), and its pinned, supplied and output values. So an honest second window's values are held to nothing the
-  first registered, and a root of an earlier window opens under no domain R7 takes (`R7-domain` when the entry names
-  the earlier domain; under the new domain no registered read of it opens). A verifier that names no R takes every
-  domain as before, and fails closed: it refuses its own inputs (ValueError, Lean `OneStage.paramsOfJson`, naming
-  `window_root` and `held`) when a value it doesn't hold across windows was registered by an earlier record under the
-  domain it takes now (`registration.unwindowed`), so a fixed-name Program's second window needs R, while a Program
-  whose per-window values take fresh names (the window-prefixed form) needs none.
-- Supplied values (`check(..., supplied=)`, `supplied_root`, the Lean's `Supplied`): a registered value the verifier fills
-  itself, so the prover never chooses it. Each row is the bytes of its sources: `{"port": P}` (the record's `roots` entry
-  of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
-  below the record's population, after the log's earlier records' populations, `log_base`, as a big-endian u64, so no
-  two records of one log share a position) and `{"window": coin}` (`window_salt`: SHA-512 of the coin bound to the
-  verifier's binding, its stream and its prover, and to the record's window; a salt per prover, stream and window since
-  R6 takes one record a window, and refused without a binding). The rows are committed under public salts
-  (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
-  inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
-  (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
-- Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
-  the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
-- Binding (`check(..., binding={"stream", "prover"})`, lowercase hex: the verifier's stream digest and the identity it
-  registered the prover under): R6 refuses a record whose window doesn't name both (`R6-stream`, `R6-prover`), and the
-  window salt binds them, so each (prover, stream, window, position) gets its own seed and a tile proved for one stream
-  is refused in another, in the same window or not.
-- Reads at a public position: the verifier derives every proof block's reads from its own program (`reads`). A proof block's subcircuit
-  parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
-  or reads the value in one proof block and not in another of its subcircuit, is refused. Data-dependent reads are not public
-  reads and are not covered here.
-- A statement that reads registered rows is a shared-row file whose registered port's table rows carry the
-  registration's salts (`Registered.statement`, `table` for each instance's position), so its `b ‖ c` are the
-  registered ones, with header `registered: {port: {"value", "positions", "paths"}}`: per table row, its position and
-  its frame-v3 path to the registered root (siblings leaf level first, 64 bytes each, hex). The Lean verifier, given the
-  verifier's own `--registered` file (`reads_file`: per port, the value, leaf count, row width (`words`, `word_bits`),
-  domain and every proof block's position from its own program and query, and the root of the registration it accepted),
-  checks each port in its own format (`row_schema`, absent for `hm96-sha512/row/v1`): that the circuit port's rows are
-  the registered rows' u16 words, or a bit row's exactly their bits, every table row's path and every instance's
-  position, and refuses a statement that names no `registered` entry for such a port or names one it was not given,
-  and one whose proof blocks it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
-- Served trees (`served.register_served`): a served root is a hiding commitment that binds nothing on its own, so every
-  served path registers each tree a proof block reads as a registered value (`ServedTree`: value, root, leaves, words,
-  `word_bits`, domain, its row format `row_schema`, for an earlier run's output its `(record digest, port)`, and for an
-  earlier record's registered value it reuses, with no tree of its own, its `(record digest, value)`), writes the
-  verifier's `--registered` file from it, and verifies with `flock-verify --zk --registered`: the premise
-  `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`. The positions are the path's own public Program
-  and `Q_template_instance` query, which the session's `--program` and `--partition` (the returned `partition`) carry;
-  rows are fixed slots padded with zeros. A tree's domain is its value's registered-value domain or, for an output or a
-  reused value, the earlier port's or entry's (R7 holds the record to it: `registration.check(..., outputs=)`), and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
-  no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
-  R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no proof block
-  reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.
-- The audit record holds `session_registered`, the roots the verifier opened the reads against, to the
-  registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
-  (`audit.session_registered(verdicts, registration)`) reads them off the accepted verdicts of record (the Lean
-  verdict's `registered`), never off the registration, for the registration's own values (its roots' ports and
-  registered values);
-  `verifier.audit_record` reads them so on both sides.
-
-Pinned by `tests/test_registered.py` and `tests/test_served.py` and, for the Lean verifier's check,
-`verity/ml/flock/tests/test_lean_registered_reads.py`.
 
 ### The partition
 
@@ -467,7 +430,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 
 Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
 
-### The proof service
+### The proof system
 
 `service.Stream` holds one protocol's registrations to its `Spec`, on the challenger's side:
 
@@ -500,7 +463,7 @@ log's history by `tests/test_service_history.py`, sessions by `tests/test_servic
 The draw of record is `coins.OwnRandomness` on the Lean verifier's coins (`one_stage.verifier.coins`:
 `IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
-`Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
+`Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
 
 A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
