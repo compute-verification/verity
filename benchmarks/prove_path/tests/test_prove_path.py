@@ -1158,7 +1158,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
 
 
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
-    """Wed 28's model is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
+    """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
     ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
     q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM
