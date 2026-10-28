@@ -13,8 +13,8 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   chunks of at most `CHUNK_BYTES` (a power of two rows each), and each chunk's subtree root, pads past Σn included, is
   folded in order as `tree_levels` folds the leaves. The caller's process copies each row into one of ``2 * workers + 1``
   shared slots of a chunk each, which `workers` forked processes read in place, so the auditor's host holds about
-  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits vy-challenger-1
-  (4 vCPU, 15 GB). A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
+  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits a challenger host
+  of 4 vCPU and 15 GB. A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
   blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
@@ -37,14 +37,14 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 from verity.ml.crypto import chacha20
 
 #: an H1 window's weights' root: each K's registered ``…/b/<K>`` root
-WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
+WEIGHTS_TAG = domains.POUW_H1_WEIGHTS
 #: ``b/<K>``'s first salt nonce, past every round's and call's tables in the prover's salt stream (vllm's
 #: ``REQUESTS_NONCE + 2^42 + 2^40``), so a key that salts both never repeats a (nonce, leaf)
 B_NONCE = (1 << 61) + (1 << 42) + (1 << 40)

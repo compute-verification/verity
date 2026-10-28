@@ -46,7 +46,40 @@ import kv_bench as BW_KV  # noqa: E402
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",
            "lts__t_sectors_op_atom.sum", "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum", "dram__bytes_write.sum")
 WRITE, ALL = METRICS[1], METRICS[0]   # the SMs' L2 writes, and every source's
+RED, LOCAL = METRICS[2], METRICS[4]   # L2 reductions, and local stores
+MARK = "WRITE-GATE "                  # starts the child's line of its launches
 KERNELS = "regex:fused_kernel|chain_kernel|leaves_kernel|level_kernel|pads_kernel|attn_|append_kernel|rc_receipt_kernel"
+
+
+def profile(kernels: str, child: list[str]) -> subprocess.CompletedProcess:
+    """`child`, a command line that prints its launches after MARK, under Nsight Compute: METRICS of each kernel whose
+    name matches `kernels`, as CSV on its stdout."""
+    ncu = shutil.which("ncu") or "/usr/local/cuda-13.0/bin/ncu"
+    return subprocess.run([ncu, "--csv", "--print-units", "base", "--target-processes", "all", "--kernel-name", kernels,
+                           "--metrics", ",".join(METRICS), *child], capture_output=True, text=True, check=False)
+
+
+def profiled(stdout: str, name_chars: int = 80) -> tuple[list[dict] | None, list[dict]]:
+    """A profile's launches (None if the child printed none) and each kernel's counters in launch order, its name cut to
+    `name_chars` (a metric the device doesn't expose, such as sm_120's DRAM writes, reads None)."""
+    want = next((json.loads(line[len(MARK):]) for line in stdout.splitlines() if line.startswith(MARK)), None)
+    rows = csv.DictReader(io.StringIO("\n".join(line for line in stdout.splitlines() if line.startswith('"'))))
+    per: dict[str, dict] = {}
+    for r in rows:
+        v = r["Metric Value"].replace(",", "")
+        per.setdefault(r["ID"], {"name": r["Kernel Name"][:name_chars]})[r["Metric Name"]] = (
+            None if v == "n/a" else float(v))
+    return want, list(per.values())
+
+
+def sector_bytes(kv: dict, metric: str) -> float:
+    """A kernel's sectors of `metric` as bytes (0 where the device doesn't expose it)."""
+    return 32 * (kv.get(metric) or 0)
+
+
+def passes(written: float, local: float, must: int, kernels: int = 1) -> bool:
+    """The gate's rule: no local stores, and L2 writes within 1% of what the kernels must write and 4 KiB a kernel."""
+    return local == 0 and written <= 1.01 * must + 4096 * kernels
 
 
 def launches(a) -> list[dict]:
@@ -114,11 +147,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
     """Attention at each k in the step's form and split count, then the append at every layer at each k."""
     import step as STEP
 
-    kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib)
-    v, i, q64 = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-    kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
-    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v, v, v], [v, v, v]
-    kv.so.kv_rc_receipts.argtypes = [v, q64, i, i, q64, v]
+    kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib, STEP.STEP_KV)
     sh = BW_KV.attn_shape(kv)
     b, ctx, layers = step["batch"], step["ctx"], 2
     slots = b * ctx
@@ -169,21 +198,8 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
 
 
 def summarize(stdout: str, rc: int) -> dict:
-    """Per kernel the counters (a metric the device doesn't expose, such as sm_120's DRAM writes, reads None), and
-    each launch's L2 writes against what it must write."""
-    want = next((json.loads(line[len("WRITE-GATE "):]) for line in stdout.splitlines()
-                 if line.startswith("WRITE-GATE ")), None)
-    rows = list(csv.DictReader(io.StringIO("\n".join(line for line in stdout.splitlines() if line.startswith('"')))))
-    per: dict[str, dict] = {}
-    for r in rows:
-        v = r["Metric Value"].replace(",", "")
-        per.setdefault(r["ID"], {"name": r["Kernel Name"][:80]})[r["Metric Name"]] = (
-            None if v == "n/a" else float(v))
-    kernels = list(per.values())
-
-    def bytes_of(kv, metric):
-        return 32 * (kv.get(metric) or 0)
-
+    """Per kernel the counters (`profiled`), and each launch's L2 writes against what it must write."""
+    want, kernels = profiled(stdout)
     res = {"rc": rc, "metrics": METRICS, "launches": want, "kernels": kernels}
     fused = [kv for kv in kernels if "fused_kernel" in kv["name"]]
     if want is None or len(fused) != sum(w["kernel"] == "fused" for w in want):
@@ -191,23 +207,23 @@ def summarize(stdout: str, rc: int) -> dict:
         return res
     rows_out = []
     for w, kv in zip([w for w in want if w["kernel"] == "fused"], fused):
-        wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
-        rb, must = bytes_of(kv, "lts__t_sectors_op_red.sum"), w["receipt_bytes"] + w["red_bytes"]
-        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "l2_red_bytes": rb,
+        wb, lb = sector_bytes(kv, WRITE), sector_bytes(kv, LOCAL)
+        rb, must = sector_bytes(kv, RED), w["receipt_bytes"] + w["red_bytes"]
+        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": sector_bytes(kv, ALL), "l2_red_bytes": rb,
                          "local_store_bytes": lb, "dram_write_bytes": kv.get("dram__bytes_write.sum"),
                          "write_over_receipts": wb / w["receipt_bytes"] if w["receipt_bytes"] else None,
                          "red_over_partials": rb / w["red_bytes"], "over_outputs_and_partials": (wb + rb) / must,
-                         "ok": lb == 0 and wb + rb <= 1.01 * must + 4096})
+                         "ok": passes(wb + rb, lb, must)})
     commit = [w for w in want if w["kernel"] == "commit"]
     if commit:
         ck = [kv for kv in kernels
               if any(s in kv["name"] for s in ("chain_kernel", "leaves_kernel", "level_kernel", "pads_kernel"))]
         must = commit[0]["leaf_bytes"] + commit[0]["node_bytes"] + commit[0].get("const_bytes", 0)
-        wb = sum(bytes_of(kv, WRITE) for kv in ck)
-        lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in ck)
+        wb = sum(sector_bytes(kv, WRITE) for kv in ck)
+        lb = sum(sector_bytes(kv, LOCAL) for kv in ck)
         rows_out.append({**commit[0], "kernels": len(ck), "l2_write_bytes": wb,
-                         "l2_write_all_bytes": sum(bytes_of(kv, ALL) for kv in ck), "local_store_bytes": lb,
-                         "write_over_digests": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(ck)})
+                         "l2_write_all_bytes": sum(sector_bytes(kv, ALL) for kv in ck), "local_store_bytes": lb,
+                         "write_over_digests": wb / must, "ok": passes(wb, lb, must, len(ck))})
     attn = [w for w in want if w["kernel"] == "attention"]
     groups: list[list[dict]] = []
     for kv in kernels:
@@ -221,13 +237,13 @@ def summarize(stdout: str, rc: int) -> dict:
         res["rows"] = rows_out
         return res
     for w, g in zip(attn, groups):
-        wb = sum(bytes_of(kv, WRITE) + bytes_of(kv, "lts__t_sectors_op_red.sum") for kv in g)
-        lb = sum(bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum") for kv in g)
+        wb = sum(sector_bytes(kv, WRITE) + sector_bytes(kv, RED) for kv in g)
+        lb = sum(sector_bytes(kv, LOCAL) for kv in g)
         must = w["out_bytes"] + w["part_sector_bytes"] + w.get("share_bytes", 0)
         rows_out.append({**w, "kernels": [kv["name"][:40] for kv in g], "l2_write_bytes": wb,
-                         "l2_write_all_bytes": sum(bytes_of(kv, ALL) for kv in g), "local_store_bytes": lb,
+                         "l2_write_all_bytes": sum(sector_bytes(kv, ALL) for kv in g), "local_store_bytes": lb,
                          "write_over_outputs_and_partials": wb / (w["out_bytes"] + w["part_bytes"]),
-                         "write_over_sectors": wb / must, "ok": lb == 0 and wb <= 1.01 * must + 4096 * len(g)})
+                         "write_over_sectors": wb / must, "ok": passes(wb, lb, must, len(g))})
     rcw = [w for w in want if w["kernel"] == "kv_receipts"]
     rck = [kv for kv in kernels if "rc_receipt_kernel" in kv["name"]]
     if len(rck) != len(rcw):
@@ -235,10 +251,10 @@ def summarize(stdout: str, rc: int) -> dict:
         res["rows"] = rows_out
         return res
     for w, kv in zip(rcw, rck):
-        wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
-        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "local_store_bytes": lb,
+        wb, lb = sector_bytes(kv, WRITE), sector_bytes(kv, LOCAL)
+        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": sector_bytes(kv, ALL), "local_store_bytes": lb,
                          "write_over_receipts": wb / w["receipt_bytes"],
-                         "ok": lb == 0 and wb <= 1.01 * w["receipt_bytes"] + 4096})
+                         "ok": passes(wb, lb, w["receipt_bytes"])})
     app = [w for w in want if w["kernel"] == "append"]
     ak = [kv for kv in kernels if "append_kernel" in kv["name"]]
     if len(ak) != len(app):
@@ -246,10 +262,10 @@ def summarize(stdout: str, rc: int) -> dict:
         res["rows"] = rows_out
         return res
     for w, kv in zip(app, ak):
-        wb, lb = bytes_of(kv, WRITE), bytes_of(kv, "l1tex__t_sectors_pipe_lsu_mem_local_op_st.sum")
-        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": bytes_of(kv, ALL), "local_store_bytes": lb,
+        wb, lb = sector_bytes(kv, WRITE), sector_bytes(kv, LOCAL)
+        rows_out.append({**w, "l2_write_bytes": wb, "l2_write_all_bytes": sector_bytes(kv, ALL), "local_store_bytes": lb,
                          "write_over_words": wb / w["word_bytes"],
-                         "ok": lb == 0 and wb <= 1.01 * w["word_bytes"] + 4096})
+                         "ok": passes(wb, lb, w["word_bytes"])})
     res["rows"] = rows_out
     res["ok"] = all(r["ok"] for r in rows_out)
     return res
@@ -267,19 +283,15 @@ def main() -> int:
     ap.add_argument("--parse", default="", help="summarize a captured write-gate.ncu.txt instead of profiling")
     a = ap.parse_args()
     if a.child:
-        print("WRITE-GATE " + json.dumps(launches(a)), flush=True)
+        print(MARK + json.dumps(launches(a)), flush=True)
         return 0
     out = Path(a.out)
     if a.parse:
         res = summarize(Path(a.parse).read_text().split("\n--- stderr ---\n")[0], 0)
     else:
-        ncu = shutil.which("ncu") or "/usr/local/cuda-13.0/bin/ncu"
-        cmd = [ncu, "--csv", "--print-units", "base", "--target-processes", "all", "--kernel-name", KERNELS,
-               "--metrics", ",".join(METRICS),
-               sys.executable, __file__, "--child", "--wt-lib", a.wt_lib, "--step-json", a.step_json, "--linears",
-               a.linears] + (["--reader-lib", a.reader_lib] if a.reader_lib else []) + (
-                   ["--kv-lib", a.kv_lib] if a.kv_lib else [])
-        p = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        p = profile(KERNELS, [sys.executable, __file__, "--child", "--wt-lib", a.wt_lib, "--step-json", a.step_json,
+                              "--linears", a.linears] + (["--reader-lib", a.reader_lib] if a.reader_lib else []) + (
+                                  ["--kv-lib", a.kv_lib] if a.kv_lib else []))
         (out / "write-gate.ncu.txt").write_text(p.stdout + "\n--- stderr ---\n" + p.stderr)
         res = summarize(p.stdout, p.returncode)
     (out / "write-gate.json").write_text(json.dumps(res, indent=1))

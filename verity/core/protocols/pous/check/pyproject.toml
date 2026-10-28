@@ -15,9 +15,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
-# Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the §7 vectors are the spec's
-# file, which the vector tests read. `interop.py` holds the Lean to the wire's Python reference (`p2_v1`'s package, `wire.py`
-# and `reference.py`) on §7's audit files, and reads §7's entry pins from the spec. `timed_audit.py` holds the Lean to the
+# Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the vectors are `p2_v1`'s
+# files, which the vector tests read. `interop.py` holds the Lean to the wire's Python reference (`p2_v1`'s package, `wire.py`
+# and `reference.py`, which pins the files) on the audit files. `timed_audit.py` holds the Lean to the
 # memory challenger's verdict (`band_gpu/memory_challenger.py`), and drives its strict audit against the harness's responder.
 # `test_run.py` holds `PousCheck.Run` to `run.py`: `lake` builds the memory challenger's Lean package and LMS's through the
 # path requires, and the test draws its sessions with that package's `tests/mc_cases.py`, which signs with the PoUS tests'
@@ -34,7 +34,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/service/flock/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
-          "verity/core/protocols/pous/p2/PROTOCOL.md", "benchmarks/pous/band_gpu/__init__.py",
+          "benchmarks/pous/band_gpu/__init__.py",
           "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py",
           "verity/core/devices/memory_challenger/lean", "verity/core/primitives/lms/lean",
           # the deployment layer and its wire, which the period hook's memory challenger is started through

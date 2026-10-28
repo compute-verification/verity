@@ -76,6 +76,7 @@ from verity.core.protocols.pouw.weights import chunks
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
@@ -250,7 +251,8 @@ def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, ca
     (`seeds.leaves`, `seeds.position_leaves`: big-endian 32-bit halves, each least significant bit first), 100 words, then
     ln as the 101st. A J10-R lane's (`PUBLIC_J10R`) has the unit's ``call`` and its two ``blocks`` (each a u64 as the
     position's leaves) after the roots, 112 words, then ln as the 113th."""
-    if len(salt) != 64 or len(roots) != 2 or any(len(x) != 64 for x in roots):
+    n = DIGEST_BYTES["sha512"]
+    if len(salt) != n or len(roots) != 2 or any(len(x) != n for x in roots):
         raise ValueError("the salt and the two roots are 64-byte digests")
     if not 0 <= int(ln) < 1 << 16:
         raise ValueError(f"the lane index is a u16 word, not {ln!r}")
