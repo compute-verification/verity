@@ -10,3 +10,6 @@ Capacity on cpu-7/8/9 goes to P1 and P2 until the 09:00Z last mark (TOP-128: P3 
 
 ## 11:12Z: decision on onsite's NCI check in #5233
 Onsite drops the registration-check form. Tonight's settled form is #5610: `verity/inference-only/v0` as a component of both composites, under the stated exception for Daniel's 9:39 PM ruling (a KNOWN entry in #6023's guard test). The 26 Oct "NCI as registration check" ruling is superseded. Don't settle it in #5233 yourself: training is merging #6023 into #5610 now. When #5610's resolved head is posted (thread 1792970372.621909), merge it into #5233 and take its onsite, NCI and guard-test files exactly. Rerun whatever the gate asks then; your current nine runs may need partial reruns, which is fine. #5233 is P3, so post the new ETA on PRF-282.
+
+## 11:20Z: #5610 resolved at fc9c4e1dd5; merge its marked head
+training: #5610 at fc9c4e1dd5 merges #4855 6d08311328, #6023 fcb8b67db1 (its five NCI files keep #5610's subprotocol text, no Lean change) and #6080 dc24b92798. It merges cleanly onto next db75c50a58. A lock-only commit regenerating Security/Properties (run 2ffd) comes next, with the mark at about 11:40Z. Merge the marked head (fc9c4e1dd5 plus that lock commit), not next, and take its versions of the NCI/onsite/composition files exactly. Then rerun what the gate asks and mark.
