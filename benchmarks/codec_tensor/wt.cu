@@ -21,6 +21,8 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
+#include "sha512.cuh"
+
 #ifndef WT_FIELD
 #define WT_FIELD 1279
 #endif
@@ -1784,8 +1786,6 @@ __global__ void __launch_bounds__(128) pipe_kernel(u64 steps, unsigned long long
   if (h == 0x123456789ull) atomicXor(xr, h);
 }
 
-#include "sha512.cuh"
-
 // --- the pass's receipt key (red team F29) ----------------------------------------------------------------------------
 //
 // A WT_RECEIPT build's receipt is sketch-sha512 (`receipts.SketchReceipter`, the remote bandwidth driver's kind). Pass j's
@@ -1819,7 +1819,7 @@ __constant__ u64 kRcptMid[8];
 // SHA-512 of the len bytes at m (big-endian words, the standard padding).
 __device__ void sha512_bytes(const uint8_t *m, int len, u64 (&s)[8]) {
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   const int nb = (len + 17 + 127) / 128;
   for (int blk = 0; blk < nb; ++blk) {
     u64 w[16];
@@ -1872,7 +1872,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
       for (int b = 0; b < 8; ++b) v = (v << 8) | m[8 * i + b];
       w[i] = v;
     }
-    for (int i = 0; i < 8; ++i) h[i] = kSha512Iv[i];
+    for (int i = 0; i < 8; ++i) h[i] = sx::IV_DEV[i];
     sha512_compress(h, w);
     for (int i = 0; i < 8; ++i) g_pass.leafmid[i] = h[i];
   }
@@ -2929,7 +2929,7 @@ int wt_set_receipt(const uint8_t *prefix) {
     for (int b = 0; b < 8; ++b) v = (v << 8) | prefix[8 * i + b];
     w[i] = v;
   }
-  for (int i = 0; i < 8; ++i) mid[i] = SHA512_IV_HOST[i];
+  sx::iv(mid);
   sha512_compress(mid, w);
   if (cudaMemcpyToSymbol(kRcptMid, mid, sizeof mid)) return 2;
   return cudaDeviceSynchronize() ? 3 : 0;

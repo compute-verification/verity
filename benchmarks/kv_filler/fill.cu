@@ -16,8 +16,8 @@
 // MMAs (bytes 0–7, then 8–15), and expands its own 16 sign bits of rows g and g + 8 at the same bytes into A. A warp
 // runs four such groups of 8 blocks at once, and keeps DEPTH offsets of loads in flight.
 //
-// Included by topup.cu (mode 4) after its `sha` (v2's SHA-512, `../codec_tensor/sha512.cuh`) and readers.cu (its TMA
-// copies); its C ABI is there.
+// Included by topup.cu (mode 4) after `../codec_tensor/sha512.cuh` (v2's SHA-512) and readers.cu (its TMA copies); its C
+// ABI is there.
 #pragma once
 #include <cuda_runtime.h>
 #include <stdint.h>
@@ -369,8 +369,8 @@ __device__ void derive_signs(const Signs& sg, uint64_t q, uint64_t P) {
                       512};
     uint64_t s[8];
 #pragma unroll
-    for (int k = 0; k < 8; ++k) s[k] = sha::kSha512Iv[k];
-    sha::sha512_compress(s, w);
+    for (int k = 0; k < 8; ++k) s[k] = sx::IV_DEV[k];
+    sha512_compress(s, w);
 #pragma unroll
     for (int k = 0; k < 8; ++k) {
       out[16 * i + 2 * k] = bswap32((uint32_t)(s[k] >> 32));
@@ -397,8 +397,8 @@ __device__ __forceinline__ uint32_t words_v2(const uint32_t (&m)[16], uint64_t j
   w[10] = j0 + lane, w[11] = pass, w[12] = 1ull << 63, w[13] = 0, w[14] = 0, w[15] = 768;
   uint64_t s[8];
 #pragma unroll
-  for (int k = 0; k < 8; ++k) s[k] = sha::kSha512Iv[k];
-  sha::sha512_compress(s, w);
+  for (int k = 0; k < 8; ++k) s[k] = sx::IV_DEV[k];
+  sha512_compress(s, w);
   uint32_t x = (uint32_t)(s[0] >> 32);
 #pragma unroll
   for (int o = 16; o; o >>= 1) x ^= __shfl_xor_sync(0xffffffffu, x, o);

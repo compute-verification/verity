@@ -147,11 +147,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
     """Attention at each k in the step's form and split count, then the append at every layer at each k."""
     import step as STEP
 
-    kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib)
-    v, i, q64 = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-    kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
-    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v], [v, v, v]
-    kv.so.kv_rc_receipts.argtypes = [v, q64, i, i, q64, v]
+    kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib, STEP.STEP_KV)
     sh = BW_KV.attn_shape(kv)
     b, ctx, layers = step["batch"], step["ctx"], 2
     slots = b * ctx

@@ -185,8 +185,6 @@ def fit(ks, ys) -> dict:
 def prim_gate(lib: B.Lib, torch, log) -> dict:
     """kv_prim's ops at the twin's rare_cases (each op's rare carry or borrow, edges, random words) against
     kv_twin.prim_want, bit for bit."""
-    v, i = ctypes.c_void_p, ctypes.c_int
-    lib.so.kv_prim.argtypes = [i, v, v, v, i, v]
     f = lib.field
     out, st = {}, B.stream(torch)
     for op, cases in T.rare_cases(f, random.Random(f.n + 7)).items():
@@ -222,8 +220,6 @@ def floor_gate(lib: B.Lib, torch, store, n_words: int, k: int, grids, st) -> lis
 def floor_occ(lib: B.Lib, torch, store, n_words: int, k: int, sms: int, reps: int, r: float, st) -> dict:
     """The read-and-decode at OCC_CTAS CTAs an SM, each checksum-gated against one word a thread's; r the read in
     bytes/s."""
-    v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-    lib.so.kv_decode_occ.argtypes = [v, q, q, i, i, v, i, v, v]
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     xr.zero_()
     lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, 0, B.ptr(xr), st)

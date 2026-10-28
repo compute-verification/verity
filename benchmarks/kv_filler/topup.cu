@@ -40,13 +40,12 @@
   } while (0)
 
 // SHA-512 (`../codec_tensor/sha512.cuh`): fill-sk16/v0's signs on the host, fill-sk16/v2's receipts on the device.
-namespace sha {
-using u64 = uint64_t;
 #include "../codec_tensor/sha512.cuh"
 
+namespace sha {
 static void sha512_host(const uint8_t* msg, size_t len, uint64_t out[8]) {
   uint64_t s[8];
-  memcpy(s, SHA512_IV_HOST, sizeof s);
+  sx::iv(s);
   std::vector<uint8_t> m(msg, msg + len);
   m.push_back(0x80);
   while (m.size() % 128 != 112) m.push_back(0);
