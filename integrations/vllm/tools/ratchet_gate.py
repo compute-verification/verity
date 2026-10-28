@@ -44,9 +44,9 @@ when:
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
   beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
   change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
-  for a queue merge), whose own merge the source checks below refuse.  In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
-  base's, each allowlist there holding the top's entries for its slug (none for a deleted one), P16's the top's public
-  commands too, and the ``test_no_new*`` tests
+  for a queue merge), whose own merge the source checks below refuse.  In a temporary worktree of the change's top, each
+  lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
+  entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
   lints with the base's pin.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
@@ -1083,8 +1083,8 @@ def lint_top(c: Change, base: str) -> None:
     """The source checks on the top change ``c``, after ``judge``, with the lints `lints_at` reads: a ruff finding or a
     counted lint's site it adds, or a list entry a rename leaves behind, fails a change that passed or touched nothing else,
     unless it is exempt (a revert; a pure move, from what it adds but not from the entries it leaves behind, which would
-    fail the repository's lints as surely); a change already failed or exempt keeps its verdict.  What the checks find is kept beside the verdict, in an entry
-    of its own, so a change below the top never fails by it."""
+    fail the repository's lints as surely); a change already failed or exempt keeps its verdict.  What the checks find is
+    kept beside the verdict, in an entry of its own, so a change below the top never fails by it."""
     if c.verdict in ("failed", "exempt"):
         return
     at = lints_at(c, base)
