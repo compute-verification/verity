@@ -75,6 +75,8 @@ COUNT -= 1  # io_shell's `SlotRow_v1`, which `ScanSlots_v2` gives the first posi
 
 COUNT -= 1  # io_shell's `SlotMask_v1`, since a slot's entry is all zero when it is empty
 
+COUNT += 2  # io_shell's `SelectCollect_v1` and `SelectEntry_v1`, a line of its own so it merges with any other change to the count
+
 COUNT += 2  # `int8_exact`'s Int8RowQuant_v3 and `boolean_int8`'s Int8RowQuant_v4, its σ, a line of its own
 
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
