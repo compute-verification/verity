@@ -11,6 +11,7 @@ import pytest
 pytest.importorskip("torch")
 
 from tests.check.opened import commit_steps
+from verity_vllm.commit import opened as OV
 from verity_vllm.commit import step_rows as R
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.commit.committer import device_pool as DP
@@ -90,6 +91,31 @@ def test_a_dropped_leaf_is_refused_by_name_never_replayed(cs, tmp_path):
         dev.open([(0, 3)], values_from=replay)
     with pytest.raises(KeyError, match="draw-gated release"):
         dev._gpu_blocks[0][0][0:dev.chunk]
+
+
+def test_a_released_window_dumps_slim_to_its_drawn_leaves(cs, tmp_path):
+    C = R.ROW_BYTES if cs else GPU_CHUNK_BYTES
+    host, rc, dev = committed(cs, {0: [("model.embed_tokens", (bytes(range(251)) * (200 * C // 251 + 1))[:200 * C])]})
+    runs = [(3, 6), (100, 101), (199, 200)]
+    DP.release(dev, {0: [i for a, b in runs for i in range(a, b)]})
+    doc = SD.dump(dev, rc, tmp_path / "w")
+    st = doc["steps"][0]
+    assert st["drawn_only"] and st["ranges"] == [[a * C, b * C] for a, b in runs]
+    assert 0 < len(st["nodes"]) < sum(st["levels"]) // 3
+    assert (tmp_path / "w" / "levels" / "s0.bin").stat().st_size == SD._node(dev) * len(st["nodes"])
+    assert not (tmp_path / "w" / "keys.bin").exists() and (st.get("salted") == [list(r) for r in runs]) == bool(cs)
+    store, run = SD.load(tmp_path / "w")
+    assert [s.root for s in run.steps] == [s.root for s in rc.steps]
+    rd = OV.OpenedReader(store, run)
+    for a, b in runs:
+        for lo in range(a, b):
+            for hi in range(lo + 1, b + 1):
+                assert rd(0, "model.embed_tokens", lo * C, hi * C) == host[0][lo * C:hi * C]
+    assert rd(0, "model.embed_tokens", 3 * C + 7, 6 * C - 3) == host[0][3 * C + 7:6 * C - 3]
+    with pytest.raises(RuntimeError, match="draw-gated release"):
+        store.open_range(0, 6, 7)
+    again = SD.dump(store, run, tmp_path / "again")
+    assert again["steps"][0]["nodes"] == st["nodes"] and again["steps"][0]["ranges"] == st["ranges"]
 
 
 def test_a_release_names_only_committed_leaves_and_happens_once(cs):
