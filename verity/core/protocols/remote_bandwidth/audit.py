@@ -13,7 +13,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
+2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
    its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
    on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
    once, after the root the verifier recorded for it, which the challenger's signed log keeps
@@ -99,7 +99,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
@@ -130,7 +130,7 @@ pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 pas
 (532.6 GB, gate runs 8 and 9's store) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")

@@ -1182,7 +1182,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_open_with_no_k_refuses(seed):
-    """K is the proof service's selection, committed in the period-open before any draw: a period whose open commits
+    """K is the proof system's selection, committed in the period-open before any draw: a period whose open commits
     none, or a malformed one, earns nothing."""
     for name in ("no-k", "k-form"):
         got, refused = _period(name, seed)
