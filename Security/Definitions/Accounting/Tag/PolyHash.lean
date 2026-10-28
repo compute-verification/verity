@@ -9,8 +9,8 @@ import Definitions.Accounting.Tag.Prob
 The tag of the bandwidth audit's uncertified fast check: `benchmarks/pous/hbm_audit/digest.py`, `gf31-poly/v1`. No
 statement about it certifies bandwidth. A device with memory to spare can keep a structure computed from each block
 (a Kedlaya–Umans evaluation table) and answer the hash without reading the block's words, so the certified tag is a
-random oracle's (`Bandwidth.Guarantees.AuditRO`). The statements about this hash are inputs to a possible version in
-the joint model, under a capacity bound.
+random oracle's (`Accounting.Guarantees.Remote.AuditRO`). The statements about this hash are inputs to a possible
+version in the joint model, under a capacity bound.
 
 A block is `W` little-endian `uint32` words (`WORDS = 16384` for a 64 KiB block). Its hash at a key point `g` is
 Horner's rule over the words' residues mod `p = 2^31 − 1` (`reference_block_hash`), and the hashes of `R` blocks are

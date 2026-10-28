@@ -7,7 +7,8 @@ import Definitions.Accounting.Tag.PolyHash
 The tag of the bandwidth audit's uncertified fast check (`gf31-poly/v1`): the keyed polynomial hash over
 `GF(2^31 − 1)` of `benchmarks/pous/hbm_audit/digest.py` (`Security/Definitions/Accounting/Tag/PolyHash.lean`). None of
 these statements certifies bandwidth: the bandwidth audit's guarantee rests on a random oracle's tag
-(`Bandwidth.Guarantees.AuditRO`). They are inputs to a possible version in the joint model, under a capacity bound.
+(`Accounting.Guarantees.Remote.AuditRO`). They are inputs to a possible version in the joint model, under a capacity
+bound.
 
 * `PolyNonCollision`, `PolyNonCollisionKeyed`: two blocks fixed before the key, with different residues, hash alike with
   probability at most `(W − 1)/p` over a uniform key (at most `W − 1` times the largest point mass of any key
