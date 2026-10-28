@@ -28,7 +28,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
-- ``L4``, one member root: the registration is O(members) (`Registration`), every member's public body (every row's
+- ``L4``, one member root: the registration is O(members) (`RegistrationSize`), every member's public body (every row's
   b || c, 128 bytes) SHA-512'd on the CPU for `rows.leaf_layer` and written out, and every port root a JSON entry; under one
   Merkle root over members, each member's leaf over its port roots, it is a root, and an audit opens K members in O(K log M).
 
@@ -345,7 +345,7 @@ LEAF_JSON_BYTES = 150
 
 
 @dataclass(frozen=True)
-class Registration:
+class RegistrationSize:
     """The window's registration as `verity.ml.windows.rows.write` makes it, members of `CAP` units: ``members``, port
     ``roots`` (a unit's rows each a port, the cut rows ``p#j`` included), the public bodies' bytes (b || c a row a unit) and
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
@@ -363,7 +363,7 @@ class Registration:
     member_root: bool
 
     @classmethod
-    def of(cls, units: list[Unit], member_root: bool) -> Registration:
+    def of(cls, units: list[Unit], member_root: bool) -> RegistrationSize:
         members = sum(-(-u.n // CAP) for u in units)
         roots = round(sum(-(-u.n // CAP) * (u.ins + u.out) for u in units))
         rows = round(sum(u.n * (u.ins + u.out) for u in units))
@@ -386,10 +386,10 @@ class Registration:
 
 
 def measure_cpu(scratch: Path, mib: int = 256) -> dict:
-    """This host's rates as `Registration.cpu_s` prices them, one thread, each over ``mib`` MiB: SHA-512 (`hashlib`) of
-    member-sized public bodies (`CAP` units of 6 rows), `json.dumps` of port-root entries as `rows.registration` writes them
-    (``indent=1, sort_keys``), 64 MiB files written and fsynced into ``scratch``, and 1 KiB files created there (each removed
-    after)."""
+    """This host's rates as `RegistrationSize.cpu_s` prices them, one thread, each over ``mib`` MiB: SHA-512 (`hashlib`)
+    of member-sized public bodies (`CAP` units of 6 rows), `json.dumps` of port-root entries as `rows.registration` writes
+    them (``indent=1, sort_keys``), 64 MiB files written and fsynced into ``scratch``, and 1 KiB files created there (each
+    removed after)."""
     import hashlib
     import os
     import platform
@@ -639,7 +639,7 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
     for name, levers, costs in sets:
         us = window_units(rest, heads, levers)
         rows_c = round(sum(u.compressions(costs) for u in us))
-        reg = Registration.of(us, "L4" in levers)
+        reg = RegistrationSize.of(us, "L4" in levers)
         served = served_ands(rest, heads, levers, target)
         pads = {t.name: pad_pass(heads, t, levers, base_ands, step_s, target) for t in TRAFFIC}
         full = pads[TRAFFIC[0].name]
