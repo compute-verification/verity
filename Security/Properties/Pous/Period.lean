@@ -23,11 +23,12 @@ record, a function of all the run's coins.
 **Every prover strategy, one fixed extractor.** Both are stated for every prover strategy `τ` in the ring model
 (`Strategy`): what survives setup is any function of the payload, `C` and the whole primitive, and each round's answer
 is any program, with no bound on the strategy's state or its time. Its type reads the memory challenger's coins only as
-the challenger releases them (the session commitment before the session, each index as the previous answer returns),
-which is the challenger being `Faithful` and `Secret` (the per-party names), covered today by `trusted-host`. The ring
-game's server is read from `τ` by one fixed extractor (`extract`): it packs `τ`'s state into `S₀` bits and cuts each
-round's program to `(D, Q, L)`, so it is a `Server` by construction, whatever `τ` does. Two named premises about the
-period's strategy take the place of the earlier per-run premise, which handed the proof a server the prover picked:
+the challenger releases them (each index as the previous answer returns; the coin commitment after the last answer, so
+no round sees it), which is the challenger being `Faithful` and `Secret` (the per-party names), covered today by
+`trusted-host`. The ring game's server is read from `τ` by one fixed extractor (`extract`): it packs `τ`'s state into
+`S₀` bits and cuts each round's program to `(D, Q, L)`, so it is a `Server` by construction, whatever `τ` does. Two
+named premises about the period's strategy take the place of the earlier per-run premise, which handed the proof a
+server the prover picked:
 
 * `DeviceModel`, the device model (`pous-ring-device`, `pous-ring-speed`), falsifiable by measurement: on the period's
   coins, `τ`'s state at each round boundary is within the capacity account's memory, the chip and every side channel's
@@ -42,11 +43,11 @@ Under the two, the extractor's server passes the ring game's session on every ce
 holds at most `B` bits at every tick, `B + S_chip + c < S₀` (`Pous.Period.SecurityProofs.extractPasses`, a lemma of
 `PeriodHeld`'s proof).
 
-Both rest on `CoinCommitHides` and the conjecture `P2RingAuditSecure` at a budget `(D, Q, L)`, which
-`Pous.EndToEnd.EndToEndRing` takes, and which is false at some budgets; `Pous.Period.PeriodHeldDeployed`
-(`Properties.Pous.PeriodDeployed`) takes it only at the budget the deadline and the round floor give. The setup
-check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`) are proved against `SetupProtocol.protocol.check`
-(`Proofs.Properties.Pous.Setup`), so neither is a premise.
+Both rest on the conjecture `P2RingAuditSecure` at a budget `(D, Q, L)`, which `Pous.EndToEnd.EndToEndRing` takes,
+and which is false at some budgets; `Pous.Period.PeriodHeldDeployed` (`Properties.Pous.PeriodDeployed`) takes it only
+at the budget the deadline and the round floor give. The setup check's `AcceptsDecodes` and `PublishesRoot`
+(`Properties.Pous`) are proved against `SetupProtocol.protocol.check` (`Proofs.Properties.Pous.Setup`), so neither is a
+premise.
 
 The certificate is graded by the peak (`Accounting.Guarantees.CapacityOfStateBound`'s reading): the bit-ticks below
 `S · len` bound the capacity account's memory at every tick of the window by `S · len`, so `S · len + S_chip + c` must
@@ -94,14 +95,14 @@ structure Audits (ΩW ΩQ : Type) where
 /-- **A prover strategy in the ring model**, at the other audits' coins, with no bound on its state or its time: what
 survives setup is any list of bits computed from the payload `W`, the public parameters, `C` and the whole primitive
 (perfect isolation: nothing else survives); round `j`'s answer to index `i` is any program over the ring, from the
-state the previous round left, shown the session commitment, returning the block and the next state. The memory
-challenger's coins reach it only as the challenger releases them: the commitment before the session, each index as the
-previous answer returns. -/
+state the previous round left, returning the block and the next state. The memory challenger's coins reach it only as
+the challenger releases them: each index as the previous answer returns, and the coin commitment only once the session
+is signed, after the last answer. -/
 structure Strategy (ΩW ΩQ : Type) where
   /-- what survives setup -/
   pre : ΩW × ΩQ → Bits sch.n → Bits sch.t → sch.Code → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω → List Bool
-  /-- round `j`'s answer to index `i` from the state `σ`, shown the session commitment -/
-  step : ΩW × ΩQ → MemoryChallenger.SessionCommitment → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
+  /-- round `j`'s answer to index `i` from the state `σ` -/
+  step : ΩW × ΩQ → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
     Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
 
 namespace Audits
@@ -142,22 +143,21 @@ def OnTime (ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω �
     run.commitment = (P.session ω).commitment ∧ run.limitNs ≤ LIMIT_NS ∧ AnsweredOnTime run (P.store (ω.1, ω.2.1))
 
 /-- **The device's trace** of the period's session in the ring model, for the strategy `τ` at the other audits' coins
-`o`, the capacity coins `x` and the memory challenger's draw `(I, v)`: for each of the 105 rounds, the state `τ` starts
-it from and the program it runs on index `I j`, shown the session commitment (`commitmentOf`, at the designated id,
-bound to the published root), the first round starting from what survived setup. -/
+`o`, the capacity coins `x` and the memory challenger's indices `I`: for each of the 105 rounds, the state `τ` starts
+it from and the program it runs on index `I j`, the first round starting from what survived setup. The coin
+commitment is not among its inputs: the challenger releases it after the last answer. -/
 noncomputable def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
-    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
-    (v : ByteArray × ByteArray) :
+    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19)) :
     List (List Bool × Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
   seqRounds ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
-    (τ.step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1) 0 (List.ofFn I)
+    (τ.step o (P.W o) (sch.enc (P.W o) x.1 ()).1) 0 (List.ofFn I)
     (τ.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
 
 /-- The blocks `τ` returns in its trace's rounds, on the period's primitive. -/
 noncomputable def answers (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
-    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19))
-    (v : ByteArray × ByteArray) : List (Bits sch.ℓ) :=
-  (P.trace τ o x I v).map fun e => (e.2.run ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)).1
+    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19)) :
+    List (Bits sch.ℓ) :=
+  (P.trace τ o x I).map fun e => (e.2.run ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)).1
 
 end Audits
 
@@ -188,12 +188,12 @@ def DeviceModel {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ 
     (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (D Q L round : ℕ) : Prop :=
   ∀ (o : ΩW × ΩQ) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
     (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray), Drawn P.sid x I v →
-    (P.OnTime (o.1, o.2, x) → ∀ e ∈ P.trace τ o x I v,
+    (P.OnTime (o.1, o.2, x) → ∀ e ∈ P.trace τ o x I,
       e.2.mulDepth ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1) ≤ D ∧
         e.2.keyWork ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1) ≤ Q ∧
         e.2.ringWork ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1) ≤ L) ∧
     ∀ B : ℕ, (∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, x) t).mem (r.acct .capacity) ≤ B) →
-      ∀ e ∈ P.trace τ o x I v, e.1.length ≤ B + d.chip + ∑ i, d.cap i * round
+      ∀ e ∈ P.trace τ o x I, e.1.length ≤ B + d.chip + ∑ i, d.cap i * round
 
 /-- `pous-ring-instantiation` and `prf/sha-512`, per run, in reduction form: **in the ring model, the period's strategy
 answers what its certified session recorded.** On every capacity coin where the period is certified (`Certified`, which
@@ -204,7 +204,7 @@ or time; it is the step from the deployed device to the ring model, so no Lean t
 def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) : Prop :=
   ∀ (o : ΩW × ΩQ) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams),
     P.Certified (o.1, o.2, x) →
-      ∃ I v, Drawn P.sid x I v ∧ P.answers τ o x I v = List.ofFn fun j => (sch.enc (P.W o) x.1 ()).2 (I j)
+      ∃ I v, Drawn P.sid x I v ∧ P.answers τ o x I = List.ofFn fun j => (sch.enc (P.W o) x.1 ()).2 (I j)
 
 /-- **The fixed extractor**: the ring game's server read from the strategy `τ` at the other audits' coins `o`. It packs
 `τ`'s state into `S₀` bits (`StateBits.pack`, read back by `StateBits.unpack`) and cuts each round's program to
@@ -214,31 +214,30 @@ within the budget, it answers as `τ` does. -/
 noncomputable def extract {ΩW ΩQ : Type} (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ) (D Q L : ℕ) :
     Server Pous.EndToEnd.S D Q L where
   pre W pp C ω := StateBits.pack (τ.pre o W pp C ω)
-  step sc W pp j σ i :=
+  step W pp j σ i :=
     Prog.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
-      (τ.step o sc W pp j (StateBits.unpack σ) i)
-  bounded _ _ _ _ _ _ := Prog.clip_ringBounded _ _ _ _ _ _
+      (τ.step o W pp j (StateBits.unpack σ) i)
+  bounded _ _ _ _ _ := Prog.clip_ringBounded _ _ _ _ _ _
 
-/-- **PoUS's per-period guarantee, about the deployed check.** Given the coin commitments' hiding (`CoinCommitHides`)
-and P2's security in the ring model at `(D, Q, L)` (`P2RingAuditSecure`): for every joint run on every device whose
-capacity coins are the ring game's, every period's audit `P`, every prover strategy `τ` of its device under the device
+/-- **PoUS's per-period guarantee, about the deployed check.** Given P2's security in the ring model at `(D, Q, L)`
+(`P2RingAuditSecure`): for every joint run on every device whose capacity coins are the ring game's, every period's
+audit `P`, every prover strategy `τ` of its device under the device
 model (`DeviceModel`) and the instantiation (`Instantiates`), every certificate `S` with
 `S · len + S_chip + ∑ cap_i · round ≤ S₀` and every value of the other audits' coins, the verifier's whole decision
 accepts the period with no break in its own data while the capacity account held fewer than `S · len` bit-ticks over the
 capacity window with probability at most `δ + ε_max` (`1% + 2^-128`) over the capacity coins. -/
 def PeriodHeld : Prop :=
-  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-      ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-        (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-        (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
-        DeviceModel r P τ D Q L round → Instantiates P τ →
-          S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
-            ∀ o : ΩW × ΩQ,
-              Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
-                  P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
-                    (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
-                (Params.δ : ℝ) + Params.εMax.toReal
+  ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+      (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
+      DeviceModel r P τ D Q L round → Instantiates P τ →
+        S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
+          ∀ o : ΩW × ΩQ,
+            Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
+                  (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
+              (Params.δ : ℝ) + Params.εMax.toReal
 
 /-- **PoUS's per-period guarantee is the joint's capacity guarantee.** Under `PeriodHeld`'s premises, in a joint run
 whose capacity verdict is the verifier's whole decision outside a break (`r.accepts .capacity ω → P.Accepts ω ∧
@@ -246,15 +245,14 @@ whose capacity verdict is the verifier's whole decision outside a break (`r.acce
 audit has its per-run guarantee (`CapacitySoundPerRun`, `JointPerRun`'s input) and its sure-bound form
 (`CapacitySound`, `Joint`'s) at certificate `S` and error `δ + ε_max`. -/
 def PeriodCapacity : Prop :=
-  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-      ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] [Fintype ΩW] [Fintype ΩQ] (d : Accounting.Device ι)
-        (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-        (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
-        DeviceModel r P τ D Q L round → Instantiates P τ →
-          S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
-            (∀ ω, r.accepts .capacity ω → P.Accepts ω ∧ ¬ P.Break ω) →
-              r.CapacitySoundPerRun S ((Params.δ : ℝ) + Params.εMax.toReal) ∧
-                r.CapacitySound S ((Params.δ : ℝ) + Params.εMax.toReal)
+  ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] [Fintype ΩW] [Fintype ΩQ] (d : Accounting.Device ι)
+      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+      (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
+      DeviceModel r P τ D Q L round → Instantiates P τ →
+        S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
+          (∀ ω, r.accepts .capacity ω → P.Accepts ω ∧ ¬ P.Break ω) →
+            r.CapacitySoundPerRun S ((Params.δ : ℝ) + Params.εMax.toReal) ∧
+              r.CapacitySound S ((Params.δ : ℝ) + Params.εMax.toReal)
 
 end Pous.Period

@@ -38,6 +38,7 @@
   "Properties.Pous.EndToEndAt",
   "Properties.Pous.PeriodAt",
   "Properties.Pous.PeriodDeployed",
+  "Properties.Pous.Pooled",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -181,10 +182,6 @@
    "owner": "@network-accounting",
    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
   },
-  "Pous.P2.Assumptions.CoinCommitHides": {
-   "owner": "@memory-accounting",
-   "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
-  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
@@ -199,15 +196,19 @@
   },
   "Pous.Period.DeviceModel": {
    "owner": "@memory-accounting",
-   "digest": "b66e645db6ba0c5ef3bd0180b599b5d7d1e49c832b57935152bf8215f683b801"
+   "digest": "2a18edf5d0551da318e3b6d712c6373df33fd32b2f8053ad6f145e2e32337091"
+  },
+  "Pous.Period.FixedBefore": {
+   "owner": "@memory-accounting",
+   "digest": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c"
   },
   "Pous.Period.Instantiates": {
    "owner": "@memory-accounting",
-   "digest": "41e1336c4b1da55366bd21f70f91c8b3d7a52483a0f0ebd521267e5ba549923a"
+   "digest": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e"
   },
   "Pous.Period.RingDeviceAt": {
    "owner": "@memory-accounting",
-   "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
+   "digest": "0f9fc9043bb966b689953434e29cba1e8e6127551b39c0506ee67693ef27a2df"
   },
   "Pouw.Assumptions.SAKServed": {
    "owner": "@compute-research",
@@ -1293,6 +1294,24 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldNontrivial : Pous.Period.PeriodHeldNontrivial"],
    "assumptions": [],
    "type_hash": "2cfa1eed4accb530e3f5570ec5d41e4f81c6a09f60324b20fc5d5da711a012e2"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
+   "assumptions": [],
+   "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log_honest": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_honest : Pous.Period.PooledShortLog_honest"],
+   "assumptions": [],
+   "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_nontrivial : Pous.Period.PooledShortLog_nontrivial"],
+   "assumptions": [],
+   "type_hash": "918e7292201b0d4ec19a1ad0f4586c158a191610851dd27f0b67962dda2bbd0f"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "owner": "@memory-accounting",
@@ -4248,7 +4267,7 @@
   "frozen": {
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
-   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes CoinCommitHides, the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
+   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
@@ -4268,15 +4287,15 @@
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises, for every prover strategy under DeviceModel and Instantiates, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw) at any price from any source game that credits words, at the source's error: the source's bound is a hypothesis over its own event, so no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field and the source game's acceptance a parameter), and the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list. Its premises are Accounting.Assumptions.WordCostsMacs and Accounting.Assumptions.HelpWithinCertifier, on the premises list; its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.credited_sound.",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200": "frozen (no-function,world-unlisted): WorkOfH1CheckedCreditPeriod at the H200's INT8 price (Accounting.h200S8Price, W1's prices on W1Device.s8H100: an INT8 tensor-core multiply-add 1, a CUDA-core op 32), a K-deep R x C tile's 16 R C multiply-adds a word (Accounting.receiptWordMacs R C: 512 at PouwH1Tile_v1's 4 x 8, 16384 at _v5's and _v6's 32 x 32), its credited words' 2 (K/32) 16 R C a unit (Accounting.receiptUnitMacs K R C: 2048 at v1, 4194304 at a warp and K = 4096) and b_unit bits a unit, for every SHA-512 and fetch price, tile shape and unit width; as WorkOfH1CheckedCreditPeriod it has no deployed function's outcome as one hypothesis and its event is a Pouw.pr through PeriodRun.Sound. Its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.h200_sound, at K = 64, 4 x 8 and b_unit = 1024, on a period whose PoUW verdict is the compiled check's (HonestH200.honestRun); its witnesses are Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200_honest, its hypotheses at one window, and _nontrivial, its conclusion failing at the verifier that accepts everything (HonestH200.acceptAll).",
-   "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and every prover strategy, and takes PeriodHeld's premises (CoinCommitHides, P2RingAuditSecure, Pous.Period.DeviceModel and Pous.Period.Instantiates with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.EndToEnd.SecurityProofs.endToEndRingAt": "frozen: endToEndRing's game at every block count N, a bound on a game's probability in the ring model, not a property of one function: c + ε from a bound c on P2's audit at N and the coin commitments' hiding ε at N; it speaks of the deployed system as endToEndRing does",
+   "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and every prover strategy, and takes PeriodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel and Pous.Period.Instantiates with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingAt": "frozen: endToEndRing's game at every block count N, a bound on a game's probability in the ring model, not a property of one function: c from a bound c on P2's audit at N, with no hiding term (the coin tree reaches no server before its last answer); it speaks of the deployed system as endToEndRing does",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": "frozen: endToEndRingAt with c from P2RingRoundSecure (PousP2Rounds.graded), at every N it covers (2^19 to 2^25); a bound on a game's probability in the ring model, not a property of one function",
    "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
-   "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
-   "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round) and the honest strategy that keeps all of C and answers by lookup (honestStrategy), the device model DeviceModel holds at the deployed budget and the instantiation Instantiates holds for every audit under a 32-byte session id, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin; art:23a323f3, r20260929-060834-0ec4)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
@@ -4286,7 +4305,10 @@
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial": "lemma: WipeSigned's nontrivial lemma: WipeRanAccepted fails at a session with a batch no record encodes, under the empty key, for the challengers that ran nothing: it is no run of theirs, and the collision finder and the forger built from it output nothing, so the break is not always true",
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "lemma: WipeSigned with a check that accepts everything in place of the wipe's compiled check is false, at the session of wipeSigned_nontrivial",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
-   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0"
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
+   "Pous.Period.SecurityProofs.pooledShort_log": "frozen (premise): periodHeld pooled over a monitoring period of U windows, each window's joint run, audit and other audits' coins fixed before its own capacity coins (Pous.Period.FixedBefore) and its strategy any under the device model: the probability that at least M windows are accepted with no break and a certificate short of the held state (Pous.Period.ShortAccepted) is at most delta', for every z > 1 and every M >= ((z - 1) U (delta + eps_max) + log (1 / delta')) / log z. Its event's acceptance is an abstract audit's (Pous.Period.Audits.Accepts) over an abstract joint run of the device model, and it takes periodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates, the certificate's fit in the ring game's state bound) and FixedBefore, none of them under shape.premises. delta' is delta_PoUS, a public deployment parameter that no component publishes.",
+   "Pous.Period.SecurityProofs.pooledShort_log_honest": "completeness: the honest lemma of pooledShort_log: at 10,080 windows, each the honest period of periodHeldHonest (honestRun, honestStrategy) against an audit under a 32-byte session id (sidAudit), FixedBefore, the device model at the deployed budget, the instantiation and the certificate's fit hold, and M = 210 meets the bound at z = 2 and delta' = 2^-64",
+   "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": "completeness: the nontrivial lemma of pooledShort_log: at 10,080 windows whose capacity account holds nothing (emptyRun), an accept-all verdict accepts every window with a certificate short of its held state, so the pooled event has probability one, above delta' = 2^-64"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4976,6 +4998,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -5492,6 +5515,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.Requirement.held",
     "Properties.Requirement.read",
     "Properties.Requirement.stepRegion"
@@ -5752,7 +5778,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Definitions.Accounting.JointBridge.CreditedWords": {
@@ -7225,13 +7254,14 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.Assumptions.P2": {
-   "digest": "924d4884f2de3b6f0b60772c529b1d861b9761e0a9ff24f6ad4e8ff54db43f7d",
+   "digest": "b768407b053bb76b905487cf76c06cc71831ee9399ad5c1507fa01b96b63f16f",
    "definitions": {
-    "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a",
     "Pous.P2.Assumptions.P2RingRoundSecureWide": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
@@ -7239,7 +7269,6 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
@@ -7249,7 +7278,8 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed"
+    "Pous.Period.SecurityProofs.periodHeldDeployed",
+    "Pous.Period.SecurityProofs.pooledShort_log"
    ]
   },
   "Definitions.Pous.Game.Oracle": {
@@ -7288,7 +7318,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Definitions.Pous.Game.Prob": {
@@ -7323,6 +7356,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
@@ -7361,7 +7397,8 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
-    "Pous.Period.SecurityProofs.periodHeldDeployed"
+    "Pous.Period.SecurityProofs.periodHeldDeployed",
+    "Pous.Period.SecurityProofs.pooledShort_log"
    ]
   },
   "Definitions.Pous.Model.M1": {
@@ -7386,7 +7423,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.Model.M1p": {
@@ -7414,6 +7453,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
@@ -7451,7 +7493,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.Model.StreamedWipe": {
@@ -7489,7 +7533,9 @@
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldHonest"
+    "Pous.Period.SecurityProofs.periodHeldHonest",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Definitions.Pous.P2.Cost": {
@@ -7556,7 +7602,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Definitions.Pous.P2.Mutable": {
@@ -7611,6 +7660,8 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
@@ -8143,6 +8194,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -8294,6 +8347,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -8519,6 +8574,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -8672,6 +8729,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -8777,6 +8836,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
@@ -9128,6 +9189,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -9391,6 +9454,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -9440,6 +9505,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -9592,6 +9659,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -9712,7 +9780,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "MemoryChallenger.Judge": {
@@ -9752,7 +9822,7 @@
    ]
   },
   "MemoryChallenger.Records": {
-   "digest": "8dd851e22ad536c9f5ae02c29116b0844bddb6a56004d05056f9fb18fd467986",
+   "digest": "b0de27e95cf5082851d50a9369102a10e4ef64c0368e9a4b1ddace18a71d1f55",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -9813,6 +9883,8 @@
     "MemoryChallenger.header": "ba8ba493a6e94b378f7d5986e48ccac0461e2ae75b030f4defdb1227c8ba007d",
     "MemoryChallenger.instBEqSessionCommitment": "4b71f394bba101b8137e4b85a4480ae521fdf8901a68c3c1a6e6e7efba43b454",
     "MemoryChallenger.instBEqSessionCommitment.beq": "fc559134d62c8328730d4711c4732821d8255538575ae507ddf54f792ff45c86",
+    "MemoryChallenger.instInhabitedSessionCommitment": "f562164380665d3682bfa7502107482e6698b0824b2bfa631bc341d7e83de2ac",
+    "MemoryChallenger.instInhabitedSessionCommitment.default": "5ee7da6c329148556696c8ac54a53eb5ed7fbf615635f1413f923ce840797f1a",
     "MemoryChallenger.message": "c7f4d39c27b0c2b6d78b2e86ccd054863dff64347b17493c7816933ef495434b",
     "MemoryChallenger.pyJsonStr": "4b73401b7a9b129fc9ebbea967e554592113d2094c19b2745d3f71528320dbbd",
     "MemoryChallenger.recordsRoot": "353ee7187b7be14be7af950c97c84e69644730673bceab8a16a323e8a037bbec",
@@ -9848,7 +9920,10 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "MemoryChallenger.SignedMessage": {
@@ -9877,7 +9952,8 @@
     "Pous.Period.SecurityProofs.periodHeldAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log"
    ]
   },
   "MemoryChallenger.StreamedWipe": {
@@ -9960,7 +10036,7 @@
    ]
   },
   "MemoryChallenger.Verdict": {
-   "digest": "31e763500bf324942f8d5579e4ba37a5aa2b1b703a0c2a229c0deb82428ce411",
+   "digest": "e00861e499354f37068407371abc101821130e4eb685fdf731eeb0029aaecb56",
    "definitions": {
     "MemoryChallenger.KNOWN_SCHEMES": "a9e423b941289e505c96985a3b431ba9ba0a7ba7ceb2c317450bd028b9fa0ab3",
     "MemoryChallenger.LMS": "adec2334cb4a7eb8ed19042a9400f4316cbfed9dd7c5589ebefdf78412f9d64a",
@@ -9978,6 +10054,8 @@
     "MemoryChallenger.Verdict": "9fdf3285abed057627ac0fa87f4122e84418b7073b3ea11fa99ce34054ee24ef",
     "MemoryChallenger.Verdict.accepted": "784f0ec84e7d2acbcc246cda142ba9efb1f614dc9e210bb869ccd8074169aab0",
     "MemoryChallenger.Verdict.reasons": "966c235026fe75780915223787dd5424778757d55801953d89f10006060bb5cc",
+    "MemoryChallenger.instInhabitedSignedSession": "78321aec9e577e16f501cba5fb1a9f5694864a99e935b0049aa26523519b7f30",
+    "MemoryChallenger.instInhabitedSignedSession.default": "5bd4af79877fd1c89356f1d05bd47da345822ae864bbd46c0a0d73775edb26d5",
     "MemoryChallenger.lmsVerify": "c0ebdb51213699179ff3229ef1192e756fcb4b72eca4d01e3c21e6bf3c2b1b48",
     "MemoryChallenger.pyRepr": "910b941de99f0673933b0e96b05ebe93ce61a92fa9ff3dbca15032aba45d7602",
     "MemoryChallenger.testScheme": "5ccf1c73c6c0c982ae0e66ad9a0c407f0cd9e994b099ef86a44b054235a4e4cb",
@@ -10003,7 +10081,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "MemoryChallenger.WipeJudge": {
@@ -10998,6 +11078,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -11033,6 +11115,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -11061,6 +11145,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
@@ -11101,13 +11187,6 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
-    "Pous.EndToEnd.SecurityProofs.endToEndRing",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide",
-    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -11118,6 +11197,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.deployed",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
@@ -11135,22 +11216,16 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
-    "Pous.EndToEnd.SecurityProofs.endToEndRing",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
-    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide",
-    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Pous.Period.SecurityProofs.periodHeldAt",
-    "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial",
     "PousCheck.Properties.SecurityProofs.deployed"
    ]
   },
@@ -11172,6 +11247,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -11232,7 +11309,9 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "PousCheck.Setup": {
@@ -11265,6 +11344,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -11304,6 +11384,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
@@ -12384,9 +12466,9 @@
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld": {
-   "digest": "14e02af108ab04f3192c17a9e8e350ff4dd9e1808a7860fbd7afce654be865cd",
+   "digest": "d5f6d1f5c65d2f9087f12b7c1f329e9dec2b41a507f38c3a7c336a5cd4699f09",
    "definitions": {
-    "Accounting.Bridge.SpaceOfPeriodHeld": "6a1fe56238dd0d659113806f481715ac801231117390f65f34e9fb6b70ae3dfd"
+    "Accounting.Bridge.SpaceOfPeriodHeld": "68f87a6d4995344f403b8e0e9274fddb74be2ee4484e7b1728369a95e0e405f4"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld"]
   },
@@ -13147,6 +13229,8 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.deployed",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
@@ -13154,27 +13238,27 @@
    ]
   },
   "Properties.Pous.EndToEnd": {
-   "digest": "2b83ff9948dde449acbb5c7c25abdaf6b0daed722aeb0bc3fba70a921cab7ce8",
+   "digest": "797d5a9da5eab34940e17f9d64a574f26dd6bfd3d30a9b244b84ad6565a5b17e",
    "definitions": {
     "Pous.EndToEnd.Accepted": "2e4b9d66656d37af29ef1ab265dc6df753e5bf2485cd55f953c568f3e18e6ddb",
     "Pous.EndToEnd.AnsweredOnTime": "c2870b618539d7df4b0ed74c56d7a427ea19457463d0c6ec11753c881fc1bdf8",
     "Pous.EndToEnd.AuditsSetup": "46e916dc15159eb4d252bf407c47652475783eb97e8bad259e96772472205a28",
     "Pous.EndToEnd.Bytes": "9aa452329501006f98b36b457f3d66a29927a48138d9151293a78432ab9c7629",
     "Pous.EndToEnd.DrawExact": "5716557793355b6e4cabb514d914e4325abb236dbd92568b421bd184076e23be",
-    "Pous.EndToEnd.EndToEndRing": "cedede4e8de6c0160cf0f8e90c61e9216f937557ed998f527f3298e8ddcecb2a",
-    "Pous.EndToEnd.EndToEndRingDeployed": "b145fabd33d90e5e91b01394178c689a87da518abb8e909a329ff97a73e663c9",
+    "Pous.EndToEnd.EndToEndRing": "8321f3e2649db7109347eebcebf9b025ee0f70594c9e695b5ef7c16c59052854",
+    "Pous.EndToEnd.EndToEndRingDeployed": "d41df6fc305f77101b91a583159c3bb8da172fb79a4314bae1c89eb2cf14c9fe",
     "Pous.EndToEnd.FULL": "d6d58a4b6fef14c6a7da026ead94ffdf7194838c4e02d5681b0e41068b6d74f0",
     "Pous.EndToEnd.HmCoins": "9cc2b3d73fb1a88f92eb44225361d5e138cea7c92b48db4656c899cb48beb066",
-    "Pous.EndToEnd.HonestPassesAccepts": "a11053b253a40ba0f87be185f5214c6f9cc2ac19775130020067b8179cc9683b",
+    "Pous.EndToEnd.HonestPassesAccepts": "63594aff051f10c5545867244dfa2250d21e6c18c9b468fea5344ce0c062ed58",
     "Pous.EndToEnd.HonestPassesRing": "d6f5298462246fa10e32727eeeb0061e070b573004c315fccfa8b6361aa0d75f",
     "Pous.EndToEnd.LIMIT_NS": "11584def18b720ba5bccd123f38bd2d93fa3a595b1853297f494f79dd7f99af8",
-    "Pous.EndToEnd.Passes": "13e9ddd0b6b6312c4120640d8a774562cd954aa3d8c78d12013c45cac9689cf2",
+    "Pous.EndToEnd.Passes": "20497d3278e0c37aeb5e44a0b6e7cf91ff5cec108ff5691ae28e422fd98faac4",
     "Pous.EndToEnd.RunBreak": "c1a4d535c19acb0c42c4245484c32895a7c02f3480e318baaf05e641f9f4514f",
     "Pous.EndToEnd.RunCheckAccepts": "cb67a47af7634f30b20da95a4791c1b57ca4ab7b1d5a1caefd0dea82f40cc79a",
     "Pous.EndToEnd.S": "5fd15b8e1093c3e86c0645f56f2a2e2d845be1a944f7f8e8ea741edeef0e0bd8",
-    "Pous.EndToEnd.Server": "e706220cebed59ed039f899be9e67aaeca1081543a73eea7ed780df53b340e10",
+    "Pous.EndToEnd.Server": "0f89681683185a5cdcb07a9e8f2dffadefd71dc85c3dbb6634b3d681f4b28732",
     "Pous.EndToEnd.Server.pre": "19017563e1eaac00c3aebb7cc8bf0a82c78924e57f6077b6b99e5daaf7ee7329",
-    "Pous.EndToEnd.Server.step": "0e10b276b3fc9991e269e17ee9b4d63d13bda64ab25f0c5aec4447b4147b47d3",
+    "Pous.EndToEnd.Server.step": "68420d78ec9ddd4d92909c16ebba0f4485b6b269327fa478a4dfb8a99d313959",
     "Pous.EndToEnd.Shaped": "ba2e4cc10ff2ec1c3c986feb77e25410fe39e9bced76006a4dfa71d88dbcc3c2",
     "Pous.EndToEnd.Streams": "7c059106a0d82756ef3e40cf54b425661e4193335a9660f53a6f1a0e5645be13",
     "Pous.EndToEnd.TableBreak": "32f889f8007524389584767ce4b85f48c2f9a562ceb77201249e990a212818ab",
@@ -13184,7 +13268,6 @@
     "Pous.EndToEnd.bytesOf": "1bf6f26565e95dea60346de6431520966589eacd73df0320410d7d747c226223",
     "Pous.EndToEnd.coinKey": "9540c153e5c2897fb03cd7c41aa0ceedb261028f72ee3732fda73917fd95c6d0",
     "Pous.EndToEnd.coinView": "84f8a78ecaac791c71b62f5bb089305d4dc092b21b7dfcf6febc9fd7c1ce3700",
-    "Pous.EndToEnd.commitmentOf": "02ca7be6f758ad1d1b799a8f0a6826b1c117d98b3cf376b7b7719997f24815b4",
     "Pous.EndToEnd.flat": "36aaa534d20cdef95ad1ab95df0150cd6906aa5604a5f8e6536deff630573404",
     "Pous.EndToEnd.leafInput": "906fa4b0121a2eff546a362ebd7a4ffe8c753775559f66bb16661d85cfeec5aa",
     "Pous.EndToEnd.q": "62f6160eff44113e913056c82541f99919de20f246e8c2f03498b1888538f445",
@@ -13212,30 +13295,32 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Properties.Pous.EndToEndAt": {
-   "digest": "650d1e41fa5c9cb5b82303ca2ab6121531629517c71514b05ad92e05ab9069c5",
+   "digest": "011166fa54edaec26562b4349c2f400136e6e67322e4a55a92d8916351614bfa",
    "definitions": {
     "Pous.EndToEnd.AcceptedAt": "7e7b3aceb1db09ac7ae6963ba59a46d38aafb0982c7680821ab61ad44391ecf2",
     "Pous.EndToEnd.AuditsSetupAt": "4eb6aff7826d6923fb27ddaee4b5d5dc2330e7cc2245fea890a5d9ba60dff270",
     "Pous.EndToEnd.DrawAtMost": "ed02e446fe21834d9438bb488d9f9210ac033bbf90563241e976e746ecde2a95",
-    "Pous.EndToEnd.EndToEndRingAt": "a0e43954214cebdd4e6b9d2ec6fa098cfe4bcb2a8398d1d7090d2860e5574f0d",
-    "Pous.EndToEnd.EndToEndRingDemo": "1c153db104b106b5cd5e013bc23e832580a5217119c531eb2d7237ebc57e6c6d",
-    "Pous.EndToEnd.EndToEndRingOfRoundSecure": "5bfc910a5712fb8e32074167520d22955b7905e6d9ba3cb4dc16e036cee6d939",
-    "Pous.EndToEnd.EndToEndRingOfRoundSecureWide": "4a7ec19825249733db2dc91b989a8acfb20f3b72868d0b8c7eba5f6a85136fea",
-    "Pous.EndToEnd.PassesAt": "cb7efa4735dfe8ba3ad29374ce336dc52c9efe54a4057c2470a8715459faf7b9",
-    "Pous.EndToEnd.RingServer": "9b59dbc9d6c066c5559b64a88e3064091451e59af51b15260a5a440957b90ade",
+    "Pous.EndToEnd.EndToEndRingAt": "5bbfe5fd453a1c9e979b359db3f090dff0ba11dde8362e4024322f3d682cc565",
+    "Pous.EndToEnd.EndToEndRingDemo": "89882d80eaffc9fbcb538b86aee1c6aaaa84f994dcbaee5f4254ef0c577fc367",
+    "Pous.EndToEnd.EndToEndRingOfRoundSecure": "013f06ae848354818eb6fe834767acf2bb2c80fa16bcf36c0f274b9f137224a1",
+    "Pous.EndToEnd.EndToEndRingOfRoundSecureWide": "1ffe938c3bf740261150e66a9a6d18dc1fc3515bfb63b333084bfdd321ffb126",
+    "Pous.EndToEnd.PassesAt": "121d8caeeb5897237a7d502f8c70a5aea3a8d4c55d3598bdfaec82d6b3ba36e9",
+    "Pous.EndToEnd.RingServer": "e4a3e86150a8359710ebf48749e71f5450b2353d5028a00dd35404067a07c667",
     "Pous.EndToEnd.RingServer.pre": "adc05612bc738e3100e8a68fbecac680767fb625e4d0c937bd5ce4003ec9f897",
-    "Pous.EndToEnd.RingServer.step": "160540a8b5a19c5e214ec0370d6d47d62fcfac9766e5456b53b4d3e9d49f1ebe",
+    "Pous.EndToEnd.RingServer.step": "a98bfc1fec52053ac4448d3002a4ae365980173d01535e51af49f2b844854327",
     "Pous.EndToEnd.RunCheckAcceptsAt": "d3e92b6735624dd79fec006f53ae0e1d3a91821b51179691b5face8c980e92df",
     "Pous.EndToEnd.SAt": "92254c209ec5e7fec9bbc11616287419e76d44460dcf23cd6003560efdb4749c",
     "Pous.EndToEnd.ServerAt": "191b3e8b41cf662ef9763dc5a3a00a8b55354afa8342c14858380bec95dae20b",
     "Pous.EndToEnd.ShapedAt": "857369acc67831231cebd3b4b5d8857402495356de19fd851f766be60ee86fb9",
     "Pous.EndToEnd.TableBreakAt": "eb392d286b2f089c538b22ad81d52718d02fced90a03279ddcf19729e329abab",
     "Pous.EndToEnd.coinViewAt": "4f706109cd608e2380fba196965f705b73283a34c7212f0cafb532bb2da2e260",
-    "Pous.EndToEnd.commitmentOfAt": "359f751b804d78142d38e88bdb62cc3d22a6196a9ce010584e38398b63604e42",
     "Pous.EndToEnd.schAt": "548c786e4696997154355dcfc507617cda29090f4bad2bd03b1b078ec893584a",
     "Pous.EndToEnd.tableStringsAt": "77f5ade10701bc2cab4eee863daad40e593d36573a2adf10e23f62399c176579"
    },
@@ -13305,18 +13390,20 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Properties.Pous.Obligation": {
-   "digest": "b12e890d4899302d4151a843086083537e58bc308b7e7b4d18e6dffeb9f28f4f",
+   "digest": "3e82f123b4093cd34f4c57ab24f84c417ef804c891e769f2a67fa28b1cf489a4",
    "definitions": {
-    "Pous.Period.ObligationHeld": "db9864881b895f7a5435cc1322c1b811b1cf0a9a914806f827df1a0738b928dd"
+    "Pous.Period.ObligationHeld": "0a67ae6654d0ee2e4ad7a88ac92a210751014201722aab6fb02f86cb2312a4ff"
    },
    "guarantees": ["Pous.Period.SecurityProofs.obligationHeld"]
   },
   "Properties.Pous.Period": {
-   "digest": "7060a042f99d3f483fa80de0a82b73a8e8d8c9ae6973f72f2dd143b77559cd65",
+   "digest": "cd6c9e58b32e9025cefdb2d9785ffee28fd7da9ba0d5a84cc122c02d7db1b276",
    "definitions": {
     "Pous.Period.Audits": "2abf0c7472eb8e703a45f56b3d6b562f9d35a136af62f541ffb09bc1913aa97e",
     "Pous.Period.Audits.Accepts": "9c59a62ff9f63e44a0a428705d76fa30ccfb0d8ad8075c50591f2bc4c108c803",
@@ -13324,7 +13411,7 @@
     "Pous.Period.Audits.Certified": "c2c244fd021695f7444f563e5f0e6f0acb345954e74d596d38f93bae11aaa749",
     "Pous.Period.Audits.OnTime": "bc1b4de87b6dec12c8d1014766f1d0325080bef79deca7b19978b28624003b87",
     "Pous.Period.Audits.W": "0e7bf51de4a054d15293a754c98e473e6a09df013d61afe8cfd4cac5f75deca6",
-    "Pous.Period.Audits.answers": "89dcc41cc3647a4bf7114d8f8d896eb7eb7257fb1e411252f0af7f29af61cc7d",
+    "Pous.Period.Audits.answers": "5cf88bd80b19d41ca6f0a2ce8b6bf2f24a6f6aafe38e9cad976b15e9c691782e",
     "Pous.Period.Audits.commitment": "0a8ab51f93a9ee8c4fa26429f0aca8ead95a6007e01211d7bc6bde6db9623445",
     "Pous.Period.Audits.device": "0be4cfbb138e21f665c1f7ac9f78b40809cd34d26c364e7af740cc06f3f4443c",
     "Pous.Period.Audits.digests": "a67611564c216b958f03ebda5d9276e7dd1c84245b96ce59a877e06768954701",
@@ -13332,16 +13419,16 @@
     "Pous.Period.Audits.session": "fbcc30d2d21b509b68a7e4fd86bdcf2a110faf352ac17e1b936e9b4886e667c1",
     "Pous.Period.Audits.sid": "36d8bc762d9ddf145d62d7d65c3e0e0bf12f15168114673abfabe22bc514ac4a",
     "Pous.Period.Audits.store": "48c5ed32a90b4013cec8cece8b54fbf47e8f6e42ac2dfc78780a55f232add1f8",
-    "Pous.Period.Audits.trace": "e5c38973a5dfe814b7bc4b9e8c76fe34643db1e3b6e44d67a51b26f417911409",
+    "Pous.Period.Audits.trace": "6a9fb7753028c0e94312e27e00c8c0223f5e8f2efd487489c931741b84b8f9d9",
     "Pous.Period.Audits.trusted": "b17da66a5d8acb82246074cec18a14315b812993923ce16038faa44d919ae0f1",
-    "Pous.Period.DeviceModel": "b66e645db6ba0c5ef3bd0180b599b5d7d1e49c832b57935152bf8215f683b801",
+    "Pous.Period.DeviceModel": "2a18edf5d0551da318e3b6d712c6373df33fd32b2f8053ad6f145e2e32337091",
     "Pous.Period.Drawn": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-    "Pous.Period.Instantiates": "41e1336c4b1da55366bd21f70f91c8b3d7a52483a0f0ebd521267e5ba549923a",
-    "Pous.Period.PeriodCapacity": "56ca5e853439d2a13283b55847f3846027d95b10a938324e6fb6f85ea395543a",
-    "Pous.Period.PeriodHeld": "5323b89fd4e7063ced4238250c6ba974360256b70e2f287d8de75b2afcd06179",
-    "Pous.Period.Strategy": "1ce2c1fe94052d8d86ad72d31282b42f32bfdecd360662ed5612497df9d20b2a",
+    "Pous.Period.Instantiates": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e",
+    "Pous.Period.PeriodCapacity": "6deff84b6199c805126cc0d8e2d90a05a009dfef0d053d64d4171780fd3be117",
+    "Pous.Period.PeriodHeld": "d06dcf0011fc36e635235ec050e48099130853e2e6fd7d132251099c902e3162",
+    "Pous.Period.Strategy": "4ec2b9ac6525dc7a436dee1becb779b29c49174f2013b3d6522a36cd1aa695d6",
     "Pous.Period.Strategy.pre": "9b452a9084c82c7df820973e2057765e71fa974a1d28f092add285d92c28ce74",
-    "Pous.Period.Strategy.step": "befe359f1d718393846d786c2fc627147a900229aa2030f224d448f7f5eba772"
+    "Pous.Period.Strategy.step": "459339205233b327ff0c621c269199f0406319e1d2021ee0389f16c9a7e1d3f2"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
@@ -13350,11 +13437,13 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest"
    ]
   },
   "Properties.Pous.PeriodAt": {
-   "digest": "3051e8f7415f89b9f6ae90cbb4323912f268019092716110c55de67682917169",
+   "digest": "805671b788f10e14628f289b9ecfe4c469bd5fca556b3bb5373a95684d98e93e",
    "definitions": {
     "Pous.Period.AuditsAt": "1be52a3943496f9ca35c28e936b9147900e7eb63364d5983ede17b689ba10f68",
     "Pous.Period.AuditsOf": "baac2aec9b786fc483ec1b75015be9d02b6058a2737a9122b0d4295c2a9e96db",
@@ -13370,18 +13459,18 @@
     "Pous.Period.AuditsOf.sid": "cef64b112f543deb65e6062bb4596288df37c98dba2a6527fb1d4d965eb78776",
     "Pous.Period.AuditsOf.store": "b6425a4751ae91f4414cbe62db0ad920bdbd66b315124539301383b128c30420",
     "Pous.Period.AuditsOf.trusted": "9f04e24d75f227520ab2c41183b2aba3835a76d4f45135de089141704d620991",
-    "Pous.Period.PeriodHeldAt": "15f8e0dc347da4468db88afbcb36c494cc4750a0deda05ea7ae4444c7d6878ed",
-    "Pous.Period.PeriodHeldDemo": "1ac6beb5d8cd4cacdb0472e21d705028a5e8036d8fe10875bdb48a7831d74784",
-    "Pous.Period.RingDeviceAt": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
+    "Pous.Period.PeriodHeldAt": "a1b0dc1409048ff78fb65d4dc9707c5b860d303032cfc14190f66e782bc42bd9",
+    "Pous.Period.PeriodHeldDemo": "67af953518fef00c445acf3ab54fc69aa4dbabe7d842739f196b3bc77d100297",
+    "Pous.Period.RingDeviceAt": "0f9fc9043bb966b689953434e29cba1e8e6127551b39c0506ee67693ef27a2df"
    },
    "guarantees": ["Pous.Period.SecurityProofs.periodHeldAt", "Pous.Period.SecurityProofs.periodHeldDemo"]
   },
   "Properties.Pous.PeriodDeployed": {
-   "digest": "8315dbc6513e93fb4931e4b19c213304f235add6f27b327c00a05a0439d03dc3",
+   "digest": "8f6a91f287e62a557392eb9478d350f607dd33e3ee3745a4210cd9bfa06ff287",
    "definitions": {
     "Pous.Period.DEADLINE_ROUNDS": "db41832c059e907d102b2e46526017111601e06fc7de7475887d195584a40079",
     "Pous.Period.HONEST_S": "22dc505be2778bbb4336673b9bf0b2d0da423653cde0cb6c5e3436d7f6c5b4c7",
-    "Pous.Period.PeriodHeldDeployed": "a96d080e6f48e7f08ccf42702763e1bf982394134f17b49233721f74c128ec4c",
+    "Pous.Period.PeriodHeldDeployed": "ed7819521b129624fad1b96f519bfcb8b3610c5f166d880f3c4ed7a81ab4f954",
     "Pous.Period.PeriodHeldHonest": "5a70912abdcd49c6aaa143fb93164a2842d14a4254312d26501b40106d9236f0",
     "Pous.Period.PeriodHeldNontrivial": "861bebf2ac45801c6ffabb248ae5c605a33cd539a601371208a29602a521fdff",
     "Pous.Period.RING_D": "101d503b569916472765f890caadf78747a89f262aad45f7128cb77d91ff36bf",
@@ -13391,13 +13480,32 @@
     "Pous.Period.emptyRun": "070c415332d211e43b44d069132092a9753b7a87dc82d057cccdbdfd52bfd89d",
     "Pous.Period.honestDevice": "047db53a9f89b8c431b3fbda5fa0dabcd0849c4d42dd23536f9ba6eb0c7954ed",
     "Pous.Period.honestRun": "c874db43085529141973df8e9b49e8650ec2058518d648b64a73611e286b7816",
-    "Pous.Period.honestStrategy": "70b4877eaded5d4e2dd2fbb35953c5365b5bfb0aff62f1b66843604cc8e498fd",
+    "Pous.Period.honestStrategy": "21f32b5ab1eb614ce2afed6c294874ca22612eb177504696352c3a582d893b3c",
     "Pous.Period.periodRun": "b653018f846864a24091259f99c693bbb4a9306ad061c5b61eced62789b8baa4"
    },
    "guarantees": [
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
-    "Pous.Period.SecurityProofs.periodHeldNontrivial"
+    "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
+   ]
+  },
+  "Properties.Pous.Pooled": {
+   "digest": "59878ee12ca2af574c1b93e9de879b7822a2e062bc4a272a401384bfc29ee4c7",
+   "definitions": {
+    "Pous.Period.FixedBefore": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
+    "Pous.Period.PooledShortLog": "f418a975384990bab09688029b56c681ff8b6894351f77c21eceeb5740261fb7",
+    "Pous.Period.PooledShortLog_honest": "9c9d262884d77dd347daf6ca15d853626586338627b17bd7fa8cfcca322b20f3",
+    "Pous.Period.PooledShortLog_nontrivial": "0381700be935c15956a9c8563d69ed9db7657fd4a1735e40b3770b13aab084f1",
+    "Pous.Period.ShortAccepted": "5f0c88920b892dd88e2a6b63b450bfb909c3a159e75657f068fdec14ac69b506",
+    "Pous.Period.acceptAll": "b5ad9aea4487fe1a74c195a20dda866bf3d84b8f972cbee2f55e0b88e8642d0d",
+    "Pous.Period.sidAudit": "8bbbf89f01c989f569a704473176c42b1fdea9eab4f7c199aa85595a60700ede"
+   },
+   "guarantees": [
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
+    "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
    ]
   },
   "Properties.Pous.TimedAudit": {
@@ -13425,6 +13533,7 @@
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.pooledShort_log",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
