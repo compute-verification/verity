@@ -5,7 +5,7 @@ import RemoteAudit.Wire
 /-!
 # The verifier's process: `remote-audit-verifier`
 
-The remote audit's verifier of record as a process the driver (`benchmarks/remote_session/verifier.py`) runs beside its
+The remote audit's Lean verifier as a process the driver (`benchmarks/remote_session/verifier.py`) runs beside its
 Python: it holds the verifier's registry (`Registry`) and every session's state (`Session.State`) and takes the events
 as they happen, one request a line on stdin, each answered by one line on stdout, `{"answer": JSON}` or
 `{"error": MESSAGE}`, in canonical JSON (`Flock.canon`). Requests (byte strings lowercase hex, an event as the
