@@ -59,8 +59,9 @@ def test_sheet_prices_the_headline(name):
 @pytest.mark.parametrize("name", SHEETS)
 def test_tensor_lines_have_slack(name):
     """The headline's sheet ε doesn't move until every tensor line is 2% slower than the sheet's, so an A3 error under
-    2% leaves it as it is: the H200's tensor lines are measured at 0.01% of the sheet's, and the B200's per-clock peaks
-    are its measured rates. On DS-90 that slack is the fold's margin (FOLD-OPT)."""
+    2% leaves it as it is: the H200's tensor lines are measured at 0.01% of the sheet's, and the B200's
+    per-clock peaks are its measured rates. On DS-90 that slack is the fold's
+    margin (FOLD-OPT)."""
     s = sheet(DEVICES / name)
     m = moves(s, DEVICES / name, steps=10)
     assert m is None or m >= 1.02, (f"{name}: ε moves with every tensor line {m:.3f}× the sheet's, inside A3's "
