@@ -168,9 +168,9 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
 
 def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
                  zy: torch.Tensor, rows: int, cfg: WgCfg, flags: int = 0) -> int:
-    """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8 (16-byte aligned), the call's records over `rows` slots
-    (`int8_exact.zy_records`), in place; returns the grid.  `flags` as `scaled_mm`'s, and 32 and 64 time the records
-    (streaming stores; none, which leaves them unwritten)."""
+    """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8, the call's records over `rows` slots (`int8_exact.zy_records`),
+    in place; returns the grid.  y and zy are 16-byte aligned and y goes out by TMA stores; `flags` 1, 2 and 4 as
+    `scaled_mm`'s, and 32 and 64 time the records (streaming stores; none, which leaves them unwritten)."""
     m, k = xq.shape
     n = w.shape[0]
     assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()
@@ -180,7 +180,7 @@ def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torc
     assert zy.dtype == torch.uint8 and zy.shape == (zy_units(m, n, rows), ZY_BYTES) and zy.is_contiguous(), zy.shape
     assert m >= 1 and k % 16 == 0, (m, n, k)
     assert xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0 and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
-    assert zy.data_ptr() % 16 == 0
+    assert zy.data_ptr() % 16 == 0 and y.data_ptr() % 16 == 0 and not flags & 16, flags
     kernel, group, ctas = cfg
     grid = _i()
     rc = lib().int8_wgmma_launch_zy(list(VARIANTS).index(kernel), xq.data_ptr(), w.data_ptr(), s_a.data_ptr(),
@@ -200,4 +200,4 @@ def fits(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor
     return (xq.is_contiguous() and w.is_contiguous() and s_a.is_contiguous() and s_w.is_contiguous() and y.is_contiguous()
             and m >= 1 and k % 16 == 0 and n % 2 == 0 and xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0
             and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
-            and (zy is None or (zy.is_contiguous() and zy.data_ptr() % 16 == 0)))
+            and (zy is None or (zy.is_contiguous() and zy.data_ptr() % 16 == 0 and y.data_ptr() % 16 == 0)))
