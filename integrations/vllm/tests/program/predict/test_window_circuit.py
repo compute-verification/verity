@@ -439,15 +439,20 @@ def test_a_key_block_is_units_within_the_grains_rows_at_every_key_count():
     keys, not the head's: one Program of 126 positions at TINY of 2,048 positions lowers, its largest unit the first block's
     softmax at 126 keys (129 rows: q, its keys, l and P, LAST its m not out), and at 129 (position 128 the first past one
     key block of 128) the full block's softmax at 135 (its running state in, its l and O out besides), where a unit a block
-    held 263. A grain whose rows hold no group of whole k-steps is refused by name."""
+    held 263. A grain whose rows hold no group of whole k-steps groups one k-step (PK 16), and a unit past its rows is
+    refused by name."""
     reg, grain = S._registered({**S.TINY, "max_position_embeddings": 2048}), Grain(gemm_words=1024, rows=256, select=64)
     for prompt, (label, rows) in ((125, (SOFTMAX.format(126), 129)),
                                   (128, ("AttnBlockSoftmax_v1{D=16,NVIS=128,FIRST=false,CHECK=false,PK=128,LAST=true}", 135))):
         units = _unit_rows(class_circuit(reg, WindowClass(1, prompt, 2), 1, grain, provable=False))
         assert max(units.items(), key=lambda kv: kv[1]) == (label, rows)
-    with pytest.raises(Unexpressible, match=re.escape("a key block of 128 keys has no P·V group of whole k-steps of 16 keys "
-                                                      "within 18 rows at D 16 and values of 16 words a row")):
-        class_circuit(S._registered(), WindowClass(1, 4, 2), 1, replace(grain, rows=18), provable=False)
+    units = _unit_rows(class_circuit(S._registered(), WindowClass(1, 4, 2), 1, replace(grain, rows=18), provable=False))
+    assert {lab for lab in units if lab.startswith("AttnBlockSoftmax")} == {
+        f"AttnBlockSoftmax_v1{{D=16,NVIS={n},FIRST=true,CHECK=true,PK=16,LAST=true}}" for n in range(1, 6)}
+    assert max(units.values()) <= 18
+    with pytest.raises(Unexpressible, match=r"AttnBlockSoftmax_v1\{D=16,NVIS=16,.*PK=16,LAST=True\}: 19 rows in and out, "
+                                            r"past a unit's 18"):
+        class_circuit(reg, WindowClass(1, 128, 2), 1, replace(grain, rows=18), provable=False)
 
 
 def _labels(circuit) -> dict[str, np.ndarray]:

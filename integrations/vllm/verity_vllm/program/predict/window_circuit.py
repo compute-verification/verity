@@ -52,8 +52,9 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each step's running state its predecessors' rows. VS is the
   columns of the value GEMM's slices (a key's value its D / VS rows), PK
   the most keys of whole k-steps of 16 that divide BN with a group within a proof block's rows (`group_keys`: 96 at D 64,
-  BN 192 and VS 32). A step's keys and values a KV group are its keys' rows as their writers hold them (a key's RoPE head's
-  row, a value's GEMM slices), key by key, which its group's heads read. A layer's cache is refused unless it is the keys
+  BN 192 and VS 32; one k-step where none fits, its group then past the grain's rows). A step's keys and values a KV group
+  are its keys' rows as their writers hold them (a key's RoPE head's row, a value's GEMM slices), key by key, which its
+  group's heads read. A layer's cache is refused unless it is the keys
   its earlier positions' nodes read and one more.
 - FA3's `Attention_v4` (sm_90) is `Attention_v22`'s cut the same way: its first visited block's softmax
   `AttnBlockSoftmax_v1` (FA3's first iteration is FA2's word for word), each full block's below it
@@ -222,12 +223,12 @@ def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
 
 def group_keys(D: int, BN: int, VS: int, rows: int = IF.MAX_ROWS) -> int:
     """PK: the most keys of whole k-steps of 16 that divide BN with a full group's `AttnBlockPv_v1` (its P row, its N·D / VS
-    value rows, its O and its output) within ``rows`` rows, refused where none is."""
-    pk = max((n for n in range(16, BN + 1, 16) if BN % n == 0 and n * D // VS + 3 <= rows), default=None)
-    if pk is None:
-        raise Unexpressible(f"a key block of {BN} keys has no P·V group of whole k-steps of 16 keys within {rows} rows at D {D} "
-                            f"and values of {VS} words a row")
-    return pk
+    value rows, its O and its output) within ``rows`` rows, else one k-step, whose group a wired window then refuses past
+    its grain's rows (`window_builder._Builder.settle`); refused where no whole k-steps of 16 make BN."""
+    steps = [n for n in range(16, BN + 1, 16) if BN % n == 0]
+    if not steps:
+        raise Unexpressible(f"a key block of {BN} keys is no whole k-steps of 16 keys")
+    return max((n for n in steps if n * D // VS + 3 <= rows), default=steps[0])
 
 
 @dataclass
