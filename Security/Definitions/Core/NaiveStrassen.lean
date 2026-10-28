@@ -7,11 +7,10 @@ free.
 **Atoms.** An exact path for one sub-product is an MMA format (`Atom`): the tensor units a MAC uses, in eighths of an
 s8 MAC (`weight8`), the most consecutive integers it holds per operand entry (`cap`), and, for a float format, the
 instruction's `k` and the width `w` within which its dot of `k` products is exact (`k · ⌊d_A/2⌋ · ⌊d_B/2⌋ ≤ 2^w`).
-These are the ACCEL model's numbers (`Accel.H200`, `Accel.Sm120`, `Accel.Principles`): each card's `weight`, the
-formats' integer runs, and P1's widths (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float dot
-as exact as FP32 allows (f16 and tf32 are `Open.dot` on both cards) and accumulation across MMAs as exact only adds
-atoms. `b1` is at `Open.b1 = 1/8`; costs are monotone in the weights, so a lower bound here holds at every
-`Open.b1 ≥ 1/8` and, on the H200, every `Open.sync ≥ 1`.
+These are the cards' tables' numbers (`Accel.H200`, `Accel.Sm120`): each card's `weight`, the formats' integer runs,
+and the widths within which a dot is exact (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float
+dot as exact as FP32 allows and accumulation across MMAs as exact only adds atoms. `b1` is at the H200's weight 1/8;
+costs are monotone in the weights, so a lower bound here holds at every weight at least these.
 
 **Schedules** (`Sched`) multiply two `2^l × 2^l` block matrices whose entries range over `a` and `b` consecutive
 integers: an atom; a digit split of one operand, `x - c = x₀ + d·x₁` with `2 ≤ d < a`, `x₀` over `d` values and `x₁`
@@ -165,7 +164,7 @@ def instances : List (List Atom) := [h200Sheet, h200Measured, rtx6000Sheet, rtx6
 /-- **Theorem 1**: at every depth budget `l ≤ L`, every schedule over `fs` for int8 operands that applies Strassen
 or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive.
 
-D4's guarantee (`Verity.Guarantees.NaiveBeatsStrassenServed`) states it at `L = 12` on all four instances. Served
+The served guarantee (`Verity.Guarantees.NaiveBeatsStrassenServed`) states it at `L = 12` on all four instances. Served
 inner and outer dimensions are at most 65536 (DeepSeek-V4's and Llama-3.1-70B's MLPs), and a leaf is at least 16:
 sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200 is taken at `Open.sync = 1`. So a recursion on
 a served product is at most `log₂(65536 / 16) = 12` deep. Deeper schedules pad past the served size, and the size
@@ -180,7 +179,7 @@ def NaiveBeatsStrassen (fs : List Atom) (L : Nat) : Prop :=
 /-- **Theorem 1 in size**: an `n × n` product padded to `2^l` leaves of size `b`, at any depth `l`, loses to naive
 tiled's `8 n³` whenever `n ≤ c·b`.
 
-D4's guarantee (`Verity.Guarantees.NaiveBeatsStrassenServedSize`) states it at `c = 4096 = 65536 / 16`
+The served guarantee in size (`Verity.Guarantees.NaiveBeatsStrassenServedSize`) states it at `c = 4096 = 65536 / 16`
 (dimensions at most 65536, leaves at least 16), for int8 operands at `(256, 256)`. The proof uses Theorem 1 up to
 depth 12, the least cost at depth 13 (above `8^13`), and `cost ≥ 7^l` from depth 14 on (`7^14 > 2^39`).
 
