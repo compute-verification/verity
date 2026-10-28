@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from test_remote_bandwidth import N, SCHEDULE, Clock, Entropy, drive, finish, params, store  # noqa: F401
+from remote_bandwidth_fakes import Clock, Entropy
+from test_remote_bandwidth import N, SCHEDULE, drive, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Session
 
