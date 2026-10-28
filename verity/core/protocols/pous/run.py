@@ -3,23 +3,25 @@
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
 `root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
 in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and its record of one signed session
-(`ChallengerRecord`: the signed session, the commitment released with it and its coin openings).  `check` judges it with
-two inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the
-run's record (whoever writes the record could otherwise list its own key), and the 32-byte id the auditor designated for
-the audit's session.  It
-accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`,
-`Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
+(`ChallengerRecord`: the signed session, the commitment published before it and its coin openings).  `check` judges it
+with two inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from
+the run's record (whoever writes the record could otherwise list its own key), and the 32-byte id the audit fixes for
+its session, which the verifier computes itself and never reads from the record: on the served piece
+`challenger_party.session_id`, derived from the audit's binding and the commitment and salt the memory challenger
+logged for it.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments,
+`k = 105`, `Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`verifier.row_leaf`) have the root the setup
    published, so the table is the one of the `C*` setup checked;
 3. the session audits that setup at the point: every block, the point's `k`, a limit within the point's `Δ + RTT`, answers
    of the point's block size, and its `binding` the published root;
-4. the session runs under the designated id (`session`, in the signed header), which the memory challenger runs at most
-   one session under (`memory_challenger.SessionLog`), so an audit has at most one session `check` accepts;
+4. the session runs under the audit's id (`session`, in the signed header), which the memory challenger runs at most one
+   session under (`memory_challenger.SessionLog`), so an audit has at most one session `check` accepts, and a retry
+   under another id is refused here;
 5. `memory_challenger.verdict` accepts the session against the table, signed under a key in `trusted`.
 
-The first refusal is the reason (`Refused`).  `check_at` takes another point and other schemes, for tests.
+The first refusal is the reason (`Refused`), word for word the Lean's.  `check_at` takes another point and other schemes, for tests.
 `PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
 acceptance establishes is `RunCheckAccepts` (`Security/Properties/Pous/EndToEnd.lean`), proved."""
 
@@ -122,7 +124,7 @@ def check_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection
 def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: ChallengerRecord,
           session_id: bytes) -> None:
     """Accept the run, or raise `Refused` with the first reason (module docstring).  `trusted` is the verifier's list of
-    memory-challenger keys and never comes from the run's record."""
+    memory-challenger keys and `session_id` the id the audit fixes; neither comes from the run's record."""
     check_at(DEPLOYED, mc.SCHEMES, trusted, setup, digests, session, session_id)
 
 

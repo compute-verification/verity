@@ -107,7 +107,7 @@ def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
     commitment, ev = _shape(case)
     p = case["params"]
     try:
-        published, session = R.Setup.from_json(commitment), R.Session.from_json(ev["session"])
+        published, session = R.Setup.from_json(commitment), R.ChallengerRecord.from_json(ev["session"])
         point, sid = period.point_of(p["point"]), bytes.fromhex(p["session_id"])
         trusted, digests = [bytes.fromhex(t) for t in p["trusted"]], bytes.fromhex(ev["digests"])
         inputs = period.setup_inputs(ev["setup"])
@@ -236,7 +236,7 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     try:
         digests = (private / "digests.bin").read_bytes()
         inner, published, point = run["answer"], R.Setup.from_json(run["published"]), period.point_of(run["point"])
-        session, sid = R.Session.from_json(run["session"]), bytes.fromhex(run["session_id"])
+        session, sid = R.ChallengerRecord.from_json(run["session"]), bytes.fromhex(run["session_id"])
         trusted = [bytes.fromhex(t) for t in run["trusted"]]
         op = advice.Opening(opening["index"], bytes.fromhex(opening["row"]), bytes.fromhex(opening["salt"]),
                             tuple(bytes.fromhex(p) for p in opening["path"]))
