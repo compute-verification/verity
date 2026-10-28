@@ -316,7 +316,7 @@ def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for a warden run, as network-e2e's `endpoint_advice` makes it for a certifier
     rehearsal's: `verity-vllm advice` over the endpoint's records ``ep`` (network-e2e's ``chain.ENDPOINT``) into
     ``ep/advice`` at the warden's bucket unless an index is there, then ``chain.served_advice`` on the certified I/O
-    read off the warden's cells (`warden_chain.io`) over the warden's sampling blocks, with the model's EOS ids ``eos``
+    read off the warden's cells (`warden_chain.io`) over the warden's link-windows, with the model's EOS ids ``eos``
     (a warden run records none)."""
     import subprocess
     import warden_chain as WC
