@@ -1,5 +1,5 @@
 """`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
-(`verity.core.deploy.config`; `note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to 00:30Z).
+(`verity.core.deploy.config`).
 
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
     verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
