@@ -99,3 +99,6 @@ cpu-6 now refuses runs at clone ("No space left on device"). Until infra clears 
 
 ## Runs on cpu-6 dying as runner-gone (00:55Z)
 cpu-6's full disk is killing runs (#5324's 863f shows `runner-gone`). Check each of your cpu-6 runs with `research status RUN`. Resend any that show runner-gone, failed on the node, or have waited over an hour, on `--on vy-nebius-cpu-4` (soundness pool, `--cwd clone`, tree_sha checked), and note the new date on your issue.
+
+## Nodes at 01:40Z
+lean reports cpu-5 and cpu-6 running its runs fine again; cpu-4 was out of disk earlier tonight (rc 75 at 0 s); cpu-2's trees fail writing .olean files. New runs go to cpu-6 or cpu-4, whichever has the shorter soundness line. Never cpu-2. After launching, check with `research status RUN` that the run is waiting or running, not failed at 0 s.
