@@ -1,9 +1,9 @@
 """Scratch guard (removed before review): the flat H1 unit's circuit file at each shape by the auditor's command, its SHA-512,
-size, peak RSS and wall time. ``python stamp_guard.py OUT.json K,R,C ... [--env NAME=V ...]``, run from anywhere."""
+size, peak RSS (the largest process's) and wall time. ``python stamp_guard.py OUT.json K,R,C ... [--env NAME=V ...]
+[--keep-net DIR]``, run from anywhere."""
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -12,6 +12,10 @@ from pathlib import Path
 
 VLLM = Path(__file__).resolve().parents[3] / "integrations" / "vllm"
 BIND = {"partition": "0" * 128, "program": "0" * 128}
+#: one shape in its own process, which reports its descendants' largest RSS (ru_maxrss of RUSAGE_CHILDREN)
+RUN = ("import json, resource, subprocess, sys; p = subprocess.run(sys.argv[1:], capture_output=True, text=True); "
+       "print(json.dumps({'rc': p.returncode, 'maxrss_kb': resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss, "
+       "'err': p.stderr[-6000:]}))")
 
 out = Path(sys.argv[1])
 shapes, env = [], dict(os.environ)
@@ -29,13 +33,13 @@ for k, r, c in shapes:
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / f"k{k}.circuit.txt"
         t = time.time()
-        p = subprocess.run(["/usr/bin/time", "-v", sys.executable, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k),
+        p = subprocess.run([sys.executable, "-c", RUN, sys.executable, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k),
                             str(r), str(c), json.dumps(BIND), str(path)], cwd=VLLM, env=env, capture_output=True, text=True)
         wall = time.time() - t
-        m = re.search(r"Maximum resident set size \(kbytes\): (\d+)", p.stderr)
-        e = {"shape": [k, r, c], "rc": p.returncode, "wall_s": round(wall, 2),
-             "peak_gib": round(int(m[1]) / 2 ** 20, 3) if m else None}
-        if p.returncode == 0:
+        rep = json.loads(p.stdout.strip().splitlines()[-1])
+        e = {"shape": [k, r, c], "rc": rep["rc"], "wall_s": round(wall, 2), "peak_gib": round(rep["maxrss_kb"] / 2 ** 20, 3),
+             "stamp": [ln for ln in rep["err"].splitlines() if ln.startswith(("STAMP", "fast_stage"))]}
+        if rep["rc"] == 0:
             h = hashlib.sha512()
             with open(path, "rb") as f:
                 while b := f.read(1 << 24):
@@ -48,8 +52,8 @@ for k, r, c in shapes:
             e["unit_rows"] = int(line.split()[2]) if line.startswith("CIRCUIT unit") else None
             e["unit_sha256"] = meta.get("unit_sha256")
         else:
-            e["stderr"] = p.stderr[-3000:]
+            e["stderr"] = rep["err"][-3000:]
         print(json.dumps(e), flush=True)
         res.append(e)
-out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text(json.dumps(res, indent=1) + "\n")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(res, indent=1) + "\n")
