@@ -141,8 +141,8 @@ def outcome(id: str, answer: str | None) -> dict[str, str]:
     the name of the reason a verdict other than accept gives (``refused`` when that is not a short name)."""
     try:
         a = json.loads(answer) if answer else {}
-    except ValueError:
-        a = {}
+    except ValueError as e:
+        a = {"unread": type(e).__name__}
     a = a if isinstance(a, dict) else {}
     out = {"id": id, "verdict": a["verdict"] if a.get("verdict") in VERDICTS else "none"}
     reason = a.get("reason")
