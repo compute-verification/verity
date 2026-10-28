@@ -40,6 +40,13 @@ def test_every_plan_row_is_a_config_and_rows_rise():
             assert [m for m, _ in rows] == sorted({m for m, _ in rows}), (sm, n, k)
             for _, text in rows:
                 W.WgCfg.parse(text)
+    for sm, shapes in C.WGMMA_ZY.items():
+        assert sm in C.WGMMA, sm
+        for (n, k), rows in shapes.items():
+            assert n % 32 == 0 and k % 16 == 0, (sm, n, k)
+            assert [m for m, _ in rows] == sorted({m for m, _ in rows}), (sm, n, k)
+            for _, text in rows:
+                W.WgCfg.parse(text)
 
 
 def test_the_row_is_the_last_whose_m_min_is_reached(monkeypatch):
@@ -50,6 +57,10 @@ def test_the_row_is_the_last_whose_m_min_is_reached(monkeypatch):
     assert W.row(1 << 20, 256, 64, "sm_90") == ("com2_128x256", 8, 0)
     assert W.row(8192, 256, 128, "sm_90") is None
     assert W.row(8192, 256, 64, "sm_120") is None
+    monkeypatch.setattr(W, "WGMMA_ZY", {"sm_90": {(256, 64): [(2048, "ppm2_128x128:g8")]}})
+    assert W.row(2048, 256, 64, "sm_90", zy=True) == ("ppm2_128x128", 8, 0)
+    assert W.row(1024, 256, 64, "sm_90", zy=True) is None
+    assert W.row(2048, 256, 64, "sm_90") == ("pp_128x128", 4, 0)
 
 
 @pytest.mark.skipif(W.nvcc() is None, reason="nvcc required")
@@ -216,7 +227,7 @@ def test_product_zy_takes_the_row_and_keeps_the_values(monkeypatch):
     calls = []
     real = W.scaled_mm_zy
     monkeypatch.setattr(W, "scaled_mm_zy", lambda *a: calls.append(a[-1]) or real(*a))
-    monkeypatch.setattr(W, "WGMMA", {"sm_90": {(n, k): [(1024, "co_128x256:g8")]}})
+    monkeypatch.setattr(W, "WGMMA_ZY", {"sm_90": {(n, k): [(1024, "co_128x256:g8")]}})
     got_y, got_zy = X.product_zy(xq, sa, w, sw, rows)
     assert calls == [("co_128x256", 8, 0)]
     ref_y, ref_zy = _zy_reference(xq, sa, w, sw, rows)

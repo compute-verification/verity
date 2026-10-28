@@ -29,7 +29,7 @@ from pathlib import Path
 import torch
 
 from verity_vllm.engine.int8_exact import ZY_BYTES, zy_units
-from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH
+from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH, WGMMA_ZY
 
 HERE = Path(__file__).resolve().parent
 SOURCES = ("int8_wgmma_acc.h", "int8_wgmma.cu")
@@ -64,10 +64,11 @@ class WgCfg(tuple):
         return f"{kernel}:g{group}" + (f":c{ctas}" if ctas else "")
 
 
-def row(m: int, n: int, k: int, sm: str) -> WgCfg | None:
-    """`int8_gemm_configs.WGMMA`'s config for one call on `sm`: the last (m_min, cfg) row for (n, k) with m >= m_min."""
+def row(m: int, n: int, k: int, sm: str, zy: bool = False) -> WgCfg | None:
+    """`int8_gemm_configs.WGMMA`'s config for one call on `sm` (`WGMMA_ZY`'s for the zy kernels): the last (m_min, cfg)
+    row for (n, k) with m >= m_min."""
     text = None
-    for m_min, cfg in WGMMA.get(sm, {}).get((n, k), ()):
+    for m_min, cfg in (WGMMA_ZY if zy else WGMMA).get(sm, {}).get((n, k), ()):
         if m >= m_min:
             text = cfg
     return None if text is None else WgCfg.parse(text)

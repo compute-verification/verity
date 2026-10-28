@@ -32,7 +32,8 @@ same y bit for bit (`pick_wgmma`; where its library doesn't build or load, the T
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
 record's, and its grid covers the call's T slots, a row tile at or past M multiplying nothing and writing only its empty
 slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.  `product_zy` takes
-`product`'s wgmma row the same way (`int8_wgmma.scaled_mm_zy`, the same y and records byte for byte).
+its own wgmma row the same way (`int8_gemm_configs.WGMMA_ZY`; `int8_wgmma.scaled_mm_zy`, the same y and records byte for
+byte).
 """
 from __future__ import annotations
 
@@ -297,9 +298,9 @@ def pick(m: int, n: int, k: int, sm: str | None = None) -> Cfg:
     return default_cfg(m, n, k)
 
 
-def pick_wgmma(m: int, n: int, k: int, index: int) -> int8_wgmma.WgCfg | None:
+def pick_wgmma(m: int, n: int, k: int, index: int, zy: bool = False) -> int8_wgmma.WgCfg | None:
     """`int8_wgmma.row` on device `index`, where `int8_wgmma` builds and loads there."""
-    cfg = int8_wgmma.row(m, n, k, arch(index))
+    cfg = int8_wgmma.row(m, n, k, arch(index), zy)
     return cfg if cfg is not None and int8_wgmma.available(index) else None
 
 
@@ -466,7 +467,7 @@ def product_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.
     zy = torch.empty((zy_units(m, n, rows), ZY_BYTES), dtype=torch.uint8, device=xq.device)
     if m:
         s_a, s_w = s_a.reshape(-1), s_w.reshape(-1)
-        wg = pick_wgmma(m, n, k, xq.device.index)
+        wg = pick_wgmma(m, n, k, xq.device.index, zy=True)
         if wg is not None and int8_wgmma.fits(xq, s_a, w, s_w, y, zy):
             int8_wgmma.scaled_mm_zy(xq, s_a, w, s_w, y, zy, rows, wg)
         else:

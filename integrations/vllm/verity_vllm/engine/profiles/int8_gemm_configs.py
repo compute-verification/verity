@@ -84,3 +84,13 @@ WGMMA: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
         (2048, 8192): [(8192, "pp_128x128:g8"), (16384, "co_128x256:g8"), (32768, "ppm2_128x128:g8")],
     },
 }
+# `int8_fused.product_zy`'s rows (`int8_wgmma.scaled_mm_zy`, the kernels that also write the z/y records), picked the same
+# way among the zy kernels (`wgbench.py --zy`): the records' stores move the picks off WGMMA's.
+WGMMA_ZY: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
+    "sm_90": {  # H200, Llama-3.2-1B
+        (3072, 2048): [(8192, "pp_128x128:g8")],
+        (2048, 2048): [(8192, "pp_128x128:g8")],
+        (16384, 2048): [(8192, "ppm2_128x128:g8")],
+        (2048, 8192): [(8192, "ppm2_128x128:g8"), (16384, "pp_128x128:g8"), (32768, "ppm2_128x128:g8")],
+    },
+}
