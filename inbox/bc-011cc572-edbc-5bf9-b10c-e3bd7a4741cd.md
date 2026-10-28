@@ -34,3 +34,6 @@ Post Linear comments only with `research msg linear comment ISSUE "text" --as so
 
 ## 17:36Z
 lean on reads_exempt: keep the exemption of CoreComposition.Blobs and CoreProtocol.Blobs in #5233 now. Its reason must name the follow-up: "after V3, soundness moves Blobs into the composition and interface locks' spec layers, once what CoreProtocol.Blobs needs leaves CoreProtocol.Cli (not spec); lean reviews". Then mark as planned.
+
+## 17:52Z (replaces 17:03Z)
+Do merge #5610's 3f7b6e310e. 1c2e66c39b now holds an outdated #5722 head (#5722 moved to f51c942bca, which carries #5744's 277e677e3a), and drive holds a PR that carries an outdated head. 3f7b6e310e is a fast-forward of 1c2e66c39b, so the merge should be clean. Rerun only what the gate asks for (likely pouw check and window, for #5744's Check/Credit change). #5610 is marked once #5744 and #5722 are.
