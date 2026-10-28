@@ -124,7 +124,7 @@ theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Sampl
 the statement's descriptor and that registration's query, the statement's partition has as many population slots as
 `partOf P` has population slots. -/
 theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Option SamplingDeploy.Reg}
-    (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.Stmt}
+    (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.AuditStatement}
     {Pt : Claims.Sampling.Partition} (hx : c.parse x = some s) (hP : c.partition s = some Pt) {n : ℕ}
     (hpop : ∀ g, reg x = some g → PopMatches s.desc g.query n)
     {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) :

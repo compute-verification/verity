@@ -30,7 +30,7 @@ open Claims Claims.Sampling NetTiming.SampledAuditProof
 
 /-! ### A registered input of a correct unit is opened at the trace's value -/
 
-theorem val_some_of_input {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit}
+theorem val_some_of_input {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit}
     (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
     (hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) g) : ∃ b, w.val H Cm s g = some b := by
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H Cm s P w
@@ -80,9 +80,9 @@ theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → 
 
 /-- **At the registration's values**: on a partitioned program, `RAcc δ` at a trace that opens each registered input,
 where it opens one, to the registration's value `ρ` there gives the leak relation at the inputs pinned at `ρ`. -/
-theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → Option Stmt}
-    {partition : Stmt → Option Partition} {L K S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ} {Dj : ℕ}
-    (reg : Stmt → Finset ℕ) (ρ : Stmt → ℕ → Bool) {x : Msg} {w : Wit}
+theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → Option AuditStatement}
+    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → Layout L S} {k : AuditStatement → ℕ} {δ : ℝ} {Dj : ℕ}
+    (reg : AuditStatement → Finset ℕ) (ρ : AuditStatement → ℕ → Bool) {x : Msg} {w : Wit}
     (hpart : ∀ s P, parse x = some s → partition s = some P → P.Partitions s.prog)
     (hagree : ∀ s, parse x = some s → ∀ g ∈ reg s, ∀ b, w.val H Cm s g = some b → b = ρ s g)
     (h : RAcc H Cm parse partition L K S lay k δ x w) :
@@ -124,7 +124,7 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg 
 
 /-! ### A disagreement with the registration is a collision -/
 
-theorem mem_assemble_of_val {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {found : List (List Msg × Opening Bool)}
+theorem mem_assemble_of_val {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
     {g : ℕ} {b : Bool} (h : (assemble s found).val H Cm s g = some b) :
     ∃ q ∈ found, q.1 = s.roots ∧ q.2.pos = g ∧ q.2.val = b := by
   unfold Wit.val at h
@@ -163,7 +163,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- The registration's collision: the extraction's own calls and the registration's checks hold two different inputs
 with one output. -/
-def RegColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (ops : Stmt → List (Opening Bool))
+def RegColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (ops : AuditStatement → List (Opening Bool))
     {Ω : Type} (P : Prover Ω) (x : Msg) (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) : Prop :=
   ∃ p ∈ ownLog H (run H P D.V x s.1) ((E D decode).ext x s.2.1 s.2.2) ++
       ((D.parse x).map fun st => regLog H D.commit st.roots (ops st)).getD [],
@@ -174,7 +174,7 @@ def RegColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col
 omit [DecidableEq Col] [Zero Col] in
 /-- A kept opening of an accepted run passes, and its check's calls are the extraction's own. -/
 theorem passes_of_mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {Ω : Type}
-    (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {st : Stmt}
+    (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {st : AuditStatement}
     (hst : D.parse x = some st) (hacc : (run H P D.V x ω r₀).out = .acc) {q : List Msg × Opening Bool}
     (hq : q ∈ found H D decode x st (run H P D.V x ω) c (outerList H D x (run H P D.V x ω) c)) :
     D.commit.Opens H q.1 q.2 = true ∧
@@ -188,8 +188,8 @@ omit [DecidableEq Col] [Zero Col] in
 registered position to a value other than the registration's makes, with the registration's opening there, calls that
 collide among the extraction's own and the registration's checks. -/
 theorem regColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H)
-    (decode : List (ℕ × Col) → List T) (reg : Stmt → Finset ℕ) (ops : Stmt → List (Opening Bool)) {Ω : Type}
-    (P : Prover Ω) (x : Msg) (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) {st : Stmt}
+    (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool)) {Ω : Type}
+    (P : Prover Ω) (x : Msg) (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) {st : AuditStatement}
     (hst : D.parse x = some st) (hreg : RegOpens H D.commit st (reg st) (ops st))
     (hacc : (run H P D.V x s.1 s.2.1).out = .acc) {w : Wit} (hw : ((E D decode).eval H P x s.1 s.2.1 s.2.2).1 = some w)
     {g : ℕ} (hg : g ∈ reg st) {b : Bool} (hwb : w.val H D.commit st g = some b) (hne : b ≠ regVal (ops st) g) :
@@ -218,7 +218,7 @@ theorem regColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.co
 omit [DecidableEq Col] [Zero Col] in
 /-- **The reduction's probability step**: the registration's collisions have probability at most `B_reg`'s. -/
 theorem Pr_regColl_le_Breg (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (ops : Stmt → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
+    (ops : AuditStatement → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x => RegColl H D decode ops P x s) ≤
       (Breg H D.V (E D decode) D.commit D.parse ops Ω P x).Pr H := by
   unfold Breg Finder.Pr
@@ -239,10 +239,10 @@ openings `ops` of them. On the statements in scope whose registration opens thei
 `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the inputs pinned at the registration's
 values (`AsReg` at `regVal`), a set the statement and the registration fix. -/
 theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T)
-    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ)
+    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : Stmt → Finset ℕ)
-    (ops : Stmt → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc D lay k x)
+    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
+    (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc D lay k x)
     (hreg : ∀ st, D.parse x = some st → RegOpens H D.commit st (reg st) (ops st)) (Ω : Type) [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) :
     PrBad H D.V
