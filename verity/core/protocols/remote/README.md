@@ -76,8 +76,8 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
    compiler B. It fixes no circuit: after each execution phase, B run on the advice the developer reported outputs that
    execution block's circuit and its partition into blocks, and the registered circuit D and its (c, k)-partition 𝓘
-   into inference blocks are the concatenation of those outputs, D = B(a₁).circuit ‖ … ‖ B(aₙ).circuit (`GLOSSARY.md`,
-   "R, D, 𝓘"; 𝓘 is read by the inference-only policy once it joins). The Lean (`Verity.Declaration`, a free circuit with
+   into inference blocks are the concatenation of those outputs, D = B(a₁).circuit ‖ … ‖ B(aₙ).circuit (`ARCHITECTURE.md`,
+   "Reported advice"; 𝓘 is read by the inference-only policy once it joins). The Lean (`Verity.Declaration`, a free circuit with
    a committed partition) still states the older shape until soundness's post-V3 PR.
 2. **Execution phase** j. The developer reports its advice a_j, a bit string the registered compiler compiles, its
    length charged, and B(a_j), the phase's execution block, is appended to the registered circuit. The block's values
