@@ -685,8 +685,10 @@ class Driver:
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (), shards: int | None = None):
         self.q, self.on = q, on
         #: the after-landing run as this many shards of the whole check over `on` (drive.toml's `shards`, default one per
-        #: machine of `on`), recorded as one check by `--combine` once they pass; 1 is one `--deferred` run of every step
-        self.shards = shards if shards is not None else len(on.split(",")) if on else 1
+        #: machine of `on`, or 1 where `on` takes `auto`), recorded as one check by `--combine` once they pass; 1 is one
+        #: `--deferred` run of every step
+        machines = (on or "").split(",")
+        self.shards = shards if shards is not None else 1 if "auto" in machines else len(machines)
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
         self.max_lean_checks = max_lean_checks
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second

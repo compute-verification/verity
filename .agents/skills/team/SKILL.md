@@ -61,7 +61,8 @@ PRs land on an eyeball review, and the full check runs after landing. ci's `rese
   hold still keeps what is above it). A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
-- One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
+- One run checks `main`'s tip after each landing: the whole check as shards, one per machine drive.toml's `on` lists,
+  recorded as one check (`check.py --combine`) once every shard passed. A red suite's culprit is rung and reverted 60 min later unless a fix is
   marked. Citations and tables read only commits whose after-landing run passed.
 - A pure move that `verity check move BASE HEAD` certifies lands alone, ahead of the queue, through the lander. Only
   drive's App pushes `main` and `next`.
