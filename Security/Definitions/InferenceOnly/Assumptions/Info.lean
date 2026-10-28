@@ -20,11 +20,11 @@ with the registered information at `θv`. `b_w` and `b_a` are rates in bits of i
 input value of a thread read.
 
 It gives `WeightsIncompressible` at the same rates, since reads carry no more information than their width, and the two
-agree on a subcircuit whose fresh input reads are fresh input gates. It is stronger where a subcircuit's fresh input
-reads are redundant: a thread value and a copy of it, two thread values one of which determines the other, or a computed
-value that takes fewer than `2^b_a` values over the runs. Each is charged `b_a`, and their information is less. It fails
-where `WeightsIncompressible` does (weights committed in `θ`, a low-rank update, updates rebuilt from fewer bits), and
-where thread values are redundant at rate above `b_a`.
+agree on a subcircuit whose fresh input reads are input gates outside `θ`. It is stronger where a subcircuit's fresh
+input reads are redundant: a thread value and a copy of it, two thread values one of which determines the other, or a
+computed value that takes fewer than `2^b_a` values over the runs. Each is charged `b_a`, and their information is less.
+It fails where `WeightsIncompressible` does (weights committed in `θ`, a low-rank update, updates rebuilt from fewer
+bits), and where thread values are redundant at rate above `b_a`.
 
 **Falsified** at FP4 at `b_a = 4`, under the standard threading.
 If each FP4 thread value is a gate holding its E2M1 value (15 values), one weight-gradient product `δ_t[i] · x_t[j]`

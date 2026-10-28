@@ -5,11 +5,11 @@ import Definitions.InferenceOnly
 # The policy at a rate as a `(c, k)`-partition
 
 `CompliesRate c α` asks for inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate.
-On a Boolean declaration a fresh input bit is an fresh input gate, so an inference block reads at most `α |I| ≤ α c` of
-them, and padding each inference block to `c` gates makes the division a `(c, ⌊αc⌋)`-partition of a declaration that
-contains it (`CompliesCK`), which complies at `(c, ⌊αc⌋)` and on which the working draft's Lemma 1 and Theorem 3 apply.
-A multi-bit declaration first takes its bit-level expansion (`ExpandComplies`): an inference block of gates at most `W`
-bits wide becomes one of at most `c W` one-bit gates, reading the same fresh input bits.
+On a Boolean declaration a fresh input bit is one input gate outside `θ`, so an inference block reads at most
+`α |I| ≤ α c` of them, and padding each inference block to `c` gates makes the division a `(c, ⌊αc⌋)`-partition of a
+declaration that contains it (`CompliesCK`), which complies at `(c, ⌊αc⌋)` and on which the working draft's Lemma 1 and
+Theorem 3 apply. A multi-bit declaration first takes its bit-level expansion (`ExpandComplies`): an inference block of
+gates at most `W` bits wide becomes one of at most `c W` one-bit gates, reading the same fresh input bits.
 -/
 
 namespace InferenceOnly.Guarantees
