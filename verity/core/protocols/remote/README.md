@@ -13,8 +13,8 @@ instead of computing them.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
-registered compiler, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Reported
-advice, Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
+registered compiler, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Reported advice,
+Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window` a period.
 
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:

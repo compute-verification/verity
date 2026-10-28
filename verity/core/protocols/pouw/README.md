@@ -11,12 +11,12 @@ parameter: it surfaces the ε at δ its sample established.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes two subprotocols: sampled proofs'
-one-stage audit and PoUW's check of each execution phase (`Core.Remote.components` in
-`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both subprotocols accept
-their own cases and its commitment binds both subprotocols' commitments; either one's rejection rejects it
+one-stage audit and PoUW's commit-period check (`Core.Remote.components` in
+`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both components accept
+their own cases and its commitment binds both components' commitments; either one's rejection rejects it
 (`Core.Composition.product`, `verity/core/protocols/composition/README.md`). PoUW's half of the remote demo has no
 runner yet: the remote demo, `verity example vllm`, runs the sampled-proofs half. The remote protocol's front door is
-`verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
+`verity/core/protocols/remote/`; PoUW is also a component of the onsite protocol (`verity/core/protocols/onsite`).
 
 ## What runs
 
