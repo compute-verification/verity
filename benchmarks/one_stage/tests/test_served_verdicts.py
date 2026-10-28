@@ -155,6 +155,20 @@ def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_p
     assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
 
 
+def test_the_certifiers_chain_keeps_off_the_runs_first_two_cpus(tmp_path):
+    """`served_verdicts.sh cert-cpus LIST` is the cpuset LIST less its first two CPUs, which PoUS's timed rounds keep,
+    and nothing (every CPU) under four; with no LIST it reads the process's own allowed CPUs."""
+    def cpus(*arg):
+        return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "cert-cpus", *arg], cwd=tmp_path,
+                              env={"PATH": os.defpath, "HOME": str(tmp_path), "D": str(tmp_path), "OUT": str(tmp_path)},
+                              check=True, capture_output=True, text=True).stdout.strip()
+    assert cpus("0-15") == ",".join(map(str, range(2, 16)))
+    assert cpus("4-5,8,10-12") == "8,10,11,12"
+    assert cpus("0-2") == cpus("7") == ""
+    own = sorted(os.sched_getaffinity(0))
+    assert cpus() == (",".join(map(str, own[2:])) if len(own) > 3 else "")
+
+
 def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
     """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
     assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]

@@ -48,7 +48,8 @@
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
-#     from the moment the window is picked, beside step 3, its lines said after the others'), each within <COMPONENT>_TIMEOUT
+#     from the moment the window is picked, beside step 3, its lines said after the others', on CERT_CPUS, by default the
+#     run's CPUs but its first two, so that PoUS's timed rounds find two CPUs idle; set empty, every CPU), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
 #     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
@@ -383,7 +384,16 @@ private_pieces() {
   done
 }
 
+cert_cpus() {  # LIST (a cpuset's list form; default this process's allowed CPUs) less its first two, or none under four
+  local r c cpus=()
+  for r in $(tr , ' ' <<< "${1:-$(sed -n 's/^Cpus_allowed_list:[[:space:]]*//p' /proc/self/status)}"); do
+    for ((c = ${r%-*}; c <= ${r#*-}; c++)); do cpus+=("$c"); done
+  done
+  [ ${#cpus[@]} -lt 4 ] || (IFS=,; echo "${cpus[*]:2}")
+}
+
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
+if [ "${1:-}" = cert-cpus ]; then cert_cpus "${2:-}"; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
@@ -514,7 +524,10 @@ say "WINDOW $PICK"
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 CERT=
 if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
-  "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" --only certifier \
+  CERT_CPUS=${CERT_CPUS-$(cert_cpus)}
+  PIN=(); [ -z "$CERT_CPUS" ] || PIN=(taskset -c "$CERT_CPUS")
+  say "CPUS: the certifier's chain on ${CERT_CPUS:-every CPU}, beside steps 3 and 4"
+  "${PIN[@]}" "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" --only certifier \
     > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
