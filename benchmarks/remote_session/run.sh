@@ -18,7 +18,7 @@
 # With PROVER_SLICE the prover runs at nice 0 in a scope of that top-level slice (root's systemd-run, then this user
 # again), on PROVER_CPUS and in at most PROVER_MEM_GB. Node 2's user slice holds only 0-119, where nice 19 doesn't make
 # another session's CPU jobs yield to the prover (cgroups share CPU by weight, a session's as much as every lease's
-# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass (r20261015-185416-ac65).
+# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass.
 # vy-timing.slice's CPUs 128-191 are fill's timing jobs', each of which holds a GPU, so none runs in a whole-node lease.
 #
 # The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so --mem-gb 260):
@@ -53,7 +53,7 @@
 # from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
-# the Lean verifier of record with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
+# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)

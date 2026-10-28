@@ -1,4 +1,4 @@
-"""The §8 rulings in the torch frontend (frontend design §8/§9), one test each.
+"""The §8 design rules of the torch frontend (frontend design §8/§9), one test each.
 Needs torch (the pod); skips cleanly without it."""
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def _node_refs(P: Program, k: int, arg: int):
     return _root_body(P).nodes[k].args[arg].refs
 
 
-# -- ruling 6: S.out is the graph boundary; dead gates are legal, reported, warned about, strict-able -----------
+# -- rule 6: S.out is the graph boundary; dead gates are legal, reported, warned about, strict-able -----------
 
 
 def test_r6_dead_gates_reported_warned_strict_and_suppressed():
@@ -80,7 +80,7 @@ def test_r6_declared_return_that_nothing_reads_is_not_on_s_out():
     assert rep.dead.total == 4
 
 
-# -- ruling 3: ops bundles are record statics; bodies shared; bundles coexist; E_IDENTITY only on conflict -----
+# -- rule 3: ops bundles are record statics; bodies shared; bundles coexist; E_IDENTITY only on conflict -----
 
 
 def _row_family():
@@ -150,7 +150,7 @@ def test_r3_bundle_with_an_uncalled_role_round_trips():
     decode_program(desc, REGISTRY)
 
 
-# -- ruling 1: one body per fully qualified specialisation; registry version in the provenance -----------------
+# -- rule 1: one body per fully qualified specialisation; registry version in the provenance -----------------
 
 
 def test_r1_conflicting_definitions_are_rejected_not_first_wins():
@@ -208,7 +208,7 @@ def test_r1_registry_version_in_provenance():
     assert rep.provenance["rules"] == []
 
 
-# -- ruling 2: no silent padding ------------------------------------------------------------------------------
+# -- rule 2: no silent padding ------------------------------------------------------------------------------
 
 
 def test_r2_no_silent_padding_of_scan_or_attention():
@@ -240,7 +240,7 @@ def _sum_step():
     return SumStep
 
 
-# -- ruling 4: derivation provenance --------------------------------------------------------------------------
+# -- rule 4: derivation provenance --------------------------------------------------------------------------
 
 
 def test_r4_derivation_provenance_record_for_the_module_route():
@@ -264,7 +264,7 @@ def test_r4_derivation_provenance_record_for_the_module_route():
     assert set(rule["preconditions"]) == set(rule["preconditions_checked"])
 
 
-# -- ruling 5: references -------------------------------------------------------------------------------------
+# -- rule 5: references -------------------------------------------------------------------------------------
 
 
 def test_r5_broadcasts_are_zero_stride_strided_and_distinct_values_are_not_merged():

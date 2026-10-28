@@ -58,7 +58,7 @@ BLOCK = 4096
 STATEMENT = 512
 """Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
 FLOOR_GPU_S = 0.0799
-"""An opening's GPU device phase at a full statement, firewall on: measured (r20261018-211523-93ec)."""
+"""An opening's GPU device phase at a full statement, firewall on: measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6
 """p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: modeled."""
 MEMSAT = {"run": "r20261018-222953-fbf1", "plain": 4260.0, "codec": 3271.0,
