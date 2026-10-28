@@ -16,7 +16,9 @@ transcript.
 * `rsZHJ_wrongRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `wrongRegZ` is one set at every registration.
 * `zk_session_soundHJ_custody_drawn_reg`: `Composed.zk_session_soundJ_custody_drawn_reg` under hidden outputs, the
-  drawn units' form: `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3.
+  drawn units' form: `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3;
+  `zk_session_soundHJ_custody_drawn_at` is the same at the value layer of any values, with the binding errors against
+  them for `δ_link`.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -149,5 +151,68 @@ theorem zk_session_soundHJ_custody_drawn_reg
     (Layout.keyProg_readsOwn c hU n _)
     hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) σ).trans ?_
   exact add_le_add (ksAvgZC_le_pr execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ)) le_rfl
+
+/-- **`zk_session_soundHJ_custody_drawn_reg` at the value layer of any values `Xv`**: "wrong" is `wrongRegZ` at
+`XlayerZC (Xv R τ)`, and the link term is the binding errors' against `Xv` (`errBoundZC`), with no hypothesis on the
+link finders. -/
+theorem zk_session_soundHJ_custody_drawn_at
+    (I : Inputs) (ht : I.tags.typed = false)
+    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (hscope : Layout.scopeOkH c = true)
+    (kd : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
+    {k Rw : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ)
+    (Xv : (R : Reg) → Cont (Law.execOS (n := n) src (.subset kd) n) Reg
+      (batchedSessionZC execArith hs512 (planZHJ dj y₀)) R →
+      ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)).Pos →
+      ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)).Val)
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    {qF qS : ℝ} :
+    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+        (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1,
+        u ∈ wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+          ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)) (reg σ)
+          (XlayerZC execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+            ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
+            (Xv (reg σ) (cont σ))))
+        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        errBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+          ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
+          Xv k Rw ρ (reg σ) (cont σ) := by
+  intro σ hCR
+  let W := wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+    ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)) (reg σ)
+    (XlayerZC execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+      ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
+      (Xv (reg σ) (cont σ)))
+  refine (execRefinesZK_tables_drawn execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
+    (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+    (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+      (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+        fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+    (fun S => ∃ u ∈ S, u ∈ W)).trans ?_
+  refine (prob_mono (q := fun o : Bool × Finset (Fin n) => o.1 = true ∧ ¬ Disjoint W o.2)
+    (fun o h => ⟨h.1, Finset.not_disjoint_iff.2 (let ⟨u, hu, hw⟩ := h.2; ⟨u, hw, hu⟩)⟩) _ _).trans ?_
+  refine (zk_flock_drawnC_reg_at execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) _
+    (loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
+    (Layout.keyProg_readsOwn c hU n _)
+    hRw hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) Xv σ).trans ?_
+  exact add_le_add (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR) le_rfl
 
 end FlockSoundness.Discharge.ZkHidden
