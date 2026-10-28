@@ -455,7 +455,37 @@ def first_last(F: Facts, name: str) -> list[Block]:
     return emb
 
 
+def head_blocks(F: Facts, name: str) -> list[Block]:
+    """The LM head and the token select, a sampled token (every decode position samples): in ``a0`` the two Calls; in
+    ``e1`` and ``e2`` each head slice ``Gemm_v2{2048,16}`` selects its best logit in its epilogue and commits it and its
+    index, and one block combines them; elsewhere the window's slices commit the logits and its select units read them."""
+    V, n = 128256, 16
+    c = [u for u in F.head["units"] if u[0] == "output"][0]
+    co = {"macs": c[3], "gates2": c[4], "ands": c[5]}
+    slices = V // n
+    if name == "a0":
+        return [Block("LM head Gemm_v2{2048,128256}", 1, co["macs"] * V, F.head["call_gates2"], F.head["call_ands"],
+                      2 * V, [F.bf16_row], V * 2 * 2048, per="sampled"),
+                Block("TokenSelect_v1", 1, 0, *F.call(F.select), 4, [2 * V], per="sampled")]
+    groups_ands, _k, gsrc = CS.MEASURED["TokenSelectGroups_v1{C=2672,G=16}"]
+    comb_ands, _k, csrc = CS.MEASURED["TokenSelectCombine_v2{V=128256,C=16}"]
+    per_group = groups_ands // 167
+    if name in ("e1", "e2"):
+        return [Block("LM head slice {2048,16} + best of 16", slices, n * co["macs"], n * co["gates2"],
+                      n * co["ands"] + per_group, 2 + 4, [F.bf16_row], n * 2 * 2048, per="sampled",
+                      note="epilogue ANDs: TokenSelectGroups' a group of 16 (measured / 167); the index's 4 bytes an estimate"),
+                Block("token select over the slices' bests", 1, 0, 0, comb_ands, 4, [6 * slices], per="sampled",
+                      note=f"ANDs: TokenSelectCombine_v2's ({csrc}), over 167 x 48 bests")]
+    return [Block("LM head slice {2048,16}", slices, n * co["macs"], n * co["gates2"], n * co["ands"], 2 * n, [F.bf16_row],
+                  n * 2 * 2048, per="sampled"),
+            Block("TokenSelectGroups_v1{C=2672,G=16}", 48, 0, 0, groups_ands, 167 * 6, [2 * 2672], per="sampled",
+                  note=f"ANDs measured ({gsrc}); commits 167 bests and indices, the index's 4 bytes an estimate"),
+            Block("TokenSelectCombine_v2", 1, 0, 0, comb_ands, 4, [167 * 6] * 48, per="sampled")]
+
+
 def summarize(F: Facts, name: str, blocks: list[Block]) -> dict:
+    head = [b.row() for b in head_blocks(F, name)]
+    head_beta = sum(r["n_per_token"] * r["boundary_bits"] / 8 for r in head)
     rows = [b.row() for b in blocks + first_last(F, name)]
     beta = sum(r["n_per_token"] * r["boundary_bits"] / 8 for r in rows)
     macs = sum(r["n_per_token"] * r["macs"] for r in rows)
@@ -468,7 +498,9 @@ def summarize(F: Facts, name: str, blocks: list[Block]) -> dict:
             "served_macs_per_token": F.served_macs, "proved_macs_per_token": macs, "blocks_per_token": n,
             "ands_per_token": ands, "blocks_over_cap_per_token": sum(r["n_per_token"] for r in rows if r["over_cap"]),
             "and_weighted_mean_block_ands": w / ands, "with_openings_and_weighted_mean": wo / ao,
-            "expected_proved_ands_per_window_est": DRAWS * w / ands, "blocks": rows}
+            "expected_proved_ands_per_window_est": DRAWS * w / ands, "head_beta_bytes_per_sampled_token": head_beta,
+            "head_ands_per_sampled_token": sum(r["n_per_token"] * r["ands"] for r in head),
+            "beta_with_head_bytes_per_token": beta + head_beta, "blocks": rows, "head_blocks": head}
 
 
 def qword_partition(m: dict, T: int) -> dict:
@@ -494,7 +526,10 @@ def qword_partition(m: dict, T: int) -> dict:
     return {"partition": "a", "keys": T, "beta_bytes_per_token": beta_bits / 8, "beta_bytes_per_kmac": 1000 * beta_bits / 8 / macs,
             "served_macs_per_token": macs, "proved_macs_per_token": macs,
             "blocks_per_token": sum(r["n_per_token"] for r in rows), "ands_per_token": ands,
-            "and_weighted_mean_block_ands": w / ands, "expected_proved_ands_per_window_est": DRAWS * w / ands, "blocks": rows}
+            "and_weighted_mean_block_ands": w / ands, "expected_proved_ands_per_window_est": DRAWS * w / ands,
+            "head_beta_bytes_per_sampled_token": sum(o["qword_committed_bits"] for k, o in ops.items()
+                                                     if k.startswith(("Gemm_v2", "TokenSelect"))) / 8,
+            "blocks": rows}
 
 
 def lm_head(m: dict) -> dict:
@@ -522,6 +557,7 @@ def main(argv=None) -> int:
         print(f"\nkeys T={T}")
         for p in res["at"][T]:
             print(f"  {p['partition']:>3}: beta {p['beta_bytes_per_token']:>12,.0f} B/token {p['beta_bytes_per_kmac']:7.2f} B/kMAC"
+                  f"  head {p.get('head_beta_bytes_per_sampled_token', 0):>9,.0f} B/sampled token"
                   f"  blocks/token {p['blocks_per_token']:>10,.0f}  AND-weighted mean block {p['and_weighted_mean_block_ands']:>13,.0f}")
     for T in keys:
         for p in res["at"][T]:
