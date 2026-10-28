@@ -19,6 +19,7 @@ necessary subcomputation, over the reference's).
 |---|---|---|
 | C, \|C\|, C(x) | A circuit: gates in topological order, each holding one value. \|C\| is its size, the number of its operation (non-input) gates. C(x) is the value of its output gates on the fresh input x. | `Verity.Circuit`, `Circuit.computed`, `Circuit.size`, `Circuit.eval` |
 | in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
+| annotation α, meaning | An annotation α of a circuit C with label set L maps each label ℓ to the set α(ℓ) of gates it holds. Proof blocks, inference blocks, a placement, a cover and a selection are annotations, and each kind is a predicate on α: a labelling of S (every gate of S held by exactly one label), a partition (a labelling of the computed gates that holds no input gate), a cover of S (every gate of S held by some label, overlaps allowed), a selection (one label). f_*α relabels along f : L → L'; α refines β when each α(ℓ) lies inside some β(ℓ′); ι^*β pulls an annotation of D back to C along a containment ι of C in D. An annotation's meaning is a predicate on it, stated in its owner's area, and is what a check establishes; it reads the committed table, never the algorithm that chose it. | `Verity.Annotation`, `Annotation.holds`, `Annotation.Labels`, `Annotation.IsPartition`, `Annotation.Covers`, `Annotation.Refines`, `Annotation.map`, `Annotation.pullback`; a partition's, `Partition.toAnnotation`; each meaning, in its owner's area, not yet in Lean |
 | θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
 | D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R is its registration, once: θ, D and 𝓘, its (c, k)-partition into inference blocks, which the verifier checks from D and θ alone (the inference-only policy). | `Verity.Declaration.D`, `Verity.Declaration`; 𝓘 is a `Verity.Partition`; the policy, `Nci.Complies` in an older form |
 | (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
@@ -287,7 +288,10 @@ Some words keep a different, narrower sense:
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`). It is not a period.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
-- Five words still carry two senses in the code; each entry says which sense keeps the word and what the other is called:
+- Six words still carry two senses in the code; each entry says which sense keeps the word and what the other is called:
+  - **Annotation**: the gates each label of a circuit holds (Notation). `verity.ml.circuits.annotations`
+    (`verity/annotations/v0`), the names, descriptions, formats and groupings of a Program's parts outside its content
+    digest, is metadata, and keeps the word until it is renamed.
   - **Row**: a commitment row, the bits one leaf hashes (hm96 rows, the `*/row/*` leaf schemes, the row-form statements).
     A matrix's row (a slot is one row of a step's activations) stays plain English. A workload or a server block is
     never a row (Older names).
