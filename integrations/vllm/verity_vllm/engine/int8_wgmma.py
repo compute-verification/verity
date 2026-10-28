@@ -5,9 +5,8 @@ the same epilogue in the same order: cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_
 `scaled_mm(xq, s_a, w, s_w, y, cfg)` launches it on torch's current stream: xq [M, K] int8, s_a [M] float32, w [N, K] int8
 (row-major), s_w [N] float32 -> y [M, N] bf16, in place.  It allocates nothing and a CUDA graph captures it (the tensor maps
 are kernel parameters, encoded on the host each call).  A config (`WgCfg`, text "ppm2_128x128:g8") is the kernel (`VARIANTS`:
-ping-pong with a consumer tile of 128 x 128, or cooperative on 128 x 256; `m2` for clusters of two CTAs along M sharing W's
-boxes by multicast, `m4` for clusters of four on a 2 x 2 block of tiles sharing X's boxes along its rows and W's along its
-columns), the raster group (tile rows, or rows of clusters, a group) and at most how many CTAs (0: one an SM).
+ping-pong with a consumer tile of 128 x 128, or cooperative on 128 x 256; `m2` for clusters of two CTAs sharing W's boxes
+by multicast), the raster group (tile rows, or pairs of them, a group) and at most how many CTAs (0: one an SM).
 
 The library is built by the nvcc on the path, else torch's CUDA_HOME's (`-fmad=false`, no FTZ or fast-math flag), for
 `int8_gemm_configs.WGMMA_ARCH`, and kept under ``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's
@@ -34,10 +33,9 @@ NVCC_FLAGS = ("-O3", "-std=c++17", "-gencode", f"arch=compute_{WGMMA_ARCH.remove
               "-fmad=false", "-Xcompiler", "-fPIC", "-shared", "-Xptxas", "-v")
 BUILD_DIR = Path.home() / ".cache" / "verity" / "int8_wgmma"
 #: the library's variants, in `int8_wgmma_layout`'s order: (tile rows, columns, cluster); `pp` ping-pong (each consumer
-#: its own tile), `co` cooperative (both consumers one tile, 64 rows each); a cluster of 2 is a pair along M, of 4 a 2 x 2
-#: block
+#: its own tile), `co` cooperative (both consumers one tile, 64 rows each)
 VARIANTS = {"pp_128x128": (128, 128, 1), "ppm2_128x128": (128, 128, 2), "co_128x256": (128, 256, 1),
-            "com2_128x256": (128, 256, 2), "ppm4_128x128": (128, 128, 4), "com4_128x256": (128, 256, 4)}
+            "com2_128x256": (128, 256, 2)}
 _vp, _i = ctypes.c_void_p, ctypes.c_int
 
 

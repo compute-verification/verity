@@ -12,9 +12,7 @@
 // epilogue of the tile before.  `co` is the cooperative one: both consumers on each 128 x 256 tile, 64 rows each, the
 // epilogue between mainloops.  The producer holds 40 registers and the consumers 232.  `m2` (`ppm2`, `com2`): clusters of
 // two CTAs on M-adjacent tiles of one column of tiles, the pair sharing each W box by TMA multicast (each CTA loads half of
-// it into both).  `m4` (`ppm4`, `com4`): clusters of four on a 2 x 2 block of tiles, each row of the block sharing its X
-// boxes and each column its W boxes the same way, so the L2 serves half of `m2`'s bytes a MAC at 128 x 128.  Barrier
-// arrivals stay at CTA scope (a cluster-scope release puts a MEMBAR.ALL.GPU on every consumer warp's
+// it into both).  Barrier arrivals stay at CTA scope (a cluster-scope release puts a MEMBAR.ALL.GPU on every consumer warp's
 // stage).  M, N and K need not be multiples of the tile: a box past the matrix reads zeros, which add nothing, and the
 // epilogue stores rows < M and columns < N alone (N even, K a multiple of 16).  The kernels are named
 // exactlin_scaled_mm_wgmma_*, so a profile's kernel classes count them with exactlin's GEMM.
@@ -29,7 +27,7 @@
 #define DEV __device__ __forceinline__
 
 struct alignas(128) Params {
-  CUtensorMap a, b;  // X: M rows of K bytes, boxes of WM / CN rows; W: N rows, boxes of BN / CM rows
+  CUtensorMap a, b;  // X: M rows of K bytes, boxes of WM rows; W: N rows, boxes of BN / CL rows
   CUtensorMap c;     // y: M rows of N bf16 words, boxes of a consumer's rows by 64 columns (with Y_TMA)
   const float* sa;   // s_a [M]
   const float* sw;   // s_w [N]
@@ -37,8 +35,7 @@ struct alignas(128) Params {
   int M, N, K, group, flags;
 };
 // flags: Y_TMA, y through shared memory and a TMA store (N a multiple of 8, y 16-byte aligned), else stored by each thread;
-// the rest are timing probes: 1 streaming stores, 2 no epilogue, 4 no stores (the last two leave y unwritten), and 32 the
-// cooperative consumers staggered
+// the rest are timing probes: 1 streaming stores, 2 no epilogue, 4 no stores (the last two leave y unwritten)
 constexpr int Y_TMA = 8;
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma
@@ -176,42 +173,34 @@ DEV void put(uint32_t* at, uint32_t v, int flags) {
   }
 }
 
-// a stage's release, on the barriers of every CTA that loads into this one's stages: its row's in the cluster's block (X's
-// boxes) and its column's (W's), rank rm + CM rn at tile (rm, rn) of the block
-template <int CM, int CN> DEV void release(uint32_t bar, int rm, int rn) {
-  if constexpr (CM * CN == 1) {
+template <int CL> DEV void release(uint32_t bar) {
+  if constexpr (CL == 1) {
     mbar_arrive(bar);
   } else {
-#pragma unroll
-    for (int j = 0; j < CN; j++) mbar_arrive_at(bar, rm + CM * j);
-#pragma unroll
-    for (int j = 0; j < CM; j++)
-      if (j != rm) mbar_arrive_at(bar, j + CM * rn);
+    mbar_arrive_at(bar, 0);
+    mbar_arrive_at(bar, 1);
   }
 }
 
-// CTA c (a cluster's, CM x CN CTAs) takes units c, c + G, ... (G the CTAs, or clusters), the j-th of them by consumer j % 2
-// (CO = 0) or by both (CO = 1).  The producer fills the ring in that order, so unit j's k-block kb is the ring's fill
-// j KB + kb.  A unit is a CM x CN block of tiles, the CTA of rank rm + CM rn taking tile (CM u_m + rm, CN u_n + rn) (zeros
-// past M or N, stored nowhere), loading part rn of X's box into its block row's CTAs and part rm of W's into its block
-// column's.
-template <int WM, int BN, int CO, int CM, int CN> DEV void body(const Params& p) {
+// CTA c (a pair's with CL = 2) takes units c, c + G, ... (G the CTAs, or pairs), the j-th of them by consumer j % 2 (CO = 0)
+// or by both (CO = 1).  The producer fills the ring in that order, so unit j's k-block kb is the ring's fill j KB + kb.  A
+// unit is one tile (CL = 1) or a pair of M-adjacent tiles, CTA r taking tile row 2 u + r (zeros past M, stored nowhere) and
+// loading half r of W's box.
+template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
   using T = Tile<WM, BN, CO>;
   constexpr int STAGES = T::STAGES, NH = T::NH, NA = T::NA, NC = CO ? 2 : 1;  // NC: the consumers that read a stage
-  constexpr int CL = CM * CN, WRITERS = CM + CN - 1;  // the CTAs loading into a CTA's stages, and it into theirs
-  static_assert((CM == 1 || CM == 2) && (CN == 1 || CN == 2), "a CTA, a pair or a 2 x 2 block");
+  static_assert(CL == 1 || CL == 2, "a CTA or a pair");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, ybuf = base + STAGES * T::STAGE, bars = ybuf + 2 * T::Y_BYTES;
   const uint32_t order = bars + 16 * STAGES;
   const int M = p.M, N = p.N, KB = (p.K + BK - 1) / BK;
-  const int tiles_m = (M + WM - 1) / WM, tiles_n = (N + BN - 1) / BN, rows_u = (tiles_m + CM - 1) / CM;
-  const int cols_u = (tiles_n + CN - 1) / CN, units = rows_u * cols_u;
-  const int tid = threadIdx.x, wg = tid / 128, rank = CL == 1 ? 0 : (int)cta_rank(), rm = rank % CM, rn = rank / CM;
+  const int tiles_m = (M + WM - 1) / WM, tiles_n = (N + BN - 1) / BN, rows_u = (tiles_m + CL - 1) / CL, units = rows_u * tiles_n;
+  const int tid = threadIdx.x, wg = tid / 128, rank = CL == 1 ? 0 : (int)cta_rank();
   const int first_u = blockIdx.x / CL, step_u = gridDim.x / CL;
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) {
       mbar_init(bars + 8 * s, 1);
-      mbar_init(bars + 8 * (STAGES + s), 4 * NC * WRITERS);
+      mbar_init(bars + 8 * (STAGES + s), 4 * NC * CL);
     }
     mbar_init(order, 4);
     mbar_init(order + 8, 4);
@@ -228,37 +217,29 @@ template <int WM, int BN, int CO, int CM, int CN> DEV void body(const Params& p)
     if (tid == 256) {
       tma_prefetch(&p.a);
       tma_prefetch(&p.b);
-      constexpr uint32_t A_PART = WM / CN * BK, B_PART = BN / CM * BK;
-      // the block row's ranks (they share X's box) and the block column's (W's)
-      uint16_t a_mask = 0, b_mask = 0;
-      for (int j = 0; j < CN; j++) a_mask |= (uint16_t)(1u << (rm + CM * j));
-      for (int j = 0; j < CM; j++) b_mask |= (uint16_t)(1u << (j + CM * rn));
+      constexpr uint32_t B_PART = BN / CL * BK;
       int s = 0;
       uint32_t ph = 0;
       for (int t = first_u; t < units; t += step_u) {
         int tm, tn;
-        raster(t, rows_u, cols_u, p.group, tm, tn);
-        tm = tm * CM + rm;
-        tn = tn * CN + rn;
+        raster(t, rows_u, tiles_n, p.group, tm, tn);
+        tm = tm * CL + rank;
         for (int kb = 0; kb < KB; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
-          const uint32_t adst = st + rn * A_PART, bdst = st + T::A_BYTES + rm * B_PART;
-          const int arow = tm * WM + rn * (WM / CN), brow = tn * BN + rm * (BN / CM);
-          if constexpr (CN == 1)
-            tma_load(adst, &p.a, full, kb * BK, arow);
-          else
-            tma_load_mc(adst, &p.a, full, kb * BK, arow, a_mask);
-          if constexpr (CM == 1)
+          tma_load(st, &p.a, full, kb * BK, tm * WM);
+          const uint32_t bdst = st + T::A_BYTES + rank * B_PART;
+          const int brow = tn * BN + rank * (BN / CL);
+          if constexpr (CL == 1)
             tma_load(bdst, &p.b, full, kb * BK, brow);
           else
-            tma_load_mc(bdst, &p.b, full, kb * BK, brow, b_mask);
+            tma_load_mc(bdst, &p.b, full, kb * BK, brow, 0x3);
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
       }
-      // the peers' consumers arrive on this CTA's barriers: it stays until every stage it loaded is released by all of them
-      if constexpr (CL > 1)
+      // the peer's consumers arrive on this CTA's barriers: it stays until every stage it loaded is released by both
+      if constexpr (CL == 2)
         for (int i = 0; i < STAGES; i++) {
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           if (++s == STAGES) { s = 0; ph ^= 1; }
@@ -269,23 +250,16 @@ template <int WM, int BN, int CO, int CM, int CN> DEV void body(const Params& p)
   regs_inc<232>();
 
   const int x = tid % 128, lane = tid % 32;
-  constexpr int LAG = 2;
-  const bool stagger = p.flags & 32;
   int32_t d[NH][NA];
   int i = 0;
   constexpr int STEP = CO ? 1 : 2;
   for (int t = first_u + (CO ? 0 : wg) * step_u, j = CO ? 0 : wg; t < units; t += STEP * step_u, j += STEP, i++) {
     int tm, tn;
-    raster(t, rows_u, cols_u, p.group, tm, tn);
-    tm = tm * CM + rm;
-    tn = tn * CN + rn;
+    raster(t, rows_u, tiles_n, p.group, tm, tn);
+    tm = tm * CL + rank;
     // ping-pong: the other consumer's mainloop of unit j - 1 has issued its last stage, so every fill before this unit's
     // first has been waited on and each parity wait below is on the fill it names
     if (!CO && j > 0) mbar_wait_warp(order + 8 * (1 - wg), (uint32_t)(wg == 0 ? i - 1 : i) & 1);
-    // cooperative, staggered: consumer 1 starts its first unit once consumer 0 has issued LAG stages, and from then on the
-    // one ahead finishes each epilogue first, so the tensor pipe runs one consumer's MMAs under the other's epilogue
-    const bool lead = CO && stagger && i == 0;
-    if (lead && wg == 1) mbar_wait_warp(order, 0);
     const uint32_t g = (uint32_t)j * KB;
     int s = g % STAGES, sp = 0;
     uint32_t ph = (g / STAGES) & 1;
@@ -301,9 +275,8 @@ template <int WM, int BN, int CO, int CM, int CN> DEV void body(const Params& p)
       WG_COMMIT;
       // ping-pong: past its last wait on a stage, so the other consumer may start, its MMAs queued behind these
       if (!CO && kb == KB - 1 && lane == 0) mbar_arrive(order + 8 * wg);
-      if (lead && wg == 0 && kb == min(LAG, KB) - 1 && lane == 0) mbar_arrive(order);
       WG_WAIT(1);
-      if (kb > 0 && lane == 0) release<CM, CN>(bars + 8 * (STAGES + sp), rm, rn);
+      if (kb > 0 && lane == 0) release<CL>(bars + 8 * (STAGES + sp));
       sp = s;
       if (++s == STAGES) { s = 0; ph ^= 1; }
     }
@@ -329,7 +302,7 @@ template <int WM, int BN, int CO, int CM, int CN> DEV void body(const Params& p)
     WG_WAIT(0);
 #pragma unroll
     for (int h = 0; h < NH; h++) acc_fence<NA>(d[h]);
-    if (lane == 0) release<CM, CN>(bars + 8 * (STAGES + sp), rm, rn);
+    if (lane == 0) release<CL>(bars + 8 * (STAGES + sp));
     if (p.flags & 2) continue;
 
     if (p.flags & Y_TMA) {
@@ -399,35 +372,29 @@ template <int WM, int BN, int CO, int CM, int CN> DEV void body(const Params& p)
 
 #define KERNELS(S, WM, BN, CO)                                                                                           \
   extern "C" __global__ void __launch_bounds__(384, 1) exactlin_scaled_mm_wgmma_##S##_##WM##x##BN(const __grid_constant__ Params p) {  \
-    body<WM, BN, CO, 1, 1>(p);                                                                                           \
+    body<WM, BN, CO, 1>(p);                                                                                              \
   }                                                                                                                      \
   extern "C" __global__ void __cluster_dims__(2, 1, 1) __launch_bounds__(384, 1)                                         \
       exactlin_scaled_mm_wgmma_##S##m2_##WM##x##BN(const __grid_constant__ Params p) {                                                 \
-    body<WM, BN, CO, 2, 1>(p);                                                                                           \
-  }                                                                                                                      \
-  extern "C" __global__ void __cluster_dims__(4, 1, 1) __launch_bounds__(384, 1)                                         \
-      exactlin_scaled_mm_wgmma_##S##m4_##WM##x##BN(const __grid_constant__ Params p) {                                                 \
-    body<WM, BN, CO, 2, 2>(p);                                                                                           \
+    body<WM, BN, CO, 2>(p);                                                                                              \
   }
 KERNELS(pp, 128, 128, 0)
 KERNELS(co, 128, 256, 1)
 
 // ---------------------------------------------------------------- the host side (int8_wgmma.py's ctypes calls)
-// Variants, in this order: ping-pong 128x128, its pairs, cooperative 128x256, its pairs, then the 2 x 2 clusters of each.
-// A cluster of 2 is a pair along M, of 4 a 2 x 2 block.
+// Variants, in this order: ping-pong 128x128, its pairs, cooperative 128x256, its pairs.
 namespace {
-constexpr int NV = 6;
-constexpr int VWM[NV] = {128, 128, 128, 128, 128, 128}, VBN[NV] = {128, 128, 256, 256, 128, 256};
-constexpr int VCL[NV] = {1, 2, 1, 2, 4, 4}, VCO[NV] = {0, 0, 1, 1, 0, 1};
+constexpr int NV = 4;
+constexpr int VWM[NV] = {128, 128, 128, 128}, VBN[NV] = {128, 128, 256, 256}, VCL[NV] = {1, 2, 1, 2};
+constexpr int VCO[NV] = {0, 0, 1, 1};
 using T0 = Tile<128, 128, 0>;
 using T2 = Tile<128, 256, 1>;
-constexpr int VSMEM[NV] = {T0::SMEM, T0::SMEM, T2::SMEM, T2::SMEM, T0::SMEM, T2::SMEM};
-constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T2::STAGES, T2::STAGES, T0::STAGES, T2::STAGES};
+constexpr int VSMEM[NV] = {T0::SMEM, T0::SMEM, T2::SMEM, T2::SMEM};
+constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T2::STAGES, T2::STAGES};
 constexpr int MAX_DEV = 64;
 const void* const VFN[NV] = {(const void*)exactlin_scaled_mm_wgmma_pp_128x128, (const void*)exactlin_scaled_mm_wgmma_ppm2_128x128,
-                             (const void*)exactlin_scaled_mm_wgmma_co_128x256, (const void*)exactlin_scaled_mm_wgmma_com2_128x256,
-                             (const void*)exactlin_scaled_mm_wgmma_ppm4_128x128, (const void*)exactlin_scaled_mm_wgmma_com4_128x256};
-// per device: SMs, and per variant the CTAs (or clusters) the card holds at once; 0 until the device's first call
+                             (const void*)exactlin_scaled_mm_wgmma_co_128x256, (const void*)exactlin_scaled_mm_wgmma_com2_128x256};
+// per device: SMs, and per variant the CTAs (or pairs) the card holds at once; 0 until the device's first call
 int g_sms[MAX_DEV], g_most[MAX_DEV][NV];
 
 int setup(int dev) {
@@ -441,7 +408,7 @@ int setup(int dev) {
       g_most[dev][v] = sms;
     } else {
       cudaLaunchConfig_t cfg = {};
-      cfg.gridDim = dim3(VCL[v], 1, 1);
+      cfg.gridDim = dim3(2, 1, 1);
       cfg.blockDim = dim3(384, 1, 1);
       cfg.dynamicSmemBytes = VSMEM[v];
       int n = 0;
@@ -484,7 +451,7 @@ extern "C" int int8_wgmma_layout(int* out) {
 }
 
 // y = exactlin(xq W^T) on `stream` with variant v, at most `ctas` CTAs (0: every SM) and raster groups of `group` tile rows
-// (or of rows of clusters); returns 0, or a nonzero code naming the failed step, and writes the grid to *grid.  y goes
+// (pairs of them with a cluster); returns 0, or a nonzero code naming the failed step, and writes the grid to *grid.  y goes
 // out by TMA stores where its rows allow (N a multiple of 8, y 16-byte aligned) unless flags has 16; flags' 1, 2 and 4 are
 // the kernel's timing probes.
 extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, int M, int N,
@@ -493,9 +460,9 @@ extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const flo
   int dev = 0;
   if (cudaGetDevice(&dev) != cudaSuccess || dev >= MAX_DEV) return 11;
   if (int e = setup(dev)) return 20 + e;
-  const int wm = VWM[v], bn = VBN[v], cl = VCL[v], cm = cl == 1 ? 1 : 2, cn = cl / cm;
+  const int wm = VWM[v], bn = VBN[v], cl = VCL[v];
   Params p;
-  if (tmap(&p.a, xq, M, K, wm / cn) || tmap(&p.b, w, N, K, bn / cm)) return 12;
+  if (tmap(&p.a, xq, M, K, wm) || tmap(&p.b, w, N, K, bn / cl)) return 12;
   p.sa = sa;
   p.sw = sw;
   p.y = static_cast<uint16_t*>(y);
@@ -504,15 +471,15 @@ extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const flo
   p.K = K;
   p.group = group;
   const int rows_c = VCO[v] ? wm / 2 : wm;  // a consumer's rows
-  p.flags = flags & 39;
+  p.flags = flags & 7;
   if (N % 8 == 0 && reinterpret_cast<uintptr_t>(y) % 16 == 0 && !(flags & 16)) {
     if (tmap_y(&p.c, y, M, N, rows_c)) return 14;
     p.flags |= Y_TMA;
   }
-  const int units = ((M + wm - 1) / wm + cm - 1) / cm * (((N + bn - 1) / bn + cn - 1) / cn);
+  const int units = ((M + wm - 1) / wm + cl - 1) / cl * ((N + bn - 1) / bn);
   int cap = cl == 1 ? g_sms[dev] : g_most[dev][v];
-  if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / cl, 1));
-  // the fewest CTAs (clusters) that keep the same rounds of units
+  if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / 2, 1));
+  // the fewest CTAs (pairs) that keep the same rounds of units
   const int rounds = (units + cap - 1) / cap, n = (units + rounds - 1) / rounds;
   *grid = n * cl;
   void* args[] = {&p};
