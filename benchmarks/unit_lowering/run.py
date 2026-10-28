@@ -3,7 +3,7 @@ combine statements, costs, and the file it writes.
 
     run.py --k K --tile R,C [--unit tile|lane|combine] [--form flat|structural] --scratch DIR --out DIR [--guard] [--tree PATH]
            [--staging fast|library]
-    run.py --guard --scratch DIR --out DIR [--tree PATH]
+    run.py --guard [all] --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
 The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (integrations/vllm), the auditor's lowering whose file a PoUW
@@ -13,10 +13,10 @@ leaf (`lanes.py`), bound to the Program a served window's verifier derives for i
 ``ru_maxrss`` (`os.wait4`, KiB on Linux) and its wall time the child's. The file is then read once for its SHA-512, bytes,
 META's ``k_log`` and AND rows (`scan`), and deleted.
 
-``--k`` writes OUT/unit_lowering.json and prints one ``UNIT-LOWERING`` line. ``--guard`` lowers every shape of `REFERENCE`
-flat, holds its SHA-512 to the pinned one and its ``k_log`` to C-Flock's 2^`K_MAX` block, writing OUT/guard.json and exiting 1
-naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's lowering at `PINS`, the guard's
-reference when this tree is the one pinned. ``--tree`` runs another checkout's lowering: its integrations/vllm and h1_lanes,
+``--k`` writes OUT/unit_lowering.json and prints one ``UNIT-LOWERING`` line. ``--guard`` lowers each shape of `PINS` (``--guard
+all``: and of `WIDE`) flat, holds its SHA-512 to `REFERENCE`'s and its ``k_log`` to C-Flock's 2^`K_MAX` block, writing
+OUT/guard.json and exiting 1 naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's
+lowering at `PINS` and `WIDE`, the guard's reference when this tree is the one pinned. ``--tree`` runs another checkout's lowering: its integrations/vllm and h1_lanes,
 its import roots first on the child's PYTHONPATH (`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has
 one.
 """
@@ -42,10 +42,12 @@ BIND = {"partition": "0" * 128, "program": "0" * 128}
 UNITS = ("tile", "lane", "combine")
 #: the leaf h1_lanes stages (`h1_lanes/run.py`'s ``RC``)
 LEAF = (32, 32)
-#: the guard's shapes (unit, K, R, C). A tile is R = 4 i rows by C = 8 j columns, i j lanes (`h1tile.Layout.lanes`), at K a
-#: multiple of 32 from 64; the combine takes K >= 384 (`h1zy.combine`), and 448 is h1_lanes' default
-PINS = (("tile", 64, 4, 8), ("tile", 256, 8, 8), ("tile", 2048, 4, 8), ("tile", 64, 32, 32), ("lane", 448, 32, 32),
-        ("combine", 448, 32, 32))
+#: the guard's shapes (unit, K, R, C), about 10 min and 12 GiB together. A tile is R = 4 i rows by C = 8 j columns, i j lanes
+#: (`h1tile.Layout.lanes`), at K a multiple of 32 from 64; the combine takes K >= 384 (`h1zy.combine`), and 448 is h1_lanes'
+#: default
+PINS = (("tile", 64, 4, 8), ("tile", 256, 8, 8), ("lane", 448, 32, 32), ("combine", 448, 32, 32))
+#: pinned as well, and guarded only under ``--guard all``: a long K, and the leaf's own tile (40 and 56 GiB)
+WIDE = (("tile", 2048, 4, 8), ("tile", 64, 32, 32))
 #: C-Flock's largest block, 2^K_MAX bits (`verity_flock.circuit.K_MAX`): no file past it can be proved
 K_MAX = 27
 #: ``H1_TMPL`` for each form (`h1unit.layout`)
@@ -199,12 +201,12 @@ def _key(s: dict) -> tuple:
 
 
 def guard(scratch: Path, tree: Path = ROOT, staging: str = "fast", shapes: list[tuple] | None = None) -> dict:
-    """Every `REFERENCE` shape (or those of ``shapes``, each ``(unit, K, R, C)``) lowered flat, its SHA-512 held to the pinned
-    one and its ``k_log`` to `K_MAX`: ``{guard, shapes}``, each shape with its ``reference`` and whether it ``matches``."""
+    """Each shape of ``shapes`` (each ``(unit, K, R, C)``, by default `PINS`) lowered flat, its SHA-512 held to `REFERENCE`'s and
+    its ``k_log`` to `K_MAX`: ``{guard, shapes}``, each shape with its ``reference`` and whether it ``matches``."""
     ref = json.loads(REFERENCE.read_text())
     pinned = {_key(s): s for s in ref["shapes"]}
     out = []
-    for unit, k, r, c in shapes or list(pinned):
+    for unit, k, r, c in shapes or PINS:
         if (unit, k, r, c) not in pinned:
             raise SystemExit(f"unit_lowering: {unit} K={k} tile={r}x{c} is not one of {REFERENCE.name}'s shapes")
         doc = measure(k, r, c, scratch, tree=tree, staging=staging, unit=unit)
@@ -224,8 +226,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--form", choices=sorted(FORMS), default="flat")
     ap.add_argument("--scratch", type=Path, required=True, help="where the circuit file is written (deleted once read)")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--guard", action="store_true", help=f"hold the flat file's SHA-512 to {REFERENCE.name}'s at its shapes")
-    ap.add_argument("--pin-reference", action="store_true", help=f"write OUT/{REFERENCE.name} from this tree at {PINS}")
+    ap.add_argument("--guard", nargs="?", const="pins", choices=("pins", "all"),
+                    help=f"hold the flat file's SHA-512 to {REFERENCE.name}'s at PINS {PINS}, or with 'all' at WIDE's too")
+    ap.add_argument("--pin-reference", action="store_true", help=f"write OUT/{REFERENCE.name} from this tree at PINS and WIDE")
     ap.add_argument("--tree", type=Path, default=ROOT, help="the checkout whose lowering runs (default: this one)")
     ap.add_argument("--staging", choices=("fast", "library"), default="fast", help="HZ_STAGE: fast_stage's patches, or none")
     ap.add_argument("--keep", action="store_true", help="keep the circuit file under --scratch")
@@ -237,13 +240,13 @@ def main(argv: list[str] | None = None) -> int:
     rc = 0
     if a.pin_reference:
         shapes = []
-        for unit, k, r, c in PINS:
+        for unit, k, r, c in PINS + WIDE:
             doc = measure(k, r, c, a.scratch, tree=tree, staging=a.staging, unit=unit)
             print(line(doc), flush=True)
             shapes.append({x: doc[x] for x in ("unit", "k", "tile", "sha512", "bytes", "ands", "k_log", "peak_gib", "wall_min")})
         (a.out / REFERENCE.name).write_text(json.dumps({"commit": commit(tree), "bind": BIND, "shapes": shapes}, indent=1) + "\n")
     if a.guard:
-        g = guard(a.scratch, tree, a.staging)
+        g = guard(a.scratch, tree, a.staging, list(PINS + WIDE) if a.guard == "all" else None)
         (a.out / "guard.json").write_text(json.dumps(g, indent=1) + "\n")
         if g["guard"] != "pass":
             bad = [f"{s['unit']} K={s['k']} tile={s['tile'][0]}x{s['tile'][1]}" for s in g["shapes"] if not s["matches"]]

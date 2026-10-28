@@ -32,6 +32,64 @@
    "peak_gib": 12.061,
    "wall_min": 3.525,
    "run": "r20261028-190851-b98d"
+  },
+  {
+   "unit": "lane",
+   "k": 448,
+   "tile": [
+    32,
+    32
+   ],
+   "sha512": "07a93caf03a7ce42c773def597ce73123bbc8a3383ba038f3cbd039afe0c536268be2dd8efba36fd8f3469897504b26cd93fa4f67478020123f25459f5623dda",
+   "bytes": 2456417158,
+   "ands": 6587943,
+   "k_log": 25,
+   "peak_gib": 11.025,
+   "wall_min": 3.551,
+   "run": "r20261028-192650-520b"
+  },
+  {
+   "unit": "combine",
+   "k": 448,
+   "tile": [
+    32,
+    32
+   ],
+   "sha512": "fc076c7b504c564854dd04c60366d54ec06250498a457848316689aa34b58641ad129148725da8db41c400ded6bb12f0c64e3da1d09825bfad50b35187039e20",
+   "bytes": 56466630,
+   "ands": 1023,
+   "k_log": 25,
+   "peak_gib": 2.801,
+   "wall_min": 0.889,
+   "run": "r20261028-192707-13f4"
+  },
+  {
+   "unit": "tile",
+   "k": 2048,
+   "tile": [
+    4,
+    8
+   ],
+   "sha512": "1f6f12941d1c924264532b52c5600c95f97068ebdea73466a32620684d11eeb8da472f44982f2354503d9fbbc46d3021cf139534e405f901e39b3d35480cc28b",
+   "bytes": 11966464478,
+   "ands": 24353765,
+   "peak_gib": 39.781,
+   "wall_min": 12.642,
+   "run": "r20261028-190932-398d"
+  },
+  {
+   "unit": "tile",
+   "k": 64,
+   "tile": [
+    32,
+    32
+   ],
+   "sha512": "5c6efa6ce1bcd0d421cd6f8c4284319ea5becade91640241f364df79d6a9f75f1df7d923de3901c96c633317022bd3e65a245b0f2c15f90da1c78d7669c833b8",
+   "bytes": 16625178423,
+   "ands": 41138509,
+   "peak_gib": 55.934,
+   "wall_min": 17.645,
+   "run": "r20261028-190926-461a"
   }
  ]
 }
