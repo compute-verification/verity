@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The stock control of served_verdicts.sh: its endpoint, engine and load with no protocol and no Commit, REPS times.
 # Each rep is one `verity-vllm serve-openai --no-commit` lifetime of served_verdicts.sh's model (REPO at REV, --precision PRECISION),
-# the bench row's scheduling (--required-manifest ROW/manifest.json, which sets only the engine's async_scheduling here),
-# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, V2's H1_T), --admit release-order and --window-requests
+# the bench row's check (--required-manifest ROW/manifest.json, which here only refuses a row declaring async scheduling),
+# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
 # SLOTS, under served_verdicts.sh's engine environment (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of
 # `examples/vllm/serve_load.py --varied` with served_verdicts.sh's REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a
 # release run of its own. The first load is the composed run's one load after its endpoint listens; later ones are warm.

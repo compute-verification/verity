@@ -231,17 +231,17 @@ def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool |
     return [p for p in want if not any(h == p or (p == "hidden_m1" and h.startswith(p)) for h in have)]
 
 
-def target_of(model: Any = None) -> dict[str, Any]:
+def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, Any]:
     """What the compiler's φ reads of the serving device: its target profile (`TargetProfile.from_device`) with, given the served
     ``model``, the int8 scope its layers run read back from them (`kernel_readback.int8_exact_of`: ``linears`` under
     ``--precision verity_int8``, which predict's Build of an exact-int8 checkpoint requires; a mixed scope is refused), and the
-    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`)."""
+    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`). The profile declares ``async_scheduling`` (LAG 1) only under it."""
     import vllm.envs as envs
 
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    target = TargetProfile.from_device()
+    target = TargetProfile.from_device().with_overrides(**({"async_scheduling": True} if async_scheduling else {}))
     if model is not None:
         target = target.with_overrides(int8_exact=int8_exact_of(model))
     return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
