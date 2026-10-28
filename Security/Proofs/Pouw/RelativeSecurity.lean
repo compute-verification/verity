@@ -7173,29 +7173,29 @@ structure Kind where
   sem : (Fin arity → ℤ) → Fin outs → ℤ
 
 /-- RS-MODEL's gate: a kind, the wires it reads, its round. -/
-structure Gate (K : Type) where
+structure GateApp (K : Type) where
   kind : K
   args : List ℕ
   round : ℕ := 0
 
 /-- RS-MODEL's straight-line program. -/
-abbrev Prog (K : Type) : Type := List (Gate K)
+abbrev StraightLine (K : Type) : Type := List (GateApp K)
 
 variable {K : Type}
 
 /-- RS-MODEL's `time_B`: the sum of the gates' prices (on sm_120 in u = 1/R* SMSP-cycles). -/
-def timeB (price : K → ℕ) (P : Prog K) : ℕ := (P.map fun g => price g.kind).sum
+def timeB (price : K → ℕ) (P : StraightLine K) : ℕ := (P.map fun g => price g.kind).sum
 
-theorem timeB_append (price : K → ℕ) (P Q : Prog K) : timeB price (P ++ Q) = timeB price P + timeB price Q := by
+theorem timeB_append (price : K → ℕ) (P Q : StraightLine K) : timeB price (P ++ Q) = timeB price P + timeB price Q := by
   simp [timeB]
 
 /-- RS-MODEL's `timeB_rewire`: rewiring never changes time. -/
-theorem timeB_rewire (price : K → ℕ) (P : Prog K) (f : Gate K → List ℕ) :
+theorem timeB_rewire (price : K → ℕ) (P : StraightLine K) (f : GateApp K → List ℕ) :
     timeB price (P.map fun g => { g with args := f g }) = timeB price P := by
   simp [timeB, Function.comp_def]
 
 /-- The program of a gate list, with its wiring left out (Model B's time doesn't read it, `timeB_rewire`). -/
-def progOf (l : List K) : Prog K := l.map fun k => { kind := k, args := [] }
+def progOf (l : List K) : StraightLine K := l.map fun k => { kind := k, args := [] }
 
 theorem timeB_progOf_append (price : K → ℕ) (l m : List K) :
     timeB price (progOf (l ++ m)) = timeB price (progOf l) + timeB price (progOf m) := by
@@ -7279,7 +7279,7 @@ def Circ.gates : {I O : Type} → Circ kd I O → List K
   | _, _, .snd => []
 
 /-- Its Model B program (wiring left out). -/
-def Circ.prog {I O : Type} (c : Circ kd I O) : Prog K := progOf c.gates
+def Circ.prog {I O : Type} (c : Circ kd I O) : StraightLine K := progOf c.gates
 
 variable (kd) in
 /-- A Model B algorithm `I → O`: what it computes and its gate list, as some circuit's. (A subtype, so that
