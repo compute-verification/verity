@@ -173,7 +173,9 @@ theorem sum_16 {l : List ℕ} (h : ∀ b ∈ l, b = 16) : l.sum = 16 * l.length 
 /-- **A column `HmIn.publicCol` names is a public leaf's bit**: bit `t` of leaf `jj` of unit slot `k`'s leaf group, a
 public leaf of the slot's unit, at a column of the slot inside the unit's input rows. -/
 theorem publicCol_at {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false)
-    (C : CheckFacts c) (hU : Built c.unit) {q : ℕ} (hq : HmIn.publicCol c pi q = true) :
+    (C : CheckFacts c)
+    (hgr : ∀ g ∈ c.unit.inGroups.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ c.unit.inWords)
+    {q : ℕ} (hq : HmIn.publicCol c pi q = true) :
     ∃ k < c.unitRange.count, ∃ jj < (c.unit.inGroups.getD 0 default).bits.size, ∃ t < 16,
       q = c.unitRange.slot k + ((c.unit.inGroups.getD 0 default).col * WORD + 16 * jj + t) ∧
       (c.unit.inGroups.getD 0 default).col * WORD + 16 * jj + t < c.unit.inWords * WORD ∧
@@ -186,7 +188,6 @@ theorem publicCol_at {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (Nat.pos_of_ne_zero C.unit_groups.1),
       Option.getD_some]
     exact Array.getElem_mem_toList _
-  obtain ⟨-, -, -, -, hgr, -⟩ := built_spec hU
   obtain ⟨hb, hw⟩ := hgr _ hg0m
   have hdm := Nat.div_add_mod (q - c.unitRange.start) (2 ^ c.unitRange.slotLog)
   generalize hg0 : c.unit.inGroups.getD 0 default = g0 at hcol hl h16 hlv hb hw ⊢

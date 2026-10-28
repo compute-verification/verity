@@ -1,23 +1,25 @@
-"""served_h1's side computation (`served_h1/receipts.py`) is `h1tile.reference`'s receipt, unit by unit: on random s8 calls at
-K = 64 and 128 (a partial row block left uncovered), and saturated operands at K = 64; and each receipt reads the unit's
-position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
-pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
-bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
-unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is computed, receipt-checked and credited (RT4-LOGIC-4, RT4-LOGIC-20), a tile's admit bits open from the admit tree and a flipped one is refused, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
-empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
-A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
-scheduler's record gives the request queue and its commitment.  A window's live coins (`served_h1/coins.py`) come from a
-challenger session off the node over its stream (a fake auditor host on loopback, its ledger and the challenger's record
-and close signed with a test key), which refuses a session of another layout; the session is reserved at infra's gate
-for the window's layout and then opened on the root the caller gives (one quoted argument each), its secret kept from
-every output and carried in the hello, which the challenger refuses without it.  The verifier checks the coins from the
-session as the gate publishes it and the auditor's ledger alone, through core's check of both (`remote.trusted_session`),
-under the key its key.json holds, ``(checked)`` only against the key's deployment record, the window's root and its
-period, and refuses a record under another key, a ledger core refuses, a session the manifest doesn't name, outside the
-window's period or opened for another layout, a round root the challenger didn't receive, a salt that isn't its round's
-coin's, and a draw after another root; an address without its session id is refused, and with neither the coins are
-in-process and labelled not certified; serve.py refuses ``--gate``, naming vllm's H1 path as the gated served window of
-record."""
+"""served_h1's side computation (`served_h1/receipts.py`) is `h1tile.reference`'s receipt, unit by unit: on random s8
+calls at K = 64 and 128 (a partial row block left uncovered), and saturated operands at K = 64; and each receipt reads
+the unit's position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`)
+is the same built in pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt
+label.  Under a call's admit bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is
+the canonical empty receipt and a live unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is
+computed, receipt-checked and credited, a tile's admit bits open from the admit tree and a flipped one is refused, a
+junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical empty row in a slot
+the queue selects, and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against
+it and the step's A root, and A' = -b is refused.  A linear's B table is the same format over its weight rows, under the
+weights' root; the scheduler's record gives the request queue and its commitment.  A window's live coins
+(`served_h1/coins.py`) come from a challenger session off the node over its stream (a fake auditor host on loopback, its
+ledger and the challenger's record and close signed with a test key), which refuses a session of another layout; the
+session is reserved at the gate for the window's layout and then opened on the root the caller gives (one quoted
+argument each), its secret kept from every output and carried in the hello, which the challenger refuses without it. The
+verifier checks the coins from the session as the gate publishes it and the auditor's ledger alone, through core's check
+of both (`remote.trusted_session`), under the key its key.json holds, ``(checked)`` only against the key's deployment
+record, the window's root and its period, and refuses a record under another key, a ledger core refuses, a session the
+manifest doesn't name, outside the window's period or opened for another layout, a round root the challenger didn't
+receive, a salt that isn't its round's coin's, and a draw after another root; an address without its session id is
+refused, and with neither the coins are in-process and labelled not certified; serve.py refuses ``--gate``, naming
+vllm's H1 path as the gated served window of record."""
 from __future__ import annotations
 
 import dataclasses
@@ -129,7 +131,7 @@ def test_dead_units_skip_noise_and_receipt():
 
 
 def test_an_admitted_zero_byte_block_is_computed_and_credited_and_a_non_admitted_block_is_not():
-    """RT4-LOGIC-4 and RT4-LOGIC-20 under `PouwH1Tile_v4`: the admit unit reads no row byte, so a selected block of
+    """Under `PouwH1Tile_v4`, the admit unit reads no row byte, so a selected block of
     zero-byte rows under nonzero scales is admitted; a tile's live bit is the OR of its admit bits, the bits the tally
     reads, so that block is computed and receipt-checked (the ungated unit's receipt) and credited, as is a selected block
     of nonzero bytes; the block the queue leaves unselected is dead: the zero receipt, its noise never derived, and no
@@ -179,7 +181,7 @@ def test_a_tiles_admit_input_opens_from_the_admit_tree_and_a_flipped_bit_is_refu
 
 
 def test_a_opens_against_the_step_root_and_refuses_neg_b():
-    """CMP-38 on PoUW's side: a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
+    """On PoUW's side, a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
     `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused
     against the committed root, and re-committing A' moves both roots."""
     from verity.ml.commitments import row_table as RT
@@ -267,7 +269,7 @@ def test_junk_row_in_an_unassigned_slot_is_refused_and_credits_nothing():
 
 
 def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing():
-    """RT-ALGO-4 (note:20261019T0618Z-draft-rt-algo-r2): a block whose 32 slots the queue selects but whose rows are all the
+    """A block whose 32 slots the queue selects but whose rows are all the
     canonical empty row is dead to the tile, which zeroes its receipt.  The admit unit admits none of its slots, so the
     block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A
     selected row of zero bytes under a nonzero scale is admitted (`scale_only`: the admit unit reads no byte), and a
@@ -412,7 +414,7 @@ def _host_key():
 
 
 class _Host:
-    """The challenger on its auditor host over loopback, as infra's gate runs a window's session (`auditor.py`): the
+    """The challenger on its auditor host over loopback, as the gate runs a window's session (`auditor.py`): the
     lane's period opened and the session reserved and opened on `root` in the auditor's signed ledger (`ledger`, v2), a
     live window's coins (`coins.layout`, or `rounds` rounds at `epoch`) with its record signed and written to
     `directory` (`remote.open_session`) beside an empty hellos.jsonl, serving one session (`remote.serve`, its hello

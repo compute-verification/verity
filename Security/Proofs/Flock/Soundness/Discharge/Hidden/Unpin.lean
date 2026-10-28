@@ -7,7 +7,8 @@ import Proofs.Flock.Soundness.Discharge.PinnedSat
 
 `HmOut.delta` is `HmRow.delta`, `outPairs`, then `pinList` (`hidden_delta'`). `unpin st` is `st` with Δ `HmRow.delta`
 and `outPairs` only: the same statement where no output is pinned, and in general the statement whose rows are the
-circuit's own. It has `layout_of`'s layout with `outPairs` past its Δ (`unpin_layout`), with or without pinned outputs.
+circuit's own. It has `layout_of`'s layout with `outPairs` past its Δ (`Hidden.Commit`'s `unpin_layout`), with or without
+pinned outputs.
 
 `pinList` is `pinnedCols`, the pinned bits' columns, each with `(i, i)` and `(i, zero)` (`pinList_eq`). So the matrices
 `stmtOf` reads off an accepted statement are `unpin`'s plus, at row `i`, `pinnedCols`'s count of `i` copies of
@@ -144,45 +145,5 @@ theorem sat_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     (stmtOf (unpin st) (unpin_wf hwf) regs).Satisfies z ∧
       ∀ o (r : Fin (2 ^ (stmtOf st hwf regs).kLog)), ((pinnedCols st.c).count r.val : ZMod 2) = 1 → (stmtOf st hwf regs).block z o r = 0 :=
   Pinned.sat_unpin (pinRows_unpin hda hdb hwf regs zero hzero) hz hz0 hone
-
-/-- **`unpin` of an untyped statement `Stmt.setupHidden` accepts has the layout the placement reads**, pinned outputs
-or not: `layout_of`'s, with `outPairs` past its Δ. -/
-theorem unpin_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : Layout (unpin st) := by
-  have s := setupHidden_spec' h
-  obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
-  have P := parse_facts hp
-  have L : Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 } :=
-    layout_of P s.pin rfl rfl s.m s.kLog
-  obtain ⟨rest, h1, h2⟩ := L.delta
-  exact {
-    disj := L.disj
-    bound := L.bound
-    slotLog := L.slotLog
-    fit := L.fit
-    unit_mem := L.unit_mem
-    unit_kind := L.unit_kind
-    unit_count := L.unit_count
-    unit_built := L.unit_built
-    unit_at := L.unit_at
-    unit_lookup := L.unit_lookup
-    unit_in := L.unit_in
-    unit_const := L.unit_const
-    pin := L.pin
-    delta_b := by
-      show (HmRow.delta st.c st.pin).2 ++ (outPairs st.c).toArray = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray
-      rw [delta_snd _ _ P.typed]
-    delta := by
-      refine ⟨rest ++ outPairs st.c, ?_, fun x hx => ?_⟩
-      · show ((HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray).toList = constPairs st.c st.pin ++ (rest ++ outPairs st.c)
-        rw [Array.toList_append, List.toList_toArray]
-        exact (congrArg (· ++ outPairs st.c) h1).trans (List.append_assoc _ _ _)
-      · rcases List.mem_append.1 hx with hx | hx
-        · exact h2 x hx
-        · exact outPairs_inBit hp hc x hx
-    kLog := L.kLog
-    kLog6 := L.kLog6
-    m := L.m }
 
 end FlockSoundness.Discharge.Hidden

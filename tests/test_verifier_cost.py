@@ -39,6 +39,10 @@ ALLOWED: dict[str, str] = {
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
         "behind Tmpl.unitNet's thunks, built only where a check reads them, which none on the templated statement's "
         "path does (benchmarks/verifier_cost/flock_tmpl stmt)",
+    "verity/core/service/flock/Flock/HmRow.lean":
+        "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
+        "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
+        "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT)",
     "verity/core/service/flock/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
     "verity/core/service/flock/Flock/TmplFold.lean":

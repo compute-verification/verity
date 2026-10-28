@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
 
 /-!
 # Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
@@ -20,11 +21,11 @@ open FlockSoundness.Discharge.Layout
 
 /-! ## The registered `b ‖ c` at a drawn unit -/
 
-/-- **`bc_drawnH` with or without shared rows**: the `b ‖ c` a satisfying witness of a drawn hidden-output statement
-holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
-theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
-    {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
+/-- **`bc_drawnH` with or without shared rows, at any session's `SpecOf`**: the `b ‖ c` a satisfying witness of a drawn
+hidden-output statement holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public
+file, at every row. It reads the session's public file and regions alone, so a templated session's too. -/
+theorem bc_drawnS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
+    (s : SpecOf parsed tags pf coins (some d) st) {pop : Public}
     (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
@@ -35,7 +36,6 @@ theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList := by
-  have s := setupHidden_spec' h
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
   rw [hpop] at hpop'
   cases hpop'
@@ -58,11 +58,27 @@ theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- **`bc_drawnW` at `unpin st`'s layout**: the statement without Δ's pinned copies, which has a layout with or without
-pinned outputs (`unpin_layout`). -/
-theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+/-- **`bc_drawnH` with or without shared rows**: the `b ‖ c` a satisfying witness of a drawn hidden-output statement
+holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
+theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
+    {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
+    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
+    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
+    (hr : o.val * st.c.g + g < D.proved.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
+        (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
+      (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList :=
+  bc_drawnS (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
+
+/-- **`bc_drawnS` at `unpin st`'s layout**: the statement without Δ's pinned copies, which has a layout with or without
+pinned outputs (`SpecC.unpinLayout`). It reads the session's public file and regions alone, as `bc_drawnS` does. -/
+theorem bc_drawnS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
+    (s : SpecOf parsed tags pf coins (some d) st) {pop : Public}
     (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout (unpin st))
@@ -74,7 +90,6 @@ theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList := by
-  have s := setupHidden_spec' h
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
   rw [hpop] at hpop'
   cases hpop'
@@ -97,13 +112,30 @@ theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
   rw [← hchunk g hr]
   exact bc_pinned' (st := unpin st) L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
+/-- **`bc_drawnW` at `unpin st`'s layout** (`bc_drawnS_unpin`). -/
+theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
+    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    (L : FlockSoundness.Layout (unpin st))
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
+    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
+    (hr : o.val * st.c.g + g < D.proved.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
+        (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
+      (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList :=
+  bc_drawnS_unpin (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
+
 open Hm Compose Flock.DeriveAll Types.Dag
 
 theorem outputs_committed_wide' : OutputsCommittedWide := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop D hD hlt hupv hu hor h64 L regs hregs z hz o g j hg
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop D hD hlt hupv hu hor h64 L regs hregs z hz o g j hg
     hg2 hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, hcr⟩ := parse_untyped ht (s.parseF hi)
   have P := parse_facts hp
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
@@ -133,7 +165,7 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
 
 /-- **`OutputsBindingWide` from `OutputsCommittedWide`**. -/
 theorem outputs_binding_wide_of (hC : OutputsCommittedWide) : OutputsBindingWide := by
-  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hs hs' pop hpop D D' hD
+  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop D D' hD
     hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
   have hcc : st.c = st'.c := setupHidden_c hs hs'
   have hpop' : HmOut.loadPublic tags st'.c pf = .ok pop := by rw [← hcc]; exact hpop
@@ -143,8 +175,8 @@ theorem outputs_binding_wide_of (hC : OutputsCommittedWide) : OutputsBindingWide
   have hor' : st'.c.outRowPorts = Array.replicate st'.c.outPorts.size 1 := by rw [← hcc]; exact hor
   have h64' : ∀ j < st'.c.outPorts.size, (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words % 64 = 0 := by
     rw [← hcc]; exact h64
-  have e1 := hC ht hs hpop hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
-  have e2 := hC ht hs' hpop' hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
+  have e1 := hC ht hi hs hpop hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
+  have e2 := hC ht hi hs' hpop' hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
   have hp : HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default) =
       HmRow.prefixOf (st'.c.ports.getD (HmOut.nIn st'.c + j) default) := by rw [hcc]
   refine commitPair_spec' _ _ _ _ (fun e => ?_) (e1.symm.trans (Eq.trans ?_ e2))
