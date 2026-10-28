@@ -37,7 +37,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row
 from verity.ml.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
-from .protocol import DomainError, Matmul, PoUWScheme, Tile, tagged
+from .protocol import DomainError, Matmul, PoUWScheme, Tile, fold_roots, tagged
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
 EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
@@ -135,7 +135,7 @@ def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
-    return tagged("verity/pouw/weights/v1", *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
+    return fold_roots("verity/pouw/weights/v1", weight_roots)
 
 
 @dataclass(frozen=True, slots=True)

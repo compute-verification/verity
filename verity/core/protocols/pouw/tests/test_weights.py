@@ -231,3 +231,21 @@ def test_a_rows_chunks_are_the_least_n_past_4096_whose_chunk_is_whole_512_code_b
     for bad in (0, -32, 4096 + 32, 5000):
         with pytest.raises(ValueError):
             Wt.chunks(bad)
+
+
+def test_every_weights_root_is_one_fold():
+    """H1's `weights_root`, an epoch's `audit.weights_root` and `core_check.weights_root` under each coin scheme are
+    `protocol.fold_roots` at their own tag (truncated as the scheme keeps it): one fold of registered roots, at the same
+    bytes as each one's own spelling of it."""
+    from verity.core.protocols.pouw import audit, core_check
+    from verity.core.protocols.pouw.protocol import fold_roots, tagged
+
+    roots = {12: bytes(range(64)), 8: bytes(64), 30: b"\x7f" * 64}
+
+    def spelled(tag: str) -> bytes:
+        return tagged(tag, *(p for k in sorted(roots) for p in (k, roots[k])))
+
+    assert Wt.weights_root(roots) == fold_roots(Wt.WEIGHTS_TAG, roots) == spelled("verity/pouw/h1/weights/v1")
+    assert audit.weights_root(roots) == fold_roots("verity/pouw/weights/v1", roots) == spelled("verity/pouw/weights/v1")
+    for scheme, (n, tag) in core_check.COIN_VERSIONS.items():
+        assert core_check.weights_root(scheme, roots) == fold_roots(tag, roots)[:n] == spelled(tag)[:n]

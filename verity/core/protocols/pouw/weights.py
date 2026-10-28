@@ -18,8 +18,8 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
-* `weights_root` is credit's fold of the roots: `tagged` of ``verity/pouw/h1/weights/v1`` and each ``K, root`` by
-  ascending K.
+* `weights_root` is credit's fold of the roots: `protocol.fold_roots` at ``verity/pouw/h1/weights/v1``, each
+  ``K, root`` by ascending K, the one fold every PoUW weights' root is at its own tag.
 * **θ.** Each ``<prefix>b/<K>`` is a registered value of the registration log's θ (`theta_item`, its `entry` as a θ
   item), and PoUW's view of θ is `theta_root`: `weights_root` of the ``<prefix>b/<K>`` roots θ lists.
 * **Chunk rows.** Past `CHUNK_MAX` codes a row of K is `chunks` (K) = n leaves, leaf n·r + c chunk c's K/n codes and
@@ -38,7 +38,7 @@ import re
 from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.pouw.protocol import fold_roots
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
@@ -302,8 +302,8 @@ def entry(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[str, A
 
 
 def weights_root(roots: Mapping[int, bytes]) -> bytes:
-    """The weights' root: `tagged` of `WEIGHTS_TAG` and each K's ``…/b/<K>`` root, ``K, root`` by ascending K."""
-    return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
+    """The weights' root: `fold_roots` of each K's ``…/b/<K>`` root at `WEIGHTS_TAG`, ``K, root`` by ascending K."""
+    return fold_roots(WEIGHTS_TAG, roots)
 
 
 def theta_item(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[str, Any]:
