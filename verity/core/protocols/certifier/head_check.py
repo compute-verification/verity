@@ -389,7 +389,7 @@ def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     (`@unpinned`), and no proof of its unit is accepted: give it a root in the sidecar's bindings and pin it with
     `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
     gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,
-    and the proof service encodes the Program on every registration."""
+    and the proof system encodes the Program on every registration."""
     d = unit(L, T, counts)
     return gate_of(d, pinned_digest(d), "N2's head check")
 
