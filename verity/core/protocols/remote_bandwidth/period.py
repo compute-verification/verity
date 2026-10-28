@@ -41,11 +41,11 @@ import os
 import subprocess
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Protocol
 
+from verity.core.protocols.pous.period import Period, Run
 from verity.core.protocols.pous.period import records
 from verity.core.protocols import answer as A
 from verity.ml.commitments.identity import canonical_json_bytes
@@ -160,27 +160,6 @@ def _sleep_until(clock: Callable[[], int], t: int) -> None:
         time.sleep((t - now) / 1e9)
 
 
-@dataclass(frozen=True)
-class Period:
-    """A period's bandwidth: the session's answer and its core case."""
-
-    answer: dict[str, Any]
-    case: dict[str, Any]
-
-    @property
-    def verdict(self) -> str:
-        return self.answer["verdict"]
-
-    @property
-    def q_bytes(self) -> int:
-        """The reads certified, in bytes: 0 unless accepted under a pooled bound."""
-        return self.answer["public"]["q_bytes"] if self.verdict == "accept" else 0
-
-    @property
-    def eps(self) -> Fraction:
-        return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
-
-
 class Prover(Protocol):
     """The prover as the verifier's side of a session sees it: in its process (`Local`) or across a socket
     (`verifier_party`)."""
@@ -235,7 +214,7 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
         window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
         cheat: Callable[[audit.Store], audit.Store] | None = None, verify: int | None = None,
         clock: Callable[[], int] = time.monotonic_ns, sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until,
-        entropy: Callable[[int], bytes] = os.urandom) -> Period:
+        entropy: Callable[[int], bytes] = os.urandom) -> Run:
     """The period's session on `node` (module docstring): `store` is what the node keeps, `coins` the verifier's live
     secret for the period. `cheat` turns the honest prover's store into the one it reads, and `verify` stops the log
     after that many windows are verified (None: all), for a period that ends undecided. `clock` is the verifier's in
@@ -351,7 +330,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     (out / "bandwidth.case.json").write_text(json.dumps(period.case, sort_keys=True))
     (out / "bandwidth.json").write_text(json.dumps({"answer": answer_, "eps": str(period.eps), "lean": lean,
                                                     "placement": where | {"reported_host": side["host"]},
-                                                    "q_bytes": period.q_bytes, "seconds": seconds,
+                                                    "q_bytes": period.public("q_bytes"), "seconds": seconds,
                                                     "store_bytes": len(store)}, sort_keys=True, indent=1))
     return answer_
 
