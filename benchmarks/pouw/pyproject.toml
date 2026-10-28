@@ -62,6 +62,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/draw.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py",
