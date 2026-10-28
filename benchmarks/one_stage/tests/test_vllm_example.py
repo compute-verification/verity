@@ -1,15 +1,11 @@
-"""The vLLM example's endpoint serves under its row's Build of record, the ahead-of-time compiler's (`verity-vllm predict row`),
-never its Commit of record's traced Build, which is only the cross-check (`predict compare --predicted`): `serve.sh` in a toy tree
-whose `verity_vllm.pipeline.cli` is a stub that records each call, and `run.sh --dry-run` handing `served_verdicts.sh` the
-example's workloads dir, where its `predict row` finds the row."""
+"""The vLLM demo's endpoint serves under its workload's Build of record, the ahead-of-time compiler's (`verity-vllm predict
+row`), never its Commit of record's traced Build, which is only the cross-check (`predict compare --predicted`): `serve.sh` in a
+toy tree whose `verity_vllm.pipeline.cli` is a stub that records each call."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,13 +14,13 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / "examples" / "vllm"
-ROW = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
+ROW = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 FAKE_CLI = '''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 with open(os.environ["CALLS"], "a") as f:
-    f.write(json.dumps({"argv": a, "VERITY_WORKLOADS": os.environ.get("VERITY_WORKLOADS")}) + "\\n")
+    f.write(json.dumps(a) + "\\n")
 answer = json.loads(Path(os.environ["ANSWERS"]).read_text())
 if a[:2] == ["predict", "row"]:
     if answer["row"] != "write":
@@ -71,12 +67,11 @@ def test_the_endpoint_serves_under_predicts_row_held_to_the_traced_one(tmp_path)
     rc, calls, out = _serve(tmp_path)
     assert rc == 10 and "SERVER EXITED before listening" in out, out
     pred, traced = str(tmp_path / "serve" / "r-toy" / "predicted"), str(tmp_path / "commit" / ROW)
-    (row, compare, serve), workloads = [c["argv"] for c in calls], {c["VERITY_WORKLOADS"] for c in calls}
+    row, compare, serve = calls
     assert row[:2] == ["predict", "row"] and row[row.index("--row") + 1] == ROW and row[row.index("--out") + 1] == pred
     assert compare[:3] == ["predict", "compare", traced] and compare[compare.index("--predicted") + 1] == pred
     assert compare[compare.index("--config") + 1] == "config.json"
     assert serve[0] == "serve-openai" and serve[serve.index("--required-manifest") + 1] == f"{pred}/manifest.json"
-    assert workloads == {str(tmp_path / "tree" / "examples" / "vllm" / "workloads")}
     assert "PREDICT-COMPARE [predict] row: EQUAL on every rank" in (tmp_path / "out" / "steps.txt").read_text()
 
 
@@ -87,21 +82,4 @@ def test_the_endpoint_serves_under_predicts_row_held_to_the_traced_one(tmp_path)
 def test_the_endpoint_doesnt_serve_without_predicts_row_or_when_the_trace_disagrees(tmp_path, row, compare, rc, said):
     got, calls, out = _serve(tmp_path, row, compare)
     assert got == rc and said in out, out
-    assert not [c for c in calls if c["argv"][0] == "serve-openai"]
-
-
-def test_run_hands_every_run_the_example_workloads_from_the_tree_root(tmp_path):
-    """`served_verdicts.sh`, `window`'s script, runs `predict row` from the tree root, and the example's row is found only through
-    `VERITY_WORKLOADS`: the dir `run.sh` passes holds the row file the example's SHA256SUMS lists."""
-    here = tmp_path / "examples" / "vllm"
-    (here / "workloads").mkdir(parents=True)
-    for f in ("run.sh", "placement.toml"):
-        shutil.copy(EXAMPLE / f, here / f)
-    doc = json.dumps({"model": "unsloth/Llama-3.2-1B", "case": "LLAMA32_1B", "engine": {"revision": "9535bd9b"}})
-    (here / "workloads" / f"{ROW}.json").write_text(doc)
-    (here / "workloads" / "SHA256SUMS").write_text(f"{hashlib.sha256(doc.encode()).hexdigest()}  {ROW}.json\n")
-    for run in ("window", "serve", "commit"):
-        p = subprocess.run(["bash", str(here / "run.sh"), run, "--dry-run"], capture_output=True, text=True, check=True)
-        argv = shlex.split(p.stdout)
-        env = dict(argv[i + 1].split("=", 1) for i, x in enumerate(argv) if x == "--env")
-        assert (tmp_path / env["VERITY_WORKLOADS"] / f"{ROW}.json").is_file(), (run, env)
+    assert not [c for c in calls if c[0] == "serve-openai"]
