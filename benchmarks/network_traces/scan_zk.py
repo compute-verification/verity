@@ -109,12 +109,13 @@ session of the auditor's challenger of its own (``--challenger``, `round_coins`)
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, `round_coins`): every round, the
   block round and the negatives too, draws as prove_path's records audit draws (`a5_coins`), on a session of the
   auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the warden's
-  session and the group's signed registrations, and the round's name). The round's `service.Stream` (`spec_of`) on its
-  coins (`a5_coins.RankCoins`) registers the round, the coins commit to the registration's digest, and its select
-  draws once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of record is the
-  stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to the Python's
-  (`coins_outcome`), and the session's evidence held by `round_coins.RoundSession.held`; for the honest round each
-  altered evidence (`a5_coins.negatives`, the evidence for another window) is also refused by the Lean's run.
+  session and the group's signed registrations, and the round's name). The round's stream (`RoundStream` on `spec_of`,
+  the joint round's own Program the generator form) on its coins (`a5_coins.RankCoins`) registers the round, the coins
+  commit to the registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the
+  session has ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`,
+  coin source the challenger) held to the Python's (`coins_outcome`), and the session's evidence held by
+  `round_coins.RoundSession.held`; for the honest round each altered evidence (`a5_coins.negatives`, the evidence for
+  another window) is also refused by the Lean's run.
   ``local`` is a development session on this machine (its own key; it shows the path, not an auditor's coins);
   ``gate:USER@HOST`` is the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under
   the deployment's key record ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the
@@ -911,7 +912,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
+                           program_file=out / "program.json", scan=(nb, cls.EVERY) if templates == TEMPLATES else None)
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
@@ -1048,9 +1049,30 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     return spec, units, counts
 
 
-def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: dict, stream: S.Stream, draw: S.Draw,
-                  rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict,
+class RoundStream(S.Stream):
+    """A round's `service.Stream` (budget 1, `CHALLENGER`) on ``coins``, whose own copy of the round's Program is the
+    form `program` registers: with ``scan``, the round's public ``(nb, every)``, the scan's three templates' generator
+    form (`scan_root` over the stream's templates at the counts `register` takes), else the mixed population
+    `service.Stream` builds. `service.Stream` builds only the mixed one, whose digest isn't the generator form's."""
+
+    def __init__(self, spec: S.Spec, units: list, delta: float, coins, scan: tuple[int, int] | None = None):
+        super().__init__(spec, units, budget=1, delta=delta, challenger=CHALLENGER, coins=coins)
+        if scan is not None and len(self.templates or ()) != len(TEMPLATES):
+            raise ValueError(f"the generator form is over the scan's {len(TEMPLATES)} templates "
+                             f"({', '.join(TEMPLATES)})")
+        self.scan = scan
+
+    def _program(self, n: int, counts):
+        mixed = super()._program(n, counts)
+        if mixed is None or self.scan is None:
+            return mixed
+        return scan_root([(t, counts[PA.template_id(t)], FIXED[tp]) for t, tp in zip(self.templates, TEMPLATES)],
+                         *self.scan)
+
+
+def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: dict, stream: RoundStream,
+                  draw: S.Draw, rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None,
+                  sessions: list[str], verdicts: dict, statement: dict, given: dict,
                   negatives: bool = True) -> tuple[dict | None, dict, dict]:
     """A round's outcome of record once its challenger's session has ended (prove_path's `a5.coins_outcome`): its
     proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
@@ -1084,7 +1106,7 @@ def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: 
     bad = {**AC.negatives(ev, coins.pre), "coins-for-another-window": ev} if ev is not None and negatives else {}
     for name, evidence in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s = S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=AC.Replay(read))
+        s = RoundStream(spec, units, a.delta, AC.Replay(read), stream.scan)
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
             if d.draw != draw.draw:
@@ -1136,7 +1158,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
     warden ports read, `warden_roots`, before any coin), its units drawn ``stratified:k`` (every unit when `k` is None)
-    by the round's `service.Stream` on its challenger's ``coins`` (`spec_of`; `a5_coins.RankCoins`), each member's
+    by the round's `RoundStream` on its challenger's ``coins`` (`spec_of`; `a5_coins.RankCoins`), each member's
     drawn units proved --zk behind the firewall and held by Lean with the verifier's own registered reads; then each
     held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A member
     with no unit drawn runs no session. Member j's session listens on ``port + j``, or with ``port`` 0 on a port the OS
@@ -1190,7 +1212,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     rank = coins.rank
     draw = refused = reg = None
     try:
-        stream = S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=rank)
+        stream = RoundStream(spec, units, a.delta, rank, pg.scan)
         rank.plan(coins.AC.need(f"stratified:{k}", pg.program, pg.query, rec["population"]))
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
         rank.commit(bytes.fromhex(reg.digest))

@@ -781,3 +781,54 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     assert stream.coin_source == "verifier"
     with pytest.raises(ValueError, match="not the check's program"):
         sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
+    with pytest.raises(ValueError, match="generator form is over the scan's 3 templates"):
+        sz.RoundStream(spec, units, 2.0 ** -20, lambda n: bytes(n), (2, 2))
+
+
+def test_the_joint_rounds_stream_holds_its_registration_to_the_generator_form():
+    """The joint round's stream (`RoundStream` at the round's ``(nb, every)``; stand-in templates with the scan's
+    parameters) builds its own Program in the generator form (`scan_root`) at the counts `register` takes, so
+    one-stage's registration check holds the round's registration to it, where `service.Stream`'s own copy, the mixed
+    population, refuses it (`R2-program`); a registration of the generator form at other boundaries is refused, as are
+    counts that aren't N. Without ``scan`` the stream's Program is the mixed one. Python's check alone: the stream's
+    registration runs the Lean's (`verifier.check`) too, which the dry run's honest and chain rounds hold."""
+    cls = SimpleNamespace(NR=2, EVERY=2, KO=1, IDB=1)
+    G, T, NE, k = 1, 8, sz.IS.entry_bits(cls), 4
+    nb = G * T // cls.EVERY
+    defs = {"first": _lanes("ScanZkTestScanFirst", ("row",), cls.NR, NE),
+            "ingress": _lanes("ScanZkTestScanBucket", ("row", "sin"), cls.NR, NE),
+            "egress": _lanes("ScanZkTestScanEgress", ("state",), 0, NE)}
+    members = sz.members_of(sz.TEMPLATES, G, T)
+    counts = sz.counts_of(members)
+
+    def root(every: int):
+        return sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
+
+    query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
+    pg = SimpleNamespace(program=root(cls.EVERY), query=query, templates=sz.TEMPLATES, scan=(nb, cls.EVERY),
+                         stagers={t: SimpleNamespace(defn=defs[t]) for t in sz.TEMPLATES})
+    staged = [{"name": m.name, "n": len(m.buckets), "defn": defs[m.template]} for m in members]
+    want = {"scan/state": {"leaves": T, "domain": "cc" * 64}}
+    spec, units, given = sz.spec_of(pg, staged, want, {"scan/state": sz.BitRowLeaf.hiding_schema}, k, "dd" * 64)
+    n = 2 * G * T
+    law = sz.S.selection_law(spec.selection, n)
+
+    def record(program) -> dict:
+        roots = [{"port": "scan/state", "root": "01" * 64, **want["scan/state"]}]
+        return R.record(program, query, sz.DR.parse_law(f"stratified:{k}"), sz.S.SCHEME, roots, {"kind": "stand-in"},
+                        leaf_layer="ee" * 64)
+
+    def check(rec: dict, program) -> tuple[str, ...]:
+        return R.check(rec, program, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64).codes
+
+    stream = sz.RoundStream(spec, units, 2.0 ** -20, lambda m: bytes(m), pg.scan)
+    own = stream._program(n, given)
+    rec = record(pg.program)
+    assert sz.PA.program_digest(own) == rec["program"] == sz.PA.program_digest(pg.program)
+    assert check(rec, own) == ()
+    mixed = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)._program(n, given)
+    assert "R2-program" in check(rec, mixed)
+    assert "R2-program" in check(record(root(2 * cls.EVERY)), own)
+    assert stream._program(n + 1, given) is None
+    plain = sz.RoundStream(spec, units, 2.0 ** -20, lambda m: bytes(m))._program(n, given)
+    assert sz.PA.program_digest(plain) == sz.PA.program_digest(mixed) != rec["program"]
