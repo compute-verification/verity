@@ -768,6 +768,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (publicInputs : Option ByteArray := none) : M Stmt := do
   let c ← HmOut.parseWith hs tags circuitFile tables
+  if J.has c.metaJ "links" then throw HmRow.LINKS
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartitionWith hs c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -783,7 +784,6 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
       let (law, _) ← HmRow.stratifiedLawWith hs obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublicWith hs c pub
-  if J.has c.metaJ "links" then throw HmRow.LINKS
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null

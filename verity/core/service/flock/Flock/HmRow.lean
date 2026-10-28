@@ -2057,6 +2057,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
     (publicInputs : Option ByteArray := none) : V Stmt := do
   let c ← HmOut.parse tags circuitFile tables
+  if J.has c.metaJ "links" then throw HmRow.LINKS
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -2072,7 +2073,6 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
       let (law, _) ← HmRow.stratifiedLaw obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
-  if J.has c.metaJ "links" then throw HmRow.LINKS
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
@@ -2203,6 +2203,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
     (publicInputs : Option ByteArray := none) : V Stmt := do
   let c ← parsed
+  if J.has c.metaJ "links" then throw HmRow.LINKS
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -2218,7 +2219,6 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
       let (law, _) ← HmRow.stratifiedLaw obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
-  if J.has c.metaJ "links" then throw HmRow.LINKS
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
