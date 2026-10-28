@@ -163,7 +163,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
     else if prof.drawn ≠ #[(unitLevel, k)] then
       .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
     else if draw.law ≠ .subset k ∨ draw.population ≠ n then
-      .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
+      .reject s!"draw: {lawName draw.law} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else
