@@ -80,9 +80,10 @@ more entries, its `period-open` and `period-close`:
     end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, ...}    files: each file's SHA-512
     period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}, root
               null for a reserve never opened
-    message = SHA-512([LEDGER_ROLE] || I || [tagged_sha512(LEDGER_TAGS[schema], ledger_text(entry without sig))])
+    message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each line as the auditor writes it (`ledger_text`, every character past ASCII escaped).  The window is `{root}`, the served Commit's root, its prover the
+each line as the auditor writes it (`ledger_text`, every character past ASCII escaped), and each signature over the entry's
+canonical JSON in UTF-8 (`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -732,10 +733,10 @@ def _hexed(v: Any) -> Any:
 
 
 def ledger_message(I: bytes, entry: dict) -> bytes:
-    """What an entry's `sig` signs: SHA-512([ROLE] || I || [tagged_sha512(TAG, ledger_text(entry without sig))]), each [x] x
+    """What an entry's `sig` signs: SHA-512([ROLE] || I || [identity_digest_sha512(TAG, entry without sig)]), each [x] x
     prefixed with its length (u64), as `challenger.record_message` frames the challenger's record under its own role; TAG is
-    the entry's schema's (`TAGS`). The text is canonical JSON with every character past ASCII escaped, the bytes of the
-    entry's own line, so an entry whose strings are ASCII signs `identity_digest_sha512(TAG, entry without sig)`."""
+    the entry's schema's (`TAGS`). The digest is over the entry's canonical JSON in UTF-8, a string past ASCII as its own
+    characters, as the challenger signs it, not over its line, where `ledger_text` escapes them."""
     if len(I) != 16:
         raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     tag = LEDGER_TAGS.get(entry.get("schema"))
@@ -743,7 +744,8 @@ def ledger_message(I: bytes, entry: dict) -> bytes:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
     body = {k: v for k, v in entry.items() if k != "sig"}
     canonical_json_text(_hexed(body))
-    digest = tagged_sha512(tag, ledger_text(body).encode())
+    text = json.dumps(body, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    digest = tagged_sha512(tag, text.encode())
     return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(digest)).digest()
 
 
