@@ -65,6 +65,9 @@ ALLOWED = {
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
+    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
+    # views a protocol reads. Its digests are canonical JSON's, the wire's.
+    "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
@@ -94,9 +97,6 @@ ALLOWED = {
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
-    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
-    # views a protocol reads. Its digests are canonical JSON's, the wire's.
-    "core.site": {"core.wire"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
