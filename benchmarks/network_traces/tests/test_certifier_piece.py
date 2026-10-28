@@ -10,7 +10,8 @@ is the three files `network-period` read, as `composite.py` reads a piece's case
 each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
 rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
-report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR
+report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
+the piece, the time limit's SIGTERM included, whenever it comes. The leak guard reads the piece's DIR
 against the run's witness, and the case is written only from the period files it left. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
@@ -27,6 +28,7 @@ import os
 import shlex
 import signal
 import socket
+import subprocess
 import sys
 import tarfile
 import threading
@@ -257,6 +259,48 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
 
 
+LOOP = "while :; do :; done"
+
+
+def _gone(pids) -> None:
+    """Each of ``pids`` has exited (no process, or a zombie its reaper hasn't reaped); one that hasn't fails the test,
+    killed first so it doesn't outlive it."""
+    alive = [pid for pid in pids if CP.live(pid)]
+    for pid in alive:
+        os.kill(pid, signal.SIGKILL)
+    assert not alive, f"{alive} outlived the piece's step"
+
+
+def test_a_step_leaves_no_process_of_its_group_behind_however_it_ends(tmp_path, monkeypatch):
+    """`run_group` ends a step's process group when its leader exits (a background process it left included), when the
+    piece's time limit's SIGTERM comes while the step runs (held until the group has ended, then `NotRun`), SIGKILLing a
+    process that ignores SIGTERM after `GRACE_S` (0 here), and when the SIGTERM comes while `subprocess.Popen` is still
+    starting the step, before the piece holds the child, the time-limit case's orphaned busy loop."""
+    pids = tmp_path / "pids"
+    assert CP.run_group(["bash", "-c", f'({LOOP}) & echo "$$ $!" > "$0"; exit 4', str(pids)]) == 4
+    _gone(map(int, pids.read_text().split()))
+    monkeypatch.setattr(CP, "GRACE_S", 0)
+    real, started = subprocess.Popen, []
+
+    def starting(*a, **kw):
+        started.append(p := real(*a, **kw))
+        os.kill(os.getpid(), signal.SIGTERM)
+        return p
+    was = signal.signal(signal.SIGTERM, CP.ended)
+    try:
+        with pytest.raises(CP.NotRun, match="SIGTERM: the piece's time limit"):
+            CP.run_group(["bash", "-c", f'(trap "" TERM; {LOOP}) & echo "$$ $!" > "$0"; kill -TERM "$PPID"; {LOOP}',
+                          str(pids)])
+        _gone(map(int, pids.read_text().split()))
+        monkeypatch.setattr(CP.subprocess, "Popen", starting)
+        with pytest.raises(CP.NotRun, match="SIGTERM: the piece's time limit"):
+            CP.run_group(["bash", "-c", LOOP])
+    finally:
+        signal.signal(signal.SIGTERM, was)
+    _gone([started[0].pid])
+    assert CP._held is None
+
+
 @pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "time limit",
                                   "foreign answer"])
 def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, warden, capsys, monkeypatch):
@@ -267,11 +311,15 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
     chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
-    cmd = {"no report": "exit 7", "time limit": 'kill -TERM "$PPID"; while :; do :; done'}.get(case)
+    pids = tmp_path / "pids"
+    cmd = {"no report": "exit 7", "time limit": f'({LOOP}) & echo "$$ $!" > {shlex.quote(str(pids))}; '
+                                                f'kill -TERM "$PPID"; {LOOP}'}.get(case)
     lean = tmp_path / "no-such-network-period" if case == "no build" else None
     answer = {"verdict": "accept", "protocol": "other"} if case == "foreign answer" else {}
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean))
     S.pieces(d, K, tmp_path / "pieces", env=env)
+    if case == "time limit":
+        _gone(map(int, pids.read_text().split()))
     piece = tmp_path / "pieces" / "certifier"
     why = (piece / CP.REFUSED).read_text()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why

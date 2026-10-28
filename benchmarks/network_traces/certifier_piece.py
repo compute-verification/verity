@@ -65,7 +65,10 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   didn't pass, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
   SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR
   keeps only its log and gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the
-  certifier missing. ``--draw K`` is the scan's K drawn units (every unit by default); a CR_K=V goes to the chain;
+  certifier missing. Each step it runs (the build, the chain, the check and the leak guard) is a process group of its
+  own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step
+  started outlives it; a SIGTERM while a step runs is held until the step's group has ended, so a step never outlives
+  the refusal either. ``--draw K`` is the scan's K drawn units (every unit by default); a CR_K=V goes to the chain;
   ``--chain-cmd`` replaces the chain (a test's, which writes the report and the scan's answers under
   RESEARCH_RUN_DIR/out).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
@@ -76,6 +79,7 @@ import argparse
 import json
 import os
 import secrets
+import select
 import shutil
 import signal
 import socket
@@ -119,6 +123,11 @@ HEIGHT = 10
 #: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
 #: windows closed
 WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
+#: how long a step's process group has after SIGTERM before SIGKILL: inside `timeout -k`'s minute and the research
+#: runner's grace, so the piece has ended its steps before anything ends the piece; and how often it looks
+GRACE_S, POLL_S = 5, 0.05
+#: the SIGTERMs that came while a step ran (`run_group`), which `ended` holds until the step's group has ended
+_held: list[int] | None = None
 
 
 def answer(verdict: str, reason: str) -> dict:
@@ -355,6 +364,71 @@ def sized(windows: int, sets: list[str]) -> list[str]:
             *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
 
 
+def live(pid: int, pgid: int | None = None) -> bool:
+    """Whether ``pid`` is a process (of process group ``pgid``, when given) that hasn't exited."""
+    try:
+        stat = Path("/proc", str(pid), "stat").read_bytes()
+    except OSError:
+        return False
+    state, _ppid, pgrp = stat[stat.rindex(b")") + 2:].split()[:3]
+    return state not in (b"Z", b"X") and pgid in (None, int(pgrp))
+
+
+def members(pgid: int) -> list[int]:
+    """The processes of process group ``pgid`` that haven't exited."""
+    return [int(e.name) for e in os.scandir("/proc") if e.name.isdigit() and live(int(e.name), pgid)]
+
+
+def end_group(p: subprocess.Popen) -> None:
+    """SIGTERM to the step's process group, `GRACE_S` for its processes to exit, SIGKILL to the rest and their exit
+    awaited, and only then its leader reaped: until then the group has a member, its leader, so its id names no other
+    group while this signals it."""
+    until = time.monotonic() + GRACE_S
+    os.killpg(p.pid, signal.SIGTERM)
+    while members(p.pid) and time.monotonic() < until:
+        time.sleep(POLL_S)
+    os.killpg(p.pid, signal.SIGKILL)
+    while members(p.pid):
+        time.sleep(POLL_S)
+    p.wait()
+
+
+def run_group(argv: list[str], **kw) -> int:
+    """``argv``'s exit, run as one of the piece's steps (``kw`` as `subprocess.Popen` reads them): in a process group of
+    its own, which `end_group` ends however the step ends, so nothing the step started outlives it. A SIGTERM while it
+    runs is held (`ended`) until the group has ended, then raised as `NotRun`. The group keeps the piece's session, by
+    which the research runner's timeout still reaches it should the piece itself be killed."""
+    global _held
+    p, _held = None, []
+    try:
+        p = subprocess.Popen(argv, process_group=0, **kw)
+        fd = os.pidfd_open(p.pid)
+        try:
+            while not _held and not select.select([fd], [], [], 1)[0]:
+                pass
+        finally:
+            os.close(fd)
+    finally:
+        try:
+            if p is not None:
+                end_group(p)
+        finally:
+            came, _held = _held, None
+    if came:
+        ended(came[0], None)
+    return p.returncode
+
+
+def captured(argv: list[str], **kw) -> subprocess.CompletedProcess:
+    """`run_group` with the step's stdout and stderr read back as text, as `subprocess.run`'s ``capture_output=True,
+    text=True`` gives them."""
+    with tempfile.TemporaryFile("w+") as out, tempfile.TemporaryFile("w+") as err:
+        rc = run_group(argv, stdout=out, stderr=err, **kw)
+        out.seek(0)
+        err.seek(0)
+        return subprocess.CompletedProcess(argv, rc, out.read(), err.read())
+
+
 def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str],
               cmd: str | None = None) -> int:
     """`served_session.py chain` on the kept run (or ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT``), its run dir
@@ -366,13 +440,13 @@ def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, 
         sys.executable, str(HERE / "served_session.py"), "chain", "--run", run, "--keep", str(keep),
         "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *sets]
     with open(d / "chain" / "stdout.log", "w") as log:
-        return subprocess.run(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
+        return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
 def period_exe(lean: str | None) -> str:
     if lean:
         return lean
-    got = subprocess.run(["lake", "build", "network-period"], cwd=LEAN_DIR, capture_output=True, text=True)
+    got = captured(["lake", "build", "network-period"], cwd=LEAN_DIR)
     exe = LEAN_DIR / ".lake" / "build" / "bin" / "network-period"
     if got.returncode or not exe.is_file():
         raise NotRun(f"lake build network-period (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
@@ -382,7 +456,7 @@ def period_exe(lean: str | None) -> str:
 def period_check(exe: str, case: dict, d: Path) -> dict:
     import scan_period as SP
     try:
-        return SP.lean_check(exe, case, d)
+        return SP.lean_check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
@@ -451,10 +525,9 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     """The record's leak guard on DIR and the hold against the warden run's witness, which releases the hold to DIR once
     it passes (0 when nothing of the witness was found, 3 when a find was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
-                          *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
-                          "--release-to", str(d), "--report", str(quarantine / "piece-guard.json")],
-                         capture_output=True, text=True)
+    got = captured([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
+                    *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
+                    "--release-to", str(d), "--report", str(quarantine / "piece-guard.json")])
     print(f"leak guard (exit {got.returncode}): {got.stdout.strip()[-400:]}", flush=True)
     return got.returncode
 
@@ -490,6 +563,9 @@ def refuse(d: Path, why: str) -> int:
 
 
 def ended(signum: int, _frame) -> None:
+    if _held is not None:
+        _held.append(signum)
+        return
     raise NotRun(f"{signal.Signals(signum).name}: the piece's time limit (CERTIFIER_TIMEOUT) ended it before a verdict")
 
 
