@@ -38,6 +38,8 @@ import Definitions.Accounting.Guarantees.RateAuditPooled
 import Definitions.Accounting.Guarantees.RateAuditRemote
 import Definitions.Accounting.Guarantees.RateAuditSketch
 import Definitions.Accounting.Guarantees.Responder
+import Definitions.Accounting.Guarantees.ServingBlocks
+import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
 import Definitions.Accounting.Guarantees.RemoteHeld
 import Definitions.Accounting.Guarantees.RemoteDraw
 import Definitions.Accounting.Guarantees.RemoteBinding
