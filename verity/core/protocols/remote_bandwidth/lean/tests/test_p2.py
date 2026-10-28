@@ -394,7 +394,7 @@ def p2_session(v) -> dict:
 P2_STEP_NS = 400
 
 
-def lean_params(reg: p2.Registration, line: bytes):
+def lean_params(reg: p2.Public, line: bytes):
     """The parameters of the request `line` as the Lean's `P2Session.paramsOf` reads them: the request's own values,
     which `p2_party.params_of` takes as the auditor's (the party holds them to its own, `p2_party.SESSION`)."""
     request = p2_party.message(line, "request")
