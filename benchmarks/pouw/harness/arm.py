@@ -147,7 +147,7 @@ class Work:
 
 
 @dataclass
-class Gate:
+class GateResult:
     """A gate's verdict at one (shape, flags): `checked` maps each output it compared to ``"all"`` or ``"sampled:<what>"``."""
 
     ok: bool
@@ -199,7 +199,7 @@ class BenchArm(Protocol):
 
     def prepare(self, dev: Any, shape: Shape, flags: frozenset[str], operands: OperandSet) -> Call: ...
 
-    def gate(self, dev: Any, call: Call, shape: Shape, flags: frozenset[str]) -> Gate: ...
+    def gate(self, dev: Any, call: Call, shape: Shape, flags: frozenset[str]) -> GateResult: ...
 
 
 #: deprecated: BenchArm's v0.4 name
@@ -304,7 +304,7 @@ def fields(template: str) -> set[str]:
         raise ArmError(f"bad placeholder in {template!r}: {ex}") from None
 
 
-def check_gate(gate: Gate, call: Call) -> None:
+def check_gate(gate: GateResult, call: Call) -> None:
     """A gate must name only outputs the call has, and check at least one of them in full."""
     unknown = set(gate.checked) - set(call.outputs)
     if unknown:

@@ -2,16 +2,15 @@
 # One-stage audit, run A10, on a CPU machine: A11's kinds and A9's routed-expert launches on rank 0's committed values (a10.py),
 # on hidden_zk's builds as a11.sh runs them. Two modes:
 #   values reads the tree, so it runs from the source, on the node holding the Build's row dir:
-#     research run --on vy-glm53-cpu-2 --project verity --source . --cwd source --mem-gb 256 --timeout 4h \
-#       --env A10_MODE=values --env A10_MEM_GB=256 -- bash benchmarks/one_stage/a10.sh
+#     A10_MODE=values A10_MEM_GB=256 bash benchmarks/one_stage/a10.sh
+#     (a job run from the source tree, 256 GB, up to 4 h)
 #   It fetches rank 0's replay bundle, the Commit's records, and A11's and A9's slices from the store into $A10_CACHE (kept on
-#   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on
-#   vy-glm53-cpu-2), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
+#   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on the
+#   machine that built it), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
 #   (a11.py --load-values' directories).
 #   audit builds the sampled-proofs Lean in the tree, so it runs from a clone:
-#     research run --on vy-glm53-cpu-2 --project verity --source . --cwd clone --mem-gb 128 --mem-wait 7200 --timeout 4h \
-#       --env A10_MODE=audit --env A10_MEM_GB=128 --env A10_VALUES=art:ID --env A10_SET=a11 \
-#       --env A10_ARGS="--only K1,K2 --tamper none" -- bash benchmarks/one_stage/a10.sh
+#     A10_MODE=audit A10_MEM_GB=128 A10_VALUES=art:ID A10_SET=a11 A10_ARGS="--only K1,K2 --tamper none" bash benchmarks/one_stage/a10.sh
+#     (a job run from a clone of the tree, 128 GB, up to 4 h)
 #   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory from the values run's record
 #   (A10_VALUES), its records in $OUT/a11 as a11.sh keeps them.
 # env: A10_MODE  A10_MEM_GB (the job's --mem-gb)  A10_ARGS (more a10.py arguments)  A10_ROW  A10_CACHE  A11_CACHE (the build cache)
