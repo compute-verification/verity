@@ -5,7 +5,6 @@ traffic.json and client.json): $OUT gets the public records and no file holding 
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -32,7 +31,7 @@ def put(root: Path, files: dict[str, object]) -> None:
 
 
 def run(code: str, **env: Path | str) -> subprocess.CompletedProcess:
-    return subprocess.run(["bash", "-c", LOG + code], env={"PATH": os.environ["PATH"], **{k: str(v) for k, v in env.items()}},
+    return subprocess.run(["env", *(f"{k}={v}" for k, v in env.items()), "bash", "-c", LOG + code],
                           capture_output=True, text=True)
 
 

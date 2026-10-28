@@ -4,7 +4,6 @@ in its requests.jsonl, its scheduler and load traces and its advice's opening, r
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -39,8 +38,9 @@ def published(out: Path) -> list[str]:
 
 @pytest.mark.parametrize("var", ["PP_LLAMA", "PP_SERVE_RUN", "PP_SERVE_ROWS"])
 def test_an_art_row_dir_or_serve_run_is_refused_before_anything_is_written(tmp_path, var):
-    got = subprocess.run(["bash", str(RUN_SH)], cwd=tmp_path, capture_output=True, text=True,
-                         env={"PATH": os.environ["PATH"], "RESEARCH_RUN_DIR": str(tmp_path), var: "art:" + "0" * 64})
+    unset = [a for v in ("PP_LLAMA", "PP_SERVE_RUN", "PP_SERVE_ROWS", "OUT") for a in ("-u", v)]
+    got = subprocess.run(["env", *unset, f"RESEARCH_RUN_DIR={tmp_path}", f"{var}=art:{'0' * 64}", "bash", str(RUN_SH)],
+                         cwd=tmp_path, capture_output=True, text=True)
     assert got.returncode == 2
     assert f"give {var} the serve directory on this node" in got.stdout
     assert list(tmp_path.iterdir()) == []
@@ -59,7 +59,7 @@ def test_a_serve_dirs_request_valued_records_never_reach_out(tmp_path):
                 "advice/w0/private/opening.json": {"rows": [PROMPT]}})
     served = block("  served() {", "  }")
     code = f'O={out}; PP=true; TG=(); run() {{ :; }}\n{served}served served {serve} 0\n'
-    got = subprocess.run(["bash", "-c", code], capture_output=True, text=True, env={"PATH": os.environ["PATH"]})
+    got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     assert published(out) == sorted(f"served-records/{f}" for f in (
         "serve.json", "windows.jsonl", "registration.json", "compiler.json"))
@@ -71,6 +71,6 @@ def test_the_standins_workload_prompts_never_reach_out(tmp_path):
             "commit/runs.jsonl": [{"rank": 0, "root": "ab"}], "commit/versions.json": {"root_tag": "t"},
             "commit/rank0/rows.json": {"rows": [PROMPT]}})
     code = f"O={out}; S={s}\n" + block("  mkdir -p $O/standin", "  mkdir -p $O/standin")
-    got = subprocess.run(["bash", "-c", code], capture_output=True, text=True, env={"PATH": os.environ["PATH"]})
+    got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     assert published(out) == ["standin/runs.jsonl", "standin/versions.json"]
