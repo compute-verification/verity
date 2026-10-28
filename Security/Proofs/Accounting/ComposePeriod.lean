@@ -382,15 +382,15 @@ theorem deficiencyUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ
 
 /-! ## The accepted prefix -/
 
-theorem credited_mono {C B V : Type} {m s Np n : ℕ} (pr : PeriodRun C B m s Np n V) {x : Paths (Paths C m × B) n}
+theorem credited_mono {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V) {x : Paths (Paths C m × B) n}
     {w w' : Fin n} (h : pr.Credited x w) (hw : w' ≤ w) : pr.Credited x w' :=
   fun w'' h'' i => h w'' (h''.trans hw) i
 
 /-- **The credited windows are the first `prefixLen`**: being credited is closed downward. -/
-theorem credited_iff {C B V : Type} {m s Np n : ℕ} (pr : PeriodRun C B m s Np n V) (x : Paths (Paths C m × B) n)
+theorem credited_iff {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V) (x : Paths (Paths C m × B) n)
     (w : Fin n) : pr.Credited x w ↔ w.val < pr.prefixLen x := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   constructor
   · intro h
     have hsub : Finset.Iic w ⊆ Finset.univ.filter fun w : Fin n => pr.Credited x w := fun w' hw' =>
@@ -563,7 +563,7 @@ sums and the zero-word cones, summed over the accepted prefix, whose budget game
 theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hn : 0 < n)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) {a b Λl fixed fd : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)
     (hDD : ∀ w, DeadConeDead Sc Cd Np (Wp.liveAt x w))
     (hcov : ∀ w, pr.Credited x w →

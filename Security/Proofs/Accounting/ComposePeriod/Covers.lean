@@ -35,7 +35,7 @@ coins. The right side is window `w`'s round's deficiency in `periodGame` at weig
 def PeriodCoversStmt : Prop :=
   ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V),
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V),
     Cd.Wf → LayerCommitted Cd →
     (Cd.periodLayer hr hK pr).WriterReads ∧
       ∀ (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), pr.Credited x w →
@@ -55,7 +55,7 @@ def anyRun (C B : Type) (m s Np : ℕ) : ProofRun C B m s Np Unit :=
 section Layer
 
 variable {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-  (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+  (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
 
 theorem periodLayer_src (ℓ : Fin n × ℕ) : (Cd.periodLayer hr hK pr).src ℓ =
     if h : ℓ.2 < Cd.dag.length ∧ Cd.binding ℓ.2 ≠ some .coin ∧ Cd.unit ℓ.2 < Np then
