@@ -516,8 +516,8 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, and
     `SAKMatmul`'s reuse form over the challenger's draw for the weight-side coins (P17's κ_re). The coin stream's exact
     exclusion and the multi-node boundary are stated in `CertifierSeesImports` (RP5, RP9);
-  - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s (RP18, in `WorkSound`'s Open). Until the Lean
-    is restated at v3.2's words, η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
+  - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
+    η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.

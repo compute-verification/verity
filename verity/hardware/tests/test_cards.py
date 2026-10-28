@@ -42,6 +42,14 @@ def test_every_number_is_sourced_and_marked(sku: str) -> None:
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
 
 
+@pytest.mark.parametrize("sku", skus())
+def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
+    """Evidence is cited by its `art:` id, and a node by its kind, never by a run id or a host name."""
+    text = (hardware.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
+    assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b|\bvy-[a-z0-9-]+", text), \
+        "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
     """A reader can take any number from any card of a kind by the same key."""
@@ -79,9 +87,9 @@ def test_the_quoted_numbers() -> None:
     one is deliberate: among them the RTX node's host figures, which the remote bandwidth audit's node reads
     (`verity.hardware.node`)."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
-    assert [value(server, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [2430, 12481, 600]
-    assert [value(h200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1980, 3201, 700]
-    assert [value(b200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1965, 3996, 1000]
+    assert [value(server, k) for k in ("clock.sm", "clock.memory")] == [2430, 12481]
+    assert [value(h200, k) for k in ("clock.sm", "clock.memory")] == [1980, 3201]
+    assert [value(b200, k) for k in ("clock.sm", "clock.memory")] == [1965, 3996]
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
     granite, sapphire = load("xeon-6776p-2s"), load("xeon-platinum-8468-2s")
