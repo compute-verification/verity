@@ -22,7 +22,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from check import sparse_hi, wraps
+from check import mac_ands, sparse_hi, wraps
 
 CLK = 1.769e9  # measured event clock under the served GEMM, run b57f
 SMS = 132
@@ -39,11 +39,24 @@ R_S8 = S8 * SMS * CLK  # MACs a second
 HASH_B = R_S8 / HASH_BPS  # MAC-times a hashed byte: about 1,836
 HBM = 4.26e12  # bytes a second, measured (theta hbm)
 WRAP_8B = {"p_W": 0.0119, "p_X": 0.0016}  # Llama-3.1-8B real weights and activations at ±80 (note 20261026T0225Z-draft-accel-bet-hybrid-2)
+WRAP_G = {"alu": ADD, "measured": 3.5 / 0.01}  # G a unit wrap rate: an IADD3-bound sparse add, or v31's wrap2 at m 8192 (r20261028-190744-7676)
+WRAP_COST = ["measured"]  # model.py --wrap-cost
+HASH_CORUN_BPS = 66.5e9  # SHA-512 beside the GEMM (the co-run share; GD-MODEL's corun_share, an estimate)
+
+# Proof blocks (C-Flock): ANDs a block, the cap, and the prover's price
+AND_MAC_32 = 271342 / 2048  # ScaledMmS8_v1's K-2048 coordinate, measured lowering count (r20261028-192825-df06, GD-PARTITION)
+OPEN_B = 454  # ANDs a byte of an operand row opened in the block (TOP-138; an estimate)
+ROW1 = 0.167e6  # ANDs a one-block row opened (GD-MODEL: three of them are 17% of the 3.0 M s8 coordinate block)
+FOLD_WORD_ANDS = 32  # ANDs to fold one word in-circuit (an 8-bit ARX step: add, multiply by a constant, rotate; an estimate)
+K_CAP = 27  # compose's K_MAX, live/src/circuit.rs IN_RANGE_K_LOG, Stmt.InRange
+DRAWS = 2773  # blocks a population draws a window at δ 2^-40, ε 0.01 (GD-MODEL, Λ/ε)
+O_AND, F0, F1, M_MAX = 1.087e-8, 3.03, 3.51e-6, 35  # GD-MODEL's costfit over r20261018-060433-b55e (sm_120; E for the H200)
 
 CALLS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192), "lm_head": (128256, 2048)}
 MS = (4, 64, 512, 8192)
 LAYER = ("qkv", "o", "gate_up", "down")
 LAYERS = 16
+STEP_CELLS = {k: sum(CALLS[c][0] for c in LAYER if CALLS[c][1] == k) * LAYERS for k in (2048, 8192)}  # cells a token, by K
 
 
 @dataclasses.dataclass(frozen=True)
@@ -132,6 +145,7 @@ class Row:
     committed: str
     block: str
     premise: str
+    gd_model: dict = dataclasses.field(default_factory=dict)
     serial: float = 0.0
     overlap: float = 0.0
     objective: float = 0.0
@@ -153,16 +167,30 @@ def lprimes(k: int) -> list[int]:
     return [lp for lp in (32, 64, 128, 256, 512, 1024, 2048, 4096) if lp < k and k % lp == 0]
 
 
+def gdm(scheme: str, k: int, noise: str, row: "Row", unit_cells: int, seg: int | None = None, lp: int | None = None,
+        word_bits: int = 8) -> dict:
+    """The row in GD-MODEL's `pouw` keys (golden/model.py), plus the keys it lacks (`word_bits`, `forced_frac`)."""
+    return {"scheme": scheme, "K": k, "L": seg, "L_prime": lp, "noise": noise,
+            "denoise_g_frac": round(row.tensor + row.cuda, 4), "unit_cells": unit_cells, "word_bits": word_bits,
+            "words_bytes_cell": row.words_bytes_cell, "forced_frac": round(min(1.0, row.floor) * row.credited, 4)}
+
+
 def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: int = 80, v_bytes: int = 4,
         fold: bool = False, dither_bits: int = 1, weight_per_call: bool = False, receipt_bits: int = 8,
-        lanes: int = 1) -> list[Row]:
-    """Dither-style periodic noise: V, U period L', words every L = t·L' (W of them), O from the noised GEMM by the peel.
+        lanes: int = 1, wrap_cost: str | None = None) -> list[Row]:
+    """Dither-style periodic noise: V, U period L', words every L = t·L' (W of them).
+
+    Two honest routes for O: the peel (the noised GEMM over the whole K, then 4L'/K of tail products and a wrap correction
+    over the wrapped entries, priced at `WRAP_G[wrap_cost]` G a unit wrap rate), or the recompute that Dither v3.2's served
+    call runs (the noised GEMM only over the credited f·K, O by the plain GEMM: f G of tensor and no wrap correction).
 
     Only V's amplitude enters the cheater's limbs (F = D_s + V M_s); U's sets only the weight-side wrap rate, since U is
     the right factor at one s8 limb whatever its width, and the H200 has no narrower integer or FP format faster than s8.
     v_bytes is the PRG bytes a V entry: 4 in dither.py's `_noise` (one u32 a value), 1 for a byte-wide draw."""
+    wrap_cost = wrap_cost or WRAP_COST[0]
     rb = dither_bits * dither_bits * R_B
     wr = {"p_X": wrap_rates(amp_v)["p_X"], "p_W": wrap_rates(amp_u)["p_W"]}
+    noise_key = "periodic" if perm == "none" else "permuted"
     rows = []
     for lp in lprimes(c.k):
         for t in range(1, 9):
@@ -174,28 +202,33 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
                 if floor < 1 - 1e-9:
                     continue
                 f = credit / c.k
-                wrap_w = min(ADD * wr["p_W"], SP24)
-                cuda = (2 * OP + ADD) / c.n + ADD * wr["p_X"] + (0 if wrap_w == SP24 else wrap_w)
-                tensor = 4 * lp / c.k + (SP24 if wrap_w == SP24 else 0)
+                base = (2 * OP + ADD) / c.n
+                wrap = WRAP_G[wrap_cost] * (wr["p_W"] + wr["p_X"])
                 prg = (c.m * c.k * dither_bits / 8 + v_bytes * c.m * lp) * PRG_B / c.macs
                 wpc = (c.n * c.k * dither_bits / 8 + 4 * c.n * lp) * PRG_B / c.macs if weight_per_call else 0.0
-                if weight_per_call:
-                    cuda += 2 * OP / c.m
+                extra = (2 * OP / c.m if weight_per_call else 0) + (w * 3 * OP / c.k if fold else 0)
                 wb = receipt_bits / 8 / lanes if fold else w * word_bits / 8
-                if fold:
-                    cuda += w * 3 * OP / c.k
-                hbm = 1 + 3 * lp / c.k + 4 * wr["p_W"]
-                rows.append(Row(
-                    name, c.name, c.m, c.n, c.k,
-                    {"lp": lp, "t": t, "W": w, "word_bits": word_bits, "amp_v": amp_v, "amp_u": amp_u, "v_bytes": v_bytes,
-                     "perm": perm, "dither_bits": dither_bits, "fold": fold},
-                    floor, f"binary {rb:.3f}/MAC + per word min(separation {cs:.2f}·L', direct): {route}", f,
-                    tensor, cuda, prg, wpc, wb * HASH_B / c.k, 4 * HASH_B / c.k, hbm, wb,
-                    (f"1 folded {receipt_bits}-bit receipt per {lanes} cell(s) over {w} virtual {word_bits}-bit prefix words a cell, and O (32-bit)" if fold else
-                     f"{w} prefix words T_s at {word_bits} bits a cell, and O (32-bit); weight root + per-period W′, U, Y_W, wrap list"),
-                    f"{lanes} cell(s)' whole K" if fold else f"one cell × one segment (L = {seg}); the O block opens the whole rows",
-                    ("ARX fold unpredictable without its inputs (not SHA-512: a new named premise)" if fold else "SAK on noised operands"),
-                ).finish(c))
+                for how in ("peel", "recompute"):
+                    if how == "peel":
+                        tensor = 4 * lp / c.k + (SP24 if wrap > SP24 else 0)
+                        cuda = base + (0 if wrap > SP24 else wrap) + extra
+                        hbm = 1 + 3 * lp / c.k + 4 * wr["p_W"]
+                    else:
+                        tensor, cuda, hbm = f, base + extra, 1 + f
+                    r = Row(
+                        name, c.name, c.m, c.n, c.k,
+                        {"lp": lp, "t": t, "W": w, "word_bits": word_bits, "amp_v": amp_v, "amp_u": amp_u, "v_bytes": v_bytes,
+                         "perm": perm, "dither_bits": dither_bits, "fold": fold, "route": how},
+                        floor, f"binary {rb:.3f}/MAC + per word min(separation {cs:.2f}·L', direct): {route}", f,
+                        tensor, cuda, prg, wpc, wb * HASH_B / c.k, 4 * HASH_B / c.k, hbm, wb,
+                        (f"1 folded {receipt_bits}-bit receipt per {lanes} cell(s) over {w} virtual {word_bits}-bit prefix words a cell, and O (32-bit)" if fold else
+                         f"{w} prefix words T_s at {word_bits} bits a cell, and O (32-bit); weight root + per-period W′, U"
+                         + (", Y_W, wrap list" if how == "peel" else "")),
+                        f"{lanes} cell(s)' whole K (lanes form)" if fold else f"one cell × one segment (L = {seg}); the O block opens the whole rows",
+                        ("ARX fold unpredictable without its inputs (not SHA-512: a new named premise)" if fold else "SAK on noised operands"),
+                    ).finish(c)
+                    r.gd_model = gdm("dither", c.k, noise_key, r, lanes if fold else 1, seg, lp, word_bits)
+                    rows.append(r)
     return rows
 
 
@@ -209,7 +242,7 @@ def two_gemm(c: Call, word_bits: int = 8, dither_bits: int = 1, lanes: int = 1) 
     if floor < 1 - 1e-9:
         return []
     fold = lanes > 1
-    return [Row(
+    r = Row(
         "fresh-R two-GEMM" + (f" + fold of {lanes} cells" if fold else ""), c.name, c.m, c.n, c.k,
         {"word_bits": word_bits, "dither_bits": dither_bits, "lanes": lanes},
         floor, f"s8 direct = {pairs} b1 plane products = two 2:4 halves: all {floor:.2f}", 1.0,
@@ -220,7 +253,9 @@ def two_gemm(c: Call, word_bits: int = 8, dither_bits: int = 1, lanes: int = 1) 
         f"{lanes} cells' whole K" if fold else "one cell's whole K",
         "SAK on noised operands, with R fixed for the period (one operand known ahead)"
         + ("; the receipt fold, as J10-R" if fold else ""),
-    ).finish(c)]
+    ).finish(c)
+    r.gd_model = gdm("two_gemm", c.k, "fresh", r, lanes, word_bits=word_bits)
+    return [r]
 
 
 def jr2(c: Call, per_call: bool) -> list[Row]:
@@ -230,26 +265,30 @@ def jr2(c: Call, per_call: bool) -> list[Row]:
     wrap_w = min(ADD * wr["p_W"], SP24)
     cuda = 1.5 * OP / c.n + (0 if wrap_w == SP24 else wrap_w) + (2 * OP / c.m if per_call else 0)
     wpc = c.n * c.k * 9 / 8 * PRG_B / c.macs if per_call else 0.0
-    return [Row(
+    r = Row(
         "JR2 fresh U " + ("per call (#6369)" if per_call else "per period"), c.name, c.m, c.n, c.k, {"u_amp": 64},
         1.0, "b·(c+U)ᵀ: s8 direct or 8 b1 planes, both 1.00 (U fresh, no fold)", 1.0,
         1.0 + (SP24 if wrap_w == SP24 else 0), cuda, c.m * c.k / 8 * PRG_B / c.macs, wpc,
         0.0, 4 * HASH_B / c.k, 1.0 if per_call else 2.0, 0.0,
         "receipts (2(KS+1) words a lane) folded over T_0..T_(KS−1) and O′; the z/y records are the values' commitment",
         "a whole tile (32×32 cells × K)", "the duo/fx1 receipt fold, as J10-R v1",
-    ).finish(c)]
+    ).finish(c)
+    r.gd_model = gdm("jr2", c.k, "fresh", r, 1024, word_bits=32)
+    return [r]
 
 
 def fresh_v(c: Call) -> list[Row]:
     """X = A + d_A + V with V fresh int8 per entry, per call; W′ = B + d_B. One 8-bit word. O = T − V·W′ᵀ."""
     wr = wrap_rates(80)
-    return [Row(
+    r = Row(
         "fresh-V (per call)", c.name, c.m, c.n, c.k, {"word_bits": 8},
         1.0, "V·d_Bᵀ mod 2^8: 8 b1 planes or s8 direct, 1.00", 1.0,
         1.0, (2 * OP + ADD) / c.n + ADD * wr["p_X"], c.m * c.k * 9 / 8 * PRG_B / c.macs, 0.0,
         HASH_B / c.k, 4 * HASH_B / c.k, 1.0, 1.0,
         "1 word at 8 bits a cell, and O (32-bit)", "one cell's whole K", "SAK on noised operands",
-    ).finish(c)]
+    ).finish(c)
+    r.gd_model = gdm("fresh_v", c.k, "fresh", r, 1)
+    return [r]
 
 
 ENG = {"amp_u": 16, "v_bytes": 1}  # U narrow (weight wraps ≈ 0) and V one PRG byte an entry: neither changes a floor
@@ -273,6 +312,118 @@ STRUCTS = {
 }
 
 
+_MAC: dict = {}
+
+
+def mac_and(word_bits: int) -> float:
+    """ANDs a MAC into a word_bits accumulator: the measured 32-bit lowering scaled by `check.mac_ands`' ratio."""
+    if not _MAC:
+        _MAC.update({b: mac_ands(np.random.default_rng(5), b)["ands"] for b in (8, 16, 32)})
+    return AND_MAC_32 * _MAC[word_bits] / _MAC[32]
+
+
+# name: (STRUCTS row its parameters come from, block along K, right operand public, word bits, lanes fold)
+TILE_STRUCTS = {
+    "HYB per-segment π, 16-bit words": ("HYB per-segment π, 16-bit, U ±16, V 1 B", "segment", False, 16, False),
+    "HYB per-segment π, 8-bit words": ("HYB per-segment π, 8-bit, U ±16, V 1 B", "segment", False, 8, False),
+    "HYB per-segment π + lanes fold": ("HYB per-segment π + ARX fold of 32 cells", "segment", False, 16, True),
+    "fresh-R two-GEMM, 8-bit word": ("fresh-R two-GEMM, 8-bit word", "whole", True, 8, False),
+    "fresh-R two-GEMM + lanes fold": ("fresh-R two-GEMM + fold of 32 cells", "whole", True, 8, True),
+    "fresh-V, 8-bit word": ("fresh-V per call, 8-bit word", "whole", False, 8, False),
+    "TOP-138's model (J10-R lanes, 300 ANDs a MAC)": (None, "whole", False, 32, True),
+}
+SIDES = (1, 2, 4, 8, 16, 32)
+
+
+def opened(rows: int, nbytes: int, k: int, row_bytes: int | None) -> int:
+    """Bytes opened to read nbytes from each of `rows` operand rows of K bytes, in value rows of row_bytes (None: exact)."""
+    if row_bytes is None:
+        return rows * nbytes
+    if row_bytes >= k:
+        return math.ceil(rows / (row_bytes // k)) * row_bytes
+    return rows * math.ceil(nbytes / row_bytes) * row_bytes
+
+
+def block(name: str, k: int, r: int, c: int, p: dict, row_bytes: int | None = None) -> dict:
+    """One draw's proof blocks for an r×c tile: (ANDs a draw, the largest block's ANDs, blocks a draw, serve bytes a cell).
+
+    Without a fold a block is the tile over one segment (HYB) or the whole K, opening r left rows and c right rows (none if
+    the right operand is the verifier's coins) and the cells' words in one-block rows. With the lanes fold a draw is the
+    tile's whole credited K as r lanes (one tile row each, its words written as a registered value) and a combine that
+    folds the tile's words into its one receipt."""
+    _, along, right_public, wb, fold = TILE_STRUCTS[name]
+    if p is None:
+        draw = 300 * r * c * k * (1 + 1.5 * (1 / r + 1 / c))
+        return {"draw": draw, "largest": draw / r, "blocks": r + 1 if r > 1 else 1, "bytes_cell": 0.0}
+    words = p.get("W", 1)
+    seg = p["t"] * p["lp"] if along == "segment" else k
+    a, wbytes = mac_and(wb), wb / 8
+    right = lambda cols, n: 0 if right_public else opened(cols, n, k, row_bytes)  # noqa: E731
+    if not fold:
+        nw = 2 if along == "segment" else 1
+        ands = r * c * seg * a + OPEN_B * (opened(r, seg, k, row_bytes) + right(c, seg)) + ROW1 * math.ceil(r * c * nw * wbytes / 128)
+        return {"draw": ands, "largest": ands, "blocks": 1, "bytes_cell": words * wbytes}
+    span = words * seg
+    lane = c * span * a + OPEN_B * (opened(1, span, k, row_bytes) + right(c, span)) + ROW1 * math.ceil(c * words * wbytes / 128)
+    comb = ROW1 * (math.ceil(r * c * words * wbytes / 128) + 1) + FOLD_WORD_ANDS * r * c * words
+    return {"draw": r * lane + comb, "largest": max(lane, comb), "blocks": r + 1, "bytes_cell": 1 / (r * c),
+            "fold_words_cell": words}
+
+
+def prove(b: dict) -> dict:
+    """GPU-s a window for one population: DRAWS draws, statements of 2^(35 − k_log) blocks (GD-MODEL's `proving`)."""
+    k_log = max(1, math.ceil(math.log2(b["largest"])))
+    stmts = math.ceil(DRAWS * b["blocks"] / 2 ** max(0, M_MAX - k_log))
+    return {"k_log": k_log, "statements": stmts, "gpu_s": DRAWS * O_AND * b["draw"] + stmts * (F0 + F1 * b["largest"])}
+
+
+def tiles(rows: list[dict], row_bytes: int | None = None) -> dict:
+    """Each structure's tile sweep: K 2048 and K 8192 populations, every r×c, and the optimum for a window of S steps.
+
+    The objective is GD-MODEL's J up to its t_stock: proving GPU-s a window + S × (the step's word hashing + fold ALU
+    work in GPU-s). Everything else a structure costs doesn't depend on the tile."""
+    rep = {}
+    for name, (src, *_rest) in TILE_STRUCTS.items():
+        params = {}
+        for k, call in ((2048, "qkv"), (8192, "down")):
+            if src is None:
+                params[k] = None
+                continue
+            r0 = [r for r in rows if r["structure"] == src and r["call"] == call and r["m"] == 8192]
+            params[k] = r0[0]["params"] if r0 else None
+        if src is not None and None in params.values():
+            continue
+        sweep = []
+        for r in SIDES:
+            for c in SIDES:
+                parts = {k: block(name, k, r, c, params[k], row_bytes) for k in (2048, 8192)}
+                pv = {k: prove(b) for k, b in parts.items()}
+                serve = {}
+                for t in (512, 8192):
+                    by = sum(STEP_CELLS[k] * t * parts[k]["bytes_cell"] for k in parts)
+                    fold = sum(STEP_CELLS[k] * t * parts[k].get("fold_words_cell", 0) * 3 for k in parts) / (ALU * SMS * CLK)
+                    serve[t] = {"bytes": by, "gpu_s": by / HASH_BPS + fold, "gpu_s_corun": by / HASH_CORUN_BPS + fold}
+                sweep.append({"r": r, "c": c, "k_log": max(v["k_log"] for v in pv.values()),
+                              "ands_draw": {k: parts[k]["draw"] for k in parts}, "ands_largest": {k: parts[k]["largest"] for k in parts},
+                              "prove_gpu_s": sum(v["gpu_s"] for v in pv.values()), "statements": {k: pv[k]["statements"] for k in pv},
+                              "serve": serve})
+        opt = {}
+        for t in (512, 8192):
+            for hash_key in ("gpu_s", "gpu_s_corun"):
+                for s in (1, 4, 1e3, 1e4, 1e5, 1e6):
+                    j = lambda e: e["prove_gpu_s"] + s * e["serve"][t][hash_key]  # noqa: E731
+                    free = min(sweep, key=j)
+                    out = {"free": (free["r"], free["c"], free["k_log"], j(free))}
+                    for cap in (27, 28, 30):
+                        ok = [e for e in sweep if e["k_log"] <= cap]
+                        e = min(ok, key=j)
+                        out[f"cap{cap}"] = (e["r"], e["c"], e["k_log"], j(e))
+                    out["cap_binds"] = out["cap27"][:2] != out["free"][:2]
+                    opt[f"T{t} {'co-run' if hash_key == 'gpu_s_corun' else 'card'} hash, S {s:g}"] = out
+        rep[name] = {"params": params, "sweep": sweep, "optimum": opt}
+    return rep
+
+
 def best(rows: list[Row], min_credit: float) -> Row | None:
     ok = [r for r in rows if r.credited >= min_credit - 1e-9]
     return min(ok, key=lambda r: (r.objective, -r.credited)) if ok else None
@@ -282,7 +433,9 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--out", type=pathlib.Path, required=True)
     p.add_argument("--min-credit", type=float, default=0.75)
+    p.add_argument("--wrap-cost", choices=sorted(WRAP_G), default="measured")
     a = p.parse_args()
+    WRAP_COST[0] = a.wrap_cost
     out = []
     for name, (n, k) in CALLS.items():
         for m in MS:
@@ -308,7 +461,11 @@ def main() -> int:
                      "wrap_anchor_8B": WRAP_8B},
            "wrap_rates": {amp: wrap_rates(amp) for amp in (16, 32, 48, 64, 80, 127)},
            "hi_limb": {f"{k[0]} t{k[1]} a{k[2]}": v for k, v in _HI.items()},
-           "min_credit": a.min_credit, "rows": out, "steps": steps}
+           "min_credit": a.min_credit, "wrap_cost": a.wrap_cost, "rows": out, "steps": steps}
+    rep["blocks"] = {"and_mac": {b: mac_and(b) for b in (8, 16, 32)}, "open_b": OPEN_B, "row1": ROW1, "k_cap": K_CAP,
+                     "draws": DRAWS, "costfit": {"o": O_AND, "f0": F0, "f1": F1, "m_max": M_MAX},
+                     "fold_word_ands": FOLD_WORD_ANDS, "step_cells_token": STEP_CELLS}
+    rep["tiles"] = {"exact rows": tiles(out), "16 KiB value rows": tiles(out, 16384)}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "structures.json").write_text(json.dumps(rep, indent=1, default=str))
     (a.out / "structures.md").write_text(render(rep))
@@ -337,6 +494,29 @@ def render(rep: dict) -> str:
     for m, d in rep["steps"].items():
         for s, v in sorted(d.items(), key=lambda kv: kv[1]["overhead_over_linear_stock"]):
             lines.append(f"| {m} | {s} | {v['overhead_over_linear_stock']:.2f} | {v['credited_share']:.3f} | {v['extra_ms_step']:.2f} |")
+    shown = {(1, 1), (1, 8), (1, 32), (4, 8), (8, 8), (16, 16), (32, 32)}
+    for rb, tl in rep.get("tiles", {}).items():
+        lines += ["", f"## Proof blocks by tile ({rb}; K 2048 and K 8192 populations, {DRAWS} draws each a window)", "",
+                  "| structure | tile | M ANDs a draw K2048 / K8192 | largest block k_log | proving GPU-s a window | words hashed a T 8192 step, ms (card / co-run) |",
+                  "|---|---|---|---|---|---|"]
+        for name, d in tl.items():
+            for e in d["sweep"]:
+                if (e["r"], e["c"]) in shown:
+                    sv = e["serve"][8192]
+                    lines.append(f"| {name} | {e['r']}×{e['c']} | {e['ands_draw'][2048] / 1e6:.2f} / {e['ands_draw'][8192] / 1e6:.2f} | "
+                                 f"{e['k_log']}{' (over 2^27)' if e['k_log'] > K_CAP else ''} | {e['prove_gpu_s']:.0f} | "
+                                 f"{sv['gpu_s'] * 1e3:.2f} / {sv['gpu_s_corun'] * 1e3:.2f} |")
+        lines += ["", f"### Optimum tile r×c (k_log) for a window of S steps at T 8,192 ({rb})", "",
+                  "| structure | hash | S 1 | S 1e3 | S 1e4 | S 1e5 | S 1e6 | cap binds at any S shown |", "|---|---|---|---|---|---|---|---|"]
+        for name, d in tl.items():
+            for hk in ("card", "co-run"):
+                cells, binds = [], False
+                for s in ("1", "1000", "10000", "100000", "1e+06"):
+                    o = d["optimum"][f"T8192 {hk} hash, S {s}"]
+                    binds |= o["cap_binds"]
+                    fr, cp = o["free"], o["cap27"]
+                    cells.append(f"{cp[0]}×{cp[1]} ({cp[2]})" + (f", free {fr[0]}×{fr[1]} ({fr[2]})" if o["cap_binds"] else ""))
+                lines.append(f"| {name} | {hk} | " + " | ".join(cells) + f" | {'yes' if binds else 'no'} |")
     return "\n".join(lines) + "\n"
 
 

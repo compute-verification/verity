@@ -151,6 +151,57 @@ def planes(rng: np.random.Generator, m: int, n: int, k: int, dither_bits: int, w
             "exact": bool(np.array_equal(T % mod, acc % mod))}
 
 
+def mac_ands(rng: np.random.Generator, word_bits: int, samples: int = 4096) -> dict:
+    """ANDs of one int8 × int8 MAC into a word_bits accumulator, mod 2^word_bits, counting XOR and NOT free: the partial
+    products x_i y_j with i + j < b (a term with exactly one sign bit enters negated, with its −2^p as a constant), then
+    a column compressor of full adders (carry ((a⊕c)∧(b⊕c))⊕c, one AND) and half adders (one AND), whose top column needs
+    no carry. Simulated bit-sliced against (acc + x·y) mod 2^b. One construction, so an upper bound on the best lowering;
+    its ratio across b scales a measured lowering's ANDs a MAC to other word widths."""
+    b = word_bits
+    x = rng.integers(-128, 128, samples, dtype=np.int64)
+    y = rng.integers(-128, 128, samples, dtype=np.int64)
+    acc = rng.integers(0, 1 << b, samples, dtype=np.int64)
+    bit = lambda v, i: ((v >> i) & 1).astype(bool)  # noqa: E731
+    cols: list[list[np.ndarray]] = [[] for _ in range(b)]
+    ands, const = 0, 0
+    for i in range(8):
+        for j in range(8):
+            p = i + j
+            if p >= b:
+                continue
+            z = bit(x, i) & bit(y, j)
+            ands += 1
+            if (i == 7) != (j == 7):
+                cols[p].append(~z)
+                const -= 1 << p
+            else:
+                cols[p].append(z)
+    for j in range(b):
+        cols[j].append(bit(acc, j))
+        if (const % (1 << b)) >> j & 1:
+            cols[j].append(np.ones(samples, dtype=bool))
+    out = np.zeros(samples, dtype=np.int64)
+    for j in range(b):
+        c = cols[j]
+        while len(c) >= 2:
+            if len(c) >= 3:
+                p, q, r = c.pop(), c.pop(), c.pop()
+                c.append(p ^ q ^ r)
+                if j < b - 1:
+                    cols[j + 1].append(((p ^ r) & (q ^ r)) ^ r)
+                    ands += 1
+            else:
+                p, q = c.pop(), c.pop()
+                c.append(p ^ q)
+                if j < b - 1:
+                    cols[j + 1].append(p & q)
+                    ands += 1
+        if c:
+            out |= c[0].astype(np.int64) << j
+    want = (acc + x * y) % (1 << b)
+    return {"word_bits": b, "ands": ands, "exact": bool(np.array_equal(out, want))}
+
+
 def q127(x: np.ndarray) -> np.ndarray:
     return np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int64)
 
@@ -177,17 +228,19 @@ def main() -> int:
     a = p.parse_args()
     rng = np.random.default_rng(a.seed)
     rep = {
-        "hyb": [hyb(rng, 6, 10, 32, t, 3, mode) for mode in ("tile", "segment", "none") for t in (1, 2, 3, 4, 8)],
+        "hyb": [hyb(rng, 6, 10, 32, t, 3, mode) for mode in ("tile", "segment", "none") for t in (1, 2, 3, 4, 8)]
+               + [hyb(rng, 6, 10, 32, 16, 1, mode) for mode in ("tile", "segment", "none")],  # one word over the whole K
         "limbs": [limbs(rng, 8, 8, 64, t, amp) for t in (1, 2, 3, 4, 8) for amp in (40, 48, 80)],
         "sparse_hi": [sparse_hi(rng, 256, 8, 256, t, mode, amp) for mode in ("tile", "segment")
                       for t in (2, 3, 4, 6, 8) for amp in (80, 127)],
         "planes": [planes(rng, 6, 9, 256, db, wb) for db in (1, 2, 3) for wb in (4, 5, 8, 16)],
         "wraps": wraps(rng, 64, 4096, [8, 16, 32, 48, 64, 80]),
+        "mac_ands": [mac_ands(rng, b) for b in (8, 16, 32)],
     }
     ok = (all(r["ok"] for r in rep["hyb"]) and all(r["two_s8_limbs_exact"] and r["one_u8_limb_exact_mod_2^8"] for r in rep["limbs"])
-          and all(r["exact"] for r in rep["planes"]) and all(r["exact"] for r in rep["sparse_hi"]))
+          and all(r["exact"] for r in rep["planes"] + rep["sparse_hi"] + rep["mac_ands"]))
     rep["all_ok"] = ok
-    rep["failures"] = ([r for r in rep["hyb"] if not r["ok"]] + [r for r in rep["planes"] + rep["sparse_hi"] if not r["exact"]]
+    rep["failures"] = ([r for r in rep["hyb"] if not r["ok"]] + [r for r in rep["planes"] + rep["sparse_hi"] + rep["mac_ands"] if not r["exact"]]
                        + [r for r in rep["limbs"] if not (r["two_s8_limbs_exact"] and r["one_u8_limb_exact_mod_2^8"])])
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "check.json").write_text(json.dumps(rep, indent=1))

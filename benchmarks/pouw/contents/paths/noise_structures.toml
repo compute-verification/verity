@@ -1,0 +1,4 @@
+order = 367
+path = "`noise_structures/`"
+runs_on = "CPU"
+what = "PoUW's noise structures on the H200 (periodic, permuted per tile or segment, fresh along K): exact integer checks of each cheater route at A = B = 0 (`check.py`), and a rate model of the floor, honest de-noising (peel or recompute), noise generation, committed words and proof blocks by tile against the 2^27 cap (`model.py`); estimates, no GPU (its own README)"
