@@ -14,10 +14,11 @@ inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/net
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
           # the certifier piece's kept warden run, which window-commit's scan reads (`kept_scan`): certifier_piece and
-          # warden_chain, and what they import
+          # warden_chain, what they import, and the site.json and host.json that served_session and auditor read on import
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
-          "benchmarks/live_challenger/auditor.py"]
+          "benchmarks/network_traces/site.json", "benchmarks/live_challenger/auditor.py",
+          "benchmarks/live_challenger/host.json"]

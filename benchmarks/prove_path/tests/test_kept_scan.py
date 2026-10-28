@@ -4,10 +4,11 @@ boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `warden
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so link-window 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in link-window 0, is anchored at 32, so link-window 1's Program 6 starts it.
-Each window's state rows are the scan's state tree's for its link-window. A window whose requests start in two link-windows, a request the warden didn't certify, a class whose window isn't the
-warden's link-window or whose scan doesn't serve the warden, and a prompt past the class's prompt cap are refused by
-name; a serve dir with no kept run gives None, and the unpacked fetch is removed. Reading the run leaves one_stage's
-``replay`` (a5's) the process's, not network_traces' (`prove_path.network_traces`)."""
+Each window's state rows are the scan's state tree's for its link-window. A window whose requests start in two
+link-windows, a request the warden didn't certify, a class whose window isn't the warden's link-window or whose scan
+doesn't serve the warden, and a prompt past the class's prompt cap are refused by name; a serve dir with no kept run
+gives None, and the unpacked fetch is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they
+were (`prove_path.network_traces`), so a5's ``import replay`` still finds one_stage's where it did before."""
 from __future__ import annotations
 
 import hashlib
@@ -82,8 +83,13 @@ def serve_dir(tmp_path_factory) -> Path:
     return serve
 
 
+def _imports() -> tuple:
+    """``sys.path``, the module ``replay`` and the file ``import replay`` finds."""
+    return list(sys.path), sys.modules.get("replay"), getattr(importlib.util.find_spec("replay"), "origin", None)
+
+
 def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
-    scan = CLASS.scan
+    scan, imports = CLASS.scan, _imports()
     rows, starts = PP.kept_scan(serve_dir, CLASS, USERS[:3])
     assert starts == [None, "user-0", None, "user-1", None, "user-2", None, None]
     assert len(rows) == CLASS.buckets and rows[0] == IS.encode(scan, IS.empty(scan))
@@ -94,8 +100,7 @@ def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
     _, late = PP.kept_scan(serve_dir, CLASS, USERS[3:])
     assert late == [None] * 6 + ["user-3", None]
     assert sorted(p.name for p in (serve_dir / CP.PRIVATE / "RUN").iterdir()) == ["fetch.tar.gz"]
-    import replay
-    assert Path(replay.__file__).parent.name == "one_stage" and str(ROOT / "benchmarks" / "network_traces") not in sys.path
+    assert _imports() == imports
 
 
 def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
