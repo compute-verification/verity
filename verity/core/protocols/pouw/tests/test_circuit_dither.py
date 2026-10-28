@@ -596,7 +596,8 @@ def test_amax_check_bounds_the_maximum_by_magnitude():
     """At the top of a binade an amax one bf16 step below the row's maximum still rounds the maximum to 127 (2 / RN(1.9921875
     / 127) ≈ 127.498), so a rounding check alone passes it: `named_ok` refuses it on |h| > amax. A row under the scale's
     floor has an empty S_i under any amax that shares its scale. A row with more columns at ±127 than a record's slots
-    isn't served under this layout."""
+    isn't served under this layout. A NaN h, which amax skips and the quantizer codes −127, is named in S_i and passes the
+    bound."""
     from verity.ml.circuits.ops import fp32 as F
 
     top, below = 0x4000, 0x3FFF
@@ -617,6 +618,11 @@ def test_amax_check_bounds_the_maximum_by_magnitude():
     _, wide = D.act_codes([0x3F80] * (D.NAMED + 1))
     with pytest.raises(ValueError, match="slots"):
         wide.pack()
+    nan = [0x3F80, 0x7FC0, 0xFFC0, 0x3F00]
+    codes, rec = D.act_codes(nan)
+    assert rec == D.ActRecord(0x3F80, (0, 1, 2)) and codes[1:3] == [-127, -127]
+    assert D.named_ok(codes, rec.pack(), {j: nan[j] for j in rec.named}) == 1
+    assert D.named_ok(codes, D.ActRecord(0x3F00, rec.named).pack(), {j: nan[j] for j in rec.named}) == 0
 
 
 @pytest.mark.parametrize("k", [64, 128])

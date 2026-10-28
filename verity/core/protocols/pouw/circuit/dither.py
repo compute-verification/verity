@@ -1195,8 +1195,9 @@ def act_ok(sh: Shape, ins: Sequence[Sequence[int]]) -> int:
 def named_ok(codes: Sequence[int], rec: bytes, hs: Mapping[int, int]) -> int:
     """The consumer's amax check of one A′ row, in the clear, on its I opened codes (`codes`), its opened record (`rec`,
     `REC` bytes) and h at the columns the codes name (`hs`, column to bf16 word, as `check_named` recomputes them): the
-    record's slots are exactly S_i = `named_of(codes)`'s; amax is no NaN; each j in S_i has |h_j| ≤ amax and
-    A′_j = requant(h_j, amax); and some j in S_i has |h_j| = amax, or, S_i empty, |requant(amax, amax)| < 127."""
+    record's slots are exactly S_i = `named_of(codes)`'s; amax is no NaN; each j in S_i has |h_j| ≤ amax (a NaN h_j, which
+    `abs_max` skips and the quantizer codes -127, aside) and A′_j = requant(h_j, amax); and some j in S_i has
+    |h_j| = amax, or, S_i empty, |requant(amax, amax)| < 127."""
     if len(rec) != REC:
         raise ValueError(f"a record is {REC} bytes, not {len(rec)}")
     amax, *got = struct.unpack(f"<{1 + NAMED}H", rec)
@@ -1206,7 +1207,7 @@ def named_ok(codes: Sequence[int], rec: bytes, hs: Mapping[int, int]) -> int:
     if not named:
         return int(abs(_sx8(requant(amax, amax))) < 127)
     mags = [hs[j] & 0x7FFF for j in named]
-    if any(m > amax or requant(hs[j], amax) != codes[j] & 0xFF for j, m in zip(named, mags)):
+    if any(amax < m <= F32_INF >> 16 or requant(hs[j], amax) != codes[j] & 0xFF for j, m in zip(named, mags)):
         return 0
     return int(amax in mags)
 
