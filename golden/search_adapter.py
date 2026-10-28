@@ -11,10 +11,12 @@ values, and returns GD-SEARCH's result keys. A knob GD-SEARCH leaves out keeps t
 (C-Flock's m cap, 35 to 40), `reps` (1 | 2), `device` ("h200" | "sm120"), `warm` (the prover kept across sessions,
 default True), `period` (windows certified together), `retain` ("device" | "host"), `akeys` (keys an attention
 block), `census` (None | "b4" | "b4-buckets", the t512 point only, default "b4"; "b4-buckets" is GD-PLANNER's
-attention templates merged) and `udraw` (JR2's U, "period" | "call") reach pouw.scheme, pouw.form, commit.open,
-point.steps_per_window, pouw.tile, prover.k_max, prover.m_max, prover.reps, prover.device, prover.warm, sampling.period,
-sampling.retain, partition.attn_keys, partition.census and pouw.u_draw. `noise: segment` is pi re-drawn each
-segment. `kernels: bar` is the row kernel GD-HASH measured (0.92 of the bar), not the bar.
+attention templates merged), `udraw` (JR2's U, "period" | "call"), `b1` ("card" 1/8 | "wgmma" 3/16) and `pricing`
+("tensor" | "in-model") reach pouw.scheme, pouw.form, commit.open, point.steps_per_window, pouw.tile, prover.k_max,
+prover.m_max, prover.reps, prover.device, prover.warm, sampling.period, sampling.retain, partition.attn_keys,
+partition.census, pouw.u_draw, pouw.b1 and pouw.pricing. `noise: segment` is pi re-drawn each segment. `bits` is the
+T_s word's checked low bits: 8 or fewer cap the floor at 7/8 (GD-BITS). `kernels: bar` is the row kernel GD-HASH
+measured (0.92 of the bar), not the bar.
 
 A design is feasible when every credited linear's floor (Dither's forced work as a share of its G, at the best attack
 found) is at least 1 - eps ("floor"), every proof block is within the block cap, 2^27 unless kmax raises it
@@ -117,7 +119,7 @@ def to_design(k: dict, point: str = "t8192") -> dict:
         s["pouw"]["L_prime"] = lp
         s["pouw"]["L"] = k.get("t", 8) * lp
     for knob, key in (("drow", "value_row_bytes"), ("bits", "word_bits"), ("agg", "agg"), ("credit", "credit"),
-                      ("scheme", "scheme"), ("form", "form")):
+                      ("scheme", "scheme"), ("form", "form"), ("b1", "b1"), ("pricing", "pricing")):
         if knob in k:
             s["pouw"][key] = k[knob]
     if "joint" in k:

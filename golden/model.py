@@ -24,7 +24,8 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
               noise ("periodic" | "fresh" | "permuted" | "segment"), u_draw ("period" | "call"),
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
               hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, tile (R, C),
-              form ("tile" | "lanes"), credit, word_bits, agg, joint
+              form ("tile" | "lanes"), credit, word_bits, b1 ("card" | "wgmma"), pricing ("tensor" | "in-model"),
+              agg, joint
     sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform" | "stratified"), retain ("device" | "host"),
               retain_GB, period
     partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
@@ -154,9 +155,12 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "b1_rate_vs_s8": (8.0, "M", f"{FLOOR}: the b1 product at 8x the s8 rate a clock; H200 mma.sync m16n8k256 "
                                 f".and.popc 21,845 against s8 m16n8k32 2,731 MACs an SM-clock, r20261028-090323-2c56 "
                                 f"(#6216, note:kernels-kfa3/20261028T0912Z-report-h200-b1-mma-rate)"),
-    "permuted_limbs": (2.55, "E", "GD-NOISE final, finding 2 (note:compute-research/20261028T2016Z-report-gd-noise): pi "
-                                  "re-drawn each tile, the 2:4 route forces 0.975 G at t 3, so (0.975 - 1/8) x 3 "
-                                  "limb-products a word (the merged factor's high limb on 2:4 sparse s8 at half price)"),
+    "b1_rate_vs_wgmma_s8": (16 / 3, "E", "GD-BITS final's second pricing (r20261028-203011-9ffb): mma.sync's BMMA "
+                                         "against wgmma's s8, 3/16 G; GD-NOISE final finding 1 withdraws it (two "
+                                         "instruction paths: BGMMA is 8.0x wgmma s8 on the card)"),
+    "permuted_limbs": (2.5, "E", "GD-BITS final (note:compute-research/20261028T2024Z-report-gd-bits, E7): pi re-drawn "
+                                 "each tile, the 2:4 route computes the word for 1/8 + (1 + 1/2 + 1)/3 = 23/24 G at t 3 "
+                                 "(GD-NOISE final finding 2 prices its overflow: 0.975, 2.55 limb-products)"),
     "jr2_noise_g": (1.32, "E", "GD-NOISE's table, JR2 per period at m 8,192 (qkv): the noised product 1.00 G, CUDA "
                                "0.18 and d_A's PRG 0.14; the lane receipts' hashing ~0 beside H1's"),
     "jr2_call_extra_g": (0.01, "E", "GD-NOISE's table, JR2 per call (#6369) over per period, without W-PRG: CUDA "
@@ -445,7 +449,12 @@ SCHEMA = {
                        "the H1 kernel's warp tile). Registered operand rows are K + 4 bytes (chunk rows past K 4,096), "
                        "opened whole; dither's A segment opens the Commit's rows"),
         "credit": ("all4", "dither's credited linears: all4 (qkv, o, gate_up and down) | k2048 (the K 2,048 three)"),
-        "word_bits": (16, "dither: bits a T_s word (O stays 32)"),
+        "word_bits": (16, "dither: bits a T_s word, its low bits checked exactly (O stays 32); 8 or fewer cap the "
+                          "floor at 7/8 (GD-BITS: Strassen over Z/2^8), t 3 with pi a segment needs 13"),
+        "b1": ("card", "the b1 product's price in the floor: card (1/8 of s8, GD-NOISE's measured BGMMA) | wgmma "
+                       "(3/16, GD-BITS' second pricing); every credit says which it used"),
+        "pricing": ("tensor", "the floor's pricing (GD-BITS): tensor (tensor pipe only, Strassen at depth 1) | "
+                              "in-model (the max of the tensor and alu pipes, Strassen to depth 2)"),
         "agg": (1, "dither: cells a T_s word"),
         "joint": (False, "dither: each credited values tile also checks its cells' segments, drawn at the larger of "
                          "the two laws (no separate PoUW blocks)"),
@@ -705,13 +714,56 @@ def l_prime(w: dict) -> int:
     return w["L_prime"] or (128 if w["scheme"] == "dither" else 32)
 
 
+#: GD-BITS final (note:compute-research/20261028T2024Z-report-gd-bits; r20261028-201602-604d,
+#: art:4c0286265cfe235af9860617e7a0ff7ae93b7846cefcf2e362fc08f95632bd2f): the floor a segment word's low n bits keep,
+#: (tensor, in-model), at b1 1/8. t 3: n <= 8 is row 8, n 9-12 the separated route 1/8 + X(n)/3 with X 2.125 + (n - 9)/8
+#: limb-products, 13 the full word; t 8 its own rows; Dither's noise fresh along K the one-word-a-cell row
+BITS_T3_LOW = (0.708, 0.766)
+BITS_T8 = {8: (0.344, 0.375), 9: (0.391, 0.391), 10: (0.422, 0.422), 11: (0.469, 0.438)}
+BITS_FRESH = {8: (0.875, 0.766), 9: (1.0, 0.875), 10: (1.0, 0.875)}
+#: rows 1-4 (rows 5-7 equal row 8 at t 3, row 4 at t 8 and fresh); other t take t 3's
+BITS_NARROW = {3: {1: (0.109, 0.125), 2: (0.328, 0.375), 3: (0.526, 0.583), 4: (0.672, 0.75)},
+               8: {1: (0.109, 0.125), 2: (0.207, 0.219), 3: (0.289, 0.312)},
+               "fresh": {1: (0.109, 0.125), 2: (0.328, 0.375), 3: (0.656, 0.75)}}
+#: no word of 8 bits or fewer of a whole product forces G: Strassen over Z/2^8 wraps exactly, 7/8 G tensor (depth 1),
+#: 49/64 in-model (depth 2); GD-BITS final, E3
+BITS_STRASSEN = (7 / 8, 0.766)
+
+
+def b1_price(w: dict) -> float:
+    if w["b1"] not in ("card", "wgmma"):
+        raise ValueError(f"pouw.b1 {w['b1']!r}")
+    return 1.0 / I("b1_rate_vs_s8" if w["b1"] == "card" else "b1_rate_vs_wgmma_s8")
+
+
+def word_floor(w: dict, t: int) -> float:
+    """The floor a T_s word's low word_bits keep (GD-BITS final), 1 when the width costs nothing. At b1 3/16 GD-BITS'
+    fewest bits fall by two at t 3 (13 to 11), which the model applies to every row (an estimate between them)."""
+    if w["pricing"] not in ("tensor", "in-model"):
+        raise ValueError(f"pouw.pricing {w['pricing']!r}")
+    i, n = (0 if w["pricing"] == "tensor" else 1), w["word_bits"] + (2 if w["b1"] == "wgmma" else 0)
+    narrow = BITS_NARROW["fresh" if w["noise"] == "fresh" else 8 if t == 8 else 3].get(w["word_bits"])
+    if narrow:
+        return narrow[i]
+    if w["noise"] == "fresh":
+        return BITS_FRESH[max(n, 8)][i] if n <= 10 else 1.0
+    if t == 8:
+        return BITS_T8[max(n, 8)][i] if n <= 11 else (1.0, 7 / 16)[i]
+    if n >= 13:
+        return 1.0
+    if n <= 8:
+        return BITS_T3_LOW[i] if t == 3 else BITS_STRASSEN[i]
+    return min(1.0, 1 / 8 + (2.125 + (n - 9) / 8) / t)
+
+
 def pouw_forced_frac(d: dict) -> float:
     """The least work a credited call forces, as a share of its plain s8 GEMM G, under SAK on noised operands, at the
     best attack found. Un-noised calls earn 0 (the brief): J10-R as served adds no noise at serve time, and at L >= K a
-    dither cell commits O alone. Dither, periodic or with pi re-drawn each segment: min(1, 1/8 + 3/t) (the floor note;
+    dither cell commits O alone. Dither, periodic or with pi re-drawn each segment: min(1, b1 + 3/t) (the floor note;
     GD-NOISE finding 2). Pi re-drawn each tile (v3.2): the merged factor's high limb runs on 2:4 sparse s8 at half
-    price, 2.55 limb-products a word, min(1, 1/8 + 2.55/t) (GD-NOISE final, finding 2: 0.975 G at t 3). Noise fresh
-    along K, or JR2: G, the one-word bound's second product (GD-NOISE finding 3; GD-BITS, if JR2's proof holds)."""
+    price, min(1, b1 + 2.5/t) (GD-BITS final: 23/24 G at t 3 and b1 1/8, G at 3/16). Noise fresh along K, or JR2: G,
+    the one-word bound's second product (GD-NOISE finding 3; GD-BITS, if JR2's proof holds). Dither's words are then
+    capped by what their low word_bits keep (`word_floor`); JR2's records are whole 48-bit words."""
     w = d["pouw"]
     if w["scheme"] in ("off", "j10r"):
         return 0.0
@@ -720,13 +772,13 @@ def pouw_forced_frac(d: dict) -> float:
     L, Lp, K = w["L"], l_prime(w), w["K"]
     if L >= K:
         return 0.0
+    t = max(1, L // Lp)
     if w["noise"] == "fresh":
-        return 1.0
+        return word_floor(w, t)
     if w["noise"] not in ("periodic", "permuted", "segment"):
         raise ValueError(f"pouw.noise {w['noise']!r}")
-    t = max(1, L // Lp)
     limbs = I("permuted_limbs") if w["noise"] == "permuted" else 3.0
-    return min(1.0, 1.0 / I("b1_rate_vs_s8") + limbs / t)
+    return min(1.0, b1_price(w) + limbs / t, word_floor(w, t))
 
 
 def guess_p(bits: int) -> float:
@@ -759,6 +811,8 @@ def pouw_credit(d: dict) -> dict:
     return {"credited_share_of_linear_macs": cred,
             "forced_share_at_best_attack": cred * forced,
             "earns_credit": cred > 0 and forced >= 1 - d["sampling"]["eps"],
+            "b1_price": None if w["scheme"] != "dither" else
+                        f"{b1_price(w):.4g} of s8 ({w['b1']}), {w['pricing']} pricing, {w['word_bits']}-bit words",
             "basis": "best attack found (an upper bound on the floor; no proved lower bound yet)"
                      if w["scheme"] == "dither" else
                      ("one-word bound, G (GD-NOISE finding 3, GD-BITS), if JR2's proof holds" if w["scheme"] == "jr2"

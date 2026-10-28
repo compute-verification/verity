@@ -174,11 +174,30 @@ def test_credit_needs_one_minus_eps_of_g_forced():
 
 
 def test_per_tile_pi_loses_the_floor_at_t3_and_per_segment_pi_keeps_it():
-    """GD-NOISE final: pi re-drawn each tile has a 2:4 route to 0.975 G at t 3; re-drawn each segment closes it."""
+    """GD-BITS final: pi re-drawn each tile has a 2:4 route to 23/24 G at t 3 (b1 1/8), G at b1 3/16; re-drawn each
+    segment closes it."""
     t3 = {"L": 384, "L_prime": 128}
-    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "permuted"})) == pytest.approx(0.975)
+    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "permuted"})) == pytest.approx(23 / 24)
+    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "permuted", "b1": "wgmma"})) == 1.0
     assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "segment"})) == 1.0
     assert model.pouw_forced_frac(model.design(pouw={"L": 256, "L_prime": 128, "noise": "permuted"})) == 1.0
+
+
+def test_word_bits_cap_the_floor_as_gd_bits_finds():
+    """GD-BITS final: no 8-bit word of a whole product forces G (Strassen over Z/2^8, 7/8); t 3 with pi a segment keeps
+    G from 13 low bits (11 at b1 3/16), losing 1/24 a bit below; fresh noise needs 9 bits tensor, 11 in-model."""
+    def f(bits, **w):
+        return model.pouw_forced_frac(model.design(pouw={"L": 384, "L_prime": 128, "noise": "segment",
+                                                         "word_bits": bits, **w}))
+    assert [f(b) for b in (8, 9, 12, 13, 16)] == pytest.approx([0.708, 0.833, 23 / 24, 1.0, 1.0], abs=1e-3)
+    assert f(11, b1="wgmma") == 1.0 and f(10, b1="wgmma") < 0.99
+    t2 = {"L": 256, "L_prime": 128}
+    assert f(8, **t2) == 7 / 8 and f(8, pricing="in-model", **t2) == 0.766 and f(16, **t2) == 1.0
+    assert f(8, noise="fresh") == 7 / 8 and f(9, noise="fresh") == 1.0 and f(10, noise="fresh", pricing="in-model") < 1
+    assert model.pouw_forced_frac(model.design(pouw={"word_bits": 12})) == pytest.approx(0.5)      # t 8: 1/8 + 3/8
+    d = model.design(pouw={**t2, "word_bits": 8})
+    c = model.pouw_credit(d)
+    assert not c["earns_credit"] and "card" in c["b1_price"] and "8-bit" in c["b1_price"]
 
 
 def test_jr2_u_drawn_every_call_pays_its_prg_at_small_m():

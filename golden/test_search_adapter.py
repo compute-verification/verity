@@ -2,7 +2,7 @@ import pytest
 
 from golden import model, search_adapter as A
 
-GOOD = {"tile": (1, 1), "kchunk": 2, "fuse": "dedupe", "bits": 8, "agg": 1, "noise": "perm", "lp": 64, "t": 2,
+GOOD = {"tile": (1, 1), "kchunk": 2, "fuse": "dedupe", "bits": 13, "agg": 1, "noise": "perm", "lp": 64, "t": 2,
         "row": 1024, "drow": 1024, "sampling": "work", "joint": "separate", "stmt": "template", "credit": "k2048",
         "seal": "roots", "host": "fixed", "kernels": "bar", "overlap": "none", "akeys": 64}
 KEYS = {"J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "feasible", "reasons", "floor_min", "max_ands",
@@ -11,8 +11,9 @@ KEYS = {"J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "feasible", 
 
 @pytest.mark.parametrize("point", ["t8192", "t512"])
 def test_evaluate_returns_the_search_keys(point):
-    """At t512 the census's Int8RowQuant_v3 at K 8,192 (48 M ANDs, gate-dominated) needs k_log 28."""
-    knobs = {**GOOD, "kmax": 28} if point == "t512" else GOOD
+    """At t512 the census's Int8RowQuant_v3 at K 8,192 (48 M ANDs, gate-dominated) needs k_log 28; at t8192 13-bit words
+    outgrow device retention."""
+    knobs = {**GOOD, "kmax": 28} if point == "t512" else {**GOOD, "retain": "host"}
     r = A.evaluate(knobs, {k: i.value for k, i in A.INPUTS.items()}, point)
     assert KEYS <= set(r) and r["feasible"], r["reasons"]
     assert r["J"] == pytest.approx(r["serve"] + r["prove_ratio"])
@@ -49,8 +50,12 @@ def test_the_period_divides_proving_and_not_serving():
 def test_a_floor_under_one_minus_eps_is_infeasible():
     assert "floor" in A.evaluate({**GOOD, "t": 8, "lp": 128})["reasons"]          # 1/8 + 3/8 < 0.99
     assert "floor" in A.evaluate({**GOOD, "t": 8, "lp": 512})["reasons"]          # L 4,096 >= K 2,048: O alone
-    assert "floor" in A.evaluate({**GOOD, "t": 3})["reasons"]                      # per-tile pi: 0.97 (GD-NOISE)
+    assert "floor" in A.evaluate({**GOOD, "t": 3})["reasons"]                      # per-tile pi: 23/24 (GD-BITS)
+    assert "floor" not in A.evaluate({**GOOD, "t": 3, "b1": "wgmma"})["reasons"]   # 3/16 + 2.5/3
     assert "floor" not in A.evaluate({**GOOD, "t": 3, "noise": "segment"})["reasons"]
+    assert "floor" in A.evaluate({**GOOD, "bits": 8})["reasons"]                   # Strassen over Z/2^8: 7/8
+    assert "floor" in A.evaluate({**GOOD, "t": 3, "noise": "segment", "bits": 12})["reasons"]
+    assert A.evaluate({**GOOD, "bits": 8, "pricing": "in-model"})["floor_min"] == pytest.approx(0.766)
 
 
 def test_scenario_inputs_move_j_and_ranges_hold_the_value():
