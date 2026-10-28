@@ -10,8 +10,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gemm_rate"))
-import attn_knobs as ak
-import fa3_tile_build as tb
+import attn_knobs as ak  # noqa: E402  (gemm_rate/ is a directory of scripts, put on sys.path above)
+import fa3_tile_build as tb  # noqa: E402
 
 
 def _kv(t: int, hkv: int = 2, d: int = 4):

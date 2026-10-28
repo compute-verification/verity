@@ -39,6 +39,7 @@ def main() -> None:
     ap.add_argument("--build-dir", type=Path, required=True)
     ap.add_argument("--tile-m", type=int)
     ap.add_argument("--jobs", default="8")
+    ap.add_argument("--cuda", type=Path, default=Path("/usr/local/cuda"), help="the CUDA toolkit whose libcuda stub links")
     args = ap.parse_args()
     hop = args.tree / "hopper"
     if args.tile_m:
@@ -61,11 +62,10 @@ def main() -> None:
     dflags = ["-D" + d for d in defines]
     nvcc = ["-O3", "-DNDEBUG", "-std=c++17", "--expt-relaxed-constexpr", "--expt-extended-lambda", "--use_fast_math",
             "-Xptxas", "-v"] + dflags
-    cuda = os.environ.get("CUDA_HOME", "/usr/local/cuda")
     args.build_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     load(name=args.name, sources=[str(s) for s in sources], extra_cflags=["-O3", "-DNDEBUG", "-std=c++20"] + dflags,
-         extra_cuda_cflags=nvcc, extra_ldflags=[f"-L{cuda}/lib64/stubs", "-lcuda"],
+         extra_cuda_cflags=nvcc, extra_ldflags=[f"-L{args.cuda}/lib64/stubs", "-lcuda"],
          extra_include_paths=[str(hop), str(args.tree / "csrc" / "common"), str(args.tree / "csrc" / "cutlass" / "include")],
          build_directory=str(args.build_dir), verbose=True, is_python_module=False, with_cuda=True)
     tile = [ln.strip() for ln in (hop / "tile_size.h").read_text().splitlines()

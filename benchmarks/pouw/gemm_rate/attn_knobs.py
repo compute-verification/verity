@@ -12,7 +12,7 @@ step's tokens at their slots. Every arm is one layer's flash_attn_varlen_func-eq
 
 - `served`: as FlashAttentionImpl calls it under batch invariance: the paged cache, block table, seqused_k, num_splits 1,
   no scheduler metadata, fa_version 3;
-- `kattn`: the same call over attn_rate.py's cache ([blocks, 16, Hkv, D] per K and V), to tie this run to HASH-55's rate;
+- `kattn`: the same call over attn_rate.py's cache ([blocks, 16, Hkv, D] per K and V), to tie this run to attn_rate.py's;
 - `sched`: `served` with scheduler metadata computed ahead (get_scheduler_metadata at num_splits 1, page size 16);
 - `contig`: k and v read from the qkv views with cu_seqlens_k = cu_seqlens_q and no block table, FA3's TMA path, as a
   step of fresh prefills allows (every key is a token of this step);
@@ -270,7 +270,7 @@ def main() -> None:
         emit({"kind": "check", "prompt": prompt, "arm": "flash_attn_varlen_func", "vs_served": compare(snap(via), ref)})
         guard = Guard(s, bat)
 
-        def intact(after: str) -> None:
+        def intact(after: str, guard: Guard = guard) -> None:
             if bad := guard.changed():
                 emit({"kind": "corrupt", "prompt": prompt, "after": after, "changed": bad})
                 raise SystemExit(f"{after} wrote into {bad}")

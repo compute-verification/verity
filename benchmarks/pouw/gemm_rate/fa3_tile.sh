@@ -49,7 +49,7 @@ for v in $VARIANTS; do
   python3 "$TAP/apply_fa3_tap.py" "$t/hopper" "$TAP" > "$O/apply-$name.log" 2>&1
   tm=(); [ "$m" != 0 ] && tm=(--tile-m "$m")
   ( "$VENV/bin/python" "$TREE/benchmarks/pouw/gemm_rate/fa3_tile_build.py" --tree "$t" --name "kfa3_$name" \
-      --build-dir "$C/build/$name" "${tm[@]}" --jobs "$JOBS" > "$O/build-$name.log" 2>&1
+      --build-dir "$C/build/$name" "${tm[@]}" --jobs "$JOBS" --cuda "$CUDA_HOME" > "$O/build-$name.log" 2>&1
     echo "build $name rc $?" >> "$O/rc.txt"
     cp "$C/build/$name/build_info.json" "$O/build_info-$name.json" 2> /dev/null ) &
   pids+=($!)
