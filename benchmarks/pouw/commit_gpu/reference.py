@@ -14,16 +14,13 @@ Salts are the committer's secret.  commit_gpu takes them from a file or derives 
 one hash: ``y = SHA-512(Ks || u64be(pos) || u64be(0)) || ... || SHA-512(Ks || u64be(pos) || u64be(2))`` (:func:`prf_salt`),
 Ks a 64-byte salt key.  Either way the root and openings are the reference's for those salts.
 
-    python3 reference.py params OUT N N_BITS [--fresh-key] [--seg] [--ks-seed S] [--tree T]   the CGP1 file for an n-leaf
+    python3 reference.py params OUT N N_BITS [--fresh-key] [--seg] [--ks-seed S]   the CGP1 file for an n-leaf
                                                               domain of n_bits rows (--seg: sha512/row-seg/v1 rows; --ks-seed:
-                                                              Ks from seed S, so domains can share it, else random; --tree:
-                                                              the domain's label names tree T)
+                                                              Ks from seed S, so domains can share it, else random)
     python3 reference.py prepare WORK [quick|full]            every case's inputs and the reference's levels, b || c and leaf
                                                               digests (WORK/cNNN; CPU only, before a GPU lease)
     python3 reference.py check BIN WORK TAG                   BIN's `check` on every prepared case, compared with the
                                                               reference (JSON lines; exit 1 on any difference)
-    python3 reference.py verify DUMP...                       dumped tile commitments (params, operand, levels; see
-                                                              verify_dump) against the reference
 
 Run from the source tree's root with ``PYTHONPATH=.``; stdlib only.
 """
@@ -62,10 +59,9 @@ def label(n: int) -> dict:
     return {"session": "commit-gpu", "operand": "A", "leaves": n}
 
 
-def domain(n: int, tree: str | None = None) -> CommitmentDomain:
-    """The operand domain of n leaves; with ``tree``, its label also names the tree (a stage's receipts: ``R-<stage>``)."""
-    lab = label(n) if tree is None else {**label(n), "tree": tree}
-    return CommitmentDomain(identity_digest_sha512(BINDING_TAG, lab), OWNER, RangeIndexedDomain(0, n), hash="sha512")
+def domain(n: int) -> CommitmentDomain:
+    """The operand domain of n leaves."""
+    return CommitmentDomain(identity_digest_sha512(BINDING_TAG, label(n)), OWNER, RangeIndexedDomain(0, n), hash="sha512")
 
 
 def t_table(key: bytes) -> bytes:
@@ -160,7 +156,7 @@ _CASE: dict = {}
 
 def _leaves(span: tuple[int, int]) -> tuple[bytes, list[bytes], list[bytes]]:
     c = _CASE
-    dom = domain(c["n"], c.get("tree"))
+    dom = domain(c["n"])
     bc_all, leaves, hs = [], [], []
     for pos in range(*span):
         if c["mode"] == "e2e":
@@ -332,74 +328,13 @@ def cases(kind: str) -> list[tuple]:
     return out
 
 
-def verify_dump(work: str, openings: int = 64) -> dict:
-    """A committed tile operand dumped by a consumer: ``work`` holds params.bin (derived salts),
-    operand.bin (m x k int8), levels.bin (every level, leaves first, as ``check`` writes them) and dump.json (m, k, r).
-    With ``row_bytes`` in dump.json (a stage's receipts), operand.bin is the rows themselves, row_bytes each, in the
-    domain whose label names dump.json's ``tree``. Every level must equal the reference's, so the root and every opening
-    path are its; sampled openings go through the reference verifier, and a changed leaf digest fails."""
-
-    def read(name: str) -> bytes:
-        with open(os.path.join(work, name), "rb") as f:
-            return f.read()
-
-    meta = json.loads(read("dump.json"))
-    p, operand, g_levels = read("params.bin"), read("operand.bin"), read("levels.bin")
-    if "row_bytes" in meta:
-        stride = meta["row_bytes"]
-        n, n_bits, tree = len(operand) // stride, 8 * stride, meta.get("tree")
-    else:
-        m, k, r = meta["m"], meta["k"], meta["r"]
-        n, n_bits, stride, tree = tile_count(m, k, r), 256 * r, 32 * r, None
-    dom = domain(n, tree)
-    ks = p[4 + 3 * 128 + 64:4 + 3 * 128 + 128]
-    if p != params(n, n_bits, ks, domain_id=dom.domain_id):
-        return {**meta, "ok": False, "error": "params.bin is not the CGP1 file of this domain under its own Ks"}
-    t0 = time.perf_counter()
-    rows = operand if "row_bytes" in meta else permute(operand, m, k, r)
-    _CASE.clear()
-    _CASE.update(mode="rows", n=n, n_bits=n_bits, stride=stride, rows=rows, salts=None, ks=ks, key=KEY, tree=tree)
-    step = max(1, min(4096, -(-n // (4 * (os.cpu_count() or 1)))))
-    with mp.get_context("fork").Pool() as pool:
-        parts = pool.map(_leaves, [(a, min(n, a + step)) for a in range(0, n, step)])
-    hs = [x for part in parts for x in part[2]]
-    r_levels = b"".join(b"".join(level) for level in tree_levels(dom, [x for part in parts for x in part[1]]))
-    depth = (n - 1).bit_length() if n > 1 else 0
-    offs = [0]
-    for d in range(depth + 1):
-        offs.append(offs[-1] + 64 * ((1 << depth) >> d))
-    root = r_levels[offs[depth]:offs[depth + 1]]
-    checks = {"levels": g_levels[:offs[-1]] == r_levels and len(r_levels) == offs[-1], "root": g_levels[offs[depth]:offs[depth + 1]] == root}
-    rng = random.Random(n)
-    picks = sorted({0, 1, n - 2, n - 1, n // 2, *rng.sample(range(n), min(n, openings) - 5)})
-    limits, commitment, bad = VerificationLimits(), Commitment(g_levels[offs[depth]:offs[depth + 1]], n), []
-    for pos in picks:
-        path = tuple(g_levels[offs[d] + 64 * ((pos >> d) ^ 1):offs[d] + 64 * ((pos >> d) ^ 1) + 64] for d in range(depth))
-        ok = verify_opening(dom, commitment, Opening(pos, hs[pos], path), V2, limits)
-        ok &= not verify_opening(dom, commitment, Opening(pos, bytes([hs[pos][0] ^ 1]) + hs[pos][1:], path), V2, limits)
-        if not ok:
-            bad.append(pos)
-    checks["openings"] = not bad
-    return {**meta, "n": n, "ok": all(checks.values()), "checks": checks, "openings_checked": len(picks), "bad_openings": bad[:8],
-            "root": root.hex(), "ref_s": round(time.perf_counter() - t0, 3)}
-
-
 def main(argv: list[str]) -> int:
     if len(argv) >= 5 and argv[1] == "params":
         key = INST.fresh_key() if "--fresh-key" in argv else KEY
         ks = random.Random(int(argv[argv.index("--ks-seed") + 1])).randbytes(64) if "--ks-seed" in argv else os.urandom(64)
-        tree = argv[argv.index("--tree") + 1] if "--tree" in argv else None
         with open(argv[2], "wb") as f:
-            f.write(params(int(argv[3]), int(argv[4]), ks, key, "--seg" in argv, domain(int(argv[3]), tree).domain_id))
+            f.write(params(int(argv[3]), int(argv[4]), ks, key, "--seg" in argv, domain(int(argv[3])).domain_id))
         return 0
-    if len(argv) >= 3 and argv[1] == "verify":
-        failed = 0
-        for work in argv[2:]:
-            r = verify_dump(work)
-            failed += not r["ok"]
-            print(json.dumps(r), flush=True)
-        print(json.dumps({"summary": {"dumps": len(argv) - 2, "failed": failed}}), flush=True)
-        return 1 if failed else 0
     if len(argv) >= 3 and argv[1] == "prepare":
         kind = argv[3] if len(argv) > 3 else "quick"
         for i, case in enumerate(cases(kind)):
