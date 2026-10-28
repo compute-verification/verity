@@ -32,7 +32,6 @@ NOT_PATHS = {
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/network_traces/README.md", "composite.py"): "the one-stage composite, not in the tree yet",
-    ("benchmarks/pouw/commit_gpu/README.md", "ovl.cu"): "the stage-overlap probe, deleted; its owner's to drop",
     ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "io.cpp"): "the Lean runtime's source",
     ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "random.c"): "the Lean runtime's source",
     ("benchmarks/numerical/README.md", "tc.rs"): "SP1's guest, deleted with the archive",
