@@ -4226,7 +4226,7 @@
    ]
   },
   "CoreProtocol.Protocol": {
-   "digest": "f688a6c1fff616359ab583c5e071dc3f3d77815e5aed58f6aa6027e2cb11824b",
+   "digest": "ba1d0b91978bc133cc30666f1fbac15b04a50c883588e3a030da464e71987167",
    "definitions": {
     "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
     "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
@@ -4273,6 +4273,8 @@
     "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
     "Core.canonicalJson": "248f540589e66dcee3fed2d3a1b6dfc238132c311c5694875a67c6ab98bff35c",
     "Core.canonicalJson._sparseCasesOn_3": "636006752adbd5a614a0be69f18609f0783764283355527f05cc5159d5172c06",
+    "Core.instBEqVerdict": "3a92223c05122f3bb245c8d35a0f1d47b56812c35e707ecf1fcdac95919bc0d1",
+    "Core.instBEqVerdict.beq": "76bbe255e5db0a448a42a787dd9079a4360ef3f625690d97069f8a6ce4f63504",
     "Core.instDecidableEqVerdict": "f46bce4ed5ce4155001bb005897480dc26f2267c50d3b4c2cf4c622a33d232db",
     "Core.instReprVerdict.repr.match_1": "512a9ee16b4e82345f3343510c022654d75d82c2a8b0218985a2e4bf3cb23d3d",
     "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
@@ -4281,6 +4283,12 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
+    "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -8722,8 +8730,10 @@
    ]
   },
   "MemoryChallenger.Verdict": {
-   "digest": "31e763500bf324942f8d5579e4ba37a5aa2b1b703a0c2a229c0deb82428ce411",
+   "digest": "4a2a801d204c56d249dec5763d44e6868aeb4986985fb651500c76730f3819fe",
    "definitions": {
+    "MemoryChallenger.Findings": "78dbd7bbd0058af89ce0dbed5098d8115dfc3827f1350458e80b3a931f77099c",
+    "MemoryChallenger.Findings.reasons": "3c52dfb1aaf8e0f5c4476cab07ff3beff52c37854c6864b1f5ee0459e4c7ab49",
     "MemoryChallenger.KNOWN_SCHEMES": "a9e423b941289e505c96985a3b431ba9ba0a7ba7ceb2c317450bd028b9fa0ab3",
     "MemoryChallenger.LMS": "adec2334cb4a7eb8ed19042a9400f4316cbfed9dd7c5589ebefdf78412f9d64a",
     "MemoryChallenger.SCHEMES": "7a6b21ede247f41540c351d62ae45d701f018a058401d09e3eb7b7c5d7e927ad",
@@ -8737,13 +8747,14 @@
     "MemoryChallenger.SignedSession.scheme": "74661bd9c9ca96f0770e1e0733cd723d71a62033304ffb17ab039af87f939b8d",
     "MemoryChallenger.SignedSession.signature": "d71b780ca95c15eb412a7a229ac68349874d5d6a953ecbe1d00e4b0754f2cb83",
     "MemoryChallenger.TEST_SCHEMES": "256ae88cac24da12e0aafb8179a8e316c22c3dd18d0f7a220492010dedb60fc6",
-    "MemoryChallenger.Verdict": "9fdf3285abed057627ac0fa87f4122e84418b7073b3ea11fa99ce34054ee24ef",
-    "MemoryChallenger.Verdict.accepted": "784f0ec84e7d2acbcc246cda142ba9efb1f614dc9e210bb869ccd8074169aab0",
-    "MemoryChallenger.Verdict.reasons": "966c235026fe75780915223787dd5424778757d55801953d89f10006060bb5cc",
+    "MemoryChallenger.Verdict": "83116a702f299368e7dfb1475616f623e6cc3f2171036a3181ac85978025071e",
+    "MemoryChallenger.Verdict.accepted": "3b63fb264d4b82fa7406329a6d2b8baa0d09325310372a492d194a66091cadfb",
+    "MemoryChallenger.Verdict.reasons": "6fceaf07c1fafa35623ee259f73bafd10311ccd4b8a9cd12ee7877e8332d3058",
+    "MemoryChallenger.acceptIf": "70aa4558153881080b07527e6475422e7dacff8ef36cca5130c80ae47f9f987d",
     "MemoryChallenger.lmsVerify": "c0ebdb51213699179ff3229ef1192e756fcb4b72eca4d01e3c21e6bf3c2b1b48",
     "MemoryChallenger.pyRepr": "910b941de99f0673933b0e96b05ebe93ce61a92fa9ff3dbca15032aba45d7602",
     "MemoryChallenger.testScheme": "5ccf1c73c6c0c982ae0e66ad9a0c407f0cd9e994b099ef86a44b054235a4e4cb",
-    "MemoryChallenger.verdict": "9078bf9dbf86f33bb6ca94a80c0f4b3e7177e5861a6e61316b64c385f6ac6dde"
+    "MemoryChallenger.verdict": "f0033468a41e2f2047ab709802c4075165581ae4b9e7fb2e008a905a9ccddb3d"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
