@@ -67,6 +67,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
 | `circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
+| `unit_lowering/` | writing PoUW's H1 tile unit as a flat circuit file: peak memory and wall time by K and tile, the file's AND rows and bytes, its SHA-512 held to a reference, and where the memory goes | maintained |
 
 ## Network
 
