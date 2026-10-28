@@ -126,7 +126,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/PROTOCOL.md": "#5046, #5353, #5409 and #5551 rewrite its lines",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "#5353 and #5637 rewrite its lines",
     "verity/core/protocols/pouw/lean/check/README.md": "#5046 rewrites its lines",
-    "verity/core/protocols/remote/README.md": "#5637 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/core/protocols/sampled_proofs/README.md": "#5371, #5637 and #5643 rewrite its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",

@@ -11,10 +11,10 @@ and no Lean theorem states remote's guarantee from them. Nothing yet ties the de
 theorems either, because remote reads sampled proofs' one-stage v1, which takes the sessions' verdicts as evidence
 instead of computing them.
 
-This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
-Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (a declaration, declaring, the
-declared advice, a declaration block and a declaration period) are in `ARCHITECTURE.md`'s Glossary, under Declaration,
-Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
+This file is an outline with signposts. The Lean is the definition. The vocabulary, the notation and the older names
+are `GLOSSARY.md`'s; the lifecycle's terms (registration, declaring, the declared advice, the execution block, the
+monitoring period) are under its lifecycle and time entries. Lean names keep some older names until they are renamed:
+`Dampener*` means the slowdown, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window` a period.
 
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
@@ -27,7 +27,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
+- the slowdown lower bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
   `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
@@ -55,7 +55,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the sample misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 
 **Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
@@ -71,34 +71,38 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 
 ## Lifecycle
 
-1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the declared
-   circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`; read by the
-   inference-only policy once it joins). It also registers
-   each subprotocol's public Program and parameters, by digest.
-2. **Declarations**, one or more per declaration period (a span of one or more sampling periods). A declaration is one
-   act of declaring: the developer reports its declared advice (a bit string that a registered compiler compiles, its
-   length charged), and the compiler appends one declaration block to the declared circuit. The block's values are
-   committed under hiding leaves (hm96 rows in SHA-512 trees) before that declaration period's audit coins.
-   `examples/lifecycle/README.md` ("Terms") runs these terms on a toy model.
-3. **The audit**, in each sampling period. The live coins draw proof blocks. The developer proves each drawn block with
-   C-Flock `--zk` behind the firewall, and the Lean verifier `flock-verify` checks each proof. PoUW's check
-   (`pouw-check`) reads each PoUW period's commitment and its drawn proofs and receipts, and credits that period's work.
-   No proof is retried, and a failed proof is a visible failure.
-4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
+1. **Registration**, once, append-only, before any coin. The developer registers its hardware (the site), its
+   information θ (the models, code and data committed up front) and a circuit builder B (vLLM's ahead-of-time compiler).
+   Each subprotocol's public Program and parameters are the protocol's own, fixed by digest.
+2. **Execution**, repeatedly. The developer declares advice a_j, a bit string charged by its length, and B outputs the
+   execution block E_j = B(a_j), with its inference blocks, its placement and its cut into proof blocks. The declared
+   circuit D is the execution blocks in order. E_j's values are committed under hiding leaves (hm96 rows in SHA-512
+   trees) as it runs. `examples/lifecycle/README.md` ("Terms") runs these terms on a toy model.
+3. **Verification** of each execution block, in five steps:
+   - **commitment**: every value is bound before any coin;
+   - **challenge**: the live coins sample proof blocks;
+   - **proof**: the developer proves each sampled block with C-Flock `--zk` behind the firewall;
+   - **validation**: the Lean verifier `flock-verify` checks each proof, PoUW's check (`pouw-check`) reads the block's
+     commitment, its sampled proofs and its receipts, and the inference-only policy, once it joins the composite,
+     checks E_j's inference blocks. No proof is retried, and a failed proof is a visible failure;
+   - **accounting**: each subprotocol's resource accounts for E_j are tallied (sampled proofs' integrity bound, PoUW's
+     credited work), and the policies read them.
+
+   The verdict follows the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
    any subprotocol rejects. It also rejects if the cases don't fit (unknown, missing, repeated or out of order), or if
    the commitment isn't `bind` of the subprotocols' digests. It is undecided if it binds and some subprotocol is
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
-5. **Accounting**, per monitoring period. The accepted sampling periods' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
-   for PoUW), and the overhead calculator turns them into overhead (see Results).
+4. Execution and verification loop. Over a monitoring period the tallies pool (`Flock.Guarantees.IntegrityHorizon` for
+   sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` for PoUW), and the slowdown calculator
+   turns them into the slowdown (see Results).
 
 ## The guarantee
 
 **In words.** Suppose the remote verdict accepts every sampling period of a monitoring period. Then, except with a
-failure probability set by the draw and by SHA-512, two things hold:
+failure probability set by the sampling design and by SHA-512, two things hold:
 
-- the committed computation satisfies the declared circuit, except on at most the proof blocks a draw of that size
+- the committed computation satisfies the declared circuit, except on at most the proof blocks a sample of that size
   misses at δ;
 - the period's credited live work is at least (1 − ε) of the declared work.
 
@@ -116,14 +120,14 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 |---|---|---|---|
 | The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
-| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
+| The slowdown over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The slowdown over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 ## Assumptions
@@ -135,7 +139,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 
 - `FlockSoundness.Assumptions.UniformRandomBytes`: the verifier's coins are uniform random bytes.
 - `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ` (`live-verifier`): the record the verifier reads is the one the
-  challenger wrote for the live run, and its draw file is the verifier's own draw.
+  challenger wrote for the live run, and its sample file is the verifier's own sample.
 - `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
   (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders. The lock names the table
   finders' premise `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
@@ -153,9 +157,9 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 - `Properties.Pouw.Period.ServiceSound`: the proof service is sound at δ_ks against PoUW's check, which is C-Flock's
   soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
-- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the window's live
+- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as sampled are the model's sample at the window's live
   coin. A protocol-code fact still to prove.
-- `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It states
+- `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It states
   the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
   path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
@@ -175,9 +179,9 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
   `H1CheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
-  is what backs the overhead bound's `PouwSound` (below), so the overhead over remote rests on the data sheet.
+  is what backs the slowdown lower bound's `PouwSound` (below), so the slowdown over remote rests on the data sheet.
 
-The overhead, `DampenerRemote`:
+The slowdown, `DampenerRemote`:
 
 - In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
   - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
@@ -193,8 +197,8 @@ The overhead, `DampenerRemote`:
 
 ## Results per monitoring period
 
-The overhead calculator is `benchmarks/rho` (`verity bench rho`; it is being renamed to overhead). Its `periods.py`
-gives the overhead's lower bound for monitoring periods of a week, a month and a year. It covers one datacenter
+The slowdown calculator is `benchmarks/rho` (`verity bench rho`; it is being renamed to slowdown). Its `periods.py`
+gives the slowdown lower bound for monitoring periods of a week, a month and a year. It covers one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`:
 
 ```text
