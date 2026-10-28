@@ -241,8 +241,9 @@ class Replay:
 
 
 def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
-             per_coin: int = 1) -> coins.Coins:
-    return coins.Coins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows, per_coin=per_coin)
+             per_coin: int = 1) -> coins.SessionCoins:
+    return coins.SessionCoins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows,
+                              per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -529,8 +530,7 @@ class Run:
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
-                                   entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}
