@@ -88,9 +88,10 @@ negatives.
   holds one subprotocol's `case.json` (its `serve` line, with `blobs` the paths of the files it reads) and its own Lean
   answer on it, `answer.json`, whose `commitment` is its digest; onsite's `--registration DIR` is NCI's. It writes the
   product's params, commitment and evidence in the composition's formats (`verity/core/protocols/composition/README.md`)
-  and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs. A subprotocol with no piece (or no
-  case or answer in its directory) didn't run and enters as undecided ("not run"): nothing is composed, a run piece's
-  rejection still rejects, and otherwise the product is undecided.
+  and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs, printing each piece's own answer and
+  Lean's verdict and exiting with Lean's code. It decides nothing: a subprotocol with no piece (or no case or answer in
+  its directory) is left out, Lean's verdict on what remains stands (a rejection naming the missing case), and the run
+  is labelled `NOT_ESTABLISHED` with what is missing.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the drawn blocks' bytes, and the

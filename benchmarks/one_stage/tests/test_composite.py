@@ -71,53 +71,64 @@ def test_a_case_whose_commitment_did_not_decode_stands_in_its_own_commitment(tmp
     assert C.piece(pw)["digest"] == b"\x05\x06"
 
 
-def test_remote_takes_no_registration_and_a_piece_must_be_the_products(tmp_path):
-    v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64)
-    nci = put(tmp_path / "nci", C.REGISTRATION, {}, b"\x03", b"{}", b"\xcc" * 64)
-    assert C.main(["remote", "--piece", str(v2), "--registration", str(nci), "--out", str(tmp_path / "a")]) == C.USAGE
-    assert C.main(["remote", "--piece", str(v2), "--piece", str(nci), "--out", str(tmp_path / "b")]) == C.USAGE
-    assert C.main(["remote", "--piece", str(v2), "--piece", str(v2), "--out", str(tmp_path / "c")]) == C.USAGE
-    with pytest.raises(SystemExit) as e:
-        C.main(["remote", "--piece", str(v2)])
-    assert e.value.code == C.USAGE
+def lean(tmp_path: Path, line: dict, rc: int) -> str:
+    """A stand-in for the product's Lean executable: prints ``line`` and its arguments, and exits ``rc``."""
+    exe = tmp_path / "lean-check"
+    exe.write_text(f"#!{sys.executable}\nimport json, sys\n"
+                   f"print(json.dumps({line!r} | {{'args': sys.argv[1:]}}))\nsys.exit({rc})\n")
+    exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
+    return str(exe)
 
 
 def answer(out: Path) -> dict:
     return json.loads((out / "answer.json").read_text())
 
 
-def test_a_subprotocol_that_did_not_run_enters_as_undecided(tmp_path):
+MISSING_POUW = {"protocol": "verity/remote/v0", "verdict": "reject", "reason": "params: verity/pouw/v1 is missing"}
+
+
+def test_a_usage_error_exits_64_not_lean_s_undecided(tmp_path):
+    v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64)
+    with pytest.raises(SystemExit) as e:
+        C.main(["remote", "--piece", str(v2)])
+    assert e.value.code == C.USAGE
+
+
+def test_a_missing_piece_is_left_out_and_lean_s_verdict_stands(tmp_path, capsys):
     v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
     out = tmp_path / "out"
-    assert C.main(["remote", "--piece", str(v2), "--out", str(out), "--exe", "/nonexistent"]) == 2
-    assert answer(out) == {"commitment": None, "profile": None, "protocol": "verity/remote/v0", "public": None,
-                           "reason": "verity/pouw/v1 undecided: not run", "verdict": "undecided"}
-    assert not (out / "params.json").exists()
+    assert C.main(["remote", "--piece", str(v2), "--out", str(out), "--exe", lean(tmp_path, MISSING_POUW, 1)]) == 1
+    assert [c["id"] for c in json.loads((out / "params.json").read_bytes())["components"]] == [V2]
+    assert answer(out)["reason"] == "params: verity/pouw/v1 is missing"
+    lines = capsys.readouterr().out.splitlines()
+    assert "NOT_ESTABLISHED missing verity/pouw/v1" in lines
+    assert any(ln.startswith("PIECE ") and '"accept"' in ln for ln in lines)
+    assert any(ln.startswith("VERDICT ") and "is missing" in ln for ln in lines)
 
 
-def test_a_piece_without_its_answer_did_not_run(tmp_path):
-    v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="undecided", reason="no session")
+def test_the_exit_code_is_lean_s_whatever_the_pieces_say(tmp_path):
+    v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="reject", reason="bad")
+    pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64, verdict="reject", reason="bad")
+    for rc in (0, 1, 2):
+        out = tmp_path / f"out{rc}"
+        assert C.main(["remote", "--piece", str(v2), "--piece", str(pw), "--out", str(out),
+                       "--exe", lean(tmp_path, {"verdict": "x"}, rc)]) == rc
+
+
+def test_a_piece_without_its_answer_is_missing(tmp_path, capsys):
+    v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64)
     pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)
     (pw / "answer.json").unlink()
-    assert C.main(["remote", "--piece", str(v2), "--piece", str(pw), "--out", str(tmp_path / "out")]) == 2
-    assert answer(tmp_path / "out")["reason"] == \
-        "verity/pouw/v1 undecided: not run; verity/sampled-proofs/one-stage/v2 undecided: no session"
+    assert C.main(["remote", "--piece", str(v2), "--piece", str(pw), "--out", str(tmp_path / "out")]) == 0
+    assert "NOT_ESTABLISHED missing verity/pouw/v1" in capsys.readouterr().out.splitlines()
+    assert [c["id"] for c in json.loads((tmp_path / "out" / "params.json").read_bytes())["components"]] == [V2]
 
 
-def test_a_run_pieces_rejection_rejects_beside_one_that_did_not_run(tmp_path):
-    pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", None, verdict="reject", reason="params: bad")
-    assert C.main(["remote", "--piece", str(pw), "--out", str(tmp_path / "out")]) == 1
-    a = answer(tmp_path / "out")
-    assert (a["verdict"], a["reason"]) == ("reject", "verity/pouw/v1 reject: params: bad")
-
-
-def test_onsites_registration_not_run_is_undecided_and_refused_rejects(tmp_path):
-    pieces = onsite_pieces(tmp_path)
-    assert C.main(["onsite", *pieces, "--out", str(tmp_path / "a")]) == 2
-    assert answer(tmp_path / "a")["reason"] == "registration: verity/nci/v1 undecided: not run"
-    nci = put(tmp_path / "nci", C.REGISTRATION, {}, b"\x03", b"{}", None, verdict="reject", reason="params: x")
-    assert C.main(["onsite", *pieces[:2], "--registration", str(nci), "--out", str(tmp_path / "b")]) == 1
-    assert answer(tmp_path / "b")["reason"] == "registration: verity/nci/v1 reject: params: x"
+def test_onsite_without_its_registration_leaves_it_out_for_lean_to_refuse(tmp_path, capsys):
+    assert C.main(["onsite", *onsite_pieces(tmp_path), "--out", str(tmp_path / "a")]) == 0
+    assert "registration" not in json.loads((tmp_path / "a" / "params.json").read_bytes())
+    assert len((tmp_path / "a" / "commitment.bin").read_bytes()) == 64
+    assert "NOT_ESTABLISHED missing verity/nci/v1" in capsys.readouterr().out.splitlines()
 
 
 def test_the_check_runs_the_products_executable_on_the_files_and_blobs(tmp_path):
