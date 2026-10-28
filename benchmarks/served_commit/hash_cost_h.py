@@ -37,8 +37,7 @@ def window_mhz(cl: list[tuple[float, float]], t0: float, t1: float) -> float | N
     return statistics.median(v) if v else None
 
 
-def main() -> None:
-    run = Path(sys.argv[1])
+def analyze(run: Path) -> dict:
     res = json.loads((run / "hash_cost.json").read_text())
     smi = next((p for p in (run / "smi.csv", run.parent / "smi.csv") if p.exists()), None)   # an ARMS run samples once, in its parent
     cl = clocks(smi) if smi else []
@@ -93,7 +92,13 @@ def main() -> None:
                                    h_range=[round(ruler_b * d * 1e-3 / b["bytes"], 1) for d in b["delta_ms_range"]])
             row["beside"] = pts
             out["rows"][f"{form}:{rb}"] = row
-    text = json.dumps(out, indent=1)
+    out.update(phases=res.get("phases", "4"), form_kind=res.get("form", "split"), stride0=res.get("stride0", False),
+               gemm_priority=res.get("gemm_priority", -100))
+    return out
+
+
+def main() -> None:
+    text = json.dumps(analyze(Path(sys.argv[1])), indent=1)
     if len(sys.argv) > 2:
         Path(sys.argv[2]).write_text(text)
     print(text)
