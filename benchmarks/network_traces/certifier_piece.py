@@ -486,7 +486,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("out", type=Path)
     f.add_argument("--gate", default=SS.GATE, help="USER@HOST, the gate's; or local, the dry run's")
     f.add_argument("--key", type=Path, default=SS.KEY)
-    f.add_argument("--peer", default="vy-dc-h200")
+    f.add_argument("--peer", default=SS.SITE["front_peer"])
     f.add_argument("--prompts", type=int, default=PROMPTS)
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
     f.add_argument("--tokens", type=int, default=TOKENS)

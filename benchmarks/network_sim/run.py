@@ -1,6 +1,6 @@
 """The network night on the lab host in one command: `verity bench network_sim --out DIR`.
 
-`verity` isn't on vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. In one
+`verity` isn't on the lab host's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. In one
 process tree it runs:
 1. the accounting layer's demo, `python -m datacenter.demo` (`DIR/demo.txt`);
 2. the mock datacenter in five blocks (`mockdc.py down`, then `up --blocks 5`), whose blocks take its five strategies,

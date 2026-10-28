@@ -4,5 +4,7 @@
   "gate_key": "vy-gate-network-accounting",
   "keep": "/workspace/research/lanes/network-accounting/gate",
   "peer": "vy-dc-h200-2",
-  "auditor": "vy-nebius-cpu-2"
+  "auditor": "vy-nebius-cpu-2",
+  "challenger": "vy-challenger-1",
+  "front_peer": "vy-dc-h200"
 }

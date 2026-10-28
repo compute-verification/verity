@@ -67,8 +67,8 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 ~~~
 
 `python -m datacenter.demo` runs a night on a two-node rack, honestly and then with an adversary, and
-`python tests/test_walkthrough.py` prints the walkthrough (the Notion page "Accounting for a datacenter, from a circuit
-up") section by section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
+`python tests/test_walkthrough.py` prints the walkthrough ("Accounting for a datacenter, from a circuit up") section by
+section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
 verity_vllm's serving Program the same way.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
