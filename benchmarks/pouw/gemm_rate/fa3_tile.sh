@@ -5,7 +5,8 @@
 #   research run --on MACHINE --project verity --source . --cwd source --timeout 60m \
 #     [--env VARIANTS="base:0 m128:128"] [--env VENV=DIR] -- bash benchmarks/pouw/gemm_rate/fa3_tile.sh
 #
-# A variant is NAME:M, M the hdim-64 causal tile's kBlockM (0: the pinned 192). KFA3_CACHE (kept outside the run dir) holds
+# A variant is NAME:M[:CTAS], M the hdim-64 causal tile's kBlockM (0: the pinned 192) and CTAS the CTAs an SM of the
+# one-MMA-warpgroup kernels (fa3_tile_build.py --ctas-per-sm, default 1). KFA3_CACHE (kept outside the run dir) holds
 # vllm-flash-attn at 506341a1 with cutlass, a tree a variant with apply_fa3_tap.py applied (built with VERITY_TAP=0), and
 # its build: KFA3_CACHE/build/NAME/kfa3_NAME.so. VENV is a Python with torch (attn_knobs.sh's). $OUT gets each build's log
 # and build_info.json, and rc.txt.
@@ -42,14 +43,16 @@ grep -qv ' rc 0$' "$O/rc.txt" && { cat "$O/rc.txt" "$O/clone.log"; exit 1; }
 
 pids=()
 for v in $VARIANTS; do
-  name=${v%%:*} m=${v#*:}
+  name=${v%%:*} rest=${v#*:}
+  m=${rest%%:*} c=${rest#*:}
+  [ "$c" = "$rest" ] && c=1
   t=$C/trees/$name
   rm -rf "$t" && mkdir -p "$t/csrc"
   cp -r "$FA/hopper" "$t/hopper" && cp -r "$FA/csrc/common" "$t/csrc/common" && ln -s "$FA/csrc/cutlass" "$t/csrc/cutlass"
   python3 "$TAP/apply_fa3_tap.py" "$t/hopper" "$TAP" > "$O/apply-$name.log" 2>&1
   tm=(); [ "$m" != 0 ] && tm=(--tile-m "$m")
   ( "$VENV/bin/python" "$TREE/benchmarks/pouw/gemm_rate/fa3_tile_build.py" --tree "$t" --name "kfa3_$name" \
-      --build-dir "$C/build/$name" "${tm[@]}" --jobs "$JOBS" --cuda "$CUDA_HOME" > "$O/build-$name.log" 2>&1
+      --build-dir "$C/build/$name" "${tm[@]}" --ctas-per-sm "$c" --jobs "$JOBS" --cuda "$CUDA_HOME" > "$O/build-$name.log" 2>&1
     echo "build $name rc $?" >> "$O/rc.txt"
     cp "$C/build/$name/build_info.json" "$O/build_info-$name.json" 2> /dev/null ) &
   pids+=($!)
