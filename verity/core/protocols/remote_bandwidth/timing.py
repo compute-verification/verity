@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.ml.commitments import domains
 
 from . import audit, codec
 from .codec import BLOCK_BYTES
@@ -44,7 +45,7 @@ from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH
 MS = 1_000_000
 US = 1_000
 S = 1_000_000_000
-JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
+JITTER_DOMAIN = domains.REMOTE_BANDWIDTH_TIMING_JITTER.encode() + b"\0"
 SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8

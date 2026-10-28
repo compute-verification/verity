@@ -53,6 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import memory_challenger as mc
@@ -61,7 +62,7 @@ from . import wipe_party, wipe_store
 from .period import serve
 from .wipe_party import READS, UNCOUNTED
 
-PROTOCOL = "verity/wipe/v0"
+PROTOCOL = domains.WIPE_PROTOCOL
 """`MemoryChallenger.WipeProtocol.ID`; a test signer's wipes answer under `memory_challenger.TEST_PREFIX` + it."""
 EPS = Fraction(1, 2 ** 128)
 MAX_READS = 1 << 17

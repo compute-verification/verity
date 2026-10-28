@@ -19,6 +19,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from verity.ml.commitments import domains
+
 from .codec import Codec, encode_segments
 from .labels import salt_value, tag, to_bytes, transpose, w_labels, w_value
 from .oracle import PinvQuery, PQuery, Prog, Tweak, parallel, run
@@ -122,7 +124,7 @@ def decode_segment(params: Params, prims: Primitives, salt: bytes, s: int, block
     return b"".join(x.to_bytes(mb, "little") for x in lowers)
 
 
-P3 = Codec("p3/v1", encode_segment, decode_segment)
+P3 = Codec(domains.POUS_P3, encode_segment, decode_segment)
 """The two-layer scheme as a codec."""
 
 

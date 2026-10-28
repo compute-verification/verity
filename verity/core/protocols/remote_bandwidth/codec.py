@@ -56,9 +56,10 @@ import hashlib
 import struct
 from dataclasses import dataclass
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 
-DOMAIN = b"verity/word-codec/kv/v0\0"
+DOMAIN = domains.WORD_CODEC_KV.encode() + b"\0"
 BLOCK_BYTES = 4096
 SEED_BYTES = 32
 DIGEST_BYTES = 64
@@ -141,7 +142,7 @@ FALLBACK = Codec(P1024, 2, True)
 P2_POINT = (16448, 21065)
 """`w` and `c0` of PoUS's registered P2 point (`pous.schemes.p2.POINT`, which the suite holds this to)."""
 P2_EXPANDER = "sha512-ctr-v4"
-P2_LAYOUT = "p2-unit4/v0"
+P2_LAYOUT = domains.REMOTE_BANDWIDTH_P2_BLOCK4
 """A P2 store's label layout: a receipt's vector is a unit of four consecutive labels in store order (`p2.py`)."""
 
 

@@ -30,10 +30,11 @@ from typing import Any
 
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
 from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_sessions
+from verity.ml.commitments import domains
 
 from . import codec, pooled
 
-FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
+FORMAT = domains.REMOTE_BANDWIDTH_MONITORING_PERIOD
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose", "pr": 4413,
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = "each session's coin PRF advantage and coin commitment hiding (named assumptions) over the period's sessions"

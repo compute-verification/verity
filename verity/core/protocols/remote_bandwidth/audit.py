@@ -101,7 +101,7 @@ from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
-from verity.ml.commitments import verify_opening
+from verity.ml.commitments import domains, verify_opening
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
@@ -110,15 +110,15 @@ from . import schedule as _schedule
 from .codec import BLOCK_BYTES, P2_LAYOUT, SEED_BYTES, Codec, P2Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
-PROTOCOL_ID = "verity/remote-bandwidth/v0"
-CODEC_DOMAIN = "verity/remote-bandwidth/codec/v0"
-OPENINGS_DOMAIN = "verity/remote-bandwidth/openings/v0"
-PAYLOAD_DOMAIN = b"verity/remote-bandwidth/payload/v0\0"
-APPEND_DOMAIN = b"verity/remote-bandwidth/append/v0\0"
-APPENDS_DOMAIN = b"verity/remote-bandwidth/appends/v0\0"
-CHAINED_DOMAIN = b"verity/remote-bandwidth/chained/v0\0"
-REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
-TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
+PROTOCOL_ID = domains.REMOTE_BANDWIDTH_PROTOCOL
+CODEC_DOMAIN = domains.REMOTE_BANDWIDTH_CODEC
+OPENINGS_DOMAIN = domains.REMOTE_BANDWIDTH_OPENINGS
+PAYLOAD_DOMAIN = domains.REMOTE_BANDWIDTH_PAYLOAD.encode() + b"\0"
+APPEND_DOMAIN = domains.REMOTE_BANDWIDTH_APPEND.encode() + b"\0"
+APPENDS_DOMAIN = domains.REMOTE_BANDWIDTH_APPENDS.encode() + b"\0"
+CHAINED_DOMAIN = domains.REMOTE_BANDWIDTH_CHAINED.encode() + b"\0"
+REGISTRATION_DOMAIN = domains.REMOTE_BANDWIDTH_REGISTRATION.encode() + b"\0"
+TILE_DOMAIN = domains.REMOTE_BANDWIDTH_STUB_TILE.encode() + b"\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
 NODE_BYTES = 64
@@ -1329,7 +1329,7 @@ class Session:
                       self.params.samples)
 
 
-REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
+REGISTRY_SCHEMA = domains.REMOTE_BANDWIDTH_REGISTRY
 UNENDED = "unended"
 """A closed registration's session that was neither accepted nor rejected when it closed: counted as failed."""
 

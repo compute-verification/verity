@@ -54,14 +54,15 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
+from verity.ml.commitments import domains
 from verity.ml.randomness import frame
 
 from . import audit, coins, receipts
 from .codec import P2_LAYOUT, P2Codec
 from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
 
-PROTOCOL_ID = "verity/remote-bandwidth/p2/v0"
-REGISTRATION_DOMAIN = b"verity/remote-bandwidth/p2-registration/v0\0"
+PROTOCOL_ID = domains.REMOTE_BANDWIDTH_P2
+REGISTRATION_DOMAIN = domains.REMOTE_BANDWIDTH_P2_REGISTRATION.encode() + b"\0"
 BLOCK_BYTES = 2056
 UNIT_BLOCKS = 4
 UNIT_BYTES = UNIT_BLOCKS * BLOCK_BYTES

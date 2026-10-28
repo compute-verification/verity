@@ -108,14 +108,14 @@ import json
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 
-from verity.ml.commitments import MerkleTree
+from verity.ml.commitments import MerkleTree, domains
 
 from . import audit
 from . import schedule as _schedule
 from .codec import BLOCK_BYTES
 from .receipts import DIGEST_BYTES
 
-SCHEMA = "verity/memory-map/v1"
+SCHEMA = domains.MEMORY_MAP
 SLOT_LIMIT = 1 << 63
 
 

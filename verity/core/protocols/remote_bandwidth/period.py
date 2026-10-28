@@ -42,12 +42,13 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from verity.core.protocols.pous.period import records
+from verity.ml.commitments import domains
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
 from . import coins as C
 
-PROTOCOL = "verity/remote-bandwidth/v0"
+PROTOCOL = domains.REMOTE_BANDWIDTH_PROTOCOL
 DELTA = Fraction(1, 2 ** 40)
 """`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
 WORD_BYTES = 64
@@ -121,7 +122,7 @@ class _Stream:
     """The challenger's entropy: `coins` in SHA-512 counter mode, so a period's coins are its live secret's."""
 
     def __init__(self, coins: bytes, node: bytes) -> None:
-        self.base, self.count = hashlib.sha512(b"verity/remote-bandwidth-period/challenger/v1\0" + node + coins).digest(), 0
+        self.base, self.count = hashlib.sha512(domains.REMOTE_BANDWIDTH_PERIOD_CHALLENGER.encode() + b"\0" + node + coins).digest(), 0
 
     def __call__(self, n: int) -> bytes:
         out = b""

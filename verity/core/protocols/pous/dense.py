@@ -22,6 +22,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from verity.ml.commitments import domains
+
 from .codec import Codec
 from .labels import salt_value, tag
 from .oracle import KeyQuery, PiInvQuery, PiQuery, Prog, Query, parallel, run
@@ -128,7 +130,7 @@ class DenseChain:
 
     params: DenseParams
     pi2: Permutation
-    name: str = "chain-dense-H/v1"
+    name: str = domains.CHAIN_DENSE_H
 
     def __post_init__(self) -> None:
         if self.pi2.width != 2 * self.params.m + CAPACITY_BITS:
@@ -214,5 +216,5 @@ def decode_segment(params: DenseParams, prims: Primitives, salt: bytes, s: int, 
     return b"".join(x.to_bytes(mb, "little") for x in w)
 
 
-DENSE = Codec("dense-chain/v1", encode_segment, decode_segment)
+DENSE = Codec(domains.DENSE_CHAIN, encode_segment, decode_segment)
 """The dense scheme as a codec (a selectable alternative to the band, `band.BAND12`)."""
