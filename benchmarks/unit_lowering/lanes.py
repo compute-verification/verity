@@ -1,22 +1,21 @@
-"""`lanes.py KIND K R C PATH TREE`: an R x C leaf's lane statement (`PouwH1LaneZy_v1`, one circuit for all its lanes, each 4 rows
-by 8 columns) or its combine (`PouwH1Combine_v1`) at K, written to PATH as TREE's `benchmarks/pouw/h1_lanes/run.py` stages it (its
-`stager`, at its leaf ``RC`` set to R x C), bound to the Program a served window's verifier derives for it (`derived`), flat
-unless ``H1_TMPL`` says otherwise. Under ``HZ_STAGE=fast`` (the default) `fast_stage` is installed first, as
-`pouw_h1_circuits --lower` installs it.
+"""`lanes.py KIND K R C PATH TREE STAGING`: an R x C leaf's lane statement (`PouwH1LaneZy_v1`, one circuit for all its lanes,
+each 4 rows by 8 columns) or its combine (`PouwH1Combine_v1`) at K, written to PATH as TREE's `benchmarks/pouw/h1_lanes/run.py`
+stages it (its `stager`, at its leaf ``RC`` set to R x C), bound to the Program a served window's verifier derives for it
+(`derived`), flat unless ``H1_TMPL`` says otherwise. At STAGING ``fast`` `fast_stage` is installed first, as
+`pouw_h1_circuits --lower` installs it under ``HZ_STAGE=fast``.
 """
 from __future__ import annotations
 
 import importlib.util
-import os
 import sys
 from pathlib import Path
 
 
-def main(kind: str, k: int, r: int, c: int, path: Path, tree: Path) -> None:
+def main(kind: str, k: int, r: int, c: int, path: Path, tree: Path, staging: str) -> None:
     pouw = tree / "benchmarks" / "pouw"
     sys.path.insert(0, str(pouw / "h1_prove"))
     sys.path.insert(0, str(pouw / "hidden_zk"))
-    if os.environ.get("HZ_STAGE", "fast") == "fast":
+    if staging == "fast":
         import fast_stage
         fast_stage.install(path.parent / f".scratch-{kind}-k{k}")
     spec = importlib.util.spec_from_file_location("h1_lanes_run", pouw / "h1_lanes" / "run.py")
@@ -30,6 +29,6 @@ def main(kind: str, k: int, r: int, c: int, path: Path, tree: Path) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 7 or sys.argv[1] not in ("lane", "combine"):
+    if len(sys.argv) != 8 or sys.argv[1] not in ("lane", "combine") or sys.argv[7] not in ("fast", "library"):
         sys.exit(__doc__.split("\n")[0])
-    main(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), Path(sys.argv[5]), Path(sys.argv[6]))
+    main(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), Path(sys.argv[5]), Path(sys.argv[6]), sys.argv[7])

@@ -131,7 +131,6 @@ def main(argv: list[str] | None = None) -> int:
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
-    from run import BIND
 
     out: dict = {"k": a.k, "tile": list(a.tile), "frames": a.frames, "sites": {}}
 

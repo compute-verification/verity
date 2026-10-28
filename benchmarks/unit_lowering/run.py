@@ -33,6 +33,8 @@ from concurrent.futures import ThreadPoolExecutor
 from itertools import islice
 from pathlib import Path
 
+from verity_config.settings import SHARED
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 REFERENCE = HERE / "reference.json"
@@ -60,8 +62,8 @@ GIB = 1 << 30
 def commit(tree: Path) -> str:
     """The commit the lowering ran from: a shipped tree's `RESEARCH_SOURCE_SHA` (it has no .git), else git's HEAD, ``+dirty``
     with uncommitted changes."""
-    if tree == ROOT and os.environ.get("RESEARCH_SOURCE_SHA"):
-        return os.environ["RESEARCH_SOURCE_SHA"]
+    if tree == ROOT and SHARED.RESEARCH_SOURCE_SHA:
+        return SHARED.RESEARCH_SOURCE_SHA
     try:
         head = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
         dirty = subprocess.run(["git", "-C", str(tree), "status", "--porcelain", "--untracked-files=no"], capture_output=True,
@@ -88,7 +90,7 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
         argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
                      str(path)], tree / "integrations" / "vllm"
     else:
-        argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(r), str(c), str(path), str(tree)], tree
+        argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(r), str(c), str(path), str(tree), staging], tree
     start = time.monotonic()
     child = subprocess.Popen(argv, cwd=cwd, env=env)
     _, status, usage = os.wait4(child.pid, 0)

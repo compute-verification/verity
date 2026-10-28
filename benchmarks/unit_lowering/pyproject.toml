@@ -1,5 +1,6 @@
-# The H1 tile unit's flat lowering as a benchmark (run.py) and its memory profile (mem_profile.py). Not a package: the suite
-# holds the AND-row count to ir_lower's own layout, and the guard to reference.json at the smallest shape.
+# PoUW H1 lowerings (the tile unit, a leaf's lane and combine) as a benchmark (run.py) and the tile's memory profile
+# (mem_profile.py). Not a package: the suite holds the AND-row count to ir_lower's own layout, and the guard to reference.json
+# at the smallest shape.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -7,6 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # The lowering the guard runs, in a child: `pouw_h1_circuits --lower` (integrations/vllm, its tests package's two
 # __init__.py on the way), h1_prove's h1unit and hidden_zk's fast_stage, and `verity` (verity_flock's ir_lower and
-# class_statement under it), which the AND-row test reads too.
+# class_statement under it), which the AND-row test reads too; run.py reads the run's commit through verity_config.settings.
 inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "integrations/vllm/tests/__init__.py",
-          "integrations/vllm/tests/protocols/__init__.py", "integrations/vllm/tests/protocols/pouw_h1_circuits.py"]
+          "integrations/vllm/tests/protocols/__init__.py", "integrations/vllm/tests/protocols/pouw_h1_circuits.py",
+          "tools/config/verity_config"]
