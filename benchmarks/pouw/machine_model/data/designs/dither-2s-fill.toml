@@ -1,5 +1,5 @@
-# Dither-2S with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which SPEC's
-# conservative contract prices at 0 (note:20261017T0324Z-draft-eps1-spec §0.5), at the cost of γ.
+# Dither-2S with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which the
+# conservative contract prices at 0, at the cost of γ.
 base = "dither-2s"
 name = "dither-2s-fill"
 title = "Dither-2S, lane filler"
@@ -20,4 +20,4 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [skip.served]
 eps = 0.00165
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 34.000 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.165%: its tail 0.118%, the sums DG, S and X(0) 0.0395%, the served epilogue 0.00748%. With P·V's served output checked it is 0.128% (8B) / 0.0563% (70B) there. Skip terms: the peel's tail at apv's issue model, 1.57 mainloop MACs a strip product, its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle (note:20261017T0320Z-draft-eps1-calc Round 10)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 34.000 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.165%: its tail 0.118%, the sums DG, S and X(0) 0.0395%, the served epilogue 0.00748%. With P·V's served output checked it is 0.128% (8B) / 0.0563% (70B) there. Skip terms: the peel's tail at apv's issue model, 1.57 mainloop MACs a strip product, its sums by vfold (decision 91) and served epilogue at one an issue cycle"

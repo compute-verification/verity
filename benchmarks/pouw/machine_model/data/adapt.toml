@@ -1,26 +1,26 @@
-# ε_adapt, SPEC's Theorem D under Daniel's one-σ order (05:07Z): the prover commits the circuit and its inputs, σ is
-# drawn once, then the prover evaluates, so every operand is fixed before σ but enforced only by the sampled proofs, and
-# a cheater can steer instances in unproved regions. Its size depends on the proof block and its selection rule, the
-# sampling compiler's choice (note:20261017T0324Z-draft-eps1-spec, final 05:34Z). It is part of ε_sample, never of the
-# core ε (Daniel, 06:29Z). `eps --checking sampled` charges the design's own unit (`unit`, whole dot products since
-# decision 72), `--adapt NAME` another. The budget (S checks at δ, p) is the design's `[luck]`.
+# ε_adapt, Theorem D under the one-σ order: the prover commits the circuit and its inputs, σ is drawn once, then
+# the prover evaluates, so every operand is fixed before σ but enforced only by the sampled proofs, and a cheater can
+# steer instances in unproved regions. Its size depends on the proof block and its selection rule, the sampling
+# compiler's choice. It is part of ε_sample, never of the core ε. `eps --checking sampled` charges the design's own unit
+# (`unit`, whole dot products), `--adapt NAME` another. The budget (S checks at δ, p) is the design's
+# `[luck]`.
 
 [segment]
 eps = 0.21
 selection = "decision 19's L-step block, drawn uniformly (superseded by whole dot products, decision 72)"
-source = "the spot check before decision 72, decision 19's L-step block (a segment-type unit): writing half of one token's attention-output row wrong lands gate/up's operand on minus its own noise, so the token's gate/up words are 0 and their checks pass; fan-out ≈ 900–1,800, ε ≈ 21% (SPEC 05:34Z)"
+source = "the spot check before decision 72, decision 19's L-step block (a segment-type unit): writing half of one token's attention-output row wrong lands gate/up's operand on minus its own noise, so the token's gate/up words are 0 and their checks pass; fan-out ≈ 900–1,800, ε ≈ 21% (SPEC)"
 
 [whole]
 eps = 0.0035
-selection = "whole dot products, uniform, one session of ≤ 256 a site a round (@proofs 05:52Z)"
-source = "whole dot products alone: Fan 14 at gate/up and 17.9 at 8B's lm_head (the RMSNorm outlier trick halves the wrong words a steer needs), +0.26–0.35% over ε_luck, the sup (SPEC 05:31Z)"
+selection = "whole dot products, uniform, one session of ≤ 256 a site a round"
+source = "whole dot products alone: Fan 14 at gate/up and 17.9 at 8B's lm_head (the RMSNorm outlier trick halves the wrong words a steer needs), +0.26–0.35% over ε_luck, the sup (SPEC)"
 
 [whole-recompute]
 eps = 0.0
 selection = "whole dot products with their operands recomputed one stage back, uniform, the same sessions"
-source = "whole-dot-product proofs that recompute their operands one stage back: ε_adapt falls inside ε_luck; each proof grows by ≈ 1.7·10⁷ MACs a producer row (SPEC 05:34Z)"
+source = "whole-dot-product proofs that recompute their operands one stage back: ε_adapt falls inside ε_luck; each proof grows by ≈ 1.7·10⁷ MACs a producer row (SPEC)"
 
 [per-stage]
 eps = 0.0
 selection = "a fresh coin each stage, six round trips a layer"
-source = "per-stage coins: ε_adapt = 0 at six round trips a layer (SPEC 05:34Z)"
+source = "per-stage coins: ε_adapt = 0 at six round trips a layer (SPEC)"
