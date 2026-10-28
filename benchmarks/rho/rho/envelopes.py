@@ -49,7 +49,7 @@ from typing import Any, Protocol
 
 from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
-from rho.theorem import Blocks, Budget, Cut, ServingBlock, ServingSplit
+from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
 
 #: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
 #: Lean's `χ` as `exfil`)
@@ -441,7 +441,7 @@ class Certifier:
 class Regime(Protocol):
     name: str
 
-    def partition(self, ctx: Context) -> ServingSplit: ...
+    def partition(self, ctx: Context) -> Partition: ...
 
     def delta(self, ctx: Context) -> Delta: ...
 
@@ -456,9 +456,9 @@ class Unmonitored:
 
     name: str
 
-    def partition(self, ctx: Context) -> ServingSplit:
+    def partition(self, ctx: Context) -> Partition:
         f, loc, h = ctx.fleet, ctx.location, ctx.horizon
-        return ServingSplit((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
+        return Partition((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
 
     def delta(self, ctx: Context) -> Delta:
         return Delta({})
@@ -510,12 +510,12 @@ class Remote:
     def delta(self, ctx: Context) -> Delta:
         return Delta({name: e.delta(ctx) for name, e in self.envelopes().items()})
 
-    def partition(self, ctx: Context) -> ServingSplit:
+    def partition(self, ctx: Context) -> Partition:
         gates = ctx.location.phi * ctx.horizon.seconds
         layout = Cut("layout", (self.blocks(ctx, gates),), self.abiding(ctx, gates), self.CITES)
         block = ServingBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
                              ctx.fleet.mfu_train)
-        return ServingSplit((block,), **_dark(ctx))
+        return Partition((block,), **_dark(ctx))
 
 
 FORMS = ("certified", "links")
@@ -570,7 +570,7 @@ class Onsite(Remote):
         w = self.wipe.wipe_s
         return Budget(float(math.floor(ctx.location.phi * w)), self.state(ctx) + self.rate_in(ctx) * w)
 
-    def partition(self, ctx: Context) -> ServingSplit:
+    def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
         serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
         # The uncertified block may take the whole serving block's input: generous to the adversary, since the
@@ -581,7 +581,7 @@ class Onsite(Remote):
         count = ctx.fleet.count * ctx.horizon.seconds / self.wipe.wipe_s
         block = ServingBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)
-        return ServingSplit((block,), **_dark(ctx))
+        return Partition((block,), **_dark(ctx))
 
 
 KINDS: Mapping[str, type] = {"unmonitored": Unmonitored, "remote": Remote, "onsite": Onsite}

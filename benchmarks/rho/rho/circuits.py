@@ -1,6 +1,6 @@
 """Training steps measured as Boolean circuits, beside the FLOP model the overhead is otherwise in.
 
-A `MeasuredStep` (`data/circuits.toml`) is one optimizer step of a run (`instances.Run`) built as a Boolean circuit: the
+A `Circuit` (`data/circuits.toml`) is one optimizer step of a run (`instances.Run`) built as a Boolean circuit: the
 Definition it is, the circuits census's count of its gates, ANDs and counted products (`products_steps` of them in dot
 steps, the K steps of a split-K or batched GEMM, and `padded` of those padding), and `circuit_properties`' measure of
 those products: `s_x`, the fewest gates in a counted product's subcircuit (`s_x_unsplit` outside the dot steps), `a_out`
@@ -25,7 +25,7 @@ from rho.params import Param, Registry
 
 
 @dataclass(frozen=True)
-class MeasuredStep:
+class Circuit:
     name: str
     #: the Definition, at its size
     definition: str
@@ -49,17 +49,17 @@ class MeasuredStep:
     a_in: float
 
 
-def circuit(registry: Registry, name: str) -> MeasuredStep:
-    return registry.fields(MeasuredStep, f"circuit.{name}")
+def circuit(registry: Registry, name: str) -> Circuit:
+    return registry.fields(Circuit, f"circuit.{name}")
 
 
-def flops(registry: Registry, c: MeasuredStep) -> float:
+def flops(registry: Registry, c: Circuit) -> float:
     """The step's FLOPs in the FLOP model: its run's target (`6 · n_active · tokens`, attention's products left out)."""
     run = instances.run(registry, c.run)
     return run.target(instances.model(registry, run.model))
 
 
-def units(registry: Registry, c: MeasuredStep) -> Units:
+def units(registry: Registry, c: Circuit) -> Units:
     """The design's own conversion: the step's gates over its FLOPs, on its structure's basis."""
     return Units(c.gates / flops(registry, c), structure(registry, c.structure).basis)
 

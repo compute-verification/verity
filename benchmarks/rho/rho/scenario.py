@@ -48,7 +48,7 @@ from rho.families import Family, family
 from rho.instances import Model, Run
 from rho.params import Registry
 from rho.profile import Profile
-from rho.theorem import Budget, Cap, Overhead, ServingSplit, least, overhead
+from rho.theorem import Budget, Cap, Overhead, Partition, least, overhead
 
 YEAR = 365 * 86400.0
 
@@ -188,18 +188,18 @@ class Result:
         return rho < self.unmonitored * (1 - 1e-9)
 
 
-def _cuts(partition: ServingSplit) -> dict:
+def _cuts(partition: Partition) -> dict:
     return {(b.name, c.name): c for b in partition.serving for c in (*b.cuts, *((b.layout,) if b.layout else ()))}
 
 
-def _cut_cites(partition: ServingSplit, s: Overhead) -> tuple[str, ...]:
+def _cut_cites(partition: Partition, s: Overhead) -> tuple[str, ...]:
     """The citations of the cut that set each serving block's share (none where its capacity did)."""
     cuts = _cuts(partition)
     return tuple(dict.fromkeys(c for name, share in s.serving.items() if (name, share.cut) in cuts
                                for c in cuts[name, share.cut].cites))
 
 
-def _binding_ks(partition: ServingSplit, s: Overhead) -> tuple[float, ...]:
+def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
     """The novel bits of each block in the cuts that set the serving blocks' shares, least first: where premises must
     hold."""
     cuts = _cuts(partition)
@@ -207,7 +207,7 @@ def _binding_ks(partition: ServingSplit, s: Overhead) -> tuple[float, ...]:
                          for b in cuts[name, share.cut].blocks}))
 
 
-def _binding_k(partition: ServingSplit, s: Overhead) -> float:
+def _binding_k(partition: Partition, s: Overhead) -> float:
     """The most novel bits of any block in the cuts that set the serving blocks' shares."""
     return max(_binding_ks(partition, s), default=0.0)
 
@@ -217,7 +217,7 @@ def _uncertified(s: Overhead) -> bool:
     return s.dark > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
 
 
-def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition: ServingSplit, declared: float,
+def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition: Partition, declared: float,
            table: Mapping[str, Mapping], st: Structure) -> Estimate:
     cites = tuple(dict.fromkeys(cites + _cut_cites(partition, s)
                                 + (st.cites() if side == "bound" and _uncertified(s) else ())))
@@ -225,7 +225,7 @@ def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition:
     return Estimate(name, side, lean.weakest(cites), s, cites=cites, declared=declared, premise=premise)
 
 
-def _estimate(arg: Argument, p: Profile, ctx: Context, partition: ServingSplit, block: Budget,
+def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, block: Budget,
               table: Mapping[str, Mapping], st: Structure) -> tuple[Estimate, Cap | None]:
     try:
         cap = per_block(arg.allowance(p), ctx.units)
@@ -251,7 +251,7 @@ def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) ->
 
 
 def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
-             partition: ServingSplit, block: Budget, table: Mapping[str, Mapping], st: Structure) -> Estimate:
+             partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure) -> Estimate:
     """Every bound met at once, the lower bound: each block gets the least of the caps whose premises aren't refuted at
     its bits (a bound refuted there doesn't bound it, and is still reported alone, tagged refuted), under the union of
     the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one."""

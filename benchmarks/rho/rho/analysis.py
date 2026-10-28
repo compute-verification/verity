@@ -34,7 +34,7 @@ from rho import lean
 from rho.envelopes import Context, Delta, Regime
 from rho.params import Param, Registry
 from rho.scenario import Result, Scenario, evaluate, evaluate_named, reads
-from rho.theorem import ServingSplit
+from rho.theorem import Partition
 
 Metric = Callable[[Result], float]
 
@@ -66,7 +66,7 @@ class _Restricted:
     def name(self) -> str:
         return self.regime.name
 
-    def partition(self, ctx: Context) -> ServingSplit:
+    def partition(self, ctx: Context) -> Partition:
         p = self.regime.partition(ctx)
         top = STATUSES.index(self.status)
         return replace(p, serving=tuple(replace(b, cuts=tuple(c for c in b.cuts if _rank(c.cites) <= top))
