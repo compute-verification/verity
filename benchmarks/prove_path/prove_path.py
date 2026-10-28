@@ -1,4 +1,4 @@
-"""Prove path: a committed run and its advice through the proof service, for network accounting under arbitrary vLLM usage.
+"""Prove path: a committed run and its advice through the proof system, for network accounting under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
@@ -1700,7 +1700,7 @@ def main(argv: list[str] | None = None) -> int:
                    "opened from against the committed weights root")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
-    p.add_argument("--law", default="subset:1", help="the proof service's law of the window")
+    p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
     for name in ("window-circuit", "class-size", "window-commit"):
