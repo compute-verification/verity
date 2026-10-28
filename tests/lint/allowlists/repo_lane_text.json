@@ -6,6 +6,10 @@
       "count": 2
     },
     {
+      "file": "Security/Definitions/Accounting/Assumptions/CreditedWords.lean",
+      "count": 1
+    },
+    {
       "file": "Security/Definitions/Accounting/Bridge.lean",
       "count": 1
     },
@@ -34,7 +38,19 @@
       "count": 2
     },
     {
+      "file": "Security/Definitions/Accounting/Sheets/B200.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Definitions/Accounting/Sheets/H200.lean",
+      "count": 1
+    },
+    {
       "file": "Security/Definitions/Claims/Recursion.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Definitions/Core/Accel/H200.lean",
       "count": 1
     },
     {
@@ -50,12 +66,52 @@
       "count": 2
     },
     {
+      "file": "Security/Definitions/Pous/Claims/StreamedWipeDisk.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Definitions/Pous/Claims/StreamedWipeServer.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean",
+      "count": 7
+    },
+    {
+      "file": "Security/Definitions/Pous/Model/StreamedWipeDisk.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Definitions/Pous/Model/StreamedWipeServer.lean",
+      "count": 3
+    },
+    {
       "file": "Security/Definitions/Pouw/Guarantees/RelativeSecurity.lean",
       "count": 2
     },
     {
-      "file": "Security/Proofs/Flock/Claims/Recursion/Assumptions/PlainLeaves.lean",
+      "file": "Security/Proofs/Flock/C3/Compose/CoinsChecked.lean",
+      "count": 2
+    },
+    {
+      "file": "Security/Proofs/Flock/C3/Compose/HonestSrc.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean",
+      "count": 5
+    },
+    {
+      "file": "Security/Proofs/Flock/Claims/Recursion/Assumptions/KSFixture.lean",
       "count": 3
+    },
+    {
+      "file": "Security/Proofs/Flock/Claims/Recursion/Assumptions/PlainLeaves.lean",
+      "count": 4
     },
     {
       "file": "Security/Proofs/Flock/Claims/Recursion/BoundDeploy.lean",
@@ -64,6 +120,14 @@
     {
       "file": "Security/Proofs/Flock/Claims/Recursion/BoundRouteCols.lean",
       "count": 1
+    },
+    {
+      "file": "Security/Proofs/Flock/Claims/Recursion/HonestHalf.lean",
+      "count": 7
+    },
+    {
+      "file": "Security/Proofs/Flock/Claims/Recursion/HonestHalfTops.lean",
+      "count": 2
     },
     {
       "file": "Security/Proofs/Flock/Claims/Recursion/LastBindsDeployed.lean",
@@ -242,7 +306,83 @@
       "count": 2
     },
     {
+      "file": "Security/Proofs/Pous/StreamedWipe.lean",
+      "count": 1
+    },
+    {
+      "file": "Security/Proofs/Pous/StreamedWipe/Disk.lean",
+      "count": 3
+    },
+    {
+      "file": "Security/Proofs/Pous/StreamedWipe/Witnesses.lean",
+      "count": 6
+    },
+    {
+      "file": "benchmarks/bandwidth/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/bandwidth/run.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/bandwidth/run_chip.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/bandwidth/run_stream.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/codec_tensor/reader.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/codec_tensor/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/codec_tensor/step.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/datacenter/datacenter/examples.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/kv_filler/fill_run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/kv_filler/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/live_challenger/tests/test_auditor_load.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/live_verifier/README.md",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/live_verifier/host.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/live_verifier/pyproject.toml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/live_verifier/tests/test_host.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/nci/tiers.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/network_e2e/README.md",
       "count": 1
     },
     {
@@ -250,7 +390,43 @@
       "count": 1
     },
     {
+      "file": "benchmarks/network_e2e/encodings/run_corpus.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_e2e/traces/join.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_e2e/traces/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_sim/README.md",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/network_sim/run.py",
+      "count": 1
+    },
+    {
       "file": "benchmarks/network_traces/README.md",
+      "count": 6
+    },
+    {
+      "file": "benchmarks/network_traces/chain_record.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_traces/compile_slice_zk.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_traces/demo_chain.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_traces/demo_stub.py",
       "count": 1
     },
     {
@@ -258,7 +434,31 @@
       "count": 1
     },
     {
+      "file": "benchmarks/network_traces/n2_advised_zk.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/network_traces/n2_zk.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_traces/scan_zk.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/network_traces/served_session.py",
+      "count": 9
+    },
+    {
+      "file": "benchmarks/network_traces/wipe_gate.sh",
+      "count": 2
+    },
+    {
       "file": "benchmarks/numerical/README.md",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/numerical/python/verity_numerical/bench/cell.py",
       "count": 1
     },
     {
@@ -275,7 +475,7 @@
     },
     {
       "file": "benchmarks/numerical/python/verity_numerical/bench/latency.py",
-      "count": 4
+      "count": 5
     },
     {
       "file": "benchmarks/numerical/python/verity_numerical/bench/templates.py",
@@ -283,7 +483,11 @@
     },
     {
       "file": "benchmarks/numerical/python/verity_numerical/bench/unit_costs_menu.py",
-      "count": 3
+      "count": 4
+    },
+    {
+      "file": "benchmarks/numerical/python/verity_numerical/bench/unit_costs_prover.py",
+      "count": 7
     },
     {
       "file": "benchmarks/numerical/tests/bench/test_bench_contract.py",
@@ -302,8 +506,32 @@
       "count": 1
     },
     {
+      "file": "benchmarks/numerical/tests/bench/test_latency.py",
+      "count": 2
+    },
+    {
       "file": "benchmarks/numerical/tests/bench/test_served_templates.py",
       "count": 1
+    },
+    {
+      "file": "benchmarks/numerical/tests/checker/test_v2.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/numerical/tests/reference/exhaustive_pod.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/one_stage/README.md",
+      "count": 7
+    },
+    {
+      "file": "benchmarks/one_stage/a10.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/one_stage/a10.sh",
+      "count": 5
     },
     {
       "file": "benchmarks/one_stage/a2.py",
@@ -314,7 +542,35 @@
       "count": 2
     },
     {
+      "file": "benchmarks/one_stage/a5_coins.py",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/one_stage/a5_glm53_commit.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/one_stage/a5_glm53_cpu.sh",
+      "count": 5
+    },
+    {
       "file": "benchmarks/one_stage/a5_llama1b_h200.sh",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/one_stage/a5_tp.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/one_stage/a8.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/one_stage/a8_gpu.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/one_stage/prove_bundle.sh",
       "count": 1
     },
     {
@@ -326,12 +582,48 @@
       "count": 4
     },
     {
-      "file": "benchmarks/one_stage/served_verdicts.sh",
+      "file": "benchmarks/one_stage/served_stock.sh",
       "count": 2
     },
     {
+      "file": "benchmarks/one_stage/served_verdicts.sh",
+      "count": 7
+    },
+    {
+      "file": "benchmarks/one_stage/zk_cost.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/one_stage/zk_cost_cpu.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pous/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pous/served_piece.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pous/streamed_wipe/served_wipe.sh",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pous/tests/test_pous_served_wipe.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/accel_v31/h200.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/accel_v31/run.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/budget.py",
-      "count": 3
+      "count": 5
     },
     {
       "file": "benchmarks/pouw/clear/clear_work.py",
@@ -339,11 +631,15 @@
     },
     {
       "file": "benchmarks/pouw/commit_gpu/README.md",
-      "count": 1
+      "count": 16
     },
     {
       "file": "benchmarks/pouw/commit_gpu/commit_gpu.cuh",
       "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/commit_gpu/gpu.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/commit_gpu/reference.py",
@@ -351,7 +647,7 @@
     },
     {
       "file": "benchmarks/pouw/dc/README.md",
-      "count": 4
+      "count": 41
     },
     {
       "file": "benchmarks/pouw/dc/analyze.py",
@@ -362,16 +658,24 @@
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/dc/emp.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/dc/emp.sh",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/dc/fp8acc.cu",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/dc/probes/sm100_a2u.cu",
-      "count": 1
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/dc/probes/sm100_async.cu",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/dc/probes/sm100_tcgen05.cu",
@@ -379,38 +683,66 @@
     },
     {
       "file": "benchmarks/pouw/dc/probes/sm90_async.cu",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/dc/probes/sm90_emp.cu",
-      "count": 1
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/dc/probes/sm90_wgmma.cu",
-      "count": 1
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/dc/probes/uniform.cuh",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/dc/s8_mma.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/dc/s8_mma.sh",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/e2e_120/accounting.py",
-      "count": 3
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/edited_gemm/README.md",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/edited_gemm/aprun.sh",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/edited_gemm/cgemm.cu",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/edited_gemm/cpv.cu",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/edited_gemm/cpvrun.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/edited_gemm/crun.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/edited_gemm/cwrun.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/edited_gemm/d2sgemm.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/edited_gemm/d2srun.sh",
       "count": 1
     },
     {
@@ -427,35 +759,67 @@
     },
     {
       "file": "benchmarks/pouw/edited_gemm/egemm_fill_probe.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/edited_gemm/fattn.cu",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/edited_gemm/fattnrun.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/edited_gemm/profile.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/edited_gemm/run.sh",
-      "count": 2
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/edited_gemm/run80.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/edited_gemm/tests/test_egemm_depthr.py",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/emu8/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/emu8/run.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/eps_budget.py",
-      "count": 9
+      "count": 22
+    },
+    {
+      "file": "benchmarks/pouw/facet_break/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/facet_break/generate.py",
+      "count": 33
     },
     {
       "file": "benchmarks/pouw/facet_break/loads.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/facet_break/run.sh",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/filler/arms.py",
-      "count": 3
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/filler/capacity_of.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/filler/capfill_co_probe.sh",
@@ -467,14 +831,38 @@
     },
     {
       "file": "benchmarks/pouw/filler/capfill_fold_probe.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/filler/capfill_fstep_probe.sh",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/filler/comm/tpcomm.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/filler/dcap.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/filler/dfill.sh",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/filler/dscore.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/filler/fill.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/filler/flin.cuh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/filler/flin.sh",
       "count": 1
     },
     {
@@ -483,7 +871,7 @@
     },
     {
       "file": "benchmarks/pouw/filler/fused_arm.py",
-      "count": 2
+      "count": 9
     },
     {
       "file": "benchmarks/pouw/filler/lfill.cuh",
@@ -495,7 +883,11 @@
     },
     {
       "file": "benchmarks/pouw/filler/pfill_arm.py",
-      "count": 8
+      "count": 24
+    },
+    {
+      "file": "benchmarks/pouw/filler/pfill_phase_screen.py",
+      "count": 5
     },
     {
       "file": "benchmarks/pouw/filler/pfill_proved.py",
@@ -506,16 +898,24 @@
       "count": 2
     },
     {
+      "file": "benchmarks/pouw/filler/psched.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/filler/psched_arm.py",
+      "count": 10
+    },
+    {
       "file": "benchmarks/pouw/filler/rounds.cuh",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/filler/score.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/filler/scoring.py",
-      "count": 11
+      "count": 15
     },
     {
       "file": "benchmarks/pouw/filler/share.py",
@@ -523,7 +923,7 @@
     },
     {
       "file": "benchmarks/pouw/filler/tests/test_filler_score.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/filler/tests/test_pf_rounds.py",
@@ -531,7 +931,7 @@
     },
     {
       "file": "benchmarks/pouw/filler/tests/test_pfill_arm.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/filler/tests/test_pfill_fold.py",
@@ -551,19 +951,35 @@
     },
     {
       "file": "benchmarks/pouw/floored_gemm/fgemm.cu",
-      "count": 4
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/floored_gemm/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/floored_gemm/tb_run.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/fp4_nobits/nobits.cu",
       "count": 3
     },
     {
+      "file": "benchmarks/pouw/fp4_nobits/run.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/fp_exact/README.md",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/fp_exact/run.sh",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/fpx_design/fpx_eps.py",
-      "count": 3
+      "count": 7
     },
     {
       "file": "benchmarks/pouw/fpx_design/h1_o_free.py",
@@ -574,16 +990,20 @@
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/h1_lanes/job.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/h1_lanes/run.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/h1_prove/h1unit.py",
-      "count": 8
+      "count": 10
     },
     {
       "file": "benchmarks/pouw/h1_prove/job.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/h1_prove/live.py",
@@ -591,14 +1011,46 @@
     },
     {
       "file": "benchmarks/pouw/h1_prove/live.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/h1_prove/run.py",
       "count": 3
     },
     {
+      "file": "benchmarks/pouw/h1_prove/served.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/h1_splitk/job.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/h_falsify/hfalsify.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/harness/README.md",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/harness/ieee_pin.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/harness/jobs/harness-timed.yaml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/harness/jobs/harness.yaml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/harness/jobs/pin_target.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/hashed_gemm/run.sh",
       "count": 1
     },
     {
@@ -616,6 +1068,22 @@
     {
       "file": "benchmarks/pouw/hidden_zk/job.sh",
       "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/hidden_zk/scope.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/highutil/period.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/highutil/pipes.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/highutil/run.sh",
+      "count": 5
     },
     {
       "file": "benchmarks/pouw/int8_toggle.py",
@@ -642,12 +1110,20 @@
       "count": 2
     },
     {
-      "file": "benchmarks/pouw/lean_headline_dc.py",
+      "file": "benchmarks/pouw/issue_ceiling/run.sh",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/lean_headline.py",
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/lean_headline_dc.py",
+      "count": 19
+    },
+    {
       "file": "benchmarks/pouw/lowbit_dc/README.md",
-      "count": 2
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/lowbit_dc/analyze.py",
@@ -658,8 +1134,12 @@
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/lowbit_dc/run.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/machine_model/README.md",
-      "count": 17
+      "count": 24
     },
     {
       "file": "benchmarks/pouw/machine_model/data/adapt.toml",
@@ -671,7 +1151,7 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/cover/rows.toml",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/machine_model/data/designs/dither-2s-fill.toml",
@@ -699,7 +1179,7 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_100/designs/dither-2s-licpw-redux-ldtm0-l32.toml",
-      "count": 5
+      "count": 9
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_100/designs/dither-c-li-l32.toml",
@@ -707,15 +1187,23 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_100/model.toml",
-      "count": 3
-    },
-    {
-      "file": "benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml",
       "count": 4
     },
     {
-      "file": "benchmarks/pouw/machine_model/data/devices/sm_100/vectors/DS-100.toml",
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml",
+      "count": 11
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_100/vectors/DC-100-ri.toml",
       "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_100/vectors/DS-100.toml",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_80/honest/a100-l16.toml",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_80/model.toml",
@@ -727,6 +1215,10 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_89/model.toml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_89/table.toml",
       "count": 1
     },
     {
@@ -743,31 +1235,39 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_90/designs/dither-2s-licpw-redux-l32.toml",
-      "count": 5
+      "count": 9
     },
     {
       "file": "benchmarks/pouw/machine_model/data/devices/sm_90/designs/dither-c-li-l32.toml",
       "count": 1
     },
     {
-      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/model.toml",
-      "count": 3
-    },
-    {
-      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml",
-      "count": 4
-    },
-    {
-      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/theta.toml",
-      "count": 7
-    },
-    {
-      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/vectors/DS-90.toml",
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/honest/dc90-licpw-redux-l32.toml",
       "count": 2
     },
     {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/model.toml",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml",
+      "count": 13
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/theta.toml",
+      "count": 10
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/vectors/DC-90-ri.toml",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/devices/sm_90/vectors/DS-90.toml",
+      "count": 3
+    },
+    {
       "file": "benchmarks/pouw/machine_model/data/headline.toml",
-      "count": 5
+      "count": 8
     },
     {
       "file": "benchmarks/pouw/machine_model/data/model.toml",
@@ -775,14 +1275,38 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/table.toml",
-      "count": 2
+      "count": 5
     },
     {
       "file": "benchmarks/pouw/machine_model/data/theta.toml",
-      "count": 4
+      "count": 6
     },
     {
       "file": "benchmarks/pouw/machine_model/data/vectors/DS-120.toml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/vectors/VF3k-16.toml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/vectors/VF3l-16.toml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/vectors/VF3m-16.toml",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/vectors/VF3n-16.toml",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/vectors/VF3o-16.toml",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/data/vectors/VF3p-16.toml",
       "count": 1
     },
     {
@@ -795,18 +1319,34 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/data/vectors/VF3s-16.toml",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/machine_model/tests/test_counts.py",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/machine_model/tests/test_data.py",
+      "count": 8
+    },
+    {
       "file": "benchmarks/pouw/machine_model/tests/test_eps.py",
-      "count": 4
+      "count": 17
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/tests/test_headline.py",
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/machine_model/tests/test_redteam.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/tests/test_sheet.py",
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/tests/test_theta.py",
       "count": 1
     },
     {
@@ -815,6 +1355,10 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/verity_machine_model/capacity.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/verity_machine_model/commands/theta.py",
       "count": 1
     },
     {
@@ -827,7 +1371,11 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/verity_machine_model/redteam.py",
-      "count": 1
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/machine_model/verity_machine_model/sheet.py",
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/machine_model/verity_machine_model/strassen/__init__.py",
@@ -835,14 +1383,30 @@
     },
     {
       "file": "benchmarks/pouw/machine_model/verity_machine_model/theta.py",
-      "count": 1
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/masked_gemm/egemm.cu",
       "count": 2
     },
     {
+      "file": "benchmarks/pouw/masked_gemm/erun.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/masked_gemm/lpgemm.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/masked_gemm/lprun.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/masked_gemm/pvrun.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/masked_gemm/run.sh",
       "count": 1
     },
     {
@@ -850,27 +1414,59 @@
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/masked_gemm/srun.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/nvfp4_sm120/fp8_bench.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/nvfp4_sm120/mainloop_nvf4.cuh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/README.md",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/clock_calib.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/clock_ceiling.sh",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/opcode_probe/collective_verdict.py",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/opcode_probe/eps1.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/opcode_probe/isa_accept.sh",
-      "count": 1
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/opcode_probe/pipes_verdict.py",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/opcode_probe/power.sh",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/opcode_probe/probes/a2u.cu",
-      "count": 1
+      "count": 5
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/atom.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/probes/cl.cu",
       "count": 1
     },
     {
@@ -879,7 +1475,7 @@
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/frontier.cu",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/issue.cu",
@@ -887,7 +1483,7 @@
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/l2gather.cu",
-      "count": 2
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/lm.cu",
@@ -899,7 +1495,7 @@
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/mma_types.cu",
-      "count": 1
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/pipes.cu",
@@ -919,14 +1515,30 @@
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/uniform.cu",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/opcode_probe/probes/uniform_up.cu",
       "count": 2
     },
     {
+      "file": "benchmarks/pouw/opcode_probe/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/sm89/census.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/sm89/clock.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/opcode_probe/sm89/ji.cuh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/opcode_probe/sm89/run.sh",
       "count": 1
     },
     {
@@ -943,10 +1555,14 @@
     },
     {
       "file": "benchmarks/pouw/pearl_c_sm120/card.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/pearl_c_sm120/fake_tma.c",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_sm120/hash_decode.cuh",
       "count": 1
     },
     {
@@ -954,20 +1570,60 @@
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/pearl_c_sm120/run.py",
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_sm90/h200.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_sm90/h200_profile.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/pearl_c_vllm/h3_window.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_vllm/noise_sweep.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_vllm/served_debit.py",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/pearl_c_vllm/served_passes.sh",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_vllm/served_profile.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_vllm/served_step.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_vllm/setup.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/pearl_c_vllm/verify.sh",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/pearl_c_vllm/window.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/period_cost.py",
-      "count": 2
+      "count": 7
     },
     {
       "file": "benchmarks/pouw/pouw_hash/pouw_hash.cuh",
@@ -983,11 +1639,11 @@
     },
     {
       "file": "benchmarks/pouw/proved_ticks.py",
-      "count": 5
+      "count": 7
     },
     {
       "file": "benchmarks/pouw/pyproject.toml",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/qstar/count.py",
@@ -996,6 +1652,10 @@
     {
       "file": "benchmarks/pouw/qstar/qstar.cu",
       "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/qstar/run.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/receipts/README.md",
@@ -1011,54 +1671,154 @@
     },
     {
       "file": "benchmarks/pouw/rs_attacks/attacks.py",
-      "count": 2
+      "count": 5
     },
     {
-      "file": "benchmarks/pouw/rt2_fp/g1_check.py",
-      "count": 2
-    },
-    {
-      "file": "benchmarks/pouw/rt2_fp/mma_joint.py",
+      "file": "benchmarks/pouw/rs_attacks/prefix.sh",
       "count": 1
     },
     {
-      "file": "benchmarks/pouw/rt2_fp/mma_joint120.cu",
+      "file": "benchmarks/pouw/rt2_fp/g1_check.py",
       "count": 3
     },
     {
+      "file": "benchmarks/pouw/rt2_fp/mma_joint.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/rt2_fp/mma_joint120.cu",
+      "count": 8
+    },
+    {
+      "file": "benchmarks/pouw/rt2_fp/mma_joint_run.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/rt2_fp/shift_price.py",
-      "count": 4
+      "count": 7
     },
     {
       "file": "benchmarks/pouw/rt2_fp/slot_pack.py",
-      "count": 10
+      "count": 13
+    },
+    {
+      "file": "benchmarks/pouw/rt2_hopper/clock.sh",
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/rt2_hopper/li_window_sat.py",
-      "count": 2
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/rt2_hopper/lirate_analyze.py",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/rt2_hopper/msp90.cu",
-      "count": 2
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/rt2_hopper/roles_analyze.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt2_hopper/sat.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/rt2_hopper/sm90_clock.cu",
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/rt2_logic/clock_offsets.py",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/rt_algo/rt_algo_check.py",
-      "count": 1
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/rt_algo_r2/rt_algo_r2_check.py",
-      "count": 5
+      "count": 6
     },
     {
       "file": "benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py",
-      "count": 2
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/rt_fp/b300_proxy.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_fp/fx1_absorb.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_fp/h1_grid.py",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/rt_fp/nvf4_mixed.cu",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/rt_fp/nvf4_mixed.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/rt_fp/overcredit.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_fp/smallalpha.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/ffill_absorb.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/forms_gap.py",
+      "count": 20
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/rs.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/rs.sh",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/sm90_forms.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/sm90_rs.cu",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/uni64.cu",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/rt_hopper/uni64.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/sass_census/diff_menu.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/sass_census/dump.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/sass_census/eps_counts.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/sass_census/eps_counts.sh",
       "count": 1
     },
     {
@@ -1066,12 +1826,20 @@
       "count": 1
     },
     {
-      "file": "benchmarks/pouw/sass_census/sass_count.py",
+      "file": "benchmarks/pouw/sass_census/multimem.sh",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/sass_census/rates.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/sass_census/sass_count.py",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/sass_census/sass_semantics.py",
-      "count": 1
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/sass_census/unpriced.cu",
@@ -1083,11 +1851,27 @@
     },
     {
       "file": "benchmarks/pouw/sass_census/unpriced_fp4.cu",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/served_h1/coins.py",
-      "count": 3
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/served_h1/commit_legs.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/served_h1/credit.py",
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/served_h1/j10r_gpu.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/served_h1/j10r_time.py",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/served_h1/partials.py",
@@ -1095,14 +1879,22 @@
     },
     {
       "file": "benchmarks/pouw/served_h1/producer_gpu.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/served_h1/serve.py",
-      "count": 5
+      "count": 7
     },
     {
       "file": "benchmarks/pouw/served_h1/serve.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/served_zk/bench.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/served_zk/job.sh",
       "count": 1
     },
     {
@@ -1114,11 +1906,23 @@
       "count": 1
     },
     {
-      "file": "benchmarks/pouw/served_zk/served_commit.py",
+      "file": "benchmarks/pouw/served_zk/serve.sh",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/served_zk/served_commit.py",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/served_zk/zk_window.sh",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/stage_cost/report.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/stage_cost/run.sh",
       "count": 1
     },
     {
@@ -1134,20 +1938,40 @@
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/stage_ovl/run.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/table_time/count.py",
       "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/table_time/run.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/table_time/table_time.cu",
       "count": 3
     },
     {
+      "file": "benchmarks/pouw/tensor_kinds/run.sh",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/tensor_kinds/run_sm80.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/tensor_kinds/search.cu",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/tensor_kinds/search.sh",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/tensor_kinds/sm80.cu",
-      "count": 2
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/tensor_kinds/sm80.py",
@@ -1155,23 +1979,27 @@
     },
     {
       "file": "benchmarks/pouw/tensor_kinds/tensor_kinds.cu",
-      "count": 3
-    },
-    {
-      "file": "benchmarks/pouw/tensor_kinds/tensor_kinds.py",
-      "count": 1
-    },
-    {
-      "file": "benchmarks/pouw/tests/test_census_cover.py",
       "count": 5
     },
     {
+      "file": "benchmarks/pouw/tensor_kinds/tensor_kinds.py",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_census_cover.py",
+      "count": 12
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_dc.py",
+      "count": 2
+    },
+    {
       "file": "benchmarks/pouw/tests/test_dither_j10r_form.py",
-      "count": 3
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/tests/test_dither_zy_h1zy.py",
-      "count": 2
+      "count": 4
     },
     {
       "file": "benchmarks/pouw/tests/test_eps_budget.py",
@@ -1179,15 +2007,31 @@
     },
     {
       "file": "benchmarks/pouw/tests/test_facet_break.py",
-      "count": 1
+      "count": 3
     },
     {
       "file": "benchmarks/pouw/tests/test_gamma.py",
       "count": 1
     },
     {
+      "file": "benchmarks/pouw/tests/test_gpu_kit.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_h1_pin.py",
+      "count": 1
+    },
+    {
       "file": "benchmarks/pouw/tests/test_h1_prove.py",
       "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_lean_headline.py",
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_lean_headline_dc.py",
+      "count": 21
     },
     {
       "file": "benchmarks/pouw/tests/test_ledger.py",
@@ -1203,7 +2047,11 @@
     },
     {
       "file": "benchmarks/pouw/tests/test_pearl_c_vllm.py",
-      "count": 3
+      "count": 5
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_period_cost.py",
+      "count": 1
     },
     {
       "file": "benchmarks/pouw/tests/test_proof_sampling.py",
@@ -1215,27 +2063,31 @@
     },
     {
       "file": "benchmarks/pouw/tests/test_rt_algo.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/tests/test_rt_algo_r2.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/tests/test_rt_algo_r3.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "benchmarks/pouw/tests/test_salt_bind.py",
+      "count": 6
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_sass_census.py",
       "count": 1
     },
     {
       "file": "benchmarks/pouw/tests/test_sass_gate.py",
-      "count": 3
+      "count": 10
     },
     {
       "file": "benchmarks/pouw/tests/test_served_h1.py",
-      "count": 3
+      "count": 9
     },
     {
       "file": "benchmarks/pouw/tests/test_served_h1_partials.py",
@@ -1243,6 +2095,34 @@
     },
     {
       "file": "benchmarks/pouw/tests/test_served_zk.py",
+      "count": 6
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_tensor_kinds.py",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_tensor_kinds_sm80.py",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_theory_attn_noise.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_theory_cpw.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/tests/test_theory_fold_routes.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/theory/cpw_routes.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/pouw/theory/scope_offload.py",
       "count": 2
     },
     {
@@ -1251,10 +2131,42 @@
     },
     {
       "file": "benchmarks/pouw/window_salt/window_salt.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/ppl/README.md",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/ppl/job.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/ppl/run.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/private_circuit/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/private_circuit/pod.sh",
       "count": 1
     },
     {
       "file": "benchmarks/proof_throughput/README.md",
+      "count": 10
+    },
+    {
+      "file": "benchmarks/proof_throughput/job.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/proof_throughput/verify.sh",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/proof_throughput/verity_proof_throughput/cli.py",
       "count": 2
     },
     {
@@ -1263,11 +2175,103 @@
     },
     {
       "file": "benchmarks/prove_path/e2e_chains/README.md",
-      "count": 11
+      "count": 12
+    },
+    {
+      "file": "benchmarks/rate_squaring/ifma.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/rate_squaring/sq.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/remote_session/auditor.sh",
+      "count": 3
+    },
+    {
+      "file": "benchmarks/remote_session/auditor_line.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/remote_session/bench.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/remote_session/binding_bench.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/remote_session/challengers.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/remote_session/checkpoint.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/remote_session/gate.sh",
+      "count": 7
+    },
+    {
+      "file": "benchmarks/remote_session/gate_run.sh",
+      "count": 7
+    },
+    {
+      "file": "benchmarks/remote_session/gate_whatif.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/remote_session/run.sh",
+      "count": 13
+    },
+    {
+      "file": "benchmarks/remote_session/tests/test_challengers.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/remote_session/tests/test_gate.py",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/remote_session/tests/test_gate_whatif.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/remote_session/tunnel_rtt.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/resource_accounting/README.md",
+      "count": 4
+    },
+    {
+      "file": "benchmarks/resource_accounting/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/resource_accounting/window.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/sampling_plan/README.md",
       "count": 3
+    },
+    {
+      "file": "benchmarks/serve_bandwidth/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/serve_bandwidth/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/stacked_share/beta_job.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/stacked_share/frontier_job.sh",
+      "count": 1
     },
     {
       "file": "benchmarks/tc_probe/tc_probe.py",
@@ -1286,7 +2290,87 @@
       "count": 1
     },
     {
+      "file": "benchmarks/torch_gpu/p2_stage/README.md",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/torch_gpu/p2_stage/bw.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/torch_gpu/p2_stage/full.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/torch_gpu/p2_stage/session.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/torch_gpu/sha512_rows/beside.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/README.md",
+      "count": 7
+    },
+    {
       "file": "benchmarks/verifier_cost/flock_read.py",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/flock_read.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/flock_rows.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/flock_tmpl.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/flock_unroll.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/job.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/nci_glm.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/verifier_cost/qcall.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/registration.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/verifier_cost/struct_tmpl.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/vllm_encoded/run.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/vllm_encoded/stack.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/word_codec/encode_rate.sh",
+      "count": 1
+    },
+    {
+      "file": "benchmarks/word_codec/run.sh",
+      "count": 2
+    },
+    {
+      "file": "benchmarks/word_codec/wide_run.sh",
       "count": 1
     },
     {
@@ -1298,16 +2382,20 @@
       "count": 1
     },
     {
-      "file": "infra/cluster/README.md",
-      "count": 3
-    },
-    {
-      "file": "infra/cluster/descriptions/nebius-after-n1.toml",
+      "file": "examples/vllm/placement.toml",
       "count": 1
     },
     {
+      "file": "infra/cluster/README.md",
+      "count": 11
+    },
+    {
+      "file": "infra/cluster/descriptions/nebius-after-n1.toml",
+      "count": 4
+    },
+    {
       "file": "infra/cluster/descriptions/nebius.toml",
-      "count": 20
+      "count": 24
     },
     {
       "file": "infra/cluster/kinds/infra.toml",
@@ -1318,24 +2406,56 @@
       "count": 1
     },
     {
+      "file": "infra/cluster/src/cluster/agent.py",
+      "count": 1
+    },
+    {
+      "file": "infra/cluster/src/cluster/cli.py",
+      "count": 2
+    },
+    {
       "file": "infra/cluster/src/cluster/kinds.py",
       "count": 3
+    },
+    {
+      "file": "infra/cluster/src/cluster/kueue_shadow.py",
+      "count": 2
+    },
+    {
+      "file": "infra/cluster/src/cluster/nebius1.py",
+      "count": 1
+    },
+    {
+      "file": "infra/cluster/src/cluster/nebius2.py",
+      "count": 1
     },
     {
       "file": "infra/cluster/src/cluster/plan.py",
       "count": 1
     },
     {
-      "file": "infra/cluster/src/cluster/submit.py",
+      "file": "infra/cluster/src/cluster/policy.py",
       "count": 1
     },
     {
+      "file": "infra/cluster/src/cluster/policy_apply.py",
+      "count": 1
+    },
+    {
+      "file": "infra/cluster/src/cluster/shadow.py",
+      "count": 1
+    },
+    {
+      "file": "infra/cluster/src/cluster/submit.py",
+      "count": 6
+    },
+    {
       "file": "infra/cluster/src/cluster/usage.py",
-      "count": 2
+      "count": 5
     },
     {
       "file": "infra/cluster/tests/test_agent.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "infra/cluster/tests/test_kueue_shadow.py",
@@ -1347,11 +2467,11 @@
     },
     {
       "file": "infra/cluster/tests/test_nebius2.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "infra/cluster/tests/test_plan.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "infra/cluster/tests/test_policy.py",
@@ -1359,7 +2479,7 @@
     },
     {
       "file": "infra/cluster/tests/test_shadow.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "infra/cluster/tests/test_status.py",
@@ -1374,8 +2494,12 @@
       "count": 1
     },
     {
+      "file": "infra/cluster/vy-cluster-agent.service",
+      "count": 2
+    },
+    {
       "file": "infra/control/README.md",
-      "count": 23
+      "count": 26
     },
     {
       "file": "infra/control/agent_watch.sh",
@@ -1387,7 +2511,7 @@
     },
     {
       "file": "infra/control/cloud_watch.py",
-      "count": 3
+      "count": 4
     },
     {
       "file": "infra/control/cloud_watch.sh",
@@ -1395,7 +2519,7 @@
     },
     {
       "file": "infra/control/cloud_watch.toml",
-      "count": 7
+      "count": 8
     },
     {
       "file": "infra/control/control_disk_alert.py",
@@ -1403,11 +2527,11 @@
     },
     {
       "file": "infra/control/deadman/README.md",
-      "count": 1
+      "count": 2
     },
     {
       "file": "infra/control/deadman/api/deadman.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "infra/control/drive.sh",
@@ -1419,11 +2543,11 @@
     },
     {
       "file": "infra/control/msg.sh",
-      "count": 2
+      "count": 3
     },
     {
       "file": "infra/control/post_start.sh",
-      "count": 1
+      "count": 2
     },
     {
       "file": "infra/control/top_watch.py",
@@ -1458,8 +2582,12 @@
       "count": 2
     },
     {
+      "file": "infra/ops/tests/conftest.py",
+      "count": 3
+    },
+    {
       "file": "infra/ops/tests/test_agent_watch.py",
-      "count": 70
+      "count": 81
     },
     {
       "file": "infra/ops/tests/test_agent_watch_relay.py",
@@ -1478,6 +2606,10 @@
       "count": 2
     },
     {
+      "file": "infra/ops/tests/test_keeper.py",
+      "count": 1
+    },
+    {
       "file": "infra/ops/tests/test_top_watch.py",
       "count": 3
     },
@@ -1491,6 +2623,10 @@
     },
     {
       "file": "infra/ops/verity_ops/deploy.py",
+      "count": 1
+    },
+    {
+      "file": "infra/ops/verity_ops/keeper.py",
       "count": 1
     },
     {
@@ -1534,16 +2670,36 @@
       "count": 1
     },
     {
-      "file": "integrations/vllm/tests/regression/fixtures.toml",
+      "file": "integrations/vllm/tests/protocols/pous_gpu.sh",
+      "count": 1
+    },
+    {
+      "file": "integrations/vllm/tests/protocols/pouw_h1_rehearsal.py",
+      "count": 3
+    },
+    {
+      "file": "integrations/vllm/tests/protocols/test_rt4_h1_challenger.py",
       "count": 2
+    },
+    {
+      "file": "integrations/vllm/tests/regression/fixtures.toml",
+      "count": 3
     },
     {
       "file": "integrations/vllm/tests/tools/test_ratchet_gate.py",
       "count": 1
     },
     {
+      "file": "integrations/vllm/tools/topp_pin_gpu.sh",
+      "count": 1
+    },
+    {
       "file": "integrations/vllm/verity_vllm/program/quarantine/dense/gelu_tanh_mul_bf16.py",
       "count": 7
+    },
+    {
+      "file": "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
+      "count": 1
     },
     {
       "file": "ruff.toml",
@@ -1555,6 +2711,10 @@
     },
     {
       "file": "tests/test_seed_ports.py",
+      "count": 1
+    },
+    {
+      "file": "tests/test_uv_pin.py",
       "count": 1
     },
     {
@@ -1576,6 +2736,10 @@
     {
       "file": "tools/agent-guard/worktree_guard.py",
       "count": 8
+    },
+    {
+      "file": "tools/config/verity_config/registry/gpus.toml",
+      "count": 1
     },
     {
       "file": "tools/move/areas_map.toml",
@@ -1647,7 +2811,19 @@
     },
     {
       "file": "tools/research/README.md",
-      "count": 6
+      "count": 7
+    },
+    {
+      "file": "tools/research/console/README.md",
+      "count": 4
+    },
+    {
+      "file": "tools/research/console/util_collect.py",
+      "count": 4
+    },
+    {
+      "file": "tools/research/console/verity_console.py",
+      "count": 5
     },
     {
       "file": "tools/research/src/research/agents.py",
@@ -1659,7 +2835,7 @@
     },
     {
       "file": "tools/research/src/research/cli.py",
-      "count": 6
+      "count": 9
     },
     {
       "file": "tools/research/src/research/clone.py",
@@ -1695,15 +2871,23 @@
     },
     {
       "file": "tools/research/src/research/mem.py",
-      "count": 7
-    },
-    {
-      "file": "tools/research/src/research/monitors.py",
       "count": 12
     },
     {
+      "file": "tools/research/src/research/merge.py",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/monitors.py",
+      "count": 13
+    },
+    {
       "file": "tools/research/src/research/notes.py",
-      "count": 3
+      "count": 6
+    },
+    {
+      "file": "tools/research/src/research/notes_index.py",
+      "count": 1
     },
     {
       "file": "tools/research/src/research/notes_sync.py",
@@ -1715,6 +2899,10 @@
     },
     {
       "file": "tools/research/src/research/pods/budgets.py",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/connect.py",
       "count": 1
     },
     {
@@ -1730,24 +2918,48 @@
       "count": 1
     },
     {
+      "file": "tools/research/src/research/pods/nebius/backup.sh",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/backup_unit.sh",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/challenger/pin.sh",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/challenger/setup.sh",
+      "count": 3
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/check.py",
+      "count": 1
+    },
+    {
       "file": "tools/research/src/research/pods/nebius/common.sh",
       "count": 2
     },
     {
       "file": "tools/research/src/research/pods/nebius/deploy.toml",
-      "count": 20
+      "count": 27
     },
     {
       "file": "tools/research/src/research/pods/nebius/device-cores-sysctl.conf",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/src/research/pods/nebius/device.sh",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/device_cores.sh",
       "count": 1
     },
     {
       "file": "tools/research/src/research/pods/nebius/dispatch.py",
-      "count": 6
+      "count": 8
     },
     {
       "file": "tools/research/src/research/pods/nebius/fill_runner.py",
@@ -1762,7 +2974,23 @@
       "count": 1
     },
     {
+      "file": "tools/research/src/research/pods/nebius/gpu_stray.py",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/launch.sh",
+      "count": 1
+    },
+    {
       "file": "tools/research/src/research/pods/nebius/lean_build_setup.sh",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/lean_sandbox.py",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/lockout/README.md",
       "count": 1
     },
     {
@@ -1771,19 +2999,51 @@
     },
     {
       "file": "tools/research/src/research/pods/nebius/monitoring/alert_sink.py",
+      "count": 3
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/alerting.yaml",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/dashboards.py",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/exporter.yaml",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/grafana.yaml",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/grafana_up.sh",
       "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/host_up.sh",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/monitoring/vy_exporter.py",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/n1_lease.py",
+      "count": 3
     },
     {
       "file": "tools/research/src/research/pods/nebius/n1_replacement.sh",
-      "count": 2
+      "count": 5
     },
     {
       "file": "tools/research/src/research/pods/nebius/n2_build.sh",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/research/src/research/pods/nebius/n2_commit.sh",
-      "count": 5
+      "count": 6
     },
     {
       "file": "tools/research/src/research/pods/nebius/n2_custody.sh",
@@ -1791,7 +3051,7 @@
     },
     {
       "file": "tools/research/src/research/pods/nebius/node_ops.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/src/research/pods/nebius/node_sweep.sh",
@@ -1799,27 +3059,55 @@
     },
     {
       "file": "tools/research/src/research/pods/nebius/oom_order.py",
-      "count": 7
+      "count": 8
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/pool_n1.py",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/pous_quiet.sh",
+      "count": 1
     },
     {
       "file": "tools/research/src/research/pods/nebius/preflight_probe.py",
-      "count": 3
+      "count": 5
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/provers.sh",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/publish_pool.py",
+      "count": 2
     },
     {
       "file": "tools/research/src/research/pods/nebius/resource_probe.py",
       "count": 1
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/cluster_up.sh",
+      "file": "tools/research/src/research/pods/nebius/session-memory-cpu.conf",
       "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/backfill_attempts.sh",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/cluster_up.sh",
+      "count": 6
     },
     {
       "file": "tools/research/src/research/pods/nebius/sky/commit_pack.py",
       "count": 2
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/disk_guard.sh",
+      "file": "tools/research/src/research/pods/nebius/sky/cutover.sh",
       "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/disk_guard.sh",
+      "count": 2
     },
     {
       "file": "tools/research/src/research/pods/nebius/sky/job_tree.sh",
@@ -1827,11 +3115,23 @@
     },
     {
       "file": "tools/research/src/research/pods/nebius/sky/jobs/config-run-row.yaml",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml",
       "count": 5
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/jobs/prover-bench.yaml",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/jobs/prover-dev.yaml",
+      "count": 1
     },
     {
       "file": "tools/research/src/research/pods/nebius/sky/jobs/store-fetch.yaml",
@@ -1842,35 +3142,71 @@
       "count": 1
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/kueue.yaml",
-      "count": 3
+      "file": "tools/research/src/research/pods/nebius/sky/kueue-pouw.yaml",
+      "count": 8
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/release.py",
+      "file": "tools/research/src/research/pods/nebius/sky/kueue.yaml",
       "count": 4
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/retention_gc.service",
+      "file": "tools/research/src/research/pods/nebius/sky/quiet_hour.sh",
       "count": 1
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/store_evict.sh",
+      "file": "tools/research/src/research/pods/nebius/sky/release.py",
+      "count": 5
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/retention_gc.service",
       "count": 3
     },
     {
-      "file": "tools/research/src/research/pods/nebius/sky/submit.sh",
-      "count": 1
-    },
-    {
-      "file": "tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh",
+      "file": "tools/research/src/research/pods/nebius/sky/retention_gc.timer",
       "count": 2
     },
     {
+      "file": "tools/research/src/research/pods/nebius/sky/sky-config.yaml",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/store_evict.service",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/store_evict.sh",
+      "count": 5
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/store_evict.timer",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/store_evict_src.conf",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/store_evict_timed.conf",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/submit.sh",
+      "count": 4
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh",
+      "count": 3
+    },
+    {
       "file": "tools/research/src/research/pods/nebius/slot_only.py",
-      "count": 9
+      "count": 14
     },
     {
       "file": "tools/research/src/research/pods/nebius/ssh-memory.conf",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/units/vy-write-probe@.service",
       "count": 1
     },
     {
@@ -1879,22 +3215,34 @@
     },
     {
       "file": "tools/research/src/research/pods/nebius/user-slice-memory-cpu.conf",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/src/research/pods/nebius/user-slice-memory-node.conf",
       "count": 1
     },
     {
-      "file": "tools/research/src/research/pods/nebius/verifier/setup.sh",
+      "file": "tools/research/src/research/pods/nebius/verifier/12-vy-verifier.conf",
+      "count": 2
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/verifier/pin.sh",
       "count": 1
     },
     {
+      "file": "tools/research/src/research/pods/nebius/verifier/setup.sh",
+      "count": 8
+    },
+    {
       "file": "tools/research/src/research/pods/nebius/vm_setup.sh",
-      "count": 4
+      "count": 5
     },
     {
       "file": "tools/research/src/research/pods/nebius/vm_stop.sh",
+      "count": 1
+    },
+    {
+      "file": "tools/research/src/research/pods/nebius/wake.py",
       "count": 1
     },
     {
@@ -1907,11 +3255,11 @@
     },
     {
       "file": "tools/research/src/research/pods/runpod.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/research/src/research/pods/sh/gpu_lease.sh",
-      "count": 3
+      "count": 5
     },
     {
       "file": "tools/research/src/research/pods/sh/lease.sh",
@@ -1923,7 +3271,7 @@
     },
     {
       "file": "tools/research/src/research/queue.py",
-      "count": 5
+      "count": 7
     },
     {
       "file": "tools/research/src/research/queue_stats.py",
@@ -1931,7 +3279,7 @@
     },
     {
       "file": "tools/research/src/research/remote.py",
-      "count": 13
+      "count": 16
     },
     {
       "file": "tools/research/src/research/result.py",
@@ -1943,7 +3291,7 @@
     },
     {
       "file": "tools/research/src/research/runs.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/src/research/slack.py",
@@ -1959,11 +3307,11 @@
     },
     {
       "file": "tools/research/src/research/store/README.md",
-      "count": 1
+      "count": 5
     },
     {
       "file": "tools/research/src/research/store/attempt.py",
-      "count": 3
+      "count": 4
     },
     {
       "file": "tools/research/src/research/store/cli.py",
@@ -1979,7 +3327,7 @@
     },
     {
       "file": "tools/research/src/research/store/custody.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/src/research/store/evict.py",
@@ -1988,6 +3336,10 @@
     {
       "file": "tools/research/src/research/store/gc.py",
       "count": 2
+    },
+    {
+      "file": "tools/research/src/research/store/ids.py",
+      "count": 1
     },
     {
       "file": "tools/research/src/research/store/index.py",
@@ -2003,7 +3355,7 @@
     },
     {
       "file": "tools/research/src/research/suite_size.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/research/src/research/telemetry/__init__.py",
@@ -2038,6 +3390,10 @@
       "count": 4
     },
     {
+      "file": "tools/research/tests/conftest.py",
+      "count": 3
+    },
+    {
       "file": "tools/research/tests/test_agents.py",
       "count": 1
     },
@@ -2047,7 +3403,7 @@
     },
     {
       "file": "tools/research/tests/test_bucket_index.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/tests/test_budgets_guard.py",
@@ -2055,7 +3411,7 @@
     },
     {
       "file": "tools/research/tests/test_cli.py",
-      "count": 6
+      "count": 8
     },
     {
       "file": "tools/research/tests/test_console_usage.py",
@@ -2067,7 +3423,7 @@
     },
     {
       "file": "tools/research/tests/test_dirty_capture.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/tests/test_disk_floor.py",
@@ -2075,7 +3431,7 @@
     },
     {
       "file": "tools/research/tests/test_disk_hold.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/tests/test_doctor.py",
@@ -2090,8 +3446,16 @@
       "count": 6
     },
     {
+      "file": "tools/research/tests/test_evict_src_local.py",
+      "count": 3
+    },
+    {
+      "file": "tools/research/tests/test_fixture_fetch.py",
+      "count": 1
+    },
+    {
       "file": "tools/research/tests/test_fleet.py",
-      "count": 4
+      "count": 6
     },
     {
       "file": "tools/research/tests/test_guard_fail_closed.py",
@@ -2099,7 +3463,7 @@
     },
     {
       "file": "tools/research/tests/test_holds.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/tests/test_jobs_dispatch.py",
@@ -2115,15 +3479,19 @@
     },
     {
       "file": "tools/research/tests/test_mem_admission.py",
-      "count": 7
+      "count": 12
+    },
+    {
+      "file": "tools/research/tests/test_merge_sweep.py",
+      "count": 1
     },
     {
       "file": "tools/research/tests/test_monitors.py",
-      "count": 11
+      "count": 12
     },
     {
       "file": "tools/research/tests/test_nebius.py",
-      "count": 42
+      "count": 45
     },
     {
       "file": "tools/research/tests/test_nebius_commit_pack.py",
@@ -2162,12 +3530,16 @@
       "count": 1
     },
     {
+      "file": "tools/research/tests/test_nebius_monitoring.py",
+      "count": 1
+    },
+    {
       "file": "tools/research/tests/test_nebius_n2_spill.py",
       "count": 1
     },
     {
       "file": "tools/research/tests/test_nebius_preflight_probe.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "tools/research/tests/test_nebius_release.py",
@@ -2179,7 +3551,7 @@
     },
     {
       "file": "tools/research/tests/test_nebius_sky.py",
-      "count": 12
+      "count": 15
     },
     {
       "file": "tools/research/tests/test_nebius_write_probe.py",
@@ -2195,7 +3567,7 @@
     },
     {
       "file": "tools/research/tests/test_oom_order.py",
-      "count": 6
+      "count": 7
     },
     {
       "file": "tools/research/tests/test_pod_guard_daemon.py",
@@ -2207,11 +3579,15 @@
     },
     {
       "file": "tools/research/tests/test_pods_registry.py",
-      "count": 4
+      "count": 6
+    },
+    {
+      "file": "tools/research/tests/test_queue.py",
+      "count": 1
     },
     {
       "file": "tools/research/tests/test_queue_drive.py",
-      "count": 34
+      "count": 36
     },
     {
       "file": "tools/research/tests/test_queue_open.py",
@@ -2231,11 +3607,11 @@
     },
     {
       "file": "tools/research/tests/test_remote_local.py",
-      "count": 7
+      "count": 11
     },
     {
       "file": "tools/research/tests/test_remote_path.py",
-      "count": 1
+      "count": 3
     },
     {
       "file": "tools/research/tests/test_remote_s3_deadline.py",
@@ -2251,15 +3627,15 @@
     },
     {
       "file": "tools/research/tests/test_retention.py",
-      "count": 7
+      "count": 8
     },
     {
       "file": "tools/research/tests/test_run_custody.py",
-      "count": 6
+      "count": 9
     },
     {
       "file": "tools/research/tests/test_run_cwd_clone.py",
-      "count": 1
+      "count": 3
     },
     {
       "file": "tools/research/tests/test_run_wait.py",
@@ -2271,7 +3647,7 @@
     },
     {
       "file": "tools/research/tests/test_slot_only.py",
-      "count": 9
+      "count": 11
     },
     {
       "file": "tools/research/tests/test_spec_alert.py",
@@ -2283,19 +3659,19 @@
     },
     {
       "file": "tools/research/tests/test_store_gc.py",
-      "count": 5
+      "count": 6
     },
     {
       "file": "tools/research/tests/test_store_honing.py",
-      "count": 4
+      "count": 5
     },
     {
       "file": "tools/research/tests/test_store_prov.py",
-      "count": 1
+      "count": 4
     },
     {
       "file": "tools/research/tests/test_store_vllm_tools.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/research/tests/test_store_vocab.py",
@@ -2303,7 +3679,7 @@
     },
     {
       "file": "tools/research/tests/test_telemetry.py",
-      "count": 14
+      "count": 17
     },
     {
       "file": "tools/research/tests/test_timefmt.py",
@@ -2314,8 +3690,12 @@
       "count": 1
     },
     {
+      "file": "tools/verity/check/README.md",
+      "count": 1
+    },
+    {
       "file": "tools/verity/check/check.py",
-      "count": 5
+      "count": 12
     },
     {
       "file": "tools/verity/check/drive.toml",
@@ -2338,12 +3718,16 @@
       "count": 1
     },
     {
+      "file": "tools/verity/check/plan.py",
+      "count": 1
+    },
+    {
       "file": "tools/verity/check/pod_setup.sh",
-      "count": 3
+      "count": 4
     },
     {
       "file": "tools/verity/check/post_train.py",
-      "count": 4
+      "count": 6
     },
     {
       "file": "tools/verity/check/preflight.py",
@@ -2355,7 +3739,7 @@
     },
     {
       "file": "tools/verity/check/slot.py",
-      "count": 17
+      "count": 20
     },
     {
       "file": "tools/verity/check/spans.py",
@@ -2363,15 +3747,19 @@
     },
     {
       "file": "tools/verity/check/suites.py",
-      "count": 15
+      "count": 21
     },
     {
       "file": "tools/verity/check/tests/conftest.py",
       "count": 1
     },
     {
+      "file": "tools/verity/check/tests/test_after_lean.py",
+      "count": 1
+    },
+    {
       "file": "tools/verity/check/tests/test_check.py",
-      "count": 15
+      "count": 26
     },
     {
       "file": "tools/verity/check/tests/test_env.py",
@@ -2379,15 +3767,15 @@
     },
     {
       "file": "tools/verity/check/tests/test_guard.py",
-      "count": 4
+      "count": 5
     },
     {
       "file": "tools/verity/check/tests/test_lean_audit.py",
-      "count": 9
+      "count": 13
     },
     {
       "file": "tools/verity/check/tests/test_lean_records.py",
-      "count": 1
+      "count": 3
     },
     {
       "file": "tools/verity/check/tests/test_lean_slot.py",
@@ -2407,7 +3795,11 @@
     },
     {
       "file": "tools/verity/check/tests/test_post_train.py",
-      "count": 4
+      "count": 5
+    },
+    {
+      "file": "tools/verity/check/tests/test_preflight.py",
+      "count": 1
     },
     {
       "file": "tools/verity/check/tests/test_shards.py",
@@ -2415,7 +3807,7 @@
     },
     {
       "file": "tools/verity/check/tests/test_slot.py",
-      "count": 21
+      "count": 25
     },
     {
       "file": "tools/verity/check/tests/test_spans.py",
@@ -2423,7 +3815,7 @@
     },
     {
       "file": "tools/verity/check/tests/test_suites.py",
-      "count": 14
+      "count": 22
     },
     {
       "file": "tools/verity/check/tests/test_verdicts.py",
@@ -2435,7 +3827,7 @@
     },
     {
       "file": "tools/verity/check/verdicts.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/verity/cli/verity_cli/run.py",
@@ -2443,7 +3835,7 @@
     },
     {
       "file": "tools/verity/lean/README.md",
-      "count": 11
+      "count": 12
     },
     {
       "file": "tools/verity/lean/cache.py",
@@ -2451,15 +3843,15 @@
     },
     {
       "file": "tools/verity/lean/check.py",
-      "count": 9
+      "count": 11
     },
     {
       "file": "tools/verity/lean/lean_audit.py",
-      "count": 6
+      "count": 9
     },
     {
       "file": "tools/verity/lean/lean_changed.py",
-      "count": 4
+      "count": 5
     },
     {
       "file": "tools/verity/lean/merge.py",
@@ -2471,11 +3863,11 @@
     },
     {
       "file": "tools/verity/lean/tests/test_audit.py",
-      "count": 25
+      "count": 29
     },
     {
       "file": "tools/verity/lean/tests/test_cache.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "tools/verity/lean/tests/test_lean_changed.py",
@@ -2499,7 +3891,11 @@
     },
     {
       "file": "verity/core/claims/__init__.py",
-      "count": 5
+      "count": 11
+    },
+    {
+      "file": "verity/core/claims/tests/test_claims_registry.py",
+      "count": 3
     },
     {
       "file": "verity/core/deploy/__init__.py",
@@ -2567,7 +3963,7 @@
     },
     {
       "file": "verity/core/protocols/certifier/README.md",
-      "count": 5
+      "count": 11
     },
     {
       "file": "verity/core/protocols/certifier/blocks.py",
@@ -2602,15 +3998,35 @@
       "count": 2
     },
     {
+      "file": "verity/core/protocols/pous/PROTOCOL.md",
+      "count": 4
+    },
+    {
       "file": "verity/core/protocols/pous/lean/README.md",
       "count": 2
     },
     {
-      "file": "verity/core/protocols/pous/schemes/p2.py",
+      "file": "verity/core/protocols/pous/period.py",
       "count": 2
     },
     {
+      "file": "verity/core/protocols/pous/schemes/p2.py",
+      "count": 3
+    },
+    {
       "file": "verity/core/protocols/pous/tests/test_pous_memory_challenger.py",
+      "count": 2
+    },
+    {
+      "file": "verity/core/protocols/pous/tests/test_pous_protocol.py",
+      "count": 1
+    },
+    {
+      "file": "verity/core/protocols/pous/tests/test_pous_streamed_wipe.py",
+      "count": 2
+    },
+    {
+      "file": "verity/core/protocols/pous/tests/test_pous_wipe_period.py",
       "count": 1
     },
     {
@@ -2619,11 +4035,11 @@
     },
     {
       "file": "verity/core/protocols/pouw/PROTOCOL.md",
-      "count": 45
+      "count": 47
     },
     {
       "file": "verity/core/protocols/pouw/circuit/__init__.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "verity/core/protocols/pouw/circuit/cap.py",
@@ -2631,11 +4047,15 @@
     },
     {
       "file": "verity/core/protocols/pouw/circuit/dither.py",
-      "count": 7
+      "count": 8
     },
     {
       "file": "verity/core/protocols/pouw/circuit/eps1_reference.py",
       "count": 4
+    },
+    {
+      "file": "verity/core/protocols/pouw/circuit/h1device.py",
+      "count": 2
     },
     {
       "file": "verity/core/protocols/pouw/circuit/h1tile.py",
@@ -2643,11 +4063,11 @@
     },
     {
       "file": "verity/core/protocols/pouw/circuit/h1window.py",
-      "count": 2
+      "count": 3
     },
     {
       "file": "verity/core/protocols/pouw/circuit/h1zy.py",
-      "count": 9
+      "count": 12
     },
     {
       "file": "verity/core/protocols/pouw/circuit/pc4.py",
@@ -2667,15 +4087,15 @@
     },
     {
       "file": "verity/core/protocols/pouw/core_check.py",
-      "count": 3
+      "count": 4
     },
     {
       "file": "verity/core/protocols/pouw/credit.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "verity/core/protocols/pouw/dither/PROTOCOL.md",
-      "count": 49
+      "count": 60
     },
     {
       "file": "verity/core/protocols/pouw/lean/check/PouwCheck/Check.lean",
@@ -2683,7 +4103,11 @@
     },
     {
       "file": "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean",
-      "count": 5
+      "count": 6
+    },
+    {
+      "file": "verity/core/protocols/pouw/lean/check/tests/pouw_credit_cases.py",
+      "count": 3
     },
     {
       "file": "verity/core/protocols/pouw/lean/check/tests/pouw_pass_cases.py",
@@ -2706,16 +4130,32 @@
       "count": 2
     },
     {
+      "file": "verity/core/protocols/pouw/lean/window/tests/test_difftest.py",
+      "count": 2
+    },
+    {
       "file": "verity/core/protocols/pouw/lean/window/tests/test_lanes.py",
       "count": 3
     },
     {
       "file": "verity/core/protocols/pouw/operands.py",
-      "count": 1
+      "count": 2
+    },
+    {
+      "file": "verity/core/protocols/pouw/schemes/pearl_c4.py",
+      "count": 2
+    },
+    {
+      "file": "verity/core/protocols/pouw/schemes/pearl_c_device.py",
+      "count": 3
     },
     {
       "file": "verity/core/protocols/pouw/serving.py",
       "count": 2
+    },
+    {
+      "file": "verity/core/protocols/pouw/tests/test_circuit_admit.py",
+      "count": 3
     },
     {
       "file": "verity/core/protocols/pouw/tests/test_circuit_compile.py",
@@ -2758,12 +4198,32 @@
       "count": 1
     },
     {
+      "file": "verity/core/protocols/pouw/tests/test_leaf_lanes.py",
+      "count": 1
+    },
+    {
       "file": "verity/core/protocols/pouw/tests/test_pouw_core_check.py",
-      "count": 2
+      "count": 4
+    },
+    {
+      "file": "verity/core/protocols/pouw/tests/test_pouw_credit.py",
+      "count": 4
+    },
+    {
+      "file": "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py",
+      "count": 1
     },
     {
       "file": "verity/core/protocols/pouw/tests/test_pouw_ncp.py",
       "count": 1
+    },
+    {
+      "file": "verity/core/protocols/pouw/tests/test_pouw_pearl_c.py",
+      "count": 2
+    },
+    {
+      "file": "verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py",
+      "count": 2
     },
     {
       "file": "verity/core/protocols/pouw/tests/test_pouw_pearl_c_period.py",
@@ -2774,8 +4234,12 @@
       "count": 1
     },
     {
+      "file": "verity/core/protocols/pouw/weights.py",
+      "count": 1
+    },
+    {
       "file": "verity/core/protocols/remote/README.md",
-      "count": 2
+      "count": 3
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/README.md",
@@ -2784,6 +4248,10 @@
     {
       "file": "verity/core/protocols/remote_bandwidth/lean/tests/replay.py",
       "count": 3
+    },
+    {
+      "file": "verity/core/protocols/remote_bandwidth/lean/tests/test_replay.py",
+      "count": 1
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/ledger.py",
@@ -2798,12 +4266,16 @@
       "count": 1
     },
     {
+      "file": "verity/core/protocols/remote_bandwidth/tests/test_deferred_map.py",
+      "count": 1
+    },
+    {
       "file": "verity/core/protocols/remote_bandwidth/tests/test_gate_ranges.py",
       "count": 2
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/tests/test_monitoring.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/tests/test_redteam_impl.py",
@@ -2811,7 +4283,7 @@
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth.py",
-      "count": 2
+      "count": 4
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth_vectors.py",
@@ -2819,19 +4291,31 @@
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/tests/test_remote_coins.py",
-      "count": 2
+      "count": 5
     },
     {
       "file": "verity/core/protocols/remote_bandwidth/timing.py",
-      "count": 11
+      "count": 21
     },
     {
       "file": "verity/core/protocols/sampled_proofs/challenger.py",
-      "count": 1
+      "count": 2
+    },
+    {
+      "file": "verity/core/protocols/sampled_proofs/remote.py",
+      "count": 3
+    },
+    {
+      "file": "verity/core/protocols/sampled_proofs/tests/test_remote.py",
+      "count": 6
     },
     {
       "file": "verity/core/protocols/tests/test_profile.py",
       "count": 2
+    },
+    {
+      "file": "verity/core/service/firewall/tests/test_firewall_release_agreement.py",
+      "count": 1
     },
     {
       "file": "verity/core/service/flock/Flock/Circuit.lean",
@@ -2884,6 +4368,10 @@
     {
       "file": "verity/core/service/flock/Flock/TemplateQuery.lean",
       "count": 2
+    },
+    {
+      "file": "verity/core/service/flock/Flock/Test/InnerStreams.lean",
+      "count": 1
     },
     {
       "file": "verity/core/service/flock/Flock/Tmpl.lean",
@@ -2974,6 +4462,10 @@
       "count": 1
     },
     {
+      "file": "verity/core/service/vstar/tests/test_vstar_in_difftest.py",
+      "count": 1
+    },
+    {
       "file": "verity/core/wire/__init__.py",
       "count": 1
     },
@@ -3042,6 +4534,10 @@
       "count": 7
     },
     {
+      "file": "verity/ml/definitions/registry/tp_allreduce.py",
+      "count": 2
+    },
+    {
       "file": "verity/ml/flock/cuda/ligerito_zk.cuh",
       "count": 1
     },
@@ -3055,7 +4551,7 @@
     },
     {
       "file": "verity/ml/flock/live/PROTOCOL.md",
-      "count": 6
+      "count": 10
     },
     {
       "file": "verity/ml/flock/live/src/bin/flock-circuit.rs",
@@ -3134,11 +4630,23 @@
       "count": 1
     },
     {
-      "file": "verity/ml/flock/pod/85-rec-reprice.sh",
+      "file": "verity/ml/flock/pod/71-gemm-slowdown.sh",
       "count": 1
     },
     {
+      "file": "verity/ml/flock/pod/74-gemm-hill.sh",
+      "count": 5
+    },
+    {
+      "file": "verity/ml/flock/pod/85-rec-reprice.sh",
+      "count": 4
+    },
+    {
       "file": "verity/ml/flock/pod/87-rec-c3-open.sh",
+      "count": 1
+    },
+    {
+      "file": "verity/ml/flock/pod/88-rec-c3-inner.sh",
       "count": 1
     },
     {
@@ -3159,7 +4667,7 @@
     },
     {
       "file": "verity/ml/flock/pyproject.toml",
-      "count": 1
+      "count": 2
     },
     {
       "file": "verity/ml/flock/python/verity_flock/circuit.py",
@@ -3195,7 +4703,7 @@
     },
     {
       "file": "verity/ml/flock/python/verity_flock/rec_residuals.py",
-      "count": 1
+      "count": 3
     },
     {
       "file": "verity/ml/flock/python/verity_flock/rec_shape.py",
@@ -3207,7 +4715,7 @@
     },
     {
       "file": "verity/ml/flock/python/verity_flock/rec_vstage.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "verity/ml/flock/python/verity_flock/rec_vstar.py",
@@ -3250,6 +4758,10 @@
       "count": 1
     },
     {
+      "file": "verity/ml/flock/tests/test_coin_schedule.py",
+      "count": 1
+    },
+    {
       "file": "verity/ml/flock/tests/test_derive.py",
       "count": 4
     },
@@ -3270,7 +4782,19 @@
       "count": 1
     },
     {
+      "file": "verity/ml/flock/tests/test_lean_forged_proofs.py",
+      "count": 1
+    },
+    {
+      "file": "verity/ml/flock/tests/test_lean_honest_plain.py",
+      "count": 1
+    },
+    {
       "file": "verity/ml/flock/tests/test_lean_live_os.py",
+      "count": 2
+    },
+    {
+      "file": "verity/ml/flock/tests/test_lean_plain_hidden.py",
       "count": 1
     },
     {
@@ -3279,11 +4803,11 @@
     },
     {
       "file": "verity/ml/flock/tests/test_lean_rec_coins.py",
-      "count": 1
+      "count": 4
     },
     {
       "file": "verity/ml/flock/tests/test_lean_rec_inner_streams.py",
-      "count": 1
+      "count": 2
     },
     {
       "file": "verity/ml/flock/tests/test_lean_session.py",
@@ -3307,7 +4831,11 @@
     },
     {
       "file": "verity/ml/flock/tests/test_lean_witness.py",
-      "count": 7
+      "count": 13
+    },
+    {
+      "file": "verity/ml/flock/tests/test_lean_zk.py",
+      "count": 1
     },
     {
       "file": "verity/ml/flock/tests/test_pinned_outputs.py",
@@ -3324,6 +4852,10 @@
     {
       "file": "verity/ml/flock/tests/test_rec_claim.py",
       "count": 2
+    },
+    {
+      "file": "verity/ml/flock/tests/test_rec_residuals.py",
+      "count": 4
     },
     {
       "file": "verity/ml/flock/tests/test_rec_sparse.py",
@@ -3359,7 +4891,7 @@
     },
     {
       "file": "verity/ml/flock/verifier/README.md",
-      "count": 5
+      "count": 9
     },
     {
       "file": "verity/ml/flock/verifier/cut_check_agree.py",
@@ -3368,6 +4900,14 @@
     {
       "file": "verity/ml/flock/verifier/firewall_agree.py",
       "count": 6
+    },
+    {
+      "file": "verity/ml/flock/verifier/firewall_controls.sh",
+      "count": 1
+    },
+    {
+      "file": "verity/ml/flock/verifier/firewall_finish_agree.sh",
+      "count": 1
     },
     {
       "file": "verity/ml/flock/verifier/layout_agree.py",
