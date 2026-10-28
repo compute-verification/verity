@@ -67,7 +67,6 @@ import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
 import Proofs.Pouw.NCP.ChainProofs
-import Proofs.Pouw.NCP.ExtraIdentityProofs
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.NCP.RelationProofs

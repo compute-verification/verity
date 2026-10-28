@@ -622,11 +622,7 @@ docstring states every parameter.
   sampling half and the policy's allowances (5% skippable summands, 1/64 dead entries per side, the unchecked peel).
 - **Its differences from milestone 1's D1**, the hardened KW transcript: see the module docstring.
 
-- **Vectors.** `ncp-v1`'s checked values equal, bit for bit, Lean's own `#eval` of
-  `mmWU 128 k A B E₁ F₁ R (blockEnd 16 (3k) t)` at every checkpoint, and the retired unbiased form equals Lean's
-  `mmW (blockEnd 16 (3k) t) (stackX k A E₁ R) (stackY k B R F₁)`, for the word-granular P, the shift by 24 and a random
-  signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
-  sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
+- **Vectors.** The scheme's pinned vectors are `tests/vectors/ncp.json`.
 
 ## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity/core/protocols/pouw/circuit`)
 

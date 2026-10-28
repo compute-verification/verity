@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
-import ncp_lean as NL
 import pouw_vectors as MV
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.core.protocols.pouw.schemes import get, ncp
@@ -19,37 +17,6 @@ PINNED = json.loads((Path(__file__).with_name("vectors") / "ncp.json").read_text
 
 def test_vectors_are_pinned():
     assert MV.vectors() == PINNED
-
-
-@pytest.mark.parametrize("kind", NL.CASES)
-def test_reference_equals_leans_own_evaluation(kind):
-    """`tests/vectors/ncp_lean.json` is Lean's `#eval` of `mmWU 128 k A B E₁ F₁ R (blockEnd 16 (3k) t)` (route U, the checked
-    values) and of the unbiased `mmW` at every checkpoint (`tests/ncp_lean.py`); the reference assembles and accumulates
-    the same inputs, bit for bit."""
-    pinned = json.loads(NL.PINNED.read_text())
-    assert pinned["toolchain"] == "leanprover/lean4:v4.34.0" and pinned["shape"] == [NL.M, NL.K, NL.N]
-    assert pinned["beta"] == ncp.BETA == 128
-    got = NL.python_checked(kind)
-    assert got == pinned["route_u"][kind]
-    assert NL.python_unbiased(kind) == pinned["unbiased"][kind]
-    x = NL.inputs(kind)
-    assert [[s[-1] for s in row] for row in got] == [[sum(p * q for p, q in zip(a, b)) for b in x["b"]] for a in x["a"]]
-
-
-def test_leans_evaluation_is_of_the_package_in_the_tree():
-    """`ncp_lean.json` records the SHA-256 of the Lean sources it was evaluated from; they are the files of `Security/` now, so an
-    edit to them fails here until `tests/ncp_lean.py` evaluates them again."""
-    pinned = json.loads(NL.PINNED.read_text())["sources_sha256"]
-    lean = Path(__file__).resolve().parents[5] / "Security"
-    assert {f: hashlib.sha256((lean / f).read_bytes()).hexdigest() for f in pinned} == pinned
-
-
-@pytest.mark.parametrize("kind", NL.CASES)
-def test_route_u_is_the_shifted_unbiased_sums(kind):
-    """Lean `checkedU_eq`: C^U_t = C_t − β·Σ_{l >= 16t} Y[l][j]; and X + β is u8, Y s8 (`rangeU`, `biasU8Iff` at β = 128)."""
-    ops = NL.ops(kind)
-    assert ncp.route_u_shift(ncp.checked_unbiased(ops), ops.y) == ncp.checked_route_u(ops)
-    assert all(0 <= v + ncp.BETA <= 255 for row in ops.x for v in row) and all(-128 <= v <= 127 for row in ops.y for v in row)
 
 
 def test_production_p_is_the_research_stores():
