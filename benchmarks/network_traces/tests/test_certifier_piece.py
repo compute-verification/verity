@@ -7,15 +7,20 @@ link-window: the period mirror's certifier/v0 accept (`period_case`) then goes t
 the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
 period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
-which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
+which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness. The front's
+warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
+asked, and the pick passes over those windows for the group's."""
 from __future__ import annotations
 
+import argparse
+import http.server
 import importlib.util
 import json
 import os
 import shlex
 import sys
 import tarfile
+import threading
 from pathlib import Path
 
 import jsonschema
@@ -261,3 +266,112 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+
+
+def _serve_windows(d: Path, windows: list[list[str]]) -> Path:
+    """A serve dir as serve-openai leaves it: window k sealed and passed, serving one request a user of ``windows[k]``."""
+    d.mkdir(parents=True)
+    reqs = [{"engine_id": f"cmpl-{k}{u}-0", "user": u, "windows": [k], "check": {"passed": True}}
+            for k, us in enumerate(windows) for u in us]
+    _write(d / "requests.jsonl", reqs)
+    _write(d / "seals.jsonl", [{"window": k, "requests": [r["engine_id"] for r in reqs if r["windows"] == [k]]}
+                               for k in range(len(windows))])
+    _write(d / "windows.jsonl", [{"window": k, "passed": True, "commit": {"steps": 4}} for k in range(len(windows))])
+    return d
+
+
+def test_the_pick_passes_over_the_warm_ups_windows_for_the_groups(tmp_path):
+    """Each warm-up is a window of one request, before the group's: the pick (the most requests, then the earliest)
+    takes the group's window, or its largest part when the engine split it, and a smaller window after it (the load's)
+    loses too; only a group split down to single requests ties the warm-ups, whose earlier window then wins."""
+    warm, group, load = [["warmup-t-0"], ["warmup-t-1"]], [f"user-{j}" for j in range(4)], ["varied.00000"]
+    for name, layout, want in (("whole", [*warm, group, load], 2), ("3+1", [*warm, group[:3], group[3:], load], 2),
+                               ("2+2", [*warm, group[:2], group[2:], load], 2),
+                               ("1+1+1+1", [*warm, *([u] for u in group), load], 0)):
+        got = S.pick(_serve_windows(tmp_path / name, layout), 4)
+        assert (got["window"], got["users"]) == (want, sorted(layout[want])), name
+
+
+class _Endpoint(http.server.BaseHTTPRequestHandler):
+    """serve-openai's completions as the warm-up sees them: each answered whole, and recorded in the serve dir's
+    request_users.jsonl first (serve-openai records a request there once its window has closed) unless ``record`` is
+    off; each request noted with whether the gate had been asked by then."""
+
+    def do_POST(self):
+        s = self.server
+        body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+        s.seen.append({"path": self.path, "body": body, "headers": {k.lower() for k in self.headers},
+                       "gate asked": (s.stub_dir / "request").exists()})
+        if s.status != 200:
+            self.send_response(s.status)
+            self.end_headers()
+            return
+        if s.record:
+            with open(s.serve / "request_users.jsonl", "a") as fh:
+                fh.write(json.dumps({"engine_id": f"cmpl-{len(s.seen)}-0", "user": body["user"]}) + "\n")
+        out = json.dumps({"id": f"cmpl-{len(s.seen)}", "choices": [{"text": "", "finish_reason": "length"}]}).encode()
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(out)))
+        self.end_headers()
+        self.wfile.write(out)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def endpoint(tmp_path, monkeypatch):
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "ssh").write_text(STUB)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
+    monkeypatch.setenv("STUB_DIR", str(tmp_path))
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Endpoint)
+    srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir = [], 200, True, tmp_path / "serve", tmp_path
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield srv
+    srv.shutdown()
+    srv.server_close()
+
+
+def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_gate(tmp_path, endpoint):
+    port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
+    assert CP.main(["front", str(port), str(serve), str(out), "--key", str(tmp_path / "key"), "--warmup", "2"]) == 0
+    assert [(s["path"], s["gate asked"]) for s in endpoint.seen] == [("/v1/completions", False)] * 2
+    assert not any(h.startswith("x-verity-release") for s in endpoint.seen for h in s["headers"])
+    bodies = [s["body"] for s in endpoint.seen]
+    assert [(len(b["prompt"]), b["max_tokens"], b["temperature"]) for b in bodies] == [(CP.PROMPT_IDS, CP.TOKENS, 0.0)] * 2
+    assert CP.PROMPT_IDS <= 32 and all(0 <= t < 128000 for b in bodies for t in b["prompt"])
+    users = [b["user"] for b in bodies]
+    assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
+    assert (tmp_path / "request").read_text() == (
+        f"warden-rehearse --peer vy-dc-h200 --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
+        "--tokens 4 --window-per-group")
+    warm = json.loads((out / "warmup.json").read_text())["requests"]
+    assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json",
+                                                     "warmup.json"]
+
+
+def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):
+    port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
+    endpoint.status = 503
+    assert CP.main(["front", str(port), str(serve), str(out), "--warmup", "1"]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"].startswith("--warmup: request 0: HTTPError")
+    assert not (tmp_path / "request").exists() and not (out / "warmup.json").exists()
+    endpoint.status, endpoint.record, clock = 200, False, _Clock()
+    a = argparse.Namespace(port=port, warmup=1, prompt_ids=CP.PROMPT_IDS, vocab=128000, tokens=CP.TOKENS)
+    with pytest.raises(CP.SS.Refused, match="recorded no closed window of .'warmup-"):
+        CP.warmup(a, serve, clock=clock, sleep=clock.sleep)
+    assert clock.t > CP.WARMUP_CLOSE_S and not (tmp_path / "request").exists()
+
+
+class _Clock:
+    t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+    def sleep(self, s: float) -> None:
+        self.t += s
