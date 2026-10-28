@@ -399,7 +399,7 @@ class Outcome:
     """A registration's final outcome. `verdict.codes` is empty when accepted, and otherwise the one visible symbol
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
-    reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the draw, the
+    of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the draw, the
     delivered sessions, the audit record and, for a draw a `Session` covers, the session's rounds."""
 
     accepted: bool
@@ -1112,7 +1112,7 @@ class Stream:
     registration's population program is their mixed population (`partition.mixed_population_program`) at the counts
     `register` is given, under one draw by the Spec's sampling design (`stratified:K`: a stratum per template, each drawn at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
-    verifier's draw and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
+    verifier of record's draw and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
     public parameters of the stream. `coins` is
     the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
