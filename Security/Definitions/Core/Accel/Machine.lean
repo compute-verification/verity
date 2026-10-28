@@ -1,127 +1,66 @@
-import Definitions.Accounting.Device
-import Mathlib.Algebra.Field.Rat
+import Definitions.Core.Accel.Card
 
 /-!
-# The accelerator model (trusted)
+# The machine 𝓜 (trusted)
 
-An accelerator is \(\mathcal G = (\Sigma, M, R, \rho, \mathcal I, u)\): stores \(\Sigma\) of \(M_s\) words each,
-resources \(R\) of \(\rho_r\) units a tick each, and an instruction set \(\mathcal I\) whose every opcode has exact
-semantics and uses \(u_r(o) \ge 0\) units of each resource. `Machine` is that tuple on an `Accounting.Device`, whose
-coarse limits (on-chip bits, device-memory bits, op rates, bandwidth, side channels) it refines. The model states two
-things about the card and nothing about algorithms:
+The machine at a card's numbers `card` and its semantics `sem`. Store `s` is `size s` words (`Loc`). A program is a
+text per thread (`Prog`); a thread runs its text in order (`step`) and the threads share the stores. An instruction
+is an ACCEL op on operands, predicated on a register bit, or a branch on one, the one data-dependent control.
+A run is a function of its initial state and its schedule, the threads stepped one after another (`run`). The schedule
+is fixed with the program, before the content: one chosen after it would be a free lookup table (step, of threads
+writing different constants, the one that writes the answer). A card's data-dependent work is the branches its code
+takes on words it computed.
 
-* **(G1) Capacity.** Store `s` is `size s` words (`Loc`): a run holds at most \(M_s\) words in it at every tick because
-  there are no other locations. Code is data too: it lives in device memory, so the texts of all the threads a run
-  steps hold at most `text` instructions together (`Prog.Fits`), device memory's bytes at 16 bytes an instruction.
-* **(G2) Rate.** Over every window of a run, the instructions issued use at most \(\rho_r\) units of each resource `r`
-  a tick, plus a backlog of `slack` ticks (`Rate`). The code reaches the SMs from device memory, so the run's
-  instructions and its code, fetched once (`fetchUse` units of `fetch` an instruction), share that path (`CodeFetch`).
+A run of `T` seconds meets the model (`Fits`) if
 
-Everything else is the instruction set's semantics: an opcode reads its input words from the stores `inStore` names
-and writes `eval` of them to the stores `outStore` names, and nothing else moves a word. So a product an opcode forms
-reaches another word only through further instructions, each of which pays its usage (P2 in `Accel.Principles`).
+* **(G1) capacity**: the texts of the threads it steps hold at most `text` instructions (code is data in device memory;
+  the stores' capacities hold by construction, store `s` has exactly `size s` locations), and
+* **(G2) rate**: over the run, its instructions use at most `ρ_r T` units of each resource `r`, device memory's carrying
+  the code too, fetched once at 16 bytes an instruction.
 
-**Execution.** A program is a text per thread (`Prog`); a thread has a program counter and runs its text in order
-(`step`), and the threads share the stores. A branch (`Instr.bra`) is the one data-dependent control: it reads a
-register and sets the thread's counter. A run's schedule is the list, per tick, of the threads stepped in it, in order
-(`run`). A thread past the end of its text does nothing and uses nothing.
-
-**The schedule costs the adversary nothing.** A run is a function of its initial state and its schedule, and every
-statement over the model takes the schedule after the state (the adversary chooses both). A card's data-dependent
-distribution of work, atomics-based work stealing included, is therefore a schedule the adversary could have computed
-from the state: it is one of the schedules the statement already ranges over, at the same instructions and so the same
-units. Data the run receives later (a verifier's coins) starts a new run from the state it is written into, with a new
-schedule. An address operand (`Operand.indirect`) is a register's value plus an offset, as a load, store or atomic
-takes one, and an operand may be an immediate the text carries.
-
-**Time.** A tick is the device's unit of time (an instance takes the SM clock at its maximum, so a tick is at least one
-clock), as in `Accounting.Window`. Instructions take effect at issue: the model has no latency, which only helps a
-program.
-
-**Where the model is coarser than the card.** Every coarsening lets a program do more than the card, so a lower bound in
-the model holds on the card:
-* stores are pooled over the device (one register file, one shared memory), and any thread may name any location;
-* a resource is pooled over the device's SMs, and the per-tick bound is on the whole device;
-* a resource with no documented rate (the register file's ports, L2's bandwidth) is not a resource here: it is free;
-* a thread's text bound is per thread, not over the card's whole program text.
+The model has no latency, no per-clock limit and no SM boundaries (each resource and store is pooled over the card, and
+any thread names any location), and a resource with no stated rate is free: each lets a program do more than the card.
 -/
 
 open scoped NNRat
 
 namespace Verity.Accel
 
-/-- A word: the stores hold 32-bit words, as a GPU's registers, shared memory and device memory do. -/
-abbrev Word : Type := BitVec 32
-
-/-- **An accelerator** \((\Sigma, M, R, \rho, \mathcal I, u)\) refining the device `toDevice`. -/
-structure Machine (ι : Type) extends Accounting.Device ι where
-  /-- the stores Σ -/
-  Store : Type
-  [decStore : DecidableEq Store]
-  /-- `M_s`: the words store `s` holds -/
-  size : Store → ℕ
-  size_pos : ∀ s, 0 < size s
-  /-- the register store: a branch's predicate and an address operand's index are read from it -/
-  reg : Store
-  /-- the resources `R` -/
-  Res : Type
-  /-- `ρ_r`: units of resource `r` the device supplies a tick -/
-  ρ : Res → ℚ≥0
-  /-- the backlog: work issued in a window completes within `slack` ticks after it -/
-  slack : ℕ
-  /-- the opcodes 𝓘 -/
-  Op : Type
-  /-- an opcode's input words -/
-  nIn : Op → ℕ
-  /-- an opcode's output words -/
-  nOut : Op → ℕ
-  /-- the store each input word is read from -/
-  inStore : (o : Op) → Fin (nIn o) → Store
-  /-- the store each output word is written to -/
-  outStore : (o : Op) → Fin (nOut o) → Store
-  /-- an opcode's exact semantics: its output words from its input words -/
-  eval : (o : Op) → (Fin (nIn o) → Word) → Fin (nOut o) → Word
-  /-- `u_r(o)`: the units of resource `r` one issue of opcode `o` uses -/
-  use : Op → Res → ℚ≥0
-  /-- the units of each resource a branch uses -/
-  braUse : Res → ℚ≥0
-  /-- the instructions all the texts of a run hold at most, together -/
-  text : ℕ
-  /-- the resource that carries code to the SMs (device memory's port) -/
-  fetch : Res
-  /-- its units an instruction of code uses, fetched once -/
-  fetchUse : ℚ≥0
-
-attribute [instance] Machine.decStore
-
-variable {ι : Type}
+/-- **The machine** at a card's numbers and its semantics. -/
+structure Machine where
+  card : Card
+  sem : Open
 
 namespace Machine
 
-variable (m : Machine ι)
+variable (m : Machine)
 
-/-- A location: a store and a word of it. Store `s` has exactly `size s` of them (G1). -/
-abbrev Loc : Type := Σ s : m.Store, Fin (m.size s)
+/-- A location: a store and a word of it. -/
+abbrev Loc : Type := m.card.Loc
 
 /-- The stores' contents: a word at every location. -/
-abbrev Mem : Type := m.Loc → Word
+abbrev Mem : Type := m.card.Mem
+
+/-- The stores' bits. -/
+def bits : ℕ := 32 * (m.card.size .reg + m.card.size .smem + m.card.size .l2 + m.card.size .dram)
 
 /-- Word `i` of store `s`, its index taken modulo the store's size. -/
-def loc (s : m.Store) (i : ℕ) : m.Loc := ⟨s, ⟨i % m.size s, Nat.mod_lt _ (m.size_pos s)⟩⟩
+def loc (s : Store) (i : ℕ) : m.Loc := ⟨s, ⟨i % m.card.size s, Nat.mod_lt _ (m.card.size_pos s)⟩⟩
 
-/-- An operand: a fixed word of the store its opcode names; the word at a register's value plus an offset (an address
-the program computed); or an immediate the text carries (as an output, it discards the word). Indices are taken modulo
-the store's size. -/
+/-- An operand: a fixed word of the store its opcode names; the word at a register's value plus an offset; or an
+immediate the text carries (as an output, it discards the word). -/
 inductive Operand
   | direct (i : ℕ)
   | indirect (r : ℕ) (off : ℕ)
   | imm (w : Word)
 
-/-- An instruction of a text: an opcode on operands, predicated on a register (it writes only when the register is
-nonzero), or a branch to `target` when register `p` is nonzero. -/
+/-- An instruction: an opcode on operands, predicated on bit `b` of register `r` (`pred = some (r, b)`: it writes
+only when the bit is set), or a branch, taken when its predicate bit is set (always, with none), to the instruction its
+`target` names (a fixed index, a register's value plus an offset, or an immediate), writing the next instruction's index
+to register `link` if it names one (a call; a return is a branch to that register). -/
 inductive Instr
-  | op (o : m.Op) (src : Fin (m.nIn o) → Operand) (dst : Fin (m.nOut o) → Operand) (pred : Option ℕ)
-  | bra (p : ℕ) (target : ℕ)
+  | op (o : Opcode m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
+  | bra (pred : Option (ℕ × ℕ)) (target : Operand) (link : Option ℕ)
 
 /-- A program: each thread's text. -/
 abbrev Prog (Θ : Type) : Type := Θ → List m.Instr
@@ -133,38 +72,47 @@ structure State (Θ : Type) where
 
 variable {m}
 
+/-- Whether bit `p.2` of register `p.1` is set in `M`. -/
+def bit (M : m.Mem) (p : ℕ × ℕ) : Bool := (M (m.loc .reg p.1)).getLsbD p.2
+
 /-- The location an operand names in store `s` of `M`, or none for an immediate. -/
-def Operand.locIn (s : m.Store) : Operand → m.Mem → Option m.Loc
+def Operand.locIn (s : Store) : Operand → m.Mem → Option m.Loc
   | .direct i, _ => some (m.loc s i)
-  | .indirect r off, M => some (m.loc s ((M (m.loc m.reg r)).toNat + off))
+  | .indirect r off, M => some (m.loc s ((M (m.loc .reg r)).toNat + off))
   | .imm _, _ => none
 
 /-- The word an operand reads in store `s` of `M`. -/
-def Operand.readIn (s : m.Store) (x : Operand) (M : m.Mem) : Word :=
+def Operand.readIn (s : Store) (x : Operand) (M : m.Mem) : Word :=
   match x with
   | .imm w => w
   | _ => match x.locIn s M with
     | some l => M l
     | none => 0
 
+/-- The instruction index a branch's target names in `M`. -/
+def Operand.target : Operand → m.Mem → ℕ
+  | .direct i, _ => i
+  | .indirect r off, M => (M (m.loc .reg r)).toNat + off
+  | .imm w, _ => w.toNat
+
 /-- `M` with `w` written where the output operand `x` names in store `s` of `M₀` (the memory before the instruction,
 so an address is read before any write). -/
-def Operand.writeIn (s : m.Store) (x : Operand) (M₀ M : m.Mem) (w : Word) : m.Mem :=
+def Operand.writeIn (s : Store) (x : Operand) (M₀ M : m.Mem) (w : Word) : m.Mem :=
   match x.locIn s M₀ with
   | some l => Function.update M l w
   | none => M
 
-/-- An opcode's effect on `M`: every input read, then the outputs written in order, unless the predicate is zero. -/
-def execOp (o : m.Op) (src : Fin (m.nIn o) → Operand) (dst : Fin (m.nOut o) → Operand) (pred : Option ℕ)
+/-- An opcode's effect on `M`: every input read, then the outputs written in order, unless its predicate bit is clear. -/
+def execOp (o : Opcode m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
     (M : m.Mem) : m.Mem :=
-  let v := m.eval o fun i => (src i).readIn (m.inStore o i) M
-  if pred.any fun p => M (m.loc m.reg p) = 0 then M
-  else (List.finRange (m.nOut o)).foldl (fun M' i => (dst i).writeIn (m.outStore o i) M M' (v i)) M
+  let v := o.eval fun i => (src i).readIn (o.inStore i) M
+  if pred.any fun p => !bit M p then M
+  else (List.finRange o.nOut).foldl (fun M' i => (dst i).writeIn (o.outStore i) M M' (v i)) M
 
-/-- The units of resource `r` an instruction uses. -/
-def Instr.use : m.Instr → m.Res → ℚ≥0
-  | .op o _ _ _ => m.use o
-  | .bra _ _ => m.braUse
+/-- The units of resource `r` an instruction uses: its opcode's, or a branch's lane share of an issue slot. -/
+def Instr.use : m.Instr → Res → ℚ≥0
+  | .op o _ _ _ => m.card.use o
+  | .bra _ _ _ => slot (1 / 32)
 
 variable {Θ : Type} [DecidableEq Θ]
 
@@ -174,49 +122,31 @@ def step (P : m.Prog Θ) (σ : m.State Θ) (θ : Θ) : m.State Θ × Option m.In
   | none => (σ, none)
   | some (.op o src dst pred) =>
       (⟨execOp o src dst pred σ.mem, Function.update σ.pc θ (σ.pc θ + 1)⟩, some (.op o src dst pred))
-  | some (.bra p t) =>
-      (⟨σ.mem, Function.update σ.pc θ (if σ.mem (m.loc m.reg p) ≠ 0 then t else σ.pc θ + 1)⟩, some (.bra p t))
+  | some (.bra p t l) =>
+      if p.all (bit σ.mem) then
+        (⟨l.elim σ.mem fun r => Function.update σ.mem (m.loc .reg r) (BitVec.ofNat 32 (σ.pc θ + 1)),
+          Function.update σ.pc θ (t.target σ.mem)⟩, some (.bra p t l))
+      else (⟨σ.mem, Function.update σ.pc θ (σ.pc θ + 1)⟩, some (.bra p t l))
 
-/-- One tick: the threads `θs` step in order; the state after, and the instructions they ran. -/
-def tick (P : m.Prog Θ) (σ : m.State Θ) (θs : List Θ) : m.State Θ × List m.Instr :=
-  θs.foldl (fun acc θ => let r := step P acc.1 θ; (r.1, acc.2 ++ r.2.toList)) (σ, [])
-
-/-- **A run** of `P` from `σ` on a schedule (per tick, the threads stepped in it): the final state, and per tick the
-instructions run. -/
-def run (P : m.Prog Θ) : m.State Θ → List (List Θ) → m.State Θ × List (List m.Instr)
+/-- **A run** of `P` from `σ` on a schedule (the threads stepped, in order): the final state, and the instructions run. -/
+def run (P : m.Prog Θ) : m.State Θ → List Θ → m.State Θ × List m.Instr
   | σ, [] => (σ, [])
-  | σ, θs :: rest =>
-      let a := tick P σ θs
+  | σ, θ :: rest =>
+      let a := step P σ θ
       let b := run P a.1 rest
-      (b.1, a.2 :: b.2)
+      (b.1, a.2.toList ++ b.2)
 
-/-- The units of resource `r` the instructions run at tick `t` use. -/
-def usage (iss : List (List m.Instr)) (t : ℕ) (r : m.Res) : ℚ≥0 :=
-  ((iss.getD t []).map fun i => i.use r).sum
-
-/-- **(G2) Rate**: over every window, the instructions run use at most `ρ_r` units of each resource `r` a tick, plus
-the backlog. At `slack = 0` and a window of one tick it bounds each tick. -/
-def Rate (iss : List (List m.Instr)) : Prop :=
-  ∀ (w : Accounting.Window) (r : m.Res),
-    ∑ t ∈ w.ticks, usage iss t r ≤ m.ρ r * ((w.len + m.slack : ℕ) : ℚ≥0)
+/-- The units of resource `r` a list of instructions uses. -/
+def units (iss : List m.Instr) (r : Res) : ℚ≥0 := (iss.map fun i => i.use r).sum
 
 /-- The instructions of code a run on `sched` holds: the texts of the threads it steps, each once. -/
-def code (P : m.Prog Θ) (sched : List (List Θ)) : ℕ := (sched.flatten.dedup.map fun θ => (P θ).length).sum
+def code (P : m.Prog Θ) (sched : List Θ) : ℕ := (sched.dedup.map fun θ => (P θ).length).sum
 
-/-- **(G1) Capacity of the code**: the texts of the threads a run steps fit in `text` instructions together. (The
-stores' capacities hold by construction: store `s` has exactly `size s` locations.) -/
-def Prog.Fits (P : m.Prog Θ) (sched : List (List Θ)) : Prop := code P sched ≤ m.text
-
-/-- **(G2) Fetching the code**: the run's use of `fetch` and its code, fetched once, fit in `fetch`'s units over the
-run and its backlog. -/
-def CodeFetch (P : m.Prog Θ) (σ : m.State Θ) (sched : List (List Θ)) : Prop :=
-  ∑ t ∈ Finset.range sched.length, usage (run P σ sched).2 t m.fetch + m.fetchUse * code P sched ≤
-    m.ρ m.fetch * ((sched.length + m.slack : ℕ) : ℚ≥0)
-
-/-- A run of `P` on `sched` from `σ` meets the model: its code fits (G1), its instructions meet the rates and its code
-is fetched (G2). Its duration is `sched.length` ticks. -/
-def Fits (P : m.Prog Θ) (σ : m.State Θ) (sched : List (List Θ)) : Prop :=
-  P.Fits sched ∧ Rate (run P σ sched).2 ∧ CodeFetch P σ sched
+/-- **A run of `T` seconds meets the model**: its code fits (G1), and its instructions, with its code fetched once
+(four words an instruction), use at most `ρ_r T` of each resource (G2). -/
+def Fits (P : m.Prog Θ) (σ : m.State Θ) (sched : List Θ) (T : ℚ≥0) : Prop :=
+  code P sched ≤ m.card.text ∧
+    ∀ r, units (run P σ sched).2 r + (if r = .dram then 4 * (code P sched : ℚ≥0) else 0) ≤ m.card.ρ r * T
 
 end Machine
 
