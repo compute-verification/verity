@@ -186,8 +186,7 @@ from verity.core.protocols.sampled_proofs.candidates import Shape, cuts
 from verity.core.protocols.sampled_proofs.costfit import fit
 ~~~
 
-- `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and
-  `Sequential`.
+- `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All` and `Law`.
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
     `verifier.check_verdicts`).
