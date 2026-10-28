@@ -632,11 +632,13 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
     the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
     (`scan_zk.CLASS`) and its draw of every unit. The per-period form is `NetTiming.Guarantees.PeriodLeakAccepted`'s
-    count, the pooled form `PooledLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in the
-    generator reading of the scan's statement: log2 #Ss = 0, the fail cell's
-    position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
-    registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
-    every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
+    count, the pooled form `PooledLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in the generator reading of
+    the scan's statement: log2 #Ss = 0, the fail cell's position log2(egress_cells + 1) a connection, the
+    link-window's free inputs, which the scan's ``prog`` rows carry (T·NP a link-window as registered, an entry's
+    33 + KO·IDB bits a request if ``prog`` were an input only at its anchored entries, `ingress_scan.entry_layout`;
+    tied, the rows are a compute audit's outputs, so the T·NP bits are the tied audit's free inputs, which the rows
+    form's K charges to the link-window, `NetworkCheck.Period.tiedAudits`), no faulty term with every unit drawn,
+    b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
@@ -652,7 +654,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                          f"drawn (scan_zk --draw {units})")
     NS, NP, NV = IS.state_bits(cls), IS.prog_bits(cls), IS.view_bits(cls)
     cap = math.log2(params.egress_cells + 1)
-    anchored = 32 + cls.KO * cls.IDB
+    anchored = sum(w for _, w in IS.entry_layout(cls))
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     free = {"registered": {"link_window": T * NP, "request": 0}, "anchors": {"link_window": 0, "request": anchored}}
@@ -699,10 +701,15 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "buckets tell a receiver no more than an idle one",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
+                "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
+                "sum",
+                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its T·NP bits are "
+                "the tied audit's free inputs, which Lean's rows-form K charges to the link-window's term "
+                "(tiedAudits), as this K does"]}
 
 
-#: each reading of the scan's free inputs, as the report labels it
+#: each reading of the link-window's free inputs (the scan's `prog`, the tied audit's free inputs), as the report
+#: labels it
 READINGS = {"registered": "`prog` as registered today (the record's K)",
             "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering)"}
 
