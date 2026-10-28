@@ -2,6 +2,7 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
+each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
@@ -35,6 +36,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from verity.core.protocols.certifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -101,6 +104,7 @@ def test_certs_accepts_the_kept_files(honest):
     got = cr.certs(honest, honest / "client")
     assert got["verdict"] == "accepted", got.get("why")
     assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
+    assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
     assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
     assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
@@ -110,6 +114,7 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
     _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
     got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"] - 1
+    assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", False)]
     assert not got["client_check"]["records_are_the_clients"]
     _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
     got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
@@ -118,6 +123,28 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
     got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"]
     assert "its signature doesn't verify" in got["client_check"]["refused"][0]
+
+
+class _Accepting(audit.Audit):
+    """A reference audit that accepts every link-window it is asked about."""
+
+    def check_link(self, link, records, frames, syncs, *args, **kwargs):
+        return [audit.Verdict(link, w, None) for w in range(len(syncs))]
+
+    def check_ingress_link(self, link, records, windows, *args, **kwargs):
+        return [audit.Verdict(link, w, None) for w in range(windows)]
+
+
+def test_a_certified_record_is_the_lean_audits_and_a_reference_that_accepts_it_doesnt_certify_it(honest, tmp_path,
+                                                                                                 monkeypatch):
+    """The certs step's verdict on a record is the Lean's (`NetworkCheck.Records`' ``verdicts-no-grid``): beside a
+    reference that accepts everything, the record whose signature is changed is still refused, its row naming the
+    reference's accept, and every other window is certified."""
+    monkeypatch.setattr(n2.cs, "Audit", lambda: lean_audit.Audit(python=_Accepting()))
+    _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
+    got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
+    assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", True)]
+    assert got["certified_windows"] == got["windows"] - 1 and got["verdict"] == "refused"
 
 
 def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
@@ -463,6 +490,29 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     Path(steps.job).write_text(json.dumps(job | {"path": None}))
     off = cr.report(steps)
     assert off["verdict"] == "refused" and off["stubbed"] == []
+
+
+def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_exited_its_finds(tmp_path):
+    ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
+    assert cr.report(_steps(tmp_path, ok))["why"] is None
+    steps = _steps(tmp_path, ok | {"rc": {"n2": "0", "scan": "1"}})
+
+    def found(*k):
+        return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
+
+    Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
+        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
+    got = cr.report(steps)
+    why = ("scan_zk exited 1; honest: witness pieces found at the verifier: ['first o1 0 @0']; chain: witness pieces "
+           "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")
+    assert (got["verdict"], got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("refused", "failed", why)
+    assert got["why"] == {"scan": f"failed: {why}"}
+    Path(steps.job).write_text(json.dumps(ok | {"rc": {"n2": "0", "scan": "1"}, "why": {"scan": "done: FAILED"}}))
+    assert cr.report(steps)["why"] == {"scan": f"failed: done: FAILED; {why}"}
+    Path(steps.scan).unlink()
+    assert cr.report(steps)["why"] == {"scan": "failed: done: FAILED; scan_zk exited 1"}
+    stand_in = cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))
+    assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
 
 
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
