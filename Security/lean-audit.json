@@ -43121,9 +43121,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.Public": {
-   "digest": "a74c3513f3dd8f6ff347b888700ba4c3cb0cb9fc828d3aaf8b048d20d8b277b8",
+   "digest": "15dc4f666c9419580d4e3fa94f44688405b9429b26b5b03c7c8a6bfbe7e148dc",
    "definitions": {
-    "PouwWindow.legacyRegistered": "27e6f0ad6e4f7449aa6744f466eb0889e37e7df6c0eabfa93bca8cd3df37d792",
+    "PouwWindow.legacyRegistered": "283147c1c56c6d9d1ad24674e32b1b74d987e8059db10e46bfe6ee934604794a",
     "PouwWindow.registered": "679c6eb48d59b5fe15606c0ea0e2df4b0585d157d32baecc61cd8c08d63172bf"
    },
    "guarantees": [
