@@ -40,6 +40,9 @@ import wgmma as W  # noqa: E402
 
 TM, BN, BK = 128, 256, 128
 GEMM_THREADS, HASH_THREADS = 256, 256
+HASH_KINDS = ("hash_rows", "hash_rows_l1", "hash_chain", "idle_k")
+HASHES = "hash_rows:8:1:0,hash_chain:8:1:0,hash_chain:8:2:0"
+CORUNS = "hash_rows:8:0,hash_chain:8:0"
 LOGMAX = 4096
 MSG_BYTES = 1024
 NUM_REGS, PREFERRED_CARVEOUT = 4, 9
@@ -56,7 +59,7 @@ class Params(C.Structure):
 
 class HashArgs(C.Structure):
     _fields_ = [("msg", u64), ("dig", u64), ("stop", u64), ("stamps", u64), ("nmsg", u64), ("dur_ns", u64),
-                ("most", u64)]
+                ("most", u64), ("nap_ns", u), ("pad", u)]
 
 
 assert C.sizeof(Params) == 384 and Params.o.offset == 256 and Params.M.offset == 264 and Params.log.offset == 288
@@ -80,7 +83,7 @@ class Lib:
         n = i32()
         self.ck("cuDeviceGetAttribute", C.byref(n), W.SM_COUNT, dev)
         self.sms = n.value
-        self.f = {k: self.fn(k) for k in ("gemm_1", "gemm_2", "hash_rows", "hash_chain", "gate_k", "corun_layout")}
+        self.f = {k: self.fn(k) for k in ("gemm_1", "gemm_2", *HASH_KINDS, "gate_k", "corun_layout")}
         out = torch.zeros(16, dtype=torch.int32, device="cuda")
         self.launch("corun_layout", 1, 1, 0, [u64(out.data_ptr())])
         torch.cuda.synchronize()
@@ -92,7 +95,7 @@ class Lib:
         for k in ("gemm_1", "gemm_2"):
             self.ck("cuFuncSetAttribute", self.f[k], W.MAX_DYN_SMEM, self.smem)
             self.ck("cuFuncSetAttribute", self.f[k], PREFERRED_CARVEOUT, 100)
-        for k in ("hash_rows", "hash_chain"):
+        for k in HASH_KINDS:
             self.ck("cuFuncSetAttribute", self.f[k], W.MAX_DYN_SMEM, 120 * 1024)
             self.ck("cuFuncSetAttribute", self.f[k], PREFERRED_CARVEOUT, 100)
         self.regs = {k: self.attr(self.f[k], NUM_REGS) for k in self.f}
@@ -211,10 +214,10 @@ class Bench:
         p.started, p.done, p.stop = base, base + 4, base + 8
         return p
 
-    def hash_args(self, dur_s: float, stop: bool, most: int = 0) -> HashArgs:
+    def hash_args(self, dur_s: float, stop: bool, most: int = 0, nap_ns: int = 0) -> HashArgs:
         base = self.ctr.data_ptr()
         return HashArgs(self.o.data_ptr(), self.dig.data_ptr(), base + 8 if stop else base + 12,
-                        self.hstamps.data_ptr(), self.nmsg, int(dur_s * 1e9), most)
+                        self.hstamps.data_ptr(), self.nmsg, int(dur_s * 1e9), most, nap_ns, 0)
 
     def reset(self) -> None:
         self.ctr.zero_()
@@ -294,24 +297,24 @@ class Bench:
         return {"arm": f"gemm_{cl}", "passes": passes, "placement": S.placement(g, self.lib.sms), **r,
                 "nvml": pw.record()}
 
-    def item_hash(self, pw: Clocks, kind: str, threads: int, per_sm: int, item_s: float) -> dict:
+    def item_hash(self, pw: Clocks, kind: str, warps: int, per_sm: int, nap_ns: int, item_s: float) -> dict:
         self.reset()
         with pw:
-            self.hash(kind, threads, per_sm, self.hash_args(item_s, False), alone=True)
+            self.hash(kind, 32 * warps, per_sm, self.hash_args(item_s, False, nap_ns=nap_ns), alone=True)
             torch.cuda.synchronize()
         h = stamps_of(self.hstamps[: self.lib.sms * per_sm])
-        return {"arm": f"{kind}:{threads // 32}w:{per_sm}", "placement": S.placement(h, self.lib.sms), **S.hash_rate(h, self.lib.sms),
-                "nvml": pw.record()}
+        return {"arm": f"{kind}:{warps}w:{per_sm}" + (f":nap{nap_ns}" if nap_ns else ""), "per_sm": per_sm,
+                "placement": S.placement(h, self.lib.sms), **S.hash_rate(h, self.lib.sms), "nvml": pw.record()}
 
-    def item_corun(self, pw: Clocks, cl: int, passes: int, kind: str) -> dict:
+    def item_corun(self, pw: Clocks, cl: int, passes: int, kind: str, warps: int, nap_ns: int) -> dict:
         self.reset()
         le = self.log_every(passes)
-        args = self.hash_args(3600.0, True)
+        args = self.hash_args(3600.0, True, nap_ns=nap_ns)
         started = C.c_uint64(self.ctr.data_ptr())
         with pw:
             self.gemm(cl, passes, le, self.sg)
             self.lib.launch("gate_k", 1, 1, 0, [started, i32(self.lib.sms)], self.sh)
-            self.hash(kind, HASH_THREADS, 1, args, alone=False, stream=self.sh)
+            self.hash(kind, 32 * warps, 1, args, alone=False, stream=self.sh)
             torch.cuda.synchronize()
         g, h = stamps_of(self.gstamps), stamps_of(self.hstamps[: self.lib.sms])
         r = S.gemm_rate(g, self.macs_per_tile)
@@ -319,7 +322,8 @@ class Bench:
         logs = [[x for x in row if x] for row in self.glog.cpu().tolist()]
         w0, w1 = S.window(h)
         inside = S.gemm_rate_in(logs, le, self.macs_per_tile, w0, w1, hr["mhz"])
-        return {"arm": f"gemm_{cl}+{kind}", "passes": passes, "gemm_placement": S.placement(g, self.lib.sms),
+        arm = f"gemm_{cl}+{kind}" + (f":{warps}w" if warps != HASH_THREADS // 32 else "") + (f":nap{nap_ns}" if nap_ns else "")
+        return {"arm": arm, "passes": passes, "gemm_placement": S.placement(g, self.lib.sms),
                 "hash_placement": S.placement(h, self.lib.sms), "covers": S.covers(g, h), "gemm": r, "hash": hr,
                 "gemm_in_hash_window": inside, "gap": S.gap(inside["peak_share"], hr["bar"]),
                 "nvml": pw.record()}
@@ -395,6 +399,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--arms", default="gemm,hash,corun,int_mm")
+    ap.add_argument("--gemms", default="1,2", help="the GEMMs timed: cluster sizes")
+    ap.add_argument("--hashes", default=HASHES, help="hash items alone: KIND:WARPS:CTAS_AN_SM:NAP_NS, comma-separated")
+    ap.add_argument("--coruns", default=CORUNS, help="hash sides of the co-runs, beside each GEMM: KIND:WARPS:NAP_NS")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     lib = Lib(a.cubin)
@@ -409,7 +416,8 @@ def main(argv: list[str] | None = None) -> int:
           "smem": lib.smem, "stages": lib.stages, "clusters_of_two": lib.clusters, "m": a.m, "n": a.n, "k": a.k,
           "group": a.group, "operands": "u2: bytes uniform in [0, 3]", "torch": torch.__version__})
     b = Bench(lib, a.m, a.n, a.k, a.group, a.seed)
-    cls = [1] + ([2] if lib.clusters * 2 >= lib.sms else [])
+    want = [int(x) for x in a.gemms.split(",")]
+    cls = [cl for cl in want if cl == 1 or lib.clusters * 2 >= lib.sms]
     ok = True
     for cl in (1, 2):
         g = b.gate_gemm(cl)
@@ -432,11 +440,14 @@ def main(argv: list[str] | None = None) -> int:
         if "gemm" in arms:
             items += [lambda cl=cl: b.item_gemm(pw, cl, passes[cl]) for cl in cls]
         if "hash" in arms:
-            items += [lambda: b.item_hash(pw, "hash_rows", HASH_THREADS, 1, a.item_s),
-                      lambda: b.item_hash(pw, "hash_chain", HASH_THREADS, 1, a.item_s),
-                      lambda: b.item_hash(pw, "hash_chain", HASH_THREADS, 2, a.item_s)]
+            for spec in a.hashes.split(","):
+                k, w, per, nap = spec.split(":")
+                items.append(lambda k=k, w=int(w), per=int(per), nap=int(nap): b.item_hash(pw, k, w, per, nap, a.item_s))
         if "corun" in arms:
-            items += [lambda cl=cl, k=k: b.item_corun(pw, cl, passes[cl], k) for cl in cls for k in ("hash_rows", "hash_chain")]
+            for cl in cls:
+                for spec in a.coruns.split(","):
+                    k, w, nap = spec.split(":")
+                    items.append(lambda cl=cl, k=k, w=int(w), nap=int(nap): b.item_corun(pw, cl, passes[cl], k, w, nap))
         if "int_mm" in arms:
             items += [lambda: b.item_int_mm(pw, a.item_s)]
         for it in items:
@@ -453,8 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         if x["arm"].startswith("gemm_") and "+" in x["arm"]:
             good = x["gemm_placement"] == (1, 1) and x["hash_placement"] == (1, 1) and x["covers"]
         elif "placement" in x:
-            want = (2, 2) if x["arm"].endswith(":2") else (1, 1)
-            good = x["placement"] == want
+            good = x["placement"] == (x.get("per_sm", 1),) * 2
         else:
             good = True
         if not good:

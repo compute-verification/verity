@@ -21,7 +21,8 @@
 // hash_rows: sx0000 (sha512x.cuh's compress<0, 1>) over 1 KiB messages read from memory: message i is bytes
 // [1024 i, 1024 i + 1024) of `msg` (the GEMM's O), its digest SHA-512 of those bytes (nine compressions), written to
 // dig[8 i ..] as big-endian words. Thread t takes messages t, t + T, ... (mod nmsg) until `stop` is set or its CTA has
-// run `dur_ns`. hash_chain: the bar's own form, each thread chaining compressions in registers.
+// run `dur_ns`. hash_rows_l1 is hash_rows with its loads cached in L1. hash_chain: the bar's own form, each thread
+// chaining compressions in registers. `nap_ns` holds either below its rate; idle_k only sleeps beside the GEMM.
 //
 // Every CTA stamps %globaltimer and clock64 at its start and end and its %smid; GEMM CTAs log %globaltimer every
 // `log_every` tiles. gate_k holds the hash stream until every GEMM CTA has started, so hash CTAs take only what the GEMM
@@ -304,6 +305,8 @@ struct HashArgs {
   Stamp* stamps;     // [gridDim.x]
   u64 nmsg, dur_ns;
   u64 most;          // messages (hash_rows) or 16-compression rounds (hash_chain) a thread at most; 0: no limit
+  u32 nap_ns;        // __nanosleep after each message or round: the hash held below its rate; 0: none
+  u32 pad;
 };
 
 DEV u64 be64(u32 lo, u32 hi) { return sx::be64(lo, hi); }
@@ -328,8 +331,9 @@ DEV void block_stamp(Stamp* stamps, u64 t0, u64 c0, u32 n, u64 work) {
 }
 
 // beside the GEMM CTA the hash CTA has 80 registers a thread: compress has one call site (the padding chunk is the block
-// loop's ninth turn; a second inlined compress spills), the loop state is 32-bit and the start time stays in shared memory
-extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
+// loop's ninth turn; a second inlined compress spills), the loop state is 32-bit and the start time stays in shared memory.
+// L1: the message's loads cached in L1 (ld.global.nc), else in L2 only (ld.global.cg)
+template <bool L1> DEV void rows_body(const HashArgs& a) {
   __shared__ u64 start[2];
   if (threadIdx.x == 0) { start[0] = gtimer(); start[1] = clock64(); }
   __syncthreads();
@@ -348,7 +352,7 @@ extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
       if (b < 8) {
 #pragma unroll
         for (int q = 0; q < 8; q++) {
-          const uint4 v = __ldcg(m + 8 * b + q);
+          const uint4 v = L1 ? __ldg(m + 8 * b + q) : __ldcg(m + 8 * b + q);
           w[2 * q] = be64(v.x, v.y);
           w[2 * q + 1] = be64(v.z, v.w);
         }
@@ -366,9 +370,12 @@ extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
     ++n;
     i += T;
     if (i >= nmsg) i -= nmsg;
+    if (a.nap_ns) __nanosleep(a.nap_ns);
   }
   block_stamp(a.stamps, start[0], start[1], n, 9ull * n);
 }
+extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) { rows_body<false>(a); }
+extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows_l1(const HashArgs a) { rows_body<true>(a); }
 
 // the bar's form: each thread chains compressions of a block it varies by its state, in registers
 extern "C" __global__ void __maxnreg__(HASH_REGS) hash_chain(const HashArgs a) {
@@ -392,9 +399,20 @@ extern "C" __global__ void __maxnreg__(HASH_REGS) hash_chain(const HashArgs a) {
       sx::compress<0, 1>(st, w);
     }
     ++n;
+    if (a.nap_ns) __nanosleep(a.nap_ns);
   }
   if (st[0] == 0x0123456789abcdefull) a.dig[t] = st[1];
   block_stamp(a.stamps, t0, c0, n, 16ull * n);
+}
+
+// a co-resident CTA that only sleeps until `stop`: what residency beside the GEMM costs without the hash's work
+extern "C" __global__ void __maxnreg__(HASH_REGS) idle_k(const HashArgs a) {
+  __shared__ u64 start[2];
+  if (threadIdx.x == 0) { start[0] = gtimer(); start[1] = clock64(); }
+  __syncthreads();
+  const volatile int* stop = a.stop;
+  while (!*stop && gtimer() - start[0] < a.dur_ns) __nanosleep(a.nap_ns ? a.nap_ns : 100000);
+  block_stamp(a.stamps, start[0], start[1], 0, 0);
 }
 
 extern "C" __global__ void gate_k(const volatile int* started, int want) {
