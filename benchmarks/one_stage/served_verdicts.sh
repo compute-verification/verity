@@ -3,7 +3,8 @@
 # verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
-#     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO). Each closed window is sealed as a
+#     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens;
+#     T defaults to H1_T, else 512, with or without H1). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
@@ -50,7 +51,7 @@
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
-# PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER, T H1_T 512 and S
+# PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER, at the engine's T and S
 # WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a session of its own on
 # vy-challenger-1, once `served_verdicts.py gate` finds no period of the lane open (a reserve would join it). PoUW's piece
 # (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session, ledger and
@@ -74,6 +75,7 @@ VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 if [ -n "${H1_GATE:-}" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
@@ -164,7 +166,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   cd "$TREE/integrations/vllm" || return 9
   local h1=()
   [ -n "${H1_GATE:-}" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
-                               --challenger-peer "${H1_PEER:-vy-dc-h200}" --max-num-batched-tokens "${H1_T:-512}")
+                               --challenger-peer "${H1_PEER:-vy-dc-h200}")
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
     mkdir -p "$OUT/pieces/wipe"
     (cd "$TREE" && bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") > "$OUT/pieces/wipe/piece.log" 2>&1
@@ -173,7 +175,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \
-    --window-steps "$WINDOW_STEPS" "${h1[@]}" \
+    --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 --copy-records-to "$OUT/serve" ${SERVE_ARGS:-} \
@@ -301,7 +303,7 @@ if [ -n "${H1_GATE:-}" ]; then
   "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
     | tee -a "$OUT/verdicts.txt"
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
-  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under TOP-84's development key: it credits nothing"
+  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T $T, S $WINDOW_STEPS), a development run under TOP-84's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
 fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
