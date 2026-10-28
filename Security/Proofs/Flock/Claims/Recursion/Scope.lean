@@ -72,7 +72,7 @@ def recordDrawOf (record : String) : Option Claims.Recursion.Draw :=
 /-- **The recursion's statement, readable**, from what the verifier reads: no circuit commitment (the compiled verifier
 has no private-circuit variant), the inner statement's dimensions as it sets it up, its inner shape as the form, and
 each V* session's draw. -/
-def toStmt (r : Read) : Claims.Recursion.Stmt where
+def toStmt (r : Read) : Claims.Recursion.CompiledStatement where
   inner := r.inner
   innerDims := (innerStmt r.src).map fun st => (st.m, st.c.kLog, st.regions.size)
   circ := none
@@ -99,7 +99,7 @@ def accepts (r : Read) : Bool :=
 def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Read := (decode x).filter accepts
 
 /-- **The deployed parser**: what the verifier reads where its setup accepts, readable. -/
-def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.Stmt :=
+def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement :=
   (parseBytes decode x).map toStmt
 
 /-- **A V* session's draw passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a draw

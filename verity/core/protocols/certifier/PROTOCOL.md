@@ -1054,13 +1054,9 @@ and proves that at most `2^c` decision streams are charged `c` bits or fewer ove
 pays for, so the weights `2^(−charge)` sum to at most 1. So with advice v1 the advice string's bounds hold with no
 assumption on the charge (`SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`,
 `SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). The windows these cover are decision-only: their four
-counts are sent as 0, which is `ChargeCount_v1`'s scope. Windows that send nonzero counts are covered once each is
-charged its decisions' charge plus a count code's length for its counts, under any count code whose lengths meet
-Kraft's inequality, as every prefix-free code's do (`SecurityProofs.EncardChargedLeCounted` and the three bounds
-`…V1Counted`): a window's weights are the decisions' times the counts', each summing to at most 1. The code is the
-same in every window and carries nothing across windows, and it is a parameter: a separate code, which is not how
-advice v1 sends counts (`code_v1` codes them inside the arithmetic coder, `ChargeCount_v2`'s window). That window is
-covered as sent: Lean mirrors `ChargeCount_v2{N, H, O}`'s reference (`window_charge.py`'s `reference_window`) one for
+counts are sent as 0, which is `ChargeCount_v1`'s scope. Windows that send nonzero counts are covered as advice v1
+sends them (`code_v1` codes them inside the arithmetic coder, `ChargeCount_v2`'s window); the earlier bounds under a
+separate count code (`…V1Counted`) are retired lemmas. That window is covered as sent: Lean mirrors `ChargeCount_v2{N, H, O}`'s reference (`window_charge.py`'s `reference_window`) one for
 one (`Security/Definitions/NetworkCertifier/WindowCharge.lean`), every count and value inside the coder, and proves
 that at most `2^c` advice values (each window's decisions, hits and order entries) are charged `c` bits or fewer
 (`SecurityProofs.EncardChargedLeWhole`, and the three bounds `…V1Whole`): two windows' symbol sequences from one carry

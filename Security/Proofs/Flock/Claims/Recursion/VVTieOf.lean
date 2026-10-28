@@ -199,7 +199,7 @@ theorem append_cancel_right' {a a' z : Array _root_.Flock.F128} (h : a ++ z = a'
 
 /-- **`VVTie` at RECR's verifier values** (`Rows.resVRead`), at a dense compiled statement whose coins run to at least
 the deployed plain verifier's inner rounds, wherever its staged `rec-residuals` statements are plain. -/
-theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hplain : ∀ xO, showsPart recRead b s x xO c → ∀ i spec (sts : Array Stmt), setupO xO = some (i, spec, sts) →
       ∀ t (ht : t < sts.size), (RecResiduals.params sts[t].c.unit.name).isSome →
@@ -322,7 +322,7 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
 /-- **A dense statement's staged tables are plain**: each passed `checkCircuit` at the reader's inner shape
 (`checks_stmt`, `checkStmt_circuit`), whose holo flag a dense form leaves off, so its META says no `holo`
 (`checkCircuit_plain`). -/
-theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) {xO : Msg}
     (hsh : showsPart untr b s x xO c) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hsu : setupO xO = some (i, spec, sts)) (t : ℕ) (ht : t < sts.size) :
@@ -340,7 +340,7 @@ theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ
 
 /-- **`VVTie` at RECR's verifier values, from the verifier's checks**: `vvTie_of`, its plain tables by
 `staged_plain`. -/
-theorem vvTie_dense {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem vvTie_dense {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     VVTie recRead b Rows.resVRead Bk s x c :=
   vvTie_of hst hd hB fun _ hsh _ _ _ hsu t ht _ => staged_plain hst hd hsh hsu t ht

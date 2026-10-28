@@ -440,7 +440,7 @@ theorem honestPre_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     simp only [List.getElem_map, List.getElem_take, histOf, Option.some.inj ha, Claims.Recursion.outMsg, hc]
 
 /-- A statement that parses reads. -/
-theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
+theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.CompiledStatement} (h : parse x = some s) : ∃ xr, readX x = some xr := by
   cases hx : readX x with
   | some xr => exact ⟨xr, rfl⟩
   | none =>

@@ -141,7 +141,7 @@ theorem hrest_read (hR : ReadsAt rd final fin) {x : Msg} (hx : DenseX x) (c : �
 message's reading, a round's length or the record's reading holds at the readers' messages of every witnesses whose
 calls are true, at every coin. -/
 theorem hrest_part (bB : Brings) (hF : FinalReads final fin) (hL : RoundLens fin) (hR : ReadsAt rd final fin) :
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt),
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement),
       (recBound _root_.Flock.Readable.relation bB (layAt fin) (bdAt rd wE final w).IVStar).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ q ∈ ivChecks (bdAt rd wE final w) (splitAt rd wE final w LS)
