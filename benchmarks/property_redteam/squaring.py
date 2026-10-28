@@ -10,8 +10,8 @@ word's `k·S` chained squarings cost their sum, so `E = k·S·e`. `e = (2L − 1
 `bitwise_codec.py` falsified.
 
 **What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`
-(at 8225774747): `Op` (a gather with its table-read `low`),
-`Gate`, `gatherAt`, `raw`, `out`, `Ok`/`InWindow`, `derive`/`intervals` (a gather's interval the hull of its column's and
+(at 8225774747): `Op` as `WordOp` (a gather with its table-read `low`),
+`Gate` as `WordGate`, `gatherAt`, `raw`, `out`, `Ok`/`InWindow`, `derive`/`intervals` (a gather's interval the hull of its column's and
 0), `Proven`, `DeclaredHold`, `OperandBits`, `dynamic`, `indexBits`, `units` (fresh index bits per index gate and kind)
 and `budgeted`, plus `Restricted` (`Codec.lean`). `units(..., fixed=True)` is that count; `fixed=False` keeps the earlier
 count, `Nat.clog 2 (args.length − 1)` index bits a range gather.
@@ -82,7 +82,7 @@ def clog2(n: int) -> int:
 
 
 @dataclass(frozen=True)
-class Op:
+class WordOp:
     """`Op ι`: an `input` slot by its binding, a `const`, an `affine` map `c + Σ coeff·v`, an s8-family `mma` coordinate
     (`C + Σ a_i·b_i`, clamped or wrapped to s32), a `gather` (`col.getD (gatherAt low idx) 0`: at `idx.toNat`, or for a
     table read, `low = n`, at `idx mod 2^n`), or a `budgeted` primitive of class `cls` (any function of its operands)."""
@@ -117,10 +117,10 @@ class Op:
 
 
 @dataclass(frozen=True)
-class Gate:
+class WordGate:
     """`Gate ι`: an operation, its operands (earlier gates, by index), and its declared interval `[lo, hi]`."""
 
-    op: Op
+    op: WordOp
     args: tuple[int, ...]
     lo: int
     hi: int
@@ -152,7 +152,7 @@ def wrap_s32(z: int) -> int:
     return (z - S32_MIN) % 2 ** 32 + S32_MIN
 
 
-def raw(op: Op, x: dict[int, int], v: list[int]) -> int:
+def raw(op: WordOp, x: dict[int, int], v: list[int]) -> int:
     """`Op.raw`: the exact value before an s8-family step's clamp or wrap."""
     if op.kind == "input":
         return x[op.slot]
@@ -178,33 +178,33 @@ def gather_at(low: int | None, z: int) -> int:
     return max(z, 0) if low is None else z % 2 ** low
 
 
-def out(op: Op, z: int) -> int:
+def out(op: WordOp, z: int) -> int:
     """`Op.out`: an s8-family step clamps (`satfinite`) or wraps to s32; every other op passes its exact value."""
     if op.kind != "mma":
         return z
     return clamp_s32(z) if op.sat else wrap_s32(z)
 
 
-def operands(g: Gate, vs: list[int]) -> list[int]:
+def operands(g: WordGate, vs: list[int]) -> list[int]:
     return [vs[j] if j < len(vs) else 0 for j in g.args]
 
 
-def value(g: Gate, x: dict[int, int], vs: list[int]) -> int:
+def value(g: WordGate, x: dict[int, int], vs: list[int]) -> int:
     return out(g.op, raw(g.op, x, operands(g, vs)))
 
 
-def values(C: list[Gate], x: dict[int, int]) -> list[int]:
+def values(C: list[WordGate], x: dict[int, int]) -> list[int]:
     vs: list[int] = []
     for g in C:
         vs.append(value(g, x, vs))
     return vs
 
 
-def val(C: list[Gate], x: dict[int, int], i: int) -> int:
+def val(C: list[WordGate], x: dict[int, int], i: int) -> int:
     return values(C, x)[i]
 
 
-def operands_ok(g: Gate, vs: list[int]) -> bool:
+def operands_ok(g: WordGate, vs: list[int]) -> bool:
     """`Op.OperandsOk`: an s8-family step's `2k + 1` operands lie in their formats; other ops ask nothing."""
     if g.op.kind != "mma":
         return True
@@ -215,7 +215,7 @@ def operands_ok(g: Gate, vs: list[int]) -> bool:
     return all(g.op.fa[0] <= z <= g.op.fa[1] for z in a) and all(g.op.fb[0] <= z <= g.op.fb[1] for z in b)
 
 
-def ok(g: Gate, x: dict[int, int], vs: list[int]) -> bool:
+def ok(g: WordGate, x: dict[int, int], vs: list[int]) -> bool:
     """`Gate.Ok`: the exact value in its declared interval, an s8-family step's operands in their formats and its
     declared interval within s32."""
     r = raw(g.op, x, operands(g, vs))
@@ -226,7 +226,7 @@ def ok(g: Gate, x: dict[int, int], vs: list[int]) -> bool:
     return True
 
 
-def in_window(C: list[Gate], x: dict[int, int]) -> bool:
+def in_window(C: list[WordGate], x: dict[int, int]) -> bool:
     """`InWindow`: every gate `Ok` on `x`."""
     vs: list[int] = []
     good = True
@@ -236,7 +236,7 @@ def in_window(C: list[Gate], x: dict[int, int]) -> bool:
     return good
 
 
-def declared_hold(C: list[Gate], x: dict[int, int]) -> bool:
+def declared_hold(C: list[WordGate], x: dict[int, int]) -> bool:
     """`DeclaredHold`: every non-derived gate's raw value lies in its declared interval."""
     vs: list[int] = []
     good = True
@@ -274,7 +274,7 @@ def iv_join(a: Iv, b: Iv) -> Iv:
     return (min(a[0], b[0]), max(a[1], b[1]))
 
 
-def derive(g: Gate, ivs: list[Iv]) -> Iv:
+def derive(g: WordGate, ivs: list[Iv]) -> Iv:
     """`Gate.derive`: the interval of a const, affine map or s8-family step from its operands' intervals, a gather's
     hull of its column's intervals and 0, and every other gate's declared interval."""
     a = [ivs[j] if j < len(ivs) else (0, 0) for j in g.args]
@@ -300,14 +300,14 @@ def derive(g: Gate, ivs: list[Iv]) -> Iv:
     return (g.lo, g.hi)
 
 
-def intervals(C: list[Gate]) -> list[Iv]:
+def intervals(C: list[WordGate]) -> list[Iv]:
     ivs: list[Iv] = []
     for g in C:
         ivs.append(derive(g, ivs))
     return ivs
 
 
-def proven(C: list[Gate]) -> list[str]:
+def proven(C: list[WordGate]) -> list[str]:
     """`Proven`: each derived gate's (a gather's among them) derived interval within its declared one, each affine map's
     declared interval within s32, and each s8-family step's `2k + 1` operands within their formats and its declared
     interval within s32. Returns the violations, so `[]` means proven."""
@@ -336,17 +336,17 @@ def proven(C: list[Gate]) -> list[str]:
     return errs
 
 
-def operand_bits(B: int, C: list[Gate]) -> bool:
+def operand_bits(B: int, C: list[WordGate]) -> bool:
     """`OperandBits B`: every budgeted gate's operands' declared bits sum to at most `B` (a gather is exempt)."""
     return all(sum(C[j].bits for j in g.args if j < len(C)) <= B for g in C if g.op.kind == "budgeted")
 
 
-def restricted(B: int, C: list[Gate]) -> bool:
+def restricted(B: int, C: list[WordGate]) -> bool:
     """`Restricted B = Proven ∧ OperandBits B`."""
     return not proven(C) and operand_bits(B, C)
 
 
-def dynamic(C: list[Gate]) -> list[bool]:
+def dynamic(C: list[WordGate]) -> list[bool]:
     """`dynamic`: whether each gate's value depends on a run or coin input."""
     ds: list[bool] = []
     for g in C:
@@ -357,7 +357,7 @@ def dynamic(C: list[Gate]) -> list[bool]:
     return ds
 
 
-def units(C: list[Gate], i: int, *, fixed: bool = False, dyn: list[bool] | None = None) -> int:
+def units(C: list[WordGate], i: int, *, fixed: bool = False, dyn: list[bool] | None = None) -> int:
     """`units`: a budgeted gate is one unit when it reads a dynamic value; a gather is its fresh index bits (its
     `indexBits` less the most any earlier gather of the same index gate and kind paid) plus one when its column is
     dynamic too."""
@@ -379,13 +379,13 @@ def units(C: list[Gate], i: int, *, fixed: bool = False, dyn: list[bool] | None 
     return 0
 
 
-def budgeted(C: list[Gate], *, fixed: bool = False) -> int:
+def budgeted(C: list[WordGate], *, fixed: bool = False) -> int:
     """`budgeted`: the circuit's total units."""
     dyn = dynamic(C)
     return sum(units(C, i, fixed=fixed, dyn=dyn) for i in range(len(C)))
 
 
-def data_products(C: list[Gate], i: int, *, dyn: list[bool] | None = None) -> int:
+def data_products(C: list[WordGate], i: int, *, dyn: list[bool] | None = None) -> int:
     """`dataProducts`: the lanes of an s8-family step whose two multiplicands both depend on a run or coin input, one
     unit each whatever their range. A lane with a constant or registered multiplicand is a linear map, and free."""
     g = C[i]
@@ -396,13 +396,13 @@ def data_products(C: list[Gate], i: int, *, dyn: list[bool] | None = None) -> in
     return sum(1 for a, b in zip(g.args[1:1 + k], g.args[1 + k:1 + 2 * k]) if dyn[a] and dyn[b])
 
 
-def products(C: list[Gate]) -> int:
+def products(C: list[WordGate]) -> int:
     """`products`: the circuit's data products."""
     dyn = dynamic(C)
     return sum(data_products(C, i, dyn=dyn) for i in range(len(C)))
 
 
-def nonlinear(C: list[Gate]) -> int:
+def nonlinear(C: list[WordGate]) -> int:
     """`nonlinear`: the budgeted units (the count on main, `fixed=True`) and the data products, what the property's caps
     bound: every operation but a linear map with coefficients fixed before the coins."""
     return budgeted(C, fixed=True) + products(C)
@@ -416,7 +416,7 @@ class Builder:
     intervals, the `dynamic` flags and the gather dedup so a large free circuit builds and measures in linear time."""
 
     def __init__(self) -> None:
-        self.gates: list[Gate] = []
+        self.gates: list[WordGate] = []
         self.ivs: list[Iv] = []
         self.dyn: list[bool] = []
         self._lean: list[int] = []  # each gate's Lean units
@@ -426,13 +426,13 @@ class Builder:
         self._gmaxf: dict[tuple[int, bool], int] = {}
         self._consts: dict[int, int] = {}
 
-    def _append(self, op: Op, args: tuple[int, ...], lo: int, hi: int) -> int:
+    def _append(self, op: WordOp, args: tuple[int, ...], lo: int, hi: int) -> int:
         i = len(self.gates)
         if op.kind == "input":
             self.dyn.append(op.binding != "registered")
         else:
             self.dyn.append(any(self.dyn[j] for j in args))
-        g = Gate(op, args, lo, hi)
+        g = WordGate(op, args, lo, hi)
         self.ivs.append(derive(g, self.ivs))
         self.gates.append(g)
         lean = fixed = 0
@@ -455,41 +455,41 @@ class Builder:
         return i
 
     def inp(self, slot: int, lo: int, hi: int, binding: str = "coin") -> int:
-        return self._append(Op("input", binding=binding, slot=slot), (), lo, hi)
+        return self._append(WordOp("input", binding=binding, slot=slot), (), lo, hi)
 
     def const(self, c: int) -> int:
         if c not in self._consts:
-            self._consts[c] = self._append(Op("const", c=c), (), c, c)
+            self._consts[c] = self._append(WordOp("const", c=c), (), c, c)
         return self._consts[c]
 
     def affine(self, c: int, terms: list[tuple[int, int]]) -> int:
         """`c + Σ coeff·gate`, its declared interval the derived one (so `Proven`); asserts it within s32."""
         args = tuple(j for _, j in terms)
-        op = Op("affine", c=c, coeff=tuple(cf for cf, _ in terms))
-        lo, hi = derive(Gate(op, args, 0, 0), self.ivs)
+        op = WordOp("affine", c=c, coeff=tuple(cf for cf, _ in terms))
+        lo, hi = derive(WordGate(op, args, 0, 0), self.ivs)
         assert S32_MIN <= lo and hi <= S32_MAX, f"affine [{lo}, {hi}] outside s32"
         return self._append(op, args, lo, hi)
 
     def mma(self, head: int, a: list[int], b: list[int], fa: tuple[int, int], fb: tuple[int, int]) -> int:
         """`head + Σ a_i·b_i`, its declared interval the derived one; asserts within s32."""
         assert len(a) == len(b)
-        op = Op("mma", fa=fa, fb=fb, k=len(a))
+        op = WordOp("mma", fa=fa, fb=fb, k=len(a))
         args = (head, *a, *b)
-        lo, hi = derive(Gate(op, args, 0, 0), self.ivs)
+        lo, hi = derive(WordGate(op, args, 0, 0), self.ivs)
         assert S32_MIN <= lo and hi <= S32_MAX, f"mma [{lo}, {hi}] outside s32"
         return self._append(op, args, lo, hi)
 
     def gather(self, idx: int, column: list[int], lo: int | None = None, hi: int | None = None,
                low: int | None = None) -> int:
         """`column[gatherAt low idx]`, declared `[lo, hi]`, or by default its derived hull (so `Proven`)."""
-        op = Op("gather", low=low)
+        op = WordOp("gather", low=low)
         args = (idx, *column)
         if lo is None or hi is None:
-            lo, hi = derive(Gate(op, args, 0, 0), self.ivs)
+            lo, hi = derive(WordGate(op, args, 0, 0), self.ivs)
         return self._append(op, args, lo, hi)
 
     def budgeted(self, f: Callable[[list[int]], int], args: list[int], lo: int, hi: int, cls: str = "rounding") -> int:
-        return self._append(Op("budgeted", cls=cls, f=f), tuple(args), lo, hi)
+        return self._append(WordOp("budgeted", cls=cls, f=f), tuple(args), lo, hi)
 
     # -- measures, from the incremental caches --
     @property
