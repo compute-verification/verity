@@ -425,7 +425,7 @@ def test_fill_layout_is_dithers(dims, ow, act):
     for i, j in [(0, 0), (127, 129), (f.m - 1, f.n - 1), (5, f.n // 2 - 1), (f.m - 1, f.n // 2)]:
         assert f.opened(i, j, f.S) == sorted(sh.opened(i, j, sh.S)) and f.o_leaf(i, j) == sh.o_leaf(i, j)
         if act and j < f.I:
-            assert f.act_leaf(i, j) == sh.act_leaf(i, j)
+            assert f.act_leaf(i, j) == sh.act_leaf(i, j) and f.rec_leaf(i) == sh.rec_leaf(i)
 
 
 def test_fill_buffer_and_root_are_dithers_with_a_prime():
@@ -440,13 +440,17 @@ def test_fill_buffer_and_root_are_dithers_with_a_prime():
     sa, sw = (list(map(int, x)) for x in v31lib.act_scales(f.m, f.n))
     Td, Od = dither.values(sh, seeds, A, B)
     assert np.array_equal(O, np.array(Od))
-    sc = dither.act_scales(sh, Od, sa, sw)
-    Ap = dither.acts(sh, Od, sc)
-    want = dither.values_buffer(sh, Td, Od, Ap)
-    values = v31.fill_buffer(f, T, O, np.array(Ap, dtype=np.int8))
+    Ap, recs = dither.acts(sh, Od, dither.act_scales(sh, sa, sw))
+    want = dither.values_buffer(sh, Td, Od, Ap, recs)
+    values = v31.fill_buffer(f, T, O, np.array(Ap, dtype=np.int8), _recs(recs))
     assert values == want
     ks = rng.bytes(64)
     assert v31.fill_commit(f, values, ks, 3 * f.leaves).root == dither.commit(sh, want, dither.salts(ks, 3 * f.leaves)).root
+
+
+def _recs(recs) -> np.ndarray:
+    """dither's records (`ActRecord`s) as the device holds them, m x dither.REC bytes."""
+    return np.frombuffer(b"".join(r.pack() for r in recs), np.uint8).reshape(-1, dither.REC).copy()
 
 
 def test_silu_table_is_dithers_silu():
@@ -460,8 +464,9 @@ def test_silu_table_is_dithers_silu():
 
 def test_fill_sample_checks_a_prime(tmp_path, capsys):
     """`v31 fill-bench`'s sample files of a gate-up call: each sampled tile's gate tile of A′ by dither's map, its
-    tile-row's A′ leaves, and four whole rows (O from D with its sums and shifts) with their amax; one A′ byte off is
-    refused."""
+    tile-row's A′ leaves (codes and records), and four whole rows (O from D with its sums and shifts) with their records,
+    the consumer's amax check passing each and refusing a forged amax; one A′ byte off is refused, and so is a record whose
+    amax is the row's second-largest |h|."""
     f = v31.Fill(128, 256, 1024, 256, 512, 2048, True, 16, True)
     sh = dither.Shape(128, 256, 1024, 256, 512, 2048, o=True, ow=16, act=True)
     rng = np.random.default_rng(8)
@@ -469,10 +474,10 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
     seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 1)
     T, O = v31.fill_values(f, A, B, v31.Coins.expand(f, seeds))
     sa, sw = v31lib.act_scales(f.m, f.n)
-    sc = dither.act_scales(sh, O.tolist(), list(map(int, sa)), list(map(int, sw)))
-    Ap = np.array(dither.acts(sh, O.tolist(), sc), dtype=np.int8)
+    Ap, recs = dither.acts(sh, O.tolist(), dither.act_scales(sh, list(map(int, sa)), list(map(int, sw))))
+    Ap, rb = np.array(Ap, dtype=np.int8), _recs(recs)
     ks, off = rng.bytes(64), 2 * f.leaves
-    cm = v31.fill_commit(f, v31.fill_buffer(f, T, O, Ap), ks, off)
+    cm = v31.fill_commit(f, v31.fill_buffer(f, T, O, Ap, rb), ks, off)
     s = tmp_path / "s"
     s.mkdir()
     (s / "seeds.bin").write_bytes(v31.fill_seeds_bytes(seeds))
@@ -481,7 +486,7 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
     (s / "sample.json").write_text(json.dumps({"m": f.m, "n": f.n, "k": f.k, "lp": f.lp, "L": f.L, "row": f.row, "o": True,
                                                "ow": 16, "act": True, "off": off, "tiles": tiles, "orows": orows,
                                                "root": cm.root.hex()}))
-    for name, x in (("xw", sw), ("rb", np.zeros(f.n, "<u4")), ("sb", np.zeros(f.n, "<u4"))):
+    for name, x in (("xw", sw), ("rb", np.zeros(f.n, "<u4")), ("sb", np.zeros(f.n, "<u4")), ("aover", np.zeros(1, "<u4"))):
         (s / f"{name}.bin").write_bytes(x.tobytes())
     tl = f.n // v31.TILE * f.lpt
     for i, tile in enumerate(tiles):
@@ -489,7 +494,7 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
         tg = tn % (f.n // v31.TILE // 2)
         tu, a0 = tg + f.n // v31.TILE // 2, f.span(f.tile_base(tile))[0]
         files = {"A": A[tm * 128:(tm + 1) * 128], "B": B[tn * 128:(tn + 1) * 128], "act": Ap[tm * 128:(tm + 1) * 128],
-                 "amax": np.array(sc.amax[tm * 128:(tm + 1) * 128], "<u2"), "xs": sa[tm * 128:(tm + 1) * 128],
+                 "rec": rb[tm * 128:(tm + 1) * 128], "xs": sa[tm * 128:(tm + 1) * 128],
                  "Bg": B[tg * 128:(tg + 1) * 128], "Bu": B[tu * 128:(tu + 1) * 128],
                  "D": O[orows[i]].astype("<u4"), "rasa": np.zeros(8, "<u4")}
         for name, x in files.items():
@@ -500,12 +505,25 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
     assert v31.main(["v31", "fill-sample", str(s)]) == 0
     rep = json.loads((s / "sample-check.json").read_text())
     assert all(t["act_exact"] and t["act_cells"] == 128 * 128 and t["act_rows_tied"] == 4 for t in rep["tiles"])
+    assert all(t["act_named_ok"] == 4 and t["act_forged_refused"] == t["act_forged"] == 4 for t in rep["tiles"])
     act = bytearray((s / "t1_act.bin").read_bytes())
     act[9 * f.I + 3] ^= 1
     (s / "t1_act.bin").write_bytes(bytes(act))
     assert v31.main(["v31", "fill-sample", str(s)]) == 1
     rep = json.loads((s / "sample-check.json").read_text())
     assert rep["tiles"][1]["act_cells_bad"] == 1 and rep["tiles"][1]["act_leaves_bad"] == 1 and rep["tiles"][1]["act_rows_bad"] == 1
+    act[9 * f.I + 3] ^= 1
+    (s / "t1_act.bin").write_bytes(bytes(act))
+    hs = dither.act_hs(sh, O.tolist(), dither.act_scales(sh, list(map(int, sa)), list(map(int, sw))))[1]
+    fc, fr = v31.forged_amax(hs)
+    act[f.I:2 * f.I] = bytes(x & 0xFF for x in fc)
+    (s / "t1_act.bin").write_bytes(bytes(act))
+    rec = bytearray((s / "t1_rec.bin").read_bytes())
+    rec[dither.REC:2 * dither.REC] = fr.pack()
+    (s / "t1_rec.bin").write_bytes(bytes(rec))
+    assert v31.main(["v31", "fill-sample", str(s)]) == 1
+    t = json.loads((s / "sample-check.json").read_text())["tiles"][1]
+    assert t["act_named_ok"] == 3 and t["act_amax_bad"] == 1 and t["act_rec_bad"] == 1
     capsys.readouterr()
 
 
@@ -539,7 +557,7 @@ class _DitherProver:
         A = self.ptrs[a_ptr] if a_ptr is not None else np.array(dither.pad_rows(seeds, sh.k, range(sh.m)), np.int8)
         self.padb = A.tobytes()
         T, O = dither.values(sh, seeds, A, self.B)
-        Ap = amax = None
+        Ap = recs = None
         if sh.act:
             Oa = [list(r) for r in O]
             if cheat.startswith("forgeH"):
@@ -547,13 +565,12 @@ class _DitherProver:
                     tm, tn = divmod(t, sh.n // 128)
                     for i in range(tm * 128, tm * 128 + 128):
                         Oa[i][tn * 128:tn * 128 + 128] = [(x + 0x10000) & 0xFFFFFFFF for x in Oa[i][tn * 128:tn * 128 + 128]]
-            sc = dither.act_scales(sh, Oa, list(map(int, self.sa)), list(map(int, self.sw)))
-            Ap, amax = dither.acts(sh, Oa, sc), sc.amax
+            Ap, recs = dither.acts(sh, Oa, dither.act_scales(sh, list(map(int, self.sa)), list(map(int, self.sw))))
             if cheat.startswith("forgeA"):
                 Ap[::2] = [[(x + 128) % 255 - 127 for x in r] for r in Ap[::2]]
-        buf = dither.values_buffer(sh, T, O, Ap)
+        buf = dither.values_buffer(sh, T, O, Ap, recs)
         self.calls[c] = {"off": c * sh.leaves}
-        self.st[c] = (buf, dither.commit(sh, buf, dither.salts(self.ks, c * sh.leaves)), Ap, amax)
+        self.st[c] = (buf, dither.commit(sh, buf, dither.salts(self.ks, c * sh.leaves)), Ap, recs)
         return c
 
     def root(self, c):
@@ -566,7 +583,7 @@ class _DitherProver:
         return self.padb
 
     def act(self, c):
-        return np.array(self.st[c][2], np.int8), np.array(self.st[c][3], "<u2")
+        return np.array(self.st[c][2], np.int8), _recs(self.st[c][3]), 0
 
     def act_ptr(self, c):
         a = np.array(self.st[c][2], np.int8)
@@ -594,7 +611,9 @@ def test_fill_dither_accepts_dithers_own_values_and_refuses_a_forged_a_prime(mon
     elif r["cheat"].startswith("forgeH"):   # every row's gate cells are in the forged tile: its amax moves
         assert r["act_rows_amax_equal"] == 0 and r["blocks_pass"] < r["blocks"]
     elif line.endswith(" 1"):
-        assert r["consumer"]["ok"] and r["values_equal"] and r["act_equal"]
+        assert r["consumer"]["ok"] and r["values_equal"] and r["act_equal"] and r["rec_equal"]
+    if r["cheat"] == "none":
+        assert r["act_named_ok"] == r["act_rows"] and r["act_forged_refused"] == r["act_forged"] > 0
 
 
 def test_fill_table(tmp_path, capsys):

@@ -659,8 +659,13 @@ class Fill:
         return self.n // 2 if self.act else 0
 
     @property
+    def arow(self) -> int:
+        """An A′ row's bytes: its I codes and its record (dither.REC)."""
+        return self.I + dither.REC if self.act else 0
+
+    @property
     def apr(self) -> int:
-        return -(-self.I // self.row)
+        return -(-self.arow // self.row)
 
     @property
     def stride(self) -> int:
@@ -673,7 +678,7 @@ class Fill:
 
     @property
     def nbytes(self) -> int:
-        return self.tiles * self.lpt * self.row + self.m * self.I
+        return self.tiles * self.lpt * self.row + self.m * self.arow
 
     def seg(self, s: int) -> tuple[int, int]:
         return (s - 1) * self.L, min(s * self.L, self.k)
@@ -691,15 +696,20 @@ class Fill:
         tm, r = divmod(i, TILE)
         return tm * self.stride + self.n // TILE * self.lpt + r * self.apr + j // self.row, j % self.row
 
+    def rec_leaf(self, i: int) -> tuple[int, int]:
+        """(leaf position, byte offset) of A′ row i's record, dither.REC bytes after its I codes."""
+        tm, r = divmod(i, TILE)
+        return tm * self.stride + self.n // TILE * self.lpt + r * self.apr + self.I // self.row, self.I % self.row
+
     def span(self, pos: int) -> tuple[int, int]:
         """(byte offset in the values, length) of leaf pos's row (dither.Shape.leaf_span)."""
         tm, q = divmod(pos, self.stride)
         tiles = self.n // TILE * self.lpt
-        start = tm * (tiles * self.row + TILE * self.I)
+        start = tm * (tiles * self.row + TILE * self.arow)
         if q < tiles:
             return start + q * self.row, self.row
         r, c = divmod(q - tiles, self.apr)
-        return start + tiles * self.row + r * self.I + c * self.row, min(self.row, self.I - c * self.row)
+        return start + tiles * self.row + r * self.arow + c * self.row, min(self.row, self.arow - c * self.row)
 
     def domain(self) -> CommitmentDomain:
         return CommitmentDomain(identity_digest_sha512(SERVED_TAG if self.o else FILL_TAG, self.label()), -1,
@@ -726,12 +736,13 @@ class Fill:
 
     def opened(self, i: int, j: int, s: int) -> list[int]:
         """The leaves proof block (i, j, s) opens: T_s's (s <= W), T_{s-1}'s (s > 1), and at s = S O's (and a gate cell's
-        A′)."""
+        A′ and its row's record)."""
         pos = [self.word_leaf(i, j, s)[0]] if s <= self.W else []
         pos += [self.word_leaf(i, j, s - 1)[0]] if s > 1 else []
         last = s == self.S and self.o
         pos += [self.o_leaf(i, j)[0]] if last else []
-        return sorted(set(pos + ([self.act_leaf(i, j)[0]] if last and self.act and j < self.I else [])))
+        gate = last and self.act and j < self.I
+        return sorted(set(pos + ([self.act_leaf(i, j)[0], self.rec_leaf(i)[0]] if gate else [])))
 
 
 served_seeds = dither.seeds
@@ -781,9 +792,11 @@ def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | Non
     return T, imatmul(Ad, Bd) & 0xFFFFFFFF
 
 
-def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None, Ap: np.ndarray | None = None) -> bytes:
+def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None, Ap: np.ndarray | None = None,
+                recs: np.ndarray | None = None) -> bytes:
     """dither.values_buffer: per tile, its T_1 .. T_W (u16) and then its O (u32, or u16 at ow 16), cells row-major,
-    little-endian; with A′ (m x I int8), each tile-row's tiles and then its 128 rows of A′."""
+    little-endian; with A′ (m x I int8) and its rows' records (m x dither.REC bytes), each tile-row's tiles and then its
+    128 rows of A′, each its codes and then its record."""
     tm, tn = f.m // TILE, f.n // TILE
     w = T[:f.W].astype("<u2").reshape(f.W, tm, TILE, tn, TILE).transpose(1, 3, 0, 2, 4).reshape(tm * tn, -1)
     parts = [w.view(np.uint8)]
@@ -795,9 +808,10 @@ def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None, Ap: np.ndar
     tiles = np.ascontiguousarray(np.concatenate(parts, axis=1)).reshape(tm, -1)
     if not f.act:
         return tiles.tobytes()
-    if Ap is None or Ap.shape != (f.m, f.I):
-        raise ValueError(f"this call commits A′ (m x I = {f.m} x {f.I}): pass it")
-    a = np.ascontiguousarray(Ap.astype(np.int8)).view(np.uint8).reshape(tm, -1)
+    if Ap is None or Ap.shape != (f.m, f.I) or recs is None or recs.shape != (f.m, dither.REC):
+        raise ValueError(f"this call commits A′ (m x I = {f.m} x {f.I}) and a record a row: pass them")
+    a = np.concatenate([np.ascontiguousarray(Ap.astype(np.int8)).view(np.uint8), recs.astype(np.uint8)], axis=1)
+    a = a.reshape(tm, -1)
     return np.concatenate([tiles, a], axis=1).tobytes()
 
 
@@ -958,12 +972,25 @@ def cmd_fill_params(a: argparse.Namespace) -> int:
     return 0
 
 
+def forged_amax(hs: list[int]) -> tuple[list[int], dither.ActRecord] | None:
+    """A prover's row under a shrunk amax, the row's second-largest |h| (NaN skipped), its codes and S_i formed under it
+    (None: no second magnitude, or S_i past a record's slots)."""
+    mags = sorted({h & 0x7FFF for h in hs if h & 0x7FFF <= 0x7F80}, reverse=True)
+    if len(mags) < 2:
+        return None
+    codes = [(dither.requant(h, mags[1]) ^ 0x80) - 0x80 for h in hs]
+    named = dither.named_of(codes)
+    return (codes, dither.ActRecord(mags[1], named)) if len(named) <= dither.NAMED else None
+
+
 def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict[str, bytes], ks: bytes, off: int,
                orows: list[int]) -> dict:
     """A sampled tile's tile-row A′ against dither.py's map: the gate tile's 128 x 128 cells (its O and its up tile's from
-    A, B's gate and up rows and the coins; amax the GPU's), every leaf of the tile-row's A′ rows, and four whole rows (O
-    from the GPU's D with its sums and shifts, tied to the reference at the tile's columns) with their amax
-    (dither.abs_max over the row's SiLU·mul) and every A′ cell."""
+    A, B's gate and up rows and the coins; amax the GPU's record's), every leaf of the tile-row's A′ rows (codes and
+    record), and four whole rows (O from the GPU's D with its sums and shifts, tied to the reference at the tile's columns)
+    with their records (dither.act_codes over the row's SiLU·mul: amax and S_i) and every A′ cell. On each whole row the
+    consumer's amax check (dither.named_ok, h at S_i from the row) passes the GPU's codes and record and refuses a forged
+    amax, the row's second-largest |h| with its codes and S_i formed under it."""
     tm, tn = divmod(tile, f.n // TILE)
     tg = tn % (f.n // TILE // 2)
     tu, I, r0 = tg + f.n // TILE // 2, f.I, tm * TILE
@@ -971,7 +998,8 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
     def rd(name: str, dt) -> np.ndarray:
         return np.frombuffer((d / f"{name}.bin").read_bytes(), dtype=dt)
 
-    ga, amax = rd(f"t{idx}_act", np.int8).reshape(TILE, I), rd(f"t{idx}_amax", "<u2").astype(int)
+    ga, grec = rd(f"t{idx}_act", np.int8).reshape(TILE, I), rd(f"t{idx}_rec", np.uint8).reshape(TILE, dither.REC)
+    amax = grec[:, :2].copy().view("<u2").reshape(TILE).astype(int)
     xs, xw = rd(f"t{idx}_xs", "<u4").astype(int), rd("xw", "<u4").astype(int)
     Bg, Bu = (rd(f"t{idx}_{x}", np.int8).reshape(TILE, f.k) for x in ("Bg", "Bu"))
     rows = range(r0, r0 + TILE)
@@ -982,16 +1010,17 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
                                     int(xw[tg * TILE + c + I]), int(amax[r])) != int(ga[r, tg * TILE + c]) & 0xFF
                     for r in range(TILE) for c in range(TILE))
     dom, g_al = f.domain(), (d / f"t{idx}_aleaves.bin").read_bytes()
+    full = np.concatenate([ga.view(np.uint8), grec], axis=1)
     leaves_bad = 0
     for r in range(TILE):
         for c in range(f.apr):
             pos = tm * f.stride + f.n // TILE * f.lpt + r * f.apr + c
-            chunk = ga[r, c * f.row:min((c + 1) * f.row, I)].tobytes()
+            chunk = full[r, c * f.row:min((c + 1) * f.row, f.arow)].tobytes()
             x = r * f.apr + c
             leaves_bad += row_leaf(dom, pos, leaf_h(chunk, cref.prf_salt(ks, off + pos)), V2) != g_al[64 * x:64 * x + 64]
     D, rasa = rd(f"t{idx}_D", "<u4").astype(np.uint64).reshape(4, f.n), rd(f"t{idx}_rasa", "<u4").astype(np.uint64)
     rb, sb = rd("rb", "<u4").astype(np.uint64), rd("sb", "<u4").astype(np.uint64)
-    tied = amax_bad = rows_bad = 0
+    tied = amax_bad = rows_bad = rec_bad = named_pass = forged = forged_refused = 0
     for x, i in enumerate(orows):
         O = (D[x] + sb * rasa[2 * x] + rasa[2 * x + 1] * rb) & 0xFFFFFFFF
         r = i - r0
@@ -999,13 +1028,24 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
                  and np.array_equal(O[tu * TILE:(tu + 1) * TILE], Ou[r].astype(np.uint64)))
         hs = [dither.silu_mul(dither.dequant(int(O[j]), int(xs[r]), int(xw[j])),
                               dither.dequant(int(O[j + I]), int(xs[r]), int(xw[j + I]))) for j in range(I)]
-        am = dither.abs_max(hs)
-        amax_bad += am != int(amax[r])
-        rows_bad += any(dither.requant(h, am) != int(ga[r, j]) & 0xFF for j, h in enumerate(hs))
+        codes, rec = dither.act_codes(hs)
+        amax_bad += rec.amax != int(amax[r])
+        rows_bad += codes != ga[r].tolist()
+        rec_bad += len(rec.named) > dither.NAMED or rec.pack() != grec[r].tobytes()
+        g_codes = ga[r].tolist()
+        named_pass += dither.named_ok(g_codes, grec[r].tobytes(), {j: hs[j] for j in dither.named_of(g_codes)})
+        cheat = forged_amax(hs)
+        if cheat is not None:
+            fc, fr = cheat
+            forged += 1
+            forged_refused += not dither.named_ok(fc, fr.pack(), {j: hs[j] for j in fr.named})
+    over = int(rd("aover", "<u4")[0])
     out = {"act_cells": TILE * TILE, "act_cells_bad": int(cells_bad), "act_leaves": TILE * f.apr,
            "act_leaves_bad": int(leaves_bad), "act_rows": len(orows), "act_rows_tied": int(tied), "act_amax_bad": int(amax_bad),
-           "act_rows_bad": int(rows_bad)}
-    out["act_exact"] = not cells_bad and not leaves_bad and tied == len(orows) and not amax_bad and not rows_bad
+           "act_rows_bad": int(rows_bad), "act_rec_bad": int(rec_bad), "act_named_ok": int(named_pass),
+           "act_forged": forged, "act_forged_refused": forged_refused, "act_rows_over": over}
+    out["act_exact"] = (not cells_bad and not leaves_bad and tied == len(orows) and not amax_bad and not rows_bad
+                        and not rec_bad and named_pass == len(orows) and forged_refused == forged and not over)
     return out
 
 
