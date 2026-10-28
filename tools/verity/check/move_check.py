@@ -852,16 +852,24 @@ def lean_declared(text: str) -> list[str]:
     return [next(filter(None, m.groups())) for m in LEAN_DECL.finditer(LEAN_COMMENT.sub("", text))]
 
 
-def renaming(base: Tree, table: dict[str, str], declared: list[str], rewrites, whole: bool = False) -> dict[str, str]:
-    """The entries of ``table`` (a map's words, or with ``whole`` a `[[words_in]]` entry's) that rename a name of
-    ``declared``, each to a name BASE never spells in a file the map rewrites (``rewrites``), and no two to one: a rename
-    that merges no two names."""
+def renaming(base: Tree, table: dict[str, str], declared: list[str], now: set[str], rewrites,
+             whole: bool = False) -> dict[str, str]:
+    """The entries of ``table`` (a map's words, or with ``whole`` a `[[words_in]]` entry's) that make a rename the range
+    made: with them applied, a name of ``declared`` (the edited `.lean` files' at BASE) becomes one of ``now`` (theirs at
+    HEAD), where it no longer stands. Each must rename to a name BASE never spells in a file the map rewrites
+    (``rewrites``), and no two to one, so that the rename merges no two names. A word of an earlier move that the range
+    didn't make (a stale one, whose rename a later move undid) is never kept."""
     R = _rename()
 
     def words(t: dict[str, str]):
         return R.Words({"words": {}, "words_in": [{"files": ["*"], "words": t}]} if whole else {"words": t})
     names = "\n".join(declared)
-    hits = {o: n for o, n in table.items() if words({o: n}).sub(names, "-") != names}
+    if not (table := {o: n for o, n in table.items() if words({o: n}).sub(names, "-") != names}):
+        return {}
+    every, hits = words(table), {}
+    for d in declared:
+        if (n := every.sub(d, "-")) != d and n in now and d not in now:
+            hits |= {o: m for o, m in table.items() if o not in hits and words({o: m}).sub(d, "-") != d}
     if not hits:
         return {}
     try:
@@ -879,15 +887,18 @@ def renaming(base: Tree, table: dict[str, str], declared: list[str], rewrites, w
 
 
 def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str], pmap: dict[str, str],
-              lean_edited: list[str] = ()) -> list:
+              lean_edited: dict[str, str] | None = None, head: Tree | None = None) -> list:
     """The move scripts' word maps at BASE, each cut to the words that rename what the range moved: a word is kept when it
     renames a path, a directory the range moved whole (as `dir/`) or a Lean module that its map, applied whole, renames to
     where the range moved it, or when it spells a kept word's rename as a pathlib chain or a regex (`spelled`); and a
     word, or a `[[words_in]]` entry's word in the files its globs match, when it renames a Lean declaration of a `.lean`
-    file the range edits (``lean_edited``) to a name BASE never spells (`renaming`)."""
+    file the range edits (``lean_edited``, each BASE path's HEAD path) as the range renamed it, to a name BASE never
+    spells (`renaming`)."""
     R = _rename()
     names = [*renamed, *lmods.items(), *((o + "/", n + "/") for o, n in pmap.items())]
+    lean_edited = lean_edited or {}
     declared = {p: lean_declared(base.text(p) or "") for p in lean_edited}
+    now = {d for q in lean_edited.values() for d in lean_declared(head.text(q) or "")} if head else set()
     out = []
     for data, whole in base_maps(base):
         moved = {a: b for a, b in names if whole.path(a) == b and a != b}
@@ -895,13 +906,13 @@ def word_maps(base: Tree, renamed: list[tuple[str, str]], lmods: dict[str, str],
                 if any(R.Words({"words": {o: n}}).path(a) != a for a in moved)}
         kept |= {o: n for o, n in data["words"].items() if (spelled(o), spelled(n)) in kept.items()}
         mine = [d for p, ds in declared.items() if not whole.excluded(p) for d in ds]
-        kept |= renaming(base, {o: n for o, n in data["words"].items() if o not in kept}, mine,
+        kept |= renaming(base, {o: n for o, n in data["words"].items() if o not in kept}, mine, now,
                          lambda p: not whole.excluded(p))
         kept_in = []
         for s in data.get("words_in", []):
             def scoped(p: str, files=s["files"]) -> bool:
                 return not whole.excluded(p) and any(R._match(p, g) for g in files)
-            if w := renaming(base, s["words"], [d for p, ds in declared.items() if scoped(p) for d in ds], scoped,
+            if w := renaming(base, s["words"], [d for p, ds in declared.items() if scoped(p) for d in ds], now, scoped,
                              whole=True):
                 kept_in.append({"files": s["files"], "words": w})
         if kept or kept_in:
@@ -1035,8 +1046,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             bp, hp = B.package(old), H.package(new)
             if bp is not None and hp is not None and not B.is_package(hp):
                 dests.setdefault(hp, set()).add(bp)
-    maps = word_maps(B, renamed, lmods, pmap, [e["old"] for e in entries if e["status"] in "RM"
-                                               and e["old"].endswith(".lean") and e["shas"][0] != e["shas"][1]])
+    maps = word_maps(B, renamed, lmods, pmap, {e["old"]: e["new"] for e in entries if e["status"] in "RM"
+                                               and e["old"].endswith(".lean") and e["shas"][0] != e["shas"][1]}, H)
     moves: dict[str, tuple[str, str]] = {}                  # a module that changed package: (its package at BASE, at HEAD)
     for o, n in renamed:
         if o.endswith(".lean") and n.endswith(".lean"):

@@ -603,6 +603,14 @@ def test_a_scoped_word_renames_only_in_its_files(tmp_path):
     assert f["path"] == "notes.md"
 
 
+def test_a_stale_word_of_another_map_is_not_kept(tmp_path):
+    """An earlier move's map also renames `DrawIsCoin`, to a name the base no longer spells; the range didn't make that
+    rename, so its word is not applied."""
+    stale = '[words]\n"DrawIsCoin" = "CoinIsDrawn"\n\n[rewrite]\nexclude = ["tools/move/**"]\n'
+    r = _declared(tmp_path, base_extra={"tools/move/a_stale_map.toml": stale})
+    assert r["certified"], r["refusals"]
+
+
 def test_a_word_no_edited_lean_file_declares_is_refused(tmp_path):
     """Renaming a declaration's mentions while its `.lean` files stay as they were renames no declaration."""
     repo, base = _repo(tmp_path, DECL_BASE)
