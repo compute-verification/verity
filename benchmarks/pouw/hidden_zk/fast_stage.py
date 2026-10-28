@@ -2,8 +2,9 @@
 one process (stage.py's); `composed()`, `size()` and `release()` hand stage.py the circuit it composed, so it never reads
 the circuit back.
 
-    - the cycle collector is off: staging makes no cyclic garbage (a K=256 row unit's 30k collections freed 325 objects),
-      and its collections were about 30% of the time at K=256, more at K=4096
+    - the cycle collector is off while a unit's gates are lowered (`ir_lower.lower_gates`): they make no cyclic garbage (a
+      K=256 row unit's 30k collections freed 325 objects), and its collections were about 30% of the time at K=256, more
+      at K=4096. It stays on elsewhere: building the Programs and tracing the IR leave cyclic garbage, 0.9 GiB at a lane
     - the unit circuit's ANDs keep their operand forms as tuples, not frozensets, and drop them once the unit is laid out:
       nothing reads them after `ir_lower.layout`
     - the unit's netlist (`ir_lower.netlist`'s text) is written once, to a file under ``scratch``, hashed as it is written:
@@ -391,12 +392,17 @@ class StreamLayout(IL.Layout):
         nnz_a = nnz_b = 0
         for i in reversed(range(len(self.spool.blocks))):
             a0, heads, ids = self.spool.block(i)
-            v0, ends, ids = self.n_in + a0, np.cumsum((heads >> 1).sum(axis=1)).tolist(), ids.tolist()
-            for j in range(len(ends) - 1, -1, -1):
-                if live[v0 + j]:
-                    for u in ids[ends[j - 1] if j else 0:ends[j]]:
-                        live[u] = 1
-            m = np.frombuffer(live, np.uint8, len(ends), v0).astype(bool)
+            v0, ends = self.n_in + a0, np.concatenate([[0], np.cumsum((heads >> 1).sum(axis=1))])
+            # `ROWS` ANDs' bits at a time as Python ints (36 bytes a bit): a whole block's, at a lane's 46 bits an AND at
+            # K = 448 and more as K grows, are about 0.9 GB
+            for j1 in range(len(heads), 0, -ROWS):
+                j0 = max(0, j1 - ROWS)
+                e, x = (ends[j0:j1 + 1] - ends[j0]).tolist(), ids[ends[j0]:ends[j1]].tolist()
+                for j in range(j1 - j0 - 1, -1, -1):
+                    if live[v0 + j0 + j]:
+                        for u in x[e[j]:e[j + 1]]:
+                            live[u] = 1
+            m = np.frombuffer(live, np.uint8, len(heads), v0).astype(bool)
             side = (heads >> 1) + (heads & 1)
             nnz_a, nnz_b = nnz_a + int(side[m, 0].sum()), nnz_b + int(side[m, 1].sum())
         lv = np.frombuffer(live, np.uint8)
@@ -571,11 +577,11 @@ def evaluate_layout(lay, ports, T, flip=None):
 def install(scratch: Path) -> None:
     """Patch the library for this process; the unit's netlist goes under ``scratch`` until `release`. The slot circuits'
     caches (`cache_slot_circuits`) go first, so these wrap them."""
-    gc.disable()
     scratch.mkdir(parents=True, exist_ok=True)
     _scratch[:] = [scratch]
     CS.cache_slot_circuits()
     new, lower, layout, expanded = forms.Circuit._new, IL.lower, IL.layout, FC._expanded
+    lower_gates = IL.lower_gates
     unit_lowering, unit_circuit, compose, write_text = CS.unit_lowering, CS.unit_circuit, FC.compose, Path.write_text
     params = inspect.signature(unit_lowering)
     atexit.register(_drop_spools)
@@ -618,6 +624,15 @@ def install(scratch: Path) -> None:
             return lower(C, *a, **k)
         finally:
             _lowering.pop()
+
+    def lower_gates_(C, *a, **k):
+        if not (_lowering and C is _lowering[-1] and gc.isenabled()):
+            return lower_gates(C, *a, **k)
+        gc.disable()
+        try:
+            return lower_gates(C, *a, **k)
+        finally:
+            gc.enable()
 
     def layout_(C, *a, **k):
         if isinstance(C, StreamCircuit):
@@ -663,7 +678,7 @@ def install(scratch: Path) -> None:
 
     forms.Circuit._new = new_
     CS.unit_lowering, CS.unit_circuit = unit_lowering_, unit_circuit_
-    IL.lower, IL.layout, FC._expanded, FC.compose = lower_, layout_, expanded_, compose_
+    IL.lower, IL.lower_gates, IL.layout, FC._expanded, FC.compose = lower_, lower_gates_, layout_, expanded_, compose_
     Path.write_text = write_text_
     IL.digest, FC.digest, FC.class_digest = sha256, digest, class_digest
     # a structural unit (`class_statement.TmplLowering`) has no netlist: its unit_sha256 stays the library's, over its template
