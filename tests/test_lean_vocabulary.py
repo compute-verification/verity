@@ -999,6 +999,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a reading of it: the service's admitted log entry (proofs)",
+    "verity/core/protocols/sampled_proofs/service.py::Session":
+        "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Coins.lean::Flock.Firewall.Coins.Session":
         "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
