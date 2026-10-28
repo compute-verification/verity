@@ -1530,6 +1530,10 @@
    "owner": "@memory-accounting",
    "digest": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482"
   },
+  "Pous.Guarantees.RoundsBound": {
+   "owner": "@memory-accounting",
+   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4"
+  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
@@ -2578,6 +2582,10 @@
   "Nci.SecurityProofs.WeightedProductCap": {
    "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
    "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial"
+  },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
+   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
   }
  },
  "unwitnessed": {
@@ -10098,6 +10106,31 @@
    "assumptions": [],
    "type_hash": "647a7a6cc6ccaf23b16ce02bee9af028ed4c839b98ee0b4dd4cb54638a5eb181"
   },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationWide320 : Pous.Guarantees.ObligationWide320"],
+   "assumptions": [],
+   "type_hash": "13eba7d1271f1b1a203a29a5a705cec12bad77b8cacff6abe06439152470f339"
+  },
+  "Pous.SecurityProofs.ObligationWide320_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.ObligationWide320_honest :",
+    "  Pous.Guarantees.RoundsBound (43 / 1000) (instHPow.hPow (ENNReal.instInv.inv 2) 137) 320",
+    "    (instHPow.hPow (ENNReal.instInv.inv 2) 20)"
+   ],
+   "assumptions": [],
+   "type_hash": "0fe48a27cbcba8450f6bd5e62caa7f83b45002045681842835976f6ae6f37000"
+  },
+  "Pous.SecurityProofs.ObligationWide320_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.ObligationWide320_nontrivial :",
+    "  Not (ENNReal.instLE.le (Pous.pr fun x => True) (instHPow.hPow (ENNReal.instInv.inv 2) 20))"
+   ],
+   "assumptions": [],
+   "type_hash": "d559839c817d2ced57f280afa6968c78ef720b10da307f39f5b90f8e22a1a08c"
+  },
   "Pous.SecurityProofs.P2ContentAbsorbs": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2ContentAbsorbs : Pous.Guarantees.P2ContentAbsorbs"],
@@ -13711,7 +13744,10 @@
    "Nci.SecurityProofs.WeightedProductCapHonest": "completeness: WeightedProductCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product reads its slot (SlotsRead, proved), its use has weight 1, and the proof block holds slots priced at most one bit (HeldPriceAtMost, proved), so WeightedProductCap's premises hold together there and WeightedProductCap is not vacuous.",
    "Nci.SecurityProofs.WeightedProductCapNontrivial": "completeness: WeightedProductCap's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at h = 0, below the slot the block holds so HeldPriceAtMost fails, its weighted products, 1, exceed h times the weight it serves, so WeightedProductCap's conclusion is not a tautology.",
    "Nci.SecurityProofs.CapabilityFloorHonest": "completeness: CapabilityFloor's honest witness (its witnesses entry): at the toy task Accounting.Overhead.Toy (Security/Definitions/Accounting/CoverageToy.lean), CoversEfficientMethods holds at η = 0 and every covered computation costs Lc = 5, both proved, so CapabilityFloor's premises hold together there; it is degenerate in coverage: Core holds of every computation, so no run is uncovered.",
-   "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Overhead.Toy, a computation costing 0, below the floor Lc = 5 so the floor premise fails, succeeds with probability 1, above η = 0, so CapabilityFloor's conclusion is not a tautology."
+   "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Overhead.Toy, a computation costing 0, below the floor Lc = 5 so the floor premise fails, succeeds with probability 1, above η = 0, so CapabilityFloor's conclusion is not a tautology.",
+   "Pous.SecurityProofs.ObligationWide320": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) at every block count from 2^19 to 2^27, 320 reads with the state at most S0 at each, by 2^-20, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
+   "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
+   "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -28742,6 +28778,7 @@
     "Pous.SecurityProofs.ObligationDemoWide",
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -28802,6 +28839,7 @@
     "Pous.SecurityProofs.ObligationDemoWide",
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
@@ -28905,6 +28943,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -29075,6 +29114,8 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_nontrivial",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
@@ -29180,14 +29221,16 @@
    ]
   },
   "Definitions.Pous.Guarantees.Obligation": {
-   "digest": "3c9e6e9e76b7b8a6acf17607917df6b2ecc351580ad2fbdb3884435b1d034f8e",
+   "digest": "2b8bd69256904902f2b37cecab7e85fb951153ec477bc227b59b2f3252cb2e9c",
    "definitions": {
     "Pous.Guarantees.ObligationDemo": "477a05a20ed593ebd3efc6354d226e2b99122be7454e38a463f3c8ba369b93a2",
     "Pous.Guarantees.ObligationDemoWide": "2c05dc28b62b59d9ef1f430c3ba2aeb195dedf0927cf39ca81d152d9b5717604",
     "Pous.Guarantees.ObligationOfRoundSecure": "94292f511eadaa13ece6940b67cc38584dc4e5668e07a68f9d48afec1d9f4b5b",
     "Pous.Guarantees.ObligationOfRoundSecureWide": "08ecc5527c191b57b8cb6515ba8e94f7d363be64f0746801d9910b3f8b41a3ae",
     "Pous.Guarantees.ObligationOfStatic": "28decba2f563aedd1f194ee15864496827f2f5602334bee6a4ac142095949212",
+    "Pous.Guarantees.ObligationWide320": "a805c8caf5169e869b00b4cc82bd17e3dd636f038f84e9a0322fde18ea171407",
     "Pous.Guarantees.P2ContentAbsorbs": "d8c36c9972b654a211b48bd6ec829a7b3a6d4015092dee2658e7dd5faf2738f1",
+    "Pous.Guarantees.RoundsBound": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
     "Pous.Guarantees.SnapshotFresh": "c106431b1609a11713c846d06df14838be4982fb3536019917533a3b5a0bf335"
    },
    "guarantees": [
@@ -29196,6 +29239,8 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_honest",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.SnapshotFresh"
    ]
@@ -29366,6 +29411,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -29642,6 +29688,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -29699,6 +29746,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
@@ -29884,6 +29932,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -30005,7 +30054,7 @@
    ]
   },
   "Definitions.Pous.P2.Cost": {
-   "digest": "4d8658986d9c068b72209b686f8ca242fcbbc469ec9d477451bf870797dcc48d",
+   "digest": "ba32e4abf87499c19314c3d66379e81d299b034419057c4c97b3c68297617d02",
    "definitions": {
     "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
     "Pous.KeyPart": "eb2c163914e5f40399b790ce38d8b0b48f7d0fad1e64fb11d449ca855d26baee",
@@ -30031,7 +30080,9 @@
     "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
     "Pous.RingQry.rec": "662150542c17dd3dfe6e2c8290691104cfa3810300966a3cee749d186b40f683",
     "Pous.SeqResponderOn": "037cd3a2d273fb6e81d0515b7872e809a60ebd4e7157e3753277dd4fe3962c49",
+    "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
     "Pous.SimResponderOn": "05be767a1c468b659d4bb814e59f7a2923bb249dded56656583ba2497799b2cd",
+    "Pous.SimResponderOn.prog": "5fbc08c1caef87dcc0ee147520ff272369887fcb366daab96043ee8d9ad9a514",
     "Pous.decBlock": "52c9d55db46e0fd203f72e1aef72df7c6a353810d3092818fc5dd45148865f4c",
     "Pous.eltD": "e0d35ad5a621d89317cedcaa1c472e5ca7089a6592f5e80abeed85a2296e66bb",
     "Pous.encBlock": "ae8a61be28a1724696c809666cbac5784158a6c30d0d19a592ad6b029056045e",
@@ -30070,6 +30121,8 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_nontrivial",
     "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
@@ -30090,13 +30143,16 @@
     "Pous.SecurityProofs.ObligationDemoWide",
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
-    "Pous.SecurityProofs.ObligationOfStatic"
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
+    "Pous.SecurityProofs.ObligationWide320_nontrivial"
    ]
   },
   "Definitions.Pous.P2.Rounds": {
-   "digest": "faea93bd74a0a0fa743500a9a3a65cdbcd7d46134265dc62ea3d021c54c4a7cd",
+   "digest": "74864b1d0686ed76de2dcca0e59cfde29b9c313cdbfbd82e32d3c3352ba949e5",
    "definitions": {
     "Pous.VarResponderOn": "251ff6ec724a960a344fb2ffedc790c65a6893b877ed06bf6b83691fc4d60803",
+    "Pous.VarResponderOn.step": "813cf4769e42688bdce563b03dbd9d5d80fcca5dd763b11fff69c1751fba1b83",
     "Pous.lowBoundaries": "33233b2ce35cdd679f4f2f96897960d01128f9a9f1f0d042c6012f27d2144cd4",
     "Pous.varAnswers": "f46e52cc7f22f537498e84dc6d1ae75aef6958d23e60c3df6cb2d0e9fbc0ee5d",
     "Pous.varPassesOn": "c67e0ff161e36905079d330a726556f3667892f6f7b1835dbe1e6a29c753d0e8"
@@ -30107,6 +30163,7 @@
     "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.ObligationWide320",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
    ]
