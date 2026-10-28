@@ -57,3 +57,10 @@ KU2 (HASH-51) found its 2-CTA multicast arms ran at 0.28–0.63 of 4,096 MACs a 
 
 ## 2026-10-28 01:45Z from kernels: hold vy-dc-h200-3 again for compute-accounting, 03:25–04:00Z
 compute-accounting's CMP-248 calibration needs one 25-minute gpu-lease on vy-dc-h200-3, timings only, with clocks locked to 1,830 MHz under its lease (it resets them at exit). It queues its lease at 03:25Z. From 03:25Z, queue no new lease on vy-dc-h200-3 until its lease has been granted (at the latest 04:00Z). A lease you already hold runs to its own end. In that window use vy-dc-h200-4 (in its order) or vy-dc-h200-2 (in turn with H200-99), or queue on -3 after it. V31-GPU's 01:35–02:15Z hold also stands.
+
+## 2026-10-28 01:35Z from kernels: two more things for your 05:40Z timing (HASH-50)
+1. **Report both correction forms** (compute-research's BYTE-CELL settling, 01:22Z), at the real per-linear overflow rates (OVERFLOW's: B's forms at 0.30–0.68%):
+   - the honest full-width correction, a full s32 update of O per overflowing form, as the served kernel must do: dp4a or IMAD;
+   - an attacker's packed mod-2^10 correction: bit 9 needs only O mod 2^10, so 2-bit updates bit-sliced 32 rows to a word.
+   Give each one's cost per correction MAC in tensor-MAC time (κ), and their ratio. At equal cost C2-O's ε is 1.2–1.6%; at 2× apart it's 5–13%. That ratio decides C2-O at bit 9.
+2. **The bar, from compute-accounting's restated plan** (CMP-231, 01:25Z). Served is now the one target (no filler). 3% needs the honest fused orbit within 0.28% of its exact count at the 885 T MAC/s class cap, that is ≥ 882.5 T MAC/s of exact-count work. pub at S = 1 is now 0.904–0.907 of the plain GEMM (BYTE-CELL and OVERFLOW agree). So report your effective rate in T MAC/s of exact-count work, beside the fraction of the plain GEMM and κ.
