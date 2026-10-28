@@ -217,6 +217,7 @@
       "linear": "CMP",
       "owns": [
         "verity/core/protocols/pouw/",
+        "verity/ml/protocols/pouw/",
         "Security/Definitions/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
@@ -332,6 +333,7 @@
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
+        "verity/ml/protocols/pous/",
         "verity/core/protocols/remote_bandwidth/",
         "verity/core/primitives/requirement/",
         "Security/Definitions/Accounting/Bandwidth.lean",
@@ -422,6 +424,7 @@
       "owns": [
         "verity/core/protocols/network/",
         "verity/core/protocols/certifier/",
+        "verity/ml/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
