@@ -3,5 +3,5 @@
 q = 1.22                  # lane instructions a table word
 bytes = 3.5               # L2 bytes a table word (6.0 single-field: --lookup-bytes 6)
 sms = 142
-mhz = 2520                # f_max (EPS1 ADA, r20261017-070403-a5ff)
+mhz = 2520                # f_max
 source = "SPEC's SCALAR-ROUTE as restated (named assumption): a right fresh word costs >= 2.03 issue slots, or >= 1.22 slots and 3.5 B of table loads (6.0 B single-field); the L40S's L2 unmeasured, so unbounded"

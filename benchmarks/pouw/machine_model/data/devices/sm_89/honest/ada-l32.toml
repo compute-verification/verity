@@ -1,9 +1,9 @@
-# Honest at L = 32 on the L40S as EPS1 ADA measured it: `honest32`, 8 IMMA.16832 then duo on each of their 32 words a
+# Honest at L = 32 on the L40S as measured: `honest32`, 8 IMMA.16832 then duo on each of their 32 words a
 # lane (LOP3 + IMAD + LEA.HI a word), operands in registers. The fastest of 2, 4, 6 and 8 warps a SMSP is 6's,
 # 22.33 words/SM/clk = 0.70 of IMMA.16832's 32 (T1 gives 1/2 here: every k32 form writes 32 words/SM/clk).
 name = "ada-l32"
 status = "measured"
-source = "EPS1 ADA's honest32 (opcode_probe/sm89/scalar.cu, SASS pinned at 8 IMMA.16832, 32 LOP3.LUT, 32 IMAD, 32 LEA.HI a step; note:20261017T0605Z-draft-eps1-ada, r20261017-065626-d7f1)"
+source = "EPS1 ADA's honest32 (opcode_probe/sm89/scalar.cu, SASS pinned at 8 IMMA.16832, 32 LOP3.LUT, 32 IMAD, 32 LEA.HI a step)"
 L = 32
 
 [mma]
@@ -19,11 +19,11 @@ IMAD = 4
 
 [measured]
 cycles_per_mma = 22.929         # 128 words x 4 SMSPs / 22.33 words/SM/clk (22.93-24.71 over 2-8 warps a SMSP)
-source = "EPS1 ADA, honest32_w6 (note:20261017T0605Z-draft-eps1-ada, r20261017-065626-d7f1)"
+source = "EPS1 ADA, honest32_w6"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
 
 [fold]
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
