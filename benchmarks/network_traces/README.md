@@ -206,9 +206,8 @@ The terms, in the generator reading of the scan's statement (each unit's registe
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
   schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs are the scan's slot entries (`prog`, `scan_zk.slot_entries`): NR·T / EVERY = 8 entries of
-  NE = 1,136 bits, 9,088 bits a link-window as registered today, or 33 + KO·IDB = 1,121 bits a request if `prog` is
-  an input only at its anchored entries.
+- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a sampling block as registered, or
+  32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
   warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
@@ -254,8 +253,8 @@ The scale:
 | year | 1 | 8.96·10^10 (4.53×) | 8.96·10^10 (4.53×) | 8.96·10^10 (4.53×) | 9,096 |
 | year | 1,000 | 8.96·10^13 (4,534×) | 8.96·10^13 (4,534×) | 8.96·10^13 (4,534×) | 9,096 |
 
-As registered today, K stays under the size of the weights for one machine's week (8.7%) and month (37.3%), and passes
-it within one machine-year and for 1,000 machines over any period, so the record's K is vacuous there.
+As registered, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
+monitoring period.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering)**, bits, and the share of
 the weights (the jitter term 0, assumed (J)):
@@ -281,8 +280,8 @@ K also rests on these conditions:
 - The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
   receiver no more than an idle one.
 - At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.01% of the weights and its machine-year 52.3%; as registered today they are 8.7%
-  and 4.53× either way.
+  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered it is 1.37×
+  a machine-week either way.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the link-window's free inputs above.
 
