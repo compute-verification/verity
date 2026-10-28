@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Two n = 8 keys that FOLD's reduced key_ok_r11 admits and at which K_R = K_1 = P/X/N fails
-(note:20261017T0320Z-draft-eps1-fold §8, the corrected criterion).
+"""Two n = 8 keys that the reduced key_ok_r11 (egemm_depthr_check) admits and at which K_R = K_1 = P/X/N fails
+(the corrected depth-R criterion).
 
 `fold_kernel_sweep.py` found them among 400 random key_ok_r11 keys; this checks them independently. At (97, 179) with the
 word (255, 48, 87, 75), K_1 has 64 elements (meet in the middle), all fixing the R-fold for R = 1..5 on every state, 48
 of them outside (G₃). At (83, 225) with the word (144, 166, 44, 160), K_1 is the 16-element group, but changes outside it
 fix the 2-fold and the 4-fold on every state. At n = 10, (321, 411) has a 32-element K_1. All three keys are
-≡ 1 mod 2^(r1+2). FOLD's reduced KJ19 rejects only
+≡ 1 mod 2^(r1+2). The reduced KJ19 rejects only
 ±1 mod 2^(n−2) = 64, which is looser than its 32-bit KJ19 (±1 mod 2^13 = 2^r1, `key_ok_r11_32`) would be at this width.
 Scaled as ±1 mod 2^r1, the filter rejects all three, but at n = 8 it rejects every key, so width-8 evidence can't speak
 for the 32-bit filter; n = 10 is the smallest width that can.
@@ -48,7 +48,7 @@ def main() -> int:
 
     checks = Checks()
     keys = (BIG[0], EVEN[0])
-    checks.check("both keys pass FOLD's reduced key_ok_r11 (egemm_depthr_check) and are ≡ 1 mod 2^(r1+2) = 32, not ±1 "
+    checks.check("both keys pass the reduced key_ok_r11 (egemm_depthr_check) and are ≡ 1 mod 2^(r1+2) = 32, not ±1 "
                  "mod 2^(n−2) = 64", all(fold_ref.key_ok_r11(*k, N) for k in keys)
                  and all(k[0] % 32 == 1 or k[1] % 32 == 1 for k in keys), str(keys))
     (key, word) = BIG
