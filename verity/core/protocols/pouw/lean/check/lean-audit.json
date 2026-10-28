@@ -61,6 +61,7 @@
    "imports": [
     "Flock.Draw",
     "PouwCommit.Draws",
+    "PouwCommit.Bindings",
     "PouwWindow.Rounds",
     "PouwCheck.Inputs",
     "SampledProofs.ChallengerRecord",
