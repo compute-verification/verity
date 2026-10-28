@@ -16,10 +16,12 @@ import agg_entropy  # noqa: E402
 import agg_line  # noqa: E402
 import agg_partial  # noqa: E402
 import agg_partial2  # noqa: E402
+import agg_reframe  # noqa: E402
 import agg_spec  # noqa: E402
 import agg_spec8  # noqa: E402
 
-STEPS = (("ands", agg_ands.main), ("cost", agg_cost.main), ("attacks", agg_attacks.main), ("partial", agg_partial.main),
+STEPS = (("ands", agg_ands.main), ("cost", agg_cost.main), ("reframe", agg_reframe.main), ("attacks", agg_attacks.main),
+         ("partial", agg_partial.main),
          ("partial2", agg_partial2.main), ("line", agg_line.main), ("spec", agg_spec.main), ("spec8", agg_spec8.main),
          ("entropy", agg_entropy.main))
 

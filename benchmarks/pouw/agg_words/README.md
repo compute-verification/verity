@@ -16,6 +16,8 @@ W = Σ f(z) mod 2^16 over the group, instead of one word a cell. Nothing in `ver
 - `agg_cost.py`: the proof block each g implies, its ANDs, proving GPU-s a window and the serve-time bytes priced at
   GD-HASH's measured cost a byte, for Llama-3.2-1B at T 8,192: J's two terms by g and window length, the best g for
   each, and the sensitivity to the opened rows' sizes.
+- `agg_reframe.py`: the same blocks at ε 10^-4 and δ 2^-40 a period, n → ∞: proving's share of a 1,000-GPU year, the
+  serve terms with f's epilogue hidden or exposed, the best g under each cap and premise, and a K = 7,168 linear.
 
 `uv run python benchmarks/pouw/agg_words/run_all.py OUT [step ...]` writes each step's JSON under OUT. The findings are
 `note:compute-research/20261028T1945Z-report-gd-agg` in the notes store.
