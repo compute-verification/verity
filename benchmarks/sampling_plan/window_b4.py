@@ -3,7 +3,8 @@
 
 Each template is a candidate at its H200 ANDs, credited them as work, opening its rows in circuit (`row_ands`), its
 statement cap from its ANDs (`transformer._cap`, m = k_log + nbl <= 35). The three linear families are ops with one
-alternative a grain (`cut` "N=w": w output channels a unit); every other template is its own op. Cost is C-Flock's fit
+alternative a grain (`cut` "N=w": w output channels a unit) of at most `MAX_PROVED_ANDS` a proof block; every other
+template is its own op. Cost is C-Flock's fit
 (`h200.Rates.fitted`, GPU-s), statements shared as the served path stages them (`CostModel.shared`).
 
 Two modes:
@@ -48,20 +49,18 @@ EPS = 0.01
 #: SHA-512 over the whole card at 4 KiB rows, 16 KiB rows, and what's free beside the GEMM (bytes/s; art:2499e3f4…)
 SHA512_BPS = {"card 4 KiB": 398e9, "card 16 KiB": 521e9, "beside GEMM": 66.5e9}
 COMPRESSION = 128
-#: C-Flock refuses a statement of k_log 28 (`demo_a.K_LOG_MAX`)
-K_LOG_MAX = 27
+#: C-Flock's compose refuses a proof block of more ANDs, its rows' openings included (TOP-138, 19:14Z)
+MAX_PROVED_ANDS = 1 << 27
 
 
-def k_log(e: dict) -> int:
-    """A proof block's statement k_log as `transformer._cap` takes it, from its ANDs with its rows' openings."""
-    return ceil(log2(max(2, e["ands"] + sum(row_ands(r) for r in (*e["in"], *e["out"]))))) + 1
+def proved_ands(e: dict) -> int:
+    return e["ands"] + sum(row_ands(r) for r in (*e["in"], *e["out"]))
 
 
 def _candidate(e: dict, op: str, template: str, cut: str = "") -> Candidate:
-    rows = tuple(e["in"]) + tuple(e["out"])
-    proved = e["ands"] + sum(row_ands(r) for r in rows)
-    return Candidate(op, template, e["units"], e["ands"], e["out_bits"], cut=cut, ands=e["ands"], rows=rows,
-                     commit_bits=0, commit_rows=float(e["commit_compressions"]), cap=X._cap(proved))
+    return Candidate(op, template, e["units"], e["ands"], e["out_bits"], cut=cut, ands=e["ands"],
+                     rows=tuple(e["in"]) + tuple(e["out"]), commit_bits=0,
+                     commit_rows=float(e["commit_compressions"]), cap=X._cap(proved_ands(e)))
 
 
 def candidates(census: dict, *, widths: tuple[int, ...] | None = None) -> list[Candidate]:
@@ -78,7 +77,7 @@ def candidates(census: dict, *, widths: tuple[int, ...] | None = None) -> list[C
             if "refused" in a or (widths is not None and a["N"] not in widths and a["N"] != e["N"]):
                 continue
             served = a["N"] == e["N"]
-            if not served and k_log(a) > K_LOG_MAX:
+            if not served and proved_ands(a) > MAX_PROVED_ANDS:
                 continue
             out.append(_candidate(e if served else a, op, op if served else f"{op}@N={a['N']}", f"N={a['N']}"))
     return out
