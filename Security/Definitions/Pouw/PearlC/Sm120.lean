@@ -5,10 +5,9 @@ import Definitions.Pouw.Fp8Atom.Atom
 
 `BLACKWELL_SM120_E4M3_M16N8K32` in `verity.ml.tc.models` (verity branch `cursor/vllm-sm120-fp8-probe-422d` at
 `8eed14b0`): one accumulator coordinate of the RTX PRO 6000 Blackwell's `mma.sync` m16n8k32 E4M3 (SASS `QMMA.16832`),
-fitted on 6,434,816 finite elements in 13 families with 0 mismatches (lane `vllm-sm120-tc-gemm`, runs
-`r20260930-030915-23f3` and `r20260930-031244-ecbc`). It is `Fp8Atom`'s grouped-sum `Pipeline` with one group of all 32
-products plus the accumulator, a 26-bit truncating adder, and an exponent floor: `⟨[32], 26, floor⟩`. Unlike Hopper's
-and Ada's 14-bit FP8 adders, the 26-bit adder does not truncate a 24-bit accumulator.
+fitted on 6,434,816 finite elements in 13 families with 0 mismatches. It is `Fp8Atom`'s grouped-sum `Pipeline` with one
+group of all 32 products plus the accumulator, a 26-bit truncating adder, and an exponent floor: `⟨[32], 26, floor⟩`.
+Unlike Hopper's and Ada's 14-bit FP8 adders, the 26-bit adder does not truncate a 24-bit accumulator.
 
 The floor is unobservable at every floor up to −124 (the capture's fit covered `[−150, −124]`). Every nonzero term has
 exponent at least −126: an E4M3 product at least −12, and an FP32 accumulator at least −126. So the floor is the

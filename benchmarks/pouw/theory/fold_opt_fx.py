@@ -1,8 +1,8 @@
-"""FOLD-OPT for SAT-120's fx chains, mechanically: no program computes the fx1 (resp. fx2) receipt update for a word in
-fewer than 4 (resp. 5) issue slots, nor more cheaply on the design's binding row. Builds on ASSUME #2240, which made the
+"""FOLD-OPT for the sm_120 design's fx chains, mechanically: no program computes the fx1 (resp. fx2) receipt update for a word in
+fewer than 4 (resp. 5) issue slots, nor more cheaply on the design's binding row. Builds on `fold_opt.py`, which made the
 plain duo fold a mechanical fact (>= 3 instructions a word).
 
-SAT-120's sm_120 design (note:20261017T0842Z-draft-sat-120, PR #2273) is H1 + fx1: one keyed IMAD a word chained in front
+The sm_120 design is H1 + fx1: one keyed IMAD a word chained in front
 of duo, so f = 4. The chain is egemm.cu's `fx_chain` (commit b2e177f63): a word w gets n ops, each `t = t * key_mul(1,c)`
 (IMAD, key_mul is odd) or `t = t ^ key_xor(1,c)` (LOP3), alternating and **ending on an IMAD** (op I fires a multiply iff
 (n - I) is odd, and the last op I = n - 1 has n - I = 1), after which duo folds the result d' = fx_chain(w):
@@ -13,7 +13,7 @@ of duo, so f = 4. The chain is egemm.cu's `fx_chain` (commit b2e177f63): a word 
     z' = rotl(u, r) + y'      # one LEA.HI
 
 so fx1 is 4 instructions a word, fx2 is 5. The keys and the a_i are per-call constants (the prover knows them before the
-run), so the search gives the cheater all of them. SPEC r4 (note:20261017T0324Z-draft-eps1-spec §2.8) wants FOLD-OPT in a
+run), so the search gives the cheater all of them. FOLD-OPT also has a
 price form: ε_mand = [mu_f*N_w*phi* + mu_x*chi*]/B(H) is 0 under FOLD-OPT, where phi* = min over the fold route menu of
 the per-word price at a certificate pi, and the assumption is mu_f = 0 (honest's fold phi_H is optimal). On a design that
 binds a joint-issue row it must hold **per facet**: honest's fold has no cheaper IMAD / uniform / b1-MMA form on r*.
@@ -31,23 +31,23 @@ The result (checks below):
   the 2-instruction slot are ruled out, so **fx1's (y', z') needs >= 4 instructions** = honest's count. fx2 adds one
   more irreducible op (the leading XOR before the multiply), so **fx2 needs >= 5**.
 - **Two-word instructions.** sm_120 has four lane forms that write two words: IMAD.WIDE and IADD.64 (ptxas 13.0 for
-  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (FOLD-FANIN's table, TS.lean) and SEL.64 (harness/sass_pins.json). So the
+  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (TS.lean's fan-in table) and SEL.64 (harness/sass_pins.json). So the
   count above holds only once no instruction writes both outputs. Here, at width 4, no program of at most 2
-  instructions ending on an IMAD.WIDE writes them, which also completes #2240's >= 3 for duo. `--wide3` (fold_wide3.c,
+  instructions ending on an IMAD.WIDE writes them, which also completes fold_opt.py's >= 3 for duo. `--wide3` (fold_wide3.c,
   CPU minutes, outside the test suite) settles all four at width 4: neither output is a word of a program of at most 2
   instructions, so a 3-instruction program would write both as its last instruction's two words, and none does, nor as
   a last SEL.64's under any predicate. The width-4 ISA is LOP3, IADD3, IMAD, IMAD.HI, LEA, LEA.HI, IMAD.WIDE, IADD.64
   and IMNMX.64, with SEL.64 as a last instruction only; it has no IDP, POPC, FLO, BREV, BMSK or wrapping-SHF form, and
   no predicate but a last SEL.64's: no ISETP, no carry chain (IADD3.X) and no guarded instruction. A predicate is one
   bit, so an instruction that writes one adds no word, and a SEL.64 before the last only picks words the program has.
-- **The three collapse routes the brief names all fail:** (i) the two multiplies do not compose -- y'(w) is not affine in
+- **The collapse routes all fail:** (i) the two multiplies do not compose -- y'(w) is not affine in
   w, so (y ^ (w*m1) ^ kx)*a is not w*(m1*a) + c; (ii) the fx IMAD's add slot cannot pre-absorb duo's + z (it feeds the
   XOR, not the + z); (iii) no IMAD.WIDE / IDP.4A / LOP3-of-three produces two words' intermediates in one instruction;
   (iv) the fx multiply is per-lane (the word differs per lane), so it cannot move to the warp-uniform datapath (NOSUM).
 - **Per facet (price form):** on the binding joint-issue row every vector class prices alike, so the fold costs
   (# instructions) * b, honest binds at 4*b (fx1) / 5*b (fx2), and no route lowers it: fewer ops is excluded above, the
   IMAD-form of an ALU op saves nothing on a joint row (it would only help on a pipe-bound row, which the design avoids by
-  DC-DESIGN's rule), the uniform route is priced on the joint row and the work is per-lane, and the XOR/multiply/rotate
+  binding a joint row), the uniform route is priced on the joint row and the work is per-lane, and the XOR/multiply/rotate
   have no tensor form. So phi* = phi_H and **mu_f = 0**: FOLD-OPT(fx1), FOLD-OPT(fx2) hold in the price form.
 - **Bijection and X1:** key_mul is odd, so fx_chain is a bijection of the word (the fold binds it as duo does), and
   f = 4 (fx1), 5 (fx2) >= 2.53 (X1).
@@ -58,7 +58,7 @@ does not collapse, because it ends on a multiply. What is mechanical: the one-in
 multi-instruction searches at width 4. Reducing every word mod 2^4 commutes with LOP3, IADD3, IMAD and LEA, and y' uses
 only those, so for y' over those forms the width-4 search covers 32 bits. It doesn't commute with IMAD.HI, LEA.HI,
 IMAD.WIDE's high word or a rotation, and z' rotates; there the 32-bit claim is the no-collapse + no-merge + op-type
-argument, by hand, with the two-instruction searches repeated at width 8 as evidence (r20261019-075453-84ff, RT-MACHINE-17).
+argument, by hand, with the two-instruction searches repeated at width 8 as evidence.
 A fully general multi-op superoptimiser over the complete ISA at 32 bits explodes.
 
 Run: `python fold_opt_fx.py [--mutations] [--wide3] [--verdict PATH]`. Stdlib + exact_kit only; `--wide3` builds
@@ -192,7 +192,7 @@ def fx_word(y: int, z: int, w: int, n: int, a: int, kx: int, r: int, tile: int =
     return duo_from_dprime(y, z, fx_chain(w, n, tile, e), a, kx, r)
 
 
-# ---- the sm_120 integer ISA (exact), as instruction templates (as #2240's fold_opt.py) -----------------------------------
+# ---- the sm_120 integer ISA (exact), as instruction templates (as fold_opt.py's) -----------------------------------
 
 SHIFTS = tuple(range(32))
 
@@ -704,7 +704,7 @@ def main() -> int:
     checks.check("width-4 exhaustive: no program of <= 2 instructions ending on an IMAD.WIDE writes fx1's (y', z') as "
                  "its two words", width_wide_writes_both(w4, y1w, z1w, wins) is None)
 
-    # duo (#2240's >= 3) with the two-word instruction: a length-2 program's first value is one instruction's, so both
+    # duo (fold_opt.py's >= 3) with the two-word instruction: a length-2 program's first value is one instruction's, so both
     # outputs would be the last instruction's two words, which no IMAD.WIDE writes.
     dd = [next(gg) & mask4 for _ in range(npts)]
     duo_u4 = [y0[i] ^ dd[i] ^ kxw for i in range(npts)]
@@ -713,7 +713,7 @@ def main() -> int:
     dins = {"y": y0, "z": z0, "d": dd, "kx": [kxw] * npts, "a": [aw] * npts, "ainv": [modinv(aw) & mask4] * npts,
             "0": [0] * npts, "1": [1] * npts}
     checks.check("width-4 exhaustive: no program of <= 2 instructions ending on an IMAD.WIDE writes duo's (y', z'), so "
-                 "#2240's >= 3 holds with two-word instructions",
+                 "fold_opt.py's >= 3 holds with two-word instructions",
                  width_single_instruction(w4, duo_y4, dins) is None and width_single_instruction(w4, duo_z4, dins) is None
                  and width_wide_writes_both(w4, duo_y4, duo_z4, dins) is None)
 
@@ -767,7 +767,7 @@ def main() -> int:
                     checks.mutation(f"fold_wide3.c without {what} misses {', '.join(labs)}", not any(left.values()),
                                     left)
 
-    # --- the lower bound. The two outputs are live and neither is a single instruction (above), so, as #2240, a length-2
+    # --- the lower bound. The two outputs are live and neither is a single instruction (above), so, as in fold_opt.py, a length-2
     # program (whose two values would be the two outputs) is impossible: fx1 needs >= 3. The 4th instruction is the
     # prepended multiply that duo does not have: u = y ^ (w*m1) ^ kx is not a single instruction (duo's u = y ^ w ^ kx IS
     # one LOP3), so reaching a correct u already costs 2 ops (the multiply w*m1, then the XOR) that produce no output, and
@@ -790,7 +790,7 @@ def main() -> int:
     checks.check("fx2 y', z' are not single instructions (needs >= 5 = honest's f)",
                  single_instruction(yp2, pool) is None and single_instruction(zp2, pool) is None)
 
-    # --- the three collapse routes the brief names, all failing ---
+    # --- the collapse routes, all failing ---
     # (i) the two multiplies do not compose: y'(w) for fixed (y, z) is not affine in w (not w*C + D), so (w*m1) and the
     #     (u*a) multiply cannot fuse into one.
     y_fixed, z_fixed = 0x12345678, 0x9ABCDEF0
@@ -825,14 +825,14 @@ def main() -> int:
                  True, "structural")
 
     # (iv) the fx multiply is per-lane (the committed word differs per lane), so it cannot move to the warp-uniform
-    #      datapath, which writes one warp-uniform word an instruction (NOSUM, ASSUME #2240).
+    #      datapath, which writes one warp-uniform word an instruction (NOSUM).
     checks.check("route (iv): the fx multiply is per-lane (word differs per lane) -> not on the uniform datapath",
                  len({fx_chain(w, 1) for w in ws}) > 1, "per-lane, data-dependent")
 
     # --- per facet (price form): on the binding joint-issue row every vector class prices alike, so phi* = phi_H ---
     # a joint-issue row prices MMA at a_r and every vector class at b_r; a pipe row (A) prices its own class high and the
     # IMAD form of an ALU op low -- that is the route FOLD-OPT-per-facet must exclude, and the design avoids it by binding
-    # a joint row (DC-DESIGN's rule).
+    # a joint row.
     ji_row = {"MMA": 7.8, "ALU": 1.0, "IMAD": 1.0, "LOP3": 1.0, "SHF": 1.0, "LEA": 1.0, "UNI": 1.0, "TENSOR": 7.8}
     a_pipe = {"MMA": 0.0, "ALU": 2.0, "IMAD": 0.5, "LOP3": 2.0, "SHF": 2.0, "LEA": 2.0, "UNI": 1.0, "TENSOR": 0.0}
     fx1_fold = ["IMAD", "LOP3", "IMAD", "LEA"]   # d'=w*m1; u=y^d'^kx; y'=u*a+z; z'=rotl(u,r)+y'

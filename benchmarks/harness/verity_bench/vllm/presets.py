@@ -234,7 +234,7 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
 
 def checkpoint_files(root: Path) -> list[Path]:
     """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
-    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (vy-nebius-2's
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
     llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
 
     return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
