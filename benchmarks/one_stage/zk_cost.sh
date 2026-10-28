@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# C-Flock's zero-knowledge session cost on sm_120 (zk_cost.py): A6's W8A8 coordinates in statements of 1-512 units, sessions
-# by `flock-circuit prove --zk --gpu` with and without the firewall's send check, the Lean verifier on them, and the fit. Run
-# from the verity tree on a GPU node, as a GPU host job (the GPU taken by gpu-lease around the sessions only):
+# C-Flock's zero-knowledge session cost on the node's GPU (zk_cost.py; sm_120, or ZK_SM, from nvidia-smi): A6's W8A8 coordinates
+# in statements of 1-512 units, sessions by `flock-circuit prove --zk --gpu` with and without the firewall's send check, the Lean
+# verifier on them, and the fit. Run from the verity tree on a GPU node, as a GPU host job (the GPU taken by gpu-lease around
+# the sessions only):
 #   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd clone --mem-gb 96 --cpus 32 \
 #     --max-min 240 -- bash benchmarks/one_stage/zk_cost.sh
 # (on vy-nebius-2 a guest job adds --preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
-#      LEASE_MAX_MIN=30 (one GPU lease a point)
+#      LEASE_MAX_MIN=30 (one GPU lease a point)  ZK_SM (the build's SM; default the GPU's compute_cap, else 120)
+#      CUDA_TK (a toolkit the node's driver runs, such as an H200 node's /usr/local/cuda-13.0; default CUDA 13.3)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
 # Kept in $OUT: the records (stage, prove and verify .jsonl), the fit (fit.json, fit.md, observations.json) and the logs;
@@ -45,8 +47,9 @@ fi
 C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; } > "$O/host.txt" 2>&1
 
-log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"
-OUT=$O/build bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=120 > "$O/build.txt" 2>&1 &
+SM=${ZK_SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-120}
+log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, sm_$SM, builds under $FLOCK_WORK and $PT_WORK"
+OUT=$O/build bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=$SM > "$O/build.txt" 2>&1 &
 OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)

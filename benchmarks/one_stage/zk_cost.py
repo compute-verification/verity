@@ -1,5 +1,5 @@
-"""C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`sampled_proofs.costfit`): A6's
-W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) staged in statements of c units, each
+"""C-Flock's zero-knowledge session cost on a GPU (sm_120 or sm_90), for the sampling planner's cost model
+(`sampled_proofs.costfit`): A6's W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) staged in statements of c units, each
 session proving k of them drawn by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
 
@@ -30,6 +30,7 @@ sessions.
 * **CPU** (`--cpu`, `zk_cost_cpu.sh`): the same sessions by `flock-circuit prove --zk` on the node's CPUs, as the CPU nodes
   prove a block's draw. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
   and the firewall's Lean's resident memory summed, which is what a node holds for one session.
+* **Device memory**: a GPU session's record carries `peak_device_mib`, the leased GPU's `memory.used` sampled every 0.5 s.
 """
 from __future__ import annotations
 
@@ -120,6 +121,38 @@ class Peak:
         return self.peak_kb
 
 
+class DevicePeak:
+    """The peak of the leased GPU's used memory (nvidia-smi's memory.used, MiB), sampled every `every` seconds in a thread while
+    a session runs: the lease gives the session the whole device, so its use is the session's (the prover's). `error` keeps the
+    last failed query's message."""
+
+    def __init__(self, uuid: str | None, every: float = 0.5) -> None:
+        import threading
+        self.uuid, self.peak_mib, self.error = uuid, None, None
+        self._stop = threading.Event()
+        self._every = every
+        self._t = threading.Thread(target=self._run, daemon=True)
+        if uuid:
+            self._t.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            p = subprocess.run(["nvidia-smi", "-i", self.uuid, "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True)
+            v = p.stdout.strip()
+            if p.returncode == 0 and v.isdigit():
+                self.peak_mib = max(self.peak_mib or 0, int(v))
+            else:
+                self.error = f"rc {p.returncode}: {(p.stderr or v)[-200:]}"
+            self._stop.wait(self._every)
+
+    def stop(self) -> int | None:
+        self._stop.set()
+        if self._t.is_alive():
+            self._t.join()
+        return self.peak_mib
+
+
 def timed(cmd: list[str], stdout, stderr, env: dict | None = None,
           peak: Peak | None = None) -> tuple[int, dict, list[tuple[float, str]]]:
     """Run ``cmd``; its exit code, wall and CPU seconds and peak RSS, and each stdout line with the seconds since start;
@@ -191,6 +224,7 @@ def stage(a) -> int:
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's draw."""
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
+    uuid = os.environ.get("GPU_LEASE_UUID")
     warm, runs = (0, 1) if mode == "cold" else (a.warm, a.runs)
     o = out / f"k{pt['K']}-c{c}-k{k}" / f"{arm}-{mode}{rep}"
     o.mkdir(parents=True, exist_ok=True)
@@ -205,6 +239,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
                              env={**os.environ, **env})
     peak = Peak()
     peak.roots.append(serve.pid)
+    dev = DevicePeak(None if a.cpu else uuid)
     serve_usage = None
     try:
         while "SERVING" not in (o / "serve.log").read_text() and serve.poll() is None:
@@ -227,6 +262,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
             serve.wait(timeout=60)
         serve_log.close()
         peak_kb = peak.stop()
+        dev_mib = dev.stop()
     lives = []
     for t, line in lines:
         if line.startswith("LIVE\t"):
@@ -245,8 +281,9 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     sessions = sorted((o / "sessions").glob("*/session.json"), key=lambda f: f.stat().st_mtime)
     served = [json.loads(f.read_text()) for f in sessions]
     rec = {"K": pt["K"], "c": c, "k": k, "arm": arm, "mode": mode, "rep": rep, "warm": warm, "runs": runs, "rc": rc,
-           "gpu_uuid": os.environ.get("GPU_LEASE_UUID"), "cpu": bool(a.cpu), "threads": os.environ.get("RAYON_NUM_THREADS"),
+           "gpu_uuid": uuid, "cpu": bool(a.cpu), "threads": os.environ.get("RAYON_NUM_THREADS"),
            **{x: round(y, 3) for x, y in {**usage, **(serve_usage or {})}.items()}, "peak_rss_kb": peak_kb,
+           "peak_device_mib": dev_mib, "device_query_error": dev.error,
            "built_s": built, "lives": lives, "dir": str(o),
            "sessions": [str(f.parent) for f in sessions],
            "serve_verify_s": [((r or {}).get("verdict") or {}).get("verify_s") for r in served],
@@ -254,7 +291,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     print(f"ZKCOST prove K={pt['K']} c={c} k={k} {arm} {mode}{rep}: rc {rc}, wall {usage['wall_s']:.2f} s, built {built} s, "
           f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, k_log {[x['k_log'] for x in lives]}, "
           f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and firewall summed), "
-          f"accepted {rec['accepted']}"
+          f"device {'-' if dev_mib is None else f'{dev_mib / 1024:.1f} GiB'}, accepted {rec['accepted']}"
           + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / 'prove.err').read_text()[-300:]!r})"), flush=True)
     return rec
 
