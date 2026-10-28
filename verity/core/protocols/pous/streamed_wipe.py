@@ -173,10 +173,10 @@ def registered_tiers(site: Site, server: bytes) -> tuple[tuple[str, int], ...]:
     one that isn't UTF-8, which names no host."""
     try:
         host = server.decode()
-    except UnicodeDecodeError:
-        host = None
-    if host is None or site.kind(host) != "host":
-        raise ValueError(f"the server {server.decode(errors='replace')!r} is not a host the registered site has")
+    except UnicodeDecodeError as e:
+        raise ValueError(f"the server {server!r} is not a host the registered site has: it isn't UTF-8") from e
+    if site.kind(host) != "host":
+        raise ValueError(f"the server {host!r} is not a host the registered site has")
     return tuple((TIER_NAMES[t], b) for t, b in site.tiers(host).items() if b > 0)
 
 
