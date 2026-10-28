@@ -64,19 +64,16 @@ theorem srcKeyP_eq_commit (hty : tags.typed = false) (h : Committed tags cf tabl
     Aliased.srcKeyP cs pi x = Aliased.srcKeyP cs pi x' := by
   unfold Aliased.srcKeyP at hk ⊢
   simp only [pubLeaf_commit hty h, h.unrolled_inWords hty, h.unrolled_inGroups hty] at hk
-  split_ifs at hk ⊢
-  · exact hk
-  · cases hk
-  · cases hk
-  · exact congrArg Aliased.KeyP.src (srcKey_eq_commit hty h C (Aliased.KeyP.src.inj hk))
+  by_cases h1 : 0 ≤ Aliased.pubLeaf cs pi x <;> by_cases h2 : 0 ≤ Aliased.pubLeaf cs pi x' <;>
+    simp only [h1, h2, ↓reduceIte, reduceCtorEq, Aliased.KeyP.src.injEq] at hk ⊢
+  all_goals first | exact hk | exact srcKey_eq_commit hty h C hk
 
 /-- **A public word's bit is the same key at the committed and the statement circuit.** -/
 theorem srcKeyP_pub_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) {pi : HmIn.Ports} {x q t : ℕ}
     (hk : Aliased.srcKeyP (HmOut.unrolled cs) pi x = .pub q t) : Aliased.srcKeyP cs pi x = .pub q t := by
   unfold Aliased.srcKeyP at hk ⊢
   simp only [pubLeaf_commit hty h, h.unrolled_inWords hty, h.unrolled_inGroups hty] at hk
-  split_ifs at hk ⊢
-  · exact hk
-  · cases hk
+  by_cases h1 : 0 ≤ Aliased.pubLeaf cs pi x <;> simp only [h1, ↓reduceIte, reduceCtorEq] at hk ⊢
+  all_goals exact hk
 
 end FlockSoundness.Discharge.Hidden
