@@ -7,8 +7,8 @@ block record. The record accepts only when every subprotocol accepted on its nod
 malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing. Its preflight refuses a flag the tree's certifier front doesn't take, and a front load with no front; its
-composite step publishes each case's and each product's verdict lines and nothing else. Its load, `serve_load.py --varied`, writes each request's send, first-token and done times beside its
+gates nothing. Its preflight refuses a flag the tree's certifier front doesn't take, a front whose endpoint isn't on the
+warden's id form, and a front load with no front; its composite step publishes each case's and each product's verdict lines and nothing else. Its load, `serve_load.py --varied`, writes each request's send, first-token and done times beside its
 record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
@@ -504,23 +504,28 @@ def _script(path: Path, body: str) -> None:
 FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
 
 
-@pytest.mark.parametrize("load, front, takes, line", [
-    ("varied", FRONT, "--gate --warmup --bucket-ms", None),
-    ("front", FRONT, "--gate --warmup --bucket-ms", None),
-    ("varied", "", "", None),
-    ("varied", FRONT, "--gate --warmup --bucket-ms-x", "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this tree's "
-                                                        "certifier front doesn't take"),
-    ("front", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
+IDS = "--protocol ids --id-payload 503"
+
+
+@pytest.mark.parametrize("load, front, takes, serve_args, line", [
+    ("varied", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("front", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("varied", "", "", "", None),
+    ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
+                                                             "tree's certifier front doesn't take"),
+    ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
+     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
-        tmp_path, load, front, takes, line):
+        tmp_path, load, front, takes, serve_args, line):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
     (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
         f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
-           "LOAD": load, "CERTIFIER_FRONT": front}
+           "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
