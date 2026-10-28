@@ -81,7 +81,8 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     {draw : Option Lean.Json} {st : Stmt} (ht : tags.typed = false)
     (h : Hidden.SpecC tags cf pf coins tables draw st)
     (hrows : Hidden.Any.OutRowsP st.c) : WiredDelta (Hidden.unpin st) :=
-  wiredDelta_out (st := Hidden.unpin st) (h.flatLayout ht) (h.unitFacts ht) hrows rfl
+  wiredDelta_out (st := Hidden.unpin st) (h.flatLayout ht : FlockSoundness.Layout (Hidden.flatTwin st))
+    (h.unitFacts ht : Aliased.UnitFacts tags (Hidden.flatTwin st)) hrows rfl
 
 /-! ## A composite input's value -/
 
