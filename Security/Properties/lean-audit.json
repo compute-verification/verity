@@ -657,6 +657,12 @@
    "assumptions": [],
    "type_hash": "b5bacea572fa620de0934d04bb17bf5973ceea4b5ea8512a20cbaa34904b991b"
   },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_honest": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
    "owner": "@memory-accounting",
    "signature": [
@@ -664,6 +670,12 @@
    ],
    "assumptions": [],
    "type_hash": "250f6026262a888db9a868c8cdfe9c036963a7f559e188ff1b96d67108172d77"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
    "owner": "@memory-accounting",
@@ -15185,6 +15197,14 @@
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
  "witnesses": {
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
+   "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_honest"],
+   "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_nontrivial"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
+   "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
+   "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  },
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
