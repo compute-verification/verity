@@ -919,7 +919,7 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
 def commit_labels(r: dict) -> str:
     """A fill-bench line's commit knobs off their defaults, as fill-table labels its rows after the call's knobs."""
     return ((f" m{r['lminb']}" if r.get("lminb", 5) not in (4, 5) else "")
-            + (f" sm{r['sminb']}" if r.get("sminb", 5) != 5 else "") + (" cf" if r.get("lfold") == 1 else "")
+            + (f" sm{r['sminb']}" if r.get("sminb", 4) != 4 else "") + (" cf" if r.get("lfold") == 1 else "")
             + (" nofull" if r.get("full") == 0 else "") + (f" mk{r['mask']}" if r.get("mask") else ""))
 
 

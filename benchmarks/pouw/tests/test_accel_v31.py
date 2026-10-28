@@ -443,7 +443,7 @@ def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_pat
             "gamma_gemm": 1.025, "full": 1, "lminb": 6, "lfold": 0, "comp": {"sha": 1e8, "leaf": 3e8, "salt": 6e7},
             "per_sm_cycle": {"sha": 0.018, "leaf": 0.0171, "leaf_nomem": 0.0175, "salt": 0.0144, "commit": None},
             "of_sha": {"leaf": 0.95, "leaf_nomem": 0.9722, "salt": 0.8, "commit": None}}
-    before = dict(line, full=0, lminb=5, sminb=4, lfold=1)
+    before = dict(line, full=0, lminb=5, sminb=5, lfold=1)
     only = dict(line, mask=2, arms={x: arms[x] for x in ("salt", "sha")}, gamma_ovl=None, gamma_ovl_w=None, gamma_call=None,
                 gamma_gemm=None)
     (tmp_path / "b.jsonl").write_text("\n".join(json.dumps(x) for x in (line, before, only)) + "\n")
@@ -458,7 +458,7 @@ def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_pat
     assert nomem.endswith("| leaf_nomem | 0.900 | 2000 | 300000000 | 0.01750 | 0.972 | 0.972 |")
     assert salt.endswith("| salt | 0.200 | 2000 | 60000000 | 0.01440 | 0.800 | 0.800 |")
     assert commit.endswith("| commit | 1.200 | 2000 | 360000000 | - | - | - |")
-    assert "| served r16384 hi k4 s1 sm4 cf nofull | 0.01800 | leaf |" in parts[6]
+    assert "| served r16384 hi k4 s1 sm5 cf nofull | 0.01800 | leaf |" in parts[6]
     v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")])
     assert capsys.readouterr().out.splitlines()[-12].endswith("| 0.01710 | 0.950 | - |")
 

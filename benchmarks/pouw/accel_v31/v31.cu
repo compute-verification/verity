@@ -1742,9 +1742,8 @@ DEV void salt_prf_block(const KsArg* k, u64 pos, int r, u64* Y) {
   sha::iv(Y);
   sha::compress_from<8>(Y, k ? k->ks_m8 : C.ks_m8, w);
 }
-// hm96_mask<false, true>'s terms from salt bytes 64 B .. 64 B + 63 (Yb, salt_prf's block B: q = 4 B .. 4 B + 3) xored into m;
-// SM: T in shared memory
-template <int B, bool SM = false>
+// hm96_mask<false, true>'s terms from salt bytes 64 B .. 64 B + 63 (Yb, salt_prf's block B: q = 4 B .. 4 B + 3) xored into m
+template <int B>
 DEV void hm96_mask_block(const uint8_t* T, const u64* Yb, u32* m) {
 #pragma unroll
   for (int r = 0; r < 16; ++r) {
@@ -1759,8 +1758,7 @@ DEV void hm96_mask_block(const uint8_t* T, const u64* Yb, u32* m) {
       const uint8_t* hi = T + 4096 + 256 * (4 * B + j) + 16 * (v >> 4);
 #pragma unroll
       for (int i = 0; i < 5; ++i) {
-        const uint4 u = SM ? *reinterpret_cast<const uint4*>(lo + 256 * i) : ldg16(lo + 256 * i),
-                    w = SM ? *reinterpret_cast<const uint4*>(hi + 256 * i) : ldg16(hi + 256 * i);
+        const uint4 u = ldg16(lo + 256 * i), w = ldg16(hi + 256 * i);
         A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
       }
     }
@@ -1808,9 +1806,9 @@ DEV void hm96_mask_block_h(const u64* T8, const u64* Yb, u32* m) {
 }
 // salt_one<true, false, true> at the call's salt offset: S[pos] from prf_salt(Ks, off + pos) (dither.salts(Ks, off)); Ks
 // from k when given, else from C. Each of the PRF's three blocks goes into the mask and the digest as it is made, so the
-// salt's 24 words are never live at once (hm96_mask over all of them spilled). MK: the mask's nibble table T through L1
-// (0) or in shared memory (2), T as hm96_mask_block_h's halves in shared memory (3), or no mask at all (1: timing only,
-// S's mask words 0).
+// salt's 24 words are never live at once (hm96_mask over all of them spilled). MK: the mask from T as
+// hm96_mask_block_h's halves in shared memory (0), from the nibble table T through L1 (2), or no mask at all (1: timing
+// only, S's mask words 0).
 template <int MK = 0>
 DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, const KsArg* k = nullptr) {
   u64 Y[16], c[8];
@@ -1818,8 +1816,8 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
 #pragma unroll
   for (int w = 0; w < 16; ++w) m[w] = 0;
   const auto mask = [&](auto b, const u64* Yb) {
-    if constexpr (MK == 3) hm96_mask_block_h<decltype(b)::value>(reinterpret_cast<const u64*>(T), Yb, m);
-    else if constexpr (MK != 1) hm96_mask_block<decltype(b)::value, MK == 2>(T, Yb, m);
+    if constexpr (MK == 0) hm96_mask_block_h<decltype(b)::value>(reinterpret_cast<const u64*>(T), Yb, m);
+    else if constexpr (MK == 2) hm96_mask_block<decltype(b)::value>(T, Yb, m);
   };
   salt_prf_block(k, off + pos, 0, Y);
   mask(std::integral_constant<int, 0>{}, Y);
@@ -1843,24 +1841,20 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
 // salt_small<true> (slot 0) a group at a time: S and F for positions below n (salted at off + pos), the pads up to width,
 // and fl levels of the subtrees of groups that hold only pads (nvb = ceil(width / 128); fl 0 when the leaf phase's level
 // kernels fold every group, Lanes::lfold); KP: Ks from ka, else from C; MINB its CTAs an SM by registers (4: 128 a thread,
-// as many CTAs as a cap of 4 lets in anyway); MK, salt_one_at's mask (2 and 3: the CTA copies the nibble table into shared
-// memory, 3 as hm96_mask_block_h's halves)
-template <bool KP = false, int MINB = SMALL_MINB, int MK = 0>
+// as many CTAs as a cap of 4 lets in anyway; 5: 96, spilling); MK, salt_one_at's mask (0: the CTA copies the nibble table
+// into shared memory as hm96_mask_block_h's halves)
+template <bool KP = false, int MINB = 4, int MK = 0>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
                  u64* levels, u64 off, int fl, const __grid_constant__ KsArg ka) {
-  __shared__ uint4 Ts[MK == 2 || MK == 3 ? 512 : 1];
-  if constexpr (MK == 2) {
-    for (u32 i = threadIdx.x; i < 512; i += SMALL_THREADS) Ts[i] = Tg[i];
-    __syncthreads();
-  } else if constexpr (MK == 3) {
-    u64* T8 = reinterpret_cast<u64*>(Ts);
+  __shared__ u64 T8[MK == 0 ? 1024 : 1];
+  if constexpr (MK == 0) {
     const u64* Tg8 = reinterpret_cast<const u64*>(Tg);
     for (u32 i = threadIdx.x; i < 1024; i += SMALL_THREADS)   // T8[512 h + 32 c + 16 d + u] = Tn's u64 512 h + 32 c + 2 u + d
       T8[i] = Tg8[(i & ~511u) + 32 * ((i >> 5) & 15) + 2 * (i & 15) + ((i >> 4) & 1)];
     __syncthreads();
   }
-  const uint8_t* T = reinterpret_cast<const uint8_t*>(MK == 2 || MK == 3 ? Ts : Tg);
+  const uint8_t* T = MK == 0 ? reinterpret_cast<const uint8_t*>(T8) : reinterpret_cast<const uint8_t*>(Tg);
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   if (persist_claim(p))
     for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
@@ -2151,18 +2145,18 @@ static std::string env_str(const char* name, const char* dflt) {
 // 96, 80 or 64 a thread); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued with the
 // call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
 // a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks;
-// V31_SMINB 4 or 5 (the default), salt_persist's MINB; V31_LFOLD 1, a group's levels (1 .. 7) folded by the group's CTA
+// V31_SMINB 4 (the default) or 5, salt_persist's MINB; V31_LFOLD 1, a group's levels (1 .. 7) folded by the group's CTA
 // (the leaf phase's for a group of leaves, the salt phase's for a group of pads alone), whose other warps wait while a few
 // fold, rather than (0, the default) by a level_kernel launch a level, over the whole width, after the leaf phase.
-// V31_MASK: the salt phase's hm96 mask (salt_persist's MK): 0 its nibble table through L1, 2 in shared memory, 3 in shared
-// memory as hm96_mask_block_h's halves, 1 none (timing only; wrong roots); 1 and 2 at V31_SMINB 5 only.
+// V31_MASK: the salt phase's hm96 mask (salt_persist's MK): 0 its nibble table in shared memory as hm96_mask_block_h's
+// halves, 2 the nibble table through L1, 1 none (timing only; wrong roots); 1 and 2 at V31_SMINB 4 only.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
       ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
-      full = env_int("V31_FULL", 1), sminb = env_int("V31_SMINB", SMALL_MINB), lfold = env_int("V31_LFOLD", 0),
+      full = env_int("V31_FULL", 1), sminb = env_int("V31_SMINB", 4), lfold = env_int("V31_LFOLD", 0),
       mask = env_int("V31_MASK", 0);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
@@ -2186,11 +2180,9 @@ static void set_carveout(int pct) {
                       (const void*)leaf_persist<LtRow, 4>, (const void*)leaf_persist<LtRow, 6>, (const void*)leaf_persist<LtRow, 8>,
                       (const void*)leaf_persist<ServedRow, 6>, (const void*)leaf_persist<ServedRow, 8>,
                       (const void*)leaf_persist<NoMemRow, 4>, (const void*)leaf_persist<NoMemRow, 6>,
-                      (const void*)leaf_persist<NoMemRow, 8>, (const void*)salt_persist<false, 4>, (const void*)salt_persist<true, 4>,
-                      (const void*)salt_persist<false, SMALL_MINB, 1>, (const void*)salt_persist<true, SMALL_MINB, 1>,
-                      (const void*)salt_persist<false, SMALL_MINB, 2>, (const void*)salt_persist<true, SMALL_MINB, 2>,
-                      (const void*)salt_persist<false, SMALL_MINB, 3>, (const void*)salt_persist<true, SMALL_MINB, 3>,
-                      (const void*)salt_persist<false, 4, 3>, (const void*)salt_persist<true, 4, 3>};
+                      (const void*)leaf_persist<NoMemRow, 8>, (const void*)salt_persist<false, SMALL_MINB>,
+                      (const void*)salt_persist<true, SMALL_MINB>, (const void*)salt_persist<false, 4, 1>,
+                      (const void*)salt_persist<true, 4, 1>, (const void*)salt_persist<false, 4, 2>, (const void*)salt_persist<true, 4, 2>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
@@ -2198,7 +2190,7 @@ static void set_carveout(int pct) {
 // path), then its levels above the leaves' CTAs. Launches that share ctl run in one stream's order.
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB, sminb = SMALL_MINB, lfold = 0, mask = 0;
+  int nsm = 1, lminb = SMALL_MINB, sminb = 4, lfold = 0, mask = 0;
   void init(int nsm_) {
     nsm = nsm_;
     ctl = dalloc<u32>(2 + 2 * 8 * (size_t)nsm);
@@ -2230,18 +2222,13 @@ struct Lanes {
     const unsigned g = grid(nvb, ccta);
     const Persist p = persist(nvb, ccta);
     const KsArg k = ka ? *ka : KsArg{};
-    if (mask == 1 && ka) salt_persist<true, SMALL_MINB, 1><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 1) salt_persist<false, SMALL_MINB, 1><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 2 && ka) salt_persist<true, SMALL_MINB, 2><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 2) salt_persist<false, SMALL_MINB, 2><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 3 && sminb == 4 && ka) salt_persist<true, 4, 3><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 3 && sminb == 4) salt_persist<false, 4, 3><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 3 && ka) salt_persist<true, SMALL_MINB, 3><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (mask == 3) salt_persist<false, SMALL_MINB, 3><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (ka && sminb == 4) salt_persist<true, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (ka) salt_persist<true><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else if (sminb == 4) salt_persist<false, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
-    else salt_persist<false><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
+    const auto launch = [&](auto kern) {
+      kern<<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, fl, k);
+    };
+    if (sminb == SMALL_MINB) launch(ka ? salt_persist<true, SMALL_MINB> : salt_persist<false, SMALL_MINB>);
+    else if (mask == 1) launch(ka ? salt_persist<true, 4, 1> : salt_persist<false, 4, 1>);
+    else if (mask == 2) launch(ka ? salt_persist<true, 4, 2> : salt_persist<false, 4, 2>);
+    else launch(ka ? salt_persist<true> : salt_persist<false>);
   }
   template <class Row>
   void leaves_nodes(Committer& cm, const Row& rows, int ccta, cudaStream_t st) {
@@ -2693,8 +2680,8 @@ struct Fill {
     }
     if (kn.sminb != 4 && kn.sminb != SMALL_MINB) { fprintf(stderr, "V31_SMINB: 4 or %d\n", SMALL_MINB); exit(2); }
     if (kn.lfold != 0 && kn.lfold != 1) { fprintf(stderr, "V31_LFOLD: 0 or 1\n"); exit(2); }
-    if (kn.mask < 0 || kn.mask > 3 || (kn.mask && kn.mask != 3 && kn.sminb != SMALL_MINB)) {
-      fprintf(stderr, "V31_MASK: 0 to 3 (1 and 2 at V31_SMINB %d)\n", SMALL_MINB);
+    if (kn.mask < 0 || kn.mask > 2 || (kn.mask && kn.sminb != 4)) {
+      fprintf(stderr, "V31_MASK: 0, 1 or 2 (1 and 2 at V31_SMINB 4)\n");
       exit(2);
     }
     own = !c0;
@@ -3146,9 +3133,8 @@ static void kernel_attrs(FILE* f) {
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist<false>},
                       {"salt_persist_ks", (const void*)salt_persist<true>},
-                      {"salt_persist_m4", (const void*)salt_persist<false, 4>},
-                      {"salt_persist_smem", (const void*)salt_persist<false, SMALL_MINB, 2>},
-                      {"salt_persist_smem_h", (const void*)salt_persist<false, SMALL_MINB, 3>},
+                      {"salt_persist_m5", (const void*)salt_persist<false, SMALL_MINB>},
+                      {"salt_persist_l1", (const void*)salt_persist<false, 4, 2>},
                       {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>},
                       {"leaf_persist_m6", (const void*)leaf_persist<V31Row, 6>},
                       {"leaf_persist_lt", (const void*)leaf_persist<LtRow>}, {"leaf_persist_lt_m6", (const void*)leaf_persist<LtRow, 6>},
