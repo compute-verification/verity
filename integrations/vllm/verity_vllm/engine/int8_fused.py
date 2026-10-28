@@ -36,7 +36,9 @@ The fused producers (`engine.int8_producers` installs them) write a linear's inp
 one launch: `silu_mul_quant` is vLLM's `_C.silu_and_mul` then `quant_rows`, and `add_norm_quant` is vLLM's batch-invariant
 `_C.fused_add_rms_norm` (its generic kernel's per-thread sums, warp shuffle tree and warp-aggregate order at min(H, 1024)
 threads, `norm_threads`) then `quant_rows`, each bit for bit (`tests/engine/test_int8_producers.py`), at
-`producer_warps`' warps.
+`producer_warps`' warps.  The silu's act is `_SILU_MUL2`, inline PTX on pairs of elements: written in Triton (libdevice's
+expf, tl.div_rn, a scalar bf16 rounding twice an element) it issued about 52 instructions an element, five of them on the
+quarter-rate unit, and ran short of HBM's rate; written out it issues about 43, three of them there.
 """
 from __future__ import annotations
 
