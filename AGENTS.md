@@ -151,8 +151,9 @@ A pass of a test suite, a circuit-check target or a Lean package's Lean check is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. PRs land
-on review, and the full check runs after landing (how a PR lands: the team skill).
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
+only tested commits (Daniel, 27 Oct, CI-239): reviewed PRs land on `checked`, and `main` moves only to a commit of
+`checked` whose full check passed (how a PR lands: the team skill).
 
 ## Lean
 
