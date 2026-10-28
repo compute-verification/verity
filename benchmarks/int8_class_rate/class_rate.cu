@@ -11,7 +11,9 @@
 //          entries of C checked against the host's.
 // Each RATIO (M compressions a T MAC) is an arm: 0 the tensor alone, else the tensor with SHA-512 (sha512x.cuh's compress
 // chained, 2 CTAs of 256 threads an SM) on a second stream, each warp paced by %globaltimer to RATIO times the alone arm's
-// rate; the arm reports the ratio it achieved over the hash's window and the tensor's rate inside that window.
+// rate; the arm reports the ratio it achieved over the hash's window and the tensor's rate inside that window. Where the
+// hash falls short of RATIO beside the whole tensor, wgmma tries again with the tensor paced (`tensor_paced`, a fraction
+// of the alone rate) at the fraction the shortfall names and halfway from it to the whole, leaving the hash room.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -I../torch_gpu/sha512_rows -o class_rate
 //        class_rate.cu -lcublasLt
@@ -140,9 +142,13 @@ __device__ __forceinline__ void mma(uint32_t* d, uint64_t da, uint64_t db) {
   else wgmma_s8u8_m64n256k32(d, da, db);
 }
 
-// ENC 2 (s8u8) keeps A signed: its A is the class's bytes and its B the offset bytes
+constexpr int TB = 64;  // iterations between the tensor's pacing checks
+
+// ENC 2 (s8u8) keeps A signed: its A is the class's bytes and its B the offset bytes. With ns_per_batch > 0, the CTA
+// holds each TB iterations to one batch per ns_per_batch of %globaltimer from its start.
 template <int ENC>
-__global__ void __launch_bounds__(128, 1) wg_k(int iters, int cls, int off, Stamp* out, u64* log, u32* sink, int* started) {
+__global__ void __launch_bounds__(128, 1) wg_k(int iters, int cls, int off, u64 ns_per_batch, Stamp* out, u64* log, u32* sink,
+                                              int* started) {
   extern __shared__ __align__(1024) uint8_t smem[];
   constexpr int ABYTES = 64 * 32, BBYTES = N * 32;
   uint8_t* A = smem;
@@ -164,7 +170,15 @@ __global__ void __launch_bounds__(128, 1) wg_k(int iters, int cls, int off, Stam
   u64 t0 = 0, c0 = 0;
   if (threadIdx.x == 0) { atomicAdd(started, 1); t0 = gtimer(); c0 = clock64(); }
   int li = 0;
+  const u64 start = gtimer();
   for (int it = 0; it < iters; ++it) {
+    if (ns_per_batch && it % TB == 0) {
+      if (threadIdx.x == 0) {
+        const u64 target = start + (u64)(it / TB) * ns_per_batch;
+        while (gtimer() < target) __nanosleep(200);
+      }
+      __syncthreads();
+    }
 #pragma unroll
     for (int i = 0; i < N / 2; ++i) asm volatile("" : "+r"(d[i])::"memory");
     asm volatile("wgmma.fence.sync.aligned;\n" ::: "memory");
@@ -272,12 +286,13 @@ static void streams() {
 }
 
 static void beside_line(const char* kernel, const char* cls, const char* enc, double ratio, double secs, const Window& w,
-                        double comps, double tensor_rate, double macs_per_smclk, bool covered) {
+                        double comps, double tensor_rate, double macs_per_smclk, bool covered, double paced = 1) {
   const double hs = (w.t1 - w.t0) * 1e-9;
-  printf("{\"kernel\": \"%s\", \"class\": \"%s\", \"enc\": \"%s\", \"ratio\": %.3f, \"secs\": %.1f, \"s\": %.3f, "
+  printf("{\"kernel\": \"%s\", \"class\": \"%s\", \"enc\": \"%s\", \"ratio\": %.3f, \"tensor_paced\": %.4f, "
+         "\"secs\": %.1f, \"s\": %.3f, "
          "\"mhz\": %.1f, \"macs_per_smclk\": %.1f, \"tmacs_per_s\": %.3f, \"gcomp_s\": %.4f, \"ratio_achieved\": %.4f, "
          "\"covered\": %s}\n",
-         kernel, cls, enc, ratio, secs, hs, w.mhz, macs_per_smclk, tensor_rate * 1e-12, comps / hs * 1e-9,
+         kernel, cls, enc, ratio, paced, secs, hs, w.mhz, macs_per_smclk, tensor_rate * 1e-12, comps / hs * 1e-9,
          tensor_rate > 0 ? comps / (tensor_rate * hs) * 1e6 : 0.0, covered ? "true" : "false");
   fflush(stdout);
 }
@@ -296,10 +311,10 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
   CK(cudaMalloc(&sink, (size_t)nsm * 128 * 4));
   Hash h;
   h.init(nsm);
-  auto launch = [&](int iters) {
+  auto launch = [&](int iters, u64 pace = 0) {
     CK(cudaMemset(started, 0, 4));
     CK(cudaDeviceSynchronize());
-    wg_k<ENC><<<nsm, 128, smem, st>>>(iters, cls, off, tsd, logd, sink, started);
+    wg_k<ENC><<<nsm, 128, smem, st>>>(iters, cls, off, pace, tsd, logd, sink, started);
     CK(cudaGetLastError());
   };
   launch(1);
@@ -335,17 +350,31 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
       continue;
     }
     const double ref = alone > 0 ? alone : macs_per_iter * nsm / t_iter;
-    auto [reps, pace] = h.pace(ratio * 1e-6 * ref, secs);
-    const int iters = std::min((double)cap, (1.25 * secs + 1.0) / t_iter);
-    launch(iters);
-    wait_k<<<1, 1, 0, sh>>>(started, nsm);
-    h.launch(sh, reps, pace);
-    CK(cudaDeviceSynchronize());
-    auto [s, L] = get();
-    Window w = window(h.stamps()), wt = window(s);
-    const double tr = logged_rate(s, L, w.t0, w.t1, macs_per_iter);
-    beside_line("wgmma", CLS_NAMES[cls], enc, ratio, secs, w, h.lanes() * reps, tr, tr / (nsm * w.mhz * 1e6),
-                wt.t0 <= w.t0 && wt.t1 >= w.t1);
+    // the tensor at `frac` of `ref` (1: unpaced), the hash paced to `ratio` of that; returns (tensor rate, achieved ratio)
+    auto beside = [&](double frac) {
+      const double rt = frac * ref;
+      auto [reps, pace] = h.pace(ratio * 1e-6 * rt, secs);
+      const u64 tpace = frac < 1 ? (u64)(TB * macs_per_iter / (rt / nsm) * 1e9) : 0;
+      const int iters = std::min((double)cap, (1.25 * secs + 1.0) * (frac < 1 ? rt / nsm / macs_per_iter : 1 / t_iter));
+      launch(iters, tpace);
+      wait_k<<<1, 1, 0, sh>>>(started, nsm);
+      h.launch(sh, reps, pace);
+      CK(cudaDeviceSynchronize());
+      auto [s, L] = get();
+      Window w = window(h.stamps()), wt = window(s);
+      const double tr = logged_rate(s, L, w.t0, w.t1, macs_per_iter), comps = h.lanes() * reps;
+      const double hs = (w.t1 - w.t0) * 1e-9;
+      beside_line("wgmma", CLS_NAMES[cls], enc, ratio, secs, w, comps, tr, tr / (nsm * w.mhz * 1e6),
+                  wt.t0 <= w.t0 && wt.t1 >= w.t1, frac);
+      return std::make_pair(tr, tr > 0 ? comps / (tr * hs) * 1e6 : 0.0);
+    };
+    auto [tr, got] = beside(1.0);
+    if (got < 0.99 * ratio && tr > 0) {
+      // the hash fell short beside the whole tensor: leave it room, at the fraction its shortfall names and halfway back
+      const double f1 = std::min(0.999, tr / ref * got / ratio);
+      beside(f1);
+      beside((1 + f1) / 2);
+    }
   }
 }
 

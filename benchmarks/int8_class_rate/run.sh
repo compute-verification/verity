@@ -9,8 +9,10 @@
 #
 # Env: CLASSES (default "s8 s2 u2 u4 zero"), ENCODINGS (wgmma's, default "s8s8 u8u8"; u8u8 runs on s8 and s2, the classes
 # an offset changes), KERNELS (default "wgmma lt"), RATIOS (default "0 1.70 2.3", 0 first), SECS (15), LT_SECS (10),
-# ROUNDS (2), CLOCK (1830), LEASE_MIN (30). Writes $OUT/rates.jsonl (class_rate's lines, each with its round), card.json
-# and summary.txt (summarize.py's reading of this card).
+# ROUNDS (2), CLOCK (1830), LEASE_MIN (30). cuBLASLt runs alone only: beside it the hash's resident CTAs, though paced,
+# hold the SMs its GEMM's CTAs need (r20261028-012156-430f: 29 T MAC/s), which measures scheduling, not the rate.
+# Writes $OUT/rates.jsonl (class_rate's lines, each with its round), card.json and summary.txt (summarize.py's reading
+# of this card).
 set -uo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 R=$(cd "$D/../.." && pwd)
@@ -37,7 +39,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-30}" -- bash -c '
     for k in $KERNELS; do
       for c in $CLASSES; do
         if [ "$k" = lt ]; then
-          "$BIN" lt "$c" "$LT_SECS" $RATIOS 2>> "$O/class_rate.err" | sed "s/^{/{\"round\": $r, /" >> "$O/rates.jsonl"
+          "$BIN" lt "$c" "$LT_SECS" 0 2>> "$O/class_rate.err" | sed "s/^{/{\"round\": $r, /" >> "$O/rates.jsonl"
           echo "round $r lt $c rc ${PIPESTATUS[0]}" >> "$O/rc.txt"
           continue
         fi

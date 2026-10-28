@@ -10,7 +10,8 @@ rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and th
   back to back on shared-memory operands, in three operand encodings: s8·s8, and the offset re-encoding as u8·u8 or
   s8·u8. `lt` is cuBLASLt's int8 GEMM at 8192³, its output checked at sampled entries. Beside each, SHA-512 runs on
   a second stream, each warp paced to the target ratio of the alone arm's rate, and the arm reports the ratio it
-  achieved.
+  achieved. Where the hash can't keep up beside the whole tensor, the tensor is paced down to leave it room. cuBLASLt
+  runs alone only, because the hash's resident CTAs crowd out its GEMM's.
 - `wgmma_i8.cuh`: the wgmma wrappers, which `gen_wgmma.py` writes.
 - `run.sh`: one card. It builds, takes one gpu-lease, locks the clock, runs every round, class, kernel and encoding,
   and resets the clock at exit.

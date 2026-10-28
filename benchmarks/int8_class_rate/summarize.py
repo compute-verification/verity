@@ -51,6 +51,8 @@ def _arm(a: dict) -> str:
     clock = (f", {a['mhz']:.0f} MHz, {a['macs_per_smclk']:.0f} MACs a SM-clock = {per_clock(a):.1f} T MAC/s at "
              f"{CLOCK_MHZ} MHz" if "mhz" in a else "")
     hash_ = f", hash {a['ratio_achieved']:.3f} M/T MAC" if a["ratio"] else ""
+    if a.get("tensor_paced", 1) < 1:
+        hash_ += f", tensor paced to {a['tensor_paced']:.3f} of alone"
     return f"{a['kernel']} {a['enc']} r{a['round']} on {a['card']}{clock}{hash_}"
 
 
