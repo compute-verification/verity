@@ -178,7 +178,8 @@ def gate(m, n, k, variants, kinds=KINDS, seed=0) -> list[dict]:
         try:
             X.scaled_mm(xq, sa, w, sw, yt, tri)
             row["triton_vs_ref"] = int((yt.view(torch.int16) != ref).sum())
-        except Exception as e:  # noqa: BLE001  (a shape Triton's descriptors refuse is gated against the reference alone)
+        except (AssertionError, RuntimeError, ValueError) as e:
+            # a shape Triton's descriptors refuse (their asserts, or the launch) is gated against the reference alone
             row["triton_refused"] = repr(e)[:200]
         for v in variants:
             for call in (0, 1):
