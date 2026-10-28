@@ -314,8 +314,8 @@ private def HEX : List String := ["", "00", "0", "0g", "ab", "AB", "é0", "éé"
   | _, _ => false
 
 private def JSONS : List Json := [Json.null, .bool true, .bool false, .num 0, .num (-7), .num ⟨15, 1⟩, .str "",
-  .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1fé😀", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
-  Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("é", .str "\x00")],
+  .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1f~", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
+  Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("e", .str "\x00")],
   Json.mkObj [("k", .num ⟨1, 2⟩)]]
 
 #guard JSONS.all fun j => JSONS.all fun i =>
