@@ -25,6 +25,7 @@ namespace CertifierDevice.IssuerDifftest
 open Lean Flock
 open NetworkCertifier (Reason Status)
 open NetworkCheck (Direction)
+open NetworkCheck.Check (Certificate)
 open CertifierDevice.Difftest (hexJson bytesOf arrOf paramsOf syncSetOf syncOf syncJson)
 
 def reasons : List Reason :=
