@@ -6,6 +6,7 @@ import NciCheck.DescLiveness
 import NciCheck.DescFuzz
 import NciCheck.Baseline
 import NciCheck.BaselineDifftest
+import NciCheck.Protocol
 
 /-!
 # The NCI policy's check

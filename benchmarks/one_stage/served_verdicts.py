@@ -15,10 +15,12 @@ window's ``[lo, hi)`` in the run's committed engine steps.
 
 ``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, the bandwidth audit, PoUS, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run as
-``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), else prints a ``MISSING`` line
-naming it and its issue. A piece that ran but wrote no answer is its error; no verdict is made for a piece that didn't run.
-A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a
-development run's, and it credits nothing.
+``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json`` and its case, what its Lean
+component reads, to ``DIR/case.json``). A piece that isn't named didn't run: its answer, written to ``DIR/answer.json``,
+is ``undecided`` with the reason ``not run`` (`NOT_RUN`), and a ``NOT RUN`` line names it and its issue. A piece that ran
+but wrote no answer rejects. A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core
+answer: its verdict is printed as a development run's, and it credits nothing, so its answer is ``undecided`` when it
+accepts.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -31,13 +33,19 @@ checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``-
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`).
 
-``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
-``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
-as `served_integrity.answer` reads it; each other subprotocol's from
-``--pieces/<component>/answer.json``, else a ``missing`` row naming its issue. They go into the window report
-(``verdicts.json``, `row_of`'s rows) and from it the block record (``block-record.json``, `block_record.from_period`,
-held by `block_record.check`). `block_record` carries only an accepted subprotocol's certificate, so where one rejects or
-errs the composed verdict is ``reject`` and no block record is written. Prints one ``RECORD`` line.
+``record``: every subprotocol's core answer (`verity.core.protocols.answer`). Sampled proofs' is from the records audit
+`prove_path/run.sh` (``PP_RECORDS=1``) kept under ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``,
+``window/audit.json``, ``windows/rank0/registration.json``), read as `served_integrity.answer` reads it; each other
+subprotocol's is ``--pieces/<component>/answer.json``, and ``undecided`` ``not run`` where its piece wrote nothing. They
+are the window report's rows (``verdicts.json``, `row_of`). The window's verdict is a Lean answer, onsite's or remote's,
+and nothing else: each directory under ``--pieces`` that holds a core answer and its case (``case.json``, as
+`composite.py` reads it) is that answer's protocol's piece (`found`), and when the pieces make up onsite (`NEEDS`: its six
+components and NCI's registration) `composite.py onsite` runs ``onsite check`` on them, else when they make up remote
+`composite.py remote` runs ``remote check``, and its answer is the window's verdict. Pieces that make up neither leave
+the window ``undecided``, its reason naming what each product lacks and why. The block record (``block-record.json``,
+`block_record.from_period`, held by `block_record.check`) is built from the report unless the window or a subprotocol's
+row rejects (``rejected``: a rejection fails the run whether or not a product composed it). Prints one ``RECORD`` line,
+and exits 1 when there is no block record, the Lean check couldn't answer, or the block record doesn't hold.
 """
 from __future__ import annotations
 
@@ -54,15 +62,37 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
-for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interfaces"):
+from verity.core.protocols import answer as CA
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+for _p in (HERE, ROOT / "examples" / "h200" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-#: the window report's format, kept from the all-protocols runner whose report it was
-REPORT_FORMAT = "verity/all-protocols-window/v1"
+import composite as C  # noqa: E402
+
+#: the window report's format: every row a core answer, and the window's verdict onsite's or remote's Lean answer
+REPORT_FORMAT = "verity/all-protocols-window/v2"
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
+#: each subprotocol's core protocol, by its runner name
+PROTOCOLS = {"integrity": "verity/sampled-proofs/one-stage/v1", "work": "verity/pouw/v1",
+             "bandwidth": "verity/remote-bandwidth/v0", "space": "verity/pous/p2/v4/run",
+             "communication": "verity/certifier/v0", "wipe": "verity/wipe/v0"}
+#: the pieces each product needs, in the order the window's verdict tries them: onsite's components after NCI's
+#: registration (`Core.Onsite.components`), and remote's (`Core.Remote.components`)
+NEEDS = {"onsite": (C.REGISTRATION, "verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+                    "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
+         "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
+#: each product's executable (`lake build onsite`, `lake build remote` in its package)
+LEAN = {p: ROOT / "verity" / "core" / "protocols" / p / ".lake" / "build" / "bin" / p for p in C.PRODUCTS}
+#: an answer's file and its case's, in a piece's directory
+ANSWER, CASE = "answer.json", "case.json"
+#: the reason a subprotocol whose piece didn't run is undecided
+NOT_RUN = "not run"
+#: the reason an accepting development piece is undecided
+DEV_UNDECIDED = "a development run: it credits nothing"
 
 #: each subprotocol after sampled proofs, by its runner name: (its name, its component, its piece's owner, the issue its piece
 #: is, what the piece does), in the chain's order
@@ -85,7 +115,7 @@ WIPE = ("the wipe", "wipe", "memory-accounting", "MEM-96",
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
-#: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
+#: why a development piece's verdict credits nothing, so its subprotocol's answer is undecided when it accepts
 DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under the lane's development key (TOP-84), and "
            "a window counts for credit only under the lane's own Cursor secret (Daniel's call); core's credit also needs "
            "the window in a period whose open commits its draw K, rows and weights")
@@ -149,30 +179,34 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
 
 
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
-    """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, else named missing; one line each on stdout."""
+    """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, else answered ``undecided`` ``not run``; one line
+    each on stdout."""
     env = dict(os.environ if env is None else env)
     got: dict[str, dict[str, Any]] = {}
-    for name, comp, owner, issue, what in PIECES.values():
-        cmd = env.get(f"{comp.upper()}_CMD")
-        if not cmd:
-            got[comp] = {"verdict": "missing", "issue": issue, "owner": owner}
-            print(f"MISSING {name} ({issue}, {owner}): {what}", flush=True)
-            continue
+    for key, (name, comp, owner, issue, what) in PIECES.items():
         d = out / comp
         d.mkdir(parents=True, exist_ok=True)
+        cmd = env.get(f"{comp.upper()}_CMD")
+        if not cmd:
+            (d / ANSWER).write_text(CA.Answer.undecided(PROTOCOLS[key], NOT_RUN).canonical() + "\n")
+            got[comp] = {"verdict": "undecided", "reason": NOT_RUN, "issue": issue, "owner": owner}
+            print(f"NOT RUN {name} ({issue}, {owner}): {what}", flush=True)
+            continue
         with open(d / "piece.log", "w") as log:
             rc = subprocess.run(["bash", "-c", cmd, "_", str(serve_dir), str(window), str(d)], stdout=log,
                                 stderr=subprocess.STDOUT, env=env, check=False).returncode
         label = name.upper()
         try:
-            a = json.loads((d / "answer.json").read_text())
+            a = json.loads((d / ANSWER).read_text())
+            if not isinstance(a, dict):
+                raise ValueError("not a JSON object")
             got[comp] = {"verdict": a.get("verdict"), "reason": a.get("reason"), "rc": rc}
         except (OSError, ValueError) as e:
             try:
                 got[comp], label = {**development_line(json.loads((d / DEVELOPMENT).read_text())), "rc": rc}, \
                     f"{label} (development run, credits nothing)"
             except (OSError, ValueError):
-                got[comp] = {"verdict": "error", "reason": f"its piece wrote no answer (exit {rc}): {e}", "rc": rc}
+                got[comp] = {"verdict": "reject", "reason": f"its piece wrote no answer (exit {rc}): {e}", "rc": rc}
         print(f"{label} {json.dumps(got[comp], sort_keys=True)}", flush=True)
     return got
 
@@ -274,16 +308,13 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
 
 
 def check_answer(a: Any) -> dict[str, Any]:
-    """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
-    the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
-    reason and neither. Anything else is a ValueError, which the row reports as the subprotocol's error."""
-    from verity.core.protocols.pouw import core_check as CC
-
+    """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`answer.of_json`): an accept has no reason and
+    both its public outputs and its profile, a reject or undecided a reason and neither. Anything else is a ValueError,
+    on which the subprotocol rejects."""
     try:
-        CC.answer_of(a)
-    except CC.Refused as e:
+        return CA.of_json(a).to_json()
+    except CA.Refused as e:
         raise ValueError(f"not a core answer: {e}") from None
-    return dict(a)
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
@@ -297,10 +328,10 @@ def epsilon(a: Mapping[str, Any]) -> str | None:
     return str(Fraction(bound, size)) if isinstance(bound, int) and isinstance(size, int) and size > 0 else None
 
 
-def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, Any]:
+def row_of(owner: str, a: Any, out: Path | None, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's report row from its answer (checked to be a core answer first); ``run`` is the recording run."""
     a = check_answer(a)
-    runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
+    runs = json.loads((out / "runs.json").read_text()) if out is not None and (out / "runs.json").exists() else []
     accepted = a["verdict"] == "accept"
     return {"protocol": a["protocol"], "owner": owner, "verdict": a["verdict"], "reason": a["reason"],
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
@@ -317,53 +348,142 @@ def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any
         a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
         return row_of(INTEGRITY_OWNER, a, audit_dir, run)
     except (RuntimeError, ValueError) as e:
-        return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
+        refused = CA.Answer.reject(PROTOCOLS["integrity"], f"{type(e).__name__}: {e}"[:2000])
+        return row_of(INTEGRITY_OWNER, refused.to_json(), None, run)
 
 
 def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
-    """A subprotocol's runner row from its piece's answer, or ``missing`` with its issue; a development piece's is
-    ``missing`` with its document when it accepts (it credits nothing), else ``reject``."""
+    """A subprotocol's runner row from its piece's answer: ``undecided`` ``not run`` with its issue where the piece wrote
+    nothing and didn't run, ``reject`` where it ran and wrote no answer or one that isn't a core answer; a development
+    piece's is ``undecided`` with its document when it accepts (it credits nothing), else ``reject``."""
     _name, comp, owner, issue, what = PIECES.get(key, WIPE)
-    f, dev = pieces_dir / comp / "answer.json", pieces_dir / comp / DEVELOPMENT
+    pid, d = PROTOCOLS[key], pieces_dir / comp
+    f, dev = d / ANSWER, d / DEVELOPMENT
     if not f.exists() and dev.exists():
         doc = json.loads(dev.read_text())
         if doc.get("verdict") == "accept":
-            return {"verdict": "missing", "owner": owner, "issue": issue, "why": DEV_WHY, "development": doc}
-        return {"verdict": "reject", "owner": owner, "reason": "; ".join(doc.get("reasons") or ())[:2000],
-                "development": doc}
+            return {**row_of(owner, CA.Answer.undecided(pid, DEV_UNDECIDED).to_json(), d, run), "why": DEV_WHY,
+                    "development": doc}
+        why = "; ".join(doc.get("reasons") or ())[:2000] or "a development run that rejected"
+        return {**row_of(owner, CA.Answer.reject(pid, why).to_json(), d, run), "development": doc}
     if not f.exists():
-        return {"verdict": "missing", "owner": owner, "issue": issue, "why": what}
+        ran = (d / "piece.log").exists()
+        a = CA.Answer.reject(pid, "its piece wrote no answer") if ran else CA.Answer.undecided(pid, NOT_RUN)
+        row = row_of(owner, a.to_json(), d, run)
+    else:
+        try:
+            row = row_of(owner, json.loads(f.read_text()), d, run)
+        except ValueError as e:
+            row = row_of(owner, CA.Answer.reject(pid, f"{type(e).__name__}: {e}"[:2000]).to_json(), d, run)
+    return {**row, "issue": issue, "why": what} if (row["verdict"], row["reason"]) == ("undecided", NOT_RUN) else row
+
+
+def found(pieces_dir: Path) -> tuple[dict[str, Path], dict[str, str]]:
+    """The pieces under ``pieces_dir`` by their answers' protocols: each directory holding a core answer and its case
+    (``answer.json``, ``case.json``); and for each protocol answered with no case, or by more than one directory, why it
+    has no piece. A directory with no core answer is no protocol's piece (its row says why)."""
+    by: dict[str, list[tuple[Path, CA.Answer]]] = {}
+    for d in sorted(x for x in pieces_dir.iterdir() if x.is_dir()) if pieces_dir.is_dir() else ():
+        try:
+            a = CA.of_json(json.loads((d / ANSWER).read_text()))
+        except (OSError, ValueError):
+            continue
+        by.setdefault(a.protocol, []).append((d, a))
+    got: dict[str, Path] = {}
+    why: dict[str, str] = {}
+    for pid, xs in by.items():
+        d, a = xs[0]
+        if len(xs) > 1:
+            why[pid] = "answered by more than one piece: " + ", ".join(x.name for x, _ in xs)
+        elif (d / CASE).is_file():
+            got[pid] = d
+        else:
+            why[pid] = f"{a.verdict.value}{f': {a.reason}' if a.reason else ''}; {d.name}/ holds no {CASE}"
+    return got, why
+
+
+def missing(got: Mapping[str, Path], why: Mapping[str, str]) -> dict[str, dict[str, str]]:
+    """What each product of `NEEDS` lacks of ``got`` (`found`'s), and why."""
+    return {p: {i: why.get(i, "no piece answers it") for i in ids if i not in got} for p, ids in NEEDS.items()}
+
+
+def lacking(lacks: Mapping[str, Mapping[str, str]]) -> str:
+    """An undecided window's reason: what each product lacks, and why."""
+    return "; ".join(f"{C.PRODUCTS[p]} lacks " + ", ".join(f"{i} ({w})" for i, w in m.items()) for p, m in lacks.items())
+
+
+#: a product's exit status for each verdict (`Core.Protocol.main`)
+EXIT = {"accept": 0, "reject": 1, "undecided": 2}
+
+
+def lean_answer(product: str, got: Mapping[str, Path], exe: Path, out: Path) -> dict[str, Any]:
+    """``composite.py PRODUCT`` on its pieces of ``got`` (`NEEDS`), ``--exe`` ``exe``, in ``out``: the product's answer,
+    the one canonical core answer under its id that the executable printed, with the verdict its exit status says;
+    RuntimeError when it is anything else."""
+    if not exe.is_file():
+        raise RuntimeError(f"no {product} executable at {exe} (lake build {product} in verity/core/protocols/{product})")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / ANSWER).unlink(missing_ok=True)
+    argv = [sys.executable, str(HERE / "composite.py"), product, "--out", str(out), "--exe", str(exe)]
+    for i in NEEDS[product]:
+        argv += ["--registration" if i == C.REGISTRATION else "--piece", str(got[i])]
+    p = subprocess.run(argv, capture_output=True, text=True, check=False)
+    (out / "composite.log").write_text(p.stdout + p.stderr)
+    said = (p.stderr or p.stdout).strip()[-1500:]
     try:
-        return row_of(owner, json.loads(f.read_text()), f.parent, run)
-    except ValueError as e:
-        return {"verdict": "error", "owner": owner, "reason": f"{type(e).__name__}: {e}"[:2000]}
+        line = (out / ANSWER).read_text().strip()
+        a = CA.of_json(json.loads(line))
+    except (OSError, ValueError) as e:
+        raise RuntimeError(f"composite.py {product} exited {p.returncode} with no answer ({e}): {said}") from None
+    if line != a.canonical() or a.protocol != C.PRODUCTS[product] or p.returncode != EXIT[a.verdict]:
+        raise RuntimeError(f"composite.py {product} exited {p.returncode} on {line[:600]}")
+    return a.to_json()
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None, wipe_server: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
-    """The window report over ``rows`` (by runner name), its block record (None when a subprotocol rejected, erred or was
-    undecided), and the ``RECORD`` line's summary."""
+           run: str | None, pieces_dir: Path, out: Path, lean: Mapping[str, Path] | None = None,
+           wipe_server: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+    """The window report over ``rows`` (by runner name), whose verdict is onsite's or remote's Lean answer on the pieces
+    under ``pieces_dir`` (`lean_answer`, with each product's executable in ``lean``, `LEAN` by default, its files under
+    ``out/composite``) or ``undecided`` naming what each lacks; its block record (None when the window or a row
+    rejects); and the ``RECORD`` line's summary."""
     from verity_e2e_demo import block_record as BR
 
-    report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": dict(rows)}
-    verdicts = {NAMES[k]: r.get("verdict") for k, r in rows.items()}
-    missing = {NAMES[k]: r.get("issue") for k, r in rows.items() if r.get("verdict") == "missing"}
+    got, why = found(pieces_dir)
+    lacks = missing(got, why)
+    product = next((p for p, m in lacks.items() if not m), None)
+    answer, error = None, None
+    if product is not None:
+        try:
+            answer = lean_answer(product, got, Path((lean or LEAN)[product]), out / "composite")
+        except RuntimeError as e:
+            error = str(e)[:2000]
+    if answer is not None:
+        verdict = answer
+    elif product is not None:
+        verdict = CA.Answer.undecided(C.PRODUCTS[product], f"the Lean check: {error}").to_json()
+    else:
+        verdict = CA.Answer.undecided(C.PRODUCTS["onsite"], lacking(lacks)).to_json()
+    report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": dict(rows),
+              "lean": {"product": product and C.PRODUCTS[product], "pieces": {i: str(d) for i, d in sorted(got.items())},
+                       "missing": {C.PRODUCTS[p]: m for p, m in lacks.items()}, "answer": answer, "error": error},
+              "verdict": verdict}
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
-    dev = dev if dev["development"] else {}
-    bad = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") not in ("accept", "missing"))
-    if bad:
-        composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows) else "undecided"
-        line = {"composed": composed, "by": bad, "verdicts": verdicts, "missing": missing, "block_record": None,
-                "why": "block_record carries an accepted subprotocol's certificate only", **dev}
-        return report, None, line
+    line = {"verdict": verdict["verdict"], "protocol": verdict["protocol"], "reason": verdict["reason"],
+            "lean": {"product": report["lean"]["product"], "verdict": answer and answer["verdict"], "error": error,
+                     "missing": {C.PRODUCTS[p]: sorted(m) for p, m in lacks.items()}},
+            "verdicts": {NAMES[k]: r["verdict"] for k, r in rows.items()},
+            "rejected": [NAMES[k] for k, r in rows.items() if r["verdict"] == "reject"],
+            "not_run": {NAMES[k]: r["issue"] for k, r in rows.items() if "issue" in r},
+            **(dev if dev["development"] else {})}
+    if verdict["verdict"] == "reject" or line["rejected"]:
+        return report, None, {**line, "block_record": None}
     w = rows.get("wipe") or {}
     extra = ({"wipe": {"row": w, "server": wipe_server, "runs": w.get("runs") or [run]}}
              if w.get("verdict") == "accept" and wipe_server is not None else None)
     rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE, extra=extra)
-    line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing, **dev,
-            "record_missing": rec["composed"]["missing"], "check": BR.check(rec), "steps": list(steps), "node": node,
-            "deployment": rec["monitoring_period"]["deployment"]["id"]}
-    return report, rec, line
+    return report, rec, {**line, "record_missing": rec["composed"]["missing"], "check": BR.check(rec),
+                         "steps": list(steps), "node": node, "deployment": rec["monitoring_period"]["deployment"]["id"]}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -395,6 +515,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--node", default=socket.gethostname())
+    for prod in C.PRODUCTS:
+        r.add_argument(f"--{prod}", type=Path, default=LEAN[prod], help=f"{prod}'s executable")
     a = ap.parse_args(argv)
     if a.cmd == "window":
         try:
@@ -421,20 +543,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
         got = pieces(a.serve_run, a.window, a.out)
-        return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
+        return 0 if all(g["verdict"] in ("accept", "undecided") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: piece_row(k, a.pieces, run) for k in PIECES},
             "wipe": piece_row("wipe", a.pieces, run)}
     served = a.pieces / "wipe" / "served.json"
-    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               wipe_server=json.loads(served.read_text())["server"] if served.exists() else None)
     a.out.mkdir(parents=True, exist_ok=True)
+    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
+                               pieces_dir=a.pieces, out=a.out, lean={p: getattr(a, p) for p in C.PRODUCTS},
+                               wipe_server=json.loads(served.read_text())["server"] if served.exists() else None)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
         (a.out / "block-record.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True) + "\n")
     print("RECORD " + json.dumps(line, sort_keys=True), flush=True)
-    return 0 if rec is not None and not line["check"] else 1
+    return 0 if rec is not None and not line["check"] and report["lean"]["error"] is None and not line["rejected"] else 1
 
 
 if __name__ == "__main__":

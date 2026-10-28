@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
+inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/pous/p2/PROTOCOL.md", "verity/core/protocols/interface",
           "verity/core/protocols/bandwidth",
           "verity/core/service/flock", "verity/core/primitives/identity", "verity/core/primitives/randomness",
@@ -31,8 +32,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pous.py", "integrations/vllm/verity_vllm/engine/__init__.py",
           "integrations/vllm/verity_vllm/engine/hooks.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
-          # that module imports) and the block record's leg
-          "benchmarks/one_stage/served_verdicts.py", "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+          # that module imports, among them composite.py) and the block record's leg
+          "benchmarks/one_stage/served_verdicts.py", "benchmarks/one_stage/composite.py",
+          "examples/h200/interfaces/verity_e2e_demo/block_record.py",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
           "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
           "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",

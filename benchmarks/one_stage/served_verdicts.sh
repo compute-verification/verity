@@ -32,18 +32,21 @@
 #     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) draws and proves its members.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
-#     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
+#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (its answer.json and case.json), else answers it
+#     undecided, "not run", and says NOT RUN with its issue. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
 #     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
 #     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'), serve() calls it in TREE, under the serve's lease
 #     and before serve-openai starts, with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and
-#     says its last line as WIPE. The record reads its pieces/wipe/answer.json and composes the wipe only when that answer
-#     accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or
-#     failed before its judge) leaves the wipe missing, one served elsewhere stays missing, and one whose answer rejects
-#     makes the record reject: a failed wipe is never accepted.
-#  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
-#     record ($OUT/record/block-record.json), composed `undecided` until the Lean check answers.
+#     says its last line as WIPE. The record reads its pieces/wipe/answer.json, and takes the wipe into the block record
+#     only when that answer accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote
+#     no answer (refused, or failed before its judge) is undecided, "not run", one served elsewhere stays out of the block
+#     record, and one whose answer rejects fails the run with no block record: a failed wipe is never accepted.
+#  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json, every row a
+#     core answer) whose verdict is onsite's Lean answer (`composite.py onsite`, the `onsite` executable) when the pieces
+#     under $OUT/pieces with a case.json beside their answer make up onsite, else remote's (`composite.py remote`), else
+#     undecided naming what each lacks; and the block record ($OUT/record/block-record.json) unless the window or a
+#     subprotocol rejects. The run passes on a window that accepts or is undecided with no subprotocol rejecting.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
@@ -260,6 +263,8 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   uv sync --all-packages --extra torch-cpu || return 5
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
   (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
+  (cd verity/core/protocols/onsite && lake build onsite) || return 7
+  (cd verity/core/protocols/remote && lake build remote) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6
@@ -379,14 +384,14 @@ rc=$?
 say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log" | cut -c1-3000)"
 [ -n "$(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log")" ] || say "SAMPLED-PROOFS: no RECORDS line; $(grep -v '^+' "$OUT/sampled-proofs.log" | tail -3 | tr '\n' ' ' | cut -c1-600)"
 
-# 4. the other subprotocols, each its piece's verdict or MISSING with its issue
+# 4. the other subprotocols, each its piece's verdict, or undecided and NOT RUN with its issue
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" 2>&1 | tee -a "$OUT/verdicts.txt"
 
-# 5. one record of every verdict
+# 5. one record of every verdict, and the window's verdict: onsite's or remote's Lean answer
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
 measure
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep -q '"composed": "\(undecided\|accept\)"' "$OUT/verdicts.txt"
+[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep '^RECORD ' "$OUT/verdicts.txt" | grep -q '"verdict": "\(undecided\|accept\)"'

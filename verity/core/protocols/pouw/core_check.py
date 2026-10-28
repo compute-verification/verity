@@ -80,6 +80,7 @@ import re
 from fractions import Fraction
 from typing import Any, NamedTuple
 
+from verity.core.protocols import answer as A
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
@@ -103,8 +104,8 @@ LEVEL = "unit"
 PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "length", "query", "range")
 LENGTH_PARAM_KEYS = ("max_tokens", "stop")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
-ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
-VERDICTS = ("accept", "reject", "undecided")
+ANSWER_KEYS = A.KEYS
+VERDICTS = A.VERDICTS
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: the window's optional groups of committed values (`values_root`): the activations it committed after serving, before
 #: its salt (X), and the registered weights' entries (W, where it registers no ``W`` root)
@@ -172,35 +173,14 @@ TILES = {
 }
 
 
-class Refused(ValueError):
-    """A decoder's refusal; `answer` prefixes it with the input it read."""
+#: a decoder's refusal; `answer` prefixes it with the input it read
+Refused = A.Refused
 
 
 # ---- canonical JSON and exact ratios, as `Core.canonicalJson` and `Core.Ratio` read them ---------------------------------
 
-def _canon(x: Any) -> str:
-    """`Flock.canon`: compact, keys sorted, serde's escaping (non-ASCII as itself), integers only."""
-    if isinstance(x, float):
-        raise Refused("canonical JSON: a non-integer number")
-    if isinstance(x, dict):
-        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + _canon(v) for k, v in sorted(x.items())) + "}"
-    if isinstance(x, list):
-        return "[" + ",".join(_canon(v) for v in x) + "]"
-    return json.dumps(x, ensure_ascii=False)
-
-
-def canonical(b: bytes) -> Any:
-    try:
-        s = b.decode()
-    except UnicodeDecodeError:
-        raise Refused("not UTF-8") from None
-    try:
-        x = json.loads(s)
-    except ValueError as e:
-        raise Refused(f"not JSON ({e})") from None
-    if _canon(x) != s:
-        raise Refused("not canonical JSON (compact, keys sorted, integers only)")
-    return x
+_canon = A.canon
+canonical = A.canonical_json
 
 
 def _quote(s: str) -> str:
@@ -381,10 +361,7 @@ def _arr_at(j: Any, k: str, ctx: str) -> list:
 
 def _unhex(s: str) -> str:
     """`Flock.unhex`, keeping the hex: `hexOf` writes back exactly what it accepts."""
-    if len(s) % 2:
-        raise Refused("odd-length hex")
-    if any(c not in "0123456789abcdef" for c in s):
-        raise Refused("not lowercase hex")
+    A.unhex(s)
     return s
 
 
@@ -448,26 +425,8 @@ def integrity_json(p: dict) -> dict:
 
 
 def answer_of(j: Any, ctx: str = "answer") -> dict:
-    """`Core.Answer.ofJson`: only what `Answer.toJson` writes, in the shapes `answer` returns."""
-    verdict = _str_at(j, "verdict", ctx)
-    if verdict not in VERDICTS:
-        raise Refused(f"{ctx}.verdict: not accept, reject or undecided")
-    protocol = _str_at(j, "protocol", ctx)
-    reason = _get(j, "reason", ctx)
-    if reason is not None:
-        _as_str(reason, f"{ctx}.reason")
-    com = _get(j, "commitment", ctx)
-    if com is not None:
-        com = _unhex(_as_str(com, f"{ctx}.commitment"))
-    pub, prof = _get(j, "public", ctx), _get(j, "profile", ctx)
-    if verdict == "accept":
-        if not (reason is None and pub is not None and prof is not None):
-            raise Refused(f"{ctx}: an accept has no reason, and both its public outputs and its profile")
-    elif not (reason is not None and pub is None and prof is None):
-        raise Refused(f"{ctx}: a {verdict} has a reason, and neither public outputs nor a profile")
-    if sorted(j) != list(ANSWER_KEYS):
-        raise Refused(f"{ctx}: not in the form Answer.toJson writes")
-    return {"protocol": protocol, "verdict": verdict, "reason": reason, "commitment": com, "public": pub, "profile": prof}
+    """`Core.Answer.ofJson` (`answer.of_json`), as `Answer.toJson` writes it back."""
+    return A.of_json(j, ctx).to_json()
 
 
 _DRAW_KEYS = {"subset": ["k", "law", "population", "units"], "bernoulli": ["law", "p", "population", "units"],
@@ -1779,8 +1738,7 @@ def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
-        return {"protocol": ID, "verdict": verdict, "reason": reason, "commitment": None if d is None else d.hex(),
-                "public": pub, "profile": prof}
+        return A.outcome(ID, verdict, reason, d, pub, prof)
     try:
         p = params(canonical(params_b))
     except Refused as e:
@@ -1807,8 +1765,7 @@ def case(j: Any) -> dict:
         e = _unhex(_str_at(j, "evidence", "the case"))
         params_b = _canon(params_j).encode()
     except Refused as err:
-        return {"protocol": ID, "verdict": "reject", "reason": f"case: {err}", "commitment": None, "public": None,
-                "profile": None}
+        return A.outcome(ID, "reject", f"case: {err}")
     return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
 
 

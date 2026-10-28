@@ -16,14 +16,14 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity.core.protocols import answer as CA
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
 
 
 def _refusal(reason: str, commitment: str | None) -> dict[str, Any]:
-    return {"commitment": commitment, "profile": None, "protocol": PROTOCOL, "public": None, "reason": reason,
-            "verdict": "reject"}
+    return CA.Answer.reject(PROTOCOL, reason, None if commitment is None else CA.unhex(commitment)).to_json()
 
 
 def _codes(checks: Mapping[str, Any]) -> list[str]:
@@ -95,8 +95,7 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     per_template = wrong.get("per_template")
     public = {"bound": wrong["bound"], "drawn": sorted(draw["units"]), "per_template": per_template,
               "proved": sorted(rec["proved_units"])}
-    return {"commitment": R.digest(reg), "profile": profile, "protocol": PROTOCOL, "public": public, "reason": None,
-            "verdict": "accept"}
+    return CA.Answer.accept(PROTOCOL, CA.unhex(R.digest(reg)), public, profile).to_json()
 
 
 __all__ = ["PROTOCOL", "answer"]
