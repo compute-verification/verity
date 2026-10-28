@@ -7,20 +7,23 @@ Lean firewall and held by Lean `verify --zk --registered`. Standalone: in no Spe
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST --main FILE
-        [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule [--class w63|test]    # its schedule as warden_serve.py's flags
+        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST
+        --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
+    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
   warden's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
-  link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
-  KO 8, KI 100) and 16-bucket link-windows, whose units a CPU proves in minutes.
+  link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
+  4 outputs a request (egress 4 request slots of 4 ids), its warden w63's at egress_cells 5 (KO + 1); and ``test``
+  (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI 100) and 16-bucket
+  link-windows, whose units a CPU proves in minutes.
 * **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
-  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), test's three (the third in the
-  first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
+  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
+  (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's), test's
+  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
   test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
 * **A warden's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
@@ -138,7 +141,7 @@ import socket
 import sys
 import time
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -205,13 +208,21 @@ W63 = Setup(
     (0, 2, 2, 12, 15),
     tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 40, 64, 8, 5), 1)),
     windows=2, A=9, max_tokens=16, seed=7)
+W63K4 = Setup(
+    "w63k4", replace(W63.cls, KO=4, KI=32), replace(W63.params, egress_cells=5),
+    (tuple((7 * k + 11) % 128_256 for k in range(32)), tuple(100_000 + k for k in range(20)),
+     tuple(131_071 - 3 * k for k in range(5)), tuple((k * k) % 128_256 for k in range(32)),
+     tuple(5_000 + k for k in range(9))),
+    W63.arrivals,
+    tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 4, 1, 4, 2), 1)),
+    windows=2, A=9, max_tokens=4, seed=7)
 TEST = Setup(
     "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
     W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
-SETUPS = {s.name: s for s in (W63, TEST)}
+SETUPS = {s.name: s for s in (W63, W63K4, TEST)}
 #: w63's: the schedule ``scan_zk.py schedule`` prints and the gate's ``warden-rehearse --scan`` serves
 CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
