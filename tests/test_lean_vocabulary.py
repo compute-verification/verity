@@ -111,7 +111,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/ml/circuits/program.py::Program",),
-    "Record": (),
+    "Record": ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",),
     "Registration": (f"{CORE}Site.lean::Verity.Registration", f"{SITE_PY}::Registration"),
     "Registry": (),
     "Session": (),
