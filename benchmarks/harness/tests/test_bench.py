@@ -321,7 +321,7 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
 
 
 def test_the_launcher_finds_a_nodes_jobs_environment_without_verity_bench_venv(tmp_path):
-    """vy-nebius-2's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
+    """A jobs node's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
     VERITY_BENCH_VENV the launcher takes the first that exists, and refuses naming every path it tried."""
 
     root = Path(__file__).resolve().parents[3]
@@ -600,7 +600,7 @@ def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
 
 def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error():
     """A gate that fails in the worker (an arm's refusal) ends the worker's loop; the runner's cleanup then closes the
-    engine, and that close must not replace the gate's error with a connection error (r20261018-205649-abfc)."""
+    engine, and that close must not replace the gate's error with a connection error."""
 
     from verity_bench.vllm.runner import _ProcessEngine
 
@@ -680,7 +680,7 @@ def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedu
 
 
 def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_never_did():
-    """r20261018-234437-5511's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
+    """A run's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
     happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
 
     from verity_bench.vllm.runner import _warm
@@ -1473,7 +1473,7 @@ def bench(factory=None, *, arms=None, reps=2, points=None):
 
 @pytest.mark.parametrize("resident_failure", [None, "a"])
 def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_failure):
-    """Red team, attack 1: each timed run is 1% slower than the one before (clocks, heat). Every arm's mean timed
+    """Each timed run is 1% slower than the one before (clocks, heat). Every arm's mean timed
     position is the same, so the means keep the arms' true 2x in either mode, and the paired ratios stay within the
     drift's second-order residue; blocks used to repeat its first cycle's order in the second, so the baseline always
     ran first and the last arm read 2.08x."""
@@ -1487,7 +1487,7 @@ def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_f
 
 
 def test_a_blocks_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
-    """Red team, attacks 1 and 3: in `blocks` the gate's engine and the timed engines are different lifetimes, and the
+    """In `blocks` the gate's engine and the timed engines are different lifetimes, and the
     identity recorded the gated one's KV pool, so a timed engine with another pool went unnoticed."""
 
     factory = FakeFactory(resident_failure="candidate", kv_after_gate={"candidate": 491_376})
@@ -1498,7 +1498,7 @@ def test_a_blocks_engine_unlike_the_gated_one_fails_engine_identity_and_times_no
 
 
 def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unseen_device_work():
-    """Red team, attack 2: under async scheduling (output lag 1) a step's host time holds the previous forward's device
+    """Under async scheduling (output lag 1) a step's host time holds the previous forward's device
     time, so a decode-only step after a prefill carried the prefill: 1.1 s over 16 tokens instead of 0.4 s. Device
     work still running after the last step means the host steps missed it, and the metric is dropped."""
 
@@ -1517,7 +1517,7 @@ def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unse
 
 
 def test_validate_refuses_dropped_reordered_or_edited_reps():
-    """Red team, attack 3: a result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
+    """A result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
     edit a mean or change `reps` and still have `judge` accept it."""
 
     doc = bench(reps=3)
@@ -1541,7 +1541,7 @@ def test_validate_refuses_dropped_reordered_or_edited_reps():
 
 
 def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
-    """Red team, attack 3: `--allow precision` used to match every leaf named precision (each arm's as well as the
+    """`--allow precision` used to match every leaf named precision (each arm's as well as the
     preset's), and `--allow id` every arm id."""
 
     doc = bench()
@@ -1557,7 +1557,7 @@ def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
 
 
 def test_table_merges_one_specs_point_results_only_when_their_identities_agree(tmp_path):
-    """Red team, attack 3: a dispatched spec runs each point as its own run, so a sweep's table is assembled from
+    """A dispatched spec runs each point as its own run, so a sweep's table is assembled from
     several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
 
     from verity_bench.cli import main
@@ -1586,7 +1586,7 @@ def test_table_merges_one_specs_point_results_only_when_their_identities_agree(t
 
 
 def test_an_arm_cannot_be_its_own_control():
-    """Red team, attack 4: its greedy gate would compare it with itself and always pass."""
+    """An arm that controlled itself would have its greedy gate compare it with itself and always pass."""
 
     with pytest.raises(ValueError, match="own control"):
         bench(arms=(Arm("stock-fp8", precision="fp8"), Arm("candidate", control="candidate")))
@@ -1594,7 +1594,7 @@ def test_an_arm_cannot_be_its_own_control():
 
 @pytest.mark.parametrize("kv_tokens", [{"candidate": None}, {"stock-fp8": None}, {"stock-fp8": None, "candidate": None}])
 def test_an_unreported_kv_pool_fails_the_gate(kv_tokens):
-    """Red team, attack 4: the kv-pool gate used to be skipped when either engine didn't report its pool."""
+    """The kv-pool gate used to be skipped when either engine didn't report its pool."""
 
     doc = bench(FakeFactory(kv_tokens=kv_tokens))
     [gate] = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
@@ -1602,7 +1602,7 @@ def test_an_unreported_kv_pool_fails_the_gate(kv_tokens):
 
 
 def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
-    """Red team, attack 4: the greedy gate ran before timing only, so an arm could pass it and compute something else
+    """The greedy gate ran before timing only, so an arm could pass it and compute something else
     in its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"candidate": "other"}))
@@ -1629,7 +1629,7 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
 
 
 def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():
-    """Red team, attack 5: from n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
+    """From n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
     rep was dropped from the ratio, which then averaged the other reps; n = 1 rendered like a measured interval."""
 
     from verity_bench.vllm.runner import _aggregate, _summary
@@ -1690,7 +1690,7 @@ def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tre
 
 
 def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_commit(tmp_path):
-    """Red team, attacks 6 and 7: validation comes from result.json alone, so a run killed after writing it (rc 143,
+    """Validation comes from result.json alone, so a run killed after writing it (rc 143,
     preempted) read as passed, and so did a run from a dirty tree, whose code its commit doesn't name."""
 
     from research.store.local import LocalStore
@@ -1795,7 +1795,7 @@ def test_check_on_a_fresh_store_counts_the_points_the_remote_holds(tmp_path, mon
 
 
 def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tmp_path, monkeypatch):
-    """Red team, attack 7: a preempted point reruns whole; if it reran in its run directory and died before writing a
+    """A preempted point reruns whole; if it reran in its run directory and died before writing a
     new result.json, the earlier attempt's verdict would stand beside the new attempt's half-written files."""
 
     import verity_bench.cli as cli

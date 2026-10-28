@@ -167,7 +167,7 @@ def RColsBind (H : Msg → Msg) (rd : Msg → Option FinalP) : Prop :=
 
 /-- **The deployed reader binds its last message's calls**: two last messages it accepts after the same rounds and
 coins, where it answered each earlier round with that round's coin, whose decisions call SHA-512 on different sets,
-show a collision among those calls. The calls are compared as sets (ASK-76), as at the plain verifier. -/
+show a collision among those calls. The calls are compared as sets, as at the plain verifier. -/
 def RCallsBind (H : Msg → Msg) (rd : Msg → Option FinalP) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
