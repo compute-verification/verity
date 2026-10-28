@@ -6,8 +6,8 @@ import Definitions.Pous.Model.StreamedWipe
 `Pous.Guarantees.StreamedWipe` for every number `k` of sequential timed reads: a ratio `r` with `(1 − 1/r)^k ≤ 2^-129`
 puts the threshold at `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits of the fill, plus the server's memory outside the fill
 and the egress, at `2^-128` (`StreamedWipeMeetsReads`). `StreamedWipeMeetsFamily`'s `k = 2152` is its instance at
-`r = 24`, and `StreamedWipeMeets141GB5` is the instance at an H200's 141 GB with 2.3 GB of driver reserve, at most 5 GB
-in all. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the proofs
+`r = 24`, and `StreamedWipeMeetsH200` is the instance at an H200 of 141 GiB (151,397,597,184 bytes) filled whole, at
+most 5 GB in all. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the proofs
 `Security/Proofs/Pous/StreamedWipe/Family.lean`.
 
 **What they rest on.** No named assumption, as `StreamedWipe`: the PRF (C3) enters as its advantage in the conclusion,
@@ -47,22 +47,24 @@ def StreamedWipeMeetsReads : Prop :=
         StreamedWipe.winReal prf P ≤
           (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 
-/-- **The H200 at 5 GB: 141 GB at 5231 reads, with its driver reserve.** `StreamedWipeMeetsReads` at `r = 59` and
-`k = 5231` on an H200: a fill of `n = 2,203,125,000` labels, its `141·10^9` bytes of HBM3e, and `R = 18,400,000,000`
-bits outside the fill, its 2.3 GB of driver reserve, which count in full because memory outside the fill adds to what a
-prover keeps. A prover with `E` bits of egress that keeps at least `39,721,768,854 + E` bits of uniform prior content
+/-- **The H200 at 5 GB: 141 GiB at 2906 reads.** `StreamedWipeMeetsReads` at `r = 33` and `k = 2906` on an H200 of
+141 GiB: a fill of `n = 2,365,587,456` labels, `151,397,597,184` bytes (the data sheet's 141 GB in binary units), and
+`R = 0`. A prover with `E` bits of egress that keeps at least `39,068,035,213 + E` bits of uniform prior content
 through the reads is accepted with probability at most `2^-128` plus the PRF's advantage. The threshold is about
-4.965 GB plus the egress: the fill's share, `21,321,768,854` bits (about 2.665 GB), plus the reserve.
+4.884 GB plus the egress. NVML's total on the deployed card is `150,754,820,096` bytes (143,771 MiB), 613 MiB less; that
+card filled whole has the lower threshold `38,902,167,181` bits at the same `r` and `k`. A fill that leaves some of the
+device out adds that memory to `R` in full, so it needs a larger `r` for the same 5 GB: it is `StreamedWipeMeetsReads`
+at the `n` and `R` it has.
 
-`r = 59` is the least ratio whose threshold, with the reserve, is at most 5 GB (`40·10^9` bits): at `r = 58` the fill's
-share is `21,651,400,598` bits (about 2.706 GB). `k = 5231` is the least `k` with `58^k · 2^129 ≤ 59^k`. Same footing as
-the family. Proof: `PousStreamedWipe.streamed_wipe_meets_141GB5`.
+`r = 33` is the least ratio whose threshold is at most 5 GB (`40·10^9` bits): at `r = 32`, with its least `k = 2817`,
+it is `40,214,986,381` bits (about 5.027 GB). `k = 2906` is the least `k` with `32^k · 2^129 ≤ 33^k`. Same footing as
+the family. Proof: `PousStreamedWipe.streamed_wipe_meets_H200`.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
-def StreamedWipeMeets141GB5 : Prop :=
-  ∀ (q E κ : ℕ) (prf : Bits κ → Fin 2203125000 → Bits 512)
-    (P : StreamedWipe.Prover 2203125000 5231 512 q (2203125000 * 512 + 18400000000) E),
-    39721768854 + E ≤ q →
+def StreamedWipeMeetsH200 : Prop :=
+  ∀ (q E κ : ℕ) (prf : Bits κ → Fin 2365587456 → Bits 512)
+    (P : StreamedWipe.Prover 2365587456 2906 512 q (2365587456 * 512) E),
+    39068035213 + E ≤ q →
     StreamedWipe.winReal prf P ≤
       (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 
