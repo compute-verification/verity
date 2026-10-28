@@ -40,6 +40,7 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -48,6 +49,7 @@
 #include <cstring>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../commit_gpu/commit_gpu.cuh"
@@ -1768,6 +1770,12 @@ __global__ void gen_kernel(int8_t* out, int K, u32 seed, bool t3) {
   for (int k = threadIdx.x; k < K; k += blockDim.x)
     out[row * K + k] = (int8_t)fminf(127.f, fmaxf(-127.f, rintf(127.f * gen_value(seed, row * K + k, t3) / mx)));
 }
+// fill-bench's V31_GEN uniform: n entries uniform in [-127, 127] (random-like, every bit toggling; a served row's dither
+// + 1 still fits int8 once its sigma is taken off, so no row is refused)
+__global__ void gen_uniform_kernel(int8_t* out, u64 n, u32 seed) {
+  for (u64 i = blockIdx.x * (u64)blockDim.x + threadIdx.x; i < n; i += (u64)gridDim.x * blockDim.x)
+    out[i] = (int8_t)((int)(mix32(seed ^ mix32((u32)i ^ mix32((u32)(i >> 32)))) % 255u) - 127);
+}
 
 // ---------------------------------------------------------------- host
 static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
@@ -2730,22 +2738,27 @@ struct Fill {
     }
     return xctr;
   }
+#ifdef V31_WG
+  // a served wg call's GEMM of D alone (gemm's first launch; the GEMM of the prefix sums is the rest)
+  void gemm_d(cudaStream_t st, int b) {
+    wgp::Args g = wa_plain;
+    g.O = D[b];
+    g.clk = clk_on;
+    if (tst) g.tso = tso[b];
+    if (kn.rp == 4 || kn.rp == 5) {
+      xep[b] = epoch(st);
+      const FusedLeaves h = fused_leaves(b);
+      wg_run(st, g, &h);
+    } else {
+      wg_run(st, g);
+    }
+  }
+#endif
   void gemm(cudaStream_t st, int b) {
     if (ltw) { lt_run(lt, X, W, D[b], st); return; }
 #ifdef V31_WG
-    if (o && wg) {
-      wgp::Args g = wa_plain;
-      g.O = D[b];
-      g.clk = clk_on;
-      if (tst) g.tso = tso[b];
-      if (kn.rp == 4 || kn.rp == 5) {
-        xep[b] = epoch(st);
-        const FusedLeaves h = fused_leaves(b);
-        wg_run(st, g, &h);
-      } else {
-        wg_run(st, g);
-      }
-    } else
+    if (o && wg) gemm_d(st, b);
+    else
 #endif
     if (o) lt_run(lt, Ap, Bp, D[b], st);
     if (!Wn) return;
@@ -3377,6 +3390,10 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
   CK(cudaGetDeviceProperties(&prop, 0));
   std::mt19937_64 rng(std::random_device{}());
   const bool served = env_int("V31_SERVED", 0) != 0;
+  // V31_GEN: the operands' law, llm (v31.py's, the default) or uniform (gen_uniform_kernel's)
+  const std::string gen = env_str("V31_GEN", "llm");
+  if (gen != "llm" && gen != "uniform") { fprintf(stderr, "V31_GEN is llm or uniform\n"); return 2; }
+  const bool uniform = gen == "uniform";
   for (const auto& sh : shapes) {
     char name[64];
     int m, n, k;
@@ -3388,8 +3405,13 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.setup(m, n, k, lp, L, row, read_params(pfile), 0);
     int8_t* A = dalloc<int8_t>((size_t)m * k);
     int *D = dalloc<int>((size_t)m * n), *D2 = dalloc<int>((size_t)m * n);
-    gen_kernel<<<m, 256, 0, f.s0>>>(A, k, (u32)rng(), true);
-    gen_kernel<<<n, 256, 0, f.s0>>>(f.B, k, (u32)rng(), false);
+    if (uniform) {
+      gen_uniform_kernel<<<4 * f.nsm, 256, 0, f.s0>>>(A, (u64)m * k, (u32)rng());
+      gen_uniform_kernel<<<4 * f.nsm, 256, 0, f.s0>>>(f.B, (u64)n * k, (u32)rng());
+    } else {
+      gen_kernel<<<m, 256, 0, f.s0>>>(A, k, (u32)rng(), true);
+      gen_kernel<<<n, 256, 0, f.s0>>>(f.B, k, (u32)rng(), false);
+    }
     std::vector<uint8_t> sd(384);
     for (auto& x : sd) x = (uint8_t)rng();
     if (served) std::fill(sd.begin(), sd.begin() + 64, 0);
@@ -3472,22 +3494,32 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
                       }});
       arms.push_back({"ovl_pad", [&](cudaStream_t s, int r) { ovl(s, r, nullptr, true); }});
     }
+    // the clocked arms' clock64 slots, 4 words each (wgp::Args::clk), in CLOCKED's order
+    const char* CLOCKED[] = {"gemm", "ovl", "gemm_d", "wgl"};
+    unsigned long long* ck = f.clk ? dalloc<unsigned long long>(16) : nullptr;
 #ifdef V31_WG
-    // wgmma.linear on A and B (bf16 values into D2, after CUTLASS's check of it)
+    // wgmma.linear on A and B (bf16 values into D2, after CUTLASS's check of it); gemm_d: the served call's GEMM of D alone
     wgp::Args gw{};
     if (served) {
       gw = f.wg_args(A, f.B, 2);
       gw.O = D2;
+      gw.clk = ck ? ck + 12 : nullptr;
       arms.push_back({"wgl", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.wg_run(s, gw); }});
+      if (f.wg) arms.push_back({"gemm_d", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.gemm_d(s, 0); }});
     }
 #endif
     const int ICUT = (int)arms.size();
     if (cut.best) arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
-    // the gemm and ovl arms' SM clock from clock64 (cmhz): each item's wg GEMMs of D, CTA 0's cycles over its ns
+    // the clocked arms' SM clock from clock64 (cmhz): each item's wg GEMMs (of D, or wgmma.linear's), CTA 0's cycles over
+    // its ns
     std::vector<std::vector<double>> cmhz(arms.size());
-    for (size_t a = 0, slot = 0; f.clk && a < arms.size(); a++) {
-      if (arms[a].name != "gemm" && arms[a].name != "ovl") continue;
-      unsigned long long* c = f.clk + 4 * slot++;
+    std::vector<unsigned long long*> cks(arms.size(), nullptr);
+    for (size_t a = 0; ck && a < arms.size(); a++) {
+      int slot = -1;
+      for (int i = 0; i < 4; i++)
+        if (arms[a].name == CLOCKED[i]) slot = i;
+      if (slot < 0) continue;
+      unsigned long long* c = cks[a] = ck + 4 * slot;
       auto inner = arms[a].enqueue;
       arms[a].enqueue = [&f, c, inner](cudaStream_t s, int r) {
         CK(cudaMemsetAsync(c, 0, 16, s));
@@ -3504,35 +3536,65 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     const gk::Timing tm = gk::timed_items(arms, reps, f.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
-    // the lt, gemm, ovl and wgl arms' power (w): each arm's calls back to back for V31_POWER_MS (default 1500; 0: none),
-    // after a fifth of that as a lead-in, NVML's energy over their event time
+    // the power arms (V31_POWER_ARMS, default lt,gemm,ovl,wgl): each arm's calls back to back for V31_POWER_MS (default
+    // 1500; 0: none) after V31_POWER_LEAD_MS of them (default a fifth of that), NVML's energy over their event time;
+    // V31_POWER_REPS rounds (default 1), the arms in turn in each round. Every window is a record (power: its calls, event
+    // ms, mJ, host start and end in Unix seconds, clock64's MHz where the arm is clocked, NVML's SM clock and clock event
+    // reasons halfway through); an arm's w is the median of its windows' watts
     std::vector<double> watts(arms.size(), NAN);
-    const double pms = env_int("V31_POWER_MS", 1500);
-    for (size_t a = 0; pms > 0 && nv.energy_mj() && a < arms.size(); a++) {
-      const std::string& nm = arms[a].name;
-      if (nm != "lt" && nm != "gemm" && nm != "ovl" && nm != "wgl") continue;
-      std::vector<double> v;
-      for (const auto& it : tm.items)
-        if (it.arm == (int)a) v.push_back(it.ms / it.calls);
-      const double per = gk::median(v);
-      if (!(per > 0)) continue;
-      arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(0.2 * pms / per)));
-      CK(cudaStreamSynchronize(f.s0));
-      cudaEvent_t e0, e1;
-      CK(cudaEventCreate(&e0));
-      CK(cudaEventCreate(&e1));
-      const unsigned long long j0 = nv.energy_mj();
-      CK(cudaEventRecord(e0, f.s0));
-      arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(pms / per)));
-      CK(cudaEventRecord(e1, f.s0));
-      CK(cudaEventSynchronize(e1));
-      const unsigned long long j1 = nv.energy_mj();
-      float ms = 0;
-      CK(cudaEventElapsedTime(&ms, e0, e1));
-      watts[a] = (double)(j1 - j0) / ms;
-      cudaEventDestroy(e0);
-      cudaEventDestroy(e1);
-    }
+    const double pms = env_int("V31_POWER_MS", 1500), plead = env_int("V31_POWER_LEAD_MS", (int)(0.2 * pms));
+    const int prounds = std::max(1, env_int("V31_POWER_REPS", 1));
+    const std::string parms = "," + env_str("V31_POWER_ARMS", "lt,gemm,ovl,wgl") + ",";
+    std::vector<std::vector<double>> pw(arms.size());
+    std::string precs;
+    auto host_s = [] {
+      return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    };
+    for (int r = 0; pms > 0 && nv.energy_mj() && r < prounds; r++)
+      for (size_t a = 0; a < arms.size(); a++) {
+        if (parms.find("," + arms[a].name + ",") == std::string::npos) continue;
+        std::vector<double> v;
+        for (const auto& it : tm.items)
+          if (it.arm == (int)a) v.push_back(it.ms / it.calls);
+        const double per = gk::median(v);
+        if (!(per > 0)) continue;
+        if (plead > 0) arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(plead / per)));
+        CK(cudaStreamSynchronize(f.s0));
+        cudaEvent_t e0, e1;
+        CK(cudaEventCreate(&e0));
+        CK(cudaEventCreate(&e1));
+        const int calls = std::max(1, (int)std::ceil(pms / per));
+        const double h0 = host_s();
+        const unsigned long long j0 = nv.energy_mj();
+        CK(cudaEventRecord(e0, f.s0));
+        arms[a].enqueue(f.s0, calls);
+        CK(cudaEventRecord(e1, f.s0));
+        std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(0.5 * pms));
+        const gk::Sample mid = nv.sample();
+        CK(cudaEventSynchronize(e1));
+        const unsigned long long j1 = nv.energy_mj();
+        const double h1 = host_s();
+        float ms = 0;
+        CK(cudaEventElapsedTime(&ms, e0, e1));
+        cudaEventDestroy(e0);
+        cudaEventDestroy(e1);
+        pw[a].push_back((double)(j1 - j0) / ms);
+        char cm[32] = "null";
+        if (cks[a]) {
+          unsigned long long h[2];
+          CK(cudaMemcpy(h, cks[a], 16, cudaMemcpyDeviceToHost));
+          if (h[1]) snprintf(cm, sizeof cm, "%.1f", 1e3 * (double)h[0] / (double)h[1]);
+        }
+        char b[384];
+        snprintf(b, sizeof b,
+                 "%s{\"arm\": \"%s\", \"round\": %d, \"calls\": %d, \"ms\": %.3f, \"mj\": %llu, \"host_t0\": %.3f, "
+                 "\"host_t1\": %.3f, \"cmhz\": %s, \"nvml_mhz\": %u, \"reasons\": %llu}",
+                 precs.empty() ? "" : ", ", arms[a].name.c_str(), r, calls, ms, j1 - j0, h0, h1, cm, mid.sm_mhz,
+                 mid.throttle);
+        precs += b;
+      }
+    for (size_t a = 0; a < arms.size(); a++)
+      if (!pw[a].empty()) watts[a] = gk::median(pw[a]);
     // the timed schedule's own values: two overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
     for (int b = 0; b < 2; b++) {
       f.poison(b, f.s0);
@@ -3612,6 +3674,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              "\"gamma_gemm_cutlass\": %s, \"cutlass_over_lt\": %s, ",
              jn(at("ovl") / med[ICUT]).c_str(), jn(at("ovl_w") / med[ICUT]).c_str(), jn(at("ovl_pad") / med[ICUT]).c_str(),
              jn(at("gemm") / med[ICUT]).c_str(), jn(med[ICUT] / l).c_str());
+    printf("\"gen\": \"%s\", \"power_ms\": %.0f, \"power_lead_ms\": %.0f, \"power_reps\": %d, \"power\": [%s], ", gen.c_str(),
+           pms, plead, prounds, precs.c_str());
     printf("\"kernels\": ");
     kernel_attrs(stdout);
     printf("}\n");
