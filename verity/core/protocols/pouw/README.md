@@ -37,8 +37,8 @@ The verifier is Lean, three Lake packages under `lean/`:
 The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`, `coins.py`, `audit.py`) are their
 references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
 `verifier.py` is the entry the Python side calls: `verifier.lean(fn, value)` runs the Lean, and `verifier.coins(n)` is
-the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) is the switch, and
-setting it to `"python"` is the one line that undoes it.
+the challenger's entropy, which the Lean reads from the operating system. Lean's verdict is the record's; there is no
+switch back to the Python.
 
 A **sampling block** is the proof blocks one sample covers: the served steps one commitment covers, committed and
 registered before its coins. The code and the Lean name it `window` (`window.py`, `PouwWindow`, `credit.window`), and
@@ -142,7 +142,7 @@ passes = credit.pearl_c_period_credit(key, ledger, pins, main, name, passes, ear
 ## Where things are
 
 - `protocol`, `schemes/`: the `PoUWScheme` interface and the named schemes.
-- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`: the
+- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `registration`, `weights`, `operands`: the
   Python references the Lean is held to, and the reference rules not yet ported.
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
