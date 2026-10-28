@@ -637,7 +637,7 @@
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb"
  },
  "layers": {
-  "Properties.Remote": {"imports": ["Definitions.Core", "CoreRemote", "Properties.Composition", "Properties.Nci", "Properties.NciDesc"], "except": [], "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"},
+  "Properties.Remote": {"imports": ["Definitions.Core", "CoreRemote", "Properties.Composition", "Properties.Nci", "Properties.NciDesc", "Properties.SampledProofs"], "except": [], "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"},
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
    "except": [
