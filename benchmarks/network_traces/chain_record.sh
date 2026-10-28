@@ -48,7 +48,8 @@
 #      CR_CHALLENGER=local|gate:USER@HOST (required unless nothing draws: the auditor's challenger, a session of its
 #      own for each scan round and each member of a sampled N2 period, round_coins; local is a dry run's, on this
 #      machine) with CR_MAIN (the verifier's main first-parent history, a path or a name under inputs/; by default
-#      fetched from the tree's origin) and, for gate:…, CR_PEER (this node as the gate's /etc/vy/peers names it),
+#      fetched from the tree's origin, MAIN_SHA's when set) and, for gate:…, CR_PEER (this node as the gate's
+#      /etc/vy/peers names it),
 #      CR_CHALLENGER_KEY (the deployment's challenger-key/v1 record) and CR_GATE_KEY (the lane's gate key)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
@@ -162,8 +163,8 @@ if [ -n "${CR_CHALLENGER:-}" ]; then
     MAIN=$OUT/main.txt UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
     { git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
         || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
-      > "$OUT/fetch-main.log" 2>&1 && git rev-list --first-parent refs/remotes/origin/main > "$MAIN" \
-      || { log "chain: no main first-parent history for the challenger's pin (CR_MAIN)"; exit 3; }
+      > "$OUT/fetch-main.log" 2>&1 && git rev-list --first-parent "${MAIN_SHA:-refs/remotes/origin/main}" > "$MAIN" \
+      || { log "chain: no first-parent history of ${MAIN_SHA:-origin/main} for the challenger's pin (CR_MAIN)"; exit 3; }
   fi
   CH=(--challenger "$CR_CHALLENGER" --main "$MAIN")
   case $CR_CHALLENGER in gate:*)
