@@ -1,6 +1,6 @@
 import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Basic.Real.Basic
 import Mathlib.Data.NNRat.Defs
-import Mathlib.Data.Real.Basic
 
 /-!
 # A card's energy (trusted)
