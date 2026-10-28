@@ -137,7 +137,7 @@ def width (p : Param) : V Nat :=
 
 private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String) (manifest : Json) : V ByteArray := do
   let t := tag.toUTF8
-  let m := (← Flock.canon manifest).toUTF8
+  let m := (← Flock.canonUtf8 manifest).toUTF8
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
 /-- `registered.domain(program, value, words, leaves, word_bits).domain_id`, `leaves` the value's rows. -/
