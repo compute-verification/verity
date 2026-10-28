@@ -10,7 +10,7 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
-arbitrary calls tables, for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
+arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
@@ -1014,7 +1014,7 @@ def check_public(j):
 
 
 def check_verdicts(j):
-    """The proof service's hold on an outcome's verdicts (`service.check_verdicts`) on `{"verdicts", "sessions",
+    """The proof system's hold on an outcome's verdicts (`service.check_verdicts`) on `{"verdicts", "sessions",
     "outputs"}`. Rejected where the Lean refuses: malformed verdicts, sessions or outputs, and, once none is pending, a
     verdict of record's sessions that are neither a list nor empty (whose characters or keys Python's `list` would read)."""
     j = _json(j)
@@ -1985,7 +1985,9 @@ def registered_values(draw) -> dict:
 REGISTERED_ENTRIES = D.Port(PIECES, "registered", registered, st.one_of(
     registered_values(), changed_audits([WINDOWS], 1, 0, REGISTERED_SETUPS).map(lambda a: {"params": a["params"]}),
     _audit_inputs(lambda a: {"params": a["params"]}, [PARAMS]), JSON), package=PACKAGE)
-TEXT = st.text(max_size=4) | st.sampled_from(["W", "x", "é", "\x00", "\U0001f600", '"'])
+#: A domain's program or value: a string of ASCII without DEL, as its binding (identity's canonical JSON, which refuses
+#: any other) holds; `Flock.canon` would write any other as UTF-8.
+TEXT = st.text(st.characters(max_codepoint=0x7e), max_size=4) | st.sampled_from(["W", "x", "\x00", '"', "\\"])
 def _domains(widths):
     return st.builds(lambda program, value, words, leaves, b: {"leaves": leaves, "program": program, "value": value,
                                                                "word_bits": b, "words": words},
@@ -2104,7 +2106,7 @@ PRODUCED_CHANGES = [
     ("no verdict reports", lambda c, x: c.update(opened=None), "P-opened"),
     ("another value opened too", lambda c, x: c["opened"].update(other=PRODUCED_OTHER), None),
 ]
-PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "é"]
+PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "a b"]
 
 
 @st.composite
@@ -2707,7 +2709,7 @@ def _stream_state(s) -> dict:
 
 
 def stream(j):
-    """The proof service stream's rules (`service._step`) on `{"params", "state", "op"}`: the decision without its
+    """The proof system stream's rules (`service._step`) on `{"params", "state", "op"}`: the decision without its
     `detail`, which the Lean doesn't write, and the state after it as `canonical_json` writes it. Rejected where the Lean
     refuses: the params as `Stream.Params.ofJson` reads them, the state as `_stream_state`, and an op `_step` raises on."""
     j = _json(j)
@@ -2871,7 +2873,7 @@ def _fleet_state(s) -> dict:
 
 
 def fleet(j):
-    """The proof service fleet's rules (`service._fleet_step`) on `{"state", "op"}`: the decision without its `detail`
+    """The proof system fleet's rules (`service._fleet_step`) on `{"state", "op"}`: the decision without its `detail`
     and the state after it as `canonical_json` writes it. Rejected where the Lean refuses: the state as `_fleet_state`,
     and an op `_fleet_step` raises on."""
     j = _json(j)

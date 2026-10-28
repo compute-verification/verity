@@ -1,4 +1,4 @@
-"""uni.sh's run into the uniform datapath's census lines on sm_90 and sm_100 (EPS1 DC r4), and the IMAD forms of duo's
+"""uni.sh's run into the uniform datapath's census lines on sm_90 and sm_100, and the IMAD forms of duo's
 ALU work beside the fold.
 
     python3 uniform.py analyze OUT... [--json F]    the rates, each row's UNI coefficient, the IMAD forms
@@ -17,7 +17,7 @@ UNI's lines are what the points show and no more. UP, the uniform pipe, is 1 / t
 `issue` a uniform instruction carries its measured issue price: the least slowdown it adds to an issue-saturated stream
 (`saturated`: the s, v, w and x streams of sm90_sat.cu and sm100_sat.cu, read only where the stream issues at least 0.95
 of its slots without the chains), less 2%; every joint issue row (JI…) scales it as the ALU's coefficient scales from
-`issue`. Where no stream saturates, it takes the ALU's issue slot (decision 73). On every other row it carries nothing: no point loads a
+`issue`. Where no stream saturates, it takes the ALU's issue slot. On every other row it carries nothing: no point loads a
 pipe row to its limit beside the chains (the honest step is latency-bound), so contention there is not measured, and 0
 gives the cheater the most. Each such row's `limit`, the largest coefficient every point allows, says how much
 contention the points leave room for. `check` confirms each row's facet, UNI's lines included, holds at every point.

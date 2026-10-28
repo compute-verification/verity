@@ -4,8 +4,8 @@ draft-deployment-api-v3` §2).
 
 ~~~text
 frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body
-head      canonical JSON (the commitments' rules: sorted keys, no whitespace, UTF-8, no floats) of one object,
-          {"type": T, "v": V, ...fields}
+head      canonical JSON (the circuits codec's: sorted keys, no whitespace, strings ASCII without DEL, no floats) of one
+          object, {"type": T, "v": V, ...fields}
 body      the message's bytes, never base64
 ~~~
 
@@ -48,21 +48,31 @@ class Refused(Exception):
         self.name, self.detail = name, detail
 
 
+def _ascii(s: str, path: str) -> str:
+    if not s.isascii() or "\x7f" in s:
+        raise ValueError(f"outside the canonical JSON domain: {path}: string {s[:40]!r} is not ASCII without DEL")
+    return s
+
+
 def _plain(value: Any, path: str = "$") -> Any:
-    if value is None or type(value) in (bool, int, str):
+    if type(value) is str:
+        return _ascii(value, path)
+    if value is None or type(value) in (bool, int):
         return value
     if isinstance(value, Mapping):
         if any(type(k) is not str for k in value):
             raise TypeError(f"{path} has a key that isn't a string")
-        return {k: _plain(v, f"{path}.{k}") for k, v in value.items()}
+        return {_ascii(k, f"{path}.<key>"): _plain(v, f"{path}.{k}") for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_plain(v, f"{path}[{i}]") for i, v in enumerate(value)]
     raise TypeError(f"{path} is a {type(value).__name__}, which canonical JSON doesn't hold (no floats: exact values only)")
 
 
 def canonical(value: Any) -> bytes:
-    """`value` as canonical JSON: the commitments' rules (`verity.ml.commitments.identity.canonical_json_bytes`)."""
-    return json.dumps(_plain(value), ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
+    """`value` as canonical JSON: `verity.ml.circuits.codec.canonical_json`'s bytes, which this unit may not import,
+    with floats refused; a string past ASCII without DEL, keys included, is refused (`ValueError`, naming where it
+    is)."""
+    return json.dumps(_plain(value), allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -86,7 +96,11 @@ def parse(data: bytes) -> Any:
                            parse_constant=_no_constant)
     except (UnicodeDecodeError, ValueError, RecursionError) as e:
         raise Refused("malformed", f"the head is not JSON ({e})") from None
-    if canonical(value) != data:
+    try:
+        again = canonical(value)
+    except ValueError as e:
+        raise Refused("malformed", f"the head is not canonical JSON ({e})") from None
+    if again != data:
         raise Refused("malformed", "the head is not in canonical form")
     return value
 
@@ -155,7 +169,7 @@ class Json:
     def why(self, v: Any) -> str | None:
         try:
             return None if len(canonical(v)) <= self.max else f"JSON of at most {self.max} bytes"
-        except TypeError as e:
+        except (TypeError, ValueError) as e:
             return str(e)
 
 

@@ -272,8 +272,8 @@
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
-        "examples/h200/",
-        "examples/dither_full_util/"
+        "demos/h200/",
+        "demos/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -294,7 +294,10 @@
       "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
-      "usergroup": "S0CBZ2L8542"
+      "usergroup": "S0CBZ2L8542",
+      "owns": [
+        "verity/hardware/"
+      ]
     },
     {
       "handle": "memory-accounting",
@@ -552,8 +555,8 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "examples/README.md",
-        "examples/lifecycle/",
+        "demos/README.md",
+        "demos/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -568,7 +571,7 @@
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/",
-        "examples/vllm/",
+        "demos/vllm/",
         "ruff.toml"
       ],
       "linear": "VLLM",

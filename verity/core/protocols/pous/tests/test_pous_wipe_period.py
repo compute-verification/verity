@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 import pous_test_signer as ts
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -106,6 +107,18 @@ def test_the_certificate_at_the_challengers_reads() -> None:
     assert W.gaps(past, 0) == [f"k = {W.MAX_READS + 1}: the certificate is computed for at most {W.MAX_READS} reads"]
 
 
+def test_a_wipe_of_no_reads_bounds_nothing() -> None:
+    """`WipeParams` refuses `k = 0`, so neither a commitment nor the challenger's side (`--reads 0`) holds it; past that
+    refusal `gaps` names it and the certificate is vacuous, as `MemoryChallenger.WipeProtocol.gaps`' guard has it."""
+    with pytest.raises(ValueError, match="1 <= batch <= k"):
+        WP.params_of(WP.request_of("n0", W.params_for()), 0)
+    zero = W.params_for()
+    object.__setattr__(zero, "k", 0)
+    assert W.gaps(zero, 0) == ["k = 0: a session of no timed reads bounds nothing"]
+    assert W.certify(zero, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M, "k": 0,
+                                  "memory_bits": M, "r": 1}
+
+
 def test_the_challenger_chooses_the_reads(tmp_path) -> None:
     """The request carries the fill, the deadline and the tiers; `k` is the challenger's (`--reads`), and a request
     naming it is refused."""
@@ -177,16 +190,16 @@ def test_the_split_wipe(how: str) -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = WP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
-    assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for the wipe"):
-        WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
-                    "vy-nebius-cpu-4", tmp_path)
-    wired = WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"wipe": {
-        "command": ["vy-verifier-gate", "wipe"], "address": "127.0.0.1:7962"}}}, "vy-nebius-cpu-4", tmp_path,
+    local = WP.side_of({}, "cpu-node", tmp_path)
+    assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for the wipe"):
+        WP.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
+                   "cpu-node", tmp_path)
+    wired = WP.side_of({"challenger_host": "auditor-host", "challenger": {"wipe": {
+        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", tmp_path,
         ("--streamer", "build"))
-    assert wired == WP.Party("vy-auditor-1", ("vy-verifier-gate", "wipe"), ("127.0.0.1", 7962))
-    native = WP.Party.of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
+    assert wired == Side("auditor-host", ("gate", "wipe"), ("127.0.0.1", 7962))
+    native = WP.side_of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
     assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ") and WP.placement("n0", "n0")["kind"] == "prover-node"
     assert WP.placement("n0", "a")["kind"] == "own-host"
@@ -196,7 +209,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         WP.placement("n0", "a", simulated=True)
 
 
-CONTROL = {"name": "control", "to": "outside", "via": "eth0 10.0.0.13: ssh"}
+CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
 def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
@@ -205,8 +218,8 @@ def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": wipe}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     return period
 
 
@@ -253,9 +266,8 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
     """`wipe.reads` starts a challenger on this node with `--reads`; one on its own host chooses its own (here
     `wipe_side.py`'s default), and the leg refuses a session at another count."""
     period = _side(tmp_path, monkeypatch, {"reads": 5231})
-    extras, of = [], WP.Party.of
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): extras.append(extra) or of(
-        doc, node, d, extra)))
+    extras, of = [], WP.side_of
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
     with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
         W.leg(period, "n0", tmp_path / "out")
     assert extras == [("--reads", "5231")]

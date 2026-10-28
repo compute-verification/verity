@@ -1,5 +1,5 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`examples/h200/e2e_h200/plan.py`'s
+commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`demos/h200/e2e_h200/plan.py`'s
 `Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
@@ -62,7 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import h200 as H  # noqa: E402
 
 from verity.core.protocols.pouw.window import eps_at  # noqa: E402
-from verity.core.protocols.profile import MARGIN, Stratified, Stratum, _neg_log_ratio  # noqa: E402
+from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
     Candidate, Certificate, CostModel, Objective, Plan, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
@@ -239,7 +239,7 @@ class _Memo(Stratum):
     `_risk` sums k terms while k <= 2^14. Every value is core's, but where core's fails:
 
     - past 2^53 units m / (n - i) rounds to 1 at m = n - k, and `log1p(-1)` raises: there each term is core's
-      `_neg_log_ratio` of (n - i - m) / (n - i) in integers;
+      `neg_log_ratio` of (n - i - m) / (n - i) in integers;
     - past 2^14 draws core takes lgamma's differences, which at a year's 1e17 units keep no digit (lgamma(1e17) is
       4e18, its ulp 512): past 2^25 units this sums core's own log1p terms instead, pairwise in binary64."""
 
@@ -252,11 +252,11 @@ class _Memo(Stratum):
             try:
                 v = Stratum._risk(self, m)
             except ValueError:
-                v = fsum(_neg_log_ratio(n - i - m, n - i) for i in range(k))
+                v = fsum(neg_log_ratio(n - i - m, n - i) for i in range(k))
         elif 2 * m < n - k + 1:
             v = -float(np.log1p(-m / (n - np.arange(k, dtype=np.float64))).sum())
         else:
-            v = fsum(_neg_log_ratio(n - i - m, n - i) for i in range(k))
+            v = fsum(neg_log_ratio(n - i - m, n - i) for i in range(k))
         _RISK[key] = v
         return v
 

@@ -12,7 +12,7 @@ testpaths = ["tests"]
 # PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
 inputs = ["verity/core/protocols/answer.py", 
   "tools/config/verity_config",
-  "verity/__init__.py",
+  "verity/__init__.py", "verity/settings.py",
   "verity/errors.py",
   "verity/ml/__init__.py",
   "verity/ml/commitments",

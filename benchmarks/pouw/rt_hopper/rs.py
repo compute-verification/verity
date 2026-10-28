@@ -1,14 +1,14 @@
-"""rs.sh's reading: each loop's wgmma rate over the SS form's alone rate (the tensor fraction, as `../dc/analyze.py` reads
-`wgli_*`), and its cycles a MMA at the plain GEMM's 122.41 SMSP-cycles over that fraction (dc90-licpw-redux-l32's
-measured 204.25 is wgli_redux's). RT-HOPPER-1 is a real escape only if the RS (or U8S8) form beside the same LI fold runs
-more than 2% faster than SS does; otherwise it is a model gap (the joint rows' default), not a hardware one. The
-`wgli_true` loops fold the wgmma's own accumulators after each wait (RT-HOPPER-8): their cycles a MMA against
-wgli_redux's say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own:
-unordered (wgli_true), ping-pong on named barriers (wgli_pp, wgli_pp2) and double-buffered on two N128 tiles (wgli_db).
-A N128 wgmma counts as half a N256 one throughout. The b1 form (BGMMA m64n256k256) and sm90_forms.cu's s8-exact
-siblings (IGMMA N128 and N64, IMMA.16832) have the same loops as RS. The facet check prices every loop on DC-90's joint
-rows, each tensor instruction at IGMMA's line by its MACs, and `fit` gives each form's joint coefficients over IGMMA's,
-the least over its matched pairs, which `forms_gap.py` offers the cheater.
+"""rs.sh's reading: each loop's wgmma rate over the SS form's alone rate (the tensor fraction, as `../dc/analyze.py`
+reads `wgli_*`), and its cycles a MMA at the plain GEMM's 122.41 SMSP-cycles over that fraction (dc90-licpw-redux-l32's
+measured 204.25 is wgli_redux's). Offering another form is a real escape only if the RS (or U8S8) form beside the same
+LI fold runs more than 2% faster than SS does; otherwise it is a model gap (the joint rows' default), not a hardware
+one. The `wgli_true` loops fold the wgmma's own accumulators after each wait: their cycles a MMA against wgli_redux's
+say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own: unordered (wgli_true),
+ping-pong on named barriers (wgli_pp, wgli_pp2) and double-buffered on two N128 tiles (wgli_db). A N128 wgmma counts as
+half a N256 one throughout. The b1 form (BGMMA m64n256k256) and sm90_forms.cu's s8-exact siblings (IGMMA N128 and N64,
+IMMA.16832) have the same loops as RS. The facet check prices every loop on DC-90's joint rows, each tensor instruction
+at IGMMA's line by its MACs, and `fit` gives each form's joint coefficients over IGMMA's, the least over its matched
+pairs, which `forms_gap.py` offers the cheater.
 
     python rs.py OUT [--json PATH]
 """

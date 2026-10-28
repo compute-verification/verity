@@ -48,10 +48,11 @@ worker_gb = 8
 # pouw/window.py and sampled_proofs/service.py, which the records digest as import sites of the PoUW modules they hold
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. sampled_proofs/challenger.py and
-# claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`. answer.py:
-# pouw/core_check.py reads its check's answer with the core answer's reader.
+# claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
+# pouw/core_check.py and pouw/leaf_lanes.py: circuit/h1window.py imports both, so building the H1 units reads them.
 inputs_only = true
-inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+# answer.py: pouw/core_check.py reads its check's answer with the core answer's reader.
+inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/definitions", "verity/ml/flock/python/verity_flock", "verity/ml/windows",
@@ -61,6 +62,7 @@ inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/error
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
+          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pous/__init__.py", "verity/core/protocols/pous/circuit.py",
           "verity/core/protocols/pous/circuit.circuit-check.py", "verity/core/protocols/pous/circuit.circuit-check.json",
           "verity/core/protocols/pous/answer_circuit.py", "verity/core/protocols/pous/answer_circuit.circuit-check.py",
