@@ -66,6 +66,9 @@ ALLOWED = {
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
@@ -84,7 +87,7 @@ ALLOWED = {
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof service's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.periods", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its

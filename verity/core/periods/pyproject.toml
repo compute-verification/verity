@@ -1,0 +1,24 @@
+[project]
+name = "verity-core-periods"
+version = "0.0.0"
+description = "The tests of verity.core.periods, and its difftest against the code's CoreProtocol.Period: the core difftest harness drives core-periods-difftest."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# What the tests import of `verity` beside this unit, and what `lake` reads to build `core-periods-difftest`: the core
+# interface's package, the difftest harness's Lean, and these files of C-Flock's verifier (`Flock.Canon` and what it
+# imports, and the package's configuration).
+inputs = ["verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/interface",
+          "verity/core/difftest/lean", "verity/core/service/flock/lakefile.toml",
+          "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
+          "verity/core/service/flock/Flock/Field.lean", "verity/core/service/flock/Flock/Bytes.lean",
+          "verity/core/service/flock/Flock/Canon.lean"]
