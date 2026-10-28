@@ -19,8 +19,6 @@ op's bits.
 
 namespace Claims.Sampling
 
-open Verity (SizeClass Netlist bitsLE)
-
 namespace Univ
 
 /-! ## The builders -/

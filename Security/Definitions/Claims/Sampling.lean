@@ -1,5 +1,4 @@
 import Definitions.Claims.IndexedTapes
-import Definitions.Core.Netlist
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
@@ -30,13 +29,13 @@ the code side's.
    `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
    `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
-5. **Named pieces**: the commitment scheme (`CommitmentScheme`, `CommitmentScheme.Binds`, and its published leaf
-   layer `CommitmentScheme.layer`); the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the
-   universal unit (Core's `Verity.Netlist`, `Universal`), a fact about the programs private circuits run as; the
-   acceptance probabilities (`OneStage.Pa`, `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each
-   `k` accepted reruns of the second stage, in each Flock's `E^rep` on every checked unit's session; the expected-time
-   finder (`Bext`); and the parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the
-   masked deployment `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
+5. **Named pieces**: the commitment scheme (`CommitmentScheme`, `CommitmentScheme.Binds`, and its published leaf layer
+   `CommitmentScheme.layer`); the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal
+   unit (`Netlist`, `Universal`), a fact about the programs private circuits run as; the acceptance probabilities
+   (`OneStage.Pa`, `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the
+   second stage, in each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the
+   parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment
+   `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
    the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
    `Complete`; `ScopeMatches`; `ZK`, of the masked deployment's reference prover and simulator, relative to the trace's
@@ -57,8 +56,6 @@ reads every claim here: the lock records each one's text under `reads`, so a cha
 -/
 
 namespace Claims.Sampling
-
-open Verity (SizeClass Netlist bitsLE)
 
 /-! ## The commitment scheme -/
 
@@ -221,6 +218,48 @@ def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
     (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ P.gates) ∧
     (∀ r ∈ P.rus, r ≠ []) ∧ (∀ u ∈ P.rus.flatten, u ≠ []) ∧
     ∀ u ∈ P.rus.flatten, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+
+/-! ## Proof units and the universal unit -/
+
+/-- A size class `(G, N_IN, N_OUT)`: `G` gates over `N_IN` inputs, and `N_OUT` output bits. -/
+structure SizeClass where
+  G : ℕ
+  nIn : ℕ
+  nOut : ℕ
+
+/-- `K`: the bits of a wire index, enough for the `W = N_IN + G` wires, at least one. -/
+def SizeClass.indexBits (c : SizeClass) : ℕ := Nat.log2 (c.nIn + c.G - 1) + 1
+
+/-- **A private circuit's gates**, as the universal unit takes them (`verity.ml.private_circuits.universal`): SSA wires,
+the `nIn` inputs and then one per gate. Gate `(op, a, b)` reads wires `a` and `b` and computes XOR, AND, XNOR or NAND
+(`op`'s bit 0 picks AND, bit 1 negates); a wire at or past the reading gate's own reads `0`, as does an output past the
+last wire. -/
+structure Netlist where
+  nIn : ℕ
+  gates : List (Fin 4 × ℕ × ℕ)
+  outs : List ℕ
+
+/-- The netlist run gate by gate on `x` (`interpret`). -/
+def Netlist.eval (n : Netlist) (x : List Bool) : List Bool :=
+  let ws := n.gates.foldl (fun ws g =>
+    let a := ws.getD g.2.1 false
+    let b := ws.getD g.2.2 false
+    ws ++ [xor (if g.1.val % 2 = 1 then a && b else xor a b) (decide (g.1.val / 2 = 1))]) x
+  n.outs.map fun o => ws.getD o false
+
+/-- The netlist is of class `c`: `G` gates over `N_IN` inputs, `N_OUT` outputs, every index in `K` bits. -/
+def Netlist.Fits (c : SizeClass) (n : Netlist) : Prop :=
+  n.nIn = c.nIn ∧ n.gates.length = c.G ∧ n.outs.length = c.nOut ∧
+    (∀ g ∈ n.gates, g.2.1 < 2 ^ c.indexBits ∧ g.2.2 < 2 ^ c.indexBits) ∧ ∀ o ∈ n.outs, o < 2 ^ c.indexBits
+
+/-- `v` in `k` bits, low bit first. -/
+def bitsLE (k v : ℕ) : List Bool := (List.range k).map v.testBit
+
+/-- The netlist as the universal unit's `(op, src, out)` arguments, in leaf order (`arguments`). -/
+def Netlist.args (c : SizeClass) (n : Netlist) : List Bool :=
+  n.gates.flatMap (fun g => bitsLE 2 g.1.val) ++
+    n.gates.flatMap (fun g => bitsLE c.indexBits g.2.1 ++ bitsLE c.indexBits g.2.2) ++
+    n.outs.flatMap (bitsLE c.indexBits)
 
 /-! ## Sampling designs -/
 

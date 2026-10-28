@@ -32,7 +32,6 @@ masked inner Flock).
 namespace Claims.Witness.Sampling
 
 open Claims Claims.Sampling
-open Verity (SizeClass Netlist)
 
 /-! ## Rerun programs with no call of their own -/
 
