@@ -7,8 +7,8 @@ own work at the public best's cost needs, to recompute ε_undecl. For each perio
   and each protocol kernel's own busy time and its time beside a GEMM, which the exclusive split doesn't charge it;
 - `pipes`: the tensor pipe's active and idle time (Nsight Compute's active share of each kernel, kernels serialized,
   times its busy time; idle is an upper bound where a kernel wasn't profiled); the card's other pipes weren't measured;
-- `clock`: the blocks' SM clocks (NVML at each block's end) against the card's ceiling, and nvidia-smi's clocks.gr,
-  clocks.sm and power.draw over the period's window;
+- `clock`: the blocks' SM clocks (NVML at each block's end) against the card's ceiling, and nvidia-smi's clocks.gr and
+  clocks.sm over the period's window;
 - `host`: the period's wall time off the GPU (before its first block, after its last, and any time the GPU waited
   between blocks for the host), and outside the period's wall the challenger session's opening with the first two
   blocks' seeds and the verifier's checks;
@@ -166,8 +166,7 @@ def smi_samples(path: Path) -> list[tuple[datetime, dict[str, float]]]:
         return []
     head = [h.strip() for h in rows[0]]
     col = {k: next((i for i, h in enumerate(head) if h.startswith(p)), None)
-           for k, p in (("gr", "clocks.current.graphics"), ("sm", "clocks.current.sm"), ("w", "power.draw"),
-                        ("util", "utilization.gpu"))}
+           for k, p in (("gr", "clocks.current.graphics"), ("sm", "clocks.current.sm"), ("util", "utilization.gpu"))}
     out = []
     for r in rows[1:]:
         if len(r) != len(head) or not re.fullmatch(r"\d{4}/\d\d/\d\d \d\d:\d\d:\d\d\.\d+", r[0].strip()):
@@ -186,7 +185,7 @@ def smi_window(samples, lo: datetime, hi: datetime) -> dict | None:
         return None
     med = lambda k: statistics.median(v[k] for v in got) if all(k in v for v in got) else None  # noqa: E731
     return {"from": lo.isoformat(), "to": hi.isoformat(), "samples": len(got), "clocks_gr_mhz": med("gr"),
-            "clocks_sm_mhz": med("sm"), "power_draw_w": med("w"), "utilization_gpu_pct": med("util")}
+            "clocks_sm_mhz": med("sm"), "utilization_gpu_pct": med("util")}
 
 
 def session_time(r: dict) -> datetime | None:

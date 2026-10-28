@@ -14,8 +14,9 @@
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
 # card file or its SKU, for summary.json's declared utilization (the credited MACs a second over θ at the card's clock
-# ceiling, their MFU) and, with NSYS=1, breakdown.json (breakdown.py: each period's time by resource, the protocol's own
-# kernels by role, the GEMM, idle, the tensor pipe, the clock and the host); nvidia-smi's clock event reasons go to
+# ceiling, their MFU) and, with NSYS=1, terms.json (terms.py: where θ x wall goes at each reading of the clock, and each
+# period's clock) and breakdown.json (breakdown.py: each period's time by resource, the protocol's own kernels by role,
+# the GEMM, idle, the tensor pipe, the clock and the host); nvidia-smi's clock event reasons go to
 # clocks-{before,after}.txt. PLAIN (default
 # lt,int_mm): period.py's --plain, the plain arm's baselines, gamma's first: cuBLASLt (v31's lt_setup) and torch._int_mm. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
@@ -59,7 +60,8 @@ nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA
   -Xcompiler -fPIC -shared -o "$LIB" $A/v31.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
+sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/terms.py $D/breakdown.py \
+  $D/timeline.py $D/pipes.py $A/h200_step.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 SERVEDA=()
 [ "${SERVED:-0}" = 1 ] && SERVEDA=(--served)
@@ -90,10 +92,10 @@ export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN PL
 export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARDA[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
-  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
+  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem --format=csv \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
   nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-before.txt" 2>&1
-  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,utilization.gpu,temperature.gpu --format=csv -lms 500 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ "$CKPT" != seeded ]; then
@@ -123,6 +125,11 @@ $LEASE bash -c '
       nsys export --type sqlite --force-overwrite true -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
       $PY $D/timeline.py "$O/nsys-$arm.sqlite" > "$O/timeline-$arm.json" 2>> "$O/nsys.log"
     done
+    if [ -s "$O/summary.json" ] && [ -n "$CARD_ARGS" ]; then
+      $PY $D/terms.py "$O/summary.json" "$O/timeline-proto.json" --periods "$O/periods.jsonl" --smi "$O/smi.csv" \
+        > "$O/terms.json" 2>> "$O/nsys.log"
+      echo "terms rc $?" >> "$O/rc.txt"
+    fi
   fi
   if [ "$NCU" = 1 ]; then
     for arm in plain proto; do
@@ -150,7 +157,7 @@ echo "lease rc $?" >> "$O/rc.txt"
 # Each chunk writes fill-NNN/ (periods.jsonl, summary.json with the declared utilization); smi-fill.csv samples the card.
 if [ -n "${FILL_UNTIL:-}" ] && grep -q "^diag rc 0" "$O/rc.txt"; then
   END=$(date -u -d "$FILL_UNTIL" +%s)
-  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,power.draw,utilization.gpu --format=csv -lms 1000 > "$O/smi-fill.csv" 2>&1 &
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,utilization.gpu --format=csv -lms 1000 > "$O/smi-fill.csv" 2>&1 &
   fsmi=$!
   n=0 bad=0
   while [ "$(date -u +%s)" -lt "$END" ] && [ $bad -lt 3 ]; do

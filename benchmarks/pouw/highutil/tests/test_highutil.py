@@ -17,6 +17,7 @@ import pytest
 import breakdown
 import period as P
 import pipes
+import terms
 
 
 def test_eps_skip_at_delta_one_percent():
@@ -70,6 +71,50 @@ def test_the_declared_utilization_is_the_credited_macs_over_theta_and_bounds_the
     u = s["unaccounted_share"]
     assert math.isclose(u["eps_undecl_at_most"], 1 - du) and math.isclose(u["eps_at_most"], 0.07 + 1 - du)
     assert "certified_share" not in s and "gamma_gpu" not in s
+    t = terms.terms(s, {"busy_share": 0.9, "gemm_share": 0.7})
+    r = t["readings"]["card"]
+    assert list(t["readings"]) == ["card"] and math.isclose(r["sum"], 1)
+    assert math.isclose(r["terms"]["accounted"], du)
+    assert math.isclose(r["eps"], 0.07 + 1 - r["terms"]["accounted"])
+    assert math.isclose(r["terms"]["the plain GEMM's floor"], (11e-4 - P.step_macs() / P.theta(CARD)) / 2e-3)
+    assert math.isclose(r["terms"]["host between blocks"], 0.1)
+    assert "credits nothing the protocol does" in t["credited"] and "not credited" in t["credited"]
+
+
+def test_the_h200_s_terms_are_at_both_clocks_and_the_certified_macs_apart():
+    P.configure({"layers": [["a", 256, 512], ["b", 128, 1024]], "m": 1024, "nb": 4, "lp": 128, "L": 512})
+    card = {"sku": "h200-sxm-141gb", "clock": {"sm": {"value": 1980, "source": "s"}},
+            "rate": {"tensor": {"value": 4096, "source": "s"}}, "sm": {"count": {"value": 132}}}
+    steps, macs = 10, 10 * P.step_macs()
+    blocks = lambda gpu_ms: [{"gpu_ms": gpu_ms, "sm_mhz": 1980}]  # noqa: E731
+    results = [{"arm": "proto", "cheat": "none", "credited_macs": macs, "macs": macs, "wall_s": 0.02, "steps": steps,
+                "blocks": blocks(18.0), "gaps_s": [], "session_open_s": 1.0, "q": 64, "eps_skip": 0.07, "accepted": True,
+                "verdict": "ACCEPT"},
+               {"arm": "plain", "cheat": "none", "macs": macs, "wall_s": 0.012, "steps": steps, "blocks": blocks(11.0)}]
+    s = P.summarize(results, P.Plan(1, steps, 64), card=card)
+    t = terms.terms(s, {"busy_share": 0.9, "gemm_share": 0.7})
+    lo, hi = t["readings"]["tensor"], t["readings"]["boost"]
+    assert (lo["clock_mhz"], hi["clock_mhz"]) == (1830, 1980) and math.isclose(lo["theta_macs_s"], 989.4e12, rel_tol=1e-4)
+    assert math.isclose(lo["terms"]["accounted"] / hi["terms"]["accounted"], 1980 / 1830)
+    assert math.isclose(hi["terms"]["accounted"], s["declared_utilization"])
+    for r in (lo, hi):
+        assert math.isclose(r["sum"], 1) and math.isclose(r["terms"]["the protocol"], sum(r["protocol"].values()))
+    m = t["macs_per_step"]
+    assert m["declared"] == P.step_macs() and m["peels"] == 2 * 1024 * (256 + 128) * 128
+    assert math.isclose(lo["certified_share"] / lo["terms"]["accounted"], m["certified_over_declared"])
+
+
+def test_each_period_s_clock_is_nvidia_smi_s_over_its_pinned_window():
+    periods = [{"period": 0, "arm": "plain", "wall_s": 4.0, "blocks": [{"sm_mhz": 1830}]},
+               {"period": 1, "arm": "proto", "wall_s": 6.0, "session_open_s": 2.0, "blocks": [{"sm_mhz": 1700}, {"sm_mhz": 1800}],
+                "coins": {"session": "s20261027T120010Z-abc"}}]
+    head = "timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz]"
+    rows = [f"2026/10/27 12:00:{sec:02d}.000, {mhz} MHz, {mhz} MHz" for sec, mhz in
+            [(6, 1500), (7, 1980), (8, 1980), (9, 1980), (13, 1755), (14, 1785), (16, 1770), (18, 1500)]]
+    cp = terms.clocks(periods, terms.smi_samples("\n".join([head, *rows])))
+    assert [c["blocks_sm_mhz_median"] for c in cp] == [1830, 1750]
+    assert cp[0]["smi"] == {"samples": 3, "clocks_sm_mhz": 1980}
+    assert cp[1]["smi"] == {"samples": 3, "clocks_sm_mhz": 1770}
 
 
 def test_prover_overhead_is_against_the_first_baseline_timed_and_each_baseline_has_its_own():
@@ -134,11 +179,11 @@ def test_the_breakdown_splits_each_period_s_gpu_time_exclusively_and_aligns_the_
     _nsys(tmp_path / "nsys-proto.sqlite", [(0, 2 * ms, "noise_kernel"), (2 * ms, 12 * ms, XMMA), (7 * ms, 22 * ms, "leaf_persist"),
                                            (14 * ms, 18 * ms, "salt_persist"), (24 * ms, 26 * ms, "bits_kernel")])
     _nsys(tmp_path / "nsys-plain.sqlite", [(i * ms, (i + 1) * ms, XMMA) for i in range(10)])
-    smi = ["timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz], power.draw [W], utilization.gpu [%]"]
+    smi = ["timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz], utilization.gpu [%]"]
     for i in range(60):
         t = i / 2
-        mhz, w = (1980, 450) if 2 <= t <= 6 else (1300, 690) if 17 <= t <= 20 else (1980, 130)
-        smi.append(f"2026/10/27 12:00:{int(t):02d}.{int(t % 1 * 1000):03d}, {mhz} MHz, {mhz} MHz, {w} W, 100 %")
+        mhz = 1300 if 17 <= t <= 20 else 1980
+        smi.append(f"2026/10/27 12:00:{int(t):02d}.{int(t % 1 * 1000):03d}, {mhz} MHz, {mhz} MHz, 100 %")
     (tmp_path / "smi.csv").write_text("\n".join(smi) + "\n")
     b = breakdown.breakdown(tmp_path, profile_steps=2)
     p0, q = b["periods"][0], b["periods"][1]
@@ -151,7 +196,7 @@ def test_the_breakdown_splits_each_period_s_gpu_time_exclusively_and_aligns_the_
     assert math.isclose(g["protocol_by_role"]["coins: the dither bits d_A, d_B"]["exclusive_s"], 3.6 * 2 / 26)
     assert k[XMMA]["role"] == "GEMM" and k["noise_kernel"]["role"].startswith("noise")
     assert p0["pipes"]["tensor"] == "not measured (no Nsight Compute run)" and p0["pipes"]["alu"].startswith("not measured")
-    assert p0["clock"]["smi"]["clocks_gr_mhz"] == 1980 and p0["clock"]["smi"]["power_draw_w"] == 450
+    assert p0["clock"]["smi"]["clocks_gr_mhz"] == 1980 and "power_draw_w" not in p0["clock"]["smi"]
     assert q["clock"]["smi"]["clocks_gr_mhz"] == 1300 and q["clock"]["below_ceiling"] == 1 - 1300 / 2000
     assert math.isclose(q["gpu"]["gemm_s"], 2.9) and q["gpu"]["protocol_s"] == 0
     assert math.isclose(p0["host"]["between_blocks_s"], 0.4) and p0["host"]["outside_the_wall"]["verify_s"] == 5.0
