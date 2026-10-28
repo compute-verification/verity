@@ -12,7 +12,7 @@
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
 # never a process on this node: the `p2_party --listen` that the auditor host's gate starts for BW_PARTY, reached at
 # BW_PARTY_HOST; it holds its own registration, which the store's must be (BW_REGISTRATION, the tracked one). The gate
-# kills the party once the session's minutes run out, and BW_PARTY asks for BW_PARTY_MIN of them (`bw_party --minutes`,
+# kills the party once the session's minutes run out, and BW_PARTY asks for BW_PARTY_MIN of them (`bw_party --fixture --minutes`,
 # default 40, the lease's; the gate takes 1 to 180), unless the key's forced command fixes its own: a session that
 # outlives them fails naming the kill. The
 # session's record is DIR/session, and its answer, held to the verifier's own record of it, is DIR/answer.json in the
@@ -38,7 +38,7 @@ STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
 REG=${BW_REGISTRATION:-$P2/bandwidth-mem69-v2.json}
 PARTY_MIN=${BW_PARTY_MIN:-40}
-PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --minutes $PARTY_MIN}
+PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --fixture --minutes $PARTY_MIN}
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}
 WINDOWS=${BW_WINDOWS:-6} PASSES=${BW_PASSES:-4} SAMPLES=${BW_SAMPLES:-1024} WINDOW_S=${BW_WINDOW_S:-20}
 DEADLINE_S=${BW_DEADLINE_S:-1} DEVICE=${BW_DEVICE:-cuda} LEASE_MIN=${BW_LEASE_MIN:-40}
