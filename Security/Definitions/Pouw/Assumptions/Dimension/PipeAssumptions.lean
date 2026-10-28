@@ -22,17 +22,17 @@ independence and MinRank ≥ 5, every closed FP32 pipe that outputs `|S|` non-fi
 def A1_cost (c γ : ℝ) (k : ℕ) (R : Mat) : Prop :=
   CheckpointIndependent k 16 R → MinRankGe k R 5 → A1CostOn IsPipe c γ k R
 
-/-- **`A1_cost` for quadratic pipes.** `a1-cost`'s Theorem 1 (the forest argument; proved on paper, red team Phase 8:
-granted with P8-1 and P8-2, which this model meets) is `A1_cost_quad 2 0 k R` for every `k` and `R`. -/
+/-- **`A1_cost` for quadratic pipes.** `a1-cost`'s Theorem 1 (the forest argument, proved on paper with priced additions
+and free products of free values, which this model has) is `A1_cost_quad 2 0 k R` for every `k` and `R`. -/
 def A1_cost_quad (c γ : ℝ) (k : ℕ) (R : Mat) : Prop :=
   CheckpointIndependent k 16 R → MinRankGe k R 5 → A1CostOn IsQuadPipe c γ k R
 
 /-- **Assumption `A1_nonquad(c, γ)`** (named, open): `A1_cost` for the closed pipes that are not quadratic, the ones
-that multiply a non-free value (a merge, `a1-cost.md` §3.4). -/
+that multiply a non-free value (a merge). -/
 def A1_nonquad (c γ : ℝ) (k : ℕ) (R : Mat) : Prop :=
   CheckpointIndependent k 16 R → MinRankGe k R 5 → A1CostOn (fun Rs => IsPipe Rs ∧ ¬ IsQuadPipe Rs) c γ k R
 
-/-- **`Lift_MinRank`** (P7-3; named, open), `ρ` and `ε` parameters: under checkpoint independence and MinRank ≥ ρ, for
+/-- **`Lift_MinRank`** (named, open), `ρ` and `ε` parameters: under checkpoint independence and MinRank ≥ ρ, for
 every program on inputs in `V₀` and every assignment `σ` of its slots to the non-final checked words of the units in
 `U` (`A = g(F₁)`), the number of noise values at which every word equals its slot is at most `ε(D − p)` times the
 grid's size, with `D = |U|·m·n·(3k/16 − 1)` and `p` the number of priced instructions. -/
@@ -45,7 +45,7 @@ def LiftMinRank (ρ : ℕ) (ε : ℤ → ℝ) (k : ℕ) (R : Mat) : Prop :=
         (slots P L).getD (σ u p) 0 ω = word k m n N R A B u p ω} : ℝ) ≤
       ε ((U.card * (m * n) * (3 * k / 16 - 1) : ℕ) - (nPriced P : ℤ)) * Nat.card (Noise N m n k)
 
-/-- **`Lift_MinRank` in L5e's form** (named; proved on paper by the lifting worker, not in Lean): for `1 ≤ G ≤ ρ` and
+/-- **`Lift_MinRank` in L5e's form** (named; proved on paper, not in Lean): for `1 ≤ G ≤ ρ` and
 `1 ≤ Λ ≤ ρ − G + 1`, under checkpoint independence and MinRank ≥ ρ, `LiftMinRank`'s count is at most
 `epsL5e ρ G Λ k (N·m) n (3k/16 − 1) (D − p)` times the grid's size. -/
 def LiftMinRankL5e (ρ G Λ k : ℕ) (R : Mat) : Prop :=

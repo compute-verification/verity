@@ -13,13 +13,9 @@ sampled audit's own coins drive the horizon's game at the prover's strategy, as 
 records go, its verdict is flock-verify's on every sampling block of the server-time block, and the claim's units and
 wrong units are those sampling blocks'.
 
-* `IntegrityOfIntegrityBlock`: `PeriodRun.Sound` for the server-time block's sampled audit at error
-  `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, `IntegrityBlock`'s.
-* `JointHorizonBlocksAOfIntegrityBlock`: Demo A's `Accounting.Guarantees.JointHorizonBlocksA` (sampled proofs, PoUW and
-  the network certifier) with every server-time block's integrity leg given by its realization, so its sampled audit's
-  error is that block's `IntegrityBlock` error.
-* `JointHorizonBlocksOfIntegrityBlock`: the same for `Accounting.Guarantees.JointHorizonBlocks`, every audit with the
-  wipes' and the memory terms (M4).
+`IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
+`δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, `IntegrityBlock`'s: the coins model's per-period guarantee, which the one theorem's
+sampled-proofs target couples into the causal game (`Accounting.PeriodLive`).
 
 C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityBlock`, this module imports
 them.
@@ -101,73 +97,6 @@ def IntegrityOfIntegrityBlock : Prop :=
     ∀ (c : Certificates) (p : Price), Real.log (1 / δ) / q ≤ c.ε * r.units →
     ENNReal.ofReal δ + S.err b ≠ ⊤ →
     r.Sound c p .sampled (ENNReal.ofReal δ + S.err b).toReal
-
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden in
-/-- **Demo A's composed theorem, with every server-time block's integrity leg from C-Flock's integrity audit of that
-block.** As `Accounting.Guarantees.JointHorizonBlocksA` (sampled proofs, PoUW and the network certifier over `B`
-server-time blocks, no wipe or memory term), with block `b`'s sampled audit given by its realization of block `b` of
-the server's sessions `S` (`RealizesIntegrityOfIntegrityBlock`), under the premises of `IntegrityOfIntegrityBlock` at
-every block, in place of its per-period guarantee: the probability that one of those three audits in some block accepts
-while its claim fails is at most
-$$\sum_b \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_{b,\mathrm{pouw}}
-  + \delta_{b,\mathrm{network}}\Big).$$ -/
-def JointHorizonBlocksAOfIntegrityBlock : Prop :=
-  ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
-    [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (r : Fin B → PeriodRun d α C Ω)
-    (S : Flock.Guarantees.ServerBlocks) (q δI : ℝ), 0 < q → 0 < δI →
-    (∀ b : Fin B, ∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
-    (∀ b : Fin B, ∀ t ∈ S.sessions b, FlockSoundness.Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ R : (b : Fin B) → RealizesIntegrityOfIntegrityBlock (r b) S b,
-    (∀ b ξ t (τ : Strategy (S.W t).game), Flock.Guarantees.Period.Plays S.W S.T ((R b).strat ξ) t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
-    (∀ b ξ t (τ : Strategy (S.W t).game), Flock.Guarantees.Period.Plays S.W S.T ((R b).strat ξ) t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
-        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    ∀ (c : Fin B → Certificates) (p : Price) (δ : Fin B → Accounting.Audit → ℝ),
-    (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (r b).units) →
-    (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
-    (∀ b, (r b).Sound (c b) p .pouw (δ b .pouw)) →
-    (∀ b, (r b).Sound (c b) p .network (δ b .network)) →
-    Pouw.pr (fun ξ => ∃ b, ∃ a ∈ ({.sampled, .pouw, .network} : Finset Accounting.Audit),
-        (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) ≤
-      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + δ b .pouw + δ b .network)
-
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden in
-/-- **The joint guarantee over a horizon of server-time blocks, with every block's integrity leg from C-Flock's
-integrity audit of that block.** As `Accounting.Guarantees.JointHorizonBlocks`, with block `b`'s sampled audit given
-by its realization of block `b` of the server's sessions `S` (`RealizesIntegrityOfIntegrityBlock`), under the premises
-of `IntegrityOfIntegrityBlock` at every block, in place of its per-period guarantee: the probability that some block's
-accepted audit's claim fails, some accepted wipe's survivor bound fails, or some block's memory term fails while its
-PoUS accepted is at most
-$$\sum_b \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_{a \ne \mathrm{sampled}} \delta_{b,a}\Big)
-  + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \delta_{\mathrm{PoUS},b}.$$ -/
-def JointHorizonBlocksOfIntegrityBlock : Prop :=
-  ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
-    [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (s : BlocksRun d α C Ω B)
-    (S : Flock.Guarantees.ServerBlocks) (q δI : ℝ), 0 < q → 0 < δI →
-    (∀ b : Fin B, ∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
-    (∀ b : Fin B, ∀ t ∈ S.sessions b, FlockSoundness.Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ R : (b : Fin B) → RealizesIntegrityOfIntegrityBlock (s.block b) S b,
-    (∀ b ξ t (τ : Strategy (S.W t).game), Flock.Guarantees.Period.Plays S.W S.T ((R b).strat ξ) t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
-    (∀ b ξ t (τ : Strategy (S.W t).game), Flock.Guarantees.Period.Plays S.W S.T ((R b).strat ξ) t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
-        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    ∀ (c : Fin B → Certificates) (p : Price) (f : ℝ) (δ : Fin B → Accounting.Audit → ℝ) (εWipe δPous : Fin B → ℝ),
-    (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (s.block b).units) →
-    (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
-    (∀ b a, a ≠ .sampled → (s.block b).Sound (c b) p a (δ b a)) →
-    (∀ b, Pouw.pr (fun ξ => (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ≤ εWipe b) →
-    (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ) ≤ δPous b) →
-    Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
-        (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
-        (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
-      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + ∑ a ∈ Finset.univ.erase .sampled, δ b a) +
-        ∑ b, εWipe b + ∑ b, δPous b
 
 end Guarantees.Bridge
 

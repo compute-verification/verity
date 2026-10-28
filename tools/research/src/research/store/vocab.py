@@ -11,7 +11,7 @@ store keeps whatever older writers wrote).  `research data vocab` prints the tab
 
 Four groups, by asserter:
 
-    result        the producing lane, about its own result / ledger row (`ledger_to_store`, or `research data label` by hand)
+    result        the producing lane, about its own result / ledger row (the r20 ledger import, or `research data label` by hand)
     verification  an independent verifier, never the producer (a table counts it only when `by` is not a producer)
     evidence      a probe or input-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
     approach      the owning lane or its coordinator, about an `approach/v1` record (`research notes claim | approach`); `approach`
@@ -72,6 +72,7 @@ OF_RECORD = "of-record"
 RUN_OF_RECORD = "run_of_record"
 GOAL = "goal"
 ABANDONED = "abandoned"
+WITHDRAWN = "withdrawn"
 REPLAY_SET = "replay_set"
 REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
@@ -151,19 +152,18 @@ UNCITES = "uncites"
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
 COMMIT_MAP_VALUES = ("accepted", "retracted")
-#: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
-#: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
-#: the spelling is copied here; `benchmarks/numerical/tests/bench/test_tables.py` checks the copy against both.
+#: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + `COMPONENT`, the frozen ledger's
+#: (a bucket measured alone is no proof class).  The store imports no bench package (the `research` rule), so the spelling is copied
+#: here; `benchmarks/numerical/tests/bench/test_bench_contract.py` checks the copy.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: Mirrors the Glossary's backend families (`README.md`, "Backend family"), which `bench/views.py` spells as `FAMILY_NAMES`; the
-#: backends' tests check the copy.  A `candidate` label written today names one of these.
+#: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
-#: The backend families, then the values `ledger_to_store.candidate` derives from a frozen ledger lane, which recorded labels carry
+#: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
 #: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
@@ -172,8 +172,8 @@ APPROACH_TYPES = ("scheme", "route", "attack")
 
 # ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
 
-#: label key written -> the key it means.  Writers (`research data label`, `ledger_to_store`) store the canonical key only; readers
-#: (`bench.tables`, `bench.store_tables`, `vocab-check`) map an old key to its canonical one with `canonical_key`.
+#: label key written -> the key it means.  Writers (`research data label`) store the canonical key only; readers (`vocab-check`)
+#: map an old key to its canonical one with `canonical_key`.
 KEY_ALIASES: dict[str, str] = {"notes": NOTE, "verify_note": NOTE, "verifier_note": NOTE, "batch": B, "checker": VERIFIER,
                                "axis": SWEEP, "milestone": ARM, "tree": SOURCE, "release": SOURCE}
 #: (key, value written) -> the value it means.
@@ -325,6 +325,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
+    _k(WITHDRAWN, GROUP_RESULT, TEXT, "the artifact's blobs were deleted from the shared store (`research data withdraw`) because "
+       "they held values that must never be shared, in a few words; --ref names the issue. Its manifest stays, so a citation "
+       "still resolves and `fetch` reports the payload gone"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
        "the cell it belongs to; the cell lists every attempt with its deviation (IX1)"),
     _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),

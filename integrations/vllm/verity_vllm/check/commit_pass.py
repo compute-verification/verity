@@ -160,7 +160,7 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
             if _sok is False:
                 _missing_b = C2._form_b_complete_over_values(_oc)
                 if _missing_b is not None:
-                    return False, f"C2 of record not established (F-r16-23): {_swhy}; and form (B) does not stand in: {_missing_b}"
+                    return False, f"C2 of record not established: {_swhy}; and form (B) does not stand in: {_missing_b}"
                 # form (B) never covers plane-fed VUs -- the population / stratum gaps are still named whatever the seed
                 _gap0, _fail0 = C2._complete_replay_population_gap(sr, _oc) if sr.get("result") is True else C2._partial_replay_named_gap(sr, _oc)
                 if _fail0 is not None:
@@ -170,8 +170,8 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
                     # unevaluated pick of FAULT class inside an evaluated stratum -- 'a fault is a run that did not evaluate, not a gap') fails
                     # closed whatever seeded the replay; form (B) stands in for a named gap, never for a fault
                     sr_why = sr.get("why") or sr.get("grade")
-                    return False, (f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade')} -- {sr_why}; "
-                                   f"the row's Commit is C1 + C3 only (F-r16-13, whatever seeded the replay: {_swhy})")
+                    return False, (f"C2 of record not established: sampled replay {sr.get('grade')} -- {sr_why}; "
+                                   f"the row's Commit is C1 + C3 only (whatever seeded the replay: {_swhy})")
                 c2_notes.append(f"{_swhy}; C2 of record by the complete form (B) alone")
                 _mech = True
         if _mech:
@@ -186,11 +186,11 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
                 return False, _fail
             if _gap is None:
                 sr_why = (sr.get("why") or sr.get("grade")) if isinstance(sr, dict) else "not run (no --program-dir / --programs-root)"
-                return False, (f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade') if isinstance(sr, dict) else None} -- {sr_why}; "
+                return False, (f"C2 of record not established: sampled replay {sr.get('grade') if isinstance(sr, dict) else None} -- {sr_why}; "
                                "the row's Commit is C1 + C3 only")
             c2_notes.append(_gap)
         else:
-            # a COMPLETE replay whose population excluded VUs BY NAME under MAN-06f / MAN-06g (plane-fed,
+            # a COMPLETE replay whose population excluded VUs BY NAME (plane-fed,
             # interior-composed v2) carries the same gap the partial rule does: those VUs have committed members no form checked unless
             # form (B) is complete over the values -- the population move keeps that condition, it does not lift it.
             _gap, _fail = C2._complete_replay_population_gap(sr, _oc)
@@ -200,10 +200,10 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
                 c2_notes.append(_gap)
         if not (isinstance(lk, dict) and lk.get("result") is True):
             lk_why = lk.get("why") if isinstance(lk, dict) else "not run"
-            return False, f"C2 of record not established (DECISIONS-2 §4): boundary linkage {lk.get('result') if isinstance(lk, dict) else None} -- {lk_why}"
+            return False, f"C2 of record not established: boundary linkage {lk.get('result') if isinstance(lk, dict) else None} -- {lk_why}"
         if not (isinstance(wp, dict) and wp.get("result") is True):
             wp_why = wp.get("why") if isinstance(wp, dict) else "not run (no --weights-of-record / --checkpoint-dir)"
-            return False, (f"weights unpinned (MAN-09): the served weights were not compared with the checkpoint of record -- {wp_why}; "
+            return False, (f"weights unpinned: the served weights were not compared with the checkpoint of record -- {wp_why}; "
                            "the committed weights root is self-consistency, not authentication")
         _att = C2._batch_attribution_note(C2._requests_n(commit), _oc)
         if _att is not None:

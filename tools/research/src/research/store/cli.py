@@ -53,6 +53,10 @@
   research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
                                                    the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
                                                    --apply marks them and deletes those still candidates a grace after their mark
+  research data withdraw ART... --reason T --ref ISSUE --as HANDLE --cache DIR [--apply]
+                                                   delete the blobs of artifacts holding values that must never be shared, cited or
+                                                   not, and label each `withdrawn` (withdraw.py, README §7.4); a blob another
+                                                   artifact holds is kept and named
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
                                                    the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
@@ -63,7 +67,7 @@
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
   research data reconcile-attempts (RUN... | --all) [--apply] [--json]
                                                    local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
-  research data parity --fresh DIR [--render] [--json-out FILE]
+  research data parity --fresh DIR [--json-out FILE]
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
@@ -787,19 +791,16 @@ def cmd_refresh(argv: list[str]) -> int:
 
 def cmd_parity(argv: list[str]) -> int:
     """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
-    rows, and with `--render` the canonical tables.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
+    rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
     from . import parity as PA  # noqa: PLC0415
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
-    ap.add_argument("--render", action="store_true", help="also compare the daily render (tables + drilldowns) over the same records")
-    ap.add_argument("--render-source", default=None, metavar="TREE", help="the tree to render with (default: steward.toml [[render]] source)")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
-                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)), source=Path(ns.render_source) if ns.render_source else None)
+    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
     if ns.json_out:
         Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
     if ns.json:
@@ -1364,6 +1365,51 @@ def cmd_gc(argv: list[str]) -> int:
     return 1 if applied.get("error_count") or applied.get("lost_count") else 0
 
 
+def cmd_withdraw(argv: list[str]) -> int:
+    """README §7.4 (`withdraw.py`): delete the blobs of artifacts holding values that must never be shared, cited or not, and label
+    each `withdrawn` with the reason.  A blob another artifact also holds is kept and named.  Read-only without `--apply`."""
+    from . import gc, withdraw
+
+    ap = _ap("withdraw")
+    ap.add_argument("arts", nargs="+", metavar="ART", help="full art: ids")
+    ap.add_argument("--reason", required=True, help="why, in a few words: the `withdrawn` label's value")
+    ap.add_argument("--ref", required=True, help="the issue or ruling that asked for it (INF-333)")
+    ap.add_argument("--as", dest="by", required=True, metavar="HANDLE", help="the handle withdrawing them: the labels' `by`")
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests read from the remote are kept (gc's cache works)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (default the temp dir)")
+    ap.add_argument("--path", dest="paths", action="append", metavar="PREFIX",
+                    help="withdraw only the files under PREFIX in the arts' trees (repeatable; a run's out/sampled-proofs/served, say)")
+    ap.add_argument("--apply", action="store_true", help="delete the blobs and write the labels")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data withdraw: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        p = withdraw.plan(st.remote, Path(ns.cache), ns.arts, work=Path(ns.work) if ns.work else None, log=say, paths=ns.paths)
+        out: dict[str, Any] = {"remote": st.remote.describe(), **p.summary()}
+        if p.missing:
+            _dump(out)
+            print("research data withdraw: no manifest for some ids; nothing deleted", file=sys.stderr)
+            return 1
+        if ns.apply:
+            out["applied"] = withdraw.apply(st.remote, p, log=say)
+            lost = False
+            for art in p.arts:
+                value = f"{ns.reason} (only {', '.join(ns.paths)})" if ns.paths else ns.reason
+                st.add_label(art, vocab.WITHDRAWN, value, ns.by, ref=ns.ref)
+                said, bad = _label_write_through(st, art)
+                say(f"{art}: withdrawn label {said}")
+                lost |= bad
+            out["labels_lost"] = lost
+    except gc.GcError as e:
+        print(f"research data withdraw: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    _dump(out)
+    return 1 if out.get("labels_lost") else 0
+
+
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
 _VERBATIM_COMMANDS = ("sql",)
 
@@ -1424,7 +1470,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }
 
 

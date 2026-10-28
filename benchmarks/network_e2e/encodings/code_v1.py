@@ -1,9 +1,10 @@
-"""ENC-CODE for advice v1: the residual's coder, canonical, prefix-free and self-delimiting per window.
+"""The advice code for advice v1: the residual's coder, canonical, prefix-free and self-delimiting per window.
 
-Advice v1 (ENC-DERIVED) charges nothing for what is certified (the warden's admission order, the request records, the
-release buckets), replayed (ENC-REPLAY's scheduler replay) or derived (ENC-DERIVED's rules), and sends only the residual,
-one `Window` per certifier window, each field's values in the order its reader asks for them:
-- `arrived`: ENC-REPLAY's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
+Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
+release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
+residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
+order its reader asks for them:
+- `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
   (`derived.Residual.hits`);
 - `resumes`: which later rows resume their request, by position among those rows, increasing over the run
@@ -20,7 +21,7 @@ then the field's values, under the registered `Book`. Each count and integer is 
 (`code.Binned`), and a field that increases over the run is coded as its gap. Each bit is coded with a public adaptive
 Krichevsky–Trofimov estimate per context (`KT`): counts start from the book's prior, are updated as the bits are decoded,
 and are halved past 2^16, so the model is public. `Encoder` and `Decoder` take the same symbols online, for a reader that
-codes with contexts of its own (ENC-REPLAY's egress contexts). `encode` and `decode` drive them over `Window`s, where a
+codes with contexts of its own (the replay's egress contexts). `encode` and `decode` drive them over `Window`s, where a
 window's `arrived` bits take as context the run of decisions since the last arrival.
 
 **Prefix-free, canonical, self-delimiting.** LEAK-LEAN's `BitsCount` (#3533) holds when the charge is at least the length
@@ -60,6 +61,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.core.protocols.certifier.window_charge import Window
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -77,24 +80,6 @@ C = _load("code")
 
 
 # ------------------------------------------------------------------------------------------------------ the residual
-
-
-@dataclass(frozen=True)
-class Window:
-    """What one certifier window is charged (the module's docstring)."""
-
-    arrived: tuple[bool, ...] = ()
-    hits: tuple[int, ...] = ()
-    resumes: tuple[int, ...] = ()
-    order: tuple[tuple[int, tuple[int, ...]], ...] = ()
-    lag: tuple[bool, ...] = ()
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "arrived", tuple(bool(b) for b in self.arrived))
-        object.__setattr__(self, "hits", tuple(int(h) for h in self.hits))
-        object.__setattr__(self, "resumes", tuple(int(p) for p in self.resumes))
-        object.__setattr__(self, "order", tuple((int(s), tuple(int(i) for i in idx)) for s, idx in self.order))
-        object.__setattr__(self, "lag", tuple(bool(b) for b in self.lag))
 
 
 @dataclass(frozen=True)

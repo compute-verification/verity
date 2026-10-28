@@ -1,6 +1,6 @@
-"""The block record: tonight's records (all-protocols runs r20261025-210358-993e and -203534-186b, wipe run
-r20261025-224222-91e2) fit their schema and check clean, every derived field is refused when it is not its legs', and a
-period whose six legs all accept on one server composes to accept."""
+"""The block record: the fixture records (built by `from-runs` from two all-protocols runs and a wipe run) fit their schema
+and check clean, every derived field is refused when it is not its legs', and a period whose six legs all accept on one
+server composes to accept."""
 from __future__ import annotations
 
 import copy
@@ -23,7 +23,7 @@ def _load(name: str) -> dict:
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_tonights_records_fit_their_schema_and_check_clean(name: str) -> None:
+def test_the_fixture_records_fit_their_schema_and_check_clean(name: str) -> None:
     rec = _load(name)
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert R.check(rec) == {}
@@ -47,6 +47,13 @@ def test_integrity_bounds_are_the_runs() -> None:
     assert R.integrity_bound(1024, 64, Fraction(1, 100)) == 68
     at = _load("block-record-r1-window10")["legs"]["integrity"]["at"]
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
+
+
+def test_the_integrity_bound_counts_a_sampling_term_equal_to_delta() -> None:
+    """Of 4 units with 2 sampled, 2 wrong ones escape with C(2, 2)/C(4, 2) = 1/6 exactly, so at δ = 1/6 the bound is 2
+    (core's `Stratified.count_bound`: the largest K whose sampling term is at least δ), not 1."""
+    assert R.integrity_bound(4, 2, Fraction(1, 6)) == 2
+    assert R.integrity_bound(4, 2, Fraction(1, 6) + Fraction(1, 10**9)) == 1
 
 
 def test_a_flipped_leg_verdict_is_refused() -> None:
@@ -96,7 +103,7 @@ def _accepting_report() -> tuple[dict, dict]:
 
 
 def test_the_wipe_is_its_threshold_at_its_reads() -> None:
-    """The wipe's quantity is `verity/wipe/v0`'s `foreign_bits` at the `k` and `r` it publishes; tonight's wipe, from
+    """The wipe's quantity is `verity/wipe/v0`'s `foreign_bits` at the `k` and `r` it publishes; the fixtures' wipe, from
     before it published them, carries its profile's `k` and no `r`."""
     assert _load("block-record-r2-period0")["legs"]["wipe"]["quantity"] == {
         "symbol": "foreign_bits", "value": 1 << 28, "unit": "bits", "k": 2152, "r": None, "M": 1 << 28, "certified": False}

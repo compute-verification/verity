@@ -199,7 +199,7 @@ def test_the_script_is_stdlib_only_and_deploy_toml_runs_it_as_root_on_the_shared
     m = tomllib.loads((src.parent / "deploy.toml").read_text())
     rows = {e["path"]: e for e in m["file"]}
     nodes = {"vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
-             "vy-nebius-cpu-5"}
+             "vy-nebius-cpu-5", "vy-nebius-cpu-6"}
     for path in ("/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.service",
                  "/etc/systemd/system/vy-oom-order.timer"):
         assert set(rows[path]["nodes"]) == nodes and nodes <= set(m["nodes"]), path
