@@ -2,8 +2,8 @@
 # h1c.cu built for sm_120a on the CPU, then h1cgate.py (or H1C_GATE, e.g. h1agate.py: the served calls' A tables) on one
 # leased GPU for at most 25 minutes: the served window's tables on a full step against commit.py, then their timing.  Extra
 # arguments go to the gate.
-#   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/dither/h1c.sh
+# On an RTX PRO 6000 under a GPU lease:
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/h1c.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw

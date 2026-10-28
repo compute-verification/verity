@@ -22,7 +22,7 @@ from verity_vllm.records.query_checks import Findings, QueryChecks, Unreachable
 DATA = Path(__file__).parent / "data"
 #: sha256 of the four C2 readers' outcomes over `_corpus()` (`json.dumps(..., sort_keys=True, default=str)`), computed with the
 #: readers on the parsed JSON before they read the record
-OUTCOMES_SHA256 = "5dacb931bbf351128ea40446847761daef6f0310f0e7412a940a0875a18529b0"
+OUTCOMES_SHA256 = "57da25a573b80ddc29057f1b344f4c23fd8c0ee04eca109151c26706e6469449"
 REQUIRED = ("vus_outside_query", "identities_without_rows", "rows_disagree", "ranks", "unstated_families", "vus_outside_query.n",
             "vus_outside_query.first", "rows_disagree.first", "ranks.replay", "identities_unreachable_by_alias.alias_entries",
             "identities_unreachable_by_alias.n", "executed_prefix_rule.applied", "executed_prefix_rule.faults",
@@ -223,7 +223,7 @@ def test_a_block_that_is_not_a_json_object_is_refused():
 def test_the_c2_rules_grade_every_writers_block_to_the_same_texts():
     outcomes = _outcomes()
     assert hashlib.sha256(json.dumps(outcomes, sort_keys=True, default=str).encode()).hexdigest() == OUTCOMES_SHA256
-    assert outcomes["coverage reconciled"]["scope"][0].startswith("C2 population scope (R17-3; query of record Q_module_body_v1)")
+    assert outcomes["coverage reconciled"]["scope"][0].startswith("C2 population scope (query of record Q_module_body_v1)")
     assert "ranks replay [1] != manifest [0]" in outcomes["served other rank"]["scope"][1]
     assert outcomes["coverage prefix faulted, account missing"]["account_missing"] is True
 
