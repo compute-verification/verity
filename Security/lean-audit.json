@@ -816,7 +816,7 @@
   },
   "Claims.JsonSpec": {
    "owner": "@proofs",
-   "digest": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
+   "digest": "5c3f04e2595efe5489b26245f2ba5e0b20bfdd90faa693a655e9c71abebeb8b7"
   },
   "Claims.Sampling.Commitment.Binds": {
    "owner": "@proofs",
@@ -2502,7 +2502,8 @@
    "Claims.Recursion.opensAt": "`FC`'s loop condition (does a run as it may abort accept and open a cap position), a finder's internal test that `KSFlockLin` reads through `FC`, no claim",
    "Claims.Recursion.accAtI": "`F0I`'s loop condition (does a draw's opened inner view accept), a finder's internal test that `KSLin2` and `BitsLin2` read through `F0I`, no claim",
    "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim",
-   "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class"
+   "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
+   "Claims.Json.Ascii": "a helper the claims read: an ASCII JSON value without DEL, which `JsonSpec` reads"
   }
  },
  "witnesses": {
@@ -21460,8 +21461,15 @@
    ]
   },
   "Definitions.Claims.Json": {
-   "digest": "82f971f29719d8884c4d9ccbf3d7033d0f508829e540d7f0f8a47c4a14142010",
+   "digest": "2de562f91708b06d88475e131813a51463527fc3800e2a28ff587094533da83c",
    "definitions": {
+    "Claims.Json.Ascii": "f038917195d4f6915917fd1173cf1625ff2ca5e905e3675dd2d916cffc551b63",
+    "Claims.Json.Ascii.arr": "109f6d19e38cdcb384c293a01a1f8cdd46eea73ad917ab40d43d5d25cd8ed453",
+    "Claims.Json.Ascii.bool": "f62411ce2634c1019da932135d410e731082e3f2b9e81b66c34b7d6d8b0505b3",
+    "Claims.Json.Ascii.null": "a71ffb23ed63048fdb036abb71357fc4f7f4065f6861512ab350210dc89cf921",
+    "Claims.Json.Ascii.num": "d22bbcc79c09b7e2ce3b17d038acd174e1a792f14c29ac61a367dbe7dad59201",
+    "Claims.Json.Ascii.obj": "58c0fe2fb7fcc47a4d157fb4ba109fa11becee7399867e47904fbd0a6ea9638d",
+    "Claims.Json.Ascii.str": "d59c9b570f4067194a1e1dc0de87defaeb4e7ea27d1d3c74b887459aa295cda8",
     "Claims.Json.Good": "049bbffb568b7a24dc10ae33ffefdb6a5d2c9b084cb34437d2c331acc5fb7d93",
     "Claims.Json.Good.arr": "8415fb2c81ce9d83a6177315a99833ce4533ef41121cfb4e6aae6136c92aafae",
     "Claims.Json.Good.bool": "2f65b38b55391e1b2a4a92ce1945ad50bfe54a5984c5e5a73b34b16460d91913",
@@ -21483,9 +21491,37 @@
     "Claims.Json.Wf.num": "c0fde77e0148d77d2a9bd77d6b01fb819f606eadb660543f68d5ae4fd3ea8e9a",
     "Claims.Json.Wf.obj": "a26fc49abe31a28e2fd80de728e6f48281d412678e8f129887067fbadbe855bc",
     "Claims.Json.Wf.str": "1130cfd92d68d48b9b92694c0bfe11cadd3df5734428e3e751a08712c00ea8f8",
-    "Claims.JsonSpec": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
+    "Claims.JsonSpec": "5c3f04e2595efe5489b26245f2ba5e0b20bfdd90faa693a655e9c71abebeb8b7"
    },
-   "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
+   "guarantees": [
+    "Claims.Flock.Complete_meets_zk",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Witness.Flock.ZK_meets",
+    "Claims.Witness.Recursion.BitsFlock_meets",
+    "Claims.Witness.Recursion.Bits_meets",
+    "Claims.Witness.Recursion.Efficient_meets",
+    "Claims.Witness.Recursion.KSBound_meets",
+    "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSFlock_meets_trim",
+    "Claims.Witness.Recursion.KSPrivBound_meets",
+    "Claims.Witness.Recursion.KSPriv_meets",
+    "Claims.Witness.Recursion.KS_meets",
+    "Claims.Witness.Recursion.ZKPriv_meets",
+    "Claims.Witness.Recursion.ZKStop_meets",
+    "Claims.Witness.Recursion.ZK_meets",
+    "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.ClaimsStated",
+    "Flock.SecurityProofs.MaskedKS",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.RecursiveKS",
+    "RecDeploy.HonestHalfFixture.honest_half_fixture"
+   ]
   },
   "Definitions.Claims.Recursion": {
    "digest": "f7c3dd948754ba4cb7f3d00f52e3e3716d8377c0f0c73af02e8771d985d657be",
@@ -36108,7 +36144,7 @@
    ]
   },
   "Flock.Canon": {
-   "digest": "9bcc7b1a0507390609e73c4bc92a0c85f264d10ed837f83b2ba70b8610ff94b1",
+   "digest": "c629c59b2321ca20b629a49077791c4bf70409b844c66d1ae60d88442e86c67a",
    "definitions": {
     "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
     "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
@@ -36121,8 +36157,10 @@
     "Flock.J.has": "ca6982e3c1614babecc5c8ac4f8e0dbe6d84112fb997d55371d9644449b9d208",
     "Flock.J.nat": "14651f660693f11c7c802159f9ef5dd00e9d1ab41c9994d1475731cc4fec6aa0",
     "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
-    "Flock.canon": "91721c8381191df75ed1970942b7cc109bf7ffde3d4daf2578471d7ec12e2fb1",
+    "Flock.ascii": "beb31478c715142b89e4d11f4ec248e0bd97c52cee1058811f2632d220133731",
+    "Flock.canon": "c87ae51bccab878e374830c0a80c1e4f669bf75da5ea5ab0e8fb48a0542a8a21",
     "Flock.canonStr": "004d0450163619de70153792b310392e674d6f8022604a84ab492ae059079804",
+    "Flock.notAscii": "d6322464f334502bd9e9c30ceaed16afb5bf260dd29ff281b3cd46826466daca",
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [
@@ -47896,13 +47934,14 @@
    ]
   },
   "Proofs.Flock.Claims.Complete.Ready": {
-   "digest": "8562f41dfa8c19c075aaf7e758c19a401d008dae4410e7568207dd6e31c651ad",
+   "digest": "36c4bdc12d018c963c34bd3894e63f121ee76c044fbc68e877cb29fe8d78366b",
    "definitions": {
     "FlockComplete.RecordFitsAt": "eceb480c22ac30e4335aa60dbd3da8758e9dc62fe07c0366517813ec189c642c",
     "FlockComplete.RecordFitsZkAt": "ab4d20d5f8ec75397c07f1b24450f456e8ef04018a67d954f28e8fe5ff0d2409",
     "FlockComplete.RegionsFit": "546678e83deeb19adf6840000481c3dbe8914bb0fa24b91fa31b65ef5b1f4874",
+    "FlockComplete.ZkTables.DrawAscii": "7e03e1abdebdc807cb5222b64f4e4e25b633b8351988317d395b64c39c912f36",
     "FlockComplete.ZkTables.RecordFitsAt": "0f1814961793d6d1f4f10a5f5882c07aad092e7b173c22435f85c81d717c6781",
-    "FlockComplete.ZkTables.ready": "c4457458c5757f7f825d93a835201f23fd6ba0340c86503defac3f0b1549804a",
+    "FlockComplete.ZkTables.ready": "335357a2b3274a08fe429142bda8294a811de7c7f90fa08c93c8ad85a62ce641",
     "FlockComplete.ZkTables.δc": "3eff5bf9dfe2a5c15085e7a368b005bade9f4a22a300282fd345ae893c0cc41b",
     "FlockComplete.betaSlotsZk": "c9f676c3daca290d41183fd54327e5165c3376a755c1296c9fc910e1014f7b7a",
     "FlockComplete.outerSlots": "0cccf3fa491449da5e1a0b1d374589d4da226eb004ceed9064b750473fc98da5",

@@ -9,7 +9,7 @@ import RemoteAudit.Wire
 The remote audit's Lean verifier as a process the driver (`benchmarks/remote_session/verifier.py`) runs beside its
 Python: it holds the verifier's registry (`Registry`) and every session's state (`Session.State`) and takes the events
 as they happen, one request a line on stdin, each answered by one line on stdout, `{"answer": JSON}` or
-`{"error": MESSAGE}`, in canonical JSON (`Flock.canon`). Requests (byte strings lowercase hex, an event as the
+`{"error": MESSAGE}`, in canonical JSON's form (`Flock.canonLine`). Requests (byte strings lowercase hex, an event as the
 difftest's `session` reads one, `Difftest.eventOf`):
 
 * `{"op": "init", "source", "registry", "chunk"}`: the verifier's secret, the registry `registry/v0` reads back (`null`
@@ -423,7 +423,7 @@ def serve : IO UInt32 := do
         match ← handle srv req stdin emit with
         | .error e => pure (line "error" (Flock.canonStr e), srv)
         | .ok (a, srv') =>
-          match Flock.canon a with
+          match Flock.canonLine a with
           | .ok text => pure (line "answer" text, srv')
           | .error e => pure (line "error" (Flock.canonStr s!"answer: {e}"), srv')
     srv := srv'

@@ -29,8 +29,10 @@ import Proofs.Flock.Claims.Complete.ZkTables.Honest
 * **`ZkTables.δc H x = 1` exactly where `ZkTables.ready H x` fails** (`deployZk`'s): the same of the masked session
   (`setupOf true`, and `ZkTables.RecordFitsAt` at the run of the honest masked prover on each table's share,
   `ZkTables.traces`), at any number of tables, and one more: its `Hello` names the keyed coin tree (`spec.coinTree`),
-  and the masked verifier refuses any other session. `εZk` counts every table's two reps, so it is the masked union
-  bound at every number of tables.
+  and the masked verifier refuses any other session; and at several tables its draw is ASCII without DEL
+  (`DrawAscii`), as the record's decode prints it with `canon`, which refuses any other (at one table the setup's own
+  header digest refuses it first). `εZk` counts every table's two reps, so it is the masked union bound at every
+  number of tables.
 * **`δcZk H x = 1` exactly where `readyZk H x` fails**, the error of `honestPZk` (the prover that reads table `i`'s
   bits at `i·2^m + a`, `tracesOf`, the relation's only at one table): `ZkTables.ready` at the masked session's run of
   `honestPZk` (`RecordFitsZkAt`), at one table.
@@ -227,14 +229,21 @@ def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : Sessio
       (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
       record.toUTF8.size < 2 ^ 64
 
+/-- **A session of several tables draws an ASCII draw** (`Claims.Json.Ascii`): the record's decode prints its draw with
+`canon`, which refuses a string outside ASCII without DEL. At one table the setup prints the draw already, in the
+statement's header (`HmRow.drawn`'s public digest), so a setup that returns has an ASCII draw; at several tables the
+setup prints only each table's own subset draw. -/
+def DrawAscii (draw : Option Lean.Json) (sts : Array Flock.Stmt) : Prop :=
+  1 < sts.size → ∀ d, draw = some d → Claims.Json.Ascii d
+
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`, at any number of tables: `readyZk`'s but its one
-table, at the honest masked prover on each table's share. The session draws a unit, the statement is under `2^64`
-bytes, every table's regions fit, its setup against `H` is the one at SHA-512, its `Hello` names the keyed coin tree,
-and the honest record fits. -/
+table, at the honest masked prover on each table's share. The session draws a unit, an ASCII one at several tables
+(`DrawAscii`), the statement is under `2^64` bytes, every table's regions fit, its setup against `H` is the one at
+SHA-512, its `Hello` names the keyed coin tree, and the honest record fits. -/
 noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
-  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
+  | some (s, spec, sts) => s.read.draw.isSome && decide (DrawAscii s.read.draw sts) && decide (x.length < 2 ^ 64) &&
       decide (∀ st ∈ sts, RegionsFit st) && decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) &&
       spec.coinTree.isSome && decide (RecordFitsAt H x spec sts)
   | none => false
@@ -243,8 +252,9 @@ open Classical in
 /-- **At SHA-512, `ready` asks no setup agreement.** -/
 theorem ready_sha512 (x : Claims.Msg) :
     ready sha512 x = match setupOf true x with
-      | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
-          decide (∀ st ∈ sts, RegionsFit st) && spec.coinTree.isSome && decide (RecordFitsAt sha512 x spec sts)
+      | some (s, spec, sts) => s.read.draw.isSome && decide (DrawAscii s.read.draw sts) &&
+          decide (x.length < 2 ^ 64) && decide (∀ st ∈ sts, RegionsFit st) && spec.coinTree.isSome &&
+          decide (RecordFitsAt sha512 x spec sts)
       | none => false := by
   unfold ready
   split
@@ -271,8 +281,9 @@ theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
   split at h
   · simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     simp only [Bool.and_eq_true, decide_eq_true_eq]
-    exact ⟨⟨⟨⟨⟨h.1.1.1.1.1.2, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩,
-      (recordFitsAt_one h.1.1.1.1.1.1).2 h.2⟩
+    have h1 := h.1.1.1.1.1.1
+    exact ⟨⟨⟨⟨⟨⟨h.1.1.1.1.1.2, fun h2 => absurd h1 (by omega)⟩, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩,
+      (recordFitsAt_one h1).2 h.2⟩
   · cases h
 
 /-- **Where `readyZk` holds, `δc H` is `δcZk H`.** -/

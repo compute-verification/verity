@@ -12,7 +12,7 @@ namespace Flock.Test.CoinsTree
 open Lean (Json)
 
 def specs : List CoinTree.Spec :=
-  [⟨#["rep0", "rep1"], 3, 64⟩, ⟨#[], 0, 1⟩, ⟨#["a\"b", "ünï", "x"], 20, 65536⟩]
+  [⟨#["rep0", "rep1"], 3, 64⟩, ⟨#[], 0, 1⟩, ⟨#["a\"b", "u~i", "x"], 20, 65536⟩]
 
 def coinsAll : List Coins := [.os, .seed] ++ specs.map .tree
 
@@ -20,6 +20,9 @@ def helloAt (t : Tags) (c : Coins) (tables : Array String) : String :=
   (helloOf t (ByteArray.mk #[1, 2, 3]) 10 c tables).toOption.getD ""
 
 #guard coinsAll.all fun c => (helloOf Tags.circuitPlainLeaves ByteArray.empty 10 c).toOption.isSome
+-- a `Hello` is canonical JSON, so a name outside ASCII without DEL, a rep's or a table's, has none
+#guard (helloOf Tags.circuitPlainLeaves ByteArray.empty 10 (.tree ⟨#["ünï"], 3, 64⟩)).toOption.isNone
+#guard (helloOf Tags.circuitPlainLeaves ByteArray.empty 10 .os #["dé"]).toOption.isNone
 #guard Tags.all.all fun t => coinsAll.all fun c =>
   [#[t.table], #["t0", "t1", "t2"]].all fun tabs => CoinTree.ofHello (helloAt t c tabs) == c.tree?
 
