@@ -116,31 +116,34 @@ def EncardDecodableLeConstantRate : Prop :=
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
     Zs.encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞)
 
-/-- **`|a|` bits per execution block, over the session's first `m` blocks.** Take the session's first `m` whole
-execution blocks of `g·T` buckets within the `E` blocks (`hn` is `EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` at
-the horizon `n = m·(g·T)`). The constant-rate Program's accepted sequences of that length with jitter below `D` number
-at most `(2^k · D^(g·T))^m`: `|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`). -/
+/-- **`|a|` bits per execution block, from any block's start.** Fix what a run showed through its first `e₀` execution
+blocks, `p`, and take the `m` blocks after them, within the `E` blocks (`hn` is
+`EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` at the horizon `n = (e₀ + m)·(g·T)`). The constant-rate Program's
+accepted sequences of that length with jitter below `D` that continue `p` number at most `(2^k · D^(g·T))^m`:
+`|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`), whatever came before. At `e₀ = 0` they are the
+session's first `m` blocks. -/
 def EncardAccSeqsLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
-    (m D : ℕ) (hn : m * (g * T) ≤ E * (g * T)),
-    (AccSeqs (constantRate (S := S) T g E frames) op (m * (g * T)) D).encard ≤
-      (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
+    (e₀ m D : ℕ) (hn : (e₀ + m) * (g * T) ≤ E * (g * T)) (p : List (Obs L K S)),
+    {o | o ∈ AccSeqs (constantRate (S := S) T g E frames) op ((e₀ + m) * (g * T)) D ∧
+        o.take (e₀ * (g * T)) = p}.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
-/-- **`|a|` bits per execution block, through the wire (W2 and J).** `EncardDecodableLeConstantRate` at the horizon of
-`m` whole execution blocks, `n = m·(g·T)`: a decoder of the wire recovers at most `(2^k · D^(g·T))^m` secrets, so over
-the session's first `m` blocks a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` bits through egress timing
-and content advice. -/
+/-- **`|a|` bits per execution block through the wire, from any block's start (W2 and J).** Take secrets whose runs
+show the same observations `p` through the first `e₀` execution blocks, each accepted through the `m` blocks after
+them. A decoder of the wire through those blocks recovers at most `(2^k · D^(g·T))^m` of them: whatever the first `e₀`
+blocks showed, a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` more bits through egress timing and
+content advice over the next `m` blocks. At `e₀ = 0` they are the session's first `m` blocks. -/
 def EncardDecodableLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire : Type}
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (m D : ℕ)
-    (hn : m * (g * T) ≤ E * (g * T))
+    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (e₀ m D : ℕ)
+    (hn : (e₀ + m) * (g * T) ≤ E * (g * T))
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z)
-    (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op (m * (g * T))
-      (I.obsRun z (m * (g * T))))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z (m * (g * T))) = z),
+    (Zs : Set Z) (p : List (Obs L K S)) (hpre : ∀ z ∈ Zs, I.obsRun z (e₀ * (g * T)) = p)
+    (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op ((e₀ + m) * (g * T))
+      (I.obsRun z ((e₀ + m) * (g * T))))
+    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z ((e₀ + m) * (g * T))) = z),
     Zs.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
 /-! ## The ingress bound: what the outside can deliver into X through timing -/

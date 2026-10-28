@@ -92,9 +92,9 @@ theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDec
   @NetTiming.encard_ingress_decodable_le_contents
 
 theorem EncardAccSeqsLeConstantRatePerWindow : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow :=
-  fun T g E k frames op m D _ => NetTiming.encard_accSeqs_le_constantRate_perWindow T g E k frames op m D
+  @NetTiming.encard_accSeqs_le_constantRate_perWindow
 theorem EncardDecodableLeConstantRatePerWindow : NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow :=
-  fun I T g E k frames m D _ => NetTiming.encard_decodable_le_constantRate_perWindow I T g E k frames m D
+  @NetTiming.encard_decodable_le_constantRate_perWindow
 theorem EncardIngressObsDecodableLePerWindow : NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow :=
   @NetTiming.encard_ingress_obsDecodable_le_perWindow
 theorem EncardIngressObsDecodableLeContentsPerWindow :

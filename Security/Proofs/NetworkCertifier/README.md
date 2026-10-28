@@ -11,9 +11,9 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                Program, acceptance (Accepted, AcceptedUpTo) and accepted observation sequences (AccSeqs)
 ../../Definitions/NetworkCertifier/Ingress.lean  trusted: the interaction read inward, a link's frames with the timing erased (rowFrames,
                                linkFrames), and acceptance as it bears on ingress (StatusComplete)
-../../Definitions/NetworkCertifier/Schedule.lean trusted: the Program's logical schedule as `schedule.py` defines it (ClockSync, SyncSet,
-                               LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
-                               Program it gives (constantRate)
+../../Definitions/NetworkCertifier/Schedule.lean trusted: the Program's schedule over send ticks (LogicalFrame, handingFrom,
+                               enqueued, expectedRow, one FIFO per execution block) and the constant-rate Program it
+                               gives (constantRate)
 ../../Definitions/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them)
                                and J
 ../../Definitions/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
@@ -167,11 +167,11 @@ charges content bits, as reads, plus timing bits. Taking `log2 #Cs` to be those 
 part of the theorem. It is exact under fixed-length frames (W3): N frames of B bits have `2^(N·B)` contents, so for
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
-**The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T W ss frames` is `schedule.py`'s Program:
-windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (Σ_sync) per window, and the Program's
-frames, anchors and logical indices `frames ins c ℓ`, read from the ingress and the content advice. A frame is eligible
-at `anchor + δ + ⌊λ/ρ⌋`, handed at `h(k) = max(eligible(k), h(k−1))`, and released by `fifoGrid`. Its advice type is
-`Ac × (Fin W → ss.Elem)`, so the sync is its only timing advice by definition, and Theorem 3's clock-sync form holds for
+**The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T g E frames` is the Program of one link's
+monitoring period: `E` execution blocks, each of `g` sampling blocks of `T` buckets, and block `e`'s frames, with
+their content and send ticks, `frames ins e (a e) ℓ`, read from the ingress and `e`'s own advice. A frame is handed at
+`h(k) = max(send(k), h(k−1))` and released by `fifoGrid`, with the FIFO empty at each execution block's first bucket.
+Its advice type is `Fin E → Adv`, the protocol's `Adv` the `|a|`-bit strings, so Theorem 3's `2^(E·k)` form holds for
 it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`).
 
 ## The trusted layer (`NetTiming.Assumptions`)
@@ -352,15 +352,15 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 ## Modelling choices a reader of the statements checks
 
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
-   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
-   windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
-   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
-   `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
-   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
-   not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
-   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
-   first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
-   `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
+   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read a horizon of whole blocks, each with
+   its parent's hypotheses at that horizon and no other. The shipped schedule's bound is `(2^k · D^(g·T))^m` over any
+   `m` execution blocks of `g·T` buckets from block `e₀`, for the runs that agree on everything observed before block
+   `e₀` (`EncardAccSeqsLeConstantRatePerWindow`, `EncardDecodableLeConstantRatePerWindow`; at `e₀ = 0` the run's first
+   `m` blocks). It holds whatever came before because each block's rows read only its own advice and its FIFO starts
+   empty, so a temporal unit that starts later is bounded by its own blocks. The ingress bound is
+   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m` link-windows, `n = m·T`
+   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version); `Packed`, `Allocated` and `JitterBounded` bound
+   every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
@@ -409,9 +409,9 @@ The constant-rate Program adds these:
     execution block `e` in canonical order, with their content and send ticks, from the ingress and `e`'s advice `v`.
     Every guarantee holds for every such function, so it covers any way the Program fixes send ticks. Advice that moves
     a send tick is counted in its block's `k` bits.
-15. **One clock per spatial unit.** Every egress link reads the same window's sync (decision A's default), and the
-    audit enforces it (danielreuter/verity#956). A clock per link is a different advice type, covered by
-    `EncardAccSeqsLeAdvice` directly.
+15. **One clock per spatial unit.** Every egress link reads the same execution block's advice (decision A's default),
+    and the audit enforces one sync per window across the links (danielreuter/verity#956). Advice per link is a
+    different advice type, covered by `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
 17. **In-set advice.** The check's advice ranges over `SyncValue`, the values of Σ_sync: a run whose declared sync is
     outside the set is an `advice` violation and rejected, so its advice is never counted. That an earlier window's
