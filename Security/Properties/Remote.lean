@@ -8,30 +8,37 @@ import Properties.SampledProofs
 /-!
 # Remote's acceptance and the inference-only policy
 
-`Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.sameB` over three components, in the order of their
-ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's window check (`PouwCheck.protocol`) and sampled
-proofs' one-stage audit (`SampledProofs.OneStageZk.protocol`). Each one's commitment is the run's registration record,
-and the composite rejects unless all three decode to one digest (`Core.Composition.strays`). The policy's check
-(`NciCheck.Protocol.check`) refuses a record whose `program` is not the declared circuit's SHA-512 (`names`), then runs
+`Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.sameB` over three subprotocols, in the order of their
+ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's window check
+(`PouwCheck.protocol`) and sampled proofs' one-stage audit (`SampledProofs.OneStageZk.protocol`). Each one's commitment is
+the run's registration record, and the composite rejects unless all three decode to one digest
+(`Core.Composition.strays`). The policy's check (`NciCheck.Protocol.check`) refuses a record whose `program` is not the
+registered circuit's SHA-512 (`names`), then runs
 the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
 (`NciCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
-* `AcceptInferenceOnly`: on every input remote's check accepts, the three components' records have one digest, the
-  record the policy's case commits to names the declared circuit by its SHA-512, θ holds what the log's first record
-  registers (`NciCheck.Properties.ProvenanceHeld`), and on the instance the policy checked, expanded gate by gate
-  (`NciCheck.Properties.Expands`), every declaration the circuit lays out with θ, and the declared division `U` the
-  owners are, meet the policy (`PolicyMet`): every inference block of `U` has at most `Γ` gates and reads at most `α`
+* `AcceptInferenceOnly`: on every input remote's check accepts, the three subprotocols' records have one digest, the
+  record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
+  registers (`NciCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
+  (`NciCheck.Properties.Expands`), has a parse, a declaration the registered circuit lays out with θ and a division its
+  owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters (`VerifierOwn`), and
+  every such declaration and division meet the policy (`PolicyMet`): every inference block of `U` has at most `Γ` gates
+  and reads at most `α`
   fresh input bits per gate, so the declaration complies (`Nci.Complies Γ α`), and it has a padded
   `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a padded `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
   `W` bits wide; and the record the one-stage audit's case commits to names, by its SHA-512, the program the audit
-  verifies the sessions against (`StageHeld`). With one digest for the two records, the circuit the policy checked and
-  the program the one-stage audit verifies have one SHA-512.
+  verifies the sessions against (`StageHeld`). With one digest for the two records, the registered circuit the policy
+  checked and the program the one-stage audit verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
-  acceptance.
+  acceptance, on a declaration acceptance exhibits and on every other.
 
 `Γ` and `α = num / den` are the verifier's own: the parameters the composite names for the policy. No statement takes an
 assumption: the digests are those the code computes and compares, so that PoUW and the one-stage audit read the policy's
 record is up to a SHA-512 collision between two records the run carries, which the statements leave to their readers.
+
+The registered circuit is the program the policy's parameters carry and the record names by its SHA-512. That it is the
+registered compiler's output on committed advice, explaining the committed trace (each proof block's inputs and outputs
+committed values), is not stated: v0 of the policy and remote read neither the log's builder item nor the trace.
 
 Proved as `Properties.Remote.SecurityProofs.X : Properties.Remote.X` in `Proofs.Properties.Remote`.
 -/
@@ -57,18 +64,28 @@ def PolicyMet (d : Declaration) {n : ℕ} (U : Partition d.D n) (Γ : ℕ) (α :
       ∃ (B : ℕ) (P : Partition d.expand.D B) (d' : Declaration) (P' : Partition d'.D B),
         Nonempty (Pad d.expand P d' P') ∧ P'.IsCK d' (Γ * W) ⌊α * (Γ * W : ℕ)⌋₊
 
+/-- The parse `i` of the policy's instance carries the policy's own parameters `p`: its program, and `Γ` and
+`α = num / den` as the parameters write them. -/
+def VerifierOwn (p : NciCheck.Protocol.Params) (i : NciCheck.Instance) : Prop :=
+  i.program = p.program ∧ NciCheck.natOf? p.gamma = some i.gamma ∧
+    ∃ a b, p.alpha = .arr #[a, b] ∧ NciCheck.natOf? a = some i.num ∧ NciCheck.natOf? b = some i.den
+
 /-- What the policy's case establishes, decoded as its parameters `p`, the run's record `c` and the evidence `e`: the
-declared circuit decodes to `P`; the record registers `P` by its SHA-512; θ holds what the log's first record registers;
-and the instance the policy checked has an expansion gate by gate, on each of which every declaration `P` lays out with
-the θ it names, and the division its owners are, meet the policy at the verifier's `Γ` and `α`. -/
+registered circuit decodes to `P`; the record registers `P` by its SHA-512; θ holds what the log's first record
+registers; the instance the policy checked has an expansion gate by gate with a parse, a declaration `P` lays out with
+the θ it names and a division its owners are, which meet the policy; and on every such expansion and parse, the parse
+carries the policy's parameters and every such declaration and division meet the policy at its `Γ` and `α`. -/
 def PolicyHeld (p : NciCheck.Protocol.Params) (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) :
     Prop :=
   ∃ P : Prog, Flock.Program.decode p.program.toUTF8 = .ok P ∧
     NciCheck.Baseline.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
-    ProvenanceHeld (instanceOf p e) (trustedOf p c) ∧ (∃ j', Expands (instanceOf p e) j') ∧
+    ProvenanceHeld (instanceOf p e) (trustedOf p c) ∧
+    (∃ (j' : Json) (i : NciCheck.Instance) (d : Declaration) (n : ℕ) (U : Partition d.D n),
+      Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ Divides i.owner U ∧
+        VerifierOwn p i ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den)) ∧
     ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration) (n : ℕ) (U : Partition d.D n),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner U →
-        i.program = p.program ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den)
+        VerifierOwn p i ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den)
 
 /-- The policy's case `k` decodes under the policy's own decoders, and what it decodes to is `PolicyHeld`. -/
 def CaseHeld (k : Case) : Prop :=
@@ -85,11 +102,12 @@ def StageHeld (k : Case) : Prop :=
     SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.base.verifier
 
 /-- **Remote's acceptance gives the inference-only policy on the registered circuit.** On every input remote's check
-accepts, on any blobs: the evidence is the three components' cases in order, the policy's `kI`, PoUW's `kW` and the
-one-stage audit's `kS`; the three commitments decode, each under its own component's decoder, to one digest `r`, the
-run's record's; the policy's case is `CaseHeld`: the record names the declared circuit by its SHA-512, θ holds what
-the log's first record registers, and every declaration the circuit lays out, with the declared division, meets the
-policy; and the one-stage audit's case is `StageHeld`: its record names, by its SHA-512, the program the audit verifies
+accepts, on any blobs: the evidence is the three subprotocols' cases in order, the policy's `kI`, PoUW's `kW` and the
+one-stage audit's `kS`; the three commitments decode, each under its own subprotocol's decoder, to one digest `r`, the
+run's record's; the policy's case is `CaseHeld`: the record names the registered circuit by its SHA-512, θ holds what
+the log's first record registers, the instance checked has a parse, a declaration the registered circuit lays out and a
+division, every parse carries the policy's `program`, `Γ` and `α`, and every declaration the registered circuit lays
+out, with the declared division, meets the policy; and the one-stage audit's case is `StageHeld`: its record names, by its SHA-512, the program the audit verifies
 the sessions against. -/
 def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
@@ -101,10 +119,11 @@ def AcceptInferenceOnly : Prop :=
         CaseHeld kI ∧ StageHeld kS
 
 /-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes. On every input
-remote's check accepts, the evidence is the three components' cases in order, the policy's case decodes to the
-parameters `p`, the run's record `cr` and the evidence `e`, the record names the declared circuit `P` by its SHA-512, and
-every declaration `P` lays out, with the θ the policy checked expanded gate by gate, complies at the verifier's `Γ` and
-`α`. -/
+remote's check accepts, the evidence is the three subprotocols' cases in order, the policy's case decodes to the
+parameters `p`, the run's record `cr` and the evidence `e`, the record names the registered circuit `P` by its SHA-512,
+the instance the policy checked, expanded gate by gate, has a parse carrying the policy's parameters and a declaration
+`P` lays out with its θ, which complies at the policy's `Γ` and `α`, and on every such expansion and parse, the parse
+carries the policy's parameters and every such declaration complies. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof →
@@ -114,8 +133,11 @@ def AcceptComplies : Prop :=
         NciCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
         Flock.Program.decode p.program.toUTF8 = .ok P ∧
         NciCheck.Baseline.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
+        (∃ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
+          Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
+            Nci.Complies i.gamma ((i.num : ℝ) / i.den) d) ∧
         ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
           Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
-            Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+            VerifierOwn p i ∧ Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
 
 end Properties.Remote
