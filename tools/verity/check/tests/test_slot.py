@@ -32,6 +32,24 @@ def any_core(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def roomy_disk(monkeypatch, tmp_path):
+    """The machine's own /workspace never blocks a slot in these tests."""
+    monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
+
+
+def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):
+    """27 Oct: checks that started on cpu-2, -4, -5 and -6 at 97-99% inodes died mid-build with ENOSPC."""
+    slot = SLOT.parse("a 0-1")[0]
+    monkeypatch.setattr(SLOT, "DISK", tmp_path)
+    assert SLOT.blocked(slot, NOW) is None
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 2**62)
+    assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "inodes free" in SLOT.blocked(slot, NOW)
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 0)
+    monkeypatch.setattr(SLOT, "DISK_MIN_GB", 1e18)
+    assert "GB free, under" in SLOT.blocked(slot, NOW)
+
+
+@pytest.fixture(autouse=True)
 def own_ramlock(monkeypatch, tmp_path):
     """A slot with mem= writes its research.mem reservation here, never into the machine's /workspace/ramlock."""
     monkeypatch.setattr(SLOT, "RAMLOCK", tmp_path / "ramlock")
