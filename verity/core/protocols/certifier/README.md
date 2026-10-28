@@ -194,7 +194,7 @@ A spec-level reference for network accounting's timing channel:
   in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
   input port whose rows aren't each read exactly once from the scan's state (`ingress_scan.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
-  load's registration on the host's uplink, ingress, in the session's first sampling block, kind ``load``), so the
+  load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
   interface's ``input_count`` under them and the scan's state's root has no free input;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes

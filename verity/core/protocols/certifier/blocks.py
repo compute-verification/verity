@@ -26,7 +26,7 @@ which the verifier pins at the root of the scan's rows the window reads (`ingres
   ingress. An external output port's rows are the circuit's outputs, the slot entries the scan's Programs row takes.
 
 **The pins** (`certified`, `pins`): each load's registration (`transfer_rows.registration`) read for the load the check
-made of the record (`transfer_rows.check_registration`: the host's uplink, ingress, the session's first sampling block
+made of the record (`transfer_rows.check_registration`: the host's uplink, ingress, the session's first execution phase
 `SESSION_WINDOW`, kind ``load``, the value, the record's program digest and the value's shape, its row format the
 verifier's own: 16-bit leaves in ``hm96-sha512/row/v2`` rows unless ``formats`` names another, as a load's f32 scale is
 one 32-bit leaf a row and its token embeddings ``hm96-sha512/row-seg/v1`` rows) under the host's network certifier's key
@@ -47,7 +47,7 @@ from verity.core.protocols.certifier.ingress_scan import SCAN_STATE
 
 #: the record's ``blocks`` keys that would make placement public; a record states none of them
 PRIVATE = ("server", "server_time", "transfers")
-#: the registration's ``window`` of a load: a load crosses once a session, in the session's first sampling block
+#: the registration's ``window`` of a load: a load crosses once a session, in the session's first execution phase
 SESSION_WINDOW = 0
 _READ = ("reader", "port", "param", "at", "radix", "base", "step")
 
