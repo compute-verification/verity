@@ -77,7 +77,7 @@ using wgp::BK;
 
 enum Form { N128 = 0, ALT = 1, CHAIN = 2 };
 enum Flag { BAR = 1, LOAD = 2, EPI = 4, NOSW = 8, KG2 = 16, MC2 = 32, MC4 = 64 };
-constexpr int cluster_of(int fl) { return fl & MC4 ? 4 : fl & MC2 ? 2 : 1; }
+__host__ __device__ constexpr int cluster_of(int fl) { return fl & MC4 ? 4 : fl & MC2 ? 2 : 1; }
 constexpr int STAGES = 4;
 constexpr double BAR_RATE = 0.018029;   // compressions a SM-clock: 4.355e9 / (132 x 1830e6)
 constexpr double PEAK_MHZ = 1830;       // the clock of int8 wgmma's peak, 989.4 T MACs a second
@@ -195,7 +195,7 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     const int w = warp - 4 * NM;   // 0: the producer warp; 1 ..: hash warps
     if (w == 0) {
       if (lane == 0 && bar && groups > 0) {
-        if (FL & LOAD) { wgp::tma_prefetch(&p.a); wgp::tma_prefetch(&p.b); }
+        if (FL & LOAD) { wgp::tma_prefetch(&p.a); wgp::tma_prefetch(CL == 1 ? &p.b : &p.bp); }
         int s = 0;
         uint32_t ph = 0;
         for (int g = 0; g < groups; g++) {
