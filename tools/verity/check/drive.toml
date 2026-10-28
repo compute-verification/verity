@@ -19,6 +19,10 @@ landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed, and the full check after landing, which reverts what it fails; the only landing there is
 land = "review"
+# the branch the review landing fast-forwards and `next` is built on. `main` holds only tested commits (Daniel, 27 Oct, CI-239):
+# drive fast-forwards `main` only to a commit of `checked` whose after-landing run passed every step, and reverts a culprit on
+# `checked`, never on `main`. "main" lands on `main` and checks after (the 24 Oct rule). Only drive's App pushes `checked`
+land_into = "checked"
 # the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
 # alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,
 # ten SHA-512 Definitions at 141-167 GB one at a time) outlasted every after-landing run from 24 Oct. The nightly `audit-main`
