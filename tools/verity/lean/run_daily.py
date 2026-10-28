@@ -53,7 +53,7 @@ def as_research() -> list[str]:
 
 
 @dataclass
-class Node:
+class DailyPaths:
     """Where everything is on node 1; the tests point it at a temporary directory."""
     bare: Path = Path("/workspace/research/git/verity.git")
     tree: Path = Path("/build/verity")
@@ -135,7 +135,7 @@ def readable_copy(src: Path, dst: Path) -> None:
     os.replace(tmp, dst)
 
 
-def prepare(n: Node, sha: str, pkgs: list[str], log) -> dict[str, Path]:
+def prepare(n: DailyPaths, sha: str, pkgs: list[str], log) -> dict[str, Path]:
     """Each package's dependencies, fetched as research in PREP at ``sha`` and copied to DEPS/<deps_key>: {package: copy}.
     Copies of keys this run doesn't use are deleted."""
     if not (n.prep / ".git").exists():
@@ -168,7 +168,7 @@ def prepare(n: Node, sha: str, pkgs: list[str], log) -> dict[str, Path]:
     return deps
 
 
-def daily(n: Node, log=print) -> int:
+def daily(n: DailyPaths, log=print) -> int:
     with open(n.lock, "w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -178,7 +178,7 @@ def daily(n: Node, log=print) -> int:
         return _daily(n, log)
 
 
-def _daily(n: Node, log) -> int:
+def _daily(n: DailyPaths, log) -> int:
     try:
         sha = _out([*n.research, "git", f"--git-dir={n.bare}", "rev-parse", "--verify", f"{MAIN}^{{commit}}"])
     except subprocess.CalledProcessError:
@@ -233,4 +233,4 @@ def _daily(n: Node, log) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(daily(Node(), lambda m: print(m, flush=True)))
+    sys.exit(daily(DailyPaths(), lambda m: print(m, flush=True)))

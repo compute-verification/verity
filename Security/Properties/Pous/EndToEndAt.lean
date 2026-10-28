@@ -82,7 +82,7 @@ def RunCheckAcceptsAt : Prop :=
   ∀ (pt : Run.Point) (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
     (sid : ByteArray),
     Run.checkAt SCHEMES pt trusted pub digests r sid = .ok () →
-    ∀ (dev : Device) (C : Array (Array ByteArray)),
+    ∀ (dev : Challengers) (C : Array (Array ByteArray)),
       AuditsSetupAt pt pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
         (ShapedAt pt.params C → Merkle.root (leaves pub.salt C) = some pub.root →
           (∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
@@ -100,7 +100,7 @@ from `RunCheckAcceptsAt` and the setup check's `AcceptsDecodes` and `PublishesRo
 set, all proved. -/
 def RunCertifiesAt : Prop :=
   ∀ (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Challengers),
     AcceptedAt pt trusted c C pub digests r sid →
       DecodesToCommitment pt.params c C ∧ Published pt.params c C pub ∧ AuditsSetupAt pt pub r.commitment ∧
         r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧

@@ -112,13 +112,13 @@ def AnsweredOnTime (r : Run) (C : Array (Array ByteArray)) : Prop :=
 
 /-- The strings the run hashes, beyond `runStrings`: each answer the device received under the key, and each block of
 `C*`, as `blockDigest` hashes them. -/
-def blockStrings (pk : ByteArray) (dev : Device) (C : Array (Array ByteArray)) : List ByteArray :=
+def blockStrings (pk : ByteArray) (dev : Challengers) (C : Array (Array ByteArray)) : List ByteArray :=
   (dev.sessions pk).flatMap (fun r => r.observed.map fun o => blockInput o.block) ++ (flat C).toList.map blockInput
 
 /-- The run's own data holds a break: two distinct strings it hashes with one SHA-512 digest (`cr/sha-512`), or a
 signature verifying under a trusted key over a session message the device never signed (`euf-cma/lms-sha512-n64`,
 under the one-role reading of `MemoryChallenger.Properties`). Every witness is bounded by the run. -/
-def RunBreak (trusted : List ByteArray) (s : SignedSession) (dev : Device) (C : Array (Array ByteArray)) : Prop :=
+def RunBreak (trusted : List ByteArray) (s : SignedSession) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
   (let xs := runStrings s dev ++ blockStrings s.publicKey dev C
    ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
     ∃ p m, SCHEMES.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ sessionMessage s = some m ∧
@@ -182,7 +182,7 @@ collision. -/
 def RunCheckAccepts : Prop :=
   ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray),
     Run.check trusted pub digests r sid = .ok () →
-    ∀ (dev : Device) (C : Array (Array ByteArray)),
+    ∀ (dev : Challengers) (C : Array (Array ByteArray)),
       AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
         (Shaped C → Merkle.root (leaves pub.salt C) = some pub.root →
           (∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
@@ -207,7 +207,7 @@ data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dis
 check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Challengers),
     Accepted trusted c C pub digests r sid →
       DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧
         r.signed.publicKey ∈ trusted ∧
