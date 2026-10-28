@@ -443,9 +443,10 @@ requests' is unheld. Each output's entry in its bucket's port is e = σ·P + row
 bucket's steps, sorted and padded to S. The unit reads the map as 8 bytes a slot, q and e as u32be: e = 2^32 − 1 for
 a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's `PAD`, B zero bytes).
 - **The advice is private**: it is never published; it enters the circuit builder and is proved in zero
-  knowledge. v4 computes the map in the clear from the opened advice v0, and takes the map and the steps as public inputs. That is the **named gap**, the one the compile
-  unit carries (the advice's hiding root in the registration, "the advice is opened to the verifier until the
-  compile unit exists"). Nothing may call the tie zero-knowledge until it is closed.
+  knowledge. v4 computes the map in the clear from the opened advice v0, and takes the map and the steps as public
+  inputs. That is the **named gap**, the one the compile unit carries (the advice's hiding root in the registration,
+  "the advice is opened to the verifier until the compile unit exists"). Nothing may call the tie zero-knowledge until
+  it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
   the advice before the draw, as rows of `verity.ml.commitments.advice` (fixed-width bit rows under
   `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Registration`), here 4 KiB rows: a window's 8N
@@ -541,7 +542,8 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
 upstream (`serve`, which drives `warden.Warden._ingress`) and the Boolean Definitions, with its sidecar). It is one
 unit a bucket row of the network certifier's ingress at selection `All`, with one output bit. It holds the prompt
 lengths the advice states to the certified bytes: the phase-6 attack swapped two prompt lengths keeping their total,
-which no count of the link's frames refuses, and so released an output before its request was in. B is the cell size (4,096 served), L the network certifier's lanes and R its r, so a row is the bucket's L·R slots.
+which no count of the link's frames refuses, and so released an output before its request was in. B is the cell size
+(4,096 served), L the network certifier's lanes and R its r, so a row is the bucket's L·R slots.
 The row is the registered port (`warden_rows.bucket_port`: unit t reads row t), as the egress unit's is, so the
 proof system's registered read holds it to the network certifier's ingress root and no gate hashes it. A row's lanes are its
 live connections by ordinal, R slots each (`warden.Warden._ingress`), and an unheld lane is B zero bytes a slot. The
@@ -1011,7 +1013,8 @@ real EOS. The registered thing is a precommitted ahead-of-time compiler. After s
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
 certifier certifies the I/O. Sampled proofs check two things: that the committed values pass the compiled circuits (the
 step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
-the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the accepted-runs bound.
+the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
+accepted-runs bound.
 
 This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
 `decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler

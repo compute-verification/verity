@@ -29,9 +29,9 @@
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
   the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
-  reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
-  the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
-  ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
+  reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
+  run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone
+  (`SCAN_ONLY`, its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each

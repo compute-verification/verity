@@ -31,10 +31,10 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean firewall
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
-  record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`),
-  `transfer_zk.py` (a server-time block's proof blocks read against the certifier's transfer rows) and
-  `compile_slice_zk.py` (the compile slice). `leak_scan.py` is the scan of what the verifier received that every one of
-  them runs.
+  record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
+  scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`), `transfer_zk.py` (a server-time block's
+  proof blocks read against the certifier's transfer rows) and `compile_slice_zk.py` (the compile slice).
+  `leak_scan.py` is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit windows as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
@@ -147,8 +147,8 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sampled draw on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
---warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own rows
-is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
+--warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
+rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
 client's `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own
 `client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
 fails or doesn't run says why.

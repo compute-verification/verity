@@ -46,12 +46,12 @@ window under its signed record, so a reader holds the declared syncs to the cert
   block's opening has too, or two signed syncs for one window. Whoever delivers the openings, the prover included,
   can't change what they open to. The chain record's certificates stage (`benchmarks/network_traces/chain_record.py`,
   `certs`) reads a run's `clocks.jsonl` through it and holds the signed syncs to the plan's declared ones.
-- **No N2 unit reads it yet.** It is opened on the host, as the in-the-clear check opens a record over
-  `CertifiedRecord.verify`. A unit whose floor reads a window's sync would take the window's clock opening as witness,
-  check it against the certificate's signed digest (the clock digest and its salted digest, two SHA-512s of a few
-  blocks, as the head check computes a head's signed digest), and compute the floor from the opened syncs inside the
-  unit, so the floor leaves the public row and the verifier reads no sync. That is a circuit change, with its
-  `circuit-check` report, not a Lean one: the network certifier's Lean issuer already signs the salted form
+- **Named gap: the clock's opening.** No N2 unit reads it yet: it is opened on the host, as the in-the-clear check
+  opens a record over `CertifiedRecord.verify`. A unit whose floor reads a window's sync would take the window's clock
+  opening as witness, check it against the certificate's signed digest (the clock digest and its salted digest, two
+  SHA-512s of a few blocks, as the head check computes a head's signed digest), and compute the floor from the opened
+  syncs inside the unit, so the floor leaves the public row and the verifier reads no sync. That is a circuit change,
+  with its `circuit-check` report, not a Lean one: the network certifier's Lean issuer already signs the salted form
   (`CertifierDevice.Issuer.clock`).
 - **What it rests on** is what the record certificate rests on: LMS's unforgeability (`euf-cma/lms-sha512-n64`), and a
   certifier that is the auditor's device, on a host the prover doesn't control. A certifier run on the prover's own
