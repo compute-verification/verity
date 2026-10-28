@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.inference_blocks: B's partition of a window circuit into inference blocks, one a slot, as a
-private table under a hiding root with its budgets and padded counts public. Held, on the H200's int8 window circuit at
-`test_window_circuit`'s TINY class, windows and grain, to the circuit unrolled unit by unit; with
-``VERITY_VLLM_FA3_LLAMA_1B=1``, int8 Llama-3.2-1B on the H200 at 4,32,4 too.
+private table under a hiding root with its budgets and padded counts public. Held, on `test_window_circuit`'s TINY window
+circuit (its class, windows and grain), to the circuit unrolled unit by unit; with ``VERITY_VLLM_FA3_LLAMA_1B=1``, on int8
+Llama-3.2-1B's window circuit on the H200 at 4,32,4 too.
 """
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ import os
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, _labels, held
+from tests.program.predict.test_window_circuit import WINDOW, _circuit, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_builder import WEIGHTS
-from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit, window_circuit
+from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
 
 from verity.ml.circuits import partition_v2 as PV2
 from verity.ml.commitments import advice as AC
@@ -37,8 +37,7 @@ def _registered(config: dict = S.TINY):
 
 @pytest.fixture(scope="module")
 def window():
-    reg = _registered()
-    return window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN), PROGRAM
+    return _circuit(WINDOW), PROGRAM
 
 
 def _slots(circuit, rs) -> dict[str, np.ndarray]:
