@@ -4115,7 +4115,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         q.add_argument("--app-id", default=None, metavar="ID", help="the app (default: the registry's slack_app_id)")
         q.add_argument("--manifest", default=None, metavar="PATH", help=f"the repo's manifest (default: the checkout's {MANIFEST_REL})")
 
-    ns = ap.parse_args(argv)
+    ns, extra = ap.parse_known_args(argv)
+    if extra and ns.cmd == "linear" and not any(x.startswith("-") for x in extra):
+        ns.value += extra                       # argparse ends `value` at the first option: `comment ID --as H TEXT`
+    elif extra:
+        ap.error(f"unrecognized arguments: {' '.join(extra)}")
     try:
         path = registry_path(ns.registry)
         reg = load_registry(path, people=ns.cmd not in ("groups", "chat"))     # these two never write people.d's into it

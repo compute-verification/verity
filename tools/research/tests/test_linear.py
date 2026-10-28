@@ -292,6 +292,11 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert rc == 0 and out.strip() == "INF-1 commented"
     (_, v, _), = lin.sent("commentCreate")
     assert v["i"] == {"issueId": "I1", "body": "@infra: picked up"}
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "--as", "infra", "options", "first")
+    assert rc == 0 and lin.sent("commentCreate")[-1][1]["i"]["body"] == "@infra: options first"
+    with pytest.raises(SystemExit):
+        run(capsys, "linear", "comment", "INF-1", "--as", "infra", "x", "--bogus", "y")
+    assert "unrecognized arguments: x --bogus y" in capsys.readouterr().err
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
     assert rc != 0 and "--as HANDLE" in err
     rc, out, _ = run(capsys, "linear", "list", "infra")
