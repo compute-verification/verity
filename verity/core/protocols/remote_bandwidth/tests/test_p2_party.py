@@ -6,6 +6,7 @@ every unit when the plan is fewer rejected, and a request for another node refus
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import socket
 import threading
@@ -13,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
@@ -22,6 +22,31 @@ FIXTURES = Path(__file__).parent / "fixtures"
 SOURCE = b"the verifier's secret"
 NODE = b"p2-node-under-test"
 STEP_NS = 400
+
+
+class Clock:
+    """The verifier's clock, which the prover's steps and the verifier's waits advance."""
+
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+    def sleep_until(self, _clock, t: int) -> None:
+        self.now = max(self.now, t)
+
+
+class Entropy:
+    def __init__(self, label: bytes) -> None:
+        self.label, self.count = label, 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
+            self.count += 1
+        return out[:n]
 
 
 @pytest.fixture(scope="module")

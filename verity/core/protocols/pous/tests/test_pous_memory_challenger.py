@@ -64,7 +64,7 @@ def test_coin_tree_commits_before_and_opens_after():
     want = mc.derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
     c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
+                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
     assert c.commitment.coin_root == tree.root and len(tree.root) == 64
     with pytest.raises(RuntimeError, match="opened after the session"):
         c.openings()
