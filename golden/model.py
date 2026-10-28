@@ -775,15 +775,26 @@ def _h1_main_ms_8k(h1_host: str) -> float:
     return s - rest - I("h1_coin_ms")
 
 
-#: GD-DENOISE (note:compute-research/20261028T1930Z-report-gd-denoise, run r20261028-190744-7676, one H200,
-#: cuBLASLt int8): Dither v3.2's served-call terms as multiples of the plain GEMM, model sums at m 64 / 512 / 8,192.
-#: coins at L' 32 / 128 / 512 (d_A bits and V), X, O's recompute on a', b' less the plain GEMM, fresh noise with O
-#: recomputed (without T_s), and ts_out: a T_s chunk's int32 output share at K 2,048 (the S 2 shapes' chunk arm less
-#: its L / K mainloop; derived)
+#: GD-DENOISE final (note:compute-research/20261028T2020Z-report-gd-denoise, run r20261028-194021-247f, one H200,
+#: cuBLASLt int8, Dither v3.2 at L 1,024), per linear at m 64 / 512 / 8,192: the plain GEMM's us (one layer), the
+#: served call measured whole as a multiple of it at L' 32 / 128 / 512 (d_A's bits, V, X, the noised GEMM over
+#: k < (S - 1) L with int32 T_s left in DRAM, a', O's plain GEMM), and its X and T_s-GEMM arms measured alone
 DENOISE_M = (64, 512, 8192)
-DENOISE = {"coins32": (1.483, 0.759, 0.155), "coins128": (1.479, 0.749, 0.205), "coins512": (1.499, 0.782, 0.470),
-           "x": (0.161, 0.100, 0.075), "rec": (0.333, 0.258, 0.202), "fresh": (3.21, 3.33, 4.0),
-           "ts_out": (0.24, 0.42, 0.49)}
+DENOISE_LIN = {
+    "qkv": {"plain_us": (7.4, 11.1, 85.6), "served": ((3.08, 3.08, 3.10), (2.77, 2.81, 2.86), (1.37, 1.45, 1.93)),
+            "x": (0.324, 0.221, 0.126), "ts": (0.665, 0.791, 0.616), "rec": (0.349, 0.363, 0.223)},
+    "o": {"plain_us": (7.2, 9.6, 56.3), "served": ((3.32, 3.35, 3.36), (2.89, 2.93, 3.00), (1.74, 1.89, 2.67)),
+          "x": (0.330, 0.261, 0.196), "ts": (0.673, 0.695, 0.669), "rec": (0.388, 0.417, 0.425)},
+    "gate_up": {"plain_us": (11.0, 33.1, 445.0), "served": ((3.07, 3.08, 3.11), (1.58, 1.59, 1.64), (0.84, 0.89, 0.97)),
+                "x": (0.208, 0.076, 0.025), "ts": (0.600, 0.716, 0.572), "rec": (0.255, 0.136, -0.016)},
+    "down": {"plain_us": (10.1, 20.9, 193.9), "served": ((6.00, 6.01, 5.96), (4.30, 4.35, 4.36), (2.59, 2.69, 2.92)),
+             "x": (0.243, 0.195, 0.209), "ts": (3.897, 2.467, 1.879), "rec": (0.359, 0.269, 0.232)},
+}
+#: fresh noise (aperiodic along K) with O recomputed, without T_s, the four linears' sum, the same run
+DENOISE_FRESH = (3.22, 3.31, 3.57)
+#: the model's served int8 GEMM at T 8,192 (b57f's kernel and clock) over GD-DENOISE's plain at m 8,192 (cuBLASLt,
+#: power-capped at 1,710-1,950 MHz): the plain us above are scaled by it to the served stack's (an estimate)
+DENOISE_CLK = 10.3617 / (16 * 780.8e-3)
 
 
 def _dither_calls(d: dict, tok: float):
@@ -851,25 +862,41 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
             parts[f"JR2: the noised product and U's noise (GD-NOISE, U a {w['u_draw']})"] = dg * G_ms * k_share
             info["jr2_noise_g"] = dg
         return parts, info
-    # dither: GD-DENOISE's served call over the credited calls' plain GEMM (an L >= K call commits O alone, un-noised)
+    # dither: GD-DENOISE's served call, per credited linear, over its plain GEMM (an L >= K call commits O alone,
+    # un-noised). The plain GEMM is the larger of the compute model's and GD-DENOISE's measured one scaled to the
+    # served stack (at small m it is launch- and weight-read-bound). The call is measured at L 1,024; another L keeps
+    # each T_s chunk's measured cost beyond its L / K mainloop, over S - 1 chunks.
     L, Lp = w["L"], l_prime(w)
-    G_c = {name: G_ms * LAYERS * K * N / WEIGHT_BYTES for name, K, N in dither_linears(d) if L < K}
+    G_c = {name: max(G_ms * LAYERS * K * N / WEIGHT_BYTES,
+                     _log_interp(tok, DENOISE_M, list(DENOISE_LIN[name]["plain_us"])) * LAYERS / 1e3 * DENOISE_CLK)
+           for name, K, N in dither_linears(d) if L < K}
     G_cred = sum(G_c.values())
-    dn = {k: _log_interp(tok, DENOISE_M, list(v)) for k, v in DENOISE.items()}
-    if w["noise"] == "fresh":
-        parts["dither: fresh coins, noised A and O recomputed"] = dn["fresh"] * G_cred
-        dg = dn["fresh"]
-    else:
-        coins = _log_interp(Lp, (32, 128, 512), [dn["coins32"], dn["coins128"], dn["coins512"]])
-        parts["dither: coins (d_A bits and V)"] = coins * G_cred
-        parts["dither: noised A (X)"] = dn["x"] * G_cred * (I("noise_fused_keep") if w["noise_fused"] else 1)
-        dg = w["denoise_g_frac"] if w["denoise_g_frac"] is not None else dn["rec"]
-        parts["dither: O recomputed on a', b' (less the plain GEMM)"] = dg * G_cred
-    # the noised GEMM over k < (S - 1) L, a chunk a segment, each writing its T_s words (int32 output share scaled
-    # to the word: an estimate below GD-DENOISE's int32 read-back arm)
-    parts["dither: noised GEMM over (S-1) L, T_s out"] = sum(
-        g * (math.ceil(K / L) - 1) * (L / K + dn["ts_out"] * (2048 / K) ** 0.5 * w["word_bits"] / 32 / w["agg"])
-        for (name, K, _), g in ((x, G_c[x[0]]) for x in dither_linears(d) if x[0] in G_c))
+    at = {name: {k: _log_interp(tok, DENOISE_M, list(v)) for k, v in DENOISE_LIN[name].items() if k != "served"}
+          for name in G_c}
+    fresh = _log_interp(tok, DENOISE_M, list(DENOISE_FRESH))
+    rest, ts_parts, dgs = 0.0, 0.0, []
+    for name, K, _ in dither_linears(d):
+        if name not in G_c:
+            continue
+        a, g = at[name], G_c[name]
+        s1, s = math.ceil(K / 1024), math.ceil(K / L)
+        ts = (s - 1) * (a["ts"] / (s1 - 1) - 1024 / K + L / K)
+        if w["noise"] == "fresh":
+            rest += fresh * g
+            dgs.append(fresh)
+        else:
+            served = _log_interp(tok, DENOISE_M, [_log_interp(Lp, (32, 128, 512), list(row))
+                                                  for row in DENOISE_LIN[name]["served"]])
+            call = served - a["ts"] - (a["x"] * (1 - I("noise_fused_keep")) if w["noise_fused"] else 0.0)
+            if w["denoise_g_frac"] is not None:
+                call += w["denoise_g_frac"] - a["rec"]
+            rest += call * g
+            dgs.append(w["denoise_g_frac"] if w["denoise_g_frac"] is not None else a["rec"])
+        ts_parts += ts * g
+    dg = sum(dgs) / len(dgs) if dgs else 0.0
+    parts["dither: served call less its T_s GEMM (coins, X, a' and O's GEMM, sequencing; GD-DENOISE)"] = rest
+    parts["dither: noised GEMM over (S-1) L, int32 T_s out (GD-DENOISE)"] = ts_parts
+    info["dither_G_ms"] = G_cred
     calls = list(_dither_calls(d, tok))
     cells = sum(c for c, _ in calls)
     words = sum(c * ((s - 1) * w["word_bits"] / 8 / w["agg"] + 4) for c, s in calls)

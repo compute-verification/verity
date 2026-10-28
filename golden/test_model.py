@@ -263,10 +263,21 @@ def test_guessable_words_cost_draws_and_small_groups_are_refused():
     assert all("(8x16," in u["name"] for u in blocks)
 
 
-def test_dither_serve_parts_are_gd_denoise_arms():
-    """At m 8,192 and L' 128: coins 0.205, X 0.075 and O's recompute 0.202 of the credited calls' plain GEMM."""
-    r = model.J(model.design(pouw={"L_prime": 128, "L": 1024}))
-    o = r["serve_overhead_ms"]
-    coins, x = o["dither: coins (d_A bits and V)"], o["dither: noised A (X)"]
-    assert x / coins == pytest.approx(0.075 / 0.205)
-    assert o["dither: O recomputed on a', b' (less the plain GEMM)"] / coins == pytest.approx(0.202 / 0.205)
+@pytest.mark.parametrize("m,whole,rel", [(64, 3.96, 0.01), (512, 2.71, 0.01), (8192, 1.47, 0.05)])
+def test_dither_served_call_is_gd_denoise_whole_call(m, whole, rel):
+    """GD-DENOISE final (r20261028-194021-247f): the four linears' served call at L 1,024, L' 128, over their plain GEMM,
+    which at small m is the measured one (launch- and weight-read-bound), not the compute model's."""
+    d = model.design(pouw={"L_prime": 128, "L": 1024, "credit": "all4"},
+                     point={"T": max(m, 512), "real_tokens": m, "seqs": 1})
+    parts, info = model.pouw_parts(d, model.stock_parts(d))
+    call = sum(v for k, v in parts.items() if k.startswith("dither:") and "roots" not in k)
+    assert call / info["dither_G_ms"] == pytest.approx(whole, rel=rel)
+    compute = model.INT8_MACS_PER_TOKEN * m / (model.theta(model.I("gemm_mhz")) * model.I("gemm_eff_per_clock"))
+    assert info["dither_G_ms"] >= compute * (1 - 1e-9)
+
+
+def test_dither_t_s_gemm_grows_with_segments():
+    o = {L: model.pouw_parts(d := model.design(pouw={"L": L, "credit": "all4"}), model.stock_parts(d))[0]
+         for L in (512, 1024, 2048)}
+    key = "dither: noised GEMM over (S-1) L, int32 T_s out (GD-DENOISE)"
+    assert o[512][key] > o[1024][key] > o[2048][key] > 0
