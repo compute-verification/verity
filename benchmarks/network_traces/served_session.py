@@ -10,6 +10,7 @@ requests. The network chain's run of record (`chain_record.sh`'s warden path) th
     python served_session.py plan [FLAGS]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
         [--at UTC]
+    python served_session.py records --from SERVE_DIR --out DIR [--port 18782]
     python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
@@ -42,6 +43,10 @@ request's max_tokens, at most KO.
   counts, the link-windows, the origin and the session's span. Before it exits, every file of ``--out`` and member of
   ``bundle.tgz`` is read for a prompt's ids, and one that holds them is removed (exit 4). Exit 0 when the gate's check
   accepted the run, its rc (or 1) when it didn't, 2 when the gate refused the request.
+* **records** writes the endpoint's records art: `RECORDS` from serve-openai's serve dir (``--from``, its ``--out``) on
+  the served node into ``--out``. It copies nothing unless serve.json shows the endpoint served with `ENDPOINT`'s flags
+  and no record holds a request's prompt ids (requests.jsonl's, read where they already are) or a ``prompt_ids`` or
+  ``streamed_ids`` field.
 * **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's records (``--endpoint``; a dry rehearsal's KEEP/RUN/endpoint by default) and the model's EOS ids
   (``--eos-ids``: 128001 for the served model, the stand-in's ``--vocab`` for a dry rehearsal's), N2's period drawn
@@ -65,10 +70,10 @@ deployment's challenger-key/v1 record (labelled ``challenger-key current``), sen
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
 **The endpoint.** It is started by hand on vy-dc-h200-2 (`HAND_START`) ahead of the session's ``--at``, and it
-listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl, serve.json and
-`USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, in requests.jsonl's order).
-requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither fetches
-nor publishes it. The endpoint step's advice (`verity-vllm advice`) needs it, the Commit record, so ``chain`` rebuilds
+listens within about 35 s. Its records art (``--endpoint ART``, ``records``'s ``$OUT``) is advice_trace.jsonl,
+windows.jsonl, serve.json and `USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line,
+in requests.jsonl's order). requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this
+runbook neither fetches nor publishes it. The endpoint step's advice (`verity-vllm advice`) needs it, the Commit record, so ``chain`` rebuilds
 it (`endpoint_records`) from `USERS` and the kept warden run's certified I/O (`warden_chain.io`), each request's prompt
 and streamed ids as the warden's cells carry them and its finish (`finish`), in KEEP/RUN/endpoint-rebuilt (0700, outside
 the run dir). chain_record.sh's copy of it is in its scratch, removed on exit, and its leak guard reads the record
@@ -78,7 +83,9 @@ of it. An endpoint that holds requests.jsonl (a dry rehearsal's stand-in's) is r
 The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
-      -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
+      -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at UTC'
+    research run --on vy-dc-h200-2 --source . --project verity --as network-accounting --cwd source --timeout 10m \\
+      -- python3 benchmarks/network_traces/served_session.py records --from SERVE_DIR --out "$OUT"
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
       --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
       tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
@@ -146,14 +153,18 @@ CONTEXT = 512
 #: the endpoint's record in its records artifact: each engine request's engine_id and its warden user (null for a body
 #: that sent none), a line in requests.jsonl's order: requests.jsonl less its values
 USERS = "request_users.jsonl"
+#: the endpoint's records its art publishes, in the serve dir beside requests.jsonl, which stays there
+RECORDS = ("advice_trace.jsonl", "windows.jsonl", "serve.json", USERS)
 HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
               "h200-2 under its 300 GB disk floor "
-              "and sends its own smoke and load requests into the records. Its --copy-records-to copies requests.jsonl "
-              "too, so it points at a private dir on h200-2, and the records art is the four public records copied from "
-              "there: request_users.jsonl, advice_trace.jsonl, windows.jsonl and serve.json")
+              "and sends its own smoke and load requests into the records. VERITY_STAGING_BOUNDED stays unset: bounded "
+              "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
+              "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl too, so it is left off or "
+              "points at a private dir on h200-2, and the records art is `records`'s $OUT from the serve dir: "
+              "request_users.jsonl, advice_trace.jsonl, windows.jsonl and serve.json")
 
 
 class Refused(Exception):
@@ -216,6 +227,9 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
             "runs": {
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
+                "records": f"research run --on {a.peer} --source . --project verity --as network-accounting "
+                           "--cwd source --timeout 10m -- python3 benchmarks/network_traces/served_session.py records "
+                           f"--from SERVE_DIR --out \"$OUT\" --port {a.port}",
                 "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                          "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
@@ -260,8 +274,8 @@ def outcome(bundle: bytes) -> dict:
 
 
 def needles(ps: list[list[int]]) -> list[bytes]:
-    """Each prompt's first 16 ids as the prompts' JSON writes them."""
-    return [json.dumps(p[:16], separators=(",", ":"))[1:-1].encode() for p in ps]
+    """Each prompt's first 16 ids as JSON writes them, compact (the prompts') or with json.dumps's default separators."""
+    return [sep.join(map(str, p[:16])).encode() for p in ps if p for sep in (",", ", ")]
 
 
 def leaked(out: Path, needles: list[bytes]) -> list[str]:
@@ -477,6 +491,43 @@ def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
     return str(dest)
 
 
+def served_as(serve: dict, port: int) -> list[str]:
+    """Each of `ENDPOINT`'s flags that serve.json shows the endpoint didn't serve with, beside what it recorded."""
+    words, off = shlex.split(ENDPOINT.format(port=port))[2:], []
+    host, at = (serve.get("address") or [None, None])[:2]
+    for i, w in enumerate(words):
+        if not w.startswith("--"):
+            continue
+        v = words[i + 1] if i + 1 < len(words) and not words[i + 1].startswith("--") else None
+        flag = w[2:]
+        have = {"host": host, "port": at, "seal": serve.get("sealed")}.get(flag, serve.get(flag.replace("-", "_")))
+        if (have is None) if v is None else str(have) != v:
+            off.append(f"{w}{' ' + v if v else ''} (serve.json: {have!r})")
+    return off
+
+
+def records(a: argparse.Namespace) -> int:
+    src, out = a.src.resolve(), a.out.resolve()
+    if not (src / "requests.jsonl").is_file():
+        raise Refused(f"--from {src}: no requests.jsonl, whose prompt ids the records are checked against: give the "
+                      "endpoint's serve dir, its --out")
+    if missing := [f for f in RECORDS if not (src / f).is_file()]:
+        raise Refused(f"--from {src}: no {', '.join(missing)}")
+    if off := served_as(json.loads((src / "serve.json").read_text()), a.port):
+        raise Refused(f"the endpoint didn't serve with the session's flags: {'; '.join(off)}. Start it again with the "
+                      "plan's endpoint and hand_start")
+    ps = [json.loads(x).get("prompt_ids") or [] for x in (src / "requests.jsonl").read_text().splitlines() if x.strip()]
+    marks = [*needles(ps), b'"prompt_ids"', b'"streamed_ids"']
+    if held := [f for f in RECORDS if any(m in (src / f).read_bytes() for m in marks)]:
+        raise Refused(f"{', '.join(held)}: a request's prompt ids or a prompt_ids or streamed_ids field, which the "
+                      "records art never publishes: nothing copied")
+    out.mkdir(parents=True, exist_ok=True)
+    for f in RECORDS:
+        shutil.copyfile(src / f, out / f)
+    print(json.dumps({"records": list(RECORDS), "requests": len(ps), "from": str(src)}), flush=True)
+    return 0
+
+
 def chain(a: argparse.Namespace) -> int:
     if not (HERE / "leak_guard.py").is_file():
         raise Refused("this tree has no record leak guard (leak_guard.py), which chain_record.sh runs on its "
@@ -530,6 +581,10 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--gate", default=GATE, help="USER@HOST, the gate's; or local, the dry rehearsal")
     q.add_argument("--key", type=Path, default=KEY)
     q.add_argument("--keep", type=Path, default=KEEP)
+    q = sub.add_parser("records")
+    q.add_argument("--from", dest="src", type=Path, required=True, help="the endpoint's serve dir, serve-openai's --out")
+    q.add_argument("--out", type=Path, required=True)
+    q.add_argument("--port", type=int, default=PORT)
     q = sub.add_parser("chain")
     q.add_argument("--run", required=True)
     q.add_argument("--keep", type=Path, default=KEEP)
@@ -551,6 +606,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if a.cmd == "chain":
             return chain(a)
+        if a.cmd == "records":
+            return records(a)
         if a.minutes is None:
             a.minutes = A.warden_minutes(a.requests, a.height) + MARGIN
         if a.cmd == "session" and a.gate == "local" and a.vocab > 256:

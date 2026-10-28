@@ -3,7 +3,9 @@ out), which this tree's gate accepts, with the endpoint's sealed flags and its h
 the class refuses is refused with its reason; a session through a stub gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
-nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
+nothing when late; records copies the endpoint's public records only from an endpoint that served the session's flags
+and only when none holds a request's prompt ids or a values field; chain runs chain_record.sh's warden path on the kept
+fetch, and is refused without the leak guard;
 on the endpoint's records artifact it reads requests.jsonl rebuilt in KEEP from the artifact's users map and the
 certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its draw on the gate's coins
 names the auditor's node as the coin link's peer, and the served node is refused."""
@@ -13,6 +15,7 @@ import io
 import json
 import os
 import shlex
+import shutil
 import sys
 import tarfile
 from datetime import datetime, UTC
@@ -76,7 +79,11 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
         "chain", "ART", "128001", 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
     assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
-                                                 "--disk-floor-gb 40"))
+                                                 "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
+    rec = shlex.split(doc["runs"]["records"])
+    inner = SS.parser().parse_args(rec[rec.index("--") + 3:])
+    assert (rec[rec.index("--on") + 1], inner.cmd, inner.out, inner.port) == ("vy-dc-h200-2", "records", Path("$OUT"),
+                                                                              18782)
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
     long.minutes = a.minutes
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
@@ -157,6 +164,48 @@ def test_public_is_the_bundle_less_witness():
             info.size = 1
             tar.addfile(info, io.BytesIO(b"x"))
     assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/cells.jsonl"]
+
+
+def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
+    d.mkdir()
+    (d / "serve.json").write_text(json.dumps({"address": ["127.0.0.1", SS.PORT], "protocol": "ids", "id_payload": 503,
+                                              "admit": "release-order", "scheme": "rows-sha512", "sealed": "windows/w<k>/",
+                                              "retain_exclude": "hidden_m1"}))
+    (d / "requests.jsonl").write_text("".join(json.dumps({"engine_id": f"e{j}", "user": f"user-{j}", "prompt_ids": p,
+                                                          "streamed_ids": [1, 2]}) + "\n" for j, p in enumerate(ps)))
+    (d / SS.USERS).write_text("".join(json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n"
+                                      for j in range(len(ps))))
+    (d / "advice_trace.jsonl").write_text(json.dumps({"kind": "config", "config": {"max_num_seqs": 4}}) + "\n")
+    (d / "windows.jsonl").write_text(json.dumps({"window": 0, "requests": ["e0", "e1"]}) + "\n")
+    (d / "seals.jsonl").write_text("{}\n")
+    return d
+
+
+def test_records_publishes_an_endpoints_public_records_only_when_it_served_the_sessions_flags_without_values(tmp_path,
+                                                                                                          capsys):
+    ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
+    src, out = _serve_dir(tmp_path / "serve", ps), tmp_path / "out"
+    argv = ["records", "--from", str(src), "--out", str(out)]
+    assert SS.main(argv) == 0
+    assert sorted(p.name for p in out.iterdir()) == sorted(SS.RECORDS)
+    assert not any(n in capsys.readouterr().out.encode() for n in SS.needles(ps))
+    shutil.rmtree(out)
+    serve = json.loads((src / "serve.json").read_text())
+    for k, v, why in (("retain_exclude", None, "--retain-exclude hidden_m1 (serve.json: None)"),
+                      ("sealed", None, "--seal (serve.json: None)"),
+                      ("address", ["127.0.0.1", 18783], "--port 18782 (serve.json: 18783)"),
+                      ("admit", "arrival", "--admit release-order (serve.json: 'arrival')")):
+        (src / "serve.json").write_text(json.dumps(serve | {k: v}))
+        assert SS.main(argv) == 2 and why in capsys.readouterr().err
+    (src / "serve.json").write_text(json.dumps(serve))
+    windows = (src / "windows.jsonl").read_text()
+    for leak in (json.dumps({"ids": ps[1]}), json.dumps({"ids": ps[1]}, separators=(",", ":")), '{"streamed_ids": []}'):
+        (src / "windows.jsonl").write_text(windows + leak + "\n")
+        assert SS.main(argv) == 2 and "windows.jsonl: a request's prompt ids" in capsys.readouterr().err
+    assert not out.exists()
+    (src / "windows.jsonl").write_text(windows)
+    (src / "requests.jsonl").unlink()
+    assert SS.main(argv) == 2 and "no requests.jsonl" in capsys.readouterr().err
 
 
 def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
