@@ -216,6 +216,23 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     assert line["reason"].startswith("sampled proofs: accept; ")
 
 
+def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
+    accept isn't read as the auditor's devices having placed it."""
+    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
+               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    (d := tmp_path / "certifier").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+        "public": {"K": 15764, "eps": "1/100", "windows": 1},
+        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                   servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
+
+
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
     row = S.sampled_proofs_row(tmp_path)
     assert row["verdict"] == "error" and "no summary" in row["reason"]
