@@ -217,8 +217,10 @@ O is checked only in its cell's last segment, never in a proof block of its own.
 T_{S−1} it passes exactly when O is right, at any S. A constant O is therefore a free guess of the block:
 - At A = B = 0, O = d_A d_Bᵀ is Bin(K, 1/4) in each cell, and its mode passes with probability 0.1145 at K = 64, 0.0470
   at K = 384 and 0.0144 at K = 4,096. η prices it (see "The outcome").
-- Where registration pins B, O's variance a cell at A = 0 is Σ(B² + B)/4 + 3K/16, so the guess is far rarer, but that
-  isn't measured on the checkpoints.
+- Where registration pins B, the prover knows c = B + d_B (d_B is a weight-side coin), so O's variance a cell at A = 0
+  is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On `LLAMA31_8B_INT8` the least such row
+  (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and 0.34–1.33% of each linear's rows give
+  more than 1e-3.
 
 **S = 1.** Where L ≥ K, a cell commits O alone, and its one proof block checks O alone. With O right, the T_S it derives
 passes whatever U, V and π are, so the noise does nothing there. The argument then rests on
@@ -529,8 +531,12 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
     `SAKMatmul`'s reuse form over the challenger's draw for the weight-side coins (P17's κ_re). The coin stream's exact
     exclusion and the multi-node boundary are stated in `CertifierSeesImports` (RP5, RP9);
   - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
-    η is priced at the free guess of "The outcome", O's constant at the least credited K. POOL-THM's ζ is priced at a
-    word's 2^-16, which that guess exceeds, so it is to be repriced at it.
+    η is priced at the free guess of "The outcome", O's constant at the least credited K, and so is POOL-THM's ζ:
+    - from the exact binomial tail at L = ln(2m/δ) (51.5 at H200 V4), ζ's share z at N proof blocks a sampling block
+      is 0.355% at N = 1e6 at PV's guess at K = 64 (0.1145). That is above tier A's 0.1% until N ≈ 1.25e7, so
+      pooling by `SAKCheck` gains nothing at D6 v1.1's rows;
+    - where every O-only block is a pinned-B call's, the guess is the 4.83e-3 above, and z ≤ 0.01% needs N ≈ 4.7e7
+      (3.6e5 at a word's 2^-16).
 - **Keeping η near 1**, each a protocol change, not adopted:
   - selecting each proof block with probability proportional to W_p/(1 − p_p), p_p its own free guess, holds the rate
     condition at a segment word's rate. At a fixed q, ε_S is then 0.06–0.47% above that rate's, against 4.9–12.9% with
