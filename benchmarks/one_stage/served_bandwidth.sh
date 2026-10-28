@@ -10,7 +10,7 @@
 # receipts sketched from the rows the decode reads (`benchmarks/pous/p2_v1/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
-# never a process on this node: the `p2_party --listen` that vy-auditor-2's gate starts for BW_PARTY, reached at
+# never a process on this node: the `p2_party --listen` that the auditor host's gate starts for BW_PARTY, reached at
 # BW_PARTY_HOST; it holds its own registration, which the store's must be (BW_REGISTRATION, the tracked one). The gate
 # kills the party once the session's minutes run out, and BW_PARTY asks for BW_PARTY_MIN of them (`bw_party --minutes`,
 # default 40, the lease's; the gate takes 1 to 180), unless the key's forced command fixes its own: a session that

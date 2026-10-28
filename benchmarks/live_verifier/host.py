@@ -63,12 +63,13 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610), and `bw_party [--pous-session SID]` the remote bandwidth audit's P2 party
-  (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612), as `auditor` from the pinned tree, one session per ssh
-  connection: the request line on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
+  (`challenger_party.py`, port 47610), and `bw_party [--pous-session SID] [--minutes M]` the remote bandwidth audit's P2
+  party (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612, with the registration the host names), as
+  `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
+  and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
-  on the host, never leaving it. `bw_party`'s registration is the host's, never the lane's: with `--pous-session SID`, the
+  on the host, never leaving it. `bw_party`'s registration is the host's, never the caller's: with `--pous-session SID`, the
   setup the block challenger kept for its PoUS session SID (`<root>/parties/pous/setups/SID.json`, the store that session
   bound), else the fixture store's in the pinned tree (`PARTY_FIXED`). `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
   `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
@@ -141,8 +142,8 @@ PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611
            "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
            "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
-"""Arguments the host adds to a party's command, never a lane's: the fixture store's registration in the pinned tree, which
-`bw_party` holds when no PoUS session names its store."""
+"""Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
+which `bw_party` holds when no PoUS session names its store."""
 SESSION_ID = re.compile(r"[0-9a-f]{64}")
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
@@ -720,8 +721,8 @@ def run_keygen(argv: list[str]) -> str:
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
-         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
-         "on stdin) | bw_party [--pous-session SID] [--minutes M] "
+         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
+         "| bw_party [--pous-session SID] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous [LOG]")
 
