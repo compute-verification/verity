@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 
 from .codec import canonical_json
-from .query_ast import (Concat, Default, Each, Group, Instances, Inter, Members, Minus, NameSel, Nodes, NodeSel, Override, Path,
-                      Pred, Query, QueryError, Rest, Root, Table, Union, Where, Zip, group, table)
+from .query_ast import (Concat, Default, Each, Group, Instances, Inter, Label, Members, Minus, NameSel, Nodes, NodeSel, Override,
+                      Path, Pred, Query, QueryError, Rest, Root, Table, Union, Where, Zip, group, label, members, table)
 
 SCHEMA = "verity-ir/query/v1"
 
@@ -28,7 +28,7 @@ def to_json(q) -> dict:
     if isinstance(q, Instances):
         return {"op": "instances", "path": str(q.path)}
     if isinstance(q, Members):
-        return {"op": "members", "path": str(q.path), "sel": str(q.sel), "k": q.k}
+        return {"op": "members", "path": str(q.path), "sel": str(q.sel), "k": list(q.k) if isinstance(q.k, tuple) else q.k}
     if isinstance(q, Nodes):
         return {"op": "nodes", "path": str(q.path), "sel": str(q.sel)}
     if isinstance(q, Zip):
@@ -66,6 +66,8 @@ def to_json(q) -> dict:
         return {"op": "table", "path": str(q.path), "table": q.name} | ({} if q.of == "nodes" else {"of": q.of})
     if isinstance(q, Group):
         return {"op": "group", "base": to_json(q.base), "key": q.key[0] if len(q.key) == 1 else list(q.key)}
+    if isinstance(q, Label):
+        return {"op": "label", "base": to_json(q.base), "map": {"affine": list(q.affine)} if q.affine is not None else {"table": q.table}}
     raise TypeError(f"cannot encode {type(q).__name__} as a query document (not a Query, dict or to_json() object)")
 
 
@@ -89,7 +91,8 @@ def _decode(doc: dict) -> Query:
     if op == "instances":
         return Instances(Path.parse(doc["path"]))
     if op == "members":
-        return Members(Path.parse(doc["path"]), NodeSel.parse(doc["sel"]), int(doc.get("k", 1)))
+        k = doc.get("k", 1)
+        return members(Path.parse(doc["path"]), NodeSel.parse(doc["sel"]), k if isinstance(k, list) else int(k))
     if op == "nodes":
         return Nodes(Path.parse(doc["path"]), NodeSel.parse(doc["sel"]))
     if op == "zip":
@@ -124,6 +127,13 @@ def _decode(doc: dict) -> Query:
         if not isinstance(doc["key"], (str, list)):
             raise QueryError(f"group: key is a key part or a list of them, got {doc['key']!r}")
         return group(from_json(doc["base"]), doc["key"])
+    if op == "label":
+        m = doc["map"]
+        if not isinstance(m, dict) or len(m) != 1 or not ("affine" in m or "table" in m):
+            raise QueryError(f"label: map is {{\"affine\": [a, b, n]}} or {{\"table\": NAME}}, got {m!r}")
+        if "affine" in m and not isinstance(m["affine"], list):
+            raise QueryError(f"label: an affine map is [a, b, n], got {m['affine']!r}")
+        return label(from_json(doc["base"]), affine=m.get("affine"), table=m.get("table"))
     raise QueryError(f"unknown query op {op!r}")
 
 
