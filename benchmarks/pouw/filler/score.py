@@ -11,7 +11,7 @@
 
 A climber's run, from a clean pushed checkout:
 
-  research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \\
+  research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \\
     -- python3 benchmarks/pouw/filler/score.py <arm|benchmarks/pouw/filler/my_arm.py:MyArm>
 
 `score.py ARM` builds dcap.cu and dscore.cu (outside the lease), then under `gpu-lease 1 --wait` runs the gates before
