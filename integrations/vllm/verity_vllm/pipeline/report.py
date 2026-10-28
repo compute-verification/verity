@@ -97,7 +97,7 @@ def config_id_of(model_repo: str, engine_args: dict, versions: dict) -> str:
 
 
 @dataclass
-class Card:
+class ReportCard:
     schema: str
     utc: str
     config_id: str
@@ -131,16 +131,16 @@ class Card:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, d: dict) -> "Card":
+    def from_json(cls, d: dict) -> "ReportCard":
         known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in d.items() if k in known})
 
 
-def load_card(path: str | Path) -> Card:
-    return Card.from_json(json.loads(Path(path).read_text()))
+def load_card(path: str | Path) -> ReportCard:
+    return ReportCard.from_json(json.loads(Path(path).read_text()))
 
 
-def write_card(card: Card, path: str | Path) -> Path:
+def write_card(card: ReportCard, path: str | Path) -> Path:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(card.to_json(), indent=1, default=str) + "\n")
@@ -422,7 +422,7 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
 
 
 def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, config_id: str | None = None,
-               mechanism_notes: list[str] | None = None, notes: list[str] | None = None, hf_config: dict | None = None) -> Card:
+               mechanism_notes: list[str] | None = None, notes: list[str] | None = None, hf_config: dict | None = None) -> ReportCard:
     """Assemble the card of a run directory.  `results` default to `gates.json` when present, else the gates are evaluated
     here.  `hf_config` is `analytic.config_of(<hf config.json>)` when the driver could obtain it (per-field provenance)."""
     run = RunArtifacts(run_dir)
@@ -463,7 +463,7 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
     hf_C = hf_config if hf_config is not None else man.get("hf_config")
     g4 = (gates.get("G4") or {}).get("detail") or {}
     g5 = (gates.get("G5") or {}).get("detail") or {}
-    card = Card(
+    card = ReportCard(
         schema=CARD_SCHEMA, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), config_id=cid, model=model,
         C=c_with_provenance(C, hf_C), engine_args=engine_args,
         workload={**{k: wl.get(k) for k in ("path", "sha256", "n_requests", "prompt_lens", "max_tokens")},
@@ -512,12 +512,12 @@ def _attention_short(backend: Any) -> str:
     return {"FlashAttentionImpl": "FA2"}.get(b, b)
 
 
-def _family_short(card: Card) -> str:
+def _family_short(card: ReportCard) -> str:
     m = card.model or {}
     return str(m.get("hf_model_type") or m.get("family") or "unknown")
 
 
-def top_section(card: Card) -> str:
+def top_section(card: ReportCard) -> str:
     """The fixed-width top section (one line per row, labels padded to 34 columns)."""
     ea, k, c = card.engine_args or {}, card.kappa or {}, card.counts or {}
     prov = card.provenance or {}
@@ -574,7 +574,7 @@ def top_section(card: Card) -> str:
     return "\n".join(L)
 
 
-def summarize_md(card: Card) -> str:
+def summarize_md(card: ReportCard) -> str:
     """The top section (in a fenced block) followed by a short markdown summary."""
     ea, k = card.engine_args or {}, card.kappa or {}
     C = {f: v.get("value") for f, v in (card.C or {}).items()}
@@ -648,6 +648,6 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-__all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "PROVENANCE_LISTS", "Card", "slug", "dtype_short",
+__all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "PROVENANCE_LISTS", "ReportCard", "slug", "dtype_short",
            "engine_args_slug", "kappa_short", "config_id_of", "c_with_provenance", "log_header", "workload_summary", "engine_args_of",
            "vu_partition_text", "counts_of", "build_card", "load_card", "write_card", "top_section", "summarize_md", "bootstrap_ci"]

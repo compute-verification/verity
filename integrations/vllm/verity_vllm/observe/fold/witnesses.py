@@ -1,5 +1,5 @@
 """A profile's witness inputs (`Profile.witnesses`): one parameter `<name>` / `<name>_<i>` per request and name after the peers, an
-Array of 32-bit words whose leaves the `Witness` reads take in issue order.  Each is sized when the fold finishes, and an empty one is
+Array of 32-bit words whose leaves the `WitnessParam` reads take in issue order.  Each is sized when the fold finishes, and an empty one is
 refused, since it would shift the input layout."""
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ from __future__ import annotations
 from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Array, Record, Type, Value
 
-from verity_vllm.observe.fold.resolver import Witness
+from verity_vllm.observe.fold.resolver import WitnessParam
 
 
 class WitnessInputs:
@@ -23,7 +23,7 @@ class WitnessInputs:
                 self.param[(i, name)], self.fields[(i, name)] = len(params), []
                 params.append((name if n_requests == 1 else f"{name}_{i}", Record()))
 
-    def leaves(self, op: Witness, i: int, ptype: Type, what: str, req_index: dict[str, int], read: dict,
+    def leaves(self, op: WitnessParam, i: int, ptype: Type, what: str, req_index: dict[str, int], read: dict,
                err: type[Exception] = ValueError) -> Affine:
         """Row i's next leaves of its request's `op.name` parameter; `read` (step, event, spec, hint) is kept with their range."""
         key = (req_index.get(op.keys[i], -1), op.name)

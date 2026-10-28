@@ -549,7 +549,7 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     return doc
 
 
-def kept_draw(s: C2.Site, slim: dict[str, Any]) -> None:
+def kept_draw(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     """Refused unless this code draws the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
     so another draw (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
     try:
@@ -589,10 +589,10 @@ def replay(o: Options) -> bool | None:
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
     args.replay_worker_peak = worker_peak(o)
     vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
-    site = C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
-                   manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
-                   components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
-                   weights_check=lambda: dict(wc), tl=tl, reads=reads)
+    site = C2.ReplaySources(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
+                            manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
+                            components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
+                            weights_check=lambda: dict(wc), tl=tl, reads=reads)
     if "keep" in b:
         kept_draw(site, b["keep"])
     with SD.touched(store) as touched:

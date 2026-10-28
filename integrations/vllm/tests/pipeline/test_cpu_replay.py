@@ -419,9 +419,9 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
 
     out, _ = _decided(tmp_path)
     slim = CPU.open_keep(CPU.slim_path(out, 1))["keep"]
-    site = C2.Site(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
-                   manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
-                   weights_check=None, tl=None)
+    site = C2.ReplaySources(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
+                            manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
+                            weights_check=None, tl=None)
     drawn = {"picks": [tuple(p) for p in slim["picks"]]}
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
     CPU.kept_draw(site, slim)
