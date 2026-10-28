@@ -236,8 +236,7 @@ theorem band_meets_family_14 (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d)
 
 /-! ## Injective domains are necessary at every `N ≥ 2`; `N = 1` is the one-segment band
 
-`shared_breaks_S` and `shared_domain_breaks_fam` generalize `shared_domain_breaks` from `N = 448` to every `N ≥ 2`
-(`internal/p3-instantiation/band-family-pin-redteam-verdict.md` §2). -/
+`shared_breaks_S` and `shared_domain_breaks_fam` generalize `shared_domain_breaks` from `N = 448` to every `N ≥ 2`. -/
 
 /-- With the shared domain, storing segment 0's labels answers every challenge with no query, so the audit of `N`
 segments accepts with probability 1 at every state bound of at least one segment's `2^28` bits. -/
