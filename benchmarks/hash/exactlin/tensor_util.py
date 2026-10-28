@@ -65,6 +65,8 @@ CLASSES = [
 ]
 TENSOR = {name: kind for name, kind, _ in CLASSES if kind}
 QUANT = re.compile(r"exactlin_quant_rows|dynamic_scaled_int8_quant")
+# GPU metrics (`nsys --gpu-metrics-devices`) read where the report has them: the SM clock and the tensor pipe's active share
+METRICS = {"clock_mhz": re.compile(r"^GPC Clock Frequency"), "tensor_active": re.compile(r"^Tensor Active")}
 _PATTERNS = [(name, re.compile(p, re.IGNORECASE)) for name, _, p in CLASSES if p is not None]
 RANK = {name: i for i, (name, _, _) in enumerate(CLASSES)}
 
@@ -108,7 +110,14 @@ def load(path: str) -> dict:
     for table, cls in (("CUPTI_ACTIVITY_KIND_MEMCPY", "memcpy"), ("CUPTI_ACTIVITY_KIND_MEMSET", "memset")):
         if table in tables:
             ops += [(s, e, cls, b, dev) for s, e, b, dev in q(f"SELECT start, end, bytes, deviceId FROM {table}")]
-    return {"kernels": kern, "ops": ops}
+    metrics: dict[str, tuple[list[int], list[float]]] = {}
+    if "GPU_METRICS" in tables and "TARGET_INFO_GPU_METRICS" in tables:
+        for mid, name in q("SELECT DISTINCT metricId, metricName FROM TARGET_INFO_GPU_METRICS"):
+            key = next((k for k, p in METRICS.items() if p.search(str(name))), None)
+            if key:
+                rows = q("SELECT timestamp, value FROM GPU_METRICS WHERE metricId = ? ORDER BY timestamp", mid)
+                metrics[key] = ([int(t) for t, _ in rows], [float(v) for _, v in rows])
+    return {"kernels": kern, "ops": ops, "metrics": metrics}
 
 
 def forwards(kern: list, layers: int) -> list[tuple[int, int]]:
@@ -124,8 +133,9 @@ def forwards(kern: list, layers: int) -> list[tuple[int, int]]:
     return out
 
 
-def sweep(iv: list[tuple], a: int, b: int) -> dict[str, int]:
-    """Each instant of [a, b) to the highest-ranked class running then, else to the host gap."""
+def sweep(iv: list[tuple], a: int, b: int, segments: list | None = None) -> dict[str, int]:
+    """Each instant of [a, b) to the highest-ranked class running then, else to the host gap; with `segments`, each
+    stretch's (start, end, class) appended to it in time order."""
     ev = []
     for s, e, c, *_ in iv:
         s, e = max(s, a), min(e, b)
@@ -135,13 +145,15 @@ def sweep(iv: list[tuple], a: int, b: int) -> dict[str, int]:
     live: dict[str, int] = defaultdict(int)
     out: dict[str, int] = defaultdict(int)
     t = a
-    for x, d, c in ev:
+    for x, d, c in ev + [(b, 0, None)]:
         if x > t:
             top = min((k for k, n in live.items() if n), key=RANK.__getitem__, default=HOST_GAP)
             out[top] += x - t
+            if segments is not None:
+                segments.append((t, x, top))
             t = x
-        live[c] += d
-    out[HOST_GAP] += b - t
+        if c is not None:
+            live[c] += d
     return dict(out)
 
 
@@ -195,11 +207,20 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
     launches: dict[str, int] = defaultdict(int)
     per_name: dict[str, list] = defaultdict(lambda: [0, 0])
     bytes_moved: dict[str, int] = defaultdict(int)
+    samples: dict[str, dict[str, list[float]]] = {k: defaultdict(lambda: [0.0, 0]) for k in data["metrics"]}
     for a, b in picked:
         win = iv[bisect.bisect_left(end_max, a):bisect.bisect_left(starts, b)]
-        ex = sweep(win, a, b)
+        seg: list = []
+        ex = sweep(win, a, b, seg)
         steps.append({"start_ns": a, "wall_ms": (b - a) / 1e6, "util": sum(ideal.values()) / (b - a),
                       "exclusive_ms": {c: v / 1e6 for c, v in sorted(ex.items(), key=lambda kv: -kv[1])}})
+        seg_starts = [x[0] for x in seg]
+        for key, (ts, vs) in data["metrics"].items():
+            for i in range(bisect.bisect_left(ts, a), bisect.bisect_left(ts, b)):
+                c = seg[bisect.bisect_right(seg_starts, ts[i]) - 1][2]
+                for k in (c, "step"):
+                    samples[key][k][0] += vs[i]
+                    samples[key][k][1] += 1
         for c, v in ex.items():
             tot_excl[c] += v
         for c, v in overlap_with_tensor(win, a, b).items():
@@ -222,6 +243,7 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
     wall = sum(b - a for a, b in picked) / n
     ideal_all = sum(ideal.values())
     idle = wall - ideal_all
+    mean = lambda key, c: samples[key][c][0] / samples[key][c][1] if key in samples and samples[key][c][1] else None  # noqa: E731
     rows = []
     for c in [c for c, _, _ in CLASSES] + [HOST_GAP]:
         ex = tot_excl.get(c, 0.0) / n
@@ -237,6 +259,7 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
             "class_util": ideal[c] * n / tot_kern[c] if kind and tot_kern.get(c) else None,
             "loss_ms": loss / 1e6, "loss_share": loss / idle if idle > 0 else None,
             "util_if_zero": ideal_all / (wall - loss) if wall > loss else None,
+            "tensor_active": mean("tensor_active", c), "clock_mhz": mean("clock_mhz", c),
             "top": sorted(([short(k), v[0] / n / 1e6, v[1] / n] for k, v in per_name.items() if cls_of[k] == c),
                           key=lambda r: -r[1])[:6]})
     return {
@@ -246,7 +269,8 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
         "steps": steps, "summary": {
             "steps": n, "wall_ms": wall / 1e6, "ideal_ms": ideal_all / 1e6, "util": ideal_all / wall,
             "wall_at_target_ms": ideal_all / target / 1e6, "over_target_ms": (wall - ideal_all / target) / 1e6,
-            "tensor_idle_ms": idle / 1e6, "macs": macs},
+            "tensor_idle_ms": idle / 1e6, "macs": macs, "tensor_active": mean("tensor_active", "step"),
+            "clock_mhz": mean("clock_mhz", "step")},
         "classes": sorted(rows, key=lambda r: -r["loss_ms"]),
         "unclassified": sorted(([short(k), v[0] / n / 1e6, v[1] / n] for k, v in per_name.items()
                                 if cls_of[k] == "other kernels"), key=lambda r: -r[1])[:15]}
@@ -277,16 +301,23 @@ def table(doc: dict) -> str:
         f"attention {s['macs']['attn'] / 1e12:.3f} T bf16, LM head {s['macs']['head'] / 1e12:.4f} T bf16; θ "
         f"{doc['theta_int8'] / 1e12:.1f} T int8 MAC/s), **tensor utilization {s['util']:.1%}**. At "
         f"{doc['target']:.0%} the step would take {s['wall_at_target_ms']:.2f} ms: {s['over_target_ms']:.2f} ms over.",
-        "",
-        "| class | wall ms/step (exclusive) | share of wall | kernel ms/step | under a tensor kernel, ms | launches/step "
-        "| class util | loss ms | share of tensor-idle | util if loss were 0 |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     f = lambda v, p="{:.3f}": "" if v is None else p.format(v)  # noqa: E731
+    gm = s.get("clock_mhz") is not None
+    if gm:
+        lines[-1] += (f" GPU metrics over the steps: SM clock {s['clock_mhz']:.0f} MHz, Tensor Active "
+                      f"{f(s['tensor_active'], '{:.1f}')}%.")
+    lines += [
+        "",
+        "| class | wall ms/step (exclusive) | share of wall | kernel ms/step | under a tensor kernel, ms | launches/step "
+        "| class util | loss ms | share of tensor-idle | util if loss were 0 |" + (" Tensor Active % | SM MHz |" if gm else ""),
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|" + ("---:|---:|" if gm else ""),
+    ]
     for r in doc["classes"]:
         lines.append(f"| {r['class']} | {r['exclusive_ms']:.3f} | {r['share_of_wall']:.1%} | {r['kernel_ms']:.3f} | "
                      f"{f(r['overlap_with_tensor_ms'])} | {r['launches']:.0f} | {f(r['class_util'], '{:.1%}')} | "
-                     f"{r['loss_ms']:.3f} | {f(r['loss_share'], '{:.1%}')} | {f(r['util_if_zero'], '{:.1%}')} |")
+                     f"{r['loss_ms']:.3f} | {f(r['loss_share'], '{:.1%}')} | {f(r['util_if_zero'], '{:.1%}')} |"
+                     + (f" {f(r.get('tensor_active'), '{:.1f}')} | {f(r.get('clock_mhz'), '{:.0f}')} |" if gm else ""))
     lines += ["", "Top kernels a step (ms, launches):"]
     for r in doc["classes"]:
         if r["top"]:

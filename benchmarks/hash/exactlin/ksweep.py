@@ -44,12 +44,14 @@ QUANT_WARPS = (4, 8, 16, 32)
 def coarse_grid(m: int, tma: bool = False) -> list[X.Cfg]:
     """BLOCK_M by m; narrow tiles and split-K only where M is small enough that the tiles fill under a wave.  `tma` adds
     the TMA kernel, plain and warp-specialized, at BLOCK_K <= 256 (a TMA box is at most 256 a side)."""
-    bms = (16,) if m <= 16 else (32,) if m <= 32 else (32, 64) if m <= 64 else (64, 128) if m <= 512 else (128,)
+    bms = (16,) if m <= 16 else (32,) if m <= 32 else (32, 64) if m <= 64 else (64, 128) if m <= 512 else (128, 256)
     bns = (16, 32, 64, 128) if m <= 64 else (64, 128, 256)
     splits = (1, 2, 4) if m <= 256 else (1,)
-    grid = [X.Cfg(bm, bn, bk, 4, 3, sp) for bm in bms for bn in bns for bk in BKS for sp in splits]
+    # a tile past 128 x 128 holds its int32 accumulator in 8 warps; at 4 it spills and never reaches the refine stage
+    w = lambda bm, bn: 8 if bm * bn > 128 * 128 else 4  # noqa: E731
+    grid = [X.Cfg(bm, bn, bk, w(bm, bn), 3, sp) for bm in bms for bn in bns for bk in BKS for sp in splits]
     if tma:
-        grid += [X.Cfg(bm, bn, bk, 4, 3, 1, t) for bm in bms for bn in bns for bk in (64, 128, 256) for t in (1, 2)]
+        grid += [X.Cfg(bm, bn, bk, w(bm, bn), 3, 1, t) for bm in bms for bn in bns for bk in (64, 128, 256) for t in (1, 2)]
     return grid
 
 

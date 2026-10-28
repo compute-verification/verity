@@ -59,6 +59,15 @@ def _export(path: Path) -> None:
         db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_MEMCPY VALUES (?, ?, ?, 0, 2)", (base + 4 * MS, base + 5 * MS, 1 << 30))
     k(0, MS, "exactlin_scaled_mm", dev=1)
     db.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    # GPU metrics every 50 us, mid-interval: Tensor Active 60 while a GEMM runs, else 0; the clock 1900 MHz throughout
+    db.execute("CREATE TABLE TARGET_INFO_GPU_METRICS (metricId INT, metricName TEXT)")
+    db.execute("CREATE TABLE GPU_METRICS (timestamp INT, metricId INT, value REAL)")
+    db.executemany("INSERT INTO TARGET_INFO_GPU_METRICS VALUES (?, ?)",
+                   [(1, "Tensor Active [Throughput %]"), (2, "GPC Clock Frequency [MHz]"), (3, "DRAM Read Bandwidth")])
+    gemm = [(r[0], r[1]) for r in rows if names[r[4]] == "exactlin_scaled_mm" and r[2] == 0]
+    for t in range(25_000, 30 * MS, 50_000):
+        db.execute("INSERT INTO GPU_METRICS VALUES (?, 1, ?)", (t, 60.0 if any(s <= t < e for s, e in gemm) else 0.0))
+        db.execute("INSERT INTO GPU_METRICS VALUES (?, 2, 1900)", (t,))
     db.commit()
 
 
@@ -88,6 +97,13 @@ def test_wall_by_class(doc):
     assert by["Commit hashing"]["kernel_ms"] == pytest.approx(1.5)
     assert by["Commit hashing"]["overlap_with_tensor_ms"] == pytest.approx(0.5)
     assert by["int8 GEMM"]["launches"] == 4 and by["memcpy"]["gb"] == pytest.approx(2 ** 30 / 1e9)
+
+
+def test_gpu_metrics_by_class(doc):
+    by = {r["class"]: r for r in doc["classes"]}
+    assert by["int8 GEMM"]["tensor_active"] == 60 and by[TU.HOST_GAP]["tensor_active"] == 0
+    assert doc["summary"]["tensor_active"] == pytest.approx(60 * 2 / 10) and doc["summary"]["clock_mhz"] == 1900
+    assert "SM clock 1900 MHz, Tensor Active 12.0%" in TU.table(doc)
 
 
 def test_utilization_and_losses(doc):
