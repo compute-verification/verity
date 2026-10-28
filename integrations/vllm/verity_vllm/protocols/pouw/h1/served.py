@@ -85,9 +85,9 @@
 """
 from __future__ import annotations
 
+import collections
 import functools
 import hashlib
-from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -345,7 +345,7 @@ class Served:
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
     #: the z tables still hashing on the GPU (`_register_later`), in registration order, each with the ``out`` its root goes in
-    _later: deque[tuple[str, dict[str, str | None]]] = field(default_factory=deque)
+    _later: collections.deque[tuple[str, dict[str, str | None]]] = field(default_factory=collections.deque)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
