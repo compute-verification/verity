@@ -8,7 +8,6 @@ kernel's tile unsplit, causal when a sequence has more than one query row.  The 
 from __future__ import annotations
 
 import json
-from importlib import resources
 
 import pytest
 
@@ -66,7 +65,7 @@ def test_a_device_without_a_binding_is_refused_naming_every_one() -> None:
 def test_every_pinned_device_is_registered_on_a_card_or_excepted() -> None:
     """The served targets with a device pin are exactly the names `CARD` and `NO_CARD` list, each in one, and every exception
     says why."""
-    pinned = {json.loads(p.read_text())["device"] for p in (resources.files("verity_vllm") / "pins").iterdir() if p.name.endswith(".json")}
+    pinned = {json.loads(p.read_text())["device"] for p in BC.DEVICE_PINS.glob("*.json")}
     assert not set(CARD) & set(NO_CARD) and set(CARD) | set(NO_CARD) == pinned
     assert all(why.strip() for why in NO_CARD.values())
 
