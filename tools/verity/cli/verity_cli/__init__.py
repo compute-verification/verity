@@ -61,32 +61,44 @@ def _runner(top: str, command: str, args: list[str]) -> int:
     raise SystemExit(f"{top}/{args[0]} has no run.py or run.sh: run its tool through `research run`")
 
 
-def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:
+def _git(*argv: str, cwd: Path, env: dict | None = None) -> str:
     return subprocess.run(["git", *argv], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def _snapshot(tmp: Path) -> Path:
-    """A checkout `research run --source` ships as is: this one when it is clean, else a detached worktree under ``tmp`` of a
+def _snapshot(root: Path, tmp: Path) -> Path:
+    """A checkout `research run --source` ships as is: ``root`` when it is clean, else a detached worktree under ``tmp`` of a
     commit of its working tree (untracked files that aren't ignored included), made without touching its branch or index."""
-    if not _git("status", "--porcelain"):
-        return ROOT
+    if not _git("status", "--porcelain", cwd=root):
+        return root
     index = tmp / "index"
-    index.write_bytes((ROOT / _git("rev-parse", "--git-path", "index")).read_bytes())
+    index.write_bytes((root / _git("rev-parse", "--git-path", "index", cwd=root)).read_bytes())
     env = {**os.environ, "GIT_INDEX_FILE": str(index)}
-    _git("add", "-A", env=env)
-    commit = _git("commit-tree", _git("write-tree", env=env), "-p", "HEAD", "-m", "verity lean try: the working tree")
-    _git("worktree", "add", "-q", "--detach", str(tmp / "tree"), commit)
+    _git("add", "-A", env=env, cwd=root)
+    tree = _git("write-tree", env=env, cwd=root)
+    commit = _git("commit-tree", tree, "-p", "HEAD", "-m", "verity lean try: the working tree", cwd=root)
+    _git("worktree", "add", "-q", "--detach", str(tmp / "tree"), commit, cwd=root)
     return tmp / "tree"
+
+
+def _checkout(file: str) -> tuple[Path, Path]:
+    """The checkout `lean try` runs in, the git top level of this directory (else ROOT, where verity is installed), and FILE
+    resolved from that root or from this directory."""
+    try:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        top = ""
+    root = Path(top).resolve() if top else ROOT
+    return root, (root / file if (root / file).is_file() else Path(file)).resolve()
 
 
 def _lean_here(file: str) -> int:
     """`lake env lean FILE` in the directory of the nearest lakefile above FILE, against that package's built imports."""
-    path = (ROOT / file if (ROOT / file).is_file() else Path(file)).resolve()
+    root, path = _checkout(file)
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
         raise SystemExit(f"verity lean try: {file} is not a .lean file in a Lake package (a directory with a "
                          f"{' or '.join(LAKEFILES)})")
-    where = pkg.relative_to(ROOT) if pkg.is_relative_to(ROOT) else pkg
+    where = pkg.relative_to(root) if pkg.is_relative_to(root) else pkg
     lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
     if not Path(lake).is_file():
         raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
@@ -100,7 +112,7 @@ def _lean(args: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
                                  "package that holds it (the nearest lakefile above FILE), against that package's built "
                                  "imports (`lake build` there first), exiting with lean's status.")
-    ap.add_argument("file", metavar="FILE", help="the .lean file, from the repository's root or this directory")
+    ap.add_argument("file", metavar="FILE", help="the .lean file, from its checkout's root or this directory")
     ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")
     ap.add_argument("--pool", help="with --on: the machine's pool for it")
     ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
@@ -111,31 +123,35 @@ def _lean(args: list[str]) -> int:
         if a.pool or a.lane:
             ap.error("--pool and --as go with --on")
         return _lean_here(a.file)
-    file = a.file if (ROOT / a.file).is_file() else os.path.relpath(Path(a.file).resolve(), ROOT)
+    root, path = _checkout(a.file)
+    if not path.is_relative_to(root):
+        raise SystemExit(f"verity lean try: {a.file} is outside the checkout this runs in ({root}), the tree --on ships: "
+                         "run it from FILE's own checkout")
+    file = path.relative_to(root).as_posix()
     pool = a.pool or (TRY_POOL if a.on == TRY_NODE else None)
     research = [sys.executable, "-m", "research"]
     t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="verity-lean-try-") as tmp:
-        source = _snapshot(Path(tmp))
+        source = _snapshot(root, Path(tmp))
         try:
             p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []),
                                   *(["--as", a.lane] if a.lane else []), "--project", "verity",
                                   "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
                                   "python3", "tools/verity/lean/lean_changed.py", "--try", file],
-                                 cwd=ROOT, stderr=subprocess.PIPE, text=True)
+                                 cwd=root, stderr=subprocess.PIPE, text=True)
             said = []
             for line in p.stderr:
                 sys.stderr.write(line)
                 said.append(line)
             rc = p.wait()
         finally:
-            if source != ROOT:
-                subprocess.run(["git", "worktree", "remove", "--force", str(source)], cwd=ROOT, capture_output=True)
+            if source != root:
+                subprocess.run(["git", "worktree", "remove", "--force", str(source)], cwd=root, capture_output=True)
     if not (m := LAUNCHED.search("".join(said))):
         print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
         return rc or 1
     run_id = m.group(1)
-    subprocess.run([*research, "fetch", run_id, "--on", a.on, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
+    subprocess.run([*research, "fetch", run_id, "--on", a.on, "--all"], cwd=root, stdout=subprocess.DEVNULL)
     d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
     for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):
         if (d / name).is_file():
