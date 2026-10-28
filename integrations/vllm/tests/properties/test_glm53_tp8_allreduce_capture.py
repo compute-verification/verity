@@ -754,7 +754,9 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
     binds at its first and last M with what they read (GLM-5.3's tree on every owner, IEEE adds, FMA in both shots); `covered`
     names it there and nowhere past it."""
     assert X.tree_str(T.GLM53_H200_TREE) == "((((((0,(1,2)),3),5),6),4),7)"
-    assert T.CAPTURE_RUNS == ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3")
+    assert T.CAPTURE_RUNS == ("art:4a6503ce29cbd49b808dffe32566e4f74e3933199fdd347dec4a2238e73058f7",
+                              "art:aef3c209534e1cf90640cd9bda04a931d041f8553437e917346d6e24283507ea",
+                              "art:6562ff46905ed10fe4372ee070a97ecc6d36725f313e4834a44e78fb3acb3f7a")
     runs = {"custom-off": T.CAPTURE_RUNS[:2], "defaults": T.CAPTURE_RUNS[2:], "switch": T.CAPTURE_RUNS}
     assert [c.definition for c in T.CAPTURED if c.setting not in T.SETTINGS] == ["AllReduceNcclTree_v1"]
     for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
