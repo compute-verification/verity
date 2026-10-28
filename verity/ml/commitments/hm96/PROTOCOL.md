@@ -7,8 +7,8 @@ with the pinned key the bound holds except for a 2^-64 fraction of keys). Bindin
 alone. `hm96-sha512/v1` is the rule for SHA-512 data commitments (Daniel, 2026-09-26: SHA-512 on every commitment path); both
 instances have the same hiding bound.
 
-- **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `Hm96Sha256(base)` and
-  `Hm96Sha512(base)` over a `vllm-v1` or `vllm-v1-sha512` configuration. The module-level names are `hm96-sha256/v1`'s.
+- **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `HidingLayout`, one leaf
+  over its inner layout. The module-level names are `hm96-sha256/v1`'s.
   `verity.ml.commitments.hm96.batch` (numpy) computes the masks and tree leaves of many rows at once, byte-identical to it.
 - **Vectors.** `vectors.json` (`hm96-sha256/v1`) and `vectors_sha512.json` (`hm96-sha512/v1`), written by
   `python -m verity.ml.commitments.hm96.vectors`. `--check` exits nonzero if either is stale.
@@ -47,13 +47,13 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
 | key label | `verity/hm96-sha256/key/v1\0` | `verity/hm96-sha512/key/v1\0` |
 
 - **The inner layout** is any `LeafLayout` with hash H that the verifier derives for the position: a fixed prefix, suffix and value
-  length. The host committer's opt-in uses vllm-v1's position leaf (`pos_leaf_layout`, or `pos_leaf_layout(n, "sha512")`). A circuit
-  prefers a block-aligned prefix such as `sha256/row/v1`'s, `sha512/row/v1`'s or a bit row's (`sha512/row/v2`), since its midstate
-  is a constant. Under frame-v3 the tree leaf's schema names the inner one: `hm96-sha512/row/v1`, or `hm96-sha512/row/v2` over a bit
+  length. The vLLM integration's SHA-256 host committer's opt-in uses its position leaf,
+  `H("verity/pos-leaf/v0" ‖ u64be(n) ‖ value)`. A circuit prefers a block-aligned prefix such as `sha256/row/v1`'s,
+  `sha512/row/v1`'s or a bit row's (`sha512/row/v2`), since its midstate is a constant. Under frame-v3 the tree leaf's schema names the inner one: `hm96-sha512/row/v1`, or `hm96-sha512/row/v2` over a bit
   row (`frame_v3/PROTOCOL.md` §6).
 - **`b ‖ c` is the commit string.** A backend proves it and publishes it, and the verifier computes the tree leaf natively.
 - **An opening** is `(value, y)`. The verifier recomputes `x`, `c`, `b` and the leaf, and checks the path with the base scheme's tree
-  (`vllm-v1`'s or `vllm-v1-sha512`'s node and lift rule and root bindings).
+  and root bindings (frame-v3-sha512's for `hm96-sha512/row/v2`).
 - **Bits.** Bit t of a byte string is bit `t mod 8` of byte `⌊t/8⌋`. `y_j`, `x_i` and `b_i` are read this way, and `M·y` is written
   this way into n/8 bytes.
 
