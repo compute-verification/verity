@@ -30,6 +30,7 @@
   "Flock.Test.SharedRows",
   "Flock.Test.SharedReads",
   "Flock.Test.RecCompose",
+  "Flock.Test.RecLinks",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
@@ -74,6 +75,7 @@
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
+  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
   "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)"
  },
  "assumptions": {
@@ -447,6 +449,9 @@
    ],
    "assumptions": [],
    "type_hash": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
+  },
+  "Flock.RecLinks.check_sound": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -454,6 +459,10 @@
   "properties": {
    "Flock.Firewall.Contract.holds_coins_binding": {
     "function": "Flock.Firewall.Contract.run",
+    "outcome": "accept"
+   },
+   "Flock.RecLinks.check_sound": {
+    "function": "Flock.RecLinks.check",
     "outcome": "accept"
    }
   },
