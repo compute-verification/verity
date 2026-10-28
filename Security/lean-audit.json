@@ -22780,9 +22780,8 @@
    ]
   },
   "Definitions.Nci.Assumptions.Baseline": {
-   "digest": "64f78009b141b08d766fda3336455a486d9273e5dbc19758b78ca1658892e416",
+   "digest": "c732d8316857dd98315427a5c47a8bd1959db67f736e959df883e55dda419f7b",
    "definitions": {
-    "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c",
     "Nci.Assumptions.ThetaRegistered": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
    },
    "guarantees": [
@@ -23519,11 +23518,10 @@
    ]
   },
   "Definitions.Nci.Guarantees.Layered": {
-   "digest": "27d1c331cf25e894e050ad933528efd38bec913500208ea8ac599ae62932f598",
+   "digest": "716cf1636428726a8850ae58d5f2420e928d34335e46186c9a5b127d21a3782f",
    "definitions": {
     "Nci.Guarantees.LayeredTraining": "53932c96f2d2663a4b544e01900efef2d2533af038b41e928f350feff97e87af",
     "Nci.Guarantees.ReferenceThreaded": "9384d85cfae9a2f425d2e9620bd2455c8d5d9c30601124d4fe283c74c0124124",
-    "Nci.Guarantees.ReferenceTraining": "79065beb76ef7b2620a1ffc38ed7d9ffd8ced01f653332fe6113a34bc3820311",
     "Nci.Guarantees.ThreadedOfLayered": "d8b16a2a29b38b05cc9448e33f0b5231a66261706be4dbc1e0011d915566f05e"
    },
    "guarantees": [
