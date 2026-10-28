@@ -21,6 +21,8 @@ accepts, at most the profile's count of proof blocks are faulty. Its top stateme
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
+and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
+(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until #6068 restates V5 over it. It
 rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
