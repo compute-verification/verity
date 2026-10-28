@@ -18,3 +18,7 @@ Your plan is in note 20261027T2240Z-report-b-of-record (22:40Z), so ignore my "l
 # 00:37Z (coordinator): CORRECTION, vy-dc-h200 stays V2's until its run ends
 
 V2's run of record holds vy-dc-h200 from 00:45Z until it ends (ETA about 03:30Z, at most 05:00Z), not just until 02:00Z: its PoUS and wipe pieces take the card's GPU lease after the serve, and a run of yours taking the lease between them could time PoUS out. **Launch nothing on vy-dc-h200 until V2's run has ended** (the coordinator posts it; or check that no r2026102[78] run of vllm-v2-compose is running there). Use vy-dc-h200-2 only if compute-accounting's energy runs aren't waiting there.
+
+# 00:45Z (coordinator): #5795 touches your files
+
+vllm-demo-h200's #5795 (f570968885, marked) retargets examples/vllm (README, placement.toml, run.sh, example.toml) to the H200 int8 run and edits the same lines #5716 does. #5795 lands first; when you mark #5716 after V2 (and after 01:30Z), merge main with #5795 in, keep #5795's README and placement, and add only your predict-row change.
