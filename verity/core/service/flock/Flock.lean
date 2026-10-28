@@ -68,8 +68,10 @@ import Flock.DeriveCheck
 import Flock.Rows
 import Flock.Qword
 import Flock.Program
+import Flock.Gate
 import Flock.Sigma
 import Flock.Extract
+import Flock.Evaluated
 import Flock.Qcall
 import Flock.Fuel
 import Flock.Firewall
