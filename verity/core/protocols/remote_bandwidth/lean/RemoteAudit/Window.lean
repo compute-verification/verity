@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import CoreProtocol.Protocol
 import RemoteAudit.Receipts
 
 /-!
@@ -145,21 +146,27 @@ structure Opening where
   digest : ByteArray
 deriving Inhabited
 
-/-- A window's outcome: accepted, or the failure and the draw it failed at (`audit.Verdict`). -/
-inductive Verdict
-  | accept
-  | reject (failure : Failure) (at? : Option (Nat × Nat))
-deriving BEq, Repr
+/-- What rejected a window: its failure and the draw it failed at, `none` for the window as a whole. -/
+structure Rejection where
+  failure : Failure
+  at? : Option (Nat × Nat)
+deriving BEq, Repr, DecidableEq
 
-/-- `Key.subset(k, n, index)` exactly: each swap's stream read far enough (a draw fails to land in 64 bytes with
-probability below 2^-256, and the read doubles until it does). -/
-def subsetExact (key : ByteArray) (k n : Nat) (index : List FlockSoundness.Randomness.Part) : Option (Array Nat) :=
-  Id.run do
-  let mut len := 64
-  for _ in [0:24] do
-    if let some out := FlockSoundness.Randomness.subset key k n index len then return some out
-    len := 2 * len
-  return none
+/-- What a window's check found besides its verdict, all witness: what rejected it, `none` when it accepts. -/
+abbrev Findings := Option Rejection
+
+/-- A window's outcome as `Core.Verdict`, with its findings (`audit.Verdict`): `accept` with none (`Verdict.accept`), or
+`reject` with the failure and the draw it failed at (`Verdict.reject`); never `undecided`. -/
+abbrev Verdict := Findings × Core.Verdict
+
+def Verdict.accept : Verdict := (none, Core.Verdict.accept)
+
+def Verdict.reject (failure : Failure) (at? : Option (Nat × Nat)) : Verdict :=
+  (some ⟨failure, at?⟩, Core.Verdict.reject)
+
+/-- What rejected the window, for a verdict other than `accept`: its findings' rejection, `malformed` when they hold
+none, which no check here gives. -/
+def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none⟩
 
 /-- `Session.close`'s draws: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
 its openings coin, in order. -/
@@ -168,7 +175,7 @@ def draws (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat
   let ends := (lengths.foldl (fun (acc : Array Nat × Nat) n => (acc.1.push (acc.2 + n), acc.2 + n)) (#[], 0)).1
   let total := ends.back?.getD 0
   let key := FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
-  let us ← subsetExact key (min samples total) total [.str "openings"]
+  let us ← FlockSoundness.Randomness.subsetExact key (min samples total) total [.str "openings"]
   pure (us.map fun u => let i := bisectRight ends u; (i, u - (if i = 0 then 0 else ends[i - 1]!)))
 
 /-- The append holding store index `j ≥ N`: the last with `first ≤ j`. -/
@@ -228,7 +235,7 @@ def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (a
       checkWindow reg digest appends w (drawn.extract (c * size) ((c + 1) * size))
         (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
-    if let .reject f at? := t.get then return .reject f at?
+    if t.get ≠ .accept then return t.get
   return .accept
 
 /-- Window t's verdict: its draws from the openings coin, then each opening checked in the order drawn. `none` only if
