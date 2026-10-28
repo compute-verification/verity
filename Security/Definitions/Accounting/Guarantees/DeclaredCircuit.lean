@@ -43,9 +43,10 @@ the layout may follow inputs chosen after those coins: it reads `y` only through
 (`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
 check at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
 `Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
-check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
-`Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
-appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
+check accepts a schedule of at most `a₀` bits holding the plan the pass sent, the model's layout of a pass being the
+verifier's own (`Properties.RemoteAudit.sessionLayout`: the positions of the session's appends and the plan the pass
+sent, where the verifier checks each opened block, `Properties.RemoteAudit.CodeLayoutTiles` and `OpensAtPosition`). So
+`a₀` is the steering cap the prover commits before the first coin
 (`audit.Params.schedule_cap`, credited as `audit.GammaTerms.steering`), over which the check refuses a schedule, not
 the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
 steers would meet `SteeredLayout` only at 301 (which the

@@ -238,10 +238,6 @@
   "Properties.Pouw.PeriodJ10R.TileServiceSound": {
    "owner": "@compute-accounting",
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
-  },
-  "Properties.RemoteAudit.ScheduleLayoutGap": {
-   "owner": "@memory-accounting",
-   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -517,9 +513,9 @@
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": ["Definitions.Accounting", "RemoteAudit", "Properties.RemoteAudit"],
    "except": [],
-   "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+   "why": "the schedule check (`RemoteAudit.Schedule`) and the verifier's layout (`sessionLayout`, where `checkOpening` checks each block under `Properties.RemoteAudit.receipterOf`) are stated against the code and the layout vocabulary they feed (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -534,7 +530,7 @@
   "Properties.Accounting.DeclaredCircuit": {
    "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
    "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and the verifier's layout (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
@@ -2126,6 +2122,54 @@
    "assumptions": [],
    "type_hash": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb"
   },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.codeLayoutTiles : Properties.RemoteAudit.CodeLayoutTiles"],
+   "assumptions": [],
+   "type_hash": "2515137ac93d73406859ea8ad9ce731b4149fbcd172ee882f68ee2f394c75a61"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_honest :",
+    "  And",
+    "    (Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "      (Option.some (RemoteAudit.Plan.whole 130023424)))",
+    "    (And (Eq (Properties.RemoteAudit.runBlocks (RemoteAudit.Plan.whole 130023424).runs).length 130023424)",
+    "      (∀ (i : Nat),",
+    "        instLTNat.lt i 130023424 →",
+    "          Eq (Properties.RemoteAudit.tileAt 130023424 List.nil.toArray (RemoteAudit.Plan.whole 130023424).runs i)",
+    "            (Option.some { fst := 0, snd := i })))"
+   ],
+   "assumptions": [],
+   "type_hash": "f483e5157c582feaed1b998d0e5b38dd1d1c99b07763afe2a4f4a7d7b6d45930"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.tileAt 1 List.nil.toArray",
+    "        (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray (Fin.val 1))",
+    "      (Option.some",
+    "        {",
+    "          fst :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).fst.val,",
+    "          snd :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).snd.val }))"
+   ],
+   "assumptions": [],
+   "type_hash": "b1a0e78990ee83a63f36e10f8ae596b94b433ee6264e4d5c1c8493885235fd30"
+  },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"],
@@ -2156,6 +2200,48 @@
    "assumptions": [],
    "type_hash": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310"
   },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.opensAtPosition : Properties.RemoteAudit.OpensAtPosition"],
+   "assumptions": [],
+   "type_hash": "111150eaa0d138025444b31c09ae5104f3f91a425059fdd7a751a2787faa2bbe"
+  },
+  "Properties.RemoteAudit.opensAtPosition_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun o =>",
+    "        And",
+    "          (Eq",
+    "            (RemoteAudit.Registration.make? (RemoteAudit.zeros 1) 130023424 reg.payloadRoot",
+    "              (RemoteAudit.zeros RemoteAudit.Codec.SEED_BYTES)",
+    "              { field := RemoteAudit.Codec.P1024, rounds := 3, masked := Bool.true } RemoteAudit.Kind.sketch Bool.false",
+    "              RemoteAudit.LAYOUT 16)",
+    "            (Except.ok reg))",
+    "          (And (Eq w.passes.size 1)",
+    "            (And (Eq (Array.instGetElem?NatLtSize.getElem! w.passes 0).plan (RemoteAudit.Plan.whole 130023424))",
+    "              (Eq",
+    "                (RemoteAudit.checkOpening reg reg.digest List.nil.toArray w (Properties.RemoteAudit.receipterOf reg w 0)",
+    "                  0 0 o)",
+    "                Option.none)))"
+   ],
+   "assumptions": [],
+   "type_hash": "114cbe4a14ae93089cb3c545b9839e5a831f14b3b5aea949a3d3c5f47b46483a"
+  },
+  "Properties.RemoteAudit.opensAtPosition_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_nontrivial (t : Nat) :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.position 130023424 List.nil.toArray ((RemoteAudit.Plan.whole 130023425).block 130023424))",
+    "      (Option.some { fst := t, snd := (RemoteAudit.Plan.whole 130023425).block 130023424 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "4f579a80bcf7a45d83f0c6f86981146cbffb177eda129678a174a259fbad350e"
+  },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.passesChained : Properties.RemoteAudit.PassesChained"],
@@ -2173,6 +2259,43 @@
    "signature": ["Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"],
    "assumptions": [],
    "type_hash": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.planBlocks : Properties.RemoteAudit.PlanBlocks"],
+   "assumptions": [],
+   "type_hash": "b52f9ab9527953b5d6389d4e21022197366698223b4ae485749e62cf43ba2f73"
+  },
+  "Properties.RemoteAudit.planBlocks_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_honest :",
+    "  Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "    (Option.some (RemoteAudit.Plan.whole 130023424))"
+   ],
+   "assumptions": [],
+   "type_hash": "93e2a89f675e16240675c6e4e5ca1336dd56105c8ade41ddff2dbcd1f6c806ee"
+  },
+  "Properties.RemoteAudit.planBlocks_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_nontrivial :",
+    "  Not",
+    "    (And",
+    "      (Eq { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length",
+    "        (Properties.RemoteAudit.runBlocks",
+    "            { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs).length)",
+    "      (∀ (p : Nat),",
+    "        instLTNat.lt p { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length →",
+    "          Eq",
+    "            (List.instGetElem?NatLtLength.getElem?",
+    "              (Properties.RemoteAudit.runBlocks",
+    "                { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs)",
+    "              p)",
+    "            (Option.some ({ blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.block p))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6e294008319128d1b11fc0e7d900c08ce145b23f97af56ee6ecb5879fe06844b"
   },
   "Properties.RemoteAudit.planReadsDistinct": {
    "owner": "@memory-accounting",
@@ -2226,10 +2349,7 @@
    "owner": "@memory-accounting",
    "signature": [
     "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
-    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
-    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  {dflt : Pfx → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))} {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
     "  (checked :",
     "    ∀ (c : Pfx) (y : Y),",
     "      Exists fun sc =>",
@@ -2238,10 +2358,40 @@
     "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
     "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
     "                (Option.some (sent c y)))) :",
-    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+    "  Exists fun steer =>",
+    "    Accounting.Assumptions.SteeredLayout (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) steer"
    ],
    "assumptions": [],
-   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
+   "type_hash": "2128e84650a110e23a0c5b93de13ce647bc6798406445b474795a55a3f76c04b"
+  },
+  "Properties.RemoteAudit.steered_of_checked_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_honest :",
+    "  Exists fun sc =>",
+    "    Exists fun passes =>",
+    "      Exists fun b =>",
+    "        And (Eq (RemoteAudit.Schedule.check sc 130023424 792 passes List.nil.toArray) (Except.ok b))",
+    "          (∀ (s : Nat),",
+    "            instLTNat.lt s 96 →",
+    "              Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes s))",
+    "                (Option.some (RemoteAudit.Plan.whole 130023424).runs))"
+   ],
+   "assumptions": [],
+   "type_hash": "aec9d714beaf2c3410bc927cd5f6042b6c2e4b7a21b4d06b2b5b1db87f3ebe6c"
+  },
+  "Properties.RemoteAudit.steered_of_checked_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_nontrivial (steer : Unit → Fin 3 → Pous.Bits (instHAdd.hAdd 0 1)) :",
+    "  Not",
+    "    (Accounting.Assumptions.SteeredLayout",
+    "      (Properties.RemoteAudit.sessionLayout 3 (fun x => { toFun := fun x => { fst := 0, snd := 0 }, inj' := ⋯ })",
+    "        (fun x x_1 => List.nil.toArray) fun x y => (List.cons { fst := y.val, snd := 1 } List.nil).toArray)",
+    "      steer)"
+   ],
+   "assumptions": [],
+   "type_hash": "7e684951741d0df3f61602dc3f52764b1aa99754df33d776ada8c890c1b1e9cb"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
@@ -2452,8 +2602,7 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Schedule"
+   "Properties.RemoteAudit.Line.Premises"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -3566,6 +3715,26 @@
    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.planBlocks": {
+    "conjuncts": [
+     {
+      "function": "RemoteAudit.Plan.make?",
+      "outcome": "accept"
+     },
+     {
+      "function": "RemoteAudit.Plan.whole",
+      "outcome": "none"
+     }
+    ]
+   },
+   "Properties.RemoteAudit.codeLayoutTiles": {
+    "function": "RemoteAudit.Plan.make?",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.opensAtPosition": {
+    "function": "RemoteAudit.checkOpening",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3585,7 +3754,7 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) at the verifier's layout (Properties.RemoteAudit.sessionLayout) with SteeredLayout replaced by, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at J10-R's tile stratum s_T of the sampling block's stratified draw (N_p = |stratum sigma s_T|, padded with wordless fillers, K_d = k s_T), with PouwCheck.Credit.window as the verdict, H1's lucks 7/8 and 1/2, a = b = 1, wmax = 1 and Lambda = j10rRate (k s_T) rho = 8(1 + K rho)/(rho K) from SplitRateClosed (8 + 8/k s_T at the demo shape's rho = 1); the pin is pinnedAt, the unit's tile at its public-row noise and keys (#2352's pin, one description), from SaltIsLiveCoin; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, decided by lane (Asks for Daniel, Decided by lane, A: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340), each listed under assumptions: TileDrawIsCoin, a code fact once CMP-126's verifier draws the tiles inside the stratified draw (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin); TileServiceSound, a fact to prove (C-Flock's soundness at each drawn unit under live coins); SharedNoiseLucks, a claim, computational (Theorem O's one slot, its form FOLD-LUCK's, CMP-134); RegisteredBeforeDraw, as H1CheckedCreditPeriod's (a deployment gap). SaltIsLiveCoin as H1CheckedCreditPeriod's; UnitFixed to be made provable from the code (ASSUMPTION-AUDIT). TileStratumEscape, the stratum's hypergeometric escape of the tile coordinate, is a lemma to prove with STRATJOINT's per-stratum projection (LEAN-56). Proved from CircuitCreditPeriod at tileRun (Proofs.Pouw.PeriodJ10R).",
    "Properties.Pouw.PeriodJ10R.TileStratumEscape": "unstated: a lemma to prove, not a premise: the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, which STRATJOINT's per-stratum projection of Law.stratified (LEAN-56) gives; no guarantee states it until that projection is exported and stratum moves to Definitions (Core/Draw.lean). Card: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340.",
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises and RingDevice, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
@@ -4467,7 +4636,8 @@
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.TS": {
@@ -6428,7 +6598,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCoversSession",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -7233,6 +7404,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7580,6 +7753,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -7697,6 +7872,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12358,6 +12535,8 @@
     "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12527,17 +12706,32 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
+   "digest": "737bccd347c065400fb41d6dec896ea63441bd434e3f621389763bc59fbe2cb2",
    "definitions": {
+    "Properties.RemoteAudit.CodeLayoutTiles": "12d06228aaab191a537794fa70fe03a6fc88ec418e409e8ecc0dcd61a7724916",
+    "Properties.RemoteAudit.OpensAtPosition": "9609d5c175a05d640bd4595bc01ceee1a1530db4e3c6579eb393981171742b12",
+    "Properties.RemoteAudit.PlanBlocks": "a6eab2f0c4c70872e2f9c4048cee9990921cd552e36be388d9225616ee9c8aed",
     "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
     "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
-    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+    "Properties.RemoteAudit.codeLayout": "2e5766f796ecf020ed2349c3728c585c33da43bee7c76906516362d2f6d4b62d",
+    "Properties.RemoteAudit.position": "c6d4e9fa887e96917fb1e560c653cba6810e2c8672f34216733fa3924735c12d",
+    "Properties.RemoteAudit.runBlocks": "c861e9121d65c5458cc0881e6e7177a02f546e08239d951ef67edf5351293b62",
+    "Properties.RemoteAudit.sessionLayout": "7e672a14fbaaec746a56e8d39032fe644767be17e5d0a442e6e492d5a24507e8",
+    "Properties.RemoteAudit.tileAt": "2bb40254f89138644670e928ab397b45fc2cbe726eb025846cd843c94c84c75d"
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Properties.RemoteAudit.Shared": {
@@ -12693,6 +12887,7 @@
     "RemoteAudit.zeros": "fd9a64c40e28d26bd8336e9fd795177ad085b47bfd67c280c321d125bb5c7565"
    },
    "guarantees": [
+    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -12711,17 +12906,27 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "RemoteAudit.Codec": {
@@ -12793,6 +12998,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -12960,16 +13167,25 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_honest",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Pooled": {
@@ -13101,6 +13317,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -13139,7 +13357,8 @@
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Session": {
@@ -13432,6 +13651,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -14340,5 +14561,199 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
+   "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
+  },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "honest": ["Properties.RemoteAudit.opensAtPosition_honest"],
+   "nontrivial": "Properties.RemoteAudit.opensAtPosition_nontrivial"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "honest": ["Properties.RemoteAudit.planBlocks_honest"],
+   "nontrivial": "Properties.RemoteAudit.planBlocks_nontrivial"
+  },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "honest": ["Properties.RemoteAudit.steered_of_checked_honest"],
+   "nontrivial": "Properties.RemoteAudit.steered_of_checked_nontrivial"
+  }
+ },
+ "unwitnessed": {
+  "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263",
+  "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "b5df1631d6de9f44fb5a1e710b018846b0292957df4809e64c54ceeda837320f",
+  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "8e473fef8f065ddce579a5caca0e4e7ce35b129bbd576c43ef682e628f4a1de3",
+  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200": "eaf5442abb4e631e913657b8c2d54421f389fe557fed648067ff77e673c620da",
+  "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": "606a2e4fac1660a70473857cbb34860a5460f7308c5769766de8a0e7c386fd9e",
+  "MemoryChallenger.Properties.SecurityProofs.judgeSigned": "18e0948e93d4aeb7c724cb5e480d3ee21588058eecdfa3567bfd45c38abb31b9",
+  "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": "e110607354acc6d4bf6477fd72ec62960d286708f367dc42da6d9ed2bec3e907",
+  "MemoryChallenger.Properties.SecurityProofs.verdictSigned": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2",
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "0969d0b3d0e6dfbfa3ce5e2da9cc3da00190bde35b39c5045e998b486d7ae8c8",
+  "NciCheck.Properties.SecurityProofs.AcceptsExactly": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
+  "NciCheck.Properties.SecurityProofs.BaselineProvenance": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
+  "NciCheck.Properties.SecurityProofs.CheckAccepts": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5",
+  "NciCheck.Properties.SecurityProofs.CheckRefuses": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a",
+  "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": "a8bd41ed9bc36f1c11a7c3e6a0e82a2e56542cacb7779adabd2c4101002bf833",
+  "NciCheck.Properties.SecurityProofs.Decodes": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd",
+  "NciCheck.Properties.SecurityProofs.DescAgrees": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
+  "NciCheck.Properties.SecurityProofs.DescReports": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b",
+  "NciCheck.Properties.SecurityProofs.DescThrottles": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e",
+  "NciCheck.Properties.SecurityProofs.DescThrottlesDark": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2",
+  "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
+  "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
+  "NciCheck.Properties.SecurityProofs.DescWitnesses": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
+  "NciCheck.Properties.SecurityProofs.RejectsExactly": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
+  "NciCheck.Properties.SecurityProofs.Reports": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
+  "NciCheck.Properties.SecurityProofs.Throttles": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
+  "NciCheck.Properties.SecurityProofs.ThrottlesDark": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d",
+  "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7",
+  "NciCheck.Properties.SecurityProofs.ThrottlesSlots": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263",
+  "NciCheck.Properties.SecurityProofs.Witnesses": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
+  "Pous.Component.SecurityProofs.runAccepts": "1f62adc1d401e89ae7fd1e127eddd0626124b177506be24f96f20e82cb2d9f2b",
+  "Pous.Component.SecurityProofs.runAccepts_by": "4a75b839bf771d49dde5409e73b4d3df4c807a730fd4bc285d3fa8f71c25b1c6",
+  "Pous.Component.SecurityProofs.runAccepts_complete": "4bdbbc1dafa32086e3fe354f8e3b7d3441554445b2e54eceda3b9059ad17c1db",
+  "Pous.Component.SecurityProofs.runAccepts_fails": "01950969f54875465e0aee46dc84f3ac02d53c4f0ec7ecad8307ae34d599426f",
+  "Pous.Component.SecurityProofs.runAccepts_meets": "cd61625db90b44d5204d4f2e3dac303dd17c84d397cc9fe8ec503d5d4d141d5c",
+  "Pous.Component.SecurityProofs.runBinds": "f1c66a8d1f3f6164547133133fdcdd331c75d520758f4137a313b1ee437b83d8",
+  "Pous.Component.SecurityProofs.runBinds_by": "cae0d8833e038b335902ce17da54fae64182d90fa7eb297d659fe5aa0656d2e6",
+  "Pous.Component.SecurityProofs.runBinds_fails": "a859641de48e9964059f341fffb59ef357e85595aea2c1e18ce8e70527328030",
+  "Pous.Component.SecurityProofs.runBinds_meets": "996ede9861ffa68932a6361f2af0db59b33f5c674880e399726dac212672321d",
+  "Pous.Component.SecurityProofs.runDigest": "5352d76b5127b71a69055d8fcbec89fb2c610ef636bce7be7fc5f56bae480cd3",
+  "Pous.Component.SecurityProofs.wipeAccepts": "4d618aa961b5a75a729863911c1a74a6814ce6e7b6f25377db57255a3822f06a",
+  "Pous.Component.SecurityProofs.wipeAccepts_by": "ac58b689636e0d20bd6762b4bc1d74cdaab80e83e47008fc243e140e639364ce",
+  "Pous.Component.SecurityProofs.wipeAccepts_complete": "512194c71d7ab9ea466852fe314d7cbc69530028b4f45f8471329223b5f9b90f",
+  "Pous.Component.SecurityProofs.wipeAccepts_fails": "bd724c9b075b560f379cd86659ac6fe4fc3312c2280f631d26995143f62ff7c5",
+  "Pous.Component.SecurityProofs.wipeAccepts_meets": "2d86adbf1b0e618863617c0c79ba56b0969ae3131084736a7c151e36e1ad428f",
+  "Pous.Component.SecurityProofs.wipeDigest": "c9473b1d1c22ef5238edb88fc8bdeef656b28d1b9bc55599428c71b6be9f3127",
+  "Pous.EndToEnd.SecurityProofs.runCheckAccepts": "71902a65dd8a9adc2df40323be3e5de079a94eea74277938847d0dceba81ecad",
+  "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": "d739e355c470adec077c55bcab72e4f9643a5c3b0a930e25382fb477cd500d78",
+  "Pous.Period.SecurityProofs.obligationHeld": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
+  "Pous.Period.SecurityProofs.periodCapacity": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
+  "Pous.Period.SecurityProofs.periodHeld": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309",
+  "Pous.Period.SecurityProofs.periodHeldAt": "0654ba44ddb9ce5cd0016e31b85a2b00599c4b03a263febd27ff5faeb4681907",
+  "Pous.Period.SecurityProofs.periodHeldDemo": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d",
+  "Pous.Period.SecurityProofs.periodHeldDeployed": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
+  "Pous.Period.SecurityProofs.periodHeldNontrivial": "2cfa1eed4accb530e3f5570ec5d41e4f81c6a09f60324b20fc5d5da711a012e2",
+  "PousCheck.Properties.SecurityProofs.acceptsDecodes": "147702d45231f61ee43eef6d3a0f8e063948e0d0f874124c5542abf5dfbc8e67",
+  "PousCheck.Properties.SecurityProofs.publishesRoot": "9e37b17a2c12a29fe835857c63299bb9b88aff6578a04e0d53da2bb680c0ce16",
+  "PousCheck.Properties.SecurityProofs.timedAuditAccepts": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
+  "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": "c149bb063996cfd7747078d73e0e18672f15cd3c9580fec061994328bb9d7f9b",
+  "Proofs.NetworkCertifier.encardAcceptedObservationsLe": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd",
+  "Properties.CertifierDevice.issuerVerifies": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b",
+  "Properties.Composition.acceptMeans": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320",
+  "Properties.Composition.answerAccepts": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2",
+  "Properties.NetworkCertifier.acceptedRowsAreProgramRows": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
+  "Properties.NetworkCertifier.acceptsLinkWindows": "a374000c189ed27fa1b6cc18a391c22904be180eff3e1a897574253e30383a90",
+  "Properties.NetworkCertifier.acceptsOneRecordEach": "d42de92f7820044006cc71b9e70572f5e891cf1517633894a1af4134899c7cf5",
+  "Properties.NetworkCertifier.answerAccepts": "ccee8d59f116f6aff96f10a3791ea371bd9e98f7fd0f39ca6aa03076a266a384",
+  "Properties.NetworkCertifier.decodeRefusals": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df",
+  "Properties.NetworkCertifier.linkWindowAcceptMeans": "85902942cc3dbf037e927cde2de8d79125f28d06c78d5eafdc3fa83578d150b1",
+  "Properties.NetworkCertifier.malformedEvidenceRejects": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953",
+  "Properties.NetworkCertifier.undecidedPending": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
+  "Properties.NetworkCertifier.undigestedParamsReject": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5",
+  "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
+  "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
+  "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
+  "Properties.NetworkRecords.noGridMeans": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee",
+  "Properties.Pouw.Check.acceptMeans": "545ca67099062d0dd1c98c4469e8dc936d2200557cb1cf253be4196afe8f360e",
+  "Properties.Pouw.Check.acceptedDraw": "5f9f29337f12c4f3ebedddade268afd4f5256e64f1177e1ee333437f0cefae9e",
+  "Properties.Pouw.Check.acceptedInRange": "278636f5197f185a387db819593f8554ba9bf66cdfabbfe82122f96236923355",
+  "Properties.Pouw.Check.acceptedIsTheService's": "4bbb525fc1112475ad5ad614cb28e55a2d79ac80ab513db40f6e3e1da768db7f",
+  "Properties.Pouw.Check.commitmentKeepsBytes": "ac05a786e1a5c2a3c155575f091a80cf244aa534361f3b3133e47b7808a17090",
+  "Properties.Pouw.Check.digestIsOneStage's": "7f35fb22b84c04ee517a37f3a246486f5a3fc4dc0736958050ae088fdc45acd7",
+  "Properties.Pouw.Check.neverNull": "4d3318d61bae44d61571509ec5bb2c448b2439bff3c26001f1ab41f31c262925",
+  "Properties.Pouw.Check.undecidedOnlyFromService": "bc2e50263838b4ba091dd8a089002f4fb04f5a55999dee3790fe39b0a015502e",
+  "Properties.Pouw.Commit.coinAccepts": "d53750168ca3e888be828d67ddf06ec2fce971334aab1109e34a6229fe8b556e",
+  "Properties.Pouw.Commit.coinBinding": "9881ce35860920a62862ad709801881a1d1ed754df2a5f433a78dc21e07d29ac",
+  "Properties.Pouw.Commit.coinRaises": "2b5075ad8ae93629bac87f1ffdca90b1d18a30d172ee6b84d8080115d68da6bf",
+  "Properties.Pouw.Commit.domainRefusals": "3027f3c9a6bed6a9a79e76b844ba678bcb31f3a8001b6b67436a898a30e7583b",
+  "Properties.Pouw.Commit.drawCoinAccepts": "94d38a0225cde06f3731a9af9350f6b5d174a69e88a3bb9db608658d77be19a1",
+  "Properties.Pouw.Commit.drawShape": "a9b27ef9d784124ffefdc3f62ee866098fa0560ff916a4dfa2c1b28e149e9239",
+  "Properties.Pouw.Commit.epochSaltAccepts": "552e94e629015560964a7134592c5c3b699c681120641a55554dac260e91fe1c",
+  "Properties.Pouw.Commit.frameInjective": "55203d8399261f28172ad062cee20d71b2dff7c11cff480c9d93e90eec22c625",
+  "Properties.Pouw.Commit.frameSizes": "2fcbf326a4d9e4cbe51b6dd8ccd56bf540629951fe22d1650ead90a10658f4fd",
+  "Properties.Pouw.Commit.keyRefusals": "fb2ac3684a0c5eba4fe7b1320a4738377c2e55fb9081a2784423875b97cd074f",
+  "Properties.Pouw.Commit.keySize": "8417ce6814230e1eabe8e5c5d56bce6165a4c858b09664e5f694138c601d9195",
+  "Properties.Pouw.Commit.leafRefusals": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33",
+  "Properties.Pouw.Commit.saltRefusals": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac",
+  "Properties.Pouw.Commit.saltSize": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
+  "Properties.Pouw.Credit.SecurityProofs.epsAtSound": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
+  "Properties.Pouw.Credit.SecurityProofs.establishedSound": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
+  "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
+  "Properties.Pouw.LiveSalt.acceptMeans": "08ffebe48af4af15238fe6dff6acba886d81b463b52ce075c4ac2481e6477319",
+  "Properties.Pouw.LiveSalt.epochRootBinding": "a689e7512d811f97c080ab5920d02bea4bec2633b2a6d4ec515d7d7e183daf52",
+  "Properties.Pouw.LiveSalt.liveCoinBinding": "6a4f2a38e49ed53c55f4d4ef8cac841394717eaeb553b22fa833e793abacb403",
+  "Properties.Pouw.LiveSalt.onePair": "57869adb3ff29c03998916c610afca59953d0f995b5afeef79df776645a3b476",
+  "Properties.Pouw.LiveSalt.oneRoot": "abbe54e38c4154054c2447d5e6952206cbe7635ce6145e379905a461377a40a0",
+  "Properties.Pouw.LiveSalt.rowSeedBinding": "1a019f5616cb2c5552794b56c5cc73bb24cc6a061d261b53936cf95fcbd956bb",
+  "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "9760d3f0de8b2e011d055cb27ac03744c5ba66617c21c1e80df0b8673106c567",
+  "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
+  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
+  "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
+  "Properties.Pouw.Served.SecurityProofs.servedWork": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
+  "Properties.Pouw.Strata.strataTile": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566",
+  "Properties.Pouw.Window.bucketCost": "d8d24f0d8121d7c9d0c53aaa3197391b2491522ee3c3498598ba7f64330b6be4",
+  "Properties.Pouw.Window.bucketCost3": "d576553bc5479500276cb0a46dc9f2c1e7b7df255d7222456baa0fc54834001a",
+  "Properties.Pouw.Window.bucketCredits": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f",
+  "Properties.Pouw.Window.bucketRefuses": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd",
+  "Properties.Pouw.Window.drawMisses": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
+  "Properties.Pouw.Window.floorPointGreatest": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1",
+  "Properties.Pouw.Window.floorPointRefuses": "973981d8d98b28c9c2a51aa25b7fc3e7d0e30419e2c784c52b5e901c289a9385",
+  "Properties.Pouw.Window.kPrimeLeast": "5490be2a87fb8935e8d06c8e5adf1656ae9203186a8aa1fb02f9aa650d865aa9",
+  "Properties.Pouw.Window.kPrimeRefuses": "39670eae87e2d8d90b32f391473aba88a7b1652ed97adb56987e0410d318ef78",
+  "Properties.Pouw.Window.levelRefuses": "1c478133e352d4990c32d730d66228a533bb886955dc937373f14325e31b42b2",
+  "Properties.Pouw.Window.levelsCount": "adead606c9dfc7cebaa2c7f141e8009da48e039db74a6250f919b14e30a3a510",
+  "Properties.Pouw.Window.levelsRefuses": "78c7744cee711526988fd65aa01432d39c9e1d71cf8518faeeea35dc6988b5f8",
+  "Properties.Pouw.Window.padLeast": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e",
+  "Properties.Pouw.Window.padRefuses": "2c2d22f4c1189a576da9882358b50af1699c2d28f7dee2443267d52fe37f67ca",
+  "Properties.Pouw.Window.pointRefuses": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
+  "Properties.Pouw.Window.workAtRefuses": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
+  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
+  "Properties.RemoteAudit.Component.acceptIsVerified": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f",
+  "Properties.RemoteAudit.Line.lineChecked": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
+  "Properties.RemoteAudit.Line.lineRegistered": "dc010c6f5a9aaf0fbc666592ae5a47a0f427bba6f06b16b6e290c6305ccda1ee",
+  "Properties.RemoteAudit.Line.stretchBound": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680",
+  "Properties.RemoteAudit.Shared.acceptDrawsOpenable": "0b743610595de5577ff9f84574ecfc2bbf1e882858d572dac4296642b8419bb8",
+  "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": "94daa863d90847df9a5df134d7e03726912631b5d730377f941ba6a25e0b9197",
+  "Properties.RemoteAudit.Shared.drawIsSubset": "254aaf81436f73958b6d16fb3bbe114b0eec2ae6b35b35134e46339aaa03b8aa",
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": "183d024d49347ffdd47478d21385093afa15cb34036387386fad9590e1904208",
+  "Properties.RemoteAudit.Shared.recordKeptAfterDraw": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae",
+  "Properties.RemoteAudit.Shared.sessionDrawsRecords": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773",
+  "Properties.RemoteAudit.acceptChecksOpenings": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad",
+  "Properties.RemoteAudit.acceptDrawsOpenable": "df20335f7f7d6e988e24076b706a7e1237000b99f240aec19fdcf97cc70df7cb",
+  "Properties.RemoteAudit.acceptOpensDraws": "e1d6123278d7730f4b3dcbef749274c3828901a8a55a9acbf9964735a446cae8",
+  "Properties.RemoteAudit.acceptedMinPasses": "0d529f21b51d610996e67758bd106ab06354a700bbb13590c9f87df83e25cb88",
+  "Properties.RemoteAudit.appendsInOrder": "f20737a675f5169f62fdfab84b3bbc63fe698266617504348fba5178463cd97a",
+  "Properties.RemoteAudit.changedReadsDistinct": "3fa28ce2488ed71727f4bb8023747125b95abe20a9a494fa45e5a29c21b0aada",
+  "Properties.RemoteAudit.chunkedIsWhole": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb",
+  "Properties.RemoteAudit.drawIsSubset": "f8c3a7d75200e11be1cf3c4a8cc96730a7ee020faa4020075d9ef3deb7b6f7d4",
+  "Properties.RemoteAudit.lifetimeCapped": "81238c57be0d96899fa06e143efbd005767864b21d0ba703b1341cb980a9a0d7",
+  "Properties.RemoteAudit.lineCoversSession": "a509370ffb2c6bc2f0bb6e80eabd220919f09ce302bef13de612d0e53c96a49d",
+  "Properties.RemoteAudit.liveIsRun": "f590e7328b4bf6c7dbfb8362da3e8a235c1e21eed5f61a86e741e80cdda95ec5",
+  "Properties.RemoteAudit.openingsUnreadUntilDrawn": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310",
+  "Properties.RemoteAudit.passesChained": "18a77f61543a7fe37e2288837a3854e9bea3524905d25b92dca9b06d4b3bed57",
+  "Properties.RemoteAudit.passesReadDistinct": "90eed93483409e786c68ecf37861604fbc03d72f97d7d1ed12f66bfe5990779e",
+  "Properties.RemoteAudit.passesStepped": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea",
+  "Properties.RemoteAudit.planReadsDistinct": "9071e783cf3cfda7e59180292d7380a8d105a2c9411f27877df8bdc87bee8691",
+  "Properties.RemoteAudit.pooledCovers": "4e42619c9a38980ce0cbfba9b6dcfeef984a6c3755f7e7dac1e64a52a7536e03",
+  "Properties.RemoteAudit.pooledCoversSession": "c426dc59633ca4f41787f55f427a54e99c5c0909bd08720e02ce311bd3e2055b",
+  "Properties.RemoteAudit.receiptsBelowLimit": "80b7bc07dd0a13d6afe9f84c7dbeddf1510a7f018442f3fc995a863b3c69d1d1",
+  "Properties.RemoteAudit.recordKeptAfterDraw": "4dea8a6ffab48be464b58e4001bb9086128588986c213b5fcc464b66dbca14b0",
+  "Properties.RemoteAudit.releasedStayOut": "9a969c04fe8d92c87062758f2b1063d15e60fe0db11e774427db2f8f9d45b6ce",
+  "Properties.RemoteAudit.scheduleChecked": "7d24cf63d2813c8aadbbcdeb5bcb4efc9f33c59451af0dae591fd359ca0e8e1e",
+  "Properties.RemoteAudit.scheduleFixesLayout": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e",
+  "Properties.SampledProofs.SecurityProofs.designWellFormed": "82f731f8e60afaa767b56880491e41c6465a0158b3520999c7e4c6fb29546c8a",
+  "Properties.SampledProofs.SecurityProofs.drawMisses": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
+  "Properties.SampledProofs.acceptMeans": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
+  "Properties.SampledProofs.bernoulliBounds": "e3a8add316d4cc582418009f5a507de3cf4393c4712c5ca61ea1fbefa554eb1b",
+  "Properties.SampledProofs.digestIsRecord's": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70",
+  "Properties.SampledProofs.fleetHaltIsFinal": "a17a42db87754384c41caa410b493a44f749f71b39aabe166aeb090ccfcb22fc",
+  "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
+  "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
+  "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  }
 }
