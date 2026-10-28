@@ -48,7 +48,8 @@ The logical layer:
 * `isWord`, `wordGates`, `Kind`, `kindAt`: the circuit's committed words of served products (`T_t`), and each gate's
   kind, computed from the IR, never asserted: its primitive, its site's statics (what `Gates.roleOf` reads) and
   whether each operand depends on a run input (an activation) or not (a weight), a receipt word's read off its tile's
-  operand rows. So a gather-fed `QKᵀ` and a weight matmul of one shape are different kinds.
+  operand rows (a plain circuit has none). So a gather-fed `QKᵀ` and a weight matmul of one shape are different
+  kinds.
 * `unitGates`, `unitWords`, `Declared.roundOf`, `Declared.stageOf`, `Declared.kindOf`: a unit's gates and words, its
   round, its stage counted from the last round (as `SplitStages` counts) and its words' kind (none for glue).
 * `coinMark`, `Declared.firstRead`, `Declared.cutOf`, `Declared.Late`, `Declared.UnitLate`, `Declared.Reaches`: each
@@ -307,7 +308,9 @@ def Declared.kindOf {ι : Type} (Cd : Declared ι) (u : ℕ) : Option Kind := (u
 /-! ## Cuts and late cones, from the IR -/
 
 /-- **The coins each gate's value depends on**, in order: one past the round of the latest coin input it reads,
-transitively (a coin input of a call site is its round's coin), and `0` for a value that reads no coin. -/
+transitively (a coin input of a call site is its round's coin), and `0` for a value that reads no coin. On a plain
+circuit (`Declared.Plain`) every mark is `0`: the noised words and receipts that read a coin are A's, inside their
+tile, and no value of `D` reads one. -/
 def coinMark {ι : Type} (Cd : Declared ι) : List ℕ :=
   Cd.dag.foldl (fun ms g => ms ++ [match g.op with
     | .input .coin _ => Cd.round (Cd.call ms.length) + 1
@@ -358,6 +361,9 @@ before coin `Declared.commitRound ℓ` of the window's `rounds`, and that coin i
 (`Declared.cutOf ℓ`), or, for a computed value (no input) that only gates of its own unit read, no later than the draw
 (`rounds`). The proofs' layer cuts `ℓ` at the later of the two (`Declared.layer`), so a value of the first case has its
 IR cut there (`StageCuts`, `Proofs.Accounting.Compose.layer_stageCuts`), and the live statements take it in `Scope`.
+
+On a plain circuit the second case holds the values a tile computes only for itself. The receipts below are A's
+commitments, which the service commits on this schedule and a drawn tile's proof opens; they are not gates of `D`.
 
 The second case is the ring of depth `D` (a receipt of step `s` under the root of round `s + D − 1`, so its off-node
 live coins, about 100 ms a round trip, are hidden behind `D` steps: about 104 ms a token at `D = 2`, 0.09 ms at
