@@ -198,8 +198,9 @@ def test_both_cases_go_private_beside_answers_naming_the_records_digest(tmp_path
 
 def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, capsys):
     """`composite.py`'s own reader (`case_dirs`, `piece`) takes both directories: each piece is its protocol's, its
-    digest the record's, and its blobs v2's. Which id onsite composes as the registration (`verity/nci/v1` or
-    `verity/inference-only/v0`) is `served_cases.REGISTRATION`'s to follow, so it isn't asserted here."""
+    digest the record's, and its blobs v2's. Composed, its public output passes its own leak check and holds neither
+    case's evidence nor the Program's text. Which id a product composes as the registration is
+    `served_cases.REGISTRATION`'s to follow, so it isn't asserted here."""
     path = HERE.parent / "composite.py"
     if not path.is_file():
         pytest.skip("no composite.py on this branch yet; this runs once it lands")
@@ -221,6 +222,15 @@ def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, ca
                for p in pieces.values())
     assert pieces[SC.V2]["blobs"] == json.loads((audit / "window" / "case-v2.json").read_text())["blobs"]
     assert SC.V2 in C.COMPONENTS["onsite"] and SC.V2 in C.COMPONENTS["remote"]
+    capsys.readouterr()
+    pub = tmp_path / "public"
+    assert C.main(["remote", "--cases", str(private), "--private-out", str(tmp_path / "composed"),
+                   "--public-out", str(pub)]) == 0, capsys.readouterr()
+    public = b"".join(f.read_bytes() for f in sorted(pub.iterdir())) + capsys.readouterr().out.encode()
+    reg = json.loads((private / "inference-only" / "case.json").read_text())
+    for secret in (reg["evidence"], reg["params"]["program"][:64], pieces[SC.V2]["evidence"].hex()):
+        assert secret.encode() not in public
+    assert {c["commitment"] for c in json.loads((pub / "composite.json").read_text())["cases"]} == {v1["commitment"]}
 
 
 @lean
