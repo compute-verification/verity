@@ -40,6 +40,7 @@ RECEIPT = hashlib.sha512(b"gd-bits receipt").digest()
 DESIGNS = {
     "seg-t8": (2048, 128, 1024),
     "seg-t3": (1536, 256, 768),
+    "seg-t3-pseg": (1536, 256, 768),
     "cell-fresh": (2048, 2048, 2048),
     "cell-jr2": (2048, 2048, 2048),
     "cell-2gemm": (2048, 2048, 2048),
@@ -48,12 +49,14 @@ DESIGNS = {
 #: along K (#6369's U is on ±64; here Dither's U stream on ±80 at L′ = K). Fresh-R two-GEMM (GD-NOISE): the word
 #: wrap8(A + d_A)·Rᵀ, R a fresh uniform int8 n × K matrix, which doesn't read B
 BINX = {"cell-jr2", "cell-2gemm"}
-KIND = {"cell-jr2": "jr2", "cell-2gemm": "2gemm"}
+#: seg-t3-pseg is Dither at t = 3 with one π a segment (GD-NOISE's fix): tile τ takes π of its segment's first tile,
+#: so it is not v3.2's stream and isn't checked against `dither.cell_values`
+KIND = {"cell-jr2": "jr2", "cell-2gemm": "2gemm", "seg-t3-pseg": "pseg"}
 #: each design's operand set in E3, whose Strassen form-side wrap densities price its in-model corrections
-SIDE = {"seg-t8": "dither-A0B0", "seg-t3": "dither-A0B0", "cell-fresh": "dither-A0B0-fresh", "cell-jr2": "jr2-A0B0",
-        "cell-2gemm": "2gemm-A0"}
+SIDE = {"seg-t8": "dither-A0B0", "seg-t3": "dither-A0B0", "seg-t3-pseg": "dither-A0B0",
+        "cell-fresh": "dither-A0B0-fresh", "cell-jr2": "jr2-A0B0", "cell-2gemm": "2gemm-A0"}
 #: designs whose W′ side is drawn per call, so Strassen's W′-side forms are alu work a call; two-GEMM's R is per period
-W_PER_CALL = {"seg-t8", "seg-t3", "cell-fresh", "cell-jr2"}
+W_PER_CALL = {"seg-t8", "seg-t3", "seg-t3-pseg", "cell-fresh", "cell-jr2"}
 
 
 def mask(n: int) -> int:
@@ -108,6 +111,8 @@ class Call:
         self.dB = np.array(D.dithers(sh, sd, "B", range(n)), np.int64)
         self.X = np.array(D.noise_a(sh, sd, range(m)), np.int64)
         self.P = np.array(D.perms(sd, K, lp), np.int64)
+        if kind == "pseg":
+            self.P = self.P[[(tau // sh.t) * sh.t for tau in range(K // lp)]]
         self.W = np.array(D.noise_b(sh, sd, range(n), pi=self.P.tolist()), np.int64)
         self.V = (self.X - self.dA)[:, :lp]
         nb = self.W - self.dB
@@ -118,7 +123,7 @@ class Call:
         self.segs = [sh.seg(s) for s in range(1, self.S + 1)]
         self.w = np.stack([self.X[:, a:b] @ self.W[:, a:b].T for a, b in self.segs])
         T = np.cumsum(self.w, axis=0) & D.M16
-        for i, j in [(0, 0), (5, 77), (127, 127)]:
+        for i, j in [(0, 0), (5, 77), (127, 127)] if kind != "pseg" else []:
             ref, _ = D.cell_values(sh, sd, [0] * K, [0] * K, i, j)
             assert [int(v) for v in T[:, i, j]] == ref, (i, j)
         if kind in ("jr2", "2gemm"):
@@ -618,7 +623,8 @@ def direct_inmodel(n: int, rhos: list, depth: int = 1, w_per_call: bool = True, 
 
 
 #: the 8-bit window each design's note recommends, [r, r + 8)
-RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (8, 16), "cell-fresh": (8, 16), "cell-jr2": (4, 12), "cell-2gemm": (4, 12)}
+RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (4, 12), "seg-t3-pseg": (8, 16), "cell-fresh": (8, 16), "cell-jr2": (6, 14),
+               "cell-2gemm": (4, 12)}
 
 #: Llama-3.2-1B's linear layers a token, (K, N): qkv, o, gate+up, down; 16 layers (lm_head and attention left out)
 LLAMA_1B = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)]
