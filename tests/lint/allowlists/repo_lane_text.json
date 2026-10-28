@@ -648,7 +648,6 @@
     {"file": "benchmarks/stacked_share/share.py", "count": 4},
     {"file": "benchmarks/tc_probe/tc_probe.py", "count": 2},
     {"file": "benchmarks/tc_probe/tcgen05_tiles.cu", "count": 1},
-    {"file": "benchmarks/tc_probe/tests/test_instances_hw.py", "count": 1},
     {"file": "benchmarks/tc_probe/trust.py", "count": 1},
     {"file": "benchmarks/tc_probe_fp4/tcgen05_fp4.cu", "count": 1},
     {"file": "benchmarks/torch_gpu/j10r_sm90/README.md", "count": 4},
