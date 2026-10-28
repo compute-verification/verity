@@ -178,15 +178,14 @@ class RankExtension:
     def h1rank_install(self, entry: str, los: Mapping[tuple[int, int], int], shapes: Sequence[Sequence[int]],
                        modules: Mapping[int, str], rows: int, steps: int, key: bytes, ship: bool = False) -> dict[str, Any]:
         """This rank's `RankRun` from linear ``los[(pp, tp)]`` on, its hooks wired (``ship``: its calls' rows go to the
-        holder's `Served`); returns its weights' roots by global index (`pouw_h1.weight_root`, as `pouw.commit_weights`)."""
+        holder's `Served`); returns its weights' roots by global index (`pouw_h1_hooks.weight_roots`, as `pouw.commit_weights`)."""
         _, layers = self._h1rank_layers()
         lo = int(los[self._h1rank_rank()])
         run = RankRun(entry, modules, [tuple(s) for s in shapes], rows, steps, lo, lo + len(layers), key, ship=ship)
         hooks = Hooks(tag=f"{entry}/rank{lo}")
         wire_rank(run, hooks, layers, rows)
         self._h1rank = {"run": run, "hooks": hooks, "sent": 0}
-        return {"lo": lo, "roots": {lo + i: PH.weight_root(lo + i, PH.numpy_of(m.weight)).hex()
-                                    for i, m in enumerate(layers)}}
+        return {"lo": lo, "roots": {w: r.hex() for w, r in PHK.weight_roots(layers, lo).items()}}
 
     def h1rank_open(self, salt: bytes) -> None:
         self._h1rank["run"]._salt = bytes(salt)

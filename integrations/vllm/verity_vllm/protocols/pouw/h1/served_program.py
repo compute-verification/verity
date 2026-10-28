@@ -1,14 +1,20 @@
 """The window Program a served H1 window declares before it serves (`declared`), the layout it is declared over
-(`layout`, `declared_layout`), the bytes the period commits of it (`descriptor`), and the card it is declared for
-(`card_arch`): `pouw_h1_served.Served` declares one per period and every window of the period serves it."""
+(`layout`, `declared_layout`), the bytes the period commits of it (`descriptor`, written by `write_program`), and the
+card it is declared for (`card_arch`): `pouw_h1_served.Served` declares one per period and every window of the period
+serves it."""
 from __future__ import annotations
 
 import functools
+import gc
+import gzip
+import hashlib
+import json
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from verity.core.protocols.pouw.circuit import h1device as HD
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
@@ -65,15 +71,40 @@ def descriptor(program: Program) -> bytes:
     return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
 
 
+def write_program(program: Program, layout: Mapping[str, Any], out: Path | str, *, rows: int, steps: int) -> str:
+    """`program`'s `codec.program_digest`, streamed once into ``out``'s `pouw_h1.PROGRAM` (its `descriptor`, gzipped) as it
+    is hashed, and its `pouw_h1.PROGRAM_META`: the digest, the descriptor's bytes, its `layout` (`declared_layout`, which
+    core's `credit.layout_of` reads from it), T ``rows`` and S ``steps``. A period-open commits the digest and the circuit
+    files built from these (``served_verdicts.py period``)."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    h, size, on = hashlib.sha512(), 0, gc.isenabled()
+    gc.disable()
+    try:
+        with gzip.open(out / PH.PROGRAM, "wb", compresslevel=1) as f:
+            for chunk in descriptor_chunks(program):
+                h.update(chunk)
+                f.write(chunk)
+                size += len(chunk)
+    finally:
+        if on:
+            gc.enable()
+    digest = h.hexdigest()
+    meta = {"program_digest": digest, "file_sha512": digest, "bytes": size, "rows": int(rows), "steps": int(steps),
+            "layout": dict(layout)}
+    (out / PH.PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
+    return digest
+
+
 def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
                     tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
     """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
     linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
-    without the Program (the proof service sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
+    without the Program (the proof system sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
     mods = [modules.get(w, str(w)) for w in range(len(shapes))]
     calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
     return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
             "linears": [[mods[w], k, n] for w, (n, k) in enumerate(shapes)], "m": HW.slot(rows, tile), "tile": list(tile)}
 
 
-__all__ = ["PREFIX", "card_arch", "declared", "declared_layout", "descriptor", "layout"]
+__all__ = ["PREFIX", "card_arch", "declared", "declared_layout", "descriptor", "layout", "write_program"]
