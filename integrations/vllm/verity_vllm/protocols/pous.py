@@ -476,7 +476,7 @@ class PousOption(Option):
         q = self.store.params
         (out / "pous.json").write_text(json.dumps({
             "answer": answer, "blocks": q.blocks, "eps": str(got.eps), "lean": lean, "placement": where,
-            "rounds_answered": self.answered - answered, "s_bits": got.s_bits, "seconds": seconds,
+            "rounds_answered": self.answered - answered, "s_bits": got.public("s_bits"), "seconds": seconds,
             "setup": {"fresh": fresh, "encode": self.store.encode if fresh else None}, "w_bytes": q.w_bytes},
             sort_keys=True, indent=1))
         return answer

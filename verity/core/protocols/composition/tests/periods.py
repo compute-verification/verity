@@ -104,7 +104,7 @@ def build(tmp: Path) -> None:
     signer = M.deployed_signer()
     store = _committed(T)
 
-    def space(name: str, run=None, **kw) -> pous.Period:
+    def space(name: str, run=None, **kw) -> pous.Run:
         mc.SessionLog.create(tmp / name)
         kw = {"signer": signer, "log": mc.SessionLog(tmp / name), "clock": M.Clock(10 ** 9), **kw}
         if run is not None:
