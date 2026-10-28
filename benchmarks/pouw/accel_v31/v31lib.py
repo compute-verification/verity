@@ -53,6 +53,8 @@ from typing import Self
 
 import numpy as np
 
+from verity.core.protocols.pouw.circuit import dither
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import v31
 
@@ -205,7 +207,7 @@ class Prover:
         self.lib.check(self.lib.open(self.h, c, parr, len(pos), rows, paths))
         off = self.calls[c]["off"]
         r, pa = rows.raw, paths.raw
-        return [(r[x * row:(x + 1) * row], v31.cref.prf_salt(self.ks, off + p),
+        return [(r[x * row:(x + 1) * row], dither.prf_salt(self.ks, off + p),
                  tuple(pa[64 * (x * depth + d):64 * (x * depth + d + 1)] for d in range(depth))) for x, p in enumerate(pos)]
 
     def answer(self, c: int, i: int, j: int, s: int) -> dict:
@@ -339,9 +341,9 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
                 w[a:a + ln] = g_values[a:a + ln]
             values, rep["forged_tiles_changed"] = bytes(w), changed
         ref = v31.fill_commit(f, values, p.ks, p.calls[c]["off"])
-        rep["values_equal"] = g_values == ref.values
+        rep["values_equal"] = g_values == values
         if not rep["values_equal"]:
-            rep["values_bad_bytes"] = int((np.frombuffer(g_values, np.uint8) != np.frombuffer(ref.values, np.uint8)).sum())
+            rep["values_bad_bytes"] = int((np.frombuffer(g_values, np.uint8) != np.frombuffer(values, np.uint8)).sum())
         rep["levels_equal"] = g_lv == v31.levels_bytes(ref.levels)
         rep["root_gpu"], rep["root_ref"] = root.hex()[:32], ref.root.hex()[:32]
         check = os.urandom(64)
