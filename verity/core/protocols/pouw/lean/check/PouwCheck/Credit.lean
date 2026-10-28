@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import Flock.FV3
 import Flock.Keccak
 import Flock.Program
 import Flock.RegKnown
@@ -848,7 +849,7 @@ def isHeld : Json → Bool
   | _ => false
 
 /-- The node at (`level`, `index`) of `d`'s tree from the subtree roots `have_`, and its pads past its count. -/
-def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
+def treeAt (d : Flock.FV3.Sha512.Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
   | 0, index => match have_.get? (0, index) with
     | some h => some h
     | none => if index ≥ d.count then some (d.pad index) else none
@@ -861,7 +862,7 @@ def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → N
 
 /-- `credit.tree_root`. -/
 def treeRoot (domain : ByteArray) (count : Nat) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Option ByteArray :=
-  treeAt ⟨.sha512, count, domain⟩ have_ (PouwCommit.depth count) 0
+  treeAt { id := domain, count } have_ (Flock.log2ceil count) 0
 
 def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 
