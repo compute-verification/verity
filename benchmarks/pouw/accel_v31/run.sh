@@ -131,6 +131,8 @@ if [ "${CUTLASS:-1}" != 0 ]; then
   echo "build cutlass rc $?" >> "$O/rc.txt"
   CUT=(-DV31_CUTLASS "$obj")
 fi
+# NVFLAGS -DV31_EXT_GEMM=1: a served call's D at S = 1 on ext_gemm.h's entry, cuBLASLt behind it; -DV31_EXT_GEMM=2 SRC.cu:
+# SRC.cu defines the entry
 build() {   # BIN LOG [nvcc flags] (BSHA: sha512.cuh's flags in place of SHA_FLAGS)
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${BSHA:-${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1}} "${CUT[@]}" \

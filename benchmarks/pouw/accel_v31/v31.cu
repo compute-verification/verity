@@ -77,6 +77,12 @@ static_assert(V31_SX == 0 || V31_SX == 1, "V31_HCV: lowreg.cuh's rounds take ROL
 #else
 #define SX_FORM ""
 #endif
+#ifndef V31_EXT_GEMM
+#define V31_EXT_GEMM 0
+#endif
+#if V31_EXT_GEMM
+#include "ext_gemm.h"
+#endif
 
 #define CL(x)                                                                                  \
   do {                                                                                         \
@@ -1554,6 +1560,34 @@ static void lt_free(Lt& L) {
   cublasLtDestroy(L.h);
   cudaFree(L.ws);
 }
+#if V31_EXT_GEMM == 1
+// ext_gemm.h's entry on cuBLASLt: load keeps b, the first GEMM tunes on its own operands
+struct ExtLt {
+  int m, n, k;
+  const int8_t* b = nullptr;
+  Lt lt{};
+  bool tuned = false;
+};
+extern "C" {
+void* v31_ext_init(int m, int n, int k) { return new ExtLt{m, n, k}; }
+int v31_ext_load(void* h, const int8_t* b, cudaStream_t) {
+  static_cast<ExtLt*>(h)->b = b;
+  return 0;
+}
+int v31_ext_gemm(void* h, const int8_t* a, int32_t* d, cudaStream_t st) {
+  ExtLt& e = *static_cast<ExtLt*>(h);
+  if (!e.b) return 1;
+  if (!e.tuned) { lt_setup(e.lt, e.m, e.n, e.k, a, e.b, d, st); e.tuned = true; }
+  lt_run(e.lt, a, e.b, d, st);
+  return 0;
+}
+void v31_ext_free(void* h) {
+  ExtLt* e = static_cast<ExtLt*>(h);
+  if (e->tuned) lt_free(e->lt);
+  delete e;
+}
+}
+#endif
 
 // The second baseline: CUTLASS's int8 GEMMs that sm_120 runs (the harness's cutlass_2x.cu, kind 7: mma.sync IMMA.16832
 // at four tile shapes; linked in under -DV31_CUTLASS), the fastest of those that implement the shape (5 calls each), D =
@@ -1857,6 +1891,7 @@ struct Fill {
 #endif
   // the wg GEMM of D's clock64 sums (wgp::Args::clk), two slots of 4: clk_on, the slot gemm() passes it (null: none)
   unsigned long long *clk = nullptr, *clk_on = nullptr;
+  void* ext = nullptr;   // -DV31_EXT_GEMM, a served call at S = 1: D = a' b'^T on ext_gemm.h's entry, its O rows hashed unfused
 
   // "": fine; else why the shape can't be committed
   static std::string bad_shape(int m, int n, int k, int lp, int L, int row) {
@@ -1947,6 +1982,12 @@ struct Fill {
     gemm_attrs();
     if (ltw) lt_setup(lt, m, n, k, X, W, D[0], s0);
     if (o) lt_setup(lt, m, n, k, Ap, Bp, D[0], s0);
+#if V31_EXT_GEMM
+    if (o && !Wn && !(ext = v31_ext_init(m, n, k))) {
+      fprintf(stderr, "the int8 GEMM entry refused m %d n %d k %d\n", m, n, k);
+      exit(2);
+    }
+#endif
     if (o) wg_setup();
     for (int b = 0; b < 2; b++) {
       CK(cudaEventCreateWithFlags(&ev_comp[b], cudaEventDisableTiming));
@@ -1964,6 +2005,10 @@ struct Fill {
                     (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim})
       cudaFree(p);
     if (ltw || o) lt_free(lt);
+#if V31_EXT_GEMM
+    if (ext) v31_ext_free(ext);
+    ext = nullptr;
+#endif
     for (int b = 0; b < 2; b++) {
       cm[b].release();
       cudaFreeHost(ksw[b]);
@@ -2002,6 +2047,11 @@ struct Fill {
       }
     }
   }
+  void ext_load(cudaStream_t st) {
+#if V31_EXT_GEMM
+    if (ext && v31_ext_load(ext, Bp, st)) { fprintf(stderr, "the int8 GEMM entry refused b'\n"); exit(3); }
+#endif
+  }
   // copy b's operands. Served: a' (and, when wside, b') with their sums and shifts, else copy b takes the other copy's B
   // side (the weights and their coins unchanged since); then X (and W') when a prefix-sum segment is committed
   void form(cudaStream_t st, const int8_t* a, bool wside, int b) {
@@ -2011,6 +2061,7 @@ struct Fill {
       if (wside) {
         CK(cudaMemsetAsync(bad + 2 + b, 0, 4, st));
         serve_rows_kernel<<<n, 256, 0, st>>>(B, dB, k, kb64, 1, Bp, rb[b], sb[b], bad + 2 + b);
+        ext_load(st);
       } else {
         CK(cudaMemcpyAsync(rb[b], rb[b ^ 1], 4 * (size_t)n, cudaMemcpyDeviceToDevice, st));
         CK(cudaMemcpyAsync(sb[b], sb[b ^ 1], 4 * (size_t)n, cudaMemcpyDeviceToDevice, st));
@@ -2065,7 +2116,7 @@ struct Fill {
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
     r5src = env_int("V31_R5SRC", 0);
     if (r5src < 0 || r5src > 2) { fprintf(stderr, "V31_R5SRC is 0, 1 or 2\n"); exit(2); }
-    if (wg && (kn.rp == 4 || kn.rp == 5))
+    if (wg && !ext && (kn.rp == 4 || kn.rp == 5))
       for (int b = 0; b < 2; b++) {
         xd[b] = dalloc<u64>(8 * (size_t)leaves);
         xf[b] = dalloc<u32>((size_t)leaves);
@@ -2140,6 +2191,12 @@ struct Fill {
   }
   void gemm(cudaStream_t st, int b) {
     if (ltw) { lt_run(lt, X, W, D[b], st); return; }
+#if V31_EXT_GEMM
+    if (ext) {
+      if (v31_ext_gemm(ext, Ap, D[b], st)) { fprintf(stderr, "the int8 GEMM entry refused a call\n"); exit(3); }
+      return;
+    }
+#endif
 #ifdef V31_WG
     if (o && wg) {
       wgp::Args g = wa_plain;
@@ -2602,7 +2659,10 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
         {"form_b", [&](cudaStream_t s, int r) {
            const u64 cb = (u64)n * k / 16;
            for (int i = 0; i < r; i++) {
-             if (f.o) serve_rows_kernel<<<n, 256, 0, s>>>(f.B, f.dB, k, f.kb64, 1, f.Bp, f.rb[0], f.sb[0], f.bad + 2);
+             if (f.o) {
+               serve_rows_kernel<<<n, 256, 0, s>>>(f.B, f.dB, k, f.kb64, 1, f.Bp, f.rb[0], f.sb[0], f.bad + 2);
+               f.ext_load(s);
+             }
              if (f.Wn) fill_b_kernel<<<(unsigned)((cb + 255) / 256), 256, 0, s>>>(f.B, f.dB, f.U, f.perm, f.W, cb, k, lp, f.kb64);
            }
          }},
@@ -2735,14 +2795,14 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
            "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"r5src\": %d, \"r5nhw\": %d, \"wgw\": %d, "
            "\"lminb\": %d, \"sahead\": %d, \"sha\": \"%d.%d.%d\", \"sx\": \"%s\", "
-           "\"fused_leaves\": %lld, "
+           "\"ext\": %d, \"fused_leaves\": %lld, "
            "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
            f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.r5src, env_int("V31_R5NHW", 0), f.wgw ? 1 : 0,
-           f.kn.lminb, f.kn.sahead ? 1 : 0, SHA_ADD, SHA_ROT, SHA_ROLL, SX_FORM, fused,
+           f.kn.lminb, f.kn.sahead ? 1 : 0, SHA_ADD, SHA_ROT, SHA_ROLL, SX_FORM, f.ext ? V31_EXT_GEMM : 0, fused,
            f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"cmhz\": %s}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a],
