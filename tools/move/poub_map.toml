@@ -1,0 +1,111 @@
+# The PoUB move (`python3 tools/move/rename.py --map tools/move/poub_map.toml`): Daniel's ruling of 28 Oct 2026, 12:46 and
+# 12:51 PM PDT (MEM-152): the subprotocol over a node's registered store is PoUB and only PoUB, in its paths, modules, Lean
+# names, ids and domain tags. Not PoUB: the bandwidth audit over PoUS's store (`verity/core/protocols/bandwidth/`), the
+# remote composite protocol (`Core.Remote`, `verity/core/protocols/remote/`), the inference-only policy's remote regime
+# (`Nci.*Remote*`, `DampenerRemote*`), `RemoteChallenger` and `RemoteCertifier`. v0's retired tags stay only in the one
+# frozen table the replay of recorded sessions reads (`poub.retired`). The rules for [words] are `rename_map.toml`'s.
+
+[rewrite]
+exclude = [
+    "archive/**",
+    "tools/move/**",
+    "**/CHANGELOG.md",
+    "tools/research/src/research/store/moves.json",
+    "tools/verity/lean/tests/fixtures/**",
+    "examples/h200/interfaces/tests/fixtures/**",
+]
+
+[[words_in]]
+files = ["**/*.lean", "**/lakefile.toml", "**/lean-audit.json"]
+[words_in.words]
+"The remote bandwidth audit's" = "PoUB's"
+"the remote bandwidth audit's" = "PoUB's"
+"The remote bandwidth audit" = "PoUB"
+"the remote bandwidth audit" = "PoUB"
+"The remote audit's" = "PoUB's"
+"the remote audit's" = "PoUB's"
+"The stacked remote audit" = "PoUB with stacking"
+"the stacked remote audit" = "PoUB with stacking"
+"The remote audit" = "PoUB"
+"the remote audit" = "PoUB"
+"What a remote audit shows" = "What a PoUB session shows"
+"A remote audit session's" = "A PoUB session's"
+"a remote audit session's" = "a PoUB session's"
+"A remote audit session" = "A PoUB session"
+"a remote audit session" = "a PoUB session"
+"an accepted remote audit session" = "an accepted PoUB session"
+"remote bandwidth audit" = "PoUB"
+"remote bandwidth session" = "PoUB session"
+"remote bandwidth's" = "PoUB's"
+"remote audit" = "PoUB"
+"proof of useful bandwidth (PoUB)" = "PoUB"
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/**", "Security/Proofs/Accounting/**", "Security/Definitions/Accounting.lean",
+         "Security/Proofs/Accounting.lean"]
+[words_in.words]
+"Remote" = "Poub"
+
+[[words_in]]
+files = ["integrations/vllm/**", "benchmarks/remote_session/**", "benchmarks/one_stage/**"]
+[words_in.words]
+"serve_remote" = "serve_poub"
+"test_serve_remote" = "test_serve_poub"
+"RemoteOptions" = "PoubOptions"
+
+[words]
+"RemoteAudit" = "PoubCheck"
+"remote_audit" = "poub_check"
+"remote-audit" = "poub-check"
+"RemoteBandwidth" = "Poub"
+"remote_bandwidth" = "poub"
+"remote-bandwidth" = "poub"
+"remote_session" = "poub_session"
+"remote_receipts" = "poub_receipts"
+"remote_coins" = "poub_coins"
+"remote_verifier" = "poub_verifier"
+"remote-verifier" = "poub-verifier"
+"REMOTE_VERIFIER" = "POUB_VERIFIER"
+"remote_filler_gib" = "poub_filler_gib"
+"remote-filler-gib" = "poub-filler-gib"
+"Accounting.Remote" = "Accounting.Poub"
+"Accounting.Assumptions.Remote" = "Accounting.Assumptions.Poub"
+"Accounting.Guarantees.Remote" = "Accounting.Guarantees.Poub"
+"Accounting.SecurityProofs.Remote" = "Accounting.SecurityProofs.Poub"
+"Accounting.RateAuditRemote" = "Accounting.RateAuditPoub"
+"Accounting.Guarantees.RateAuditRemote" = "Accounting.Guarantees.RateAuditPoub"
+"Accounting/Remote" = "Accounting/Poub"
+"Accounting/Assumptions/Remote" = "Accounting/Assumptions/Poub"
+"Accounting/Guarantees/Remote" = "Accounting/Guarantees/Poub"
+"Accounting/RateAuditRemote" = "Accounting/RateAuditPoub"
+"Accounting/Guarantees/RateAuditRemote" = "Accounting/Guarantees/RateAuditPoub"
+"RemoteSession" = "PoubSession"
+"RemoteHeld" = "PoubHeld"
+"RemoteWindow" = "PoubWindow"
+"RemoteDraw" = "PoubDraw"
+"RemoteSketch" = "PoubSketch"
+"RemoteOutside" = "PoubOutside"
+"RemoteBinding" = "PoubBinding"
+"RemoteP2" = "PoubP2"
+"RateAuditRemote" = "RateAuditPoub"
+"REMOTE_SESSION" = "POUB_SESSION"
+"remote_or_skip" = "poub_or_skip"
+"remote_kv_pages" = "poub_kv_pages"
+"remote-kv-pages" = "poub-kv-pages"
+"remote_weight_blocks" = "poub_weight_blocks"
+"remote-weight-blocks" = "poub-weight-blocks"
+"remote_kv_lib" = "poub_kv_lib"
+"remote-kv-lib" = "poub-kv-lib"
+"remote-session-lib" = "poub-session-lib"
+"remote_step_ms" = "poub_step_ms"
+"remote-step-ms" = "poub-step-ms"
+"remote_plan" = "poub_plan"
+"remote-plan" = "poub-plan"
+
+[keep_in]
+# A sampled-proofs test program's root, not PoUB's.
+"verity/core/service/sampled_proofs/tests/test_challenger_difftest.py" = ["RemoteWindow"]
+
+[keep]
+# How the recorded P2 fixture's W was drawn, which its commitment and C* hash.
+strings = ["verity/remote-bandwidth/tests/p2-store/w"]
