@@ -314,18 +314,20 @@ DEV void block_stamp(Stamp* stamps, u64 t0, u64 c0, u32 n, u64 work) {
   }
 }
 
+// beside the GEMM CTA the hash CTA has 80 registers a thread: its loop state is 32-bit and its start time stays in shared
+// memory, so the chaining value, its copy in the rounds and the schedule fit without a spill
 extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
   __shared__ u64 start[2];
   if (threadIdx.x == 0) { start[0] = gtimer(); start[1] = clock64(); }
   __syncthreads();
-  const u64 t0 = start[0], c0 = start[1];
-  const u64 T = (u64)gridDim.x * blockDim.x;
-  u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  const volatile u64* t0p = start;
+  const u32 T = gridDim.x * blockDim.x, nmsg = (u32)a.nmsg;
+  u32 i = blockIdx.x * blockDim.x + threadIdx.x;
   const volatile int* stop = a.stop;
   u32 n = 0;
-  while (i < a.nmsg && (a.most == 0 || n < a.most)) {
-    if (*stop || gtimer() - t0 >= a.dur_ns) break;
-    const uint4* m = a.msg + i * 64;
+  while (i < nmsg && (a.most == 0 || n < a.most)) {
+    if (*stop || gtimer() - *t0p >= a.dur_ns) break;
+    const uint4* m = a.msg + (u64)i * 64;
     u64 st[8], w[16];
     sx::iv(st);
 #pragma unroll 1
@@ -343,14 +345,14 @@ extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
     for (int q = 1; q < 15; q++) w[q] = 0;
     w[15] = 1024 * 8;
     sx::compress<0, 1>(st, w);
-    u64* o = a.dig + i * 8;
+    u64* o = a.dig + (u64)i * 8;
 #pragma unroll
     for (int q = 0; q < 8; q++) o[q] = st[q];
     ++n;
     i += T;
-    if (i >= a.nmsg) i -= a.nmsg;
+    if (i >= nmsg) i -= nmsg;
   }
-  block_stamp(a.stamps, t0, c0, n, 9ull * n);
+  block_stamp(a.stamps, start[0], start[1], n, 9ull * n);
 }
 
 // the bar's form: each thread chains compressions of a block it varies by its state, in registers

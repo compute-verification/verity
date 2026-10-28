@@ -38,7 +38,7 @@ for name, body in re.findall(r"Compiling entry function '(\w+)'.*?\n(.*?)(?=Comp
 fns = re.split(r"\n\s+Function : ", sass)
 for f in fns[1:]:
     name = f.split("\n", 1)[0].strip()
-    ops = collections.Counter(re.findall(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]+)", f))
+    ops = collections.Counter(re.findall(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Za-z0-9_.]+)", f))
     tensor = {k: v for k, v in ops.items() if "GMMA" in k}
     print(f"{name}: {sum(ops.values())} instructions, tensor {tensor}, LDL/STL {ops.get('LDL', 0) + ops.get('STL', 0)}")
     if name.startswith("gemm_") and not any(k.startswith("IGMMA.64x256x32") for k in tensor):
