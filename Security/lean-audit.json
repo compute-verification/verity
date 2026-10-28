@@ -370,13 +370,13 @@
    "owner": "@memory-accounting",
    "digest": "60c0b561a6a5e0593300d8d0fae9ca6439605f1d5cf0309818429418be1b2335"
   },
-  "Accounting.Gates.Gate.Reclamped": {
-   "owner": "@memory-accounting",
-   "digest": "047ec3fab12d90229a1c73927e479d528c43fb04223a4cfc88776b4b0ebb9bdf"
-  },
   "Accounting.Gates.InWindow": {
    "owner": "@memory-accounting",
    "digest": "925f0d1d2c5d8388a13992fb9e415906168d6cfc915b6382d3973d586a8c5c33"
+  },
+  "Accounting.Gates.IntGate.Reclamped": {
+   "owner": "@memory-accounting",
+   "digest": "047ec3fab12d90229a1c73927e479d528c43fb04223a4cfc88776b4b0ebb9bdf"
   },
   "Accounting.Gates.Property": {
    "owner": "@memory-accounting",

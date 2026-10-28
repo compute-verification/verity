@@ -108,7 +108,7 @@ def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
     (store : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → RateSketch.SketchStore N 128)
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → Fin N ↪ Fin T × Fin M)
     (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
-    (X L B εnum εden : ℕ) (W : Gates.Dag ι) (Aud : Gates.Audit) : Prop :=
+    (X L B εnum εden : ℕ) (W : Gates.IntDag ι) (Aud : Gates.Audit) : Prop :=
   RateSketch.LifetimeCapped layout joined L →
   ∀ (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (g : Fin G) (y : Y),
     ∃ (K : RateSketch.Carrier N 128) (I : Finset ℕ),
