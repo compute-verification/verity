@@ -10,7 +10,7 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity check --record [ARGS]` | the check of a clean commit, recorded as an Attempt |
 | `verity check move BASE HEAD` | the certificate that BASE..HEAD is a pure move (`check/move_check.py`) |
 | `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
-| `verity example NAME [ARGS]` | `examples/<NAME>/`'s command: `verity run` on its `config.toml`, else its runner |
+| `verity example NAME [ARGS]` | `demos/<NAME>/`'s command: `verity run` on its `config.toml`, else its runner |
 | `verity example --status` | every example's place on its two axes, how far it runs and how far its guarantee is proved, and what each next step needs |
 | `verity run CONFIG` | the parties a deployment configuration places on this machine, and its verdict |
 | `verity config new\|check\|hash` | write, check or hash a deployment configuration |
@@ -24,7 +24,7 @@ In a NAME, a `-` stands for a `_`.
 | --- | --- |
 | `verity_cli/__init__.py` | the dispatch, `verity check` and `verity lean try` |
 | `verity_cli/run.py` | `verity run` and `verity config`, over `verity.core.deploy.config` |
-| `verity_cli/examples.py` | the examples' ladder, read from each `examples/<name>/example.toml` |
+| `verity_cli/examples.py` | the examples' ladder, read from each `demos/<name>/example.toml` |
 | `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
 
 `verity run` and `verity config` refuse a configuration (`no-table`) until a workload's protocols bring a table of parties;

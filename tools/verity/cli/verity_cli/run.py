@@ -9,7 +9,7 @@
 `verity run` checks the configuration, then runs the parties it places on this machine (``--on``, default
 ``local``), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default
 a new directory under the system's temporary one). The parties are those of the static table `REGISTRY` names: the
-served window's (`examples/onsite_served/served_table.py`); `verity_cli`'s tests also run the toy's
+served window's (`demos/onsite_served/served_table.py`); `verity_cli`'s tests also run the toy's
 (`tools/verity/cli/tests/step0.py`). With no table, `verity run` and `verity config` are refused by name
 (``no-table``).
 
@@ -75,7 +75,7 @@ from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
 #: the static table: the directory on its import path, and its module (module docstring)
-REGISTRY: tuple[Path, str] | None = (ROOT / "examples" / "onsite_served", "served_table")
+REGISTRY: tuple[Path, str] | None = (ROOT / "demos" / "onsite_served", "served_table")
 #: the deploy bindings `begin` keeps beside the run (module docstring)
 BINDINGS = "bindings.json"
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools

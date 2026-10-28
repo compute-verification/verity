@@ -149,12 +149,12 @@ PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, C
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
 HEADER = ("The onsite run of the served window: onsite's five components and the wipe, each party on its machine. Run it",
-          "on each machine with `verity run THIS --on MACHINE --bindings FILE` (examples/onsite_served/README.md); the",
+          "on each machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the",
           "deploy bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
 
 
 def configuration(commit: str) -> dict[str, Any]:
-    """The configuration `examples/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
+    """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
     `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)

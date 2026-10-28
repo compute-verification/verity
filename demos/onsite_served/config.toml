@@ -1,5 +1,5 @@
 # The onsite run of the served window: onsite's five components and the wipe, each party on its machine. Run it
-# on each machine with `verity run THIS --on MACHINE --bindings FILE` (examples/onsite_served/README.md); the
+# on each machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the
 # deploy bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "pous", "bandwidth", "certifier", "wipe"]

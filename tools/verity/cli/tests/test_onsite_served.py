@@ -1,4 +1,4 @@
-"""The served window's onsite configuration (`examples/onsite_served/config.toml`) and its table (`served_table.py`):
+"""The served window's onsite configuration (`demos/onsite_served/config.toml`) and its table (`served_table.py`):
 the file is the table's configuration byte for byte and names no host; `verity run --dry-run` resolves every party,
 channel and piece with no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a
 binding the configuration has no place for; the served window runs once with every piece's hooks, and the onsite check
@@ -18,7 +18,7 @@ from verity.core.wire import Refused
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-DIR = ROOT / "examples" / "onsite_served"
+DIR = ROOT / "demos" / "onsite_served"
 CONFIG = DIR / "config.toml"
 REG = R.registry((DIR, "served_table"))
 T = sys.modules["served_table"]

@@ -87,16 +87,16 @@ gate = "USER@HOST"
 
 Every party resolved, every channel and piece, and nothing run (no GPU); with `--bindings`, a missing binding refused:
 
-    verity run examples/onsite_served/config.toml --dry-run --bindings BINDINGS
+    verity run demos/onsite_served/config.toml --dry-run --bindings BINDINGS
 
 On the prover node, from the commit `research deploy install` installed (set `[program] commit` to it, else the verdict
 names the difference under `simulated`): the served window, every piece inside it, the auditor's sides opened through
 their bindings:
 
-    verity run examples/onsite_served/config.toml --on prover-node --bindings BINDINGS --state STATE
+    verity run demos/onsite_served/config.toml --on prover-node --bindings BINDINGS --state STATE
 
 The gate's and the auditor host's sides are started by their gates when the prover's pieces open them, so
 `verity run --on gate-host` starts nothing. On the auditor host, with `STATE/out` holding the served window's public
 record, the onsite check and the period's verdict:
 
-    verity run examples/onsite_served/config.toml --on auditor-host --state STATE
+    verity run demos/onsite_served/config.toml --on auditor-host --state STATE
