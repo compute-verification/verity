@@ -12,12 +12,12 @@ the prover's bytes:
   process draws from the operating system (`State.sendHello`). The coin check reads the session's tree, link points and
   nonce from the setup's values (`helloOf`), never from the text. A setup whose sizes are past what the loop's frames
   read (`sizesOk`) is refused there: no `Hello` leaves, and the session is stopped.
-* `Hello`'s answer must be the coin tree's root and session key (`Coins.Session.start`), under a tree whose streams are
+* `Hello`'s answer must be the coin tree's root and session key (`Coins.Release.start`), under a tree whose streams are
   the session's (`streamsOk`), and it is relayed as it is.
 * `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
   `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
   `planOf`), never at a place the prover names. The coins answered must open the committed tree there
-  (`Coins.Session.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
+  (`Coins.Release.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
 * Each rep's frame is the loop's own, started on its frames port for the session and the table's rep
   (`Frames.startRep`), and the loop issues every request to it (`Frames`, on the schedule `Drive.reqs` fixes). A rep
   stream's `Round` carries the device's round, and what leaves in its place is the frame's release against the
