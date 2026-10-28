@@ -8,6 +8,12 @@ integrity by sampled proofs' one-stage audit on the proofs themselves (`SampledP
 blobs). `Core.Composition.sameB` composes them on the caller's blobs: every component accepts or remote doesn't, and any
 one's rejection rejects remote whatever the others answer. Each one's commitment is the run's record, and all three must
 commit to the same one: two records' digests reject remote whatever the components answer.
+
+A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
+fresh-input bits) in the clear. Remote composes it for the run of record of 28 Oct only, as an exception to
+everything-zero-knowledge (Daniel's ruling, 27 Oct, 9:39 PM PDT: "Let's run it in the clear tonight as a stated
+exception."). v1's private form (the division committed under hiding leaves, compliance proved, a padded profile)
+replaces it after 15:00Z on 28 Oct.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
