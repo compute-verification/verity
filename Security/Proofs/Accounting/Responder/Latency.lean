@@ -442,7 +442,7 @@ theorem B2WindowAudit : Guarantees.B2WindowAudit := by
   unfold Pous.seqAcceptsOn
   dsimp only
   refine Eq.trans (Latency.seqAnswers_congr ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1)
-    (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
+    (fun j σ i => Pous.OracleAlgorithm.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
     (fun j σ i => hA₂ W (sch.enc W x.1 x.2.1).1 j σ i _ (hbud x.1 _ _ j σ i).1 (hbud x.1 _ _ j σ i).2)
     (List.ofFn x.2.2) 0 _) hx
 

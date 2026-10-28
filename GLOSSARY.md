@@ -173,7 +173,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until they are renamed; BLAKE3's own terms | chunk (a compression's 1024-bit chunk) |
 | "block" for a piece of a counter-mode stream (coins, noise); `Randomness.block`, `J10R.noiseBlock`, `verity.ml.randomness`'s `blocks()`, until they are renamed | chunk (of the stream) |
 | "block" for a unit of the encoded store of proof of useful space (PoUS); `blocks_per_segment`, `block_bytes`, until a format version | label (a segment's top label) |
-| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `Tag.Block`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
+| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
 | "block", "block-scaled" for entries under one FP8 or NVFP4 scale; the checkpoint id `verity-fp8-block128/v1`, the Definitions `ScaledMmFp8Block_v1`, `ScaledMmFp8BlockSharedScale_v1`, `MoeExpertFp8BlockCoordinate_v2`, `BlockScaledAlignAdd`, `SiluMulFp8BlockQuant_v1`, vLLM's `weight_block_size` | scale group |
 | "block" for a range of a GEMM's inner dimension; the Lean's `D1.nBlocks`, `ThreeBlock` | segment |
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
@@ -242,7 +242,7 @@ bake it in, and renaming would invalidate every one of them for no semantic gain
   device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000.
 - **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
   ceiling (`benchmarks/pouw/machine_model/`'s data). θ is never a card's numbers; it is the registered inputs.
-- **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
+- **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Opcode`), each priced by a card's rates.
 - **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
   the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
 - **Segment**: L consecutive inner indices of one output cell, between two committed prefix sums. A Dither proof block is
