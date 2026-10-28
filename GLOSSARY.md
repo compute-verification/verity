@@ -37,10 +37,10 @@ changes here and the older name gets a row under Older names, in the same change
 
 **The lifecycle**
 
-- **Registration** registers three things, append-only: **the site**, the hardware (`Verity.Site`, recursive, folded
-  from the append-only registration); **the registered information** θ, the input gates whose values are fixed before
-  the period (the models, code and data committed up front); and **the builder** B, the ahead-of-time compiler (vLLM's
-  `program/predict/`). The subprotocols' Programs and the proof system are the protocol's own, not registered.
+- **Registration**: the developer registers, append-only, its **hardware** (modelled as **the site**, `Verity.Site`,
+  recursive, folded from the append-only registration), its **information** θ, the input gates whose values are fixed
+  before the period (the models, code and data committed up front), and a **circuit builder** B, the ahead-of-time
+  compiler (vLLM's `program/predict/`). The subprotocols' Programs and the proof system are the protocol's own, not registered.
 - **Execution**: for each **declared advice** a_j (declaring is the developer's), B outputs the **execution block** E_j,
   its partition 𝓘_j into inference blocks, and its placement loc_j on the site's registered devices. B also outputs the
   cut into proof blocks, which validation checks against public rules (each proof block's outputs within its public
@@ -49,10 +49,11 @@ changes here and the older name gets a row under Older names, in the same change
   tick, and a_j corrects it. a_j is charged only by its length, a public budget per execution block, and is committed
   after E_j runs and before E_j's challenge. PoUW's own compile is not part of B. The **declared circuit** is D = E_1 ‖ … ‖ E_n, the one use of "declared". The **actual circuit** A is everything the hardware
   computed, hidden work included, each gate placed at a device and a tick (`Accounting.Placed`).
-- **Verification** follows each execution in four steps, in order: **commitment**, **challenge** (live coins),
-  **proof** and **validation**, where the verifier checks the proofs, and the inference-only policy checks each E_j.
-  Every commitment is bound before any challenge. Execution and verification loop.
-- **Accounting**, once per monitoring period, turns what verification established into the bound (The bound, below).
+- **Verification** follows each execution in five steps, in order: **commitment**, **challenge** (live coins),
+  **proof**, **validation**, where the verifier checks the proofs, and **accounting**, which tallies each subprotocol's
+  resource accounts for E_j. The policies read those accounts: the inference-only policy checks each E_j against them.
+  Every commitment is bound before any challenge. Execution and verification loop, and the bound over a monitoring
+  period (The bound, below) is read from the tallies.
 
 **Time and blocks**
 

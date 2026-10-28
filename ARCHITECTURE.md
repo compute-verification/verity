@@ -16,7 +16,7 @@ The subprotocols run composed in two composite protocols, onsite, for an auditor
 
 ## How an audit works
 
-An audit runs registration (the site, the registered information θ and the builder B), then a loop of execution and verification, each verification in four steps (commitment, challenge, proof and validation, where the inference-only policy checks each execution block), then accounting once per monitoring period.
+An audit runs registration (the developer registers its hardware, its information θ and a circuit builder B), then a loop of execution and verification, each verification in five steps: commitment, challenge, proof, validation and accounting, where the policies (the inference-only policy among them) read each execution block's accounts. The bound over a monitoring period is read from those accounts.
 
 Sampled proofs run today as the [one-stage audit](verity/core/protocols/sampled_proofs/README.md). Both parties hold the circuit and the query that partitions it into proof blocks, and one round goes like this:
 
