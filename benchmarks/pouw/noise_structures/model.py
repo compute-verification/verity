@@ -109,11 +109,11 @@ def c_segment(perm: str, t: int, amp: int, word_bits: int, words: int, dither_bi
     or the word is 8 bits (F mod 2^8 as u8); else a dense low limb plus the high limb dense or 2:4 sparse with a CUDA
     residual; under per-segment π, D_s Uᵀ and t·(Vπ_s⁻¹)Uᵀ as two dense limbs. Unpermuted: V Uᵀ is shared by every
     segment, so D_s Uᵀ + V Y_sᵀ + t·VUᵀ costs 2 + 1/words."""
-    if perm == "none":
-        return 2 + 1 / words, "D_s·Uᵀ + V·Y_sᵀ dense, V·Uᵀ once a call"
     fmax = t * (amp + 2 ** dither_bits - 1)
     if word_bits <= 8 or fmax <= 127:
         return 2.0, "F·Uᵀ one limb (F mod 2^8 or F in int8) + V·Y_sᵀ"
+    if perm == "none":
+        return 2 + 1 / words, "D_s·Uᵀ + V·Y_sᵀ dense, V·Uᵀ once a call"
     dens, res = hi_res(perm, t, amp)
     sparse = 1 + SP24 + res * ADD  # low limb, 2:4 high limb, and res·L' residual adds a cell at ADD MAC-times each
     routes = {"F lo dense + F hi 2:4 + residual adds": sparse, "F lo + hi dense": 2.0}
