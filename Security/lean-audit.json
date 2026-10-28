@@ -18745,11 +18745,12 @@
    ]
   },
   "Definitions.Core.Accel.H200": {
-   "digest": "d7e26a863651648637515780781eecec807d9297f9f57c8afafd068ba1032c3a",
+   "digest": "e9f93314a12af777f8f51a6c624279e39ebee73fc0fe099440a72944ba621fca",
    "definitions": {
-    "Verity.Accel.H200.card": "9a7c11c13ea92af34baf8681502c011111e4720f5e4b26b81f0d1cff97269df5",
+    "Verity.Accel.H200.card": "4c9e1956a34fbc0d9933f5b00c909030e831ec26376d3425bbeda6bcd58e454f",
     "Verity.Accel.H200.card._sparseCasesOn_5": "f3b8cbb5aea664b89814a5e2e7eb685aef9d36a7b784d679f43414ceddd2f7e9",
-    "Verity.Accel.H200.clock": "501f6feb0a520614b6f64770735030e6007eb3359cdf54a22ef361980cafa987"
+    "Verity.Accel.H200.clock": "501f6feb0a520614b6f64770735030e6007eb3359cdf54a22ef361980cafa987",
+    "Verity.Accel.H200.tensorClock": "fbc75b01473fb6f71e38d9540ed163e3336bec47e6bebaa7c70f6e731903ea99"
    },
    "guarantees": [
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
