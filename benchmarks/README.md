@@ -81,16 +81,19 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
-| `bandwidth/` | PoUB's device probes: the on-chip stores S_chip has to cover, and the write ceilings that bound a fill | maintained |
+| `bandwidth/` | the bandwidth audit's GPU tagger: each chunk's tag over the store in device memory, their leaves and root | maintained |
 | `remote_session/` | the remote bandwidth audit's verifier and prover over the wire, the store on the GPUs, and serving's step rate under the audit | maintained |
 | `live_verifier/` | the remote bandwidth audit's verifier as a service on an auditor host | maintained |
 | `kv_filler/` | the filler top-up beside serving: how much of the card's read rate a period's registered reads reach, and what the top-up costs inference | maintained |
+| `kv_lifetime/` | KV page lifetimes in vLLM's page pool, and the share of live KV a lifetime cap credits | maintained |
 | `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |
 | `serve_bandwidth/` | where a served mix's DRAM read bandwidth goes on the RTX PRO 6000, by phase and kernel class | maintained |
 | `word_codec/` | the word codec and the KV cache codec on one GPU, gated against their references, and the rate audit's frontier | maintained |
 | `codec_tensor/` | the wide-word codec on one GPU, the device reader of the remote bandwidth audit's receipts, and where the decoders spend their time | maintained |
 | `property_redteam/` | the Programs the stacking property must refuse or fully budget, and the honest shapes it must pass | maintained |
 | `rate_squaring/` | the GPU's modular-squaring rate at 512, 768 and 1,024 bits, and the γ it implies | frozen |
+| `rate_redteam/` | the host CPUs' squaring rate, the price of a partial rebuild, and γ under node-level accounting | frozen |
+
 ## Numerics
 
 | Directory | What it measures | Status |
