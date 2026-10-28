@@ -772,7 +772,7 @@ def exact_floor(atoms: Mapping[str, Any]) -> dict:
 def table(spec: Mapping[str, Any], atoms: Mapping[str, Any]) -> dict:
     node, wl = spec["node"], spec["workload"]
     S, P = wl["context"], wl["prompt"]
-    out: dict[str, Any] = {"schema": "verity-stacked-share/frontier/v2", "units": "nonlinear (#4622)", "node": node,
+    out: dict[str, Any] = {"schema": "verity-stacked-share/frontier/v2", "units": "nonlinear", "node": node,
                            "workload": wl, "E_word": E_WORD, "E_before": E_BEFORE, "lifetimes_s": LIFETIMES, "R_in": R_IN,
                            "anchor": check_anchor(spec["models"], atoms, spec["anchor"], S, P), "models": {}}
     floors = {"softmax_floor": softmax_floor(atoms), "exact_floor": exact_floor(atoms)}
@@ -883,7 +883,7 @@ def markdown(t: Mapping[str, Any]) -> str:
     wl, node = t["workload"], t["node"]
     E = ", ".join(f"{e} {v:,}" for e, v in E_WORD.items())
     lines = [f"Reference: {node['name']}, a pool full of requests decoding at context S = {wl['context']}, prefills of "
-             f"P = {wl['prompt']}; exact-int8 profile; nonlinear units (#4622: property/v1's budgeted units plus one a data "
+             f"P = {wl['prompt']}; exact-int8 profile; nonlinear units (property/v1's budgeted units plus one a data "
              f"product, a product of two run-dependent values); E a word {E}.", ""]
     lines += ["**The census, KV at write** (decode at S; f at L = 10 min and 1 h; before: property/v1's units without data "
               f"products, E {E_BEFORE['conjectured']:,}).", ""]
