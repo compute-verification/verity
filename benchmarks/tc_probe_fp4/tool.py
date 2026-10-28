@@ -1,20 +1,17 @@
-"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1), lane fp4-5090.
+"""Store declaration for the Blackwell FP4 tensor-core probe (research.store README §6.1), probe.py on an sm_120a GPU:
 
-    research run --on vy-5090 --project verity --campaign r21-silicon --tool tc_probe_fp4 --source <worktree> \
-        --send autoproof/probes/results/probe3_1783788526.json -- \
-        python benchmarks/tc_probe_fp4/probe.py --instruction nvf4 --out $RESEARCH_RUN_DIR --sass-check --sweep --n-random 4096 \
-            --replay-autoproof $RESEARCH_RUN_DIR/inputs/probe3_1783788526.json
+    python benchmarks/tc_probe_fp4/probe.py --instruction nvf4 --out DIR --sass-check --sweep --n-random 4096 \
+        --replay-autoproof FILE
 
 Key params follow probe.py's argparse; `--out` and `--procs` never enter the derivation.  Replay files are content-resolved.
 
-`tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py, lane pouw rtx-pro GPU 4); `--out`, `--expect-uuid` and
+`tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py); `--out`, `--expect-uuid` and
 `--max-seconds` are guards and paths, not part of the answer:
 
-    research run --on vy-nebius-2 --project verity --campaign pouw --tool tc_price_fp4 --source . --cwd source -- \
-        gpu-lease 1 -- uv run --no-project --with numpy python benchmarks/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR \
-            --expect-uuid GPU-...,GPU-... --locked-mhz 2100
+    uv run --no-project --with numpy python benchmarks/tc_probe_fp4/w1_price.py --out DIR --expect-uuid GPU-...,GPU-... \
+        --locked-mhz 2100
 
-`tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as research runs, its timed families as fill jobs
+`tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as recorded runs, its timed families as fill jobs
 (``benchmarks.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).  `tc_lut_fp4` is F3
 (f3_lut.py), run the same way with one width per fill chunk, and `tc_strassen_fp4` is F2 (f2_strassen.py), one level per chunk.
 `tc_recheck_fp4` (recheck.py) and `tc_sparse_e4m3` (sp_e4m3.py, the 2:4 sparse E4M3 row against two dense k32 atoms) capture in
@@ -49,13 +46,13 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--families", default=None)
     ap.add_argument("--sass-check", action="store_true")
     ap.add_argument("--library", default=None)                  # a prebuilt library; its sha256 is in the result's nvcc identity
-    ap.add_argument("--chain2", action="store_true")            # lane tcgen05: K=128 chains on the TMEM accumulator
-    ap.add_argument("--smem-strides", default=None)             # lane tcgen05: shared-memory descriptor strides
+    ap.add_argument("--chain2", action="store_true")            # tcgen05: K=128 chains on the TMEM accumulator
+    ap.add_argument("--smem-strides", default=None)             # tcgen05: shared-memory descriptor strides
     ap.add_argument("--chain", type=int, default=1)             # mma.sync: in-register chains of L dependent MMAs
     ap.add_argument("--expect-model", default=None)             # the model whose mismatches gate the run
     ap.add_argument("--corrupt-word", action="store_true")      # the gate's self-test: one flipped word must fail the run
     ap.add_argument("--expect-uuid", default=None)              # a guard (stops a run on the wrong GPU), not part of the answer
-    ap.add_argument("--fake-silicon", default=None)             # dry run; probe.py refuses it under a research run
+    ap.add_argument("--fake-silicon", default=None)             # dry run; probe.py refuses it with RESEARCH_RUN_ID set
     ap.add_argument("--sass-only", action="store_true")
     ap.add_argument("--hot-bits", default="14,15,16")            # sp_nvf4_t1: the hot accumulators' h
     ap.add_argument("--model-sample", type=int, default=4096)   # sp_nvf4_t1: words checked against the pinned models

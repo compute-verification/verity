@@ -1,8 +1,8 @@
-"""Cross-check: the registered composites, evaluated gate by gate by the IR oracle, against the validated
-C++/CPU models of the numerics lane (`verity.ml.definitions.numerics`) on random and adversarial inputs.
+"""Cross-check: the registered composites, evaluated gate by gate by the reference evaluator, against the validated
+C++/CPU numerics models (`verity.ml.definitions.numerics`) on random and adversarial inputs.
 
-This is conformance evidence for the *definitions* (the IR body reproduces the frozen model the lane
-measured bit-exact against production); correspondence against captured production values is the
+This is conformance evidence for the *definitions* (the circuit body reproduces the frozen model, which is
+bit-exact against production); correspondence against captured production values is the
 separate `verity_vllm.correspondence.capture_identities` tool.
 """
 
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll
@@ -88,7 +88,7 @@ def check_attention_head(rng, Ts=(1, 5, 64, 65, 130, 200), D=128):
         q = _rand_bf16(rng, D, scale=float(rng.choice([0.3, 1.0, 3.0])))
         k = _rand_bf16(rng, T * D, scale=float(rng.choice([0.3, 1.0, 3.0]))).reshape(T, D)
         v = _rand_bf16(rng, T * D).reshape(T, D)
-        # the lane's model: q (H, D), k/v (n, KVH, D) with kvh mapping; single head -> H=1, KVH=1
+        # the numerics model: q (H, D), k/v (n, KVH, D) with kvh mapping; single head -> H=1, KVH=1
         rr = fa2_relation.model_row(_u16(q)[None, :], _u16(k)[:, None, :], _u16(v)[:, None, :], D ** -0.5)
         ref = np.asarray(rr.out).reshape(-1)[:D]
         args = [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()]

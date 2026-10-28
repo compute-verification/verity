@@ -15,7 +15,7 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   survives from before the schedule.
 * **The carried state** at boundary `b` (`Blocks.carried`): the gates computed before block `b` that a gate computed
   from block `b` on reads, the values crossing a time boundary (the KV cache, say). It is derived from the circuit and
-  the blocks, never declared, as a partition's committed wires are. Its value is the committed transcript's
+  the blocks, never declared, as a partition's committed wires are. Its value is the committed trace's
   (`Blocks.carriedValue`): the device commits it before the wipe and re-reads it after. That the value it re-reads is
   the committed one is the commitment's binding, which this module doesn't state.
 * **The device's state** (`Device.State`): its on-chip state, `chip` bits, and its store, `mem` bits.
@@ -36,7 +36,7 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   egress and the spot reads, with the challenger accepting, with probability at most `ε`. `ε` may depend on the
   adversary's moves, so it can carry the labels' PRF advantage.
 
-**One GPU, one store** (Daniel's rulings of 25 Oct): the device is one GPU, and its one store is the GPU's HBM
+**One GPU, one store**: the device is one GPU, and its one store is the GPU's HBM
 (`Accounting.Device.mem`, M). The model has no host store.
 
 **The blocks are private.** The blocks' gate sets split the circuit's gates over time, as a partition does, and like a
@@ -92,7 +92,7 @@ def carried (b : Fin B) : Finset (Fin C.N) := (s.before b).filter fun a => ∃ g
 /-- A value of the carried state at boundary `b`: one for each of its gates. -/
 abbrev Carried (b : Fin B) : Type := (g : s.carried b) → BitVec (C.w g)
 
-/-- **The carried state's committed value**: what the committed transcript `X` gives the carried gates. -/
+/-- **The carried state's committed value**: what the committed trace `X` gives the carried gates. -/
 def carriedValue (X : C.Transcript) (b : Fin B) : s.Carried b := fun g => X g
 
 end Blocks
@@ -167,7 +167,7 @@ reads, the probability over a uniform `z`, a uniform seed and uniform spot reads
 (`Game.value` on `Game.draw`). At `foreignBits = f · fill + 2λ` the threshold is `Accounting.BlockWipe.Survives`'s.
 
 `z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
-block `b` starts from is a function of, besides the carried value, which, once bound to the committed transcript, is
+block `b` starts from is a function of, besides the carried value, which, once bound to the committed trace, is
 fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip bits may survive any wipe.
 
 **The pair is the protocol's.** `foreignBits` and `ε` are what the wipe's protocol publishes with an accepted verdict
@@ -175,7 +175,7 @@ fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip
 definition. `ε` is a function of the adversary's moves (`S_φ`, `hold`, `keep`), so it can cover the wipe's own error,
 the labels' PRF advantage against the distinguisher those moves make (the standard-model term, as
 `Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
-the egress enters (NET-78). A constant `ε` reads the labels as ideal. `Pous.Guarantees.SecureErasureMeetsFamily` is the
+the egress enters. A constant `ε` reads the labels as ideal. `Pous.Guarantees.SecureErasureMeetsFamily` is the
 proved family bound underneath, and `Pous.Guarantees.StreamedWipe` the streamed game's proved bound. The bridge from an
 accepted verdict to this bound is memory-accounting's, in a package that sees both. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)

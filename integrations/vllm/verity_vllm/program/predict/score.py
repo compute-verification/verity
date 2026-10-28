@@ -15,7 +15,7 @@ compared with what the Build traced:
 A unit the vocabulary cannot express is scored `unexpressible` with the fact that stops it; a unit over `max_rows` (LP + T) is
 `over_budget`; a Build dir without a Program (the Build refused or failed) is `no_trace`.  Outputs go wherever `--out` says and
 `score` refuses an output path inside the rows root: a score is never written into a Build row (a switched row's AOT Build is
-`aot.emit`'s, run by its own Build stage).
+`aot.emit`'s, run by its own Build phase).
 """
 
 from __future__ import annotations

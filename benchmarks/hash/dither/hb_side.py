@@ -1,5 +1,5 @@
-"""The `dither-hb` arm's receipts: kernels-dither-rtx's side receipts (`dither_fused`, rc="side": step s's receipts on a
-second stream after its coin, beside step s + 1) with this lane's two-launch unit, h1u.cu's `kh_unit_ws` (the noise
+"""The `dither-hb` arm's receipts: `dither-side`'s side receipts (`dither_fused`, rc="side": step s's receipts on a
+second stream after its coin, beside step s + 1) with h1u.cu's two-launch unit, `kh_unit_ws` (the noise
 grid-wide into a workspace, then the multiply and fold from it), in place of h1r's single-launch version 2.
 
 `install(win, path)` replaces the window's h1r object with `SideH1R`, which `Window._side_receipts` launches through:
@@ -9,7 +9,7 @@ seeds and none of the units. Every other version and every other attribute is h1
 coins, poisoning and `dither_fused.check` (every receipt against h1r v1, three units against h1tile.reference) are
 unchanged. What is committed, before which coin, and every receipt are the same as `dither-side`'s.
 
-The library is h1u.cu built by job.sh on this lane's branch (a variant's .so, `HB_H1U`), sent to the run with --send.
+The library is h1u.cu built by job.sh (a variant's .so, `HB_H1U`), in the run's inputs.
 """
 from __future__ import annotations
 
@@ -19,12 +19,12 @@ import torch
 
 
 def auto_j(units: int, nb: int, sms: int) -> int:
-    """h1bench.py's: the largest J (noise blocks a lane) that still leaves about 64 warps an SM."""
+    """h1bench.py's: the largest J (noise chunks a lane) that still leaves about 64 warps an SM."""
     return max(1, min(32, (units * nb) // (32 * sms * 64)))
 
 
 class Units:
-    """`kh_unit_ws` over a plan's calls: each call's A [T, K] and B [N, K] s8 (row stride K), its live row blocks, its
+    """`kh_unit_ws` over a plan's calls: each call's A [T, K] and B [N, K] s8 (row stride K), its live row tiles, its
     seeds at the plan's seed offset (16 words a unit) and its receipts at the plan's word offset, in h1r's unit order."""
 
     def __init__(self, path: str, plans: list, sms: int):

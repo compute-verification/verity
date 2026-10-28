@@ -1,14 +1,14 @@
 """The Qwen3-MoE fold scope and the TP8 collectives' peer reads on RECORDED events: Qwen3-235B-A22B BF16 at TP8.
 
 `fixtures/qwen3_235b_a22b_tp8_moe_l47.rank{0,7}.jsonl.gz` are layer 47 of ranks 0 and 7 of the 235B Match of record (B1 i256 o32, RTX PRO
-6000, vLLM d9105ea80, batch-invariant eager; run r20261003-163309-0f1d), cut by `tests/engine/moe_scope_cut.py --logits` (each
+6000, vLLM d9105ea80, batch-invariant eager), cut by `tests/engine/moe_scope_cut.py --logits` (each
 `moe_scope_cut` Note names the source log and its sha256): the RunHeader, the layer's weight Roots and the lm_head shard's, and for the
-prefill step (256 rows) and the first decode step (1 row) the scope, the block's all-reduce right after it, and the step's
+prefill step (256 rows) and the first decode step (1 row) the scope, the layer's all-reduce right after it, and the step's
 `logits_processor` nodes (the lm_head shard's GEMM and the logits all-gather).  `fixtures/QWEN3_235B_A22B.config.json` is the
 checkpoint's config.json at the recorded revision (its sha256 is the header's `config_sha256`); the rank profile is derived from it.
   * each rank folds the scope as the TP2 cut does (`test_gen_ov_moe_qwen3_recorded.py`): the router's gate GEMM ahead of the router,
     writing its logits, the experts, the activation (the SiluMul version the profile binds) and the routed sum; after the scope the
-    block's `AllReduce_v2{WORLD=8,N=H}` over the routed sum; then the lm_head shard and the logits' `AllGather_v1{WORLD=8,N=V/8}`;
+    layer's `AllReduce_v2{WORLD=8,N=H}` over the routed sum; then the lm_head shard and the logits' `AllGather_v1{WORLD=8,N=V/8}`;
   * `fold` over the cut (the hidden state the cut does not compute read as stand-ins, everything else the fold's own) gives every
     collective one `peers` field per peer rank, in rank order at adjacent offsets; a one-row collective (the decode all-reduce, both
     logits all-gathers) reads its 7 peers as ONE run across those fields, the prefill all-reduce one run per field and row;
@@ -16,7 +16,7 @@ checkpoint's config.json at the recorded revision (its sha256 is the header's `c
     how a rank Program reading one `peers_<k>` Input per peer reads it, and the two compare equal; without the split at field boundaries
     the one-row reads do not.
 Not covered: the Build's TP8 rank Program itself (here a Program of that form over the same fields), the collective ordinals of a whole
-step (the cut numbers only its own collectives), and the cross-rank leg.
+step (the cut numbers only its own collectives), and the cross-rank check.
 """
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ def test_recorded_tp8_scope_resolves_the_gate_gemm_ahead_of_the_router_and_the_r
     assert group.parts.index(gemm) < group.parts.index(router)
     assert silu.operands[0].view == up.outputs[0].view and down.operands[0].view == silu.outputs[0].view
 
-    # the block's all-reduce over the rank's routed sum, issued after the scope
+    # the layer's all-reduce over the rank's routed sum, issued after the scope
     assert ar.spec.id == f"AllReduce_v2{{WORLD={WORLD},N={H}}}" and ar.rows == M and ar.pattern == "tp.collective"
     (own,) = ar.operands
     assert own.kind == "all_reduce" and own.site == MODULE and own.own == msum.outputs[0].view
@@ -341,7 +341,7 @@ def _folded_routed(rank: int):
 
 @pytest.mark.parametrize("rank", RANKS)
 def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole(rank):
-    """The flat Compute (VLLM-14): the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
+    """The flat Compute: the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
     rank r's whole [M, N] partial in row order -- the per-row instances' parts, regrouped -- and whose peer part canonicalises as a rank
     Program's read of each whole `peers_<k>` Input."""
     _f, per_row = _folded(rank)

@@ -1,18 +1,25 @@
-"""The declaration library: the measured node, a BlueField-3 behind its NIC, the leaf-spine generator and the demo's rack.
-The values' sources are pinned in `benchmarks/network_sim/tests/test_graph.py`, since this package doesn't import
-`verity`."""
+"""The declaration library: the measured node, a BlueField-3 behind its NIC, the leaf-spine generator and the demo's rack."""
 from __future__ import annotations
 
 from collections import Counter
 
 import pytest
+from verity.core.protocols.remote_bandwidth import ledger
 
 from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
 
 def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
-    dc = rtx_node("n")
+    """Its devices add up to the remote audit's node, `ledger.Node`: `Accounting.Device`'s one Python mirror."""
+    dc, node = rtx_node("n"), ledger.Node.stated()
+    ds = dc.devices.values()
+    assert sum(float(d.on_chip) for d in ds if d.on_chip) == node.chip_bytes * 8
+    assert sum(float(d.bandwidth) for d in ds if d.bandwidth) == pytest.approx(node.read_bytes_per_s * 8)
+    assert sum(float(d.write) for d in ds if d.write) == pytest.approx(
+        (8 * node.gpu_write_bytes_per_s + node.host_write_bytes_per_s) * 8)
+    for w, rate in node.squarings_per_s.items():
+        assert sum(float(d.rate[f"square-{w[1:]}"]) for d in ds if d.rate) == pytest.approx(rate)
     assert dc.validate() == []
     (block,) = dc.blocks
     assert block.name == "n" and dc.fabric == [] and dc.boundary == []
@@ -37,6 +44,7 @@ def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
     assert dc.block_of("n.dpu").name == dc.block_of("n.bmc").name == "n"
     assert [(e.a, e.b) for e in dc.links if "n.dpu" in (e.a, e.b)] == [("n.nic0", "n.dpu"), ("n.dpu", "n.bmc")]
     assert dpu.memory.value == 200 * GB and dpu.residual.value == pytest.approx(6.48 * GB)
+    assert dpu.write is bmc.write is None                             # no write ceiling stated: a wipe fills at its links
     assert bmc.memory.value == pytest.approx(1.32 * GB) and bmc.residual.value == pytest.approx(0.442 * GB)
     behind = leaf_spine(1, dpus=True)
     assert [(e.a, e.b) for e in behind.boundary] == [("b0.dpu", "b0.cert")]
@@ -78,8 +86,9 @@ def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world
     assert world.kind == "wan" and world.delay == 1e-3 and dc.link("challenger", "leaf0").delay == 1e-6
     c = dc.cadence
     assert (c.frame_bits, c.bucket_ticks, c.buckets, c.jitter_classes, c.tick.value) == (32, 1, 4, 128, 1e-4)
-    named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual]
-             if a] + [a for e in dc.links for a in (e.capacity, e.latency) if a] + [c.tick]
+    named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual,
+                                                      d.write] if a]
+    named += [a for e in dc.links for a in (e.capacity, e.latency) if a] + [c.tick]
     assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
     assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
     assert [b.name for b in rack(nodes=1, dpus=False).blocks] == ["n0"] and "n0.dpu" not in rack(1, False).devices

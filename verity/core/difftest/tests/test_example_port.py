@@ -51,7 +51,7 @@ def floor_div(v) -> int:
 
 
 def total_div(v) -> int:
-    a, b = _int(v, "a"), _int(v, "b")
+    _, b = _int(v, "a"), _int(v, "b")
     return 0 if b == 0 else div(v)
 
 

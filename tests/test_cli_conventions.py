@@ -40,7 +40,7 @@ SYNONYMS = {
     "--by": "--as for the handle acting, or a name that says what it filters (e.g. --labeled-by, --bucket)",
 }
 
-#: (file, flag): how many definitions existed when this test landed (14 Oct 2026); shrink it, never grow it
+#: (file, flag): how many definitions existed when this test landed; shrink it, never grow it
 KNOWN = {
     ("infra/cluster/src/cluster/cli.py", "--by"): 1,
     ("infra/ops/verity_ops/deploy.py", "--by"): 2,

@@ -338,7 +338,7 @@ def test_a_lane_or_combine_of_a_leaf_of_one_lane_or_no_whole_index_bits_is_refus
 
 
 def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compress_before_their_last_block():
-    """A partial and the receipt are 8 (KS + m) bytes. The Lean verifier takes a v2 row of any length (#3148), so K = 384,
+    """A partial and the receipt are 8 (KS + m) bytes. The Lean verifier takes a v2 row of any length, so K = 384,
     416, 896 and 928, whose rows' padding spills into another block, are staged. The combine reads only those rows, and
     C-Flock needs a row of the statement that compresses before its last block, ceil((bytes + 17) / 128) - 1 >= 1, so
     112 bytes or more: K = 384 is the least, and K = 352's 104-byte rows are refused. A lane has such rows at every K."""

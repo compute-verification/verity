@@ -27,7 +27,7 @@ Each instruction is the whole text of a thread of its own (`prog`), and the sche
   after another (`n³` tensor units, the moves' and MMAs' issue slots, shared memory's and device memory's words, the
   code fetched at four words an instruction).
 * `kernel_computes`: it leaves `C = A·B` exactly, each entry's sum a 32-bit word.
-* `gemm_cardWithinAccel`: so the coverage premise holds at the honest instance (`gemmCan`, the card running this
+* `gemm_cardWithinAccel`: so the card premise holds at the honest instance (`gemmCan`, the card running this
   kernel), at the exact `s8` semantics, which meets (P1) and (P2).
 -/
 
@@ -783,7 +783,7 @@ def gemmCan (n : ℕ) (f : card.Mem → card.Mem) (T : ℚ≥0) (D : card.Mem �
   T = secs n ∧ D = (fun M => ∃ A B, Placed n A B M) ∧
     f = fun M => (Machine.run (prog (kernel n)) ⟨M, fun _ => 0⟩ (sched (kernel n))).1.mem
 
-/-- **The coverage premise holds at the honest instance**: at the exact `s8` semantics, which meets (P1) and (P2), the
+/-- **The card premise holds at the honest instance**: at the exact `s8` semantics, which meets (P1) and (P2), the
 kernel is a program of the machine that meets the model and computes the card's map. -/
 theorem gemm_cardWithinAccel (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
     Verity.Assumptions.CardWithinAccel card (gemmCan n) := by

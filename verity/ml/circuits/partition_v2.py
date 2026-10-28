@@ -66,7 +66,7 @@ predicates give that.  Instances of a Definition are laid out identically, so a 
 * L2 Statement: the circuit of the unit, cut from the program at its place, is the entry's Definition and has the shape the
   entry records [unit-definition, unit-shape];
 * L3 Bind: its inputs and outputs as root gates of the program, the positions its committed values are opened at (`Unit`);
-* L4 Correct: given the committed values (a transcript of root gate -> value), its gates applied to its inputs give its
+* L4 Correct: given the committed values (a trace of root gate -> value), its gates applied to its inputs give its
   outputs [unit-incorrect].
 """
 from __future__ import annotations

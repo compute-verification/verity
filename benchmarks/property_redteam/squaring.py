@@ -10,20 +10,20 @@ word's `k·S` chained squarings cost their sum, so `E = k·S·e`. `e = (2L − 1
 `bitwise_codec.py` falsified.
 
 **What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`
-as 6b's #2459 has it (`cursor/circuit-encode-declared-6cd3` @ 8225774747): `Op` (a gather with its table-read `low`),
+(at 8225774747): `Op` (a gather with its table-read `low`),
 `Gate`, `gatherAt`, `raw`, `out`, `Ok`/`InWindow`, `derive`/`intervals` (a gather's interval the hull of its column's and
 0), `Proven`, `DeclaredHold`, `OperandBits`, `dynamic`, `indexBits`, `units` (fresh index bits per index gate and kind)
-and `budgeted`, plus `Restricted` (`Codec.lean`). `units(..., fixed=True)` is that count; `fixed=False` keeps the count
-before #2420, `Nat.clog 2 (args.length − 1)` index bits a range gather.
+and `budgeted`, plus `Restricted` (`Codec.lean`). `units(..., fixed=True)` is that count; `fixed=False` keeps the earlier
+count, `Nat.clog 2 (args.length − 1)` index bits a range gather.
 
-**Two Lean-only holes, both closed.** (A) Before #2420 a gather whose column is one constant word cost `Nat.clog 2 1 = 0`
-units and returns `c·[idx ≤ 0]`, a free comparison of any s32 value, so carries are free: `free_square` builds a whole
-squaring mod p1024 at **0 units** as that count reads, and `free_codec.py` the whole codec word (no budgeted gate, right
-on every draw). #2420 (on main) charges it one unit, and `free_square` costs 6,014. (B) Until #2459 `Gate.derive`
-returned a gather's declared interval, so a gather at a fixed index (wiring, 0 units) re-declared a free affine
-remainder `T_m − 256·⌊T_m/256⌋` into `[0, 255]`, and `holeb_square` squared at 128 units, one carry a limb. #2459
-derives the hull of the column's intervals and 0, and `Proven` refuses it: the gather's derived interval leaves its
-declared one, and the next squaring's `mma` operands leave u8. Hole B stays open on main until #2459 lands.
+**Two Lean-only holes, both closed.** (A) Under the earlier count a gather whose column is one constant word cost
+`Nat.clog 2 1 = 0` units and returns `c·[idx ≤ 0]`, a free comparison of any s32 value, so carries are free:
+`free_square` builds a whole squaring mod p1024 at **0 units** as that count reads, and `free_codec.py` the whole codec
+word (no budgeted gate, right on every draw). The current count charges it one unit, and `free_square` costs 6,014. (B) While `Gate.derive`
+returned a gather's declared interval, a gather at a fixed index (wiring, 0 units) re-declared a free affine
+remainder `T_m − 256·⌊T_m/256⌋` into `[0, 255]`, and `holeb_square` squared at 128 units, one carry a limb. `Gate.derive`
+now derives the hull of the column's intervals and 0, and `Proven` refuses it: the gather's derived interval leaves its
+declared one, and the next squaring's `mma` operands leave u8.
 
 **The constructions,** measured here (units, all `Restricted 128`, `Proven`, `DeclaredHold` on their inputs, and right):
 
@@ -35,9 +35,9 @@ declared one, and the next squaring's `mma` operands leave u8. Hole B stays open
   fixup group with no carry; wrong with probability ≈ `105·c_top / 256^8` ≈ 2^−44.
 * `seam_square` **160**, the cheapest: group 0's carry is computed first, the pass over limbs 4..127 ends in the top carry
   `c_top`, and limbs 0..3 are emitted last from `f_0 + 105·c_top`, so the fold needs no fixup. Wrong only when
-  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4, run
-  r20261018-030322-ffbd; 2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
-* `holeb_square` 128 as Model.lean read before #2459, refused under it.
+  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4;
+  2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
+* `holeb_square` 128 under a `derive` that returns the declared interval, refused under the hull.
 
 **Why 160 holds.** 160 = 128 byte gates + 32 group carries. Each output byte is an s8-family operand of the next
 squaring, so a gate whose derived interval lies in a byte: a budgeted gate (one unit), or a free gate over narrower
@@ -47,7 +47,7 @@ operands are columns or adjacent pairs `f_p + 256·f_{p+1}` within s32, the carr
 (balanced) digits and from any seam limb, under `OperandBits 128`: none uses fewer than 32 groups (u8 columns are 30 bits
 at limb 0 down to 23 at limb 127, s8 a bit narrower, and five columns fit only near the top, where merges are too
 few to save a group). The margin is small but real: a 31-group plan first appears at `OperandBits 130` (s8, merged) to
-136 (u8, unmerged) (run r20261018-060115-4966), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
+136 (u8, unmerged), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
 the renormalization floor `L − d(ε) = 119` (121 at 2^−20): the 128 bytes alone exceed it, by 41 units a squaring. In
 nonlinear units every construction also pays its column sums, `L² = 16,384` data products (`column_sums`), so
 `seam_square` costs 16,544 against `e = 374`. Numbers are *measured* by building and running the circuits here unless
@@ -137,8 +137,8 @@ class Gate:
 
     def index_bits(self, fixed: bool = False) -> int:
         """`Gate.indexBits`: `n` for a table read of the index's low `n` bits, else `Nat.clog 2 args.length`,
-        `⌈log₂(V + 1)⌉` for a column of `V` words (the `V` words and the out-of-range 0). `fixed=False` is the count
-        before #2420, `Nat.clog 2 (args.length − 1)`, under which a one-word column cost 0."""
+        `⌈log₂(V + 1)⌉` for a column of `V` words (the `V` words and the out-of-range 0). `fixed=False` is the earlier
+        count, `Nat.clog 2 (args.length − 1)`, under which a one-word column cost 0."""
         if self.op.low is not None:
             return self.op.low
         return clog2(len(self.args)) if fixed else clog2(len(self.args) - 1)
@@ -422,7 +422,7 @@ class Builder:
         self._lean: list[int] = []  # each gate's Lean units
         self._fixed: list[int] = []
         self._products = 0
-        self._gmax: dict[tuple[int, bool], int] = {}  # (index gate, kind) -> max pre-#2420 indexBits so far
+        self._gmax: dict[tuple[int, bool], int] = {}  # (index gate, kind) -> max earlier-count indexBits so far
         self._gmaxf: dict[tuple[int, bool], int] = {}
         self._consts: dict[int, int] = {}
 
@@ -538,8 +538,8 @@ def e_per_squaring(log2_inv_eps: int) -> int:
 
 def counting_floor(log2_inv_eps: int) -> int:
     """The byte-gate floor on a squaring's budgeted units, modeled (not a theorem): if every output byte is a budgeted
-    gate or a constant guess (#2459's premise, with hole B closed: a derived value of width 255 reads only gates that
-    narrow, and a gather's hull is its column's while it pays each index bit it reads fresh), a squaring right on `ε` of
+    gate or a constant guess (the gather hull's premise, with hole B closed: a derived value of width 255 reads only
+    gates that narrow, and a gather's hull is its column's while it pays each index bit it reads fresh), a squaring right on `ε` of
     inputs guesses at most `⌊log₂(1/ε)/8⌋` bytes, so `U ≥ ⌈(8L − log₂(1/ε))/8⌉`: 126 at `ε = 2^−20`, 123 at `2^−40`."""
     return -(-(8 * N_LIMBS - log2_inv_eps) // 8)
 
@@ -871,8 +871,8 @@ def column_intervals(fmt: tuple[int, int] = U8) -> list[Iv]:
 
 def _holeb_limb(b: Builder, t: int, carry_out: int | None = None) -> tuple[int, int]:
     """One limb under hole B: the carry `h = ⌊t/256⌋` a budgeted gate (or `carry_out`, already paid), and the byte
-    `t − 256·h`, a free affine map, re-declared `[0, 255]` by a gather at the fixed index 0 (wiring: 0 units). Model.lean
-    before #2459 derived a gather's declared interval, so the next squaring's `mma` took it as a u8 operand; #2459
+    `t − 256·h`, a free affine map, re-declared `[0, 255]` by a gather at the fixed index 0 (wiring: 0 units). A `derive`
+    that returns a gather's declared interval lets the next squaring's `mma` take it as a u8 operand; Model.lean
     derives the hull of its column and 0, the affine map's wide interval, and `Proven` refuses it."""
     if carry_out is None:
         carry_out = b.budgeted(lambda v: v[0] >> 8, [t], 0, _fhi(b, t) >> 8)
@@ -881,8 +881,8 @@ def _holeb_limb(b: Builder, t: int, carry_out: int | None = None) -> tuple[int, 
 
 
 def holeb_square(b: Builder, a: list[int]) -> tuple[list[int], int]:
-    """**Hole B** (Lean-only, open on main after #2420, closed by #2459's gather hull): one budgeted unit a limb, 128 a
-    squaring, and refused by `Proven` under #2459. Every byte is its limb's `T_m − 256·⌊T_m/256⌋`, free, re-declared
+    """**Hole B** (Lean-only, closed by the gather hull): one budgeted unit a limb, 128 a
+    squaring, and refused by `Proven` under the hull. Every byte is its limb's `T_m − 256·⌊T_m/256⌋`, free, re-declared
     into `[0, 255]` by a fixed-index gather, so only the carries pay. The seam
     is `seam_square`'s: group 0's carry `c_4` first (one gate over `f_0 … f_3`), a ripple over limbs 4..127 to `c_top`,
     then limbs 0..3 from `f_0 + 105·c_top`, the last of them closed by `c_4` itself (no gate). Wrong exactly when
@@ -994,8 +994,8 @@ def main() -> None:
                 "column_bits": [_iv_bits(iv) for iv in cols]}
     best = rows["seam_square"]["fixed_units"]
     result = {
-        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747 (#2459), ported scalar; lean_units is "
-                 "the count before #2420",
+        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747, ported scalar; lean_units is "
+                 "the count before the gather fix",
         "constructions": rows,
         "seam": {"samples": args.seam_samples, "fails": fails, "c_top_mean": sum(ctops) / len(ctops),
                  "c_top_max": max(ctops), "model_rate": DELTA * (sum(ctops) / len(ctops)) / 2 ** 32},

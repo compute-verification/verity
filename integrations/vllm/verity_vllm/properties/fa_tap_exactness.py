@@ -14,10 +14,10 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
       un-swapped windowed decode; FA3: an M cap below the packed rows) is skipped (counter + 1), writes nothing, and the output still
       equals the installed kernel's;
   (e) a guarded-max build (`verity_tap_row3() == 1`, `query.guarded_max`) against a record of the default build (`baseline`): every stream
-      word of the six classes but ROW word 3 equals the default build's (`masked_digest`), and word 3 is the IR's `GuardNegInfZero_v1` of
+      word of the six classes but ROW word 3 equals the default build's (`masked_digest`), and word 3 is the circuit's `GuardNegInfZero_v1` of
       the entry's row_max at every key block after a row's first (the guard's unit reads that committed word) and 0 at the first
-      (`check_row3`; the IR reference on a sample, special values included, and its vectorised twin on every word);
-  (f) the same build's MS class (`verity_tap_src() & 64`): at every visited key block the word is the IR's
+      (`check_row3`; the reference evaluator on a sample, special values included, and its vectorised twin on every word);
+  (f) the same build's MS class (`verity_tap_src() & 64`): at every visited key block the word is the circuit's
       `F32MulFtz_v1(GuardNegInfZero_v1(row_max), scale_log2)` of the ROW entry's row_max, the value the block's exp2 units read
       (`check_ms`; twin on every word, the reference on a sample);
   (g) FA3 under the construction `check-inf-per-iteration` (`registry.fa3_check_inf`, `TargetProfile.fa3_construction`): the MS words
@@ -28,7 +28,7 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
 Beside the property, an FA3 run can check every row of its prefill launches against the decode-shaped Definitions (`--against-decode`,
 `prefill_cases`, `out_vs_decode`, `decode_shaped`): `Attention_v4` at the one-row decode's tile (`decode_tile`) and its `MASKED_FROM`,
 which the window circuit's class Program binds at every position, prompt positions included, while the engine prefills a prompt at the
-prefill's tile (VLLM-127).  It is a finding, not part of `ok`.
+prefill's tile.  It is a finding, not part of `ok`.
 
 Every stream word is `FILL` before the launch.  The `edge_rows` cases give some query rows the scores -inf (so the max and the guard see
 -inf everywhere), +inf or NaN throughout (`SPECIAL`).
@@ -111,7 +111,7 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
 
 
 #: the H200 window class of record's attention heads (32 query heads over 8 KV heads) prefilling its 1,024-id prompt, beside a 200-id
-#: and a 17-id prompt (VLLM-127)
+#: and a 17-id prompt
 GQA4_PREFILL = _case("prefill_1024_gqa4", 32, 8, [1024, 200, 17], [1024, 200, 17])
 
 
@@ -231,7 +231,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 
 
 def ir_guard(m: int) -> int:
-    """The IR model's `GuardNegInfZero_v1(m)` by the reference evaluator."""
+    """The circuit's `GuardNegInfZero_v1(m)` by the reference evaluator."""
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.definitions.registry import prims
 
@@ -239,7 +239,7 @@ def ir_guard(m: int) -> int:
 
 
 def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, int, int]], ir_sample: int = 64) -> dict[str, Any]:
-    """ROW word 3 of a guarded-max build at every visited (slab, row, block): the IR's `GuardNegInfZero_v1` of the entry's row_max (word 0)
+    """ROW word 3 of a guarded-max build at every visited (slab, row, block): the circuit's `GuardNegInfZero_v1` of the entry's row_max (word 0)
     at every block after the row's first (the kernel visits blocks n_block_max - 1 .. 0), 0 at the first.  All words by the twin, and
     `ir_sample` of them (every distinct special row_max among them) by the reference evaluator."""
     from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero
@@ -272,7 +272,7 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
 
 
 def scale_log2_bits(c: dict[str, Any], D: int) -> int:
-    """The f32 bits of the kernel's `scale_softmax_log2` for case `c` at head dim `D`, the IR's constant: softmax_scale * log2(e), or
+    """The f32 bits of the kernel's `scale_softmax_log2` for case `c` at head dim `D`, the circuit's constant: softmax_scale * log2(e), or
     softcap * log2(e) with a softcap."""
     from verity.ml.definitions.registry import b1, dense
 
@@ -280,7 +280,7 @@ def scale_log2_bits(c: dict[str, Any], D: int) -> int:
 
 
 def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
-    """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
+    """The circuit's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.definitions.registry import prims
@@ -290,7 +290,7 @@ def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
 
 def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, int, int]], scale_log2: int, ir_sample: int = 64,
              masked_from: dict[tuple[int, int], int] | None = None) -> dict[str, Any]:
-    """The MS class at every visited (slab, row, block): the IR's `F32MulFtz_v1(GuardNegInfZero_v1(row_max), scale_log2)` of the ROW entry's
+    """The MS class at every visited (slab, row, block): the circuit's `F32MulFtz_v1(GuardNegInfZero_v1(row_max), scale_log2)` of the ROW entry's
     row_max (word 0, the running max after the block).  With `masked_from` (FA3 under `check-inf-per-iteration`) the guard applies only at
     blocks >= the row's value, as `AttnBlock_v4{CHECK}`.  All words by the twin, `ir_sample` of them (every distinct special row_max among
     them) by the reference evaluator; mismatches whose row_max is -inf are counted apart."""
@@ -328,7 +328,7 @@ def out_ok(e: dict[str, Any]) -> bool:
 
 
 def ms_ok(e: dict[str, Any]) -> bool:
-    """A guarded-max case's MS class: every visited word is the IR's, on the twin and on the reference sample."""
+    """A guarded-max case's MS class: every visited word is the circuit's, on the twin and on the reference sample."""
     r = e.get("ms") or {}
     return r.get("ms_mismatch") == 0 and r.get("ir_mismatch") == 0 and (r.get("ir_sampled", 0) > 0 or r.get("ms_words") == 0)
 

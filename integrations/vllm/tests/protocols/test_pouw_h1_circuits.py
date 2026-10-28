@@ -16,15 +16,15 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.ml.circuits import partition_object as PO  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.circuits import partition_object as PO
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols import pouw_h1_circuits as PC  # noqa: E402
-from tests.protocols import pouw_h1_rehearsal as RH  # noqa: E402
-from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_circuits as PC
+from tests.protocols import pouw_h1_rehearsal as RH
+from tests.protocols.test_pouw_h1_served import _unit
 
 AUDITOR = Path(__file__).resolve().parents[4] / "benchmarks" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata

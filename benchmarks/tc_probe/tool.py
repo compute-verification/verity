@@ -1,6 +1,6 @@
-"""Store declaration for the tensor-core probe (research.store README §6.1).
+"""Store declaration for the tensor-core probe (research.store README §6.1), for runs of
 
-    research run --tool tc_probe --project verity -- python benchmarks/tc_probe/tc_probe.py --arch sm_89 --out $RESEARCH_RUN_DIR --sweep ...
+    python benchmarks/tc_probe/tc_probe.py --instruction ID --out DIR --sweep ...
 
 Key params follow tc_probe.py's argparse (`--instruction` is parsed when present and simply absent otherwise, so a probe
 extended with it and one without hash differently only when it is given).  `--out` and `--procs` never enter the derivation:
@@ -64,7 +64,7 @@ TC_PROBE = Tool(
     parse=parse,
 )
 
-# --- instances_hw: frozen input sets replayed on silicon (lane instances-hw) --------------------------------------------------------
+# --- instances_hw: frozen input sets replayed on silicon --------------------------------------------------------
 
 INSTANCES_SCRIPT = "instances_hw.py"
 

@@ -20,7 +20,7 @@ and these premises, each a named `Prop` taken as a hypothesis:
   counts whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the
   pass, not necessarily at one tick.
 
-The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean (art:d3c891e4).
+The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean.
 -/
 
 namespace Accounting.Assumptions
@@ -29,8 +29,8 @@ open Accounting.Remote.Sketch
 
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
-/-- `random-oracle` (the random-oracle card, 9cd57182, ASK-16: PoUW only, each use a named premise; its use for the
-memory sketch is asked of Daniel, 24 Oct). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
+/-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; its use for the
+memory sketch is not yet ruled on). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
 uniform**: at every prover coin `b` and registered store `D`, no event `E` of the keys (each candidate seed's signs and
 receipt hash) is more than `ε` likelier at `A.keys b D x`, over SHA-512's outputs `x`, than at uniform keys, so the
 keys' law is within statistical distance `ε` of uniform:
@@ -46,13 +46,13 @@ SHA-512 is one fixed function, and for it the premise is false in Lean at small 
 family, not a spread of them (with `Hs` a point, `keys b D` takes one value). So it is a premise, read in the
 random-oracle model, and not a lemma. There `Hs` is SHA-512 drawn as a uniform function and `keys b D x` its outputs at
 the seeds the prover's run tries. Distinct seeds' receipt hashes and 256-bit sign keys
-`K = derive(seed_i, SIGN_DOMAIN, …)` are fresh queries, uniform and independent, chosen adaptively or not. The signs
-are `K.stream` rows, `k_s × 4096` bits expanded from `K`'s 256, so two candidates whose `K` collide share their signs,
-and exact uniformity (`ε = 0`) is false at two or more candidates (red team RD-13). Off a collision the signs are fresh
-too, so the keys' law is within the collision's probability of uniform: over at most `Q + P` candidate seeds, at most
-`(Q + P)²/2^257`, the `ε` `SketchBoundDeployed` reads and `timing.sketch_failure`'s last term. The premise fails for a
-run that tries one seed under two candidates (their keys are equal, not independent): the model gives each candidate
-its own key, and `timing.sketch_failure` charges each candidate a compression of its own. -/
+`K = derive(seed_i, SIGN_DOMAIN, …)` are fresh queries, uniform and independent, chosen adaptively or not. The signs are
+`K.stream` rows, `k_s × 4096` bits expanded from `K`'s 256, so two candidates whose `K` collide share their signs, and
+exact uniformity (`ε = 0`) is false at two or more candidates. Off a collision the signs are fresh too, so the keys' law
+is within the collision's probability of uniform: over at most `Q + P` candidate seeds, at most `(Q + P)²/2^257`, the
+`ε` `SketchBoundDeployed` reads and `timing.sketch_failure`'s last term. The premise fails for a run that tries one seed
+under two candidates (their keys are equal, not independent): the model gives each candidate its own key, and
+`timing.sketch_failure` charges each candidate a compression of its own. -/
 def SketchHashRandom [Fintype Hs] (A : Session β Hs P N m h S L q ks G) (ε : ℝ) : Prop :=
   ∀ (b : β) (D : Accounting.RateSketch.Data N m 0 Accounting.RateSketch.Sector)
     (E : Keys P N m h ks G → Prop),

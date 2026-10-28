@@ -1,4 +1,4 @@
-"""F2 (lane pouw rtx-pro GPU 4): one- and two-level Strassen over one NVFP4 group on the TF32 tensor core, against dense NVFP4 on
+"""F2: one- and two-level Strassen over one NVFP4 group on the TF32 tensor core, against dense NVFP4 on
 sm_120a, word for word.
 
 A cheaper-computation search: Strassen's 2 x 2 recursion multiplies block matrices in 7 products instead of 8, so L levels over
@@ -57,12 +57,13 @@ import f1_rates as F1  # noqa: E402
 import f3_lut as F3  # noqa: E402
 from emulation import E  # noqa: E402
 import probe as P  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f2-strassen-sm120/v1"
 SRC = HERE / "f2_strassen.cu"
 HEADER = HERE / "nvf4_step.cuh"
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math (the 09:34Z rule); build refuses them
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math; build refuses them
 NATIVE_TPB = 128
 LEVELS = {"l1": 1, "l2": 2}
 FAMILIES, TIMED, GATE_LENGTHS = F3.FAMILIES, F3.TIMED, F3.GATE_LENGTHS
@@ -70,7 +71,7 @@ NATIVE_OPCODE, NATIVE_PRODUCTS = F3.NATIVE_OPCODE, F3.NATIVE_PRODUCTS
 TF32_OPCODE = {1: "HMMA.1688.F32.TF32", 2: "HMMA.1684.F32.TF32"}
 #: distinct Strassen tiles per launch (warps take tile w mod NTILES), and the column tiles they cycle through
 NTILES, NCT = 256, 4
-#: F1's TF32 prices in FP4 slots per product, m16n8k8 and m16n8k4 (collect r20260930-111747-26f3, Measured)
+#: F1's TF32 prices in FP4 slots per product, m16n8k8 and m16n8k4 (F1's collect, Measured)
 F1_TF32_SLOTS = {1: 8.0, 2: 16.0}
 FAVOURS_STRASSEN = ("the pre-additions outside the timed loop: A's (U) are amortized over the N/TN column tiles, B's (V) are "
                     "preprocessing of fixed weights; so is the E2M1 codes' conversion to TF32",
@@ -389,7 +390,7 @@ class FakeF2:
     """CPU stand-in for the dry run: the Strassen kernel is emulated through the packed fragments (unpacked, multiplied per product
     and recombined by W), the native arm is the vectorised pinned model on the packed codes, the step the same model on the given
     group dots.  Its rates are invented (TF32 m16n8k8 at 256 and m16n8k4 at 128 products per SM per clock, NVFP4 at 2,048);
-    ``--fake-silicon`` never runs under a research run."""
+    ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 64, 2000.0   # 64 SMs x one 4-warp block: a warp per tile
     TPB = 128
@@ -399,7 +400,7 @@ class FakeF2:
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -732,12 +733,12 @@ def collect(args) -> int:
     meas += [{"name": f"{k}_products_per_sm_per_clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
              for k, v in rows.items()]
     clocks = sorted({str(v["clocks"]) for v in levels.values()})
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "clocks": clocks[0] if len(clocks) == 1 else "mixed", "label": "Measured" if clocks == ["locked-2100"] else "Measured, " + ",".join(clocks),
            "method": "F2 Strassen kernels from the fill queue (one level per chunk, each against dense NVFP4 in the same process), "
                      "collected; see f2_strassen.json",
            "workload_fingerprint": {"tool": "tc_strassen_fp4", "version": "1", "build_so_sha256": b.get("so_sha256"),
-                                    "levels": {k: v["sha256"] for k, v in levels.items()}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "levels": {k: v["sha256"] for k, v in levels.items()}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if ok else "failed", "checker": "every level's gates (UUID, cc 12.0, SASS, every group's Strassen "
                           "dots = the integer group dots on every element, the route's words = the native atom's on every word and the "
                           "pinned model's on a sample at chains of 1 and 3, the dots and their checksum at the timed length) passed in its "
@@ -759,13 +760,13 @@ def build_cmd(args) -> int:
               f"{g['mma_opcodes']}  FADD {g['fadd']}  memory {g['memory_ops'] or 'none'}", flush=True)
     if rec.get("error"):
         print(rec["error"], flush=True)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
                "label": "Measured (ptxas and SASS of the F2 kernels; no device)",
                "method": "f2_strassen.cu compiled for sm_120a with -Xptxas -v; each kernel's timed loop read from cuobjdump",
                "workload_fingerprint": {"tool": "tc_strassen_fp4", "version": "1", "step": "build", "so_sha256": rec.get("so_sha256"),
                                         "source_sha256": rec["source_sha256"], "header_sha256": rec["header_sha256"],
-                                        "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                        "commit": SHARED.RESEARCH_SOURCE_COMMIT},
                "validation": {"status": "passed" if rec["ok"] else "failed",
                               "checker": "7^L TF32 MMAs and no memory access per Strassen loop, NT OMMA in the native loop, no spills, "
                                          "no FADD/FFMA/FMUL .FTZ",
@@ -802,8 +803,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", required=True)
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", False) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_level, "collect": collect}[args.cmd](args)
 
 

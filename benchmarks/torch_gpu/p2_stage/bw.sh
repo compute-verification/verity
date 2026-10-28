@@ -3,10 +3,10 @@
 # size (bw_check.py), from build.sh's lib for the toy's decode path; cwd = the source tree's root:
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
-#     --env GPU_LEASE_WHO=kernels-kstage --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
+#     --env GPU_LEASE_WHO=LANE --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
 #
-# Under one untimed lease of at most LEASE_MIN minutes (default 10), refused near INF-242's window (Tue 27 Oct
-# 08:00-10:00Z). RANDOM units of random C* (default 262144) against the reference, SAMPLE of them (default 4000) from
+# Under one untimed lease of at most LEASE_MIN minutes (default 10), refused if it could reach one of QUIET's periods
+# (each START/END in UTC, space-separated; none by default). RANDOM units of random C* (default 262144) against the reference, SAMPLE of them (default 4000) from
 # their blocks. Each step's exit code is in $OUT/rc.txt; exits non-zero if any failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
@@ -21,8 +21,9 @@ for c in ${CUDA:-} "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; d
 RANDOM_UNITS=${RANDOM_UNITS:-262144}
 SAMPLE=${SAMPLE:-4000}
 LEASE_MIN=${LEASE_MIN:-10}
+QUIET=${QUIET:-}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
-export O D PY LEASE_MIN RANDOM_UNITS SAMPLE PATH=$CUDA/bin:$PATH P2_RECEIPTS_BUILD=$S/p2r SHA512_ROWS_BUILD=$S/sxr \
+export O D PY LEASE_MIN QUIET RANDOM_UNITS SAMPLE PATH=$CUDA/bin:$PATH P2_RECEIPTS_BUILD=$S/p2r SHA512_ROWS_BUILD=$S/sxr \
   PYTHONPATH=$PWD:$PWD/benchmarks/pous${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
@@ -39,11 +40,14 @@ echo "bw: asking for the GPU at $(date -u +%H:%M:%SZ)"
 env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
   echo "leased at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"
-  now=$(date -u +%s); w0=$(date -u -d 2026-10-27T08:00:00Z +%s); w1=$(date -u -d 2026-10-27T10:00:00Z +%s)
-  if [ $((now + 60 * LEASE_MIN)) -gt "$w0" ] && [ "$now" -lt "$w1" ]; then
-    echo "a lease from now could reach INF-242 window (Tue 27 Oct 08:00-10:00Z): released unused" >> "$O/rc.txt"
-    step window 3; exit 3
-  fi
+  now=$(date -u +%s)
+  for w in $QUIET; do
+    w0=$(date -u -d "${w%/*}" +%s); w1=$(date -u -d "${w#*/}" +%s)
+    if [ $((now + 60 * LEASE_MIN)) -gt "$w0" ] && [ "$now" -lt "$w1" ]; then
+      echo "a lease from now could reach the quiet period $w: released unused" >> "$O/rc.txt"
+      step window 3; exit 3
+    fi
+  done
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,uuid,name,driver_version,clocks.max.sm,memory.total,memory.used \
     --format=csv > "$O/gpus.txt" 2>&1
   "$PY" "$D/bw_check.py" --out "$O" --lib "$LIB" --random "$RANDOM_UNITS" --sample "$SAMPLE" --bench \

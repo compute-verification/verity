@@ -24,7 +24,7 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′), and a live window's ``salt``, its salt
   coin and the salt it gives (`window_salt`).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
-  window's at the verifier's max_tokens (`window.length_problem`; Daniel, 19 Oct, ASK-39), each item the verifier's own
+  window's at the verifier's max_tokens (`window.length_problem`), each item the verifier's own
   at the registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
   query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
   units drawn subset:K′ at the window's δ, and a live window's salt is its live coin's (`window_salt`: taken from a
@@ -43,7 +43,7 @@ certified window, whose verifier holds the network certifier's reveal for it (`s
 `salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
 before it drew that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
 challenger runs it before it asks the certifier for one, since the certifier reveals a window once.  A live Pearl-C
-pass (`pouw_pearl_c_host.epoch_of`, VLLM-95), whose manifest's coins are a live session's, took its salt coin from a
+pass (`pouw_pearl_c_host.epoch_of`), whose manifest's coins are a live session's, took its salt coin from a
 salt-only session of the auditor host's challenger opened on its salt epoch's root (`salt.epoch_open_root` of its
 weights' root and its ``pass_index``): its verifier holds the auditor's ledger and that session's files as `rounds`
 reads them (`LIVE`), and the pass passes `live_salt` under them.

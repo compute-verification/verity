@@ -1,6 +1,6 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
 `streamed_wipe.py` and `verity.ml.crypto.lms`: the coins and their tree, the round records' root, the header and the
-signed message, the block digest, LMS signing at a leaf and verification, and the streamed wipe's signed message and
+signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message and
 egress count, each on drawn inputs that include what both sides must refuse (`test_verdict.py` and
 `test_wipe_verdict.py` hold the verdicts)."""
 
@@ -61,7 +61,7 @@ def with_malformed(valid: st.SearchStrategy) -> st.SearchStrategy:
     return mostly(valid, st.one_of(malformed(valid), st.none()), 4)
 
 
-def WIDE(bits: int) -> st.SearchStrategy:  # noqa: N802
+def WIDE(bits: int) -> st.SearchStrategy:
     """A natural of `bits` bits, now and then one past them."""
     return mostly(st.integers(0, 2 ** bits - 1), st.integers(2 ** bits, 2 ** (bits + 2)))
 
@@ -90,7 +90,7 @@ SALT = mostly(st.binary(min_size=192, max_size=192), st.binary(min_size=191, max
 @st.composite
 def coin_tree_inputs(draw) -> dict:
     """Each refusal now and then: no rounds, a salt too many or too few or short, a bad key, a session not 32 bytes, no
-    blocks or more than a u64 index holds, no source."""
+    labels or more than a u64 index holds, no source."""
     k = draw(mostly(st.integers(1, 5), st.just(0)))
     n = draw(mostly(st.just(k), st.sampled_from([k + 1, max(0, k - 1)])))
     session = draw(mostly(st.just(32), st.sampled_from([31, 33])).flatmap(lambda m: st.binary(min_size=m, max_size=m)))

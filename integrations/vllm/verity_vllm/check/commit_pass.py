@@ -46,20 +46,20 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
     if int(n_exp) != int(n_com):
         return False, f"expected_tensors {n_exp} != committed_tensors {n_com} (refused/lost acquisitions -> incomplete root)"
     bnd = commit.get("binding")
-    if bnd is not None:                                    # R14 BIND-01 (rules r14-v1): identity COVERAGE of the expected population is the gate
+    if bnd is not None:                                    # BIND-01: identity COVERAGE of the expected population is the gate
         ok, why = CR.binding_check(bnd, min_openings=min_openings)
         if not ok:
             return False, why
     cov = ex.get("coverage") or commit.get("coverage")
-    if cov is not None and not cov.get("ok", False):     # R14 MAN-01: identities REQUIRED by the Program/query manifest, not the collector's own attempts
+    if cov is not None and not cov.get("ok", False):     # Identities REQUIRED by the Program/query manifest, not the collector's own attempts
         fam = cov.get("families_missing_entirely") or []
         first = (cov.get("missing") or [{}])[0]
-        if cov.get("error") and not cov.get("missing_n"):   # [R17-1 / R17-27] a named coverage error with nothing uncovered (prefix, reconciliation): the name IS the reason
+        if cov.get("error") and not cov.get("missing_n"):   # a named coverage error with nothing uncovered (prefix, reconciliation): the name IS the reason
             return False, f"manifest coverage: {cov['error']}"
         return False, (f"manifest coverage: {cov.get('missing_n')} required identities uncovered ({cov.get('missing_by_family')}); "
                        + (f"whole families missing: {fam}; " if fam else "") + f"first: step {first.get('step')} {first.get('op_path')}/{first.get('output_member')} inv {first.get('invocation')} want {first.get('want_range')} got {first.get('committed_numel')}")
     idc = ex.get("identity_check")
-    if idc is not None and not idc.get("ok", False):     # R13: identities, not counts -- missing-one-and-duplicating-another fails here
+    if idc is not None and not idc.get("ok", False):     # Identities, not counts -- missing-one-and-duplicating-another fails here
         v = (idc.get("violations") or [{}])[0]
         return False, f"identity check: {idc.get('violations_n')} step(s) differ from the expected manifest (first: step {v.get('step')} {CR.json_short(v)})"
     if int(errs_n) > 0:
@@ -70,7 +70,7 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
         if not ok:
             return False, why
     oar = commit.get("openings_after_release")
-    # [R17 fp8] a bounded-staging record run must not carry a learned-only step (a placeholder root from the learn-only warm-up path)
+    # a bounded-staging record run must not carry a learned-only step (a placeholder root from the learn-only warm-up path)
     _bs = ex.get("bounded_staging") if isinstance(ex.get("bounded_staging"), dict) else None
     if _bs and _bs.get("learned_only_steps"):
         return False, f"bounded staging: {len(_bs['learned_only_steps'])} learned-only step(s) {list(_bs['learned_only_steps'])[:8]} on a record run (no root)"
@@ -83,7 +83,7 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
             return False, f"openings checked {n_open} < {min_openings}"
         if n_ok != n_open:
             return False, f"openings verified {n_ok} != checked {n_open}"
-    elif n_ok != n_open:                      # [R17 fp8] retain=host + exclude: the host share of the in-run openings must still verify
+    elif n_ok != n_open:                      # retain=host + exclude: the host share of the in-run openings must still verify
         return False, f"openings (host share) verified {n_ok} != checked {n_open}"
     if tokens_equal is not True:
         return False, "control vs instrumented tokens differ"
@@ -95,9 +95,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     bnd = commit.get("binding")
     vc = commit.get("value_correspondence")
     if isinstance(vc, dict) and vc.get("result") is False:
-        # [R15 COORD M-0111 (2)] LIVE C2: the committed bytes of an identity differ from the Match oracle's value (or the reference root):
+        # LIVE C2: the committed bytes of an identity differ from the Match oracle's value (or the reference root):
         # a relabel / same-name byte swap / late read that C1 (coverage) and C3 (openings) cannot see.  Named, fail closed.
-        # [rev-cb M-0301 R1] name the FAILING component's own cause: the oracle's `why` only when the ORACLE failed (a partial-coverage note
+        # name the FAILING component's own cause: the oracle's `why` only when the ORACLE failed (a partial-coverage note
         # on a None oracle result is not the cause of a root-compare failure); else the composite's `why` (root_compare / replay), else generic.
         oc = vc.get("oracle_compare") or {}
         oc_top = commit.get("oracle_compare") if isinstance(commit.get("oracle_compare"), dict) else {}
@@ -113,17 +113,17 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     oc = commit.get("oracle_compare")
     if isinstance(oc, dict) and oc.get("result") is False:
         return False, oc.get("why") or f"C2 oracle mismatch: {oc.get('mismatch_n')} identities differ from the Match oracle"
-    # [DECISIONS-2 §4 C2 / M-0356 (1); rev-cb M-0411 O1] C2 OF RECORD = sampled exact VU replay from the committed bytes (registered relation
+    # C2 OF RECORD = sampled exact VU replay from the committed bytes (registered relation
     # evaluators on the Program's dataflow) + exhaustive ordered boundary linkage (declared prompt -> input ids at the arrival step; sampled
     # id[s-1] -> input id[s]).  Required at EVERY B for a row-procedure record (one carrying the binding block): a mismatch / an unlinked
-    # boundary is a named FAIL; ABSENCE or a partial replay is a named FAIL too (never an unsound PASS on C1 + C3 alone, F-cb-02 / M-0106).
+    # boundary is a named FAIL; ABSENCE or a partial replay is a named FAIL too (never an unsound PASS on C1 + C3 alone).
     # The linkage is not a B>=2 device: at B=1 the arrival-step check ties the Commit to the workload of record (the wl_swapped canary) and
     # the decode chain is what a cross-step relabel breaks.  The full Match-oracle compare is a diagnostic: a mismatch still fails (above),
     # a complete attribution no longer substitutes for the replay.  Records without a binding block (unit fixtures of other checks) keep
     # the legacy rule.  TP2 (tp2_commit grades the rank block before attaching its binding) is graded by tp's path until the rank replay lands.
     sr = commit.get("sampled_replay")
     lk = commit.get("boundary_linkage")
-    # [rel M-0621] a producer that assembles its C2 under value_correspondence.components (compiled S3's kernel replay) is graded by the
+    # a producer that assembles its C2 under value_correspondence.components (compiled S3's kernel replay) is graded by the
     # SAME gate: the components are read where the top level is absent, and only when the component says it IS a sampled exact replay
     # (method / schema); a component of another method never stands in for the replay of record.
     _comps = (commit.get("value_correspondence") or {}).get("components") if isinstance(commit.get("value_correspondence"), dict) else None
@@ -137,9 +137,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
         return False, f"C2 sampled replay: {sr.get('why') or 'a sampled VU does not replay from its committed inputs'}"
     if isinstance(lk, dict) and lk.get("result") is False:
         return False, f"C2 boundary linkage: {lk.get('why') or 'an (engine step, request) boundary is not linked'} ({lk.get('unlinked_n')} unlinked)"
-    # [MAN-09; rev-cb M-0610, coord M-0614 (1)] WEIGHTS OF RECORD: the registered inputs must be authenticated by their canonical reference --
+    # WEIGHTS OF RECORD: the registered inputs must be authenticated by their canonical reference --
     # the pinned checkpoint shards -- not by re-hashing the committer's own parameters (O5 is self-consistency).  Every served parameter the
-    # Program names is compared by digest with the checkpoint-composed tensor of record: a difference (rev-cb flipweight) or a missing field
+    # Program names is compared by digest with the checkpoint-composed tensor of record: a difference (a flipped weight) or a missing field
     # is a named FAIL; on a row-procedure record the pin is REQUIRED (absent / not evaluated = 'weights unpinned', a named FAIL, like O1).
     wp = commit.get("weights_pin")
     if isinstance(wp, dict) and wp.get("result") is False:
@@ -150,9 +150,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     if isinstance(bnd, dict) and (bnd.get("population") or bnd.get("coverage")):
         _oc = oc if isinstance(oc, dict) else ((vc.get("oracle_compare") if isinstance(vc, dict) else None) or
                                                (_comps.get("oracle_compare") if isinstance(_comps, dict) else None))
-        # [R16 rev F-r16-23 / M-0579] the replay's seed must be POST-COMMITMENT as a fact, not a label: a prover-chosen --replay-seed (or a
+        # the replay's seed must be POST-COMMITMENT as a fact, not a label: a prover-chosen --replay-seed (or a
         # root-form label whose seed is not the run root's) makes the replay a mechanism run -- C2 of record then rests on form (B) alone
-        # (M-0721 (1)) and the PASS names it; without a complete form (B) the Commit FAILS by name.  Legacy records without a seed source
+        # and the PASS names it; without a complete form (B) the Commit FAILS by name.  Legacy records without a seed source
         # are graded by the finalizer (report), not here.
         _mech = False
         if isinstance(sr, dict) and sr.get("result") is not False:
@@ -160,39 +160,39 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
             if _sok is False:
                 _missing_b = C2._form_b_complete_over_values(_oc)
                 if _missing_b is not None:
-                    return False, f"C2 of record not established (F-r16-23): {_swhy}; and form (B) does not stand in: {_missing_b}"
-                # form (B) never covers plane-fed VUs (F-r16-07) -- the population / stratum gaps are still named whatever the seed
+                    return False, f"C2 of record not established: {_swhy}; and form (B) does not stand in: {_missing_b}"
+                # form (B) never covers plane-fed VUs -- the population / stratum gaps are still named whatever the seed
                 _gap0, _fail0 = C2._complete_replay_population_gap(sr, _oc) if sr.get("result") is True else C2._partial_replay_named_gap(sr, _oc)
                 if _fail0 is not None:
                     return False, _fail0
                 if sr.get("result") is not True and _gap0 is None:
-                    # [R16 rev F-r16-26 / rel M-0686] the F-r16-13 rule runs BEFORE the mechanism lift: a PARTIAL replay with no NAMED gap (an
+                    # the named-gap rule runs BEFORE the mechanism lift: a PARTIAL replay with no NAMED gap (an
                     # unevaluated pick of FAULT class inside an evaluated stratum -- 'a fault is a run that did not evaluate, not a gap') fails
                     # closed whatever seeded the replay; form (B) stands in for a named gap, never for a fault
                     sr_why = sr.get("why") or sr.get("grade")
-                    return False, (f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade')} -- {sr_why}; "
-                                   f"the row's Commit is C1 + C3 only (F-r16-13, whatever seeded the replay: {_swhy})")
+                    return False, (f"C2 of record not established: sampled replay {sr.get('grade')} -- {sr_why}; "
+                                   f"the row's Commit is C1 + C3 only (whatever seeded the replay: {_swhy})")
                 c2_notes.append(f"{_swhy}; C2 of record by the complete form (B) alone")
                 _mech = True
         if _mech:
             pass
         elif not (isinstance(sr, dict) and sr.get("result") is True):
-            # [COORD M-0721 (1), moe M-0715] C2 of record holds when EITHER form is complete (M-0481 'any ONE suffices'): a PARTIAL replay
+            # C2 of record holds when EITHER form is complete (any ONE suffices): a PARTIAL replay
             # with 0 MISMATCH whose every unevaluated stratum is NAMED (family | module | reason) is a GAP on the record, not a failure,
             # when form (B) -- the Match-oracle compare -- is complete (0 mismatch, attribution complete) over the values.  A replay
             # mismatch always fails (above); the absence of both forms still fails (O1 stands).
             _gap, _fail = C2._partial_replay_named_gap(sr, _oc)
-            if _fail is not None:                                    # [R16 rev F-r16-07] a plane-fed stratum: neither form covers it, named
+            if _fail is not None:                                    # a plane-fed stratum: neither form covers it, named
                 return False, _fail
             if _gap is None:
                 sr_why = (sr.get("why") or sr.get("grade")) if isinstance(sr, dict) else "not run (no --program-dir / --programs-root)"
-                return False, (f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade') if isinstance(sr, dict) else None} -- {sr_why}; "
+                return False, (f"C2 of record not established: sampled replay {sr.get('grade') if isinstance(sr, dict) else None} -- {sr_why}; "
                                "the row's Commit is C1 + C3 only")
             c2_notes.append(_gap)
         else:
-            # [R16 rev F-r16-02 / M-0016] a COMPLETE replay whose population excluded VUs BY NAME under MAN-06f / MAN-06g (plane-fed,
+            # a COMPLETE replay whose population excluded VUs BY NAME (plane-fed,
             # interior-composed v2) carries the same gap the partial rule does: those VUs have committed members no form checked unless
-            # form (B) is complete over the values -- the population move (rev-cb M-0751 (b)) keeps the M-0721 (1) condition, it does not lift it.
+            # form (B) is complete over the values -- the population move keeps that condition, it does not lift it.
             _gap, _fail = C2._complete_replay_population_gap(sr, _oc)
             if _fail is not None:
                 return False, _fail
@@ -200,15 +200,15 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
                 c2_notes.append(_gap)
         if not (isinstance(lk, dict) and lk.get("result") is True):
             lk_why = lk.get("why") if isinstance(lk, dict) else "not run"
-            return False, f"C2 of record not established (DECISIONS-2 §4): boundary linkage {lk.get('result') if isinstance(lk, dict) else None} -- {lk_why}"
+            return False, f"C2 of record not established: boundary linkage {lk.get('result') if isinstance(lk, dict) else None} -- {lk_why}"
         if not (isinstance(wp, dict) and wp.get("result") is True):
             wp_why = wp.get("why") if isinstance(wp, dict) else "not run (no --weights-of-record / --checkpoint-dir)"
-            return False, (f"weights unpinned (MAN-09): the served weights were not compared with the checkpoint of record -- {wp_why}; "
+            return False, (f"weights unpinned: the served weights were not compared with the checkpoint of record -- {wp_why}; "
                            "the committed weights root is self-consistency, not authentication")
         _att = C2._batch_attribution_note(C2._requests_n(commit), _oc)
         if _att is not None:
             c2_notes.append(_att)
-        # [R17-3 / reqval] the population of record is Q(P): the replay's reach reconciled against the required manifest is stated on
+        # the population of record is Q(P): the replay's reach reconciled against the required manifest is stated on
         # every PASS (query_total / uncovered_by_name), and a reconciliation failure is a named FAIL -- never a silent narrowing
         _scope, _scope_fail = C2._query_population_scope(sr)
         if _scope_fail is not None:
@@ -223,29 +223,29 @@ def _after_release_verdict(commit: dict, min_openings: int) -> tuple[bool, str] 
     ops = commit.get("openings") or {}
     oar = commit.get("openings_after_release")
     bnd = commit.get("binding")
-    if oar is not None:                      # R13 P0: openings after the raw device staging was released must verify against the ORIGINAL roots
+    if oar is not None:                      # Openings after the raw device staging was released must verify against the ORIGINAL roots
         n_a, ok_a = int(oar.get("n") or 0), int(oar.get("verified") or 0)
         if n_a < min_openings:
             return False, f"openings after release checked {n_a} < {min_openings}"
         if ok_a != n_a:
             return False, f"openings after release verified {ok_a} != checked {n_a} (source {oar.get('source')})"
-        if "replay" in str(oar.get("source") or "") and oar.get("replay_root_equal") is not True:   # replay | host+replay (R17-5)
+        if "replay" in str(oar.get("source") or "") and oar.get("replay_root_equal") is not True:   # replay | host+replay
             return False, "replay run root differs from the original run root (replay-to-open is not reproducing the committed bytes)"
         if "replay" in str(oar.get("source") or "") and int(oar.get("replay_errors_n") or 0) > 0:
             return False, f"replay run recorded {oar.get('replay_errors_n')} collector error(s)"
         if int(oar.get("retained_device_after") or 0) > 0:
             return False, f"raw/level bytes still on the device after release: {oar.get('retained_device_after')}"
-        # [R17 fp8, R17-5] the challenge / population picks the in-run stages could not open from host (excluded families) were handed to
+        # the challenge / population picks the in-run stages could not open from host (excluded families) were handed to
         # this stage: every one of them must have been opened here by replay, and verified (ok_a == n_a above covers the verification)
         _po = (bnd or {}).get("openings_population") or {}
         _def_a, _def_b = int(ops.get("deferred_replay_n") or 0), int(_po.get("deferred_replay_n") or 0)
         if _def_a or _def_b:
-            # [rev F-r17b-13] by POSITION when the record carries them: the union of both stages' deferred (step, leaf) sets must be a subset
+            # by POSITION when the record carries them: the union of both stages' deferred (step, leaf) sets must be a subset
             # of the after-release stage's received set; count-only records (older) fall back to received >= max(a, b)
             _pa = [tuple(p) for p in (ops.get("deferred_positions") or [])]
             _pb = [tuple(p) for p in (_po.get("deferred_positions") or [])]
             _got = {tuple(p) for p in (oar.get("deferred_received_positions") or [])}
-            # [revb S-r17b-03] the count-only branch is for records written BEFORE positions existed: a writer that knows positions always
+            # the count-only branch is for records written BEFORE positions existed: a writer that knows positions always
             # writes the keys (empty lists included), so their presence gates the branch -- it cannot be reached by omitting the lists
             _positional_writer = any(k in d for d, k in ((ops, "deferred_positions"), (_po, "deferred_positions"), (oar, "deferred_received_positions")))
             if _pa or _pb or _got or _positional_writer:

@@ -1,12 +1,11 @@
-# The accelerator model: the envelope ISA and its coverage
+# The ACCEL model
 
-The machine 𝓜 (`Accel.Machine`) is a card's table of numbers (`Accel.Card`: `Accel.H200`, `Accel.Sm120`) and its
-semantics (`Accel.Open`), which no table states: the headline holds at every semantics meeting (P1) and (P2), and the
-coverage premise (`Assumptions.CardWithinAccel`) says the card's own is one. The premise rests on one claim: **every
-instruction the card executes is dominated by an envelope opcode** (`Accel.Op`, or a branch) that reads and writes at
-least its words, at no more units of each resource. This file is the envelope's opcode list and the map from the card's
-instructions onto it; MODEL-COVER (CMP-166) owns the per-opcode table and its sources (CUDA Binary Utilities 12.9
-§4.3 and §4.4, PTX ISA 9.0, the DS-120 and DC-90 SASS census).
+ACCEL is the physical model the accounting reads: a machine 𝓜 (`Accel.Machine`) made of a card's table of numbers
+(`Accel.Card`: `Accel.H200`, `Accel.Sm120`) and the card's semantics (`Accel.Open`), which no table states. Programs
+are lists of the ACCEL ops (`Accel.Op`) and branches. A run fits a time `T` when its code fits the text (G1) and each
+resource's units are at most its rate times `T` (G2), on a schedule fixed before the content (`Machine.Fits`). The
+headline holds at every semantics meeting (P1), integer MMAs exact within the table's range, and (P2), every MMA dot a
+function of its accumulator and its pairs' products. The card premise says the card's own semantics is one of them.
 
 ## The table (`Accel.Card`)
 
@@ -18,73 +17,79 @@ instructions onto it; MODEL-COVER (CMP-166) owns the per-opcode table and its so
 | `exact` | (P1)'s range: an integer MMA is exact while `|C| + Σ|a·b| < 2^exact` |
 | `text` | code space, instructions (device memory at 16 bytes an instruction) |
 
-The table gives the device model's limits (`Card.toDevice`, `Accounting.Device`): at a tick of `τ` seconds the
-device's on-chip and device-memory bits are the stores', and its tensor MACs, CUDA-core ops (32 an issue slot and every
-pipe's lanes), oracle queries and device-memory bits a tick are the rates', rounded up. A run that meets the model
-stays within them summed over a window (`fits_toDevice`); no per-tick `Accounting.Schedule` is built from a run.
+Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
+(bank words), `l2` (words read or written) and `dram` (words). Each table is a SKU's at its firmware's maximum:
 
-Resources: `tensor` (s8 MACs), `issue` (warp instructions), `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
-(bank words), `l2` (words read or written) and `dram` (words).
+| Table | SKU | SM clock | Device memory |
+|---|---|---|---|
+| `Accel.H200.card` | H200 SXM 141 GB, 132 SMs | 1980 MHz | HBM3e at 3201 MHz on 6144 bits, 4.917 TB/s |
+| `Accel.Sm120.card` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
 
-## The envelope opcodes (`Accel.Op`, `Card.use`)
+Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
+[0, 0]. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A run that fits the
+model stays within them summed over a window (`fits_toDevice`), and no per-tick `Accounting.Schedule` is built from a
+run.
 
-| Opcode | Reads → writes | Units |
-|---|---|---|
-| `mma o sh sa sb` | an `m × n × k` tile of the card's MMA opcode `o` (formats, 32- or 64-bit accumulators): `A` from `sa`, `B` from `sb`, accumulators in registers → the accumulators | `m·n·max(k, 1)·weight` tensor, one issue slot, each operand word's read at its store |
-| `mmaSp o sh sa sb` | as `mma`, 2:4 sparse: `k/2` kept pairs a row, chosen by metadata | `m·n·max(k/2, 1)·weight` tensor, one issue slot, reads |
-| `lane o` | one of the card's lane functions on its pipe: up to 4 register words (6 on `f64`) → 2 | `1/32` issue slot and a lane of the pipe (`fma` has none: issue-bound) |
-| `move s t n k` | `n` words of `s`, read once → `k` copies in `t`, unchanged | `max k 1 / 32` issue, each word's read and each copy's write, a register-to-register copy an `alu` lane |
-| `atom s o` | a word of `s` and two registers → the word's new value and a returned word (the card's function) | `1/32` issue, the word's access, an `alu` lane if `s` is the registers |
-| `red s t n o` | `n` words of `s` into `n` words of `t` (the card's function) | `1/32` issue, an access at each end a word, an `alu` lane a word if `t` is the registers |
-| branch | a predicate bit → the program counter, to a fixed, register or immediate target, optionally writing the return index | `1/32` issue |
+## The ACCEL ops (`Accel.Op`, `Card.use`)
 
-The hash oracle has no opcode: programs reach it only through the accelerator's priced calls (`Pouw.Dither.Accel.G3`,
-`Pouw.Dither.CallsAtPub`). Semantics are fixed by the model only where an honest kernel needs them: a move copies its
-words, and an integer MMA is exact within the range (P1). Every MMA dot is a function of its accumulator and its pairs'
-products (P2, `ProductForm`).
+- `mma` and `mmaSp`: an `m × n × k` tile of one of the card's MMA opcodes, dense or 2:4 sparse. Each costs
+  `m·n·max(k, 1)` (or `k/2` kept pairs) products at the format's weight in tensor units, one issue slot, and each
+  operand word's read at its store.
+- `lane`: one of the card's lane functions on its pipe, reading up to 4 register words (6 on `f64`) and writing 2.
+  It costs `1/32` of an issue slot and a lane of the pipe.
+- `move`: `n` words of a store read once into `k` copies in another. It costs `max k 1 / 32` issue slots, each word's
+  read and each copy's write, and a register-to-register copy is an `alu` lane.
+- `atom` and `red`: an atomic on a word, or a reduction of `n` words into `n` words, each with the card's function.
+  Each costs `1/32` of an issue slot and an access at each end; a word either writes to registers is an `alu` lane.
+- A branch costs `1/32` of an issue slot.
 
-## Coverage, by class
+The hash oracle has no op: programs reach it only through the accelerator's priced calls (`Pouw.Dither.Accel.G3`,
+`Pouw.Dither.CallsAtPub`). The model fixes semantics only where an honest kernel needs them: a move copies its words,
+and an integer MMA is exact within the range (P1).
 
-| The card's instructions | Envelope opcode | Notes |
-|---|---|---|
-| IMMA, IGMMA (s8, u8) | `mma` | dense `wgmma` and `mma.sync` alike at the tensor rate: `mma.sync`'s lower measured rate only overprices it |
-| HMMA, HGMMA (f16, bf16, tf32), QGMMA, QMMA (FP8, e2m1), OMMA (nvf4, mxf4), BMMA, BGMMA (b1) | `mma` | the card's dot at the format's weight; P2 holds by the multiplier structure |
-| DMMA | `mma` with 64-bit accumulators | FP64 operands at weight 32 |
-| the sparse forms (`mma.sp`, sparse `wgmma`) | `mmaSp` | |
-| IADD3, IMAD, IMAD.WIDE, IMAD.HI, LEA, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, IDP, IABS, BMSK, SGXT, the video ops, PLOP3, PSETP, P2R, R2P | `lane` on `alu` or `imad` | each reads at most 4 words and writes at most 2; a 64-bit result is 2 words |
-| FADD, FMUL, FFMA, FMNMX, FSET, FSETP, FSEL, FCHK, FSWZADD, HADD2, HFMA2, HMUL2, HMNMX2, HSET2, conversions (F2F, F2I, I2F, I2I, FRND, F2FP) | `lane` on `fma` or `alu` | |
-| DADD, DFMA, DMUL, DSETP | `lane` on `f64` | three FP64 operands are 6 words |
-| MUFU | `lane` on `sfu` | 16 lanes a SM-clock (CPG Table 7) |
-| SHFL | `lane` on `shfl` | registers are pooled, so a lane names another's register |
-| the uniform datapath (UIADD3, UIMAD, ULOP3, …, R2UR, S2UR) | `lane`, `move` | uniform registers are register words |
-| VOTE, REDUX, ELECT | `lane`s on `fma` | a fold of the card's binary function: 31 lanes are at most the instruction's issue slot |
-| MOV, LD, ST, LDG, STG, LDS, STS, LDL, STL, LDSM, STSM, LDC, LDGSTS, TMA and bulk copies | `move` | an address is a register plus an offset; a broadcast load is one read to `k` copies |
-| ATOM, ATOMS, ATOMG, RED | `atom` | |
-| bulk and TMA reductions, vector RED | `red` | |
-| BRA, BRX, JMX, CALL, RET, EXIT | branch | EXIT is a branch past the text's end |
-| BAR, SYNCS, MEMBAR, FENCE, DEPBAR, BSSY, BSYNC, WARPSYNC, NANOSLEEP, YIELD | none | no data effect: the schedule orders the threads, and the model has no latency |
-| S2R, CS2R (thread and block ids) | `move` from an immediate | a thread's ids are constants of its text |
+## The card premise (`Assumptions.CardWithinAccel`)
 
-**Open** (not yet dominated, so outside the premise's claim until added or argued): MATCH (a word compared across 32
-lanes in one instruction); MMAs with f16 accumulators; FP6 and block-scaled FP8 MMAs (`kind::mxf8f6f4`; `Fmt` lacks
-`e3m2`, `e2m3`, `mxf8`, `mxf6`); clock reads (`%clock`, time as data); the texture path's filtering (TEX, TLD4, and
-surfaces); sm_100's tensor memory and `tcgen05`, which sm_120 doesn't have. From MODEL-COVER's re-key (CMP-166):
-IADD3 at CC 12.0's 128 lanes a SM-clock, twice `alu`'s 64 (two `lane`s, one on each pipe); the uniform datapath's 4
-results a SM-clock beside `alu`'s lanes; BAR.RED, which folds a predicate across the CTA (BAR.SYNC and BAR.ARV have no
-data effect); and the VOTE, REDUX, ELECT row, whose fold on `fma` is free (RT-MODEL-MIN RM7: REDUX shares MATCH's unit
-and VOTE spends 16 `alu` lanes). **Excluded** by the premise (no code here uses them, and none computes a committed
-word or a hash more cheaply than the model prices): the video and JPEG engines, sm_120's RT cores, the copy engines and
-compute data compression. The exclusions are open too (RM4): RT and the texture path each exceed the served margins.
+The card does no more than 𝓜 at its numbers: for some semantics meeting (P1) and (P2), whatever the card computes in
+`T` seconds, some program of 𝓜 computes on a schedule fixed before the content, within `T` (`Machine.Fits`). It rests on
+one claim: every instruction the card executes is dominated by an ACCEL op (or a branch) that reads and writes at least
+its words, at no more units of each resource. The per-instruction evidence is the coverage table,
+`benchmarks/pouw/machine_model/data/cover/rows.toml`. At a table, the premise also says the cards are that table's SKU
+and firmware.
 
-## Open in the statement
+## Proved
 
-- **The card numbers** (RT-MODEL-MIN RM5, RM6): each table is a SKU's at its firmware's maximum, the H200 SXM's at
-  1980 MHz and 4.917 TB/s (HBM3e at 3201 MHz, above the data sheet's 4.8) and the RTX PRO 6000 Server Edition's at
-  2430 MHz and 1597.6 GB/s. Both cards' SM and memory clock offset ranges are [0, 0] (runs r20261027-035033-dcba and
-  r20261027-031620-6643). So the coverage premise says the cards are that SKU and firmware, and nothing the protocol
-  checks attests it. The H200's L2 row is a placeholder, and sm_120's is one pattern's measurement.
-- **CUDA-core matmul routes** (RM1's residue, RM2, CMP-167): with every register word an `alu` lane, the four-Russians
-  table method pays at least an `alu` lane a MAC, at most 6.25% of the `s8` tensor rate on sm_120 and 1.6% on the
-  H200 through registers, and 12.5% on the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane.
-  None of these is a public route, so `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The
-  algorithmic premise that carries them is SAK-LB's `SAKResidual`, pending Daniel (RM8 restates its falsifier).
+- `WorkSoundAt`, `WorkSoundOnCard` and their instances on both tables (`WorkSoundH200`, `WorkSoundSm120`,
+  `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`) follow from Dither's `WorkSound`, with no premise beyond its own
+  and the card premise (`Proofs/Pouw/DitherInstance.lean`).
+- The premise holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`). The deployed
+  `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048, fits the H200's table in its seconds (`kernel_fits`) and leaves
+  C = A·B in device memory (`kernel_computes`).
+- The premise refuses a card that changes memory in no time (`cardWithinAccel_fails`), and one that changes more words
+  of shared memory, L2 or device memory in `T` seconds than the table's rate times `T` (`cardWithinAccel_fails_rate`)
+  (`Proofs/Core/Accel/Model.lean`).
+- The exact `s8` semantics (`s8Open`) meets (P1) and (P2) on both cards, so the headline's hypotheses on the semantics
+  are not empty.
+
+## Open
+
+- **Instructions not yet dominated**, outside the premise's claim until an op covers them or an argument does:
+  - MATCH, which compares a word across 32 lanes in one instruction, and REDUX, which shares its unit;
+  - VOTE, which spends 16 `alu` lanes;
+  - MMAs with f16 accumulators;
+  - FP6 and block-scaled FP8 and FP6 MMAs, since `Fmt` lacks `e3m2`, `e2m3`, `mxf8` and `mxf6`;
+  - clock reads, which make time data;
+  - IADD3 at sm_120's 128 lanes a SM-clock, twice `alu`'s 64;
+  - the uniform datapath's 4 results a SM-clock beside `alu`'s lanes;
+  - BAR.RED, which folds a predicate across the CTA.
+- **Exclusions.** The premise excludes the video and JPEG engines, sm_120's RT cores, the texture path's filtering, the
+  copy engines and compute data compression. An exclusion is a second adversary class until it has a rate row or a
+  proof that the model dominates it. The RT cores (at most 58 integer products a SM-clock, 6% of sm_120's `s8` rate)
+  and the texture path (at most 64, 6% on sm_120 and 1.6% on the H200) exceed the headline's served margins, 3.9% on
+  sm_120 and 2.6% on the H200.
+- **The card numbers.** Nothing the protocol checks attests a node's SKU and firmware. The H200's L2 row is a
+  placeholder, neither measured nor a ceiling, and sm_120's is one read pattern's measurement.
+- **CUDA-core matmul routes.** With every register word an `alu` lane, the four-Russians table method pays at least an
+  `alu` lane a MAC: at most 6.25% of the `s8` tensor rate on sm_120 and 1.6% on the H200 through registers, and 12.5% on
+  the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
+  `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The algorithmic premise that would carry
+  them, `SAKResidual`, is not yet adopted.

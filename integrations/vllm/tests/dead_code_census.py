@@ -7,7 +7,7 @@ Its output is not committed: write it anywhere with --out.
     python tests/dead_code_census.py [--imported imported.json] [--out /tmp/census.json] [--git-dates]
 
 ROOTS (`census_roots.txt`, reviewed by hand): shell entry points (paths or globs: every sweep runner and negatives runner by rule), Python
-entry points, and directories of roots (the R19 regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
+entry points, and directories of roots (the regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
 `<name>.py` tokens and `from X import` / `import X` anywhere (heredocs, `-c` strings); every `.sh` a root shell names is a root too.
 Shell scripts are entry points: the census never deletes one.  A module that only a non-root shell runs is non-live and must be kept
 by name in the keep-list.
@@ -72,8 +72,7 @@ PROTECTED = (
 
 #: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
 #: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
-RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.check.fold_compare",
-                                    "verity_vllm.check.root_policy", "verity_vllm.properties.golden", "verity_vllm.check.operand_provenance")
+RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.properties.golden")
 
 #: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
 #: imports it; circuit-check's discovery (`sidecars.discover`) loads it by path

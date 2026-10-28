@@ -4,7 +4,7 @@ reference regression's manifest rebuilds on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
-about an hour of CPU in one process) run here instead, once per landing (Daniel, 3 Oct).  `research merge --push` starts
+about an hour of CPU in one process) run here instead, once per landing.  `research merge --push` starts
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
@@ -46,7 +46,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 #: node 2: its two 560 GB check slots hold all 120 of its cores, so the rebuilds run unpinned at nice 19 beside them, in the
-#: ~480 GB of its 1600 GB slice the slots leave (node 1, their machine since 3 Oct on cores 96-127, drains 23 Oct 13:00Z; CI-152)
+#: ~480 GB of its 1600 GB slice the slots leave
 MACHINE = "vy-nebius-2"
 CORES = ""
 BY = "regression"
@@ -81,7 +81,7 @@ out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
 uv run -q --locked --all-packages --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
-  integrations/vllm/tests/regression/expected > "$out/fetch-fixtures.json" || exit 1
+  integrations/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
 cd integrations/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
   {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
@@ -104,7 +104,7 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
     commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
     a train commit's own second parent is a PR's head, which no check of the train ran on): a landing made with `--defer` lands
-    while its check runs, or cancels it then (#2544), so no passed attempt is in the store to find (CI-81)."""
+    while its check runs, or cancels it then, so no passed attempt is in the store to find."""
     body = git("log", "-1", "--format=%B", commit, cwd=cwd)
     m = CHECK_RE.search(body)
     if m and attempt in (None, m.group(1)):

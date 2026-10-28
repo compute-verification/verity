@@ -1,8 +1,9 @@
 """build.sh's gate on one attn_bf16 cubin (sm_90a or sm_120a): ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the
-reasons on stderr) on a ptxas warning, a stack frame, a spill or local memory, and on any kernel whose floating-point
-instructions aren't the Definition's: every tensor-core instruction an HMMA.16816.F32.BF16 (D/16 of them in QK^T's unrolled
-k loop, 4 D/16 in _s16's, at least one in PV's), the cvt an F2FP.BF16(.F32).PACK_AB, and no other floating-point arithmetic (an HFMA2.MMA of
--RZ and RZ, the compiler's way of loading a constant, adds nothing).
+reasons on stderr) on a ptxas warning, a kernel compiled for another arch, a stack frame, a spill or local memory, and on
+any kernel whose floating-point instructions aren't the Definition's: every tensor-core instruction an HMMA.16816.F32.BF16
+(D/16 of them in QK^T's unrolled k loop, 4 D/16 in _s16's, at least one in PV's and in the _ref kernels'), the cvt an
+F2FP.BF16(.F32).PACK_AB, and no other floating-point instruction (an HFMA2.MMA of -RZ and RZ, the compiler's way of loading
+a constant, adds nothing, and an FSEL whose operands carry no negation or absolute value moves a word unchanged).
 
   python3 sass_gate.py ARCH PTXAS_TXT SASS_TXT OUT_JSON
 """
@@ -15,12 +16,14 @@ import sys
 
 HMMA = "HMMA.16816.F32.BF16"
 CVT = re.compile(r"^F2FP\.BF16(\.F32)?\.PACK_AB$")
-MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
-FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FCHK|MUFU|FRND|F2F|F2I|I2F|DADD|DMUL|DFMA|DSETP|HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|F2FP)(\.[\w.]+)?\b")
+MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
+FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FSEL|FCHK|FRND|FSWZADD|MUFU|F2F|F2I|I2F|DADD|DMUL|DFMA|DSETP|DMNMX|"
+                   r"HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|HSET2|F2FP)(\.[\w.]+)?\b")
 CONSTANT = re.compile(r"\bHFMA2\.MMA R\d+, -RZ, RZ\b")
-#: kernel: (exact HMMA count, or None for at least one); _s16's QK^T unrolls its 4 key tiles
-WANT = {f"attn_{op}_d{d}{tile}": ((4 if tile == "_s16" else 1) * d // 16 if op == "qk" else None)
-        for tile in ("", "_h8", "_h16", "_s16") for op in ("qk", "pv") for d in (64, 128)}
+SELECT = re.compile(r"\bFSEL R\d+, [^;|\-]*;")
+#: kernel: (exact HMMA count, or None for at least one); _s16's QK^T unrolls its 4 key tiles, _ref's loops
+WANT = {f"attn_{op}_d{d}{tile}": ((4 if tile == "_s16" else 1) * d // 16 if op == "qk" and tile != "_ref" else None)
+        for tile in ("", "_h8", "_h16", "_s16", "_ref") for op in ("qk", "pv") for d in (64, 128)}
 
 
 def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
@@ -30,9 +33,11 @@ def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
         if m.group(2) != arch:
             problems.append(f"{m.group(1)}: compiled for {m.group(2)}, want {arch}")
         body = m.group(3)
+        regs = re.search(r"Used (\d+) registers", body)
         frame = re.search(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads", body)
-        funcs[m.group(1)] = {"regs": int(re.search(r"Used (\d+) registers", body).group(1)), "stack": int(frame.group(1)),
-                             "spill_stores": int(frame.group(2)), "spill_loads": int(frame.group(3))}
+        funcs[m.group(1)] = {"regs": int(regs.group(1)) if regs else None, "stack": int(frame.group(1)) if frame else None,
+                             "spill_stores": int(frame.group(2)) if frame else None,
+                             "spill_loads": int(frame.group(3)) if frame else None}
     cur = None
     for line in sass.splitlines():
         fm = re.search(r"Function : (\w+)", line)
@@ -53,9 +58,11 @@ def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:
         for fl in FLOAT.finditer(line):
             if CVT.match(fl.group(0)):
                 r["F2FP"] += 1
-            elif not CONSTANT.search(line):
+            elif not CONSTANT.search(line) and not (fl.group(1) == "FSEL" and SELECT.search(line)):
                 r["float"].append(fl.group(0))
     for name, r in funcs.items():
+        if r.get("regs") is None or r.get("stack") is None:
+            problems.append(f"{name}: no ptxas resource line")
         if r.get("stack") or r.get("spill_stores") or r.get("spill_loads") or r.get("LDL") or r.get("STL"):
             problems.append(f"{name}: local memory {r}")
         if r.get("other_mma"):

@@ -23,7 +23,7 @@ K. Each rank ships each call's A rows and scales, its z/y records and, once, its
 ``b/<K>``: the period's registration of a rank's shards (`Weights`, a registry) is refused here, since no public rule
 slices the pinned checkpoint into shards yet.
 
-With ``commit`` (ROOTS1, VLLM-81) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
+With ``commit`` (ROOTS1) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
 ``worker_extension_cls`` then: the rows-sha512 committer, the int8 source and the step-input port on the rank's model),
 and the rank's tap (`RankTap`) ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to
 the window's name of the linear (``…qkv_proj@tp1/row_quant``), and the port's input ids, cut to the step's scheduled

@@ -10,15 +10,15 @@
 #     --env PLAN=honest --env GIB=16 -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
 # PLAN is the prover's sessions (honest, skip:F; comma-separated, one session each); GIB the store across every GPU
-# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; CHECK_WORKERS the verifier's opening
-# checkers (default a core less than it may use); VERIFIER_CPUS and PROVER_CPUS the cores
+# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; CHECK_WORKERS the verifier's processes
+# computing each window's exact bound (default a core less than it may use); VERIFIER_CPUS and PROVER_CPUS the cores
 # each process is pinned to; MAXMIN the lease's minutes; PY the Python (default the fill's torch venv; a verifier needs
 # only numpy, so on a CPU node any venv with it).
 #
 # With PROVER_SLICE the prover runs at nice 0 in a scope of that top-level slice (root's systemd-run, then this user
 # again), on PROVER_CPUS and in at most PROVER_MEM_GB. Node 2's user slice holds only 0-119, where nice 19 doesn't make
 # another session's CPU jobs yield to the prover (cgroups share CPU by weight, a session's as much as every lease's
-# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass (r20261015-185416-ac65).
+# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass.
 # vy-timing.slice's CPUs 128-191 are fill's timing jobs', each of which holds a GPU, so none runs in a whole-node lease.
 #
 # The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so --mem-gb 260):
@@ -52,8 +52,7 @@
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
 # from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
-# CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
-# python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
+# CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
 # the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
@@ -107,12 +106,12 @@ export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87} P
 export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))} ROLE=${ROLE:-both}
 VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
-  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"} ${VERDICT:+--verdict "$VERDICT"})
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" ${VERDICT:+--verdict "$VERDICT"} \
+    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"

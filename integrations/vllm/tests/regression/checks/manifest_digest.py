@@ -14,7 +14,7 @@ dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under b
 The builder is the integration's (the query path `verity-vllm manifest`, Q_module_body_v1 -- the same build / build-global flags
 row_pod.sh uses).
 
-`actual` also states what the built manifest PROMOTED ([R19 int-20, F-r19-int-20]: interior rows whose output crosses a module
+`actual` also states what the built manifest PROMOTED (interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
 
     promoted            the count of promoted identity rows (0 on a v1-shaped manifest)
@@ -38,7 +38,7 @@ from pathlib import Path
 from .. import resolver
 
 NAME = "manifest_digest"
-TIER = "T0"          # inputs: Programs 50-300 MB + workload; the rebuild itself is CPU-minutes (run it on a pod tonight)
+TIER = "T0"          # inputs: Programs 50-300 MB + workload; the rebuild itself is CPU-minutes (run it on a pod)
 STRENGTH = "strong"
 REBUILD = True       # 94% of the T0 wall (2-26 min a row): skipped unless VERITY_REGRESSION_REBUILD=1, the post-train job's switch
 INPUTS = ("manifest.json", "commit/manifest_verify.json", "build_summary.json", "build_request*/instances.json.gz", "workloads/<row>.json")
@@ -76,7 +76,7 @@ def _summary(man: dict, *, with_rows: bool) -> dict:
 
 
 def _member_class(member: str) -> str:
-    """`op_path/output_member` with the layer index folded to `<k>` (the fold `verity_vllm.query.compare._sig` uses)."""
+    """`op_path/output_member` with the layer index folded to `<k>`."""
     op, _, mem = member.rpartition("/")
     return ".".join("<k>" if p.isdigit() else p for p in op.split(".")) + "/" + mem
 
@@ -90,7 +90,7 @@ def _one_or_list(members: list[str]):
 
 
 def _promotion(row: resolver.Row, man: dict) -> dict:
-    """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`,
+    """The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`,
     `promoted_member_class`, `only_new` (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
     rows = man.get("identities") or []
     v2 = (man.get("query") or {}).get("engine") in QUERY_ENGINES

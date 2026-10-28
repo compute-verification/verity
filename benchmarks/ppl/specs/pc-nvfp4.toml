@@ -1,4 +1,4 @@
-description = "PPL-COMPILE's format baseline, no PoUW: NVFP4: E2M1 in blocks of 16 along k with UE4M3 scales and one FP32 scale per tensor, every matmul (linears, lm_head, both attention matmuls) rounded to nearest, products in FP32, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
+description = "format baseline, no PoUW: NVFP4: E2M1 in blocks of 16 along k with UE4M3 scales and one FP32 scale per tensor, every matmul (linears, lm_head, both attention matmuls) rounded to nearest, products in FP32, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
 
 [[linear]]
 step = "smooth"

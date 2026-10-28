@@ -29,12 +29,9 @@ accumulator -- as a mathematical definition, not a lookup of measurements:
   :func:`~verity.ml.circuits.silicon.silicon.pack_fp32` for a finite value -- whose zero is
   always ``+0`` (``-0`` accumulators and ``-0`` products never produce ``-0``).
 
-On finite operands this is exactly :func:`verity.ml.circuits.silicon.silicon.tc_dot`
-(``lean/VeritorSpec/TCTotal.lean`` proves the Lean transcription of the two
-agree, ``tcDot_total_eq_of_finite``).  On the special encodings it is a
-*specification*; the evidence that the A100 (sm_80) and the RTX 4090 (sm_89)
-implement it is the campaign recorded under ``docs/data/tc-total-2026-09-07/``
-(``gpu/tc-total/campaign.py``): 147,258 structured tiles x 128 outputs x 3
+On finite operands this is exactly :func:`verity.ml.circuits.silicon.silicon.tc_dot`.
+On the special encodings it is a *specification*; the evidence that the A100
+(sm_80) and the RTX 4090 (sm_89) implement it is a hardware campaign: 147,258 structured tiles x 128 outputs x 3
 repetitions per device, every output reproduced, no nondeterminism, no
 position or k-index dependence, and no difference between the two devices.
 
@@ -51,19 +48,16 @@ the same total semantics over a different finite pipeline -- *one* group of
 sixteen products plus the accumulator, a 26-bit adder, exponent floor
 ``-133`` -- as one accumulator coordinate of ``wgmma.mma_async.sync.aligned
 .m64n128k16.f32.bf16.bf16`` (SASS ``HGMMA.64x128x16.F32.BF16``) computes it
-on the H100.  The pipeline parameters were *recovered* on the device (lane HP,
-``gpu/tc-hopper/campaign.py``: neutral-subgroup, internal-precision and
+on the H100.  The pipeline parameters were *recovered* on the device
+(neutral-subgroup, internal-precision and
 parameter-fit families; ``16:26:-133`` is the unique zero-mismatch candidate
 over groups x width x floor) and the special-value rules R1-R8 were re-tested
-with L6's case families; the record is ``docs/data/tc-hopper-2026-09-07/``.
+with L6's case families.
 The instruction's ``scale-d = 0`` form (accumulator ignored, CUTLASS
 ``ScaleOut::Zero``) was measured equal to ``acc = +0``.  On finite operands
 the function is :func:`verity.ml.circuits.silicon.silicon.tc_dot` on
 :data:`~verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16` (identical parameters,
 Hawkeye's H100 numbers, now re-measured).
-
-Promoted verbatim from ``veritor`` ``src/veritor/core/silicon_total.py`` lines
-1-258 (commit eb865ce29); the gate-set builders were left behind.
 """
 
 from __future__ import annotations
@@ -239,6 +233,6 @@ AMPERE_BF16_DOT16_TOTAL = AMPERE_BF16_M16N8K16
 TOTAL_FAMILY_VERSION = "3"
 
 #: :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_WGMMA_K16` (the model of ``sm90.wgmma.m64n8k16.bf16``) is re-exported
-#: here, where lane HP's campaign first registered it: all sixteen products and the accumulator in one grouped
+#: here, where veritor's H100 campaign first registered it: all sixteen products and the accumulator in one grouped
 #: sum, 26-bit adder, exponent floor ``-133``, the parameters of :data:`~verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`.
 HOPPER_WGMMA_FAMILY_VERSION = "1"

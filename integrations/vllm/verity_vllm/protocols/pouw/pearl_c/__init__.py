@@ -42,7 +42,7 @@ torch's current stream, in the device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.  A pass's state and its end
   are `ends`'s (`PassEnds`).
 
-The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
+The per-call host work is kept small:
 the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`, the index numbered across the epoch: `pouw_pass.call_index`)
 and their upload through a pinned ring (`_Uploads`); the records' screen as one fused kernel (`screen_into`, Triton, its
 compiled kernel launched directly after the first launch; `screen` where Triton can't run); A's roots copied into a pass
@@ -129,8 +129,8 @@ from verity_vllm.protocols.pouw.pearl_c.screen import (
 #: the Pearl-C schemes this device path runs, by name (`verity.core.protocols.pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
-#: GLM-5.3's FP8 form on the H200, Daniel 22 Oct) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
-#: tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line from its own seed (the work law capping each
+#: GLM-5.3's FP8 form on the H200) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
+#: tile leaves and HM96 trees: the one hash), each row's E_A line from its own seed (the work law capping each
 #: credited row too); its tree hash comes from `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
 #: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
@@ -376,7 +376,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             if self.graphs else None,
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
-            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
+            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
         self.cur: _Pass | None = None
         self.begin()
 

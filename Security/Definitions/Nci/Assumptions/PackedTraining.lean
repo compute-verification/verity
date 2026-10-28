@@ -25,12 +25,12 @@ On an honest `Dot16` circuit the partial sums are the accumulators: the step gat
 reading the one before, so an entry whose step gates lie in `m` IUs passes its accumulator between IUs at least `m − 1`
 times, each read by the IU it enters.
 
-Daniel's #approvals card of 20 Oct 2026 (card badb84c0) adopted it by default, with `PackedActivationsIncompressible`,
-as the `k`-generalization of the carded per-product premises `ActivationsIncompressible` and `TrainingIncompressible`.
+It is adopted, with `PackedActivationsIncompressible`, as the `k`-generalization of the per-product premises
+`ActivationsIncompressible` and `TrainingIncompressible`.
 It covers a reference training circuit with at most `k` of the chain's products to a gate, such as one in `Dot16` steps,
 whose weights and first inputs depend on more than `Γ` work of training since the commitment, as
-`TrainingIncompressible` does (card 90f5557c), and not a declared circuit, whose wiring the prover controls and where
-its activations' half is false (Daniel, 9 Oct 2026, 02:46Z). -/
+`TrainingIncompressible` does, and not a declared circuit, whose wiring the prover controls and where
+its activations' half is false. -/
 def PackedTrainingIncompressible {k : ℕ} (c : Declaration) (ch : PackedChain c.D k) (T : Threading c) (Γ : ℕ)
     (K b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition c.D n), ∃ s : Fin n → ℕ,

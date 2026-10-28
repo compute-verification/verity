@@ -4,8 +4,8 @@ session, signs its release log when it ends and publishes nothing secret; the ve
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
 hello is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, signed as
-such, a salt opens only after `--root`, and with `--peer` the tunnel opens once the challenger listens and a tunnel that
-ends first ends it."""
+such, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's, with `--root`, is
+refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
 
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def test_a_lean_that_cannot_answer_starts_no_session(tmp_path):
 
 
 def test_a_source_no_claim_instance_names_starts_no_session(tmp_path):
-    """CMP-52: the host's coins are named by a claim instance (the Lean's, `uniform/io-getrandombytes`), or it draws
+    """The host's coins are named by a claim instance (the Lean's, `uniform/io-getrandombytes`), or it draws
     none: a source without one starts no session and asks it for no byte."""
     proc, out, first = start(tmp_path, env={**os.environ, "COINS_UNNAMED": "1"})
     code, err = finish(proc)
@@ -271,7 +271,7 @@ SALTED = ["--families", json.dumps([["pouw/salt", 1], ["pouw/round", 1]])]
 
 @pytest.mark.parametrize("after, served", [("ab", True), ("cd", False)])
 def test_with_a_root_a_salt_opens_only_after_it(tmp_path, after, served):
-    """RT4-INT-24's witness: a session's salt followed a root unrelated to its window's Commit."""
+    """A salt opens only after the session's root: one that followed a root unrelated to its window's Commit is refused."""
     proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, *SALTED)
     with R.RemoteChallenger.connect(first.split()[1]) as client:
         record = C.LiveRecord(client, "pouw/salt", itertools.count().__next__)
@@ -335,3 +335,14 @@ def test_a_peer_missing_from_the_peers_file_is_refused(tmp_path):
     proc, out, first = start(tmp_path, "out", None, "--peer", "vy-nebius-9", "--peers", str(tmp_path / "peers"))
     code, err = finish(proc)
     assert (code, first) == (2, "") and "no peer vy-nebius-9" in err
+
+
+def test_a_windows_session_never_opens_its_own_tunnel(tmp_path):
+    """A window's session (`--root`) reaches its peer through the peer's certifier coin link alone
+    (`CoinsConfidential`), so `--peer` with it is refused before any key or coin is touched."""
+    env = fake_ssh(tmp_path, "exec tail -f /dev/null")
+    proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, "--peer", "vy-nebius-2", "--peers",
+                             str(tmp_path / "peers"), env=env)
+    code, err = finish(proc)
+    assert (code, first) == (2, "") and "certifier coin link, never its own ssh -R" in err
+    assert not out.exists() and not (tmp_path / "key").exists() and not (tmp_path / "ssh.args").exists()

@@ -17,14 +17,14 @@ Over a window of `T` ticks the certificate is `(S₀ − S_chip − ∑ cap_i ·
 the game bounds the peak, and the account's bit-ticks bound its peak only by their whole total. A window of one tick
 gives the full `S₀ − S_chip − ∑ cap_i · round` only for a one-round game. That is inherent to games graded by their
 peak state; a useful certificate needs a game graded at each round boundary (the continuous audit, for P2), and that
-choice is Daniel's. No table should cite `CapacityOfStateBound` at a session window.
+choice is still open. No table should cite `CapacityOfStateBound` at a session window.
 
 State derived from the game's public inputs (Pearl-C's weight state `B̃`, a function of PoUW's public weights) needs no
 room in a server's state, so a device may keep it in an account other than the capacity account, and the capacity
 certificate does not count it. It is not free: it shares the capacity residual `M − S` with every other account's state
 (`DerivedStateResidual`). Like `CovertResidual`, that bounds the other accounts being beyond the residual on every one
 of the capacity audit's own coins, not at the coin drawn: outside the error, some capacity coin leaves them within it. A
-per-run reading is not claimed yet; lane `ra-per-run` is proving it by truncation.
+per-run reading is not claimed yet; a proof by truncation is in progress.
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Capacity`).
 -/

@@ -2,12 +2,12 @@ import Definitions.Core.TC.Spec
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
-# The envelope instruction set (trusted)
+# The ACCEL ops (trusted)
 
 The machine 𝓜's instructions: a handful of coarse classes (`Op`), each at least as powerful a unit of its resource as
 any instruction of the card it covers (`Assumptions.CardWithinAccel`). What a class computes is the card's own
-(`Open`, the card's semantics, which no table states): the envelope fixes only what an instruction reads, what it
-writes and its units (`Card.use`). Two things have semantics here, the ones an honest kernel needs: a move copies its
+(`Open`, the card's semantics, which no table states): the ops fix only what an instruction reads, what it writes and
+its units (`Card.use`). Two things have semantics here, the ones an honest kernel needs: a move copies its
 words unchanged, and an integer MMA is exact within the table's range (P1, `Card.Exact`). Every MMA's dot is a function
 of its accumulator and its pairs' products (P2, `ProductForm`).
 
@@ -240,7 +240,7 @@ def mmaSpEval (dot : Dot) (fa fb : Fmt) (wide : Bool) (s : Shape) (v : ℕ → W
   BitVec.ofNat 32 (dot (accC wide (s.waSp fa + s.wsel + s.wb fb) v q) (rowASp fa s v (q / s.n))
     (colBSp fa fb s v (q / s.n) (q % s.n)) / 2 ^ (32 * (o % accWords wide)))
 
-/-! ## The card's semantics and the envelope's opcodes -/
+/-! ## The card's semantics and the ACCEL ops -/
 
 /-- **The card's semantics**: the functions its instructions compute. No table states them; a statement over the model
 holds at every `Open` meeting P1 (`Card.Exact`) and P2 (`Open.ProductForm`, as `Assumptions.AccelProductForm`), and
@@ -269,7 +269,7 @@ def Open.ProductForm (x : Open) : Prop :=
   ∀ (o : x.Mma) (k : ℕ), Accel.ProductForm (x.fa o) (x.fb o) k (x.dot o k) ∧
     Accel.ProductForm (x.fa o) (x.fb o) (k / 2) (x.dotSp o k)
 
-/-- **The envelope's opcodes** at the card's semantics `x`. -/
+/-- **The ACCEL ops** at the card's semantics `x`. -/
 inductive Op (x : Open) where
   /-- an MMA tile of opcode `o` at shape `sh`, `A` read from store `sa` and `B` from `sb` (accumulators in registers) -/
   | mma (o : x.Mma) (sh : Shape) (sa sb : Store)
