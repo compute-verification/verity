@@ -2065,6 +2065,18 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Verity.Assumptions.ChallengerLogsCoins": {
+   "owner": "@soundness",
+   "digest": "8c09825011781cb4d73b14f1056b1887cea82faad845141e6d826075010c94fa"
+  },
+  "Verity.Assumptions.FlipsAfterRecorded": {
+   "owner": "@soundness",
+   "digest": "3261cd32e88a813bed5cba80d2463e28d2202169df59653ce77d0692830f48f7"
+  },
+  "Verity.Assumptions.VerifierReadsLog": {
+   "owner": "@soundness",
+   "digest": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
   }
  },
  "meaning": [
@@ -11364,7 +11376,10 @@
    "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
   },
   "Verity.SecurityProofs.SampleAfterRecorded": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": ["Verity.SecurityProofs.SampleAfterRecorded : Verity.Guarantees.SampleAfterRecorded"],
+   "assumptions": [],
+   "type_hash": "fbeb0ea5055c52bb842b296ef0dabce92330410439b1b39442b6125cfd409494"
   },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
@@ -18855,6 +18870,15 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
    ]
   },
+  "Definitions.Core.Assumptions.Challenger": {
+   "digest": "2874164ae699cba60c2ba360ec2ff1a7150d1fcfa56a83c4f2beca9ce9902c97",
+   "definitions": {
+    "Verity.Assumptions.ChallengerLogsCoins": "8c09825011781cb4d73b14f1056b1887cea82faad845141e6d826075010c94fa",
+    "Verity.Assumptions.FlipsAfterRecorded": "3261cd32e88a813bed5cba80d2463e28d2202169df59653ce77d0692830f48f7",
+    "Verity.Assumptions.VerifierReadsLog": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
+   },
+   "guarantees": ["Verity.SecurityProofs.SampleAfterRecorded"]
+  },
   "Definitions.Core.Boolean": {
    "digest": "bdca6f202be5ce821c537817148d69f8f173b88caf12b8a5fcade6c8ea044d2f",
    "definitions": {
@@ -18927,6 +18951,20 @@
     "FlockVBridge.unit_recOpen",
     "Verity.SecurityProofs.ToCircuitAnd"
    ]
+  },
+  "Definitions.Core.Challenger": {
+   "digest": "28dfd5a933b4a0ed8941bb49066baa775c3d0637181498540c50664d5311bf10",
+   "definitions": {
+    "Verity.Challenger.Entry": "2c6ba8eb683a32594eb1690e2f50d6f42acd4442d14296dfae561923d6267a18",
+    "Verity.Challenger.Entry.casesOn": "a74aef2596ab98880fad4e0f1a74e458f88c7e0ac547c5fa1e01150ebc69637f",
+    "Verity.Challenger.Entry.rec": "6dccc93c82810b811bb83084d85df3fa7a307b1558851d2159ae0387bcfb3d32",
+    "Verity.Challenger.Entry.recorded": "1b4c26e0ca7cb8afece1a2e586ede676c870a6f253c48625408f6a7cbea22ba4",
+    "Verity.Challenger.Entry.released": "15cde9e1c6850c327f0e3e0785538b0d159763287152aeda0a1220a72712f544",
+    "Verity.Challenger.Log": "33130dd2a0c20b1b6c6790b0f45dcd5a6d8cd4869c5c4de7b1c245ca61f260d9",
+    "Verity.Challenger.Log.before": "f0e1df39a87e0ac597c37752c5752c87890e4318dbfb444f2c1595fec53d6f5f",
+    "Verity.Challenger.Log.coins": "79ada5721ed20366fc0b5b1ae28120a130f3743df5415b3be8329c126438297b"
+   },
+   "guarantees": ["Verity.SecurityProofs.SampleAfterRecorded"]
   },
   "Definitions.Core.Circuit": {
    "digest": "4b89f6ddf9d7d0b8a14ef45007686901fdfd61ea19bbc81c3f68df13cca94eec",
@@ -19290,7 +19328,8 @@
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "Verity.SecurityProofs.SampleAfterRecorded"
    ]
   },
   "Definitions.Core.Expand": {
@@ -19535,12 +19574,20 @@
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Verity.SecurityProofs.ProbBatchInduced",
+    "Verity.SecurityProofs.SampleAfterRecorded",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
     "Verity.SecurityProofs.SoundInterleave",
     "Verity.SecurityProofs.SoundMono"
    ]
+  },
+  "Definitions.Core.Guarantees.Challenger": {
+   "digest": "c26ec9f6baf432c0e1cf5f1a99c0f738e410052e2163b57115f1ab701f84c00e",
+   "definitions": {
+    "Verity.Guarantees.SampleAfterRecorded": "342ebbadd02d84a86df79332a6014239c4b4301f5cc598bcad5ffa67d982b051"
+   },
+   "guarantees": ["Verity.SecurityProofs.SampleAfterRecorded"]
   },
   "Definitions.Core.Guarantees.Circuit": {
    "digest": "89c10e4e2fdf1bf5cd69dfd492214dc9c787a2fa08c487ad55cbf74f1b22be70",
