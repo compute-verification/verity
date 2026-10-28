@@ -20,7 +20,7 @@ import re
 from test_repository import ROOT, _tracked
 
 ALLOWED: dict[str, str] = {
-    "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
+    "verity/core/protocols/inference_only/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
     "verity/core/service/flock/Flock/Extract.lean":

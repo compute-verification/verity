@@ -11,7 +11,7 @@ O=${OUT:?run under research run, which sets OUT}
 cmd=${1:?usage: job.sh measure|partition [ARGS...]}
 shift
 case $cmd in
-  measure) pkg=verity/core/protocols/network/nci/lean exe=nci-check ;;
+  measure) pkg=verity/core/protocols/inference_only/lean exe=nci-check ;;
   partition) pkg=verity/core/service/sampled_proofs exe=sampled-proofs-difftest ;;
   *) echo "job.sh: COMMAND is measure or partition, not $cmd" >&2; exit 2 ;;
 esac

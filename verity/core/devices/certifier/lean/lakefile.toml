@@ -11,7 +11,7 @@ relaxedAutoImplicit = false
 
 [[require]]
 name = "certifier_program"
-path = "../../../protocols/certifier/lean"
+path = "../../../protocols/network_certifier/lean"
 
 [[require]]
 name = "network_check"

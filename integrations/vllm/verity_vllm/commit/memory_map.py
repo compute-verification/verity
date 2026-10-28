@@ -1,4 +1,4 @@
-"""memory-map/v1 from the circuit (`verity.core.protocols.remote_bandwidth.memory_map`): the KV blocks each serving step wrote
+"""memory-map/v1 from the circuit (`verity.core.protocols.poub.memory_map`): the KV blocks each serving step wrote
 and freed, from the Program of record and the engine's page layout, with each block's digest from the values served (the
 Commit's committed words, `pipeline.memory_map`).
 
@@ -59,8 +59,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step, Written
+from verity.core.protocols.poub import codec
+from verity.core.protocols.poub.memory_map import SLOT_LIMIT, Header, Step, Written
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
@@ -68,8 +68,8 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
-from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
+from verity_vllm.protocols.poub.interface import PageLayout
+from verity_vllm.protocols.poub.registry import _page_blocks
 
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")

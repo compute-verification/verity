@@ -9,7 +9,7 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/ml/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.ml.circuits.program.Program`, or `codec.decode_program`'s result. It is
 the format the inference-only policy's check reads gate by gate
-(`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`) and `Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
+(`verity/core/protocols/inference_only/lean/NciCheck/Check.lean`) and `Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -56,6 +56,6 @@ optimizer) circuit.
 
     uv run --extra torch-cpu benchmarks/circuit_properties/run.py [--models NAME,...] [--T T] [--out DIR]
 
-measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
+measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/overhead's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.

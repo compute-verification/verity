@@ -1,6 +1,6 @@
 # benchmarks/codec_tensor
 
-The bandwidth audit's (PoUB, `verity/core/protocols/remote_bandwidth`) work on the GPU, and the tensor-core wide-word
+The bandwidth audit's (PoUB, `verity/core/protocols/poub`) work on the GPU, and the tensor-core wide-word
 codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
 (with `reader.py`, `reader.sh`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.

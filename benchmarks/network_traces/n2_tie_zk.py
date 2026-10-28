@@ -67,11 +67,11 @@ sys.path.insert(0, str(HERE))
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
-from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
-from verity.core.protocols.certifier import io_request as Q, service as SVC  # noqa: E402
-from verity.core.protocols.certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
+from verity.core.protocols.network_certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.network_certifier import io_request as Q, service as SVC  # noqa: E402
+from verity.core.protocols.network_certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
+from verity.core.protocols.network_certifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Direction  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 B = 512

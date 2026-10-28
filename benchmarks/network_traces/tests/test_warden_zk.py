@@ -19,9 +19,9 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, HEADER, PAD
-from verity.core.protocols.certifier.warden import END
+from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier.active import DATA, HEADER, PAD
+from verity.core.protocols.network_certifier.warden import END
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE / "tests"))

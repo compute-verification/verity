@@ -27,6 +27,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/window_advice.py",
-          "verity/core/protocols/certifier/README.md", "benchmarks/live_challenger/auditor.py",
+          "verity/core/protocols/network_certifier/README.md", "benchmarks/live_challenger/auditor.py",
           "benchmarks/live_challenger/host.json",
           "verity/core/protocols/network/lean/lakefile.toml", "verity/core/service/sampled_proofs/lakefile.toml"]

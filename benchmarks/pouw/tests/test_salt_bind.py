@@ -21,11 +21,11 @@ from pathlib import Path
 
 import numpy as np
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
-from verity.core.protocols.certifier.grid import GridParams
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+from verity.core.protocols.network_certifier import active
+from verity.core.protocols.network_certifier.active import Proxy
+from verity.core.protocols.network_certifier.certificate import LmsKey, LmsSigner
+from verity.core.protocols.network_certifier.grid import GridParams
+from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd

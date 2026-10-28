@@ -371,7 +371,7 @@ def test_refuses_a_hit_of_part_of_a_block(corpus):
 def test_synthetic_advice_is_adv_spec_advice(corpus):
     """`advice.Advice` refuses advice without meaning (positions, sources, kept outputs, release order), so the
     synthetic traces and the hand-made advice above are I1 v0 as the certifier defines it."""
-    A = pytest.importorskip("verity.core.protocols.certifier.advice")
+    A = pytest.importorskip("verity.core.protocols.network_certifier.advice")
     for adv in (corpus[1]["advice"], _general_advice()[0]):
         spec = A.Advice(tuple(A.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish) for q in adv.requests),
                         tuple(A.StepAdvice(tuple(A.Row(x.request, x.kind, x.start, x.n, x.cache_hit, x.preempted,

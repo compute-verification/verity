@@ -1,7 +1,7 @@
 # The inference-only policy's literature index and overhead board
 
 Data and a calculator for the question negotiators will ask about the
-[inference-only policy](../../verity/core/protocols/network/nci/README.md) ("bounding accumulation"): if both sides
+[inference-only policy](../../verity/core/protocols/inference_only/README.md) ("bounding accumulation"): if both sides
 adopt it, how fast can a determined actor still advance frontier capability? Four parts:
 
 - every source we rely on, each claim quoted verbatim (`sources/`);
@@ -13,7 +13,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 (`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
 (`Security/Definitions/Nci/Guarantees/Contained.lean`).
 
-The overhead lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one overhead calculator.
+The overhead lower bound's numbers come from [`benchmarks/overhead`](../overhead/README.md), the one overhead calculator.
 `tiers.py`'s `dampener` is an older calculator of the remote composition's overhead, which the next code change folds
 into rho. Where the two disagree, rho's number is the one to cite: at the remote tiers `dampener` reads 1 at its
 defaults, which bounds nothing, while rho's remote scenarios give a draft bound above the adversary no protocol
@@ -39,7 +39,7 @@ encumbers. The code and its outputs keep the older names (`slowdown.py`, and `ti
 | `covering_priced.py` | Kimi K2's overhead under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
 | `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
 | `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
-| `tiers.py` | the older calculator of the remote composition's overhead under the verification stack, per tier (its `efficiency` and `dampener`), until it is folded into `benchmarks/rho`; `python benchmarks/nci/tiers.py [--json]` |
+| `tiers.py` | the older calculator of the remote composition's overhead under the verification stack, per tier (its `efficiency` and `dampener`), until it is folded into `benchmarks/overhead`; `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server block holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `figures.py` | `tiers.py`'s talk figures, to the evidence store |

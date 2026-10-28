@@ -1409,7 +1409,7 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.core.protocols.network_certifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
     rp = replay(trace.engine, trace.requests, admit=trace.before_step)
@@ -1495,8 +1495,8 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
-#: advice v0's module (`verity.core.protocols.certifier.advice`)
-V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "certifier" / "advice.py"
+#: advice v0's module (`verity.core.protocols.network_certifier.advice`)
+V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "network_certifier" / "advice.py"
 
 
 def load_v0(spec: str | Path | None) -> Any:

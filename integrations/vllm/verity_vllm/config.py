@@ -688,7 +688,7 @@ class CommitConfig:
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity_vllm.protocols.poub.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

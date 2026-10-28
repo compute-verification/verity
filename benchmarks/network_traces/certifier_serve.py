@@ -226,17 +226,17 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit as host_audit, calibration, out_commit
-from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
+from verity.core.protocols.network_certifier import audit as host_audit, calibration, out_commit
+from verity.core.protocols.network_certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
+from verity.core.protocols.network_certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
     Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
-from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
-from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
-from verity.core.protocols.certifier.served import Admission, ServedProfile
-from verity.core.protocols.certifier.service import LinkWindows
+from verity.core.protocols.network_certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
+from verity.core.protocols.network_certifier.lean_audit import Audit
+from verity.core.protocols.network_certifier.schedule import ClockSync, expected_grids, handing_buckets
+from verity.core.protocols.network_certifier.served import Admission, ServedProfile
+from verity.core.protocols.network_certifier.service import LinkWindows
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -1598,7 +1598,7 @@ def parse_prompts(text: str) -> list[list[int]]:
 
 
 def rehearse(args) -> int:
-    from verity.core.protocols.certifier import lean_audit
+    from verity.core.protocols.network_certifier import lean_audit
     from verity.core.protocols.sampled_proofs.one_stage import verifier
 
     out = args.out

@@ -80,11 +80,11 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
-from verity.core.protocols.certifier import service as SVC  # noqa: E402
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
-from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.network_certifier import advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.network_certifier import service as SVC  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
+from verity.core.protocols.network_certifier.schedule import ClockSync  # noqa: E402
+from verity.core.protocols.network_certifier.service import LinkWindows  # noqa: E402
 from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 

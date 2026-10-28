@@ -97,8 +97,8 @@ from verity.ml.commitments.hm96 import batch as HB  # noqa: E402
 from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.ml.crypto import chacha20  # noqa: E402
-from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
+from verity.core.protocols.network_certifier import transfer_rows as TR  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Direction, Issuer  # noqa: E402
 from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 

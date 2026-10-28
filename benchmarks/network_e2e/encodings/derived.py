@@ -1,4 +1,4 @@
-"""The derived rules: the fields of advice v0 (I1, `verity.core.protocols.certifier.advice`) that cost zero bits,
+"""The derived rules: the fields of advice v0 (I1, `verity.core.protocols.network_certifier.advice`) that cost zero bits,
 because the certified I/O, the committed values, the registered config or the advice's own history already fix them, and
 the advice that remains.
 
@@ -70,8 +70,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import NamedTuple
 
-from verity.core.protocols.certifier import advice as I1
-from verity.core.protocols.certifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
+from verity.core.protocols.network_certifier import advice as I1
+from verity.core.protocols.network_certifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
 
 
 @dataclass(frozen=True)

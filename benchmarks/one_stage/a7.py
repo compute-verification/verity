@@ -80,9 +80,9 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
-from verity.core.protocols.remote_bandwidth import schedule as SC  # noqa: E402
-from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
+from verity.core.protocols.poub import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
+from verity.core.protocols.poub import schedule as SC  # noqa: E402
+from verity.core.protocols.poub.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402

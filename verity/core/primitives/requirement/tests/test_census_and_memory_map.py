@@ -42,8 +42,8 @@ import pytest
 
 import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import Replay
+from verity.core.protocols.poub import codec
+from verity.core.protocols.poub.memory_map import Replay
 from verity.ml.circuits import requirement as R
 from verity.ml.circuits.census import census, step_ends, step_of
 from verity.ml.circuits.program import REGISTRATION, Program, is_input
@@ -246,8 +246,8 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
     request's census is its Program's at its sampling events unless `censuses` gives one."""
     from verity_vllm.commit import memory_map as MM
-    from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-    from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
+    from verity_vllm.protocols.poub.interface import PageLayout
+    from verity_vllm.protocols.poub.registry import _page_blocks
 
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}

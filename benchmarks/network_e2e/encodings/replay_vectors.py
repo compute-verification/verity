@@ -1,4 +1,4 @@
-"""The difftest of the replay step circuit (`verity.core.protocols.certifier.replay_step`) against the replay itself.
+"""The difftest of the replay step circuit (`verity.core.protocols.network_certifier.replay_step`) against the replay itself.
 
 `vectors(trace, R=, W=, A=)` replays a trace (`replay.replay` with the trace's own decisions, sync or async scheduling)
 with its scheduler instrumented, and returns each executed step as the step circuit sees it (under async scheduling a
@@ -14,7 +14,7 @@ checks `replay_step.reference` on every step that fits the size class (the rest 
 `--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
 candidates whose `_KV.hit` it called), which is what v1 sends a shortfall for past the pool bound; `--fixture N` writes each trace's N consecutive fitting steps with the most
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
-(`verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json`).
+(`verity/core/protocols/network_certifier/tests/fixtures/replay_step_vectors.json`).
 
 **A served window as the compile slice's input.** `served_window` cuts one window out of a served run's step trace (the
 server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and
@@ -42,7 +42,7 @@ import replay as RP  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 
-from verity.core.protocols.certifier import replay_step as RS  # noqa: E402
+from verity.core.protocols.network_certifier import replay_step as RS  # noqa: E402
 
 
 class _Recorder:

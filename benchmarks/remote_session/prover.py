@@ -24,7 +24,7 @@ kv:P            honest, beside a serving node's KV writes (`ServingTrace`): befo
 kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts for them are of zeros, and an
                 opening of one carries the true page, as skip's do
 serve           honest, beside the backend's own serving (`backend.serving`: a node's `Store`, whose engine steps
-                write, free and re-key its KV, `verity_vllm.protocols.remote_bandwidth.remote`): before each pass the backend's engine runs
+                write, free and re-key its KV, `verity_vllm.protocols.poub.remote`): before each pass the backend's engine runs
                 its next step (pass 0's before the first window, `ready`), and the pass reads every live block at it;
                 one pass in flight, since a launch waits on its step, and a pass whose step ran past a boundary of a
                 window with a root is the next window's first, so the allowance covers a read, not a step; paced, a
@@ -106,11 +106,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
-from verity.core.protocols.remote_bandwidth import wire as rwire  # noqa: E402
-from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
+from verity.core.protocols.poub import audit, coins, memory_map, receipts as rb  # noqa: E402
+from verity.core.protocols.poub import codec as rcodec  # noqa: E402
+from verity.core.protocols.poub import store as rstore  # noqa: E402
+from verity.core.protocols.poub import wire as rwire  # noqa: E402
+from verity.core.protocols.poub.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
 import wire  # noqa: E402
 
@@ -740,7 +740,7 @@ class ProverSide:
                                            daemon=True)
         elif mode in ("serve", "servedrop"):
             if not hasattr(self.backend, "serving"):
-                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.protocols.remote_bandwidth.remote)")
+                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.protocols.poub.remote)")
             trace = self.backend.serving(self.registration, head["lifetime"])
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))

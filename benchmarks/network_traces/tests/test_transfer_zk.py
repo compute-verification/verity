@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.certifier import transfer_rows as TR
+from verity.core.protocols.network_certifier import transfer_rows as TR
 
 HERE = Path(__file__).resolve().parents[1]
 #: interface 1's fixture at H200 under its test seed: ``[name, SHA-256 of generation row 0, of the last]``

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity_vllm.config import UsageError
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV

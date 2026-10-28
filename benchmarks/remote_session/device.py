@@ -66,9 +66,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
-from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
+from verity.core.protocols.poub import audit, coins, receipts as rb  # noqa: E402
+from verity.core.protocols.poub import codec as rcodec  # noqa: E402
+from verity.core.protocols.poub.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
 from verity.ml import randomness  # noqa: E402
 

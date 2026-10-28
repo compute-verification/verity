@@ -24,5 +24,5 @@ if [ -e "$IN/glm53-b1-node.descriptor.json.gz" ]; then
   done
 fi
 uv sync -q --all-packages --extra torch-cpu
-(cd verity/core/protocols/network/nci/lean && lake build nci-check) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
+(cd verity/core/protocols/inference_only/lean && lake build nci-check) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
 uv run python benchmarks/verifier_cost/nci_glm.py measure --out "$O" --scratch "$d" "${a[@]}" "$@"

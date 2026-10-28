@@ -9,7 +9,7 @@ every action it took, in order (each link write, server connection, server write
 salt connection and salt write, and published record with its grid's parameters), and at the end its declared syncs, its
 shaper's hand times, its log of egress frames read and its four counts (link frames read, requests released, salts
 released and delivered). The Lean audit runs `CertifierDevice/DifftestMain.lean` on both files (`runs`
-in `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
+in `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/network_certifier/tests/
 test_network_certifier_device_lean_difftest.py` checks that this script still writes them.
 
 **Driving the proxy event by event.** The proxy runs on its own asyncio loop, unchanged, in a world this script holds:
@@ -74,9 +74,9 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 
-import verity.core.protocols.certifier
-from verity.core.protocols.certifier import online
-from verity.core.protocols.certifier.active import (
+import verity.core.protocols.network_certifier
+from verity.core.protocols.network_certifier import online
+from verity.core.protocols.network_certifier.active import (
     CANONICAL_STREAM,
     COMPACT_LAST,
     COMPACT_RECORD,
@@ -97,9 +97,9 @@ from verity.core.protocols.certifier.active import (
     request_frames,
     salt_frame,
 )
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
-from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
-from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
+from verity.core.protocols.network_certifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.core.protocols.network_certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
+from verity.core.protocols.network_certifier.served import Admission, ServedProfile, admits
 
 COUNT = 2400
 MS = 1_000_000
@@ -966,13 +966,13 @@ def write(out: Path, count: int = COUNT) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.core.protocols.certifier is tested")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.core.protocols.network_certifier is tested")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--count", type=int, default=COUNT)
     a = ap.parse_args()
-    here = Path(verity.core.protocols.certifier.__file__).resolve()
+    here = Path(verity.core.protocols.network_certifier.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.core.protocols.certifier comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.core.protocols.network_certifier comes from {here}, not from the checkout {a.verity}")
     write(a.out, a.count)
 
 

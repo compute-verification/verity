@@ -34,8 +34,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import receipts as rb  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core.protocols.poub import receipts as rb  # noqa: E402
+from verity.core.protocols.poub import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
 import wire  # noqa: E402

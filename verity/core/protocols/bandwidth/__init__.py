@@ -10,6 +10,6 @@ against the label and its path to `vk`'s root.  `PROTOCOL.md` is the protocol an
   the bound an accepted window certifies (`bound`).
 
 It reuses PoUS's store, setup and `vk` as they are (`verity.core.protocols.pous`).  The GPU tagger is
-`benchmarks/bandwidth`.  The bandwidth audit on the served path is `verity.core.protocols.remote_bandwidth`, whose
-receipts `verity_vllm.protocols.remote_bandwidth` uses too; this v0 stays for the benchmarks that measure its tags.
+`benchmarks/bandwidth`.  The bandwidth audit on the served path is `verity.core.protocols.poub`, whose
+receipts `verity_vllm.protocols.poub` uses too; this v0 stays for the benchmarks that measure its tags.
 """

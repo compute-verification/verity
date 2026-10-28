@@ -31,7 +31,7 @@ path = "../../verity/core/protocols/pouw/lean/commit"
 
 [[require]]
 name = "nci_check"
-path = "../../verity/core/protocols/network/nci/lean"
+path = "../../verity/core/protocols/inference_only/lean"
 
 [[require]]
 name = "certifier_device"
@@ -59,7 +59,7 @@ path = "../../verity/core/primitives/evaluate"
 
 [[require]]
 name = "remote_audit"
-path = "../../verity/core/protocols/remote_bandwidth/lean"
+path = "../../verity/core/protocols/poub/lean"
 
 [[require]]
 name = "core_requirement"

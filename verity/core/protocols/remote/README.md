@@ -21,14 +21,14 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
 - PoUB, proof of useful bandwidth, an onsite subprotocol whose code still says "remote bandwidth": its package
-  `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
+  `verity/core/protocols/poub/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
-- `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
+- `RemoteCertifier` (`verity/core/protocols/network_certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
-  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
+  `Nci`) and `benchmarks/overhead`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
 ## Parties
@@ -193,12 +193,12 @@ The overhead, `DampenerRemote`:
 
 ## Results per monitoring period
 
-The overhead calculator is `benchmarks/rho` (`verity bench rho`; it is being renamed to overhead). Its `periods.py`
+The overhead calculator is `benchmarks/overhead` (`verity bench rho`; it is being renamed to overhead). Its `periods.py`
 gives the overhead's lower bound for monitoring periods of a week, a month and a year. It covers one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`:
 
 ```text
-uv run python benchmarks/rho/periods.py --scenario reference-remote-h200
+uv run python benchmarks/overhead/periods.py --scenario reference-remote-h200
 ```
 
 Each figure states which of its parameters are measured on one machine and which are scaled. The δ it reports is pooled

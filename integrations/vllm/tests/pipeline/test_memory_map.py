@@ -23,7 +23,7 @@ from tests.commit.test_memory_map import PREFIX, PRODUCERS, WARM_ARRIVE, WARM_TA
 from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
+from verity.core.protocols.poub.memory_map import Replay, dumps, parse
 from verity.ml.circuits.codec import encode_program, program_digest
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.commit import memory_map as MM

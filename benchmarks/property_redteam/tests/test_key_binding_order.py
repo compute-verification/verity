@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.core.protocols.remote_bandwidth import codec
+from verity.core.protocols.poub import codec
 
 P512 = codec.Codec(codec.P512, 2, False)
 

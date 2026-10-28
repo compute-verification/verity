@@ -1,6 +1,6 @@
 # network_traces
 
-The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
+The network certifier (`verity/core/protocols/network_certifier/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay that knows bytes
 only, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end to end. Each
 driver's docstring says what it runs, what it publishes and what its verifier receives.
@@ -26,7 +26,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
+- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.network_certifier.warden`, the network certifier
   as a relay that knows bytes only, in front of any TCP server and checks what it published offline; `warden_chain.py`
   is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean firewall

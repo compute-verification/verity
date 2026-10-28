@@ -21,7 +21,7 @@ from typing import Any
 
 from verity.core.deploy import runtime
 from verity.core.deploy.config import Channel, Component, Refused, Workload
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.warden import WardenParams
 from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 from verity.ml.circuits.codec import canonical_json

@@ -1,4 +1,4 @@
-"""CacheStep_v1's specification (`verity.core.protocols.certifier.cache_step.reference`) against the derived rules'
+"""CacheStep_v1's specification (`verity.core.protocols.network_certifier.cache_step.reference`) against the derived rules'
 prefix rules (`derived.Prefixes`) over whole traces, through `cache_vectors.drive`, and the certifier's difftest vectors
 as `cache_vectors` makes them now."""
 from __future__ import annotations
@@ -27,7 +27,7 @@ def _load(name, path):
 V = _load("enc_cache_vectors", HERE.parent / "cache_vectors.py")
 D = V.D
 FIXTURES = HERE / "fixtures"
-VECTORS = REPO / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "cache_step_vectors.json"
+VECTORS = REPO / "verity" / "core" / "protocols" / "network_certifier" / "tests" / "fixtures" / "cache_step_vectors.json"
 
 
 def _trace(name):

@@ -9,7 +9,7 @@ import pytest
 
 import active_replay as ar
 import compact_render as cr
-from verity.core.protocols.certifier import active
+from verity.core.protocols.network_certifier import active
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "vllm_llama32_1b_streams.json").read_text())
 VOCAB = cr.Vocab({int(k): v for k, v in FIXTURE["vocab"].items()}, FIXTURE["special"])

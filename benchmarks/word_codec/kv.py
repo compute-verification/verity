@@ -25,7 +25,7 @@ A KV token-layer is written after the codec seed, so it is encoded under its bou
 bound=True)`), with d kept beside it and given to `decode_token_layer`.  Under the seed's key alone its writer could
 pick its encoding (all zeros, or another block's) and write the token-layer that decodes from it, holding nothing for
 it; under the bound key a chosen encoding decodes to a token-layer with the digest it was decoded under only by a
-search over SHA-512.  The bound key is `verity.core.protocols.remote_bandwidth.codec`'s for block slot · LAYERS + layer,
+search over SHA-512.  The bound key is `verity.core.protocols.poub.codec`'s for block slot · LAYERS + layer,
 byte for byte.  `kv.cu` takes it as each token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and
 `benchmarks/vllm_encoded/paged.cu`'s paths), gated against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py`
 takes the seed's key only.

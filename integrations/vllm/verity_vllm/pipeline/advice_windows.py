@@ -64,7 +64,7 @@ from verity.ml.windows import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
-I1 = "verity.core.protocols.certifier.advice"
+I1 = "verity.core.protocols.network_certifier.advice"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")

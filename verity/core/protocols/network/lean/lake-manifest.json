@@ -20,7 +20,7 @@
    "name": "certifier_program",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../certifier/lean",
+   "dir": "../../network_certifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

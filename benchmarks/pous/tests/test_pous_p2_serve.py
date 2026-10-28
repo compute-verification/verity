@@ -19,7 +19,7 @@ sys.path.insert(0, str(BENCH))
 from p2_v1 import serve as V  # noqa: E402
 from p2_v1 import store as S  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth import p2, receipts  # noqa: E402
+from verity.core.protocols.poub import p2, receipts  # noqa: E402
 
 STORE, DOC, C_STAR = V.toy()
 SALT = bytes.fromhex(DOC["salt"])

@@ -24,12 +24,12 @@ import test_network_check_protocol as V2
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.ml.commitments.identity import tagged_sha512
-from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.certificate import CertifiedRecord
-from verity.core.protocols.certifier.commitment import CommittedRecord, commit, record_digest
-from verity.core.protocols.certifier.grid import COMPLETE, Reason, Record, Status
-from verity.core.protocols.certifier.lean_audit import encode
-from verity.core.protocols.certifier.schedule import expected_grids
+from verity.core.protocols.network_certifier.audit import Audit
+from verity.core.protocols.network_certifier.certificate import CertifiedRecord
+from verity.core.protocols.network_certifier.commitment import CommittedRecord, commit, record_digest
+from verity.core.protocols.network_certifier.grid import COMPLETE, Reason, Record, Status
+from verity.core.protocols.network_certifier.lean_audit import encode
+from verity.core.protocols.network_certifier.schedule import expected_grids
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

@@ -37,7 +37,7 @@ import sys
 from collections import defaultdict
 from functools import cached_property
 
-from verity.core.protocols.certifier.active import HEADER
+from verity.core.protocols.network_certifier.active import HEADER
 
 from . import framing as F
 from . import model as M
