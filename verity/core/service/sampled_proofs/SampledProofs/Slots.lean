@@ -6,12 +6,15 @@ verifier evaluates, as the claims read it, and the slots of the proof blocks a d
   one per template or Definition, in the order of its first unit), each stratum's proof blocks its units in ascending
   order, each unit's gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the span of the gates a
   `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none when the root has
-  no input) of every gate of the root's input nodes, in gate order, each a proof block of its own; it is drawn `all`, as
-  `partition_object`'s input unit is always checked and never drawn.
+  no input) of every gate of the root's input nodes, in gate order, each a proof block of its own; the claims' design
+  reads it `all`, as `partition_object`'s input unit is never drawn. No run opens an input row on its own: `Run.run`
+  proves the drawn units (`Draw.proved`), whose session (`HmRow.drawn`) opens only the rows its units read, and
+  registration opens none. So an input row is opened only through a drawn unit that reads it.
 * **Slots.** A proof block's slot is its index in class, stratum and block order (`Partition.blocks`). Where no two
   strata's units interleave, unit `i`'s slot is `i`.
 * **Checked.** `checked` lists the slot of every proof block the draw proves (`Select.select`'s proved units: its units
-  and a work draw's closure) and of every input slot, in slot order.
+  and a work draw's closure) and of every input slot, in slot order. It is the claims' reading of a draw; `Run.run`
+  doesn't call it, and the session proves no input slot of a unit outside the draw.
 * **JSON.** The layout's JSON keeps a block's keys `unit` and `pus` (its gates as a list of one `[lo, hi]`), and
   `checked` its `[slot, 0]` pairs, until a format version: the difftest's Python side reads them.
 -/
@@ -77,7 +80,7 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
 /-- **The checked slots** (`Deploy.checked`) of a draw that proves the units `proved`: every proof block among them and
-every input slot, in slot order. -/
+every input slot, in slot order. An input slot listed here is opened only where a drawn unit reads its row. -/
 def checked (l : Layout) (proved : Array Nat) : Array Nat :=
   (l.blocks.zipIdx.filter fun (b, _) => b.unit.all proved.contains).map (·.2)
 

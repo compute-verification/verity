@@ -15,9 +15,9 @@ The C-Flock session's units, read as the sampling claims' statement, partition, 
   block per C-Flock unit, slot `u` unit `u`'s lowered gates (`unitGates`). Then the input class: one stratum (none
   when there is no input gate) of a one-gate proof block per input gate, in gate order (`inputClassOf`).
 * `designOf kd`: the population drawn `subset kd`, and the input class drawn at rate `0` (`bernoulli 0 1`), whose
-  `P_a` factor is `1`. **Inputs are outside this bound**: the deployed
-  verifier checks every input slot on every run (`Slots.checked`), but C-Flock's game checks no input unit, so this
-  design reads an input slot as never drawn.
+  `P_a` factor is `1`. **An input slot is never drawn here**, as at the deployed verifier: its session (`HmRow.drawn`)
+  opens only the rows its drawn units read, and registration opens none, so an input row is opened only through a
+  drawn unit that reads it.
 * `stmtOf P κ kd desc q roots`: the statement of the program at constants `κ`, the query `q`, that design and the
   roots.
 * `commitOf pos bit val com cs`: an opening at wire `g`'s position passes when some opening of the registered commit
@@ -78,8 +78,8 @@ class. -/
 def partOf {C : Circuit} {n : ℕ} (P : Partition C n) : Claims.Sampling.Partition :=
   ⟨[[(List.finRange n).map fun u => unitGates P u], inputClassOf C]⟩
 
-/-- **The design**: the population drawn `subset kd`; the input class drawn at rate `0`, so inputs are outside the
-bound. -/
+/-- **The design**: the population drawn `subset kd`; the input class drawn at rate `0`: no run opens an input row but
+through a drawn unit that reads it. -/
 def designOf (kd : ℕ) : Claims.Sampling.Design := ⟨[.subset kd, .bernoulli 0 1]⟩
 
 /-- **The statement**: `progOf`'s program at constants `κ` under the query `q` and the descriptor bytes `desc`, the
