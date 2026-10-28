@@ -175,7 +175,7 @@ def test_a_block_a_later_step_fills_is_credited_once_complete(run):
     _, _, _, req = run
     layout, store = R.pack(req, 128)
     assert (store.registered, layout.block[14], layout.block[15], layout.block[19], layout.offset[15]) == (3, 3, 3, 4, 32)
-    paged = R.Layout({**layout.block, 19: 3}, {**layout.offset, 19: 64})
+    paged = R.Store.Placement({**layout.block, 19: 3}, {**layout.offset, 19: 64})
     filled = R.Store(3, {0: frozenset(), 1: frozenset({3, 4})}, store.freed,
                      {**store.payload, 3: store.payload[3] | req.values[19] << 64})
     assert R.incomplete(req, paged, 1) == {3, 4} and not R.incomplete(req, paged, 2)
