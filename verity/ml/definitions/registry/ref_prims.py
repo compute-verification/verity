@@ -58,7 +58,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.ml.circuits.codec import canonical_json, register_lazy_family
+from verity.ml.circuits.codec import register_lazy_family
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.ml.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -793,7 +793,9 @@ def ref_vocab_manifest() -> dict:
 
 def ref_vocab_digest() -> str:
     """SHA-256 over the canonical JSON of `ref_vocab_manifest()` — what DERIVE records in a derived program's provenance."""
-    return hashlib.sha256(canonical_json(ref_vocab_manifest())).hexdigest()
+    import json
+    m = ref_vocab_manifest()
+    return hashlib.sha256(json.dumps(m, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "SHARED_PRIMITIVES", "ref_vocab_manifest",
