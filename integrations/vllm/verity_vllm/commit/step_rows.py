@@ -46,6 +46,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 __all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
            "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
@@ -61,7 +62,7 @@ OWNER = -1
 ROW_BYTES = 4096
 SALT_BYTES = INST.salt_bytes
 KEY_BYTES = 64
-ROOT_BYTES = 64
+ROOT_BYTES = DIGEST_BYTES["sha512"]
 
 
 def binding(program: bytes, ctx: bytes, geo: bytes, row_bits: int = 8 * ROW_BYTES) -> bytes:

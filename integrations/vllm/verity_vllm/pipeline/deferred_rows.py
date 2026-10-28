@@ -23,6 +23,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
@@ -94,7 +95,7 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
 
 
 #: the bytes of the only run root a ``served`` window is taken over: the SHA-512 record's (``frame-v3-sha512`` / ``hm96-sha512``)
-SERVED_ROOT = 64
+SERVED_ROOT = DIGEST_BYTES["sha512"]
 
 
 def source(window: dict[str, Any], run_root: str, bundle_manifest_sha256: str, commitment: str,
