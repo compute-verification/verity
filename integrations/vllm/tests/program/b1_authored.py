@@ -1,4 +1,4 @@
-"""The B1 serving program authored in torch through the frontend (lane FE2).
+"""The B1 serving program authored in torch through the frontend.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
@@ -476,7 +476,7 @@ ATTENTION_FA2 = {"BN": BN, "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}  
 
 
 def attention_fa2(D: int) -> dict:
-    """[E7 D54] The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
+    """The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
     return {"BN": b1.fa2_kblock_n(D), "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}
 
 
