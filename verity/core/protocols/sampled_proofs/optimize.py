@@ -23,6 +23,12 @@ witness is built by re-executing its replay block from the last committed state 
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
+**Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
+weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
+whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a proof block
+cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
+`weigh` chooses the kinds' weights at a target, under the same stratified certificate.
+
 **Modes.**  `CostModel.commit_weight` is the weight w on serving's commitments in a plan's total: at 1 they count as spent,
 and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest law costs
 `c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it: `n · b(s) · h`
@@ -30,12 +36,6 @@ for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whethe
 `grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
 cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
 form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
-
-**Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
-weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
-whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a proof block
-cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
-`weigh` chooses the kinds' weights at a target, under the same stratified certificate.
 """
 from __future__ import annotations
 

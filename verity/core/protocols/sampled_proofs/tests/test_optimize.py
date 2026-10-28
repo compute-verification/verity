@@ -13,16 +13,17 @@ from math import ceil, comb, exp, fsum, log, log1p, log2, ulp
 
 import pytest
 
+from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Grain, grain_costs, grain_optimum, leak_count,
+                                                           leak_draws, loc_bits, sqrt_grain)
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
-from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, Commitment, CostModel, Grain,
-                                                           Objective, ReplayDomain, TemplateCost, _hit, _miss, certify,
-                                                           density_bound, density_exact, for_budget, for_target, frontier,
-                                                           grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
-                                                           ln_upper, loc_bits, max_harm, max_harm_check, needs_benchmark,
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
+                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
+                                                           for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
+                                                           max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
-                                                           sqrt_grain, template_cost, touched, weigh, work_law)
+                                                           template_cost, touched, weigh, work_law)
 
 SLACK = 1 + 2.0 ** -18
 

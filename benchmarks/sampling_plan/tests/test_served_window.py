@@ -1,4 +1,4 @@
-"""The served window's two modes (`served_window.py`, PRF-298): every rung covers the window's work, the fused rungs exceed
+"""The served window's two modes (`served_window.py`): every rung covers the window's work, the fused rungs exceed
 C-Flock's statement, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
 period grows and along √(w β h C/(o Λ)), and leaves the exfiltration optimum where it was."""
 

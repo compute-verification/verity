@@ -72,7 +72,7 @@ zero-work subcircuits at their floor.
   blocks that commit only the residual and K, V), for the free-compute target (a window, a week, a year pooled) and
   the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`; then the chunk family's
-  optimum against √(wβhC/(oΛ)) (PRF-298). It writes `served_window.json` and `served_window.md`.
+  optimum against √(wβhC/(oΛ)). It writes `served_window.json` and `served_window.md`.
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]

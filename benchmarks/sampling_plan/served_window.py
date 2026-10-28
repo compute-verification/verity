@@ -1,4 +1,4 @@
-"""The served window's partition in the planner's two modes (PRF-298): Llama-3.2-1B int8 at T 8,192 on the H200, one step
+"""The served window's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
 a window (b921), cut into proof blocks at each rung of a ladder, for the free-compute target and the exfiltration target,
 priced proving only (`PROVING_ONLY`, Lean's `GranularityOptimum`) and proving plus `w` times the serve-time commitment
 (`n b(s) h`, paid on every proof block, drawn or not) at two readings of h, a hashed byte's cost.
@@ -43,11 +43,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import EPILOGUE, I, KEY, S8_STEP, observations  # noqa: E402
+from inputs import EPILOGUE, I, KEY, S8_STEP, observations
 
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,  # noqa: E402
+from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, for_target, grain_costs, leak_count, loc_bits,
                                                            row_ands, sqrt_grain)
 
@@ -193,7 +193,7 @@ def _fused(name: str, units: int, int8: float, bf16: float, opened: float, out_b
 
 def fused_parts(rung: str) -> list[Part]:
     """Proof blocks that commit only their boundary: the residual stream (bf16), and the K and V a later token reads."""
-    tl, d, f = token_layers(), LLAMA_1B["hidden"], LLAMA_1B["intermediate"]
+    tl, d = token_layers(), LLAMA_1B["hidden"]
     kv = 2 * 2 * LLAMA_1B["kv_heads"] * LLAMA_1B["head_dim"]
     macs, attn_ands = attention_row()
     heads = LLAMA_1B["heads"]
@@ -206,7 +206,8 @@ def fused_parts(rung: str) -> list[Part]:
     scales = 4 * sum(n for _, n in LINEARS.values())
     keys = kv * mean_keys()
     if rung == "attn|mlp token":
-        share = (2 * d + 2 * 2560) / (row_bytes or 1)
+        roped = (LLAMA_1B["heads"] + LLAMA_1B["kv_heads"]) * LLAMA_1B["head_dim"]
+        share = (2 * d + 2 * roped) / (row_bytes or 1)
         return [_fused("attention block", tl, attn_w, bf16, attn_w + keys + 2 * d + 2 * d + kv, 2 * d + kv,
                        softmax + share * row_ops),
                 _fused("MLP block", tl, mlp_w, 0.0, mlp_w + 4 * d, 2 * d, (1 - share) * row_ops)]
