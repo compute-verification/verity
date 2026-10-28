@@ -10,7 +10,7 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, KindReceipt, RemoteBandwidthReceipt, Store, chain
+from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, KindReceipt, NodeMemory, RemoteBandwidthReceipt, chain
 from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
 WORD = 64
@@ -51,14 +51,14 @@ class FakeReceipt:
 CODEC, RECEIPT = FakeCodec(), FakeReceipt()
 
 
-def weights(store: Store, name: str = "w", blocks: int = 6, seed: int = 0) -> tuple[ArrayBacking, bytes]:
+def weights(store: NodeMemory, name: str = "w", blocks: int = 6, seed: int = 0) -> tuple[ArrayBacking, bytes]:
     payload = np.random.default_rng(seed).integers(0, 256, blocks * BLOCK, np.uint8)
     b = ArrayBacking(payload.copy())
     store.register(name, "hbm", "weights", b, block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source=f"sha:{seed}")
     return b, payload.tobytes()
 
 
-def pool(store: Store, layers: int = 2, pages: int = 4, slots: int = 8, slot_bytes: int = 64, **kw):
+def pool(store: NodeMemory, layers: int = 2, pages: int = 4, slots: int = 8, slot_bytes: int = 64, **kw):
     lay = PageLayout(pages, slots, slot_bytes, **kw)
     ps, ks = lay.strides()
     nbytes = max(ps * (pages - 1) + ks * (lay.planes - 1) + lay.plane_bytes, ps * pages)
@@ -72,12 +72,12 @@ def kv_payload(layer: int, page: int, slot: int) -> bytes:
 
 
 def test_the_store_is_both_interfaces():
-    s = Store()
+    s = NodeMemory()
     assert isinstance(s, StoreView) and isinstance(s, Lifecycle)
 
 
 def test_registration_encodes_in_place_and_logs_each_region():
-    s = Store()
+    s = NodeMemory()
     b, payload = weights(s)
     info = s.region("w")
     assert (info.first, info.blocks, info.first_word, info.word_bytes) == (0, 6, 0, WORD)
@@ -88,7 +88,7 @@ def test_registration_encodes_in_place_and_logs_each_region():
     assert s.region("w2").first == 6 and s.region("w2").first_word == 6 * BLOCK // WORD
     r2 = s.registration()
     assert (r1.count, r2.count) == (1, 2) and r1.root != r2.root
-    t = Store()
+    t = NodeMemory()
     weights(t)
     weights(t, "w2", 2, seed=1)
     assert t.registration() == r2
@@ -96,7 +96,7 @@ def test_registration_encodes_in_place_and_logs_each_region():
 
 
 def test_registration_refuses_partial_blocks_and_unknown_tiers():
-    s = Store()
+    s = NodeMemory()
     with pytest.raises(ValueError):
         s.register("x", "hbm", "weights", ArrayBacking(np.zeros(BLOCK + WORD, np.uint8)), block_bytes=BLOCK,
                    codec=CODEC, receipt=RECEIPT, source="x")
@@ -106,18 +106,18 @@ def test_registration_refuses_partial_blocks_and_unknown_tiers():
 
 
 def test_page_layouts_page_major_and_plane_major():
-    s = Store()
+    s = NodeMemory()
     pool(s, layers=1, pages=3, slots=8, slot_bytes=64)
     p = s.pool
     assert p.ids.tolist() == [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]]
     assert (p.lo.tolist(), p.hi.tolist()) == ([0, 4, 0, 4], [4, 8, 4, 8])
-    t = Store()
+    t = NodeMemory()
     pool(t, layers=1, pages=3, slots=8, slot_bytes=64, page_stride=512, plane_stride=3 * 512)
     assert t.pool.ids.tolist() == [[0, 1, 6, 7], [2, 3, 8, 9], [4, 5, 10, 11]]
 
 
 def test_kv_life_alloc_append_free_without_reencoding():
-    s = Store()
+    s = NodeMemory()
     bs, lay = pool(s)
     before = [b.read(0, b.nbytes) for b in bs]
     s.kv_alloc([2])
@@ -152,7 +152,7 @@ def test_kv_life_alloc_append_free_without_reencoding():
 
 
 def test_a_page_freed_part_written_keeps_its_dirty_block_out():
-    s = Store()
+    s = NodeMemory()
     pool(s)
     s.kv_alloc([1])
     s.kv_write_reference([Append(1, 0, 6)], kv_payload, step=0)
@@ -163,7 +163,7 @@ def test_a_page_freed_part_written_keeps_its_dirty_block_out():
     assert set(s.idle_blocks("kv/0").tolist()) >= {4, 6}
 
 
-def _window(s: Store, sigma: bytes, steps):
+def _window(s: NodeMemory, sigma: bytes, steps):
     s.begin_window(sigma)
     out = []
     for live, appends in steps:
@@ -176,7 +176,7 @@ def _window(s: Store, sigma: bytes, steps):
 
 def test_passes_are_chained_from_the_challenge():
     def run(flip: bool):
-        s = Store()
+        s = NodeMemory()
         b, _ = weights(s)
         if flip:
             b.write(0, bytes([b.read(0, 1)[0] ^ 1]))
@@ -189,7 +189,7 @@ def test_passes_are_chained_from_the_challenge():
 
 
 def test_windows_chain_through_the_session():
-    s = Store()
+    s = NodeMemory()
     weights(s)
     _, w1 = _window(s, SIGMA, [((), None), ((), None)])
     _, w2 = _window(s, SIGMA2, [((), None)])
@@ -202,7 +202,7 @@ def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest
     """The driver's `Registration.digest`, not the store's own log root, is the root before the session's first pass;
     a later window takes none."""
     from verity.core.protocols.remote_bandwidth import audit
-    s = Store()
+    s = NodeMemory()
     weights(s)
     digest = audit.register(bytes(32), audit.site_log(b"node", s.layout().blocks, bytes(64)), audit.STORE,
                             nonce=bytes(32)).digest
@@ -216,7 +216,7 @@ def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest
 
 
 def test_a_plan_is_its_runs_each_block_once():
-    s = Store(filler_plan=lambda st, j: [("kv/0", [0, 1, 5])])
+    s = NodeMemory(filler_plan=lambda st, j: [("kv/0", [0, 1, 5])])
     weights(s)
     weights(s, "w2", 2, seed=1)
     pool(s)
@@ -227,7 +227,7 @@ def test_a_plan_is_its_runs_each_block_once():
     assert s.plan(0).tolist() == [b for f, c in runs for b in range(f, f + c)]
     want = b"verity/remote-bandwidth/plan/v0\0" + struct.pack(">I", 5) + b"".join(struct.pack(">QQ", *r) for r in runs)
     assert pc.plan_digest == hashlib.sha512(want).digest() == rb.Plan(tuple(runs), s.layout().blocks).digest
-    t = Store(filler_plan=lambda st, j: [("kv/0", [0, 8])])
+    t = NodeMemory(filler_plan=lambda st, j: [("kv/0", [0, 8])])
     pool(t)
     t.kv_alloc([2])
     t.kv_write_reference([Append(2, 0, 8)], kv_payload, step=0)
@@ -237,7 +237,7 @@ def test_a_plan_is_its_runs_each_block_once():
 
 
 def test_outside_a_window_a_pass_commits_nothing():
-    s = Store()
+    s = NodeMemory()
     weights(s)
     s.begin_pass()
     assert s.end_pass() is None
@@ -246,7 +246,7 @@ def test_outside_a_window_a_pass_commits_nothing():
 
 def test_openings_verify_and_a_tampered_one_does_not():
     host = ArrayBacking(np.zeros(4 * BLOCK, np.uint8))
-    s = Store(filler_plan=lambda st, j: [("dram", range(4)), ("kv/1", st.idle_blocks("kv/1")[:3])])
+    s = NodeMemory(filler_plan=lambda st, j: [("dram", range(4)), ("kv/1", st.idle_blocks("kv/1")[:3])])
     _, payload = weights(s)
     bs, _ = pool(s)
     s.register("dram", "host", "filler", host, block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="zeros")
@@ -272,7 +272,7 @@ def test_openings_verify_and_a_tampered_one_does_not():
 
 
 def test_an_opening_of_a_rewritten_block_is_stale():
-    s = Store()
+    s = NodeMemory()
     pool(s)
     s.kv_alloc([0])
     s.kv_write_reference([Append(0, 0, 8)], kv_payload, step=0)
@@ -288,7 +288,7 @@ def test_an_opening_of_a_rewritten_block_is_stale():
 def test_a_windows_openings_outlast_the_next_windows_start():
     """The driver's openings coin for window t comes once window t + 1's first root is in, so window t's passes stay
     open through window t + 1 and go when window t + 2 begins."""
-    s = Store()
+    s = NodeMemory()
     _, payload = weights(s)
     _, w0 = _window(s, SIGMA, [((), None), ((), None)])
     _, w1 = _window(s, SIGMA2, [((), None)])
@@ -304,10 +304,10 @@ def test_a_windows_openings_outlast_the_next_windows_start():
     assert s.plan(0, window=1).tolist() == list(range(6))
 
 
-def _aligned_store() -> tuple[Store, dict[str, ArrayBacking]]:
+def _aligned_store() -> tuple[NodeMemory, dict[str, ArrayBacking]]:
     """Weights of 40 and 20 blocks and two KV layers of 4 pages of 4 blocks: whole subtrees of 2, 1, 1 and 1 leaves,
     then a tail of 8 and 4 blocks."""
-    s = Store(salt_key=bytes(32))
+    s = NodeMemory(salt_key=bytes(32))
     w, _ = weights(s, "w", 40)
     w2, _ = weights(s, "w2", 20, seed=1)
     bs, _ = pool(s)
@@ -316,7 +316,7 @@ def _aligned_store() -> tuple[Store, dict[str, ArrayBacking]]:
     return s, {"w": w, "w2": w2, "kv/0": bs[0], "kv/1": bs[1]}
 
 
-def _driver_root(s: Store, backings: dict[str, ArrayBacking], pc, receipt=RECEIPT, z=None) -> bytes:
+def _driver_root(s: NodeMemory, backings: dict[str, ArrayBacking], pc, receipt=RECEIPT, z=None) -> bytes:
     """The pass's root as the driver builds it (`rb.tree`): every receipt in plan order, sixteen to a hidden leaf."""
     plan, keyed, lay = s.plan(pc.index).tolist(), receipt.keyed(pc.seed), s.layout()
     ys = []
@@ -343,7 +343,7 @@ def test_a_pass_lays_its_segments_out_as_subtrees_of_the_drivers_tree():
 def test_under_the_drivers_receipt_the_pass_is_the_drivers_byte_for_byte():
     """4 KiB blocks under `RemoteBandwidthReceipt`, bound to a z per block: 77 positions, so a short last leaf and three
     pads, and the root `rb.tree` gives over `rb.Receipter`'s receipts."""
-    s, rec = Store(salt_key=bytes(32)), RemoteBandwidthReceipt()
+    s, rec = NodeMemory(salt_key=bytes(32)), RemoteBandwidthReceipt()
     backings = {}
     for name, n in [("w", 40), ("w2", 37)]:
         backings[name] = ArrayBacking(np.random.default_rng(n).integers(0, 256, n * rb.BLOCK_BYTES, np.uint8))
@@ -363,7 +363,7 @@ def test_under_the_drivers_receipt_the_pass_is_the_drivers_byte_for_byte():
         assert verify_opening(info, pc, s.plan(0), o, rec, CODEC.decode, None, z(o.region, o.block - info.first))
 
 
-def _opened(**end) -> Store:
+def _opened(**end) -> NodeMemory:
     s, _ = _aligned_store()
     s.begin_window(SIGMA)
     s.begin_pass([0, 1, 2, 3])
@@ -412,7 +412,7 @@ def test_identity_codec_and_the_drivers_receipt_kinds_of_the_block_alone(kind):
     """`KindReceipt` (the binder's default without tiles, at sketch-sha512): a receipt is `rb.receipter`'s of the block
     under the whole 64-byte pass seed, a z it is handed left out; the pass's root is the driver's (`rb.tree`), and an
     opening verifies."""
-    s, rec = Store(salt_key=bytes(32)), KindReceipt(kind)
+    s, rec = NodeMemory(salt_key=bytes(32)), KindReceipt(kind)
     raw = np.random.default_rng(3).integers(0, 256, 3 * rb.BLOCK_BYTES, np.uint8)
     b = ArrayBacking(raw.copy())
     s.register("w", "hbm", "weights", b, block_bytes=rb.BLOCK_BYTES, codec=IDENTITY, receipt=rec, source="rng")

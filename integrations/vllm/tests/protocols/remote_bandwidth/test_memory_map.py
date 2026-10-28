@@ -17,9 +17,10 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec, memory_map
 from verity.core.protocols.remote_bandwidth.memory_map import MemoryMapError, Replay
+from verity.ml.circuits import requirement
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, Store
+from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
 from .test_registry import CODEC, RECEIPT
 
@@ -33,9 +34,9 @@ def kv_payload(layer: int, page: int, slot: int, life: int = 0) -> bytes:
                     for u in range(2 * SLOT_BYTES // 64))
 
 
-def store(s: Store | None = None) -> tuple[Store, list[ArrayBacking]]:
+def store(s: NodeMemory | None = None) -> tuple[NodeMemory, list[ArrayBacking]]:
     """Weights of 3 blocks, the KV pool's two layers of 16 blocks each, then 2 blocks of host filler: N = 37."""
-    s = Store() if s is None else s
+    s = NodeMemory() if s is None else s
     w = np.random.default_rng(0).integers(0, 256, 3 * BLOCK, np.uint8)
     s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
     lay = PageLayout(PAGES, SLOTS, SLOT_BYTES)
@@ -46,12 +47,12 @@ def store(s: Store | None = None) -> tuple[Store, list[ArrayBacking]]:
     return s, bs
 
 
-def registration(s: Store) -> audit.Registration:
+def registration(s: NodeMemory) -> audit.Registration:
     return audit.register(bytes(32), audit.site_log(b"node", s.layout().blocks, bytes(64)), audit.STORE,
                           nonce=bytes(32))
 
 
-def expected_payload(s: Store, slot: int, page: int, life: int) -> bytes:
+def expected_payload(s: NodeMemory, slot: int, page: int, life: int) -> bytes:
     """The payload the trace wrote to a KV block: its plane's slots ``[lo, hi)``, in slot order."""
     p = s.pool
     for li, rn in enumerate(p.regions):
@@ -64,7 +65,7 @@ def expected_payload(s: Store, slot: int, page: int, life: int) -> bytes:
     raise AssertionError(f"slot {slot} is not a KV block")
 
 
-def pool_blocks(s: Store):
+def pool_blocks(s: NodeMemory):
     """Each KV block: (store index, page, column)."""
     p = s.pool
     for rn in p.regions:
@@ -86,7 +87,7 @@ TRACE = [
 ]
 
 
-def run_trace(s: Store, m, check=None) -> list[memory_map.Step]:
+def run_trace(s: NodeMemory, m, check=None) -> list[memory_map.Step]:
     """The trace, each step's frees (a finished request's after the step before, a preempted one's in this step's
     schedule) and allocs, then its write; ``check(step, lives, new, pages)`` after each write, with the lines it closed
     and the pages it wrote, whose blocks are in the line it opened; then the last line closed."""
@@ -171,10 +172,30 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
     assert changes[5].released == ((3, 4), (19, 4))
 
 
+def test_the_audit_store_is_the_requirement_store_the_map_records():
+    """`NodeMemory.audit_store` is the audit's `requirement.Store` as the map records it: the 37 registered blocks, each
+    step's written indices and those it released, and no payloads; the blocks resident after each step are those the
+    replayed map's slots hold."""
+    s, _ = store()
+    with pytest.raises(RuntimeError, match="record_memory_map"):
+        s.audit_store()
+    m = s.record_memory_map(registration=registration(s).digest)
+    steps = run_trace(s, m)
+    a = s.audit_store()
+    assert type(a) is requirement.Store and a.registered == 37 and a.payload == {}
+    assert sorted(a.written) == sorted(a.freed) == [x.step for x in steps]
+    assert a.freed[2] == frozenset(range(37, 49)) and a.freed[6] == frozenset((3, 4, 5, 6, 19, 20, 21, 22))
+    replay = Replay(memory_map.parse(m.text().splitlines())[0])
+    assert a.resident(0) == frozenset(range(37))
+    for x in steps:
+        assert a.written[x.step] == frozenset(replay.apply(x).indices)
+        assert a.resident(x.step + 1) == {j for slot in range(37) if (j := replay.holds(slot)) is not None}
+
+
 def test_a_freed_page_is_released_out_of_every_plan_until_written_again():
     """The audit credits only blocks the circuit keeps live: a freed page's blocks leave the filler and the pass's plan
     (one that names them is refused) until a write completes them under a new index."""
-    s = Store(filler_plan=lambda st, j: [("kv/0", st.idle_blocks("kv/0"))])
+    s = NodeMemory(filler_plan=lambda st, j: [("kv/0", st.idle_blocks("kv/0"))])
     store(s)
     reg = registration(s)
     s.record_memory_map(registration=reg.digest)
@@ -186,7 +207,7 @@ def test_a_freed_page_is_released_out_of_every_plan_until_written_again():
     s.begin_window(bytes(32), reg.digest)
     s.begin_pass(None)
     assert s.end_pass() is not None and not page1 & set(s.plan(0).tolist())
-    bad = Store(filler_plan=lambda st, j: [("kv/0", [4, 5])])
+    bad = NodeMemory(filler_plan=lambda st, j: [("kv/0", [4, 5])])
     store(bad)
     bad.record_memory_map(registration=registration(bad).digest)
     bad.kv_alloc([1])
@@ -238,7 +259,7 @@ def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
 
 
 def test_on_write_sees_each_registered_block_a_write_reaches_before_its_bytes_change():
-    """`Store.on_write`: a step's `kv_append` hands it the pool blocks the step's write reaches while they are
+    """`NodeMemory.on_write`: a step's `kv_append` hands it the pool blocks the step's write reaches while they are
     registered (a pass's plan may still hold them), before the forward writes them; a block already reached and not
     complete (dirty) is not handed again."""
     s, _ = store()
@@ -389,7 +410,7 @@ def test_the_map_goes_to_the_provers_file(tmp_path):
 
 
 def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
-    t = Store()
+    t = NodeMemory()
     t.register("w", "hbm", "weights", ArrayBacking(np.zeros(2048, np.uint8)), block_bytes=1024, codec=CODEC,
                receipt=RECEIPT, source="w")
     with pytest.raises(ValueError, match="block_bytes=4096"):
@@ -412,7 +433,7 @@ def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
 PAGE0, PAGE1 = [3, 4, 5, 6, 19, 20, 21, 22], [7, 8, 9, 10, 23, 24, 25, 26]
 
 
-def deferred(s: Store, lifetime: int = LIFETIME):
+def deferred(s: NodeMemory, lifetime: int = LIFETIME):
     """A map in a session: each append to ``sent`` as (first, digests, payloads), its encode landing when the test
     says (`MemoryMap.encoded`)."""
     sent: list = []
