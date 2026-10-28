@@ -15,7 +15,7 @@ its parts, each ``nbytes`` bytes at ``offset`` of the slot's bytes in the group'
 - :func:`to_json` writes it back, ``_layout_json``'s output.
 - :attr:`Layout.json_digest` is what a deployment file binds: ``identity_digest_sha512(JSON_TAG, to_json(layout))``, the
   parts included (``slots``' own ``layout_digest`` binds only the rows' sizes, which the unit domains need).
-- :func:`check_shared` refuses a layout that isn't shared-row (CIR-113): a row of more than :data:`MAX_PARTS` parts, a
+- :func:`check_shared` refuses a layout that isn't shared-row: a row of more than :data:`MAX_PARTS` parts, a
   tensor byte in no row or in two, or a producer's output that isn't a window of one row (:meth:`Layout.window`).
 """
 from __future__ import annotations
@@ -255,7 +255,7 @@ def load(path: str | os.PathLike[str]) -> Layout:
 
 
 def check_shared(layout: Layout, outputs: Iterable[tuple[int, int, int, int]] = ()) -> None:
-    """Refuse ``layout`` unless it is shared-row (CIR-113): every row at most :data:`MAX_PARTS` parts; in each group every byte
+    """Refuse ``layout`` unless it is shared-row: every row at most :data:`MAX_PARTS` parts; in each group every byte
     of every tensor in exactly one row, except a tensor each row reading it reads whole (a quantizer's f32 scale, beside each
     of its chunks' codes); and each producer output in ``outputs``, (group, tensor, offset, bytes), a window of one row."""
     seen: set[int] = set()
