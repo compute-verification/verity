@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 # The sites of a one-table hidden-output session
 
 Integrate's `sitesAt` and `sitesAt_parse` (`Integrate/Sites.lean`) at the hidden tables (`planAtH`, `tabAtH`). A drawn
-table's acceptance (`TableH.acc`) is its `Stmt.setupHidden` run, with the layout [wave2-hidden]'s `Hidden.hidden_layout`
+table's acceptance (`TableH.acc`) is its `Stmt.setupHidden` run, with the layout `Discharge/Hidden`'s
+`Hidden.hidden_layout`
 gives, its unit slots' rows its flat twin's (`unitRowsFlat`, from `Hidden.hidden_delta'`, at rows that fit), and
 the table's statement `stmtOf` of it, which is the layout's block R1CS (`Integrate.model_eq`).
 
