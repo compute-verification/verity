@@ -663,9 +663,9 @@ def _no_pads(*_args, **_kwargs):
 def test_a_hostile_leaf_count_is_refused_before_the_verifier_hashes_any_pad(monkeypatch):
     """A registered A value's, round A table's or receipt table's leaf count other than the rows the window's layout
     gives it (`table_rows`), 2^40 among them, and an unsized value's (an input-ids table's) past `MAX_ROWS`, are refused
-    by `_a_link` before `tree_root` hashes any pad: every entry's count is checked first, and a hostile count is never
-    padded to its tree. In a whole window too, where `_a_link` reads the layout's rows."""
-    monkeypatch.setattr(Cr, "tree_root", _no_pads)
+    by `_a_link` before `merkle.root_from_subtrees` hashes any pad: every entry's count is checked first, and a hostile
+    count is never padded to its tree. In a whole window too, where `_a_link` reads the layout's rows."""
+    monkeypatch.setattr(Cr, "root_from_subtrees", _no_pads)
     for name in ("layout-rows", "leaves-cap"):
         for seed in range(10):
             d = cases.a_link_instance(random.Random(f"{name}/{seed}"), name)
