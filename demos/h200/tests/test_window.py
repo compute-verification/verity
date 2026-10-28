@@ -65,23 +65,23 @@ def lockstep(steps: int, batch: int) -> list[SimpleNamespace]:
 
 
 @pytest.fixture(scope="module")
-def frozen() -> W.Window:
-    return W.Window(FROZEN, lockstep(FROZEN.context, 2))
+def frozen() -> W.Locator:
+    return W.Locator(FROZEN, lockstep(FROZEN.context, 2))
 
 
 @pytest.fixture(scope="module")
-def frozen_fused() -> W.Window:
-    return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=RESIDUAL)
+def frozen_fused() -> W.Locator:
+    return W.Locator(FROZEN, lockstep(FROZEN.context, 2), fused=RESIDUAL)
 
 
 @pytest.fixture(scope="module")
-def frozen_both() -> W.Window:
-    return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=BOTH)
+def frozen_both() -> W.Locator:
+    return W.Locator(FROZEN, lockstep(FROZEN.context, 2), fused=BOTH)
 
 
 @pytest.fixture(scope="module")
-def frozen_all() -> W.Window:
-    return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=ALL)
+def frozen_all() -> W.Locator:
+    return W.Locator(FROZEN, lockstep(FROZEN.context, 2), fused=ALL)
 
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
@@ -96,7 +96,7 @@ def test_a_layout_that_isnt_shared_rows_is_refused() -> None:
     with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 254..256 aren't a window of one row"):
         W.shared_layout(MINI, 255)
     with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 0..2 are committed twice"):
-        W.Window(MINI, lockstep(1, 1), families_layout(MINI)).writers()
+        W.Locator(MINI, lockstep(1, 1), families_layout(MINI)).writers()
 
 
 def test_the_residual_fusion_drops_the_projections_tables_and_the_residual_adds_at_the_frozen_shape(frozen, frozen_fused) -> None:
@@ -268,7 +268,7 @@ def test_the_bundles_pieces_on_families_v1_at_the_frozen_shape_are_cmp_161s() ->
     a linear's x its quantizer's chunk units, an output its own unit's row."""
     lay, bases = _layout(FROZEN)
     assert lay.digest.hex().startswith("1791efa8")
-    win = W.Window(FROZEN, lockstep(FROZEN.context, 2), lay)
+    win = W.Locator(FROZEN, lockstep(FROZEN.context, 2), lay)
     read = lambda s, unit, rank, at, n, start=0: {"step": s, "slot": 1, "unit": unit, "rank": rank, "at": at,  # noqa: E731
                                                    "start": start, "nbytes": n}
     assert win.bundle(7, 1, "l3.softmax", 5, "k") == [read(t, bases["l3.wk.gather"], 0, 64 * t, 128) for t in range(8)]
@@ -304,7 +304,7 @@ def served(request):
     ps = RUN.prompts_for("serve", N, P)
     d.serve(SlotKV(SlotShape(SLOTS, MINI.layers, MINI.context, MINI.head_dim, prompt=P, generate=G), "cpu", admit=ADMIT),
             [Request(i, bytes(ps[i].astype(np.uint8))) for i in range(N)])
-    win = W.Window(MINI, d.steps, fused=fused)
+    win = W.Locator(MINI, d.steps, fused=fused)
     assert any(r != b for s, st in enumerate(d.steps) for b in range(st.batch) for _, r in win.history(s, b)), \
         "a sequence's earlier keys are in other rows of their steps"
     assert ("l0.wo" in d.steps[0].tables) == ("residual" not in fused)
@@ -321,7 +321,7 @@ LAYOUTS = {"shared-1024": lambda f: W.shared_layout(MINI, fused=f), "shared-64":
 def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_replay_reads(served, layout) -> None:
     w, c, d = served
     S, _ = _slots()
-    win = W.Window(MINI, d.steps, LAYOUTS[layout](c.fused), c.fused)
+    win = W.Locator(MINI, d.steps, LAYOUTS[layout](c.fused), c.fused)
     rows = {(s, b): win.slot_rows(st, b) for s, st in enumerate(d.steps) for b in range(st.batch)}
     if layout == "families-v1":
         assert all(S.commit_slot(c.context, win.layout, r.salt_key, b, rows[s, b]).root == r.slot_roots[b]
@@ -354,7 +354,7 @@ def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_repla
 def test_a_drawn_attention_blocks_rows_open_against_their_steps_roots(served) -> None:
     w, c, d = served
     S, _ = _slots()
-    win = W.Window(MINI, d.steps, fused=c.fused)
+    win = W.Locator(MINI, d.steps, fused=c.fused)
     s = len(d.steps) - 1
     st = d.steps[s]
     b = int(np.argmax(st.positions))
