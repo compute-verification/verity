@@ -32,9 +32,8 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean firewall
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_advised_zk.py` (N2's advised proof block), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress
-  bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`),
-  `transfer_zk.py` (a server-time block's proof blocks read against the certifier's transfer rows) and
-  `compile_slice_zk.py` (the compile slice). `leak_scan.py` is the scan of what the verifier received that every one of
+  bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`)
+  and `compile_slice_zk.py` (the compile slice). `leak_scan.py` is the scan of what the verifier received that every one of
   them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit windows as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
@@ -259,7 +258,7 @@ It is not the record's number.
 
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
-  reading is a claim, with lean and Daniel.
+  reading is a claim, not yet a locked guarantee.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
