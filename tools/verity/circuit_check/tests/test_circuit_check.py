@@ -157,14 +157,14 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
     _without_the_catalog(monkeypatch)
     fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
     decided: dict[str, bool] = {}
+    undecided: dict[str, str] = {}
     for f in fams:
         try:
             decided[f] = TG.is_call(f)
-        except TG.Undecided:
-            continue
+        except TG.Undecided as e:
+            undecided[f] = str(e)
     assert {f for f, call in decided.items() if call} == set(decided) & calls
-    undecided = sorted(fams - set(decided))
-    assert len(undecided) < len(fams) // 10, f"most families need no catalog: {undecided[:20]}"
+    assert len(undecided) < len(fams) // 10, f"most families need no catalog: {sorted(undecided.values())[:20]}"
 
 
 @pytest.mark.slow
