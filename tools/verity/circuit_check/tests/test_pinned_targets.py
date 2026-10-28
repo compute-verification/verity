@@ -68,6 +68,7 @@ def test_the_pinned_ids_are_every_pin_held_for_a_definition(monkeypatch):
     assert TG.pinned() == {"A_v1", "B_v1", "C_v1"}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("sidecar, family", [("arith_encode", "ChargeCount_v1"), ("charge_chain", "ChargeLink_v1")])
 def test_the_certifiers_pinned_n14_bindings_are_their_sidecars_targets(sidecar, family):
     """``{N=14}`` of the certifier's charge units is over `MAX_GATES` beside ``{N=2}`` under it; both are pinned, so both are

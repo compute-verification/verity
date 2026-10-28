@@ -344,6 +344,7 @@ KBIG_BINDING = """def kbig():
 """
 
 
+@pytest.mark.slow
 def test_a_pin_added_after_the_records_keeps_its_target_from_them(tmp_path):
     """SynK is reached at K = 2 (a root, and in SynKBig's body) and at K = 5 (in SynKBig's body), with `targets.MAX_GATES` at 2
     gates: the full build checks K = 2 alone, and its records describe no K = 5.  A pin of K = 5 then keeps it
