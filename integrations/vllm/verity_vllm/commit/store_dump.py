@@ -33,10 +33,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.committer_api import RunRoots, StepRoot
 from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
+from verity_vllm.commit.run_roots import RunRoots, StepRoot
 
 SCHEMA = "verity-vllm/committed-store/v1"
 NODE = 32                                                       # a vllm-v1 tree node; rows-sha512's is step_rows.ROOT_BYTES (`_node`)

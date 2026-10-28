@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from verity_vllm.commit.run_roots import RunRoots, StepRoot
+
 
 @dataclass
 class StepCommitment:
@@ -54,23 +56,6 @@ class RunCommitment:
         """The run root and each step's root and sizes, without the committer's measurements, Merkle roots or layout digests: what a
         committed store keeps of the run (`commit.store_dump`)."""
         return RunRoots(self.run_root, [StepRoot(s.step, s.root, s.n_leaves, s.n_bytes, s.n_tensors) for s in self.steps])
-
-
-@dataclass
-class StepRoot:
-    """A `StepCommitment`'s step root and the leaves, value bytes and tensors it binds."""
-    step: int
-    root: bytes
-    n_leaves: int
-    n_bytes: int
-    n_tensors: int
-
-
-@dataclass
-class RunRoots:
-    """`RunCommitment.roots()`: the run root and each step's `StepRoot`."""
-    run_root: bytes
-    steps: list[StepRoot]
 
 
 @dataclass
