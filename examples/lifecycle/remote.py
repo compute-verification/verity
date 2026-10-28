@@ -7,16 +7,15 @@ its declarations is not credited and not detected (`unreported` is accepted): th
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any
 
-from lifecycle import (DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, VERIFIER, Developer, Link, Verifier, load_of,
-                       products, theta_of)
+from lifecycle import (DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, VERIFIER, Developer, Link, Verifier, hardware,
+                       load_of, products, theta_of)
 from verity.core.deploy import runtime
 from verity.core.deploy.manifest import Channel, Manifest, Role
 
 ID = "lifecycle-remote"
-LAYOUT = replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),))
+LAYOUT = hardware("", NODE.body.cards, NODE.body.locs, (Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),))
 """The site's first hardware registration entry: the node, and its uplink with no certifier on it."""
 
 MANIFEST = Manifest(

@@ -39,13 +39,15 @@ in one process, on seeded coin sources and virtual clocks, with the manifest's c
 block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and a declaration block is `LifecycleBlock(N)`: N units
 chained through the state wire. The monitoring period is three declaration periods of 3, 4 and 2 requests.
 
-1. **Hardware registration** (`Hardware`; `check_registration(layout, registration)`). The site is one `Layout`: cards
-   by digest (`Card`, in `Accounting.Device`'s terms), a tree of locations with their owners (`Loc`: the site, hosts,
+1. **Hardware registration** (`Hardware`; `check_registration(layout, entry)`). The site is one `Layout`: cards
+   by digest (`Card`: an SKU's clock, peak rate in each operand class and memory figures), a tree of locations with their owners (`Loc`: the site, hosts,
    devices naming a card, memory leaves with their tier and bytes, and the auditor's certifiers and challengers), and
    links with their ends, β and latency. A certifier sits on an uplink by splitting it: host to certifier, certifier to
-   the outside. The layout is folded from one append-only log of `Registration` entries, each chained to the log's head
-   and checked as a whole against its prefix's layout, refused by name: `previous`, `duplicate-id`, `unknown-ref`,
-   `kind`, `card-digest` (a card that isn't the auditor's data sheet, `SHEETS`), `capacity`, `owner` (a certifier or
+   the outside. The layout is folded from the hardware entries of the registration log
+   (`verity.core.protocols.registration`; `hardware` builds one), each chained to the log's head and checked as a whole
+   against its prefix's site by the log's own check, refused by name: `previous`, `duplicate-id`, `unknown-ref`,
+   `kind`, `card-digest` (a card whose SKU has no data sheet in `SHEETS`, or a device naming no registered card),
+   `figures` (a card that isn't its data sheet), `capacity`, `owner` (a certifier or
    challenger that isn't one of the auditor's own devices with its key), and onsite `uncertified` (a boundary link no
    certifier splits) and `challenger-reach`. After declaration 1 a later entry adds gpu2 with its HBM, and a disk.
 2. **Registration** (`Register`; `register`, `check_baseline`). B's descriptor (format, advice cap of 32 bits a
@@ -81,7 +83,7 @@ chained through the state wire. The monitoring period is three declaration perio
 The first registration and declaration 1, onsite, and the period, remote (`run.py` prints every phase of both):
 
 ```text
-1 hardware     registration: entry 72aec7485cfec4a3..., after e3d2030c65fc3ac4...
+1 hardware     registration: entry 1a72d503437cf43e..., after d6356b427985ba6d...
                cards      sim-int8-a, sim-int8-b
                locations  site0 (site), node0 (host in site0), gpu0 (device sim-int8-a in node0), hbm0 (memory hbm 64
                           GiB in gpu0), gpu1 (device sim-int8-b in node0), hbm1 (memory hbm 128 GiB in gpu1), dram0
@@ -131,9 +133,9 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 | name | caller | in | out | module |
 | --- | --- | --- | --- | --- |
-| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | missing: written in the example |
+| `Card`, `Loc`, `Link`, `hardware(previous, cards, locs, links)` | developer | the site's hardware | one hardware entry of the registration log, chained to its head | `verity.core.protocols.registration` (`Card`, `Loc`, `Link`, `Entry`, `Hardware`), the executable log `Core.Registration`'s Python, held to it by the composition suite's difftest |
 | `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | missing: written in the example (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
-| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | missing: written in the example |
+| `check_registration(layout, entry, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `verity.core.protocols.registration.hardware_refusal`, held to `Core.Registration` by the composition suite's difftest |
 | `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the declaration blocks | missing: written in the example |
 | `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the example |
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the example |
