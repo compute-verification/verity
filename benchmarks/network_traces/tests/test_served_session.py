@@ -81,9 +81,9 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     rec = shlex.split(doc["runs"]["records"])
-    inner = SS.parser().parse_args(rec[rec.index("--") + 3:])
-    assert (rec[rec.index("--on") + 1], inner.cmd, inner.out, inner.port) == ("vy-dc-h200-2", "records", Path("$OUT"),
-                                                                              18782)
+    inner = SS.parser().parse_args(shlex.split(rec[-1])[2:])
+    assert rec[rec.index("--") + 1:-1] == ["bash", "-lc"] and rec[rec.index("--on") + 1] == "vy-dc-h200-2"
+    assert (inner.cmd, inner.out, inner.port) == ("records", Path("$OUT"), 18782)
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
     long.minutes = a.minutes
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
@@ -204,6 +204,8 @@ def test_records_publishes_an_endpoints_public_records_only_when_it_served_the_s
         assert SS.main(argv) == 2 and "windows.jsonl: a request's prompt ids" in capsys.readouterr().err
     assert not out.exists()
     (src / "windows.jsonl").write_text(windows)
+    assert SS.main([*argv[:-1], str(SS.TREE / "records-out")]) == 2 and "is in the tree" in capsys.readouterr().err
+    assert not (SS.TREE / "records-out").exists()
     (src / "requests.jsonl").unlink()
     assert SS.main(argv) == 2 and "no requests.jsonl" in capsys.readouterr().err
 

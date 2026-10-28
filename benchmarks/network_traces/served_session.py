@@ -85,7 +85,7 @@ The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate dir
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at UTC'
     research run --on vy-dc-h200-2 --source . --project verity --as network-accounting --cwd source --timeout 10m \\
-      -- python3 benchmarks/network_traces/served_session.py records --from SERVE_DIR --out "$OUT"
+      -- bash -lc 'python3 benchmarks/network_traces/served_session.py records --from SERVE_DIR --out "$OUT"'
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
       --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
       tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
@@ -228,8 +228,8 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
                 "records": f"research run --on {a.peer} --source . --project verity --as network-accounting "
-                           "--cwd source --timeout 10m -- python3 benchmarks/network_traces/served_session.py records "
-                           f"--from SERVE_DIR --out \"$OUT\" --port {a.port}",
+                           "--cwd source --timeout 10m -- bash -lc 'python3 benchmarks/network_traces/served_session.py "
+                           f"records --from SERVE_DIR --out \"$OUT\" --port {a.port}'",
                 "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                          "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
@@ -508,6 +508,8 @@ def served_as(serve: dict, port: int) -> list[str]:
 
 def records(a: argparse.Namespace) -> int:
     src, out = a.src.resolve(), a.out.resolve()
+    if out == TREE or TREE in out.parents:
+        raise Refused(f"--out {out} is in the tree: give the run's $OUT, expanded on the node (inside bash -lc '...')")
     if not (src / "requests.jsonl").is_file():
         raise Refused(f"--from {src}: no requests.jsonl, whose prompt ids the records are checked against: give the "
                       "endpoint's serve dir, its --out")
