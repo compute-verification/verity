@@ -96,3 +96,6 @@ cpu-2 is out of disk: suites and tries there fail mid-run (d9db, e825 and fbab a
 
 ## cpu-6 is out of disk too (00:10Z)
 cpu-6 now refuses runs at clone ("No space left on device"). Until infra clears it, send new runs to vy-nebius-cpu-4's soundness pool (`--on vy-nebius-cpu-4`, `CHECK_SLOTS=/workspace/research/locks/soundness/slots`). Use cpu-7, 8 or 9 as soon as infra announces them. Leave runs that already hold a slot on cpu-6 alone.
+
+## Runs on cpu-6 dying as runner-gone (00:55Z)
+cpu-6's full disk is killing runs (#5324's 863f shows `runner-gone`). Check each of your cpu-6 runs with `research status RUN`. Resend any that show runner-gone, failed on the node, or have waited over an hour, on `--on vy-nebius-cpu-4` (soundness pool, `--cwd clone`, tree_sha checked), and note the new date on your issue.
