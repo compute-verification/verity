@@ -324,16 +324,17 @@ class Facts:
         return self.attn["qword"]["macs"] // HEADS, self.attn["call_gates2"] // HEADS, self.attn["call_ands"] // HEADS
 
 
-def gather(name: str, rows: int, nbytes: int, per: str = "layer") -> tuple[list[Block], tuple[int, int]]:
-    """``rows`` rows of ``nbytes`` bytes gathered `GATHER_FAN` to a row, level by level until a consumer reads at most
-    `GATHER_FAN`: the gather blocks (copies, drawn by their openings) and the rows the consumer reads."""
-    blocks, at = [], (rows, nbytes)
-    while at[0] > GATHER_FAN:
-        n = math.ceil(at[0] / GATHER_FAN)
-        blocks.append(Block(f"{name} gather ({GATHER_FAN} rows of {at[1]} B)", n, 0, 0, 0, GATHER_FAN * at[1],
-                            [(GATHER_FAN, at[1])], per=per, drawn_by_openings=True))
-        at = (n, GATHER_FAN * at[1])
-    return blocks, at
+def gather(name: str, rows: int, nbytes: int, per: str = "layer") -> tuple[list[Block], list[tuple[int, int]]]:
+    """``rows`` rows of ``nbytes`` bytes, past `GATHER_FAN`, gathered `GATHER_FAN` to a row (the last the rest): the gather
+    blocks (copies, drawn by their openings) and the rows a consumer reads, ``(count, bytes)`` each."""
+    if rows <= GATHER_FAN:
+        return [], [(rows, nbytes)]
+    full, rest = divmod(rows, GATHER_FAN)
+    if full + bool(rest) > GATHER_FAN:
+        raise ValueError(f"{name}: {rows} rows need a second gather level")
+    parts = [(full, GATHER_FAN)] + ([(1, rest)] if rest else [])
+    return ([Block(f"{name} gather ({k} rows of {nbytes} B)", n, 0, 0, 0, k * nbytes, [(k, nbytes)], per=per,
+                   drawn_by_openings=True) for n, k in parts], [(n, k * nbytes) for n, k in parts])
 
 
 def gemm_blocks(F: Facts, name: str, K: int, N: int, n: int, reads: list[int], out_bytes: int, prologue=(0, 0),
@@ -432,10 +433,10 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
         gemm_blocks(F, "o slice {2048,32}", 2048, 2048, t2, [XQ], 2 * t2),
         Block("RMSNormFused after attention", 1, 0, *norm, 2 * X, [X, A2]),
         *gd,
-        Block("RMSNormFused after the MLP", 1, 0, *norm, 2 * X, [X, D8g]),
+        Block("RMSNormFused after the MLP", 1, 0, *norm, 2 * X, [X, *D8g]),
         gemm_blocks(F, "gate_up slice {2048,32}", 2048, 16384, t2, [XQ], 2 * t2),
         *ggu,
-        Block("SiluMul", 1, 0, *silu, S, [GUg]),
+        Block("SiluMul", 1, 0, *silu, S, GUg),
         Block("Int8RowQuant{8192}", 1, 0, *quant8, SQ, [S]),
         gemm_blocks(F, "down slice {8192,8}", 8192, 2048, t8, [SQ], 2 * t8),
     ]
@@ -443,7 +444,7 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
     # (b) norm and quantize into the GEMM tile that reads them, SiluMul into down's; one tile also commits the residual
     out["b"] = [
         *gd,
-        gemm_blocks(F, "qkv tile + norm1 + quant", 2048, 3072, t2, [X, D8g], 2 * t2, prologue=plus(norm, quant2)),
+        gemm_blocks(F, "qkv tile + norm1 + quant", 2048, 3072, t2, [X, *D8g], 2 * t2, prologue=plus(norm, quant2)),
         Block("qkv tile 0's residual r1", 1, 0, 0, 0, X, note="the norm's residual output, committed by one qkv tile"),
         Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
         *heads("attention head", by_head, by_head + by_tile),
@@ -451,21 +452,21 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
         gemm_blocks(F, "gate_up tile + norm2 + quant", 2048, 16384, t2, [X, A2], 2 * t2, prologue=plus(norm, quant2)),
         Block("gate_up tile 0's residual r2", 1, 0, 0, 0, X),
         *ggu,
-        gemm_blocks(F, "down tile + SiluMul + quant", 8192, 2048, t8, [GUg], 2 * t8, prologue=plus(silu, quant8)),
+        gemm_blocks(F, "down tile + SiluMul + quant", 8192, 2048, t8, GUg, 2 * t8, prologue=plus(silu, quant8)),
     ]
 
     # (c) dot-product inputs (bf16) and outputs only, quantize in the GEMM's prologue, the residual stream kept
     out["c"] = [
         Block("RMSNormFused (x, r) after attention", 1, 0, *norm, 2 * X, [X, A2]),
         *gd,
-        Block("RMSNormFused (x, r) after the MLP", 1, 0, *norm, 2 * X, [X, D8g]),
+        Block("RMSNormFused (x, r) after the MLP", 1, 0, *norm, 2 * X, [X, *D8g]),
         gemm_blocks(F, "qkv tile + quant", 2048, 3072, t2, [X], 2 * t2, prologue=quant2),
         Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
         *heads("attention head", by_head, by_head + by_tile),
         gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
         gemm_blocks(F, "gate_up tile + quant", 2048, 16384, t2, [X], 2 * t2, prologue=quant2),
         *ggu,
-        Block("SiluMul", 1, 0, *silu, S, [GUg]),
+        Block("SiluMul", 1, 0, *silu, S, GUg),
         gemm_blocks(F, "down tile + quant", 8192, 2048, t8, [S], 2 * t8, prologue=quant8),
     ]
 
@@ -473,14 +474,14 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
     out["d"] = [
         Block("RMSNormFused + quant (xq, r) after attention", 1, 0, *plus(norm, quant2), XQ + X, [X, A2]),
         *gd,
-        Block("RMSNormFused + quant (xq, r) after the MLP", 1, 0, *plus(norm, quant2), XQ + X, [X, D8g]),
+        Block("RMSNormFused + quant (xq, r) after the MLP", 1, 0, *plus(norm, quant2), XQ + X, [X, *D8g]),
         gemm_blocks(F, "qkv tile", 2048, 3072, t2, [XQ], 2 * t2),
         Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
         *heads("attention head", by_head, by_head + by_tile),
         gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
         gemm_blocks(F, "gate_up tile", 2048, 16384, t2, [XQ], 2 * t2),
         *ggu,
-        Block("SiluMul + quant", 1, 0, *plus(silu, quant8), SQ, [GUg]),
+        Block("SiluMul + quant", 1, 0, *plus(silu, quant8), SQ, GUg),
         gemm_blocks(F, "down tile", 8192, 2048, t8, [SQ], 2 * t8),
     ]
 
@@ -489,26 +490,26 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
     silu_ep = (F.silu_word["gates2"] * t2 // 2, F.silu_word["ands"] * t2 // 2)  # a tile of t2/2 (g, u) pairs
     add = (2048 * F.add_word["gates2"], 2048 * F.add_word["ands"])
 
-    def norm1(a, d) -> Block:
-        return Block("norm1 + quant (r += a + d; xq1, r)", 1, 0, *plus(norm, quant2, add), XQ + X, [X, a, d],
+    def norm1(a: list, d: list) -> Block:
+        return Block("norm1 + quant (r += a + d; xq1, r)", 1, 0, *plus(norm, quant2, add), XQ + X, [X, *a, *d],
                      note="adds the previous layer's a and d to the residual it committed")
 
-    def norm2(a) -> Block:
-        return Block("norm2 + quant (xq2)", 1, 0, *plus(norm, quant2), XQ, [X, a], note="r2 = r1 + a, not committed")
+    def norm2(a: list) -> Block:
+        return Block("norm2 + quant (xq2)", 1, 0, *plus(norm, quant2), XQ, [X, *a], note="r2 = r1 + a, not committed")
 
     qk_tiles = [gemm_blocks(F, "q/k tile + RoPE", 2048, 2560, t2, [XQ], 2 * t2, epilogue=rope_ep,
                             note="a tile of whole rotary pairs; commits q' and k'"),
                 gemm_blocks(F, "v tile", 2048, 512, t2, [XQ], 2 * t2)]
     q_e, kv_e = (by_head, [2 * KV]) if pack else (by_tile, by_tile * 2)
     pk = packs(by_tile, by_tile * 2) if pack else []
-    out["e1"] = [*gd, norm1(A2, D8g), *qk_tiles, *pk,
+    out["e1"] = [*gd, norm1([A2], D8g), *qk_tiles, *pk,
         *heads("attention head", q_e, kv_e),
         gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
-        norm2(A2),
+        norm2([A2]),
         gemm_blocks(F, "gate_up tile + SiluMul", 2048, 16384, t2, [XQ], t2, epilogue=silu_ep,
                     note="g and u columns paired; commits s, half of gu"),
         *gs,
-        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, [Sg]),
+        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, Sg),
         gemm_blocks(F, "down tile", 8192, 2048, t8, [SQ], 2 * t8),
     ]
 
@@ -518,22 +519,22 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
     mx2, mx8 = (F.scale[2048]["gates2"], F.scale[2048]["ands"]), (F.scale[8192]["gates2"], F.scale[8192]["ands"])
     gmx, MXg = gather("s partial maxima", 16384 // t2, 4)
     gsq, SQg = gather("sq codes", 16384 // t2, t2 // 2)
-    out["e2"] = [*gd, norm1(A2, D8g), *qk_tiles, *pk,
+    out["e2"] = [*gd, norm1([A2], D8g), *qk_tiles, *pk,
         *heads("attention pass 1 (partial max)", q_e, kv_e, commits=4),
         Block("o scale (max of 32 partial maxima)", 1, 0, *mx2, 4, [(HEADS // group, 4 * group)],
               note="ANDs: Int8RowQuant{2048}'s scale unit, an upper bound"),
         *heads("attention pass 2 (recompute, oq codes)", q_e, kv_e, extra=(0, *code2_head), commits=HEAD_DIM,
                extra_reads=(4,), last_only=True),
         gemm_blocks(F, "o tile", 2048, 2048, t2, [(HEADS // group, HEAD_DIM * group), 4], 2 * t2),
-        norm2(A2),
+        norm2([A2]),
         gemm_blocks(F, "gate_up pass 1: tile + SiluMul, partial max", 2048, 16384, t2, [XQ], 4, epilogue=silu_ep),
         *gmx,
-        Block("s scale (max of 512 partial maxima)", 1, 0, *mx8, 4, [MXg],
+        Block("s scale (max of 512 partial maxima)", 1, 0, *mx8, 4, MXg,
               note="ANDs: Int8RowQuant{8192}'s scale unit, an upper bound"),
         gemm_blocks(F, "gate_up pass 2: recompute + sq codes", 2048, 16384, t2, [XQ, 4], t2 // 2,
                     epilogue=plus(silu_ep, code8)),
         *gsq,
-        gemm_blocks(F, "down tile", 8192, 2048, t8, [SQg, 4], 2 * t8),
+        gemm_blocks(F, "down tile", 8192, 2048, t8, [*SQg, 4], 2 * t8),
     ]
 
     # (e3) e1 at the finest GEMM units, each reading its weight column and sharing its slice's rows; the 2-byte rows they
@@ -554,7 +555,7 @@ def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None =
         norm2(a3),
         gemm_blocks(F, "gate_up (g, u) pair + SiluMul", 2048, 16384, 2, [XQ], 2, epilogue=(F.silu_word["gates2"], F.silu_word["ands"])),
         *gs,
-        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, [s3]),
+        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, s3),
         gemm_blocks(F, "down coordinate", 8192, 2048, 1, [SQ], 2),
         *gd,
     ]
@@ -594,14 +595,14 @@ def head_blocks(F: Facts, name: str) -> list[Block]:
                       n * co["ands"] + per_group, 2 + 4, [F.bf16_row], n * 2 * 2048, per="sampled",
                       note="epilogue ANDs: TokenSelectGroups' a group of 16 (measured / 167); the index's 4 bytes an estimate"),
                 *gb,
-                Block("token select over the slices' bests", 1, 0, 0, comb_ands, 4, [best_rows], per="sampled",
+                Block("token select over the slices' bests", 1, 0, 0, comb_ands, 4, best_rows, per="sampled",
                       note=f"ANDs: TokenSelectCombine_v2's ({csrc}), over 167 x 48 bests")]
     gl, logit_rows = gather("logit slices", 2672 // n, 2 * n, per="sampled")
     return [Block("LM head slice {2048,16}", slices, n * co["macs"], n * co["gates2"], n * co["ands"], 2 * n, [F.bf16_row],
                   n * 2 * 2048, per="sampled"),
             *[Block(b.name + " (a group's)", 48 * b.n, 0, 0, 0, b.commits, b.reads, per="sampled", drawn_by_openings=True)
               for b in gl],
-            Block("TokenSelectGroups_v1{C=2672,G=16}", 48, 0, 0, groups_ands, 167 * 6, [logit_rows], per="sampled",
+            Block("TokenSelectGroups_v1{C=2672,G=16}", 48, 0, 0, groups_ands, 167 * 6, logit_rows, per="sampled",
                   note=f"ANDs measured ({gsrc}); commits 167 bests and indices, the index's 4 bytes an estimate"),
             Block("TokenSelectCombine_v2", 1, 0, 0, comb_ands, 4, [167 * 6] * 48, per="sampled")]
 
