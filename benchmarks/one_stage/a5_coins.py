@@ -25,9 +25,9 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
   then each rank's draw once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
   commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
-  on the one client until `drawn` returns its segment. Once every rank has drawn or won't (`skip`), the client closes the
-  session and settles every segment (`Draws.released`). `Replay` reads an honest draw's bytes again, for the negatives'
-  streams.
+  on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
+  Once every rank has drawn or won't (`skip`), the client closes the
+  session. `Replay` reads an honest draw's bytes again, for the negatives' streams.
 * **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
