@@ -10,7 +10,7 @@ from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import research_result, serve_commit
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
-COMMIT_SH = Path(__file__).resolve().parents[4] / "examples" / "vllm" / "commit.sh"
+COMMIT_SH = Path(__file__).resolve().parents[4] / "demos" / "vllm" / "commit.sh"
 WDS = ["d" * 64, "a" * 64, "c" * 64, "b" * 64]
 #: an evidence dir's files that hold request values, where each rank ran or when each process ran: never published
 PRIVATE_FILES = {"match/capture/tokens.json": {"prompt_token_ids": [[1, 2]], "generated_token_ids": [[3]], "timing": {}},

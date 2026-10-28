@@ -4,7 +4,7 @@
 # B8 and B1 stochastic workloads' Build, Match and Commit (ROWS; CHECKS=0 runs only the workloads).
 #   research run --on vy-nebius-1 --project verity --cwd source --mem-gb 128 --timeout 3h \
 #     --env GPU_LEASE_WHO=vllm-topp-pin -- bash integrations/vllm/tools/topp_pin_gpu.sh
-# Needs on the node what examples/vllm/commit.sh needs: vLLM's venv, the checkpoint in /workspace/hf and gpu-lease.
+# Needs on the node what demos/vllm/commit.sh needs: vLLM's venv, the checkpoint in /workspace/hf and gpu-lease.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROWS=${ROWS:-"llama32-1b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager llama32-1b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"}
