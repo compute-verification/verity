@@ -320,7 +320,7 @@ def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -
         _sr_kw["executed_prefix"] = {} if s.args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
         _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
         if _epr_r["any_eos_stop"] or _flt:
-            print("[delta] not-executed(R17-1) class -> sampled_replay(executed_prefix=): " + ", ".join(
+            print("[delta] not-executed class -> sampled_replay(executed_prefix=): " + ", ".join(
                 f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items())
                   + (f"; FAULTS {_flt}" if _flt else "; no faults"), flush=True)
     elif _epr_r["any_eos_stop"]:
@@ -495,7 +495,7 @@ def reconcile(s: Site, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict
         _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
         sr["not_executed_reconciliation"] = _recon
         row["commit"]["not_executed_reconciliation"] = _recon
-        print(f"[delta] not-executed(R17-1) reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
+        print(f"[delta] not-executed reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
               + ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items())
               + f"; row families {[(f, d['commit'], d['population']) for f, d in _recon['by_family'].items()]}"
               + (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"

@@ -35,7 +35,7 @@
 
 namespace wc {
 
-// ro-blake3/v1's compression with every add on IMAD (ra-tag-fast's V1, benchmarks/tag_fast/tf.cu at 1b21bc8f7): x * 1 + y
+// ro-blake3/v1's compression with every add on IMAD (the fast tagger's V1, benchmarks/tag_fast/tf.cu at 1b21bc8f7): x * 1 + y
 // with the 1 read from constant memory, so ptxas cannot fold it back into an IADD3, issues on the FMA pipe beside the
 // integer ALU that the XORs and rotations take. The same function as bw::b3_compress (V0), which WC_B3V=0 selects.
 __constant__ uint32_t kOne = 1;

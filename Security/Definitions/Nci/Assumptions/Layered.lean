@@ -4,10 +4,10 @@ import Definitions.Nci.Layered
 # NCI over threads: the reference circuit is keyed
 
 `Nci.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
-circuit (`Layered`). That the reference training circuit is keyed, and at which parameters, is checked against a
-transformer block at Kimi K2's shapes on paper (the Notion page "Threading at Dot16 granularity"), not in Lean: no Lean
-reference circuit of a transformer exists to build a `Layered` on. Until one does, it is a named conjecture, stated over
-a reference circuit `c` and its threading `T` as `WeightsIncompressible` is.
+circuit (`Layered`). That the reference training circuit is keyed, and at which parameters, is checked on paper against
+a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit of a transformer exists to build a
+`Layered` on. Until one does, it is a named conjecture, stated over a reference circuit `c` and its threading `T` as
+`WeightsIncompressible` is.
 -/
 
 namespace Nci.Assumptions
