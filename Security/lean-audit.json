@@ -1214,6 +1214,10 @@
    "owner": "@compute-accounting",
    "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
   },
+  "Nci.Assumptions.CoversEfficientMethods": {
+   "owner": "@training",
+   "digest": "1da6410237fea7622af465d92377764d24c77080d022cae138c2a1e82daff6ad"
+  },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
@@ -2065,10 +2069,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Nci.Assumptions.CoversEfficientMethods": {
-   "owner": "@training",
-   "digest": "1da6410237fea7622af465d92377764d24c77080d022cae138c2a1e82daff6ad"
   }
  },
  "meaning": [
@@ -22897,10 +22897,11 @@
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
-  "Definitions.Nci.Assumptions.Capability": {
-   "digest": "5ae385f65fbea116ea895de8d39302df1d94ccd34ecf47d5f50527aef70fbcc7",
+  "Definitions.Nci.Assumptions.Capability.Information": {
+   "digest": "c3c2e8c21526aa9f8c59d04d7b23fe740fc78c80489ddf50407db7d0460fac8e",
    "definitions": {
-    "Nci.Assumptions.DescriptionHard": "e49e83c9e7b8e494648db4d121e92509923c7c03eb4ac828e071044ce0d25fde",
+    "Nci.Assumptions.DescriptionHard": "9371fdba373c0178c6b93987ca9a0047950828c46f67ee731b3a40944a828c1c",
+    "Nci.Assumptions.MinEntropyHard": "6aae7d9c6bfc943f9e48f5acacaf5225fe4a34c26a686bfc07207456086caf0e",
     "Nci.Assumptions.Recovers": "f4e81a057f2968ddfa57d169027cfb3cf4537b88c62d992cdbdfe4e1112a1753",
     "Nci.Assumptions.SourceHard": "9bb08aa938b6b6ef5a51724c34e0ff9648d720509aa7472b941874fe39a69862"
    },
@@ -23150,26 +23151,41 @@
     "Nci.Cover.SecurityProofs.CoverTrainingChained"
    ]
   },
-  "Definitions.Nci.Capability": {
-   "digest": "ab2befe08fee15dca039925cf2a89ce95243c473b42ff6f352a897eef4ee0412",
+  "Definitions.Nci.Capability.Consumers": {
+   "digest": "3a2c4c036c602f87732ece5444e67dd6aab4ee02322531cb0e1113bca5aeb8ac",
+   "definitions": {
+    "Nci.Capability.Consumers": "1db2f5ef93c0dbe70f236c67692768bb3561b733f17ad57ca9b9b036bcadc3f1",
+    "Nci.Capability.Consumers.A": "764485946f0e1561577f641a3fc44dd749f9e38f5171924c44cc752f96ec292c",
+    "Nci.Capability.Consumers.G": "47cb0fa23fcad90af841b1d64c6e5c97cb0f3a07024ec2342a424ab3b4b1c517",
+    "Nci.Capability.Consumers.OverlapWeights": "c742a183626f2103f5744187a19b4d80d32915cca02bb81cb44db0092a70165c",
+    "Nci.Capability.Consumers.RequiresState": "a3e4ea72107e0829bf2adeeeaf57b86edca37784931e498712cd4bf66ff2a801",
+    "Nci.Capability.Consumers.Upstream": "896cfd5359d7cea460a600793f794bb1eaa0845ae0e7c95bbbbfc35854493081",
+    "Nci.Capability.Consumers.fins": "c59d1ded744cecb19890446035aab074cf22ecedf628d5c6d172112b3aaab83b",
+    "Nci.Capability.Consumers.servedIn": "0c841326a61d5059e5d70c37dedd95d56cc7a4635fd81753755660c4b7846c2b"
+   },
+   "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
+  },
+  "Definitions.Nci.Capability.Items": {
+   "digest": "0a27cd835b4439c57f5331c464ffd8cfc282768557e7499a5a449c1ae8ec6500",
    "definitions": {
     "Nci.Capability.HeldPriceAtMost": "fab2506f36f16f4e86a0329c97935ec4a201c80743714fb23ddff89a96d39d12",
-    "Nci.Capability.Incidence": "788fce7029742f6fdd875f6a42c251b101436f80bdffb2f9b320a76cf20d7432",
-    "Nci.Capability.Incidence.occ": "8a72c6b02a8248ddb9b5a93bccd1dc01c96fa609bd7109d00a591aa1d17cd5cb",
     "Nci.Capability.Items": "869715c5b75ec7bc813fe60d87a82e66ce94491cf002a15b3e17fff020930e9d",
     "Nci.Capability.Items.cells": "429f31f6f869ecbb8cb38eec2f914782fb9032b267fbeadb18a72d5c8ab8650d",
     "Nci.Capability.Items.price": "0aae0af211ba06076397fd637597ba4fda1b8486fe5d94b781bb0b4e1a5e5743",
     "Nci.Capability.Items.sum": "7dd1c6245f4ae84ae008ef424b6f11e2357d8a0b2bad48285f45320b9386e8ce",
-    "Nci.Capability.OverlapWeights": "f4e47ec497c21c1a55eca1f0cdf56bdc962c39cecd521c2d3684f3ad56cab7fa",
-    "Nci.Capability.RequiresState": "96d2b9e1055f6453b0d3a73aa31f0dcbb1a4ca6082812394850a7bd9cb4242ba",
     "Nci.Capability.Selects": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0",
-    "Nci.Capability.SlotsRead": "49f1035075a0a734932dcb6a095da7f41fb3708f2c4d9dd33ee4c8e4308fa677",
-    "Nci.Capability.Upstream": "0464f429cdda4619e5b59bc9bbbca86c14ef0d2409df76347b775e3ec6fa3c32",
-    "Nci.Capability.UseRegions": "cbab1338344181a2c45b1e88a669ccd70cbaf83ef5302ffdb0a3586fe7f89d74",
-    "Nci.Capability.UseRegions.A": "fd86016bc0a03eace74fd072b606795800b4868fa0f6035d108aa2dc68db29c3",
-    "Nci.Capability.UseRegions.G": "803a5c4385bfc4ae729bbe972e11f01892826d3a77077eba8561e348f20ff117",
-    "Nci.Capability.completedIn": "3bec73b0377705ee4d058ebade5ce9debd840fe88438ead243eb400091df0a6f",
     "Nci.Capability.holds": "04ade264264a82af516b76bebd8e49fb81cd3f6c304d3e2c79a78eb7252d0788",
+    "Nci.Capability.selectionBits": "842e916722e381f39c2c5a3c26cbce09721507cb63e8774b8d058d7d8da22ca6"
+   },
+   "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
+  },
+  "Definitions.Nci.Capability.Products": {
+   "digest": "810a0d696d664f36c5659c16a044fb32d967f9e0f7352ce21758fb93202e2bd2",
+   "definitions": {
+    "Nci.Capability.Incidence": "788fce7029742f6fdd875f6a42c251b101436f80bdffb2f9b320a76cf20d7432",
+    "Nci.Capability.Incidence.occ": "8a72c6b02a8248ddb9b5a93bccd1dc01c96fa609bd7109d00a591aa1d17cd5cb",
+    "Nci.Capability.SlotsRead": "49f1035075a0a734932dcb6a095da7f41fb3708f2c4d9dd33ee4c8e4308fa677",
+    "Nci.Capability.completedIn": "3bec73b0377705ee4d058ebade5ce9debd840fe88438ead243eb400091df0a6f",
     "Nci.Capability.served": "cbe631252ab9d15e5f19f5069a7e20d9eb465efde39c3501691da234760ffb54"
    },
    "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
@@ -23452,18 +23468,37 @@
    ]
   },
   "Definitions.Nci.Guarantees.Capability": {
-   "digest": "b5acb4da75d46e750d92fc43d819b1209710a77873127617c5895c36d130bc50",
+   "digest": "9870b8af64227ab64b3883ae2f06b0203a66511778b94e786f2fb91350291b11",
    "definitions": {
-    "Nci.Guarantees.HeldBudget": "26a1988c3e20c42919dec42ecb37f054321d7f2d3fa9df32de4291bf91881eea",
-    "Nci.Guarantees.ImportOrRecompute": "a7b5e4aa1333c696a02bbf684cc63839f30455f6f5e1af9a6529adb77b9f8d12",
-    "Nci.Guarantees.IncidenceCap": "0ab89e37f5ed3a60ef8376109a8c3ea139e5026426a36a03fe9b69ccbb1201da",
-    "Nci.Guarantees.LocalBoundsStated": "e4745ef45716685c8f40a27fe0e53a8dd8ebe145bb6cc69aab0250701271044b",
-    "Nci.Guarantees.OperandCapJoint": "c0e5a242b2d17a833cc4144c1db07e2816c3ddad913926f67acc620331a8f252",
-    "Nci.Guarantees.OperandCapSeparate": "c7fe70750dc19d1e6f7a865497391c291718a5b924849ada21d31948adc8af70",
-    "Nci.Guarantees.RecomputeByGates": "69135327362ceaa3271828a4e2cddc5496a5207f394ab6d39ca04e86ea92d5bd",
-    "Nci.Guarantees.RecomputeByState": "e955a4c1ffd2016ba1993996e703822f00116f5ec9c8a372656a8feeecb9d977",
+    "Nci.Guarantees.LocalBoundsStated": "885904d798ad12dc309f082b65924ce375034a82e54834e673aeefba5fb51a75"
+   },
+   "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
+  },
+  "Definitions.Nci.Guarantees.Capability.Budgets": {
+   "digest": "3cd3f04df0207643b3cbdd6edbbe03775fd5c0490d64a3b73f4fa8772a007539",
+   "definitions": {
+    "Nci.Guarantees.HeldBudget": "303fd61a3ec0a6e01def3a13db20e6a92b5a5bb492693d2054ec95fa314656b5",
     "Nci.Guarantees.RecoveredBudget": "236c12ed7254dbe3a454890caa355d5f809e7426e38894f6f665505a91ca8f3b",
+    "Nci.Guarantees.StatHeldBudget": "6f64693a5a20a39546ea08ba8453ff79ff02e75cb2b3063a21cbacae74ca99da"
+   },
+   "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
+  },
+  "Definitions.Nci.Guarantees.Capability.Dependency": {
+   "digest": "9642a6938b7c5ab159f85d044be06f6c7ed361846678aa7256133acdc2f72b2b",
+   "definitions": {
+    "Nci.Guarantees.ImportOrRecompute": "2217119412f06c2be12a54f96e6b791204678fc6e724afbe5147c751db3c44ff",
+    "Nci.Guarantees.RecomputeByGates": "631eb475b57e6a18b84c804e86d64a007bd43bb30cffc744dba0a7a509f0e677",
+    "Nci.Guarantees.RecomputeByState": "4a23402b72e65cb8a3e7394e0004aa684dfccfaa67982dd2c207d0d9b8f770e8",
     "Nci.Guarantees.WeightedProductCap": "b95192c29e95b35f1301ce64b5b6d99c7559409157a1d814c3d33a7985615185"
+   },
+   "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
+  },
+  "Definitions.Nci.Guarantees.Capability.Incidence": {
+   "digest": "866ba973b31e59505f1adb7ebfaa96d79a9a455fd97c16b54eaabc1e6c2c128a",
+   "definitions": {
+    "Nci.Guarantees.IncidenceCap": "0ab89e37f5ed3a60ef8376109a8c3ea139e5026426a36a03fe9b69ccbb1201da",
+    "Nci.Guarantees.OperandCapJoint": "c0e5a242b2d17a833cc4144c1db07e2816c3ddad913926f67acc620331a8f252",
+    "Nci.Guarantees.OperandCapSeparate": "c7fe70750dc19d1e6f7a865497391c291718a5b924849ada21d31948adc8af70"
    },
    "guarantees": ["Nci.SecurityProofs.LocalBoundsStated"]
   },
