@@ -68,7 +68,10 @@
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
   "Flock.Test.RequireLink",
-  "VStar"
+  "VStar",
+  "Flock.Annot",
+  "Flock.AnnotExpand",
+  "Flock.Test.Annot"
  ],
  "exempt": {
   "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)",
