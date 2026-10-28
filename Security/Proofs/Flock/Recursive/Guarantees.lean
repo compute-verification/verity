@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 /-!
 # Proofs of the recursive audit's guarantees
 
-* `Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound` (retired from the lock: the
+* `Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound` (retired from the lock, PRF-212: the
   recursion's guarantee is `Flock.Guarantees.RecursiveKS`) is `zk_sessions_recursive_fork_read_off` with
   V*'s bridge
   (`Flock.Assumptions.VBridge`) taken apart, the inner verifier reading each round's message whole (`same` is equality,
