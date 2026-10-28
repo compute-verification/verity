@@ -1002,12 +1002,6 @@
    "assumptions": [],
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
   },
-  "Properties.Composition.bindCollision": {
-   "owner": "@proofs",
-   "signature": ["Properties.Composition.bindCollision : Properties.Composition.BindCollision"],
-   "assumptions": [],
-   "type_hash": "f86555ffa02dda204d373056f53bae5a661695130de713ec34f2ca1c249a68f2"
-  },
   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
    "owner": "@compute-accounting",
    "signature": [
@@ -3577,10 +3571,6 @@
     "function": "Core.Composition.checkRegistered",
     "outcome": "accept"
    },
-   "Properties.Composition.bindCollision": {
-    "function": "Core.Composition.bind",
-    "outcome": "none"
-   },
    "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
     "function": "PousCheck.SetupProtocol.protocol.check",
     "outcome": "accept"
@@ -3653,7 +3643,6 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
-   "Properties.Composition.bindCollision": "lemma: the composition commitment's binding (`bind` equal over two digest lists gives equal lists or one SHA-512 output on two different messages); `bind` returns a digest and no outcome, so the statement fits no property's shape",
    "Properties.SampledProofs.OneStageZk.AcceptMeans": "unstated: what the one-stage audit's v2 check (`SampledProofs.OneStageZk.checkBlobs`) accepts; no theorem proves it yet, and the guarantee that does replaces this entry"
   },
   "conjectures": {
