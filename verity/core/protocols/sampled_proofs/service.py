@@ -25,7 +25,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
 declares them; the joint note's §6 step 0 allows that on test prompts, and hiding them is the hidden layout (step 8).
-The `Stream` runs `check_public` by the verifier before one-stage's R1 to R7, reading an entry's fields in key
+The `Stream` runs `check_public` by the verifier of record before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
 **A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's served window, every
