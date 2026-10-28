@@ -263,15 +263,16 @@ theorem gate_refused_nil {s : Certificate.Store} {k delta rtt : Nat} (h : (Certi
   unfold Certificate.gate Certificate.p2 at *
   by_cases hp : (s.w, s.c0, s.blocksPerSegment) = Certificate.POINT
   · simp only [hp, beq_self_eq_true, ite_true] at h ⊢
-    simp only [Certificate.Certificate.refusals, Certificate.deadlineRefusals, Certificate.Certificate.effectiveRounds,
-      List.append_eq_nil_iff, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt] at h
+    simp only [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals,
+      Certificate.CapacityBound.effectiveRounds, List.append_eq_nil_iff, ite_eq_right_iff, reduceCtorEq, imp_false,
+      not_lt] at h
     obtain ⟨⟨hk, hd⟩, hδ, hr⟩ := h
     have hd' : ¬ (delta + rtt) / Certificate.ROOT_CALL_NS > 0 := fun hc => by simp [hc] at hd
     have hδ' : delta = Certificate.DELTA_NS := by simpa using hδ
     have hlt : Certificate.DELTA_NS + rtt < Certificate.ROOT_CALL_NS := by
       unfold Certificate.ROOT_CALL_NS at hd'; rw [← hδ']; unfold Certificate.ROOT_CALL_NS; omega
     refine ⟨trivial, hk, hδ', hr, ?_⟩
-    simp [Certificate.Certificate.refusals, Certificate.deadlineRefusals, Certificate.Certificate.effectiveRounds,
+    simp [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals, Certificate.CapacityBound.effectiveRounds,
       Certificate.CERT_BLOCKS, Certificate.POINT, hlt, hδ', Nat.not_lt.2 hk, Nat.not_lt.2 hr]
   · simp [hp] at h
 

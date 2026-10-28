@@ -3,7 +3,7 @@ import PousCheck.Wire
 /-!
 # What an accepted timed audit establishes: the certificate gate and the StorageProfile
 
-`verity/core/protocols/pous/protocol.py` (`Certificate`, `TimedAudit`, `StorageProfile`) at the scheme
+`verity/core/protocols/pous/protocol.py` (`CapacityBound`, `TimedAudit`, `StorageProfile`) at the scheme
 `schemes/p2.py` names (`P2`, `p2-<w>/v4`). P2 has one certificate, at its registered point `(w, c0, blocks per segment) =
 (16448, 21065, 2^16)`: `Pous.SecurityProofs.P2SlackFamilyUncond`'s `λ = 128` row, `k = 105` challenges each answered
 within no sequential root (`rounds = 0` calls of `ROOT_CALL_NS`), about `W` of 8 segments.
@@ -22,8 +22,8 @@ namespace PousCheck.Certificate
 
 open Lean (Json JsonNumber)
 
-/-- `protocol.Certificate`: `rho` and `delta` as fractions `(numerator, denominator)`. -/
-structure Certificate where
+/-- `protocol.CapacityBound`: `rho` and `delta` as fractions `(numerator, denominator)`. -/
+structure CapacityBound where
   k : Nat
   rounds : Nat
   work : Nat
@@ -62,7 +62,7 @@ def deadlineRefusals (delta rtt : Nat) : List String :=
   else []
 
 /-- `P2.certificate`: P2's certificate at `(w, c0, blocks per segment)`, only at the registered point. -/
-def p2 (w c0 bps : Nat) : Option Certificate :=
+def p2 (w c0 bps : Nat) : Option CapacityBound :=
   if (w, c0, bps) == POINT then
     some { k := CERT_K, rounds := 0, work := 2 ^ 20, callNs := ROOT_CALL_NS,
            theoremName := "Pous.SecurityProofs.P2SlackFamilyUncond", segments := some (CERT_BLOCKS / POINT.2.2),
@@ -70,10 +70,10 @@ def p2 (w c0 bps : Nat) : Option Certificate :=
   else none
 
 /-- The sequential calls of at least `callNs` that fit in `Δ + RTT`: the effective `D`. -/
-def Certificate.effectiveRounds (c : Certificate) (limit : Nat) : Nat := limit / c.callNs
+def CapacityBound.effectiveRounds (c : CapacityBound) (limit : Nat) : Nat := limit / c.callNs
 
-/-- `Certificate.refusals`: why `k` challenges within `limit` ns are outside the certificate; none when inside. -/
-def Certificate.refusals (c : Certificate) (k limit : Nat) : List String :=
+/-- `CapacityBound.refusals`: why `k` challenges within `limit` ns are outside the certificate; none when inside. -/
+def CapacityBound.refusals (c : CapacityBound) (k limit : Nat) : List String :=
   let d := c.effectiveRounds limit
   (if k < c.k then [s!"k = {k} is below the certificate's {c.k}"] else []) ++
   match c.cliff with
@@ -89,7 +89,7 @@ def nat (n : Nat) : Json := .num (JsonNumber.fromNat n)
 def opt (n : Option Nat) : Json := match n with | some x => nat x | none => .null
 def strs (l : List String) : Json := .arr (l.map Json.str).toArray
 
-def Certificate.toJson (c : Certificate) : Json := Json.mkObj [
+def CapacityBound.toJson (c : CapacityBound) : Json := Json.mkObj [
   ("k", nat c.k), ("rounds", nat c.rounds), ("work", nat c.work), ("call_ns", nat c.callNs), ("theorem", .str c.theoremName),
   ("rho", .str s!"{c.rho.1}/{c.rho.2}"), ("delta", .str s!"{c.delta.1}/{c.delta.2}"),
   ("eps_log2", .num (JsonNumber.fromInt c.epsLog2)), ("cliff", opt c.cliff), ("segments", opt c.segments),
@@ -125,7 +125,7 @@ def Store.manifestRepr (s : Store) : String :=
 
 /-- `TimedAudit`'s gate at `k`, `Δ` and the RTT allowance, for research (`research=True`, so it always has a profile):
 the certificate it audits under, its refusals and the spec's, and its other gaps. -/
-def gate (s : Store) (k delta rtt : Nat) : Option Certificate × List String × List String :=
+def gate (s : Store) (k delta rtt : Nat) : Option CapacityBound × List String × List String :=
   match p2 s.w s.c0 s.blocksPerSegment with
   | none => (none, s!"{s.name} has no certificate at {s.manifestRepr}" :: deadlineRefusals delta rtt, [])
   | some c =>
