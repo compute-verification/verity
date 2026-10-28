@@ -21,7 +21,7 @@ the coin through the prover's roots (`receipts.seed`); the openings are drawn fr
 answers the append's root, a commitment the prover has already made: committed before the session like every coin, it
 opens after that root, once.
 
-`SessionCoins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
+`Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
 takes from the challenger afterwards, the commitment it signed and the roots its signed release log shows it received
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
@@ -116,7 +116,7 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
         return str(e)
 
 
-class SessionCoins:
+class Coins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows drawn
     `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
     committed before the session.  Each family's coins open in order, each once, after the root recorded for it
@@ -205,13 +205,13 @@ class SessionCoins:
 
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
-          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> SessionCoins:
+          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> Coins:
     """Session `session`'s coins from a challenger in the verifier's process, drawing from `entropy`."""
-    return SessionCoins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration,
-                        session, windows, per_coin=per_coin, clock=clock)
+    return Coins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration, session,
+                 windows, per_coin=per_coin, clock=clock)
 
 
-def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
+def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
                     signed: LiveCommitment, received: Mapping[str, Sequence[bytes]], in_flight: int = 2) -> str | None:
     """Why the session's coins, `coins`, are not the challenger's as it signed them; None when they are.  `windows` is
     each released window's roots and `appends` each append's root, in the order the session received them; `signed` is
@@ -253,7 +253,7 @@ def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], app
     return None
 
 
-def trusted(coins: SessionCoins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
+def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
             verify: Verify, period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the challenger signed for the session's window, read on the auditor's side: the one challenger session the
     auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the session's own (`window`),
@@ -273,6 +273,6 @@ def trusted(coins: SessionCoins, directory: Any, heads: Sequence[Any], key: Chal
     return remote.trusted_session(directory, heads, w, key, verify)
 
 
-__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "SCHEME", "SessionCoins",
-           "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
-           "released_reason", "trusted", "window", "window_root"]
+__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "SCHEME", "WINDOW_DOMAIN",
+           "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins", "released_reason", "trusted",
+           "window", "window_root"]
