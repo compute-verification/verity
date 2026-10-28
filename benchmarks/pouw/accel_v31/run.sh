@@ -57,7 +57,8 @@
 # `research run --no-sampler`; empty when already under a lease); LEASE_ONCE=1 (MODE=fill): its GPU steps all under one
 # LEASE, after the builds and the CPU's prep, in place of a lease each; CUTLASS=0 (no CUTLASS baseline), V31_CACHE (CUTLASS's
 # clone and object, default /workspace/pouw/accel_v31); NVFLAGS, more nvcc flags for every build (H200: -DV31_WG=1, the
-# GEMM on warpgroup MMAs); SHA_FLAGS, sha512.cuh's issue choices (default -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1, tuned
+# GEMM on warpgroup MMAs; -DV31_EXT_GEMM=1, a served call's D at S = 1 on ext_gemm.h's entry, cuBLASLt behind it, or
+# -DV31_EXT_GEMM=2 SRC.cu with SRC.cu defining the entry); SHA_FLAGS, sha512.cuh's issue choices (default -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1, tuned
 # on sm_120).
 set -uo pipefail
 export O=${OUT:?}

@@ -945,7 +945,8 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
                    + (" r5w0" if r.get("rp") == 5 and r.get("W") and r.get("wgw", 1) and not r.get("r5w", 1) else "")
                    + (" tst" if r.get("rp") == 5 and r.get("tst") else "")
-                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else "")
+                   + (f" ext{r['ext']}" if r.get("ext") else ""))
         fused = "-"
         rows_all = r.get("leaves") or r.get("o_leaves")
         if r.get("fused_leaves", -1) >= 0 and rows_all:
