@@ -22,12 +22,12 @@ variable {B w p : ℕ} [NeZero p]
 the `Sz j`-bit state `σ`, and returns the block and the `Sz (j + 1)`-bit state, within `RingBounded D Q L`. -/
 structure VarResponderOn (sch : Scheme (ringRO B w p)) (Sz : ℕ → ℕ) (D Q L : ℕ) : Type where
   step : Bits sch.n → Bits sch.t → (j : ℕ) → Bits (Sz j) → Fin sch.B →
-    Prog (ringRO B w p) (Bits sch.ℓ × Bits (Sz (j + 1)))
+    OracleProgram (ringRO B w p) (Bits sch.ℓ × Bits (Sz (j + 1)))
   bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
 
 /-- The blocks a `VarResponderOn` returns for the indices `is`, starting at round `j` in state `σ`. -/
 def varAnswers {M : IdealModel} {ℓ B : ℕ} {Sz : ℕ → ℕ} (f : M.Qry → M.Ans)
-    (step : (j : ℕ) → Bits (Sz j) → Fin B → Prog M (Bits ℓ × Bits (Sz (j + 1)))) :
+    (step : (j : ℕ) → Bits (Sz j) → Fin B → OracleProgram M (Bits ℓ × Bits (Sz (j + 1)))) :
     (j : ℕ) → List (Fin B) → Bits (Sz j) → List (Bits ℓ)
   | _, [], _ => []
   | j, i :: is, σ =>
@@ -36,7 +36,7 @@ def varAnswers {M : IdealModel} {ℓ B : ℕ} {Sz : ℕ → ℕ} (f : M.Qry → 
 
 /-- The first `j` of the `k` answers are correct. -/
 def varPassesOn (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D Q L : ℕ} (k j : ℕ) (W : Bits sch.n)
-    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : Outcome sch k) : Prop :=
+    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : AuditCoins sch k) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
   let C := (sch.enc W ω x.2.1).2

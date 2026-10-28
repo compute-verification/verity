@@ -11,13 +11,13 @@ namespace Pous.FreeBlocks
 
 variable {M : IdealModel}
 
-theorem seqAnswers_length {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) :
+theorem seqAnswers_length {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleProgram M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B)) (σ : Bits S), (seqAnswers f step j is σ).length = is.length
   | _, [], _ => rfl
   | j, i :: is, σ => by simp [seqAnswers, seqAnswers_length f step (j + 1) is]
 
 theorem seqAcceptsFree_zero (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (Fr : FreeSet sch 0) (A₂ : SeqResponder sch S D Q) (x : Outcome sch k) :
+    (Fr : FreeSet sch 0) (A₂ : SeqResponder sch S D Q) (x : AuditCoins sch k) :
     seqAcceptsFree sch k W A₁ Fr A₂ x ↔ seqAccepts sch k W A₁ A₂ x := by
   simp only [seqAcceptsFree, seqAccepts]
   have hF : ∀ W pp C ω, Fr.free W pp C ω = ∅ := fun W pp C ω =>

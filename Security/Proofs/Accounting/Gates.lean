@@ -1004,7 +1004,7 @@ example (F : Field) (B e εnum εden : ℕ) : ChainSum F 0 B e εnum εden := by
 
 /-- Inside the floor one draw is never more than `ε` of the draws, so the circuit behind
 `encodeChainHardness_false_eps0`, right on one draw, computes no word at any `ε` and field the floor admits. -/
-example (F : Field) (k εnum εden : ℕ) (d : Draw k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
+example (F : Field) (k εnum εden : ℕ) (d : KeySample k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
     (hp : 2 ^ 66 ≤ F.p) : ¬ MoreThan (draws F k) {d} εnum εden := by
   intro h
   unfold MoreThan at h
@@ -1637,7 +1637,7 @@ def codecRows : List (ℕ × ℕ × List ℕ × ℕ × ℕ × ℕ × ℕ × ℕ)
 theorem encodeWord_codecRows :
     codecRows.all (fun (n, c, cs, K, τ, i, m, y) =>
       let F : Field := ⟨n, c⟩
-      let d : Draw cs.length := (fun r => cs.getD r 0, K, τ)
+      let d : KeySample cs.length := (fun r => cs.getD r 0, K, τ)
       encodeWord F.p d.key (d.tweak F i) m == y) := by
   decide +kernel
 

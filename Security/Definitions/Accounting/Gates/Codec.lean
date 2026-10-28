@@ -79,18 +79,18 @@ def encodeWord (p : ℕ) (K : Key) (t m : ℕ) : ℕ :=
 /-- A word less its parity: its low bit cleared. -/
 def lessParity (y : ℕ) : ℕ := y / 2 * 2
 
-/-- A draw of a `k`-round key: its round constants, its mask and its tweak multiplier. -/
-abbrev Draw (k : ℕ) := (Fin k → ℕ) × ℕ × ℕ
+/-- A sample of a `k`-round key: its round constants, its mask and its tweak multiplier. -/
+abbrev KeySample (k : ℕ) := (Fin k → ℕ) × ℕ × ℕ
 
 /-- The draws, uniform: `c_r ∈ [0, p)`, `K ∈ [0, 2^n)`, `τ ∈ [1, p)`. -/
-def draws (F : Field) (k : ℕ) : Finset (Draw k) :=
+def draws (F : Field) (k : ℕ) : Finset (KeySample k) :=
   Fintype.piFinset (fun _ => Finset.range F.p) ×ˢ (Finset.range (2 ^ F.n) ×ˢ Finset.Ico 1 F.p)
 
-/-- A draw's key. -/
-def Draw.key {k : ℕ} (d : Draw k) : Key := ⟨List.ofFn d.1, d.2.1⟩
+/-- A key sample's key. -/
+def KeySample.key {k : ℕ} (d : KeySample k) : Key := ⟨List.ofFn d.1, d.2.1⟩
 
 /-- Word `i`'s tweak under a draw, `τ·i mod p`. -/
-def Draw.tweak {k : ℕ} (F : Field) (d : Draw k) (i : ℕ) : ℕ := d.2.2 * i % F.p
+def KeySample.tweak {k : ℕ} (F : Field) (d : KeySample k) (i : ℕ) : ℕ := d.2.2 * i % F.p
 
 /-- A registered input's canonical slot: a byte of a payload word, of a round constant, of the mask, or of a word's
 tweak. -/
@@ -101,7 +101,7 @@ inductive Slot
   | tweak (i l : ℕ)
 
 /-- A slot's value under a draw, for payload `m`. -/
-def Slot.value {k : ℕ} (F : Field) (d : Draw k) (m : ℕ → ℕ) : Slot → ℤ
+def Slot.value {k : ℕ} (F : Field) (d : KeySample k) (m : ℕ → ℕ) : Slot → ℤ
   | .payload i l => byte (m i) l
   | .const r l => if h : r < k then byte (d.1 ⟨r, h⟩) l else 0
   | .mask l => byte d.2.1 l
@@ -112,21 +112,21 @@ variable {ι : Type} {k : ℕ}
 /-- The codec's inputs over draws `D`, by binding: a registered input is one value on every draw (a payload byte, or
 anything fixed before the draw); a coin input is a canonical slot's byte on every draw, or one value on every draw (a
 coin independent of the draw). -/
-def CodecInputs (F : Field) (C : Dag ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
+def CodecInputs (F : Field) (C : Dag ι) (D : Finset (KeySample k)) (m : ℕ → ℕ) (x : KeySample k → ι → ℤ) : Prop :=
   (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i) ∧
     ∀ i, (∃ g ∈ C, g.op = .input .coin i) →
       (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
 /-- On draw `d`, `C`'s inputs and budgeted gates but gathers hold their declared intervals and its outputs `out i l`
 hold the bytes of words `words`' encodings, less their parity. -/
-def Encodes (F : Field) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
-    (d : Draw k) : Prop :=
+def Encodes (F : Field) (C : Dag ι) (x : KeySample k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
+    (d : KeySample k) : Prop :=
   DeclaredHold C (x d) ∧
     ∀ i ∈ words, ∀ l < F.bytes,
       val C (x d) (out i l) = byte (lessParity (encodeWord F.p d.key (d.tweak F i) (m i))) l
 
 /-- `C` computes words `words` on more than `ε = εnum/εden` of the draws: on a set `good` of draws that large. -/
-def ComputesWords (F : Field) (k : ℕ) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
+def ComputesWords (F : Field) (k : ℕ) (C : Dag ι) (x : KeySample k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
     (out : ℕ → ℕ → ℕ) (εnum εden : ℕ) : Prop :=
   ∃ good ⊆ draws F k, MoreThan (draws F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
 
@@ -137,7 +137,7 @@ def Restricted (B : ℕ) (C : Dag ι) : Prop := Proven C ∧ OperandBits B C
 bits that compute `q` distinct words (each below `p`) of the codec's encoding, less parity, on more than `ε` of the
 draws, from the payload and whatever they registered before the draw. -/
 def encodeCosts (F : Field) (k B εnum εden q : ℕ) : Set ℕ :=
-  {c | ∃ (ι : Type) (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  {c | ∃ (ι : Type) (C : Dag ι) (m : ℕ → ℕ) (x : KeySample k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted B C ∧ runBits C = 0 ∧
       CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ nonlinear C = c}
 
@@ -159,7 +159,7 @@ less their parity, on more than `ε = εnum/εden` of the draws (`ComputesWords`
 that is `q ≤ nonlinear C / E + runBits C / (n − 1)`: each word costs `E` nonlinear units, or `n − 1` bits of run
 input (the word itself, sent after the draw). What the encode budget reads; `Assumptions.ChainSum` concludes it. -/
 def EncodeBound (F : Field) (k B E εnum εden : ℕ) : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : KeySample k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ nonlinear C * (F.n - 1) + runBits C * E

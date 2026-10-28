@@ -845,14 +845,14 @@ def slotOf (F : Field) (k j : ℕ) : Slot :=
   else .tweak 1 (j - (k + 1) * F.bytes)
 
 /-- The coin inputs on draw `d`: each slot's byte. -/
-def xd (F : Field) (k : ℕ) (d : Draw k) (s : Slot) : ℤ := s.value F d (fun _ => 0)
+def xd (F : Field) (k : ℕ) (d : KeySample k) (s : Slot) : ℤ := s.value F d (fun _ => 0)
 
 lemma byte_le (N l : ℕ) : byte N l ≤ 255 := by
   have := Nat.mod_lt (N / 256 ^ l) (show 256 > 0 by norm_num)
   unfold byte
   omega
 
-lemma xd_range (F : Field) (k : ℕ) (d : Draw k) (s : Slot) : 0 ≤ xd F k d s ∧ xd F k d s ≤ 255 := by
+lemma xd_range (F : Field) (k : ℕ) (d : KeySample k) (s : Slot) : 0 ≤ xd F k d s ∧ xd F k d s ≤ 255 := by
   have hb : ∀ N l, ((byte N l : ℕ) : ℤ) ≤ 255 := fun N l => by exact_mod_cast byte_le N l
   cases s with
   | payload i l => dsimp only [xd, Slot.value]; exact ⟨by positivity, hb _ _⟩
@@ -912,7 +912,7 @@ lemma sum_bytes (N : ℕ) : ∀ m, ∑ l ∈ Finset.range m, 256 ^ l * byte N l 
     unfold byte
     ring
 
-lemma decN_eq (F : Field) (k : ℕ) (d : Draw k) (base : ℕ) (hb : base + F.bytes ≤ NN F k) :
+lemma decN_eq (F : Field) (k : ℕ) (d : KeySample k) (base : ℕ) (hb : base + F.bytes ≤ NN F k) :
     decN F (asg (C0 (NN F k) (slotOf F k)) (wire (NN F k)) (xd F k d)) base =
       ∑ l ∈ Finset.range F.bytes, 256 ^ l * (xd F k d (slotOf F k (base + l))).toNat := by
   unfold decN
@@ -944,7 +944,7 @@ lemma slotOf_tweak (F : Field) (k l : ℕ) (hl : l < F.bytes) :
     ite_eq_right (show ¬ (k + 1) * F.bytes + l < (k + 1) * F.bytes by omega),
     show (k + 1) * F.bytes + l - (k + 1) * F.bytes = l by omega]
 
-lemma key_decode (F : Field) (k : ℕ) (d : Draw k) (hd : d ∈ draws F k) (hn : F.n = 8 * F.bytes) :
+lemma key_decode (F : Field) (k : ℕ) (d : KeySample k) (hd : d ∈ draws F k) (hn : F.n = 8 * F.bytes) :
     keyOf F k (asg (C0 (NN F k) (slotOf F k)) (wire (NN F k)) (xd F k d)) = d.key ∧
       tauOf F k (asg (C0 (NN F k) (slotOf F k)) (wire (NN F k)) (xd F k d)) = d.2.2 := by
   unfold draws at hd
@@ -956,7 +956,7 @@ lemma key_decode (F : Field) (k : ℕ) (d : Draw k) (hd : d ∈ draws F k) (hn :
   have hsum : ∀ N, N < 256 ^ F.bytes → ∑ l ∈ Finset.range F.bytes, 256 ^ l * byte N l = N := fun N hN => by
     rw [sum_bytes, Nat.mod_eq_of_lt hN]
   refine ⟨?_, ?_⟩
-  · unfold keyOf Draw.key
+  · unfold keyOf KeySample.key
     congr 1
     · congr 1
       funext r
@@ -982,7 +982,7 @@ lemma key_decode (F : Field) (k : ℕ) (d : Draw k) (hd : d ∈ draws F k) (hn :
     refine Finset.sum_congr rfl fun l hl => ?_
     rw [Finset.mem_range] at hl
     rw [slotOf_tweak F k l hl]
-    dsimp only [xd, Slot.value, Draw.tweak]
+    dsimp only [xd, Slot.value, KeySample.tweak]
     rw [mul_one, Nat.mod_eq_of_lt hτ]
     simp
 
@@ -1054,7 +1054,7 @@ theorem EncodeChainRefuted : Accounting.Guarantees.Gates.EncodeChainRefuted := b
     unfold GoodG at this
     rw [hop] at this
     exact absurd this.1 (by decide)
-  have hd0 : ((fun _ => 0, 0, 1) : Draw k) ∈ draws F k := by
+  have hd0 : ((fun _ => 0, 0, 1) : KeySample k) ∈ draws F k := by
     unfold draws
     rw [Finset.mem_product, Fintype.mem_piFinset, Finset.mem_product]
     exact ⟨fun _ => Finset.mem_range.2 (show 0 < F.p by omega), Finset.mem_range.2 (Nat.two_pow_pos _),

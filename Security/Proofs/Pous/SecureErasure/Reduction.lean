@@ -45,7 +45,7 @@ theorem pr_big_fibre_le {X Z : Type} [Fintype X] [Fintype Z] [DecidableEq Z] (ke
 /-- **The prover on codes.** If `d j (e j σ) = σ` for every memory `σ` that gives `z` back at a round `j < s`, then on
 any rounds where the prover keeps `z`, the responder that decodes its memory, runs the prover's step and encodes the
 next memory returns the prover's blocks. -/
-theorem seqAnswers_sim {ℓ S S' S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S))
+theorem seqAnswers_sim {ℓ S S' S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleProgram M (Bits ℓ × Bits S))
     (keep : ℕ → Bits S → Bits S_φ) (z : Bits S_φ) (s : ℕ) (e : ℕ → Bits S → Bits S') (d : ℕ → Bits S' → Bits S)
     (hed : ∀ j < s, ∀ σ, keep j σ = z → d j (e j σ) = σ) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), j + is.length ≤ s → (∀ a ∈ eraseAnswers f step keep j is σ, a.2 = z) →
@@ -76,7 +76,7 @@ theorem secure_erasure_meets : Pous.Guarantees.SecureErasureMeets := by
           simpa only [card_bits, Nat.cast_pow, Nat.cast_ofNat] using this
       _ = (s : ℝ≥0∞) * 2 ^ S / (2 ^ S' * 2 ^ S_φ) := by
           rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, mul_div_assoc]
-  have hgood : ∀ z, ¬ bad z → pr (fun y : K × Outcome sch s => eraseWins sch dig s W P (z, y)) ≤ δ + ε := by
+  have hgood : ∀ z, ¬ bad z → pr (fun y : K × AuditCoins sch s => eraseWins sch dig s W P (z, y)) ≤ δ + ε := by
     intro z hz
     have hcode : ∀ j, ∃ (e : Bits S → Bits S') (d : Bits S' → Bits S),
         j < s → ∀ σ, P.keep j σ = z → d (e σ) = σ := by
@@ -88,7 +88,7 @@ theorem secure_erasure_meets : Pous.Guarantees.SecureErasureMeets := by
         exact ⟨e, d, fun _ σ hσ => hed σ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hσ⟩)⟩
       · exact ⟨fun _ => fun _ => false, fun _ => fun _ => false, fun h => absurd h hj⟩
     choose e d hed using hcode
-    have hκ : ∀ κ : K, pr (fun o : Outcome sch s => eraseWins sch dig s W P (z, κ, o)) ≤ δ + ε := by
+    have hκ : ∀ κ : K, pr (fun o : AuditCoins sch s => eraseWins sch dig s W P (z, κ, o)) ≤ δ + ε := by
       intro κ
       let A₁ : Preprocessor sch S' := fun W pp C ω => e 0 (P.fill z W pp C ω κ).2
       let A₂ : SeqResponder sch S' D Q :=
@@ -99,11 +99,11 @@ theorem secure_erasure_meets : Pous.Guarantees.SecureErasureMeets := by
       have h := seqAnswers_sim (M.answer o.1) (P.read.step W (sch.enc W o.1 o.2.1).1) P.keep z s e d hed
         (List.ofFn o.2.2) 0 (P.fill z W (sch.enc W o.1 o.2.1).1 (sch.enc W o.1 o.2.1).2 o.1 κ).2 (by simp) hkept
       exact h.trans hans
-    have := pr_prod_le (fun (κ : K) (o : Outcome sch s) => eraseWins sch dig s W P (z, κ, o))
+    have := pr_prod_le (fun (κ : K) (o : AuditCoins sch s) => eraseWins sch dig s W P (z, κ, o))
       (fun _ => False) (δ + ε) fun κ _ => hκ κ
     rwa [pr_false', zero_add] at this
   have h : pr (eraseWins sch dig s W P) ≤ pr bad + (δ + ε) :=
-    pr_prod_le (fun (z : Bits S_φ) (y : K × Outcome sch s) => eraseWins sch dig s W P (z, y)) bad (δ + ε) hgood
+    pr_prod_le (fun (z : Bits S_φ) (y : K × AuditCoins sch s) => eraseWins sch dig s W P (z, y)) bad (δ + ε) hgood
   rw [add_comm] at h
   exact h.trans (add_le_add_right hbad _)
 

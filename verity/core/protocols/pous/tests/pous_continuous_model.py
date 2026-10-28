@@ -42,21 +42,21 @@ HIT, WRONG, LATE, REJECT = "hit", "wrong", "late", "reject"
 
 @dataclass(frozen=True)
 class Ret:
-    """`Prog.ret a`."""
+    """`OracleProgram.ret a`."""
 
     value: object
 
 
 @dataclass(frozen=True)
 class Round:
-    """`Prog.round qs k`: the queries `qs` at once, then `k` on their answers."""
+    """`OracleProgram.round qs k`: the queries `qs` at once, then `k` on their answers."""
 
     qs: tuple
     k: Callable[[tuple], Ret | Round]
 
 
 def run(f: Callable, p: Ret | Round) -> object:
-    """Lean `Prog.run` (`Security/Definitions/Pous/Game/Oracle.lean`):
+    """Lean `OracleProgram.run` (`Security/Definitions/Pous/Game/Oracle.lean`):
 
     def run (f : M.Qry → M.Ans) : Prog M α → α
       | ret a => a
@@ -68,7 +68,7 @@ def run(f: Callable, p: Ret | Round) -> object:
 
 
 def depth(f: Callable, p: Ret | Round) -> int:
-    """Lean `Prog.depth` (`Security/Definitions/Pous/Game/Oracle.lean`):
+    """Lean `OracleProgram.depth` (`Security/Definitions/Pous/Game/Oracle.lean`):
 
     def depth (f : M.Qry → M.Ans) : Prog M α → ℕ
       | ret _ => 0
@@ -81,7 +81,7 @@ def depth(f: Callable, p: Ret | Round) -> int:
 
 
 def work(f: Callable, p: Ret | Round) -> int:
-    """Lean `Prog.work` (`Security/Definitions/Pous/Game/Oracle.lean`):
+    """Lean `OracleProgram.work` (`Security/Definitions/Pous/Game/Oracle.lean`):
 
     def work (f : M.Qry → M.Ans) : Prog M α → ℕ
       | ret _ => 0

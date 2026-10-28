@@ -64,13 +64,13 @@ section Game
 variable {B w p : ℕ} [NeZero p]
 
 theorem varPassesOn_zero (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D Q L k : ℕ} (W : Bits sch.n)
-    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : Outcome sch k) :
+    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : AuditCoins sch k) :
     varPassesOn sch k 0 W A₁ A₂ x := by
   simp [varPassesOn]
 
 /-- One more correct answer is a stronger event. -/
 theorem varPassesOn_of_succ (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D Q L k j : ℕ} (W : Bits sch.n)
-    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : Outcome sch k)
+    (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : AuditCoins sch k)
     (h : varPassesOn sch k (j + 1) W A₁ A₂ x) : varPassesOn sch k j W A₁ A₂ x := by
   have h' := congrArg (List.take j) h
   simp only [List.take_take, Nat.min_eq_left (Nat.le_succ j)] at h'
@@ -82,21 +82,21 @@ def ofSeq {sch : Scheme (ringRO B w p)} {S D Q L : ℕ} (A₂ : SeqResponderOn s
   ⟨A₂.step, A₂.bounded⟩
 
 theorem varAnswers_const {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B' → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B' → OracleProgram M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B')) (σ : Bits S),
       varAnswers (Sz := fun _ => S) f step j is σ = seqAnswers f step j is σ
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [varAnswers, seqAnswers, varAnswers_const f step (j + 1) is]
 
 theorem length_seqAnswers {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B' → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B' → OracleProgram M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B')) (σ : Bits S), (seqAnswers f step j is σ).length = is.length
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [seqAnswers, List.length_cons, length_seqAnswers f step (j + 1) is]
 
 /-- All `k` answers of `ofSeq A₂` are correct exactly when today's audit accepts `A₂`. -/
 theorem varPassesOn_ofSeq_iff (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n)
-    (A₁ : Preprocessor sch S) (A₂ : SeqResponderOn sch S D Q L) (x : Outcome sch k) :
+    (A₁ : Preprocessor sch S) (A₂ : SeqResponderOn sch S D Q L) (x : AuditCoins sch k) :
     varPassesOn sch k k W A₁ (ofSeq A₂) x ↔ seqAcceptsOn sch k W A₁ A₂ x := by
   unfold varPassesOn seqAcceptsOn ofSeq
   simp only
