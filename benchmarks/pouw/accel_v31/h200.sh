@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dither's no-fold receipt (v31.cu) on the H200, sm_90a, at the PoUW filler's segments: each of CONFIGS,
-# an L':t pair (default L' 512 at t 8, L = 4,096; t at most 8, dither/PROTOCOL.md's "The segment and the noise period").
+# an L':t pair (default L' 512 at t 8, L = 4,096; t at most 8, dither/PROTOCOL.md's "The segment and the noise tile").
 # run.sh as it stands, with GENCODE sm_90a and no CUTLASS baseline. For each pair, its gates (one lease) and its bench
 # (another):
 #   gates  run.sh's own at L' 256 t 3, then at L' 512 t 8: one and several whole segments, a partial last one,

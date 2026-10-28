@@ -111,7 +111,7 @@ class Shape:
             raise ValueError(f"L' a multiple of 32 dividing K, not L' {self.lp} at K {self.k}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 
@@ -595,8 +595,8 @@ K_LIMIT = 1 << 17
 
 @dataclass(frozen=True)
 class Fill:
-    """A no-fold call: m x n output cells at contraction k, noise period lp (L'), segments of L, leaf rows of `row` bytes,
-    O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
+    """A no-fold call: m x n output cells at contraction k, noise tiles of lp (L'), segments of L, leaf rows of `row`
+    bytes, O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
 
     m: int
     n: int
@@ -617,7 +617,7 @@ class Fill:
             raise ValueError(f"L a multiple of L' {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 
