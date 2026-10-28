@@ -41,6 +41,13 @@ served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T
   adds that a leaf is an entry iff its cap is nonzero, admitted in round 0 with its header cap that cap. Its premise gives
   v1's, so `live_credit` holds of it. With the decoded caps the committed `max_tokens` (`hcap`, as `hm` and `hs`),
   a round `s ≥ 1` serves at most `#{q < T : s < max_tokens q}` rows, so no hidden request takes another's decode rows.
+* `RowsView`, `rowsOk`, `cut`, `rowsOk_liveOk2`, `rowsOk_admitted`, `Agrees`, `LiveRowsChecks`, `live_rows`:
+  **`PouwLiveRows_v1{T, R}`**, a round's live check cut into `P = T / R` pieces of `R` rows (a T 8,192 prefill round's
+  128 units of 64 rows, each inside C-Flock's 2^27-bit unit). Piece `j` reads rows `[jR, jR + R)`, headers and caps
+  `0..R-1`, `m`, `s` and its base `jR`; a row naming request `q` must lie in `q`'s admitting round and in
+  `[first q, first q + plen q)`, so no count is carried between pieces. A round whose pieces all accept meets `liveOk2`
+  on its view with the headers past `R` empty (`cut`), so everything above holds of it there, and its rule-A count over
+  the whole request table is `m`.
 
 What a decode reads from the port rows (the slot words, each header's index, round, cap and prompt length, the public
 `m` and `s`, and the `ok` word) is the statement's port layout, read through `dec`. That the decoded `m` is the call's
@@ -480,5 +487,190 @@ theorem live_schedule {ι σ : Type} (calls : Finset ι) (step : ι → σ) (m :
     refine ⟨?_, h0, hcp.trans (hcap c hc q hq)⟩
     rw [← hcap c hc q hq]
     exact hb.1.1 hp
+
+/-! ## `PouwLiveRows_v1{T, R}`: a round's live check cut into pieces of `R` rows -/
+
+/-- **A round's words as its pieces read them**: v2's, each header's first slot `first q`, and the piece's public row
+base `base` (`jR` for piece `j`). -/
+structure RowsView extends LiveView2 where
+  first : ℕ → ℕ
+  base : ℕ
+
+/-- **`PouwLiveRows_v1{T, R}`'s `ok` at row base `base`, on words** (`circuit.live.rows_ok`): `m ≤ T`; the entries among
+headers `0..R-1` are a prefix, each at its own index, bound to the public caps as v2 binds them; each row `base + k`
+(`k < R`) below `m` names an entry (`1 ≤ slot ≤ N`, `N` the entries among the `R`) and each from `m` on is 0; and a row
+naming request `q` lies in `q`'s admitting round `s` and in `[first q, first q + plen q)`. -/
+def rowsOk (T R : ℕ) (v : RowsView) (base : ℕ) : Prop :=
+  v.m ≤ T ∧ (∀ q, q + 1 < R → v.plen (q + 1) ≠ 0 → v.plen q ≠ 0) ∧ (∀ q < R, v.plen q ≠ 0 → v.index q = q) ∧
+    capsBound R v.toLiveView2 ∧
+    ∀ k < R, ((base + k < v.m → 1 ≤ v.slot (base + k) ∧ v.slot (base + k) ≤ (entries R v.toLiveView).card) ∧
+      (v.m ≤ base + k → v.slot (base + k) = 0)) ∧
+      ∀ q < R, v.slot (base + k) = q + 1 → v.rnd q = v.s ∧ v.first q ≤ base + k ∧ base + k < v.first q + v.plen q
+
+/-- **The round's view as its pieces see it**: the headers and caps past the pieces' `R` empty. -/
+def cut (R : ℕ) (v : RowsView) : LiveView2 :=
+  { v.toLiveView2 with plen := fun q => if q < R then v.plen q else 0, pcap := fun q => if q < R then v.pcap q else 0 }
+
+theorem entries_cut {T R : ℕ} (hRT : R ≤ T) (v : RowsView) :
+    entries T (cut R v).toLiveView = entries R v.toLiveView := by
+  ext q
+  simp only [entries, cut, mem_filter, mem_range]
+  by_cases hq : q < R <;> simp [hq]; omega
+
+/-- In a round whose pieces all accept, row `i < T` is row `i mod R` of piece `i / R`. -/
+theorem rowsOk_row {T R P : ℕ} {v : RowsView} (hT : T = P * R) (h : ∀ j < P, rowsOk T R v (j * R)) {i : ℕ}
+    (hi : i < T) :
+    ((i < v.m → 1 ≤ v.slot i ∧ v.slot i ≤ (entries R v.toLiveView).card) ∧ (v.m ≤ i → v.slot i = 0)) ∧
+      ∀ q < R, v.slot i = q + 1 → v.rnd q = v.s ∧ v.first q ≤ i ∧ i < v.first q + v.plen q := by
+  have hR : 0 < R := by
+    rcases Nat.eq_zero_or_pos R with h0 | h0
+    · subst h0; simp at hT; omega
+    · exact h0
+  have hj : i / R < P := (Nat.div_lt_iff_lt_mul hR).2 (hT ▸ hi)
+  have he : i / R * R + i % R = i := Nat.div_add_mod' i R
+  have := (h (i / R) hj).2.2.2.2 (i % R) (Nat.mod_lt i hR)
+  rw [he] at this
+  exact this
+
+/-- **A round whose `P` pieces of `R` rows all accept meets v2's `ok`** on its view with the headers past `R` empty
+(`cut`): every row it names is in `[first, first + prompt length)` of a request admitted in round `s`, so no request is
+named by more rows than its prompt length, whichever piece holds them. -/
+theorem rowsOk_liveOk2 {T R P : ℕ} {v : RowsView} (hP : 0 < P) (hT : T = P * R)
+    (h : ∀ j < P, rowsOk T R v (j * R)) : liveOk2 T (cut R v) := by
+  classical
+  have hRT : R ≤ T := hT ▸ Nat.le_mul_of_pos_left R hP
+  have h0 := h 0 hP
+  simp only [Nat.zero_mul] at h0
+  obtain ⟨hm, hpre, hidx, hcap, -⟩ := h0
+  have hN : (entries R v.toLiveView).card ≤ R := by
+    unfold entries; exact (card_filter_le _ _).trans (card_range R).le
+  have hnamed : ∀ i < T, ∀ q, v.slot i = q + 1 → q < R := by
+    intro i hi q hq
+    obtain ⟨⟨hlt, hge⟩, -⟩ := rowsOk_row hT h hi
+    by_cases him : i < v.m
+    · have := (hlt him).2; omega
+    · have := hge (by omega); omega
+  refine ⟨⟨hm, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · intro q hq hp
+    simp only [cut] at hp ⊢
+    by_cases hq1 : q + 1 < R
+    · rw [if_pos hq1] at hp; rw [if_pos (by omega)]; exact hpre q hq1 hp
+    · rw [if_neg hq1] at hp; exact absurd rfl hp
+  · intro q hq hp
+    simp only [cut] at hp ⊢
+    by_cases hqR : q < R
+    · rw [if_pos hqR] at hp; exact hidx q hqR hp
+    · rw [if_neg hqR] at hp; exact absurd rfl hp
+  · intro i hi
+    rw [entries_cut hRT]
+    exact (rowsOk_row hT h hi).1
+  · intro q hq
+    rcases (named T (cut R v).toLiveView q).eq_empty_or_nonempty with he | ⟨i, hi⟩
+    · rw [he]; exact Nat.zero_le _
+    simp only [named, mem_filter, mem_range] at hi
+    have hqR := hnamed i hi.1 q hi.2
+    have hrnd := ((rowsOk_row hT h hi.1).2 q hqR hi.2).1
+    have hsub : named T (cut R v).toLiveView q ⊆ Ico (v.first q) (v.first q + v.plen q) := by
+      intro i' hi'
+      simp only [named, mem_filter, mem_range] at hi'
+      obtain ⟨-, h1, h2⟩ := (rowsOk_row hT h hi'.1).2 q hqR hi'.2
+      exact mem_Ico.2 ⟨h1, h2⟩
+    have hc := card_le_card hsub
+    rw [Nat.card_Ico] at hc
+    have ht : takes (cut R v).toLiveView q = v.plen q := by simp [takes, takesAt, cut, hrnd, hqR]
+    rw [ht]
+    omega
+  · intro q hq
+    simp only [cut]
+    by_cases hqR : q < R
+    · rw [if_pos hqR, if_pos hqR]; exact hcap q hqR
+    · rw [if_neg hqR, if_neg hqR]; simp
+
+/-- **A round whose pieces all accept has rule A's count `m`**, over its whole request table: a row names a request among
+the pieces' `R`, so the headers past `R` admit no row. -/
+theorem rowsOk_admitted {T R P : ℕ} {v : RowsView} (hP : 0 < P) (hT : T = P * R)
+    (h : ∀ j < P, rowsOk T R v (j * R)) : admitted T v.toLiveView = v.m := by
+  classical
+  have hcut : admitted T (cut R v).toLiveView = v.m := liveOk_admitted (rowsOk_liveOk2 hP hT h).1
+  have hN : (entries R v.toLiveView).card ≤ R := by
+    unfold entries; exact (card_filter_le _ _).trans (card_range R).le
+  rw [← hcut]
+  unfold admitted
+  congr 1
+  refine filter_congr fun i hi => ?_
+  have hiT := mem_range.1 hi
+  obtain ⟨⟨hlt, hge⟩, -⟩ := rowsOk_row hT h hiT
+  simp only [Admits, cut]
+  constructor
+  · rintro ⟨q, hq, hs, hp⟩
+    have hqR : q < R := by
+      by_cases him : i < v.m
+      · have := (hlt him).2; omega
+      · have := hge (by omega); omega
+    exact ⟨q, hq, hs, by rw [if_pos hqR]; exact hp⟩
+  · rintro ⟨q, hq, hs, hp⟩
+    by_cases hqR : q < R
+    · rw [if_pos hqR] at hp; exact ⟨q, hq, hs, hp⟩
+    · rw [if_neg hqR] at hp; exact absurd rfl hp
+
+/-- **A piece's decoded view agrees with the round's on what it reads**: its `m` and `s`, its `R` rows from `base`, and
+headers and caps `0..R-1`, which credit's finding opens at the round's registered tables and known rows. -/
+def Agrees (R base : ℕ) (w v : RowsView) : Prop :=
+  w.m = v.m ∧ w.s = v.s ∧ (∀ k < R, w.slot (base + k) = v.slot (base + k)) ∧
+    ∀ q < R, w.plen q = v.plen q ∧ w.index q = v.index q ∧ w.rnd q = v.rnd q ∧ w.cap q = v.cap q ∧
+      w.pcap q = v.pcap q ∧ w.first q = v.first q
+
+theorem rowsOk_congr {T R base : ℕ} {w v : RowsView} (ha : Agrees R base w v) (h : rowsOk T R w base) :
+    rowsOk T R v base := by
+  obtain ⟨hm, hs, hsl, hq⟩ := ha
+  have he : entries R w.toLiveView = entries R v.toLiveView :=
+    filter_congr fun q hq' => by rw [(hq q (mem_range.1 hq')).1]
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h
+  refine ⟨hm ▸ h1, fun q hq1 hp => ?_, fun q hqR hp => ?_, fun q hqR => ?_, fun k hk => ?_⟩
+  · rw [← (hq (q + 1) hq1).1] at hp
+    rw [← (hq q (by omega)).1]
+    exact h2 q hq1 hp
+  · obtain ⟨hp', hi', -⟩ := hq q hqR
+    rw [← hp'] at hp
+    rw [← hi']
+    exact h3 q hqR hp
+  · obtain ⟨hp', -, hr', hc', hpc', -⟩ := hq q hqR
+    have := h4 q hqR
+    simp only [hp', hr', hc', hpc'] at this
+    exact this
+  · obtain ⟨⟨ha1, ha2⟩, ha3⟩ := h5 k hk
+    rw [hsl k hk, hm, he] at ha1
+    rw [hsl k hk, hm] at ha2
+    rw [hsl k hk] at ha3
+    refine ⟨⟨ha1, ha2⟩, fun q hqR hsq => ?_⟩
+    obtain ⟨hp', -, hr', -, -, hf'⟩ := hq q hqR
+    have := ha3 q hqR hsq
+    rw [hp', hr', hf', hs] at this
+    exact this
+
+/-- `LiveRowsChecks` (a fact of `circuit.live.PouwLiveRows_v1{T, R}`'s circuit, backed by circuit-check and
+`test_circuit_live`'s agreement of its gates with `rows_ok`, not proved; no guarantee takes it yet). **The piece's circuit
+computes its Definition at its port rows**, in `LiveSlotsChecks`' form, at its decoded row base. -/
+def LiveRowsChecks (T R : ℕ) (sess : RowsSession) (dec : RowsSession → (ℕ → ℕ → Option Bool) → RowsView) : Prop :=
+  ∀ vals : Fin sess.Circ.N → Bool,
+    (∀ u, ∀ g ∈ sess.P.io u, sess.Circ.eval vals g = vals g) →
+    (dec sess (portRead sess vals)).ok = true →
+    rowsOk T R (dec sess (portRead sess vals)) (dec sess (portRead sess vals)).base
+
+/-- **A round proved piece by piece counts its served rows**: where each of its `P` pieces' sessions is accepted at its
+public row base `jR` (`hbase`: credit opens the piece's `base` at the known `base@<j>` row), and each piece's decoded view
+agrees with the round's on what the piece reads (`hv`), the round meets v2's `ok` on its view with the headers past `R`
+empty, so `live_credit` and `live_schedule` hold of it there, and its rule-A count over its whole request table is `m`. -/
+theorem live_rows {T R P : ℕ} (hP : 0 < P) (hT : T = P * R) (sess : ℕ → RowsSession)
+    (dec : RowsSession → (ℕ → ℕ → Option Bool) → RowsView) (hchk : ∀ j < P, LiveRowsChecks T R (sess j) dec)
+    (vals : (j : ℕ) → Fin (sess j).Circ.N → Bool)
+    (heval : ∀ j < P, ∀ u, ∀ g ∈ (sess j).P.io u, (sess j).Circ.eval (vals j) g = vals j g)
+    (hok : ∀ j < P, (dec (sess j) (portRead (sess j) (vals j))).ok = true)
+    (hbase : ∀ j < P, (dec (sess j) (portRead (sess j) (vals j))).base = j * R)
+    (v : RowsView) (hv : ∀ j < P, Agrees R (j * R) (dec (sess j) (portRead (sess j) (vals j))) v) :
+    liveOk2 T (cut R v) ∧ admitted T v.toLiveView = v.m := by
+  have h : ∀ j < P, rowsOk T R v (j * R) := fun j hj =>
+    rowsOk_congr (hv j hj) (hbase j hj ▸ hchk j hj (vals j) (heval j hj) (hok j hj))
+  exact ⟨rowsOk_liveOk2 hP hT h, rowsOk_admitted hP hT h⟩
 
 end Pouw.SecurityProofs.LiveCredit
