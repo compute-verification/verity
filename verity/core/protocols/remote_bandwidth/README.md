@@ -12,7 +12,7 @@ its registered store. A period's case replays through the Lean (`RemoteAudit.Pro
 the Lean verifier of record beside the books (below). Not all of it is zero knowledge yet:
 
 - **Openings are in the clear.** Each window's openings go to the verifier party as they are (`wire.encode_openings`),
-  and it checks them itself (`audit.Session.verify`). Those checks are the specification of what each zero-knowledge
+  and it checks them itself (`audit.AuditRun.verify`). Those checks are the specification of what each zero-knowledge
   proof block proves (`PROTOCOL.md` §8), but no session proves them: `opening.py` evaluates the opening unit on the
   honest witness, and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
 - **Plans are in the clear.** The verifier sees which blocks each pass covers (`PROTOCOL.md` §8, "What the plan
@@ -27,7 +27,7 @@ the Lean verifier of record beside the books (below). Not all of it is zero know
 - `period.run(node, store, coins)`: one session, every party in one process; `period.session` is the verifier's side.
 - `python -m verity.core.protocols.remote_bandwidth.verifier_party [--listen HOST:PORT]`: the verifier and its
   challenger as a party of their own, serving one prover (`verifier_party.period_with` drives a period through it).
-- `audit.register`, `audit.Registry`, `audit.Session` and `audit.Prover`: the lifecycle the parties drive.
+- `audit.register`, `audit.Registry`, `audit.AuditRun` and `audit.Prover`: the lifecycle the parties drive.
 - `ledger.declared(record, node)`: an accepted session's declared outputs; `monitoring.table`: one accepted session
   scaled up to a deployment's monitoring period.
 - The Lean package `lean/` (root module `RemoteAudit`): `remote-audit-verifier` (`RemoteAudit.Verifier`), the verifier's
@@ -47,7 +47,7 @@ the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
-that record. `audit.Session` keeps the books beside it as the reference, and a registration, event, window verdict or
+that record. `audit.AuditRun` keeps the books beside it as the reference, and a registration, event, window verdict or
 record field on which they differ refuses the session at that window as `disagreement`. The books check no openings: a
 window's verdict is the Lean's, and the Python check of its openings runs beside the Lean's in a transcript's replay
 (`lean/tests/replay.py`). The Lean decides alone because:
