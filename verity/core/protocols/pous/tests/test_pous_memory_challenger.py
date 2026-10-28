@@ -318,7 +318,7 @@ def test_a_session_log_that_is_missing_unreadable_or_made_twice_is_refused(tmp_p
 def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monkeypatch):
     """`pous_test_signer`'s leaf states and session logs are made under the suite's basetemp (`DIR`, the conftest's), which
     the check removes when the suite ends, or in a directory the caller passes, and never in `$TMPDIR`, where nothing
-    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's /workspace inodes);
+    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's /workspace inodes);
     with neither, they refuse."""
     tmp = tmp_path_factory.mktemp("tmpdir")
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))
