@@ -11,8 +11,8 @@
 # listening on PEER's loopback PORT, and keeps the gate's answer in KEEP/RUN/start.json alone (0600), never published:
 # it is the request's public fields and the run's systemd unit, vy-certifier@RUN.service, which the warden's witness also
 # records (stalls.json's cgroup paths) and no public file holds, so the leak guard would hold it as a piece of the
-# witness. A refusal (another rehearsal still runs), an answer naming no run, goes to the log: a visible failure, never
-# retried. Then `status` every 15 s until the run ends (status.json), and its bundle with
+# witness. A refusal (another rehearsal still runs), an answer naming no certifier run, goes to the log: a visible
+# failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with
 # witness/, the lane's own (`fetch`), to KEEP/RUN/fetch.tar.gz (0700, outside the run dir: custody publishes $OUT), and
 # to bundle.tgz only what `fetch` gives any other key, the bundle less witness/; summary.json is the session's. Exits
 # with the gate run's rc.
@@ -93,7 +93,8 @@ rc=0
 reply=$(PYTHONPATH=$PWD python3 benchmarks/network_traces/demo_stub.py prompts --count "$PROMPTS" \
   | "${SSH[@]}" "$REQUEST") || rc=$?
 RUN=$([ "$rc" = 0 ] && python3 -c 'import json, sys; print(json.loads(sys.argv[1])["run"])' "$reply" 2>/dev/null) || RUN=
-if [ -z "$RUN" ]; then
+# `auditor.CERTIFIER_RUN`, which plain python3 can't import; RUN names a directory under KEEP
+if ! [[ "$RUN" =~ ^c[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}$ ]]; then
   echo "$(date -u +%FT%TZ): the gate didn't start the session (exit $rc): ${reply:0:400}"; exit $((rc ? rc : 1))
 fi
 mkdir -p "$KEEP/$RUN" && chmod 700 "$KEEP" "$KEEP/$RUN"

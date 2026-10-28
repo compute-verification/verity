@@ -33,8 +33,9 @@ if cmd.startswith("warden-rehearse "):
     if os.environ.get("STUB_REFUSE"):
         print(json.dumps({"refused": "another rehearsal still runs"}))
         sys.exit(1)
-    print(json.dumps({"run": "%(run)s", "started": True, "unit": "vy-certifier@%(run)s.service"}))
-elif cmd == "status %(run)s":
+    run = os.environ.get("STUB_RUN", "%(run)s")
+    print(json.dumps({"run": run, "started": True, "unit": f"vy-certifier@{run}.service"}))
+elif cmd.startswith("status "):
     if os.environ.get("STUB_FIFO"):
         open(os.environ["STUB_FIFO"], "w")
         signal.pause()
@@ -138,6 +139,18 @@ def test_a_refused_start_is_a_visible_failure_and_keeps_nothing(tmp_path):
     log = (tmp_path / "run" / "out" / "wipe-gate.log").read_text()
     assert "the gate didn't start the session (exit 1)" in log and "another rehearsal still runs" in log
     assert not (keep / RUN).exists() and "start.json" not in _published(tmp_path)
+
+
+def test_a_start_naming_no_certifier_run_writes_nothing_under_its_name(tmp_path):
+    """The run names a directory under KEEP, so the job holds it to the auditor's `CERTIFIER_RUN`, as the front does."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    assert f'=~ ^{A.CERTIFIER_RUN.pattern.replace(r"\d", "[0-9]")}$ ]]' in (HERE / "wipe_gate.sh").read_text()
+    keep = tmp_path / "keep"
+    got = _gate(tmp_path, KEEP=str(keep), STUB_RUN="../escape")
+    assert got.returncode == 1, got.stdout + got.stderr
+    assert "the gate didn't start the session (exit 0)" in (tmp_path / "run" / "out" / "wipe-gate.log").read_text()
+    assert not (tmp_path / "escape").exists() and not list(keep.glob("*/start.json"))
 
 
 def test_keep_inside_the_run_dir_is_refused(tmp_path):
