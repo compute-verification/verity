@@ -8,7 +8,7 @@ process, `Local`), in the protocol's order:
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
    verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
-2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
+2. the verifier opens a session (`audit.AuditRun`) on coins its challenger commits to before the first one, drawn from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each root
    sent before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
    (`deadline_ns`) before it closes the window;
@@ -79,7 +79,7 @@ def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
             base | {"gaps": [], "wrong": str(b.wrong)})
 
 
-def answer(session: audit.Session) -> dict[str, Any]:
+def answer(session: audit.AuditRun) -> dict[str, Any]:
     """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it. Like the
     check (`RemoteAudit.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
     one window in flight."""
@@ -237,7 +237,7 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
                           codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
     held, not_before = _Held(), clock()
     challenger = C.local(reg.digest, 0, windows, _Stream(coins, name), clock=lambda: held.now / 1e9)
-    s = audit.Session(params, reg, None, challenger, not_before_ns=not_before, clock=held)
+    s = audit.AuditRun(params, reg, None, challenger, not_before_ns=not_before, clock=held)
     prover.hold(reg, s.commitment)
     events: list[dict[str, Any]] = []
 

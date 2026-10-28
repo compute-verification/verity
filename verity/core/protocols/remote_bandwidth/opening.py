@@ -13,7 +13,7 @@ codec seed, j, the append's coin, the pass's chaining value, sign rows and p, th
 and depths), and its verdict row; it holds the one witness row it doesn't open, the plan row, to the canonical plan row
 of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
-`Session` is `audit.Session` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
+`Session` is `audit.AuditRun` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
 `audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one draw by the unit's
 reference on the prover's arguments and the plan link, and `reference` a session's windows by it: the stand-in for the
 units' proofs where a session isn't proved."""
@@ -67,7 +67,7 @@ class Values:
 
 
 @dataclass(frozen=True)
-class Draw:
+class PositionSample:
     """What the verifier knows of one draw: window t, pass i at step s, position p, block j = plan_i[p], the pass's seed,
     plan and root, and the commitment block j's payload is a leaf of: the registration's payload tree (``coin`` None) or
     its append's, under the append's coin."""
@@ -93,11 +93,11 @@ class Draw:
         return min(PER_LEAF, self.plan.length - PER_LEAF * self.leaf)
 
 
-class Session(audit.Session):
-    """`audit.Session` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's draws, and
+class Session(audit.AuditRun):
+    """`audit.AuditRun` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's draws, and
     `decide` takes check 3's outcome on each in place of `verify`'s openings."""
 
-    def drawn(self, t: int) -> tuple[Draw, ...]:
+    def drawn(self, t: int) -> tuple[PositionSample, ...]:
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None:
             raise audit.SessionError(f"window {t} has no draws")
@@ -109,8 +109,8 @@ class Session(audit.Session):
                 domain, commitment, coin = self._payload_domain, Commitment(self.registration.payload_root, N), None
             else:
                 _f, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
-            out.append(Draw(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan, w.roots[i],
-                            domain, commitment, coin))
+            out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
+                                      w.roots[i], domain, commitment, coin))
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
@@ -145,7 +145,7 @@ class Store(audit.Store):
         return self.payloads[j] if j < self.registration.blocks else self.kept[j]
 
 
-def public(d: Draw, codec_seed: bytes, S, values: Values) -> dict[str, list[int]]:
+def public(d: PositionSample, codec_seed: bytes, S, values: Values) -> dict[str, list[int]]:
     """The verifier's own copy of draw ``d``'s public rows (`BC.opening_public`): block j's codec key, bound under its
     append's coin if appended; the pass's chaining value, sign rows and p; the pass's receipt root under its seed and plan
     (`receipts.domain`); the payload's tree, at rank j - first; and, appended, the canonical payload commitment at row
@@ -158,7 +158,8 @@ def public(d: Draw, codec_seed: bytes, S, values: Values) -> dict[str, list[int]
                              (d.commitment.root, d.domain.domain_id, d.block - first, merkle_depth(d.domain.count)), vals)
 
 
-def witness(d: Draw, ps: audit.Pass, store: Store, plan_row: Sequence[int], S, values: Values) -> dict[str, list[int]]:
+def witness(d: PositionSample, ps: audit.Pass, store: Store, plan_row: Sequence[int], S,
+            values: Values) -> dict[str, list[int]]:
     """The honest prover's arguments for draw ``d`` of pass ``ps``: its block and payload from its store, the receipt leaf
     under its salt and path in the pass's tree, the payload under its salt and path in its append's tree (or the
     registration's), the step's certified plan row, and, appended, the payload's path in the canonical payload commitment."""
@@ -185,7 +186,8 @@ def plan_link(plan_bc: bytes, certified_bc: bytes) -> str | None:
     return None if plan_bc == certified_bc else "plan"
 
 
-def check(d: Draw, args: dict, codec_seed: bytes, S, values: Values, plan_salt: bytes, certified_bc: bytes) -> str | None:
+def check(d: PositionSample, args: dict, codec_seed: bytes, S, values: Values, plan_salt: bytes,
+          certified_bc: bytes) -> str | None:
     """Check 3 on one draw by the unit's reference (`BC.opening_check`) on the prover's arguments, its public rows the
     verifier's own, then `plan_link` on the plan row's ``b || c`` under ``plan_salt``: None, or the failure (one of
     `audit.FAILURES`)."""
