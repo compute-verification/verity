@@ -19,7 +19,7 @@ open FlockSoundness.Audit Claims.Sampling
 variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
 
 /-- **What `witRows` opens at a wire's position is its value**, through an opening that passes there. -/
-theorem witRows_val_some {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witRows_val_some {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {v : Fin C.N → Bool} {s : Claims.Sampling.AuditStatement} (hs : s.roots = roots) {g : Fin C.N} {b : Bool}
     (h : (witRows C Cm H roots v).val H Cm s (posOf C g) = some b) :
     b = v g ∧ ∃ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true := by
@@ -39,7 +39,7 @@ theorem witRows_val_some {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} 
 /-- **A returned row on one unfixed input, opened against it, is faulty**: at a returned gate `g = row [i] b` of unit `u`,
 with `i` an input the constants don't fix, `v i = false`, and `v g = true` wherever `g`'s position opens at `v g`. -/
 theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (desc : Claims.Msg) (q : Query)
-    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (v : Fin C.N → Bool)
+    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (v : Fin C.N → Bool)
     {g i : Fin C.N} {b : List (Fin C.N)} {u : Fin n} (hg : g ∈ C.outputs) (hu : P.unit g = some u)
     (hop : C.op g = .row [i] b) (hi : C.op i = .input) (hκ : κ i = none) (hvi : v i = false)
     (hvg : ∀ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true → v g = true) :
@@ -132,7 +132,7 @@ theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
 
 /-- **`faulty_row`, as the claim failing**: at a draw of every unit (`k_d = n`), at any `δ ≥ 0`. -/
 theorem not_relS_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (hkd : kd = n) (desc : Claims.Msg)
-    (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (v : Fin C.N → Bool)
+    (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (v : Fin C.N → Bool)
     {δ : ℝ} (hδ : 0 ≤ δ) {g i : Fin C.N} {b : List (Fin C.N)} {u : Fin n} (hg : g ∈ C.outputs)
     (hu : P.unit g = some u) (hop : C.op g = .row [i] b) (hi : C.op i = .input) (hκ : κ i = none) (hvi : v i = false)
     (hvg : ∀ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true → v g = true) :
@@ -154,7 +154,7 @@ theorem commitDep_rows_of_opens (rows : Fin C.N → Option RowAt) (c : Flock.Cir
     rw [rowOfPos_posOf, hg]
     rfl
   have : (commitDep C rows c nl roots).Opens H roots ⟨posOf C g, b, d⟩ = false := by
-    simp only [Claims.Sampling.Commitment.Opens, commitDep, pathCommit, ha] <;> rfl
+    simp only [Claims.Sampling.CommitmentScheme.Opens, commitDep, pathCommit, ha] <;> rfl
   rw [this] at h
   cases h
 

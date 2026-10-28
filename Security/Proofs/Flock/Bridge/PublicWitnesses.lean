@@ -32,7 +32,7 @@ namespace Flock.Bridge
 open Claims.Sampling
 
 /-- A commitment that opens nothing gives every position no value. -/
-theorem wit_val_none {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool} {s : Claims.Sampling.AuditStatement}
+theorem wit_val_none {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.CommitmentScheme Bool} {s : Claims.Sampling.AuditStatement}
     (h : ∀ o, Cm.Opens H s.roots o = false) (w : Claims.Sampling.Wit) (g : ℕ) : w.val H Cm s g = none := by
   unfold Claims.Sampling.Wit.val
   rw [List.find?_eq_none.2 fun o _ => by simp [h o]]
@@ -45,7 +45,7 @@ theorem commitDep_opens_none (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N 
   have ha : atOf C rows rs o.pos = none := by
     unfold atOf rowOfPos
     cases wireOf C o.pos <;> simp [hr]
-  simp only [Claims.Sampling.Commitment.Opens, commitDep, pathCommit, ha] <;> rfl
+  simp only [Claims.Sampling.CommitmentScheme.Opens, commitDep, pathCommit, ha] <;> rfl
 
 /-- A computed gate is in some unit. -/
 theorem unit_some {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
@@ -58,7 +58,7 @@ theorem unit_some {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundne
 opening gives it one. -/
 theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (κ : Fin C.N → Option Bool) (kd : ℕ) (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (hCm : ∀ o, Cm.Opens H roots o = false)
+    (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (hCm : ∀ o, Cm.Opens H roots o = false)
     (w : Claims.Sampling.Wit) {g : Fin C.N} {u : Fin n} (hg : g ∈ C.outputs) (hu : P.unit g = some u) :
     u.val ∈ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w := by
   classical
@@ -115,7 +115,7 @@ theorem pa_zero {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness
 when every unit is drawn (`k_d = n`), at any `δ ≥ 0`. -/
 theorem not_relS_unopened {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (κ : Fin C.N → Option Bool) (kd : ℕ) (hkd : kd = n) (desc : Claims.Msg) (q : Claims.Sampling.Query)
-    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
+    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (hCm : ∀ o, Cm.Opens H roots o = false) (w : Claims.Sampling.Wit) {δ : ℝ} (hδ : 0 ≤ δ) {g : Fin C.N}
     (hg : g ∈ C.outputs) (hgi : (C.op g).isInput = false) :
     ¬ Claims.Sampling.RelS H Cm δ (stmtOf P κ kd desc q roots) (partOf P κ) w := by

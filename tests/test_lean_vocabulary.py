@@ -462,10 +462,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.Circuit`'s gate: becomes it (the AND/XOR gate) (lean)",
     "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Draw":
         "duplicate of `Verity.Draw`: becomes it, as a V* session's record holds it (lean)",
-    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Commitment":
-        "duplicate of `merkle.Commitment`, the claims layer's named primitive: becomes `Hash.RowLeaf`'s root (lean)",
-    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Netlist":
-        "duplicate of `universal.Netlist`, stated in Claims: becomes Core's, moved into Security/Definitions/Core/ (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Partition":

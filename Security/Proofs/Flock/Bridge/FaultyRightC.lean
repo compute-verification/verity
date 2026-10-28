@@ -132,7 +132,7 @@ theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n
       · exact hin (mem_unitGates.2 ⟨g, hu, 0, by omega, by rw [Nat.add_zero]⟩)
       · exact hin (mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩)
 
-theorem witRows_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witRows_mem {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {v : Fin C.N → Bool} {o : Opening Bool} (h : o ∈ (witRows C Cm H roots v).vals) :
     ∃ g, o.pos = posOf C g ∧ o.val = v g := by
   simp only [witRows, List.mem_map, List.mem_finRange, true_and] at h
@@ -142,7 +142,7 @@ theorem witRows_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {root
   split <;> exact ⟨rfl, rfl⟩
 
 /-- **`witRows` opens a wire's position at its value** wherever some datum passes there. -/
-theorem witRows_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witRows_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {v : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, v a, d⟩ = true) :
     (witRows C Cm H roots v).val H Cm s (posOf C a) = some (v a) := by
@@ -163,7 +163,7 @@ theorem witRows_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {root
   rw [hg'v]
 
 /-- **`witDep` opens a wire's position at its value** wherever some datum passes there (`witRows_val`). -/
-theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {xv : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
     (witDep C Cm H roots xv).val H Cm s (posOf C a) = some (C.eval xv a) :=
@@ -173,7 +173,7 @@ theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
 witness `w` gives each committed wire of `u` that `κ` doesn't fix its value in `C`'s evaluation on `Xr`'s inputs, and
 that evaluation is `κ`'s constant at each constant wire `u` reads, `u` is not faulty in `w`. -/
 theorem not_faulty_of_val {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (H : Claims.Msg → Claims.Msg)
-    (Cm : Commitment Bool) (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
+    (Cm : CommitmentScheme Bool) (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (w : Wit) (kd : ℕ) (desc : Claims.Msg) (q : Query)
     (hval : ∀ a ∈ P.io u, κ a = none →
       w.val H Cm (stmtOf P κ kd desc q roots) (posOf C a) = some (C.eval Xr a))
@@ -235,7 +235,7 @@ at each committed wire of the unit that the constants `κ` don't fix (`FaultyRig
 witness `witRows v`). -/
 theorem faultyRows {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
+    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hright : ∃ op : Pos → Opn, ∀ g ∈ P.io u,
@@ -258,7 +258,7 @@ theorem faultyRows {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val O
 other wire it reads is transported (`faultyRows` at the evaluation). -/
 theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
+    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hright : ∃ op : Pos → Opn, ∀ g ∈ P.io u,
