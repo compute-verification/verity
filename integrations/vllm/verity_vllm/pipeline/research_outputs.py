@@ -27,7 +27,7 @@ all, and gets each stage's entries that stages.txt records (`build_stages`):
     replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
                                       commit/summary.json, as tp-commit-replay folded it).  Never a replay bundle or a slim keep
                                       (`cpu_replay.keep`): both hold clear values (committed values with their salts, the requests
-                                      and served tokens, opened weights), so they stay on the node, prover-side (VLLM-148).
+                                      and served tokens, opened weights), so they stay on the node, prover-side.
                                       The Match's tokens.json files and the Commit's token record (tokens_p<pair>.json) still carry
                                       the requests' prompt and served token ids in the clear; the regression harness reads them.
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
