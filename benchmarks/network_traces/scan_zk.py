@@ -78,11 +78,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
   the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
-  this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is vy-challenger-1's through
-  its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
-  gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations carry fresh salts, so
-  each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own coins: one session serves
-  one draw, and their refusal is Lean's registered reads, whatever the coins.
+  this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's
+  challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
+  ``--challenger-key``. The gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations
+  carry fresh salts, so each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own
+  coins: one session serves one draw, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`), less the pieces public
   anyway (the circuits, zeros, the window's pads and `END` cells) and the sparse pieces (at most one nonzero byte); the
@@ -1300,7 +1300,7 @@ def main(argv=None) -> int:
                         "every unit")
     p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
-                   "(vy-challenger-1 through its gate, with --peer and --challenger-key)")
+                   "(the auditor's challenger through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, "
                    "whose 127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its "
