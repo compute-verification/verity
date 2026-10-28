@@ -315,17 +315,19 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     """The gate's ``period-open`` of period `name` for serve-openai's run `serve_dir` (``period open``, module docstring)
     and what it commits: ``{circuit, rows, steps, draw_k, circuit_files, missing, length, weights}``, ``missing`` the
     strata with no ``k<K>`` file yet. ValueError naming what to build or rerun when the serve dir or `circuits` doesn't
-    hold the period's Program, T and S."""
+    hold the period's Program, T and S. Before serve-openai starts (no ``serve.json`` yet) the Program is ``program``'s,
+    and `period_served` holds the one it then declares to it."""
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
-    proto = json.loads((serve_dir / "serve.json").read_text()).get("protocols") or {}
+    served = serve_dir / "serve.json"
+    proto = (json.loads(served.read_text()).get("protocols") or {}) if served.is_file() else None
     try:
         meta = json.loads((serve_dir / H1_META).read_text())
     except (OSError, ValueError) as e:
         raise ValueError(f"{serve_dir} has no declared window Program ({H1_META}, {type(e).__name__}): serve it with "
                          "--protocols pouw:eps1-sm120-h1fx1 from a tree whose serve_h1 writes it") from None
     circuit, rows, steps = meta["program_digest"], int(meta["rows"]), int(meta["steps"])
-    if proto.get("program") != circuit:
+    if proto is not None and proto.get("program") != circuit:
         raise ValueError(f"serve.json's Program {str(proto.get('program'))[:16]}... is not {H1_META}'s {circuit[:16]}...")
     redo = (f"build them with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
             f"--live {rows},{steps}")
@@ -371,6 +373,18 @@ def period_open(serve_dir: Path, gate: str, name: str, circuits: Path, **kw: Any
     argv, doc = period_open_argv(serve_dir, name, circuits, **kw)
     doc = {"name": name, **doc, "open": _gate_json(gate, argv)}
     (serve_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc
+
+
+def period_served(serve_dir: Path) -> dict[str, Any]:
+    """``period served``: the period opened before serve-openai started, whose Program serve-openai must then have
+    declared (serve.json's ``protocols.program``); ValueError naming both when it declared another, since credit refuses
+    every window of a period whose open committed another Program."""
+    doc = json.loads((serve_dir / PERIOD).read_text())
+    got = (json.loads((serve_dir / "serve.json").read_text()).get("protocols") or {}).get("program")
+    if got != doc["circuit"]:
+        raise ValueError(f"serve-openai declared Program {str(got)[:16]}..., not period {doc['name']}'s "
+                         f"{doc['circuit'][:16]}... (`program`'s, built from DECLARED): its windows credit nothing")
     return doc
 
 
@@ -724,7 +738,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--lane", default="vllm")
     g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     pe = sub.add_parser("period")
-    pe.add_argument("verb", choices=("open", "close"))
+    pe.add_argument("verb", choices=("open", "served", "close"))
     pe.add_argument("serve_dir", type=Path)
     pe.add_argument("--gate")
     pe.add_argument("--name")
@@ -780,6 +794,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if ok else 1
     if a.cmd == "period":
         try:
+            if a.verb == "served":
+                doc = period_served(a.serve_dir)
+                print(f"PERIOD served {doc['name']}: serve-openai declared its Program {doc['circuit'][:16]}...",
+                      flush=True)
+                return 0
             if not a.gate:
                 raise ValueError("no gate command (--gate)")
             if a.verb == "close":
