@@ -26,8 +26,8 @@ It is sound for the example and not zero-knowledge; Flock behind the ZK server r
 - **Registered circuit**: the circuit the developer claims, growing as it declares: C = B(a_1 ‖ … ‖ a_k), for a registered
   registered compiler B that is prefix-extending (the blocks before are unchanged).
 - **Execution block**: what one declaration appends, B applied to a_k.
-- **Execution phase**: the span of time one declaration covers. Monitoring period ⊃ execution phase ⊇ verification
-  phase ⊃ tick; here an execution phase is one verification phase, and a monitoring period is three of them.
+- **Execution phase**: the span of time one declaration covers. Monitoring period ⊃ execution phase ⊃ tick, and each
+  execution phase has its one verification phase; a monitoring period is three of them.
 - **Declaring**, and one act of it, **a declaration**: the developer reports the **advice** a_k, B appends the
   execution block, and the block's values are committed before any coins are flipped.
 

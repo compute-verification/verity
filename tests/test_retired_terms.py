@@ -1,5 +1,5 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
-A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix
+A semantically meaningful part of the registered or actual circuit is a block, always named with a prefix
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
 proof block. The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
@@ -235,7 +235,7 @@ def test_the_doc_scan_reads_each_form():
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
-    """The protocol's vocabulary (TOP-137), on toy files: hm96 rows keep their name in the commitments' own docs."""
+    """The protocol's vocabulary (`ARCHITECTURE.md`, "How an audit works"), on toy files: hm96 rows keep their name in the commitments' own docs."""
     docs = {
         "a.md": "The draw, a drawn unit, nothing redraws; the firewall and a sampling\nblock; the declared circuit.\n"
                 "Committed as hm96 rows before that period's coins; rejection dominates. A Commit period stays.\n"
