@@ -67,8 +67,9 @@
 # one it declares: {"pouw": {"unit": "j10r", "ks": [2048]}} declares J10-R's tile unit over the linears at K 2,048 alone,
 # the form a period's guarantee covers. SERVE_ARGS carries no --protocols-config of its own.
 # PoUW's piece (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session,
-# ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA (default the tree's
-# HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
+# ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line: MAIN_FILE's (a file, kept as
+# $OUT/main.txt; the gate's pin is a commit of `next`, so give `git rev-list --first-parent` of it), else MAIN_SHA's
+# (default the tree's HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
 # With H1_CIRCUITS too (a directory), before serve-openai starts (its startup reserves window 0's session, which joins
 # only a period already open), `served_verdicts.py program D/h1` writes the Program serve-openai will declare for REPO at
 # H1_T and WINDOW_STEPS, `pouw_h1_circuits --program D/h1 --out H1_CIRCUITS --live H1_T,WINDOW_STEPS --strata H1_STRATA`
@@ -356,7 +357,11 @@ fi
 
 H1_COINS="PoUW H1: not served (H1_GATE empty)"
 if [ -n "$H1_GATE" ]; then
-  if [ -n "$MAIN_SHA" ]; then
+  if [ -n "${MAIN_FILE:-}" ]; then
+    [ -s "$MAIN_FILE" ] || { say "PREFLIGHT: MAIN_FILE $MAIN_FILE is missing or empty"; exit 3; }
+    [ "$MAIN_FILE" -ef "$OUT/main.txt" ] || cp "$MAIN_FILE" "$OUT/main.txt"
+    export MAIN_FILE=$OUT/main.txt
+  elif [ -n "$MAIN_SHA" ]; then
     git -C "$TREE" rev-list --first-parent "$MAIN_SHA" > "$OUT/main.txt" || { say "PREFLIGHT: MAIN_SHA $MAIN_SHA not in this tree"; exit 3; }
     export MAIN_FILE=$OUT/main.txt
   fi
