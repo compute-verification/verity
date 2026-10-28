@@ -98,8 +98,8 @@ sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
 SESS=util80-${RESEARCH_RUN_ID:-local}
-pysample=()
-[ "${PYSAMPLE:-0}" = 1 ] && pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}")
+pysample=(); sample=none
+[ "${PYSAMPLE:-0}" = 1 ] && { pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}"); sample=process-tree; }
 cd "$TREE/integrations/vllm" || exit 9
 # shellcheck disable=SC2086
 "$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node "${pysample[@]}" \
@@ -123,7 +123,7 @@ load() {  # $1 requests, $2 seed, $3 name
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
-"$NSYS" start --session="$SESS" -o "$SCR/prof" --force-overwrite=true --sample=none --cpuctxsw=none \
+"$NSYS" start --session="$SESS" -o "$SCR/prof" --force-overwrite=true --sample="$sample" --cpuctxsw=none \
   --gpu-metrics-devices=cuda-visible --gpu-metrics-frequency="${GPU_HZ:-10000}" --gpu-metrics-set=gh100 > "$OUT/nsys_start.txt" 2>&1
 say "CAPTURE start (exit $?)"
 load "$N" 1 main; lrc=$?
