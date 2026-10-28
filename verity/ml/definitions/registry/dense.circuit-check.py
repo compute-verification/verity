@@ -6,9 +6,9 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """Each row at N = 16 (the scalar rows at C = 0.5), GeGLU at I = 16, and soft-capped attention at CAP = 30: the frontend's
-    `attention_softcap` instance (T = 5, two query heads on one KV head, D = 16, its one block at FA2's kBlockN of 128), and one
-    head over 17 keys in blocks of 16, whose second block is the first that isn't `FIRST`; with the two primitives."""
+    """Each vector Definition at N = 16 (the scalar ones at C = 0.5), GeGLU at I = 16, and soft-capped attention at CAP = 30: the
+    frontend's `attention_softcap` instance (T = 5, two query heads on one KV head, D = 16, its one block at FA2's kBlockN of
+    128), and one head over 17 keys in blocks of 16, whose second block is the first that isn't `FIRST`; with the two primitives."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import b1
     from verity.ml.definitions.registry import dense as DN
