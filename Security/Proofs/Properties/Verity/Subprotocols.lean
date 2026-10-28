@@ -155,7 +155,7 @@ def CoinsOf.bits : (ns : List ℕ) → CoinsOf ns → List (List Bool)
 theorem outK_coins : ∀ (ns : List ℕ) (K : List Release → Game α) (s : Game.Strategy (releasesK ns K))
     (xs : CoinsOf ns), (outK ns K s xs).1.map Release.coins = CoinsOf.bits ns xs
   | [], _, _, _ => rfl
-  | _ :: ns, K, s, (x, xs) => congrArg (List.ofFn x :: ·) (outK_coins ns _ (s.2 x) xs)
+  | _ :: ns, _, s, (x, xs) => congrArg (List.ofFn x :: ·) (outK_coins ns _ (s.2 x) xs)
 
 /-- **The play's log holds each round's coins at its round**, whatever the strategy. -/
 theorem playOut_coins (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) (xs : CoinsOf ns) :
@@ -197,7 +197,12 @@ theorem playOut_forward (ns : List ℕ) (θ F c b : ByteArray) (enc : List Relea
       forwardK b ns (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
         fun log => ⟨enc log, PUnit.unit⟩ :=
     eq_of_heq ((cast_heq _ _).trans (cast_heq _ _))
-  simp only [playOut, h, outK_forwardK]
+  have ho := outK_forwardK b ns (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
+    (fun log => ⟨enc log, PUnit.unit⟩) xs
+  unfold playOut
+  rw [h]
+  exact congrArg (fun o : (log : List Release) × Game.Strategy
+    (Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange)) => (⟨θ, F, c, o.1, o.2.1⟩ : Exchange)) ho
 
 end Coins
 
