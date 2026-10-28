@@ -30,8 +30,8 @@ k and v, which later tokens read). β counts each committed value once, at its w
 
 Every number is the IR's: widths from the Calls' signatures, MACs from their tensor-core steps, ANDs and two-input gates from
 each primitive's Boolean version (census ``boolean=boolean_version``), summed over a unit's gates (`Q_word` units, tile
-slices) or the whole Call's (a block holding whole ops). A block's opening ANDs are `optimize.row_ands` of each row it reads or
-writes (a value slice a row, a weight column a row, a key's k and v a row), an estimate of the in-circuit hashing. Its
+slices) or the whole Call's (a block holding whole ops). A block's opening ANDs are `class_size.opening_ands` of each row it
+reads or writes (a value slice a row, a weight column a row, a key's k and v a row), an estimate of the in-circuit hashing. Its
 ``k_log_est`` is `class_size.block_k_log` of its ANDs and those rows, and ``over_cap`` marks one past C-Flock's 2^27-bit
 block. Attention's key blocks, where the window's FA3 BN doesn't set them, are as few as keep a block's ANDs under
 ``CAP_ANDS``.
@@ -56,7 +56,6 @@ from verity_vllm.program.predict.build import build_program  # noqa: E402
 from verity_vllm.program.predict.phi import Phi  # noqa: E402
 
 from verity.core.protocols.sampled_proofs.one_stage.partition import unit_class  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import row_ands  # noqa: E402
 from verity.ml.circuits.census import census  # noqa: E402
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.cut import CallGraph, boundary_widths, call_scope, derived_committed, evaluate_definition  # noqa: E402
@@ -242,7 +241,7 @@ class Block:
                 + ([self.commits] if self.commits else []))
 
     def opening_ands(self) -> int:
-        return sum(row_ands(b) for b in self.rows())
+        return sum(CS.opening_ands(b) for b in self.rows())
 
     def row(self) -> dict:
         boundary = self.commits * 8

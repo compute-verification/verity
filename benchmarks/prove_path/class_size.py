@@ -193,6 +193,15 @@ def rows_k(rows: int) -> int:
 
 #: C-Flock's ranges (`verity_flock.circuit`): an hm96 slot a port and a SHA-512 slot a 3 compressions, 2^18 bits each
 SLOT_LOG, PER_SLOT = 18, 3
+#: ANDs a SHA-512 compression in C-Flock's circuit: its 81,402 rows (GD-SIS's pin, note:compute-research/20261028T1938Z-report-gd-sis),
+#: 1.40 times `optimize.row_ands`' 58,120
+COMPRESSION_ANDS = 81_402
+
+
+def opening_ands(nbytes: int) -> int:
+    """In-circuit ANDs to open one hm96-sha512 row of ``nbytes`` bytes: `optimize.row_ands`' compressions (two, then
+    ``ceil((nbytes + 17) / 128)``) at `COMPRESSION_ANDS` each."""
+    return COMPRESSION_ANDS * (2 + -(-(nbytes + 17) // 128))
 #: template bits a unit spends an AND: the K = 14,336 H1 lane's 197.9 M columns (r20261023-045657-f038,
 #: note:proofs/20261023T0048Z-report-structw) over its ≈ 149.8 M ANDs (`h1_tile_optimum`'s fits), an estimate. The staged
 #: lanes bound it to (1.03, 1.53]: K = 4,096's fits 2^27 and K = 6,144's is refused at 2^28 (r20261024-013223-eef3)
