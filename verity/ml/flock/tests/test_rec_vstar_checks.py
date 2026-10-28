@@ -43,7 +43,7 @@ def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=
     """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points;
     ``holo``, when given, its `holo` key (`rec-inner --hide`); ``sparse``, the bucket's RecSparse shape (`rec-inner
     --sparse`), and ``stacked``, R's `(m, claims)` (the inner circuit's META's), candidate 3's."""
-    path.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": k, "claims": c,
+    path.write_text(json.dumps({"format": "verity/rec-inner/v2", "m": m, "k_log": k, "claims": c,
                                 "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {}),
                                 **({"sparse": list(sparse)} if sparse is not None else {}),
                                 **({"stacked": {"m": stacked[0], "claims": stacked[1]}} if stacked is not None else {})}))
@@ -151,7 +151,7 @@ def test_the_inner_shapes_claims_are_two_and_two_per_region(tmp_path):
             f"the inner session's claims 8, not two and two per region of its {regions} ({2 + 2 * regions})"), line
     (tmp_path / "v0.json").write_text(json.dumps({"format": "verity/rec-inner/v0", "m": 27, "k_log": 22, "claims": 8}))
     p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(tmp_path / "v0.json")], capture_output=True, text=True)
-    assert p.returncode == 2 and p.stderr.strip() == "rec-inner: not a verity/rec-inner/v1 object", p.stderr
+    assert p.returncode == 2 and p.stderr.strip() == "rec-inner: not a verity/rec-inner/v2 object", p.stderr
 
 
 def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off_it(staged, tmp_path):  # noqa: F811
