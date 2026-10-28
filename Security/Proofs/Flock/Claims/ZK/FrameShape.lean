@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.ZK.FrameParse
 /-!
 # The frame reads a round's shape alone
 
-Stage B (`note:20261022T0001Z-report-zkfin-stageb`, R1): the loop's release runs each rep's frame on the scheduled rounds
+The loop's release runs each rep's frame on the scheduled rounds
 at placeholder draws, salts and level-0 cap, so the frame's state after a round must not read what those change: the
 draws' values (the pads, their root and rows), a bytes frame's body (a commitment's cap), an observe's values, and
 whether the rep is stopped. Over a round's frames (`roundFree_encs`), the frame's step (`stepAt`) reads a label's bytes,

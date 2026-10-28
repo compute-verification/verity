@@ -45,6 +45,13 @@ def _edit(d, name: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1))
 
 
+def test_a_missing_fetched_table_names_the_fetch(tmp_path):
+    d = _copy(tmp_path)
+    (d / "corpus.json").unlink()
+    with pytest.raises(FileNotFoundError, match="uv run research data fetch-fixtures benchmarks/pouw/machine_model"):
+        C.load(d)
+
+
 def test_an_opcode_without_a_row_fails(tmp_path):
     d = _copy(tmp_path)
     p = d / "rows.toml"

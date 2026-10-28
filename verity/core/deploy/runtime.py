@@ -23,6 +23,10 @@ channel that closes before its party starts (`closed`), a message the party send
 that channel (`undeclared`), an exception out of the party (`party-died`) and a run in which nothing more can happen
 (`stalled`) each finish the party refused by name. Nothing is retried: a party that dies fails its run.
 
+A frame the runtime takes off a peer's channel reaches a party that has a clock stamped with that clock's reading then
+(`Received.at`): the run's virtual time in a simulated run, the party's clock source in a live one, read without
+stepping a virtual clock. The transcript keeps the stamp (`arrived`, `ARRIVED`), and a replay feeds it back.
+
 With `state_dir`, each run is numbered in `runs.jsonl` and its transcripts and record are kept under `runs/N/`. A restart
 keeps the state; a run the log shows started and never ended is refused by name (`incomplete`) when the next starts.
 """
@@ -40,7 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.wire import Message, Refused, Registry, Schema, Str, canonical, parse, split
+from verity.core.wire import Int, Message, Refused, Registry, Schema, Str, canonical, parse, split
 from verity.core.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
@@ -54,6 +58,8 @@ RUNTIME = Registry([Schema("Closed", 1, "structure", {"how": Str(1024)}),
                     Schema("Refused", 1, "structure", {"name": Str(64), "detail": Str(1024)})])
 """What the runtime tells a party: its channel closed (`how`: `end` when the peer ended it, else what failed on it, the
 channel's `ended`), or a frame on it was refused by name."""
+ARRIVED = Registry([Schema("Arrived", 1, "private", {"ns": Int()})])
+"""A transcript's `arrived` entry: when the next frame, its `in`, arrived on the party's clock."""
 FAILED = ("party-died", "stalled")
 RUNS = "runs.jsonl"
 
@@ -90,17 +96,19 @@ def _refused(name: str, **detail: Any) -> Finish:
 
 
 class Host:
-    """One party as the runtime runs it. `transmit(endpoint, frame)` puts a frame on the wire; in a replay it is a no-op."""
+    """One party as the runtime runs it. `transmit(endpoint, frame)` puts a frame on the wire; in a replay it is a no-op.
+    `clock` reads the party's clock source, for the stamp on a frame from a peer; None for a party with no clock, and in
+    a replay, which feeds the stamps its transcript kept."""
 
     def __init__(self, name: str, party: Party, identity: Identity, params: Mapping[str, Any], transcript: Transcript,
                  endpoints: Mapping[str, Endpoint], transmit: Callable[[Endpoint, bytes], None] = lambda ep, f: None,
-                 on_finish: Callable[[Host], None] = lambda h: None) -> None:
+                 on_finish: Callable[[Host], None] = lambda h: None, clock: Callable[[], int] | None = None) -> None:
         self.name, self.party, self.identity, self.params = name, party, identity, dict(params)
         self.transcript, self.endpoints = transcript, dict(endpoints)
-        self.transmit, self.on_finish = transmit, on_finish
+        self.transmit, self.on_finish, self.clock = transmit, on_finish, clock
         self.finished: Finish | None = None
         self.started = False
-        self.early: list[tuple[str, bytes]] = []
+        self.early: list[tuple[str, bytes, int | None]] = []
 
     def start(self) -> None:
         """The start entry and each channel's hello; the party itself starts once every handshake is done."""
@@ -120,14 +128,16 @@ class Host:
         self.started = True
         self._act(lambda: self.party.start(self.params, self.identity))
         early, self.early = self.early, []
-        for channel, raw in early:
-            self.receive(channel, raw)
+        for channel, raw, at in early:
+            self.receive(channel, raw, at)
 
     def _handshake_out(self, ep: Endpoint, f: bytes) -> None:
         self.transcript.append("handshake-out", ep.channel, "structure", f)
         self.transmit(ep, f)
 
-    def receive(self, channel: str, raw: bytes) -> None:
+    def receive(self, channel: str, raw: bytes, at: int | None = None) -> None:
+        """The frame `raw` on `channel`, which arrived at `at` on the party's clock (a frame from a peer, to a party that
+        has one)."""
         ep = self.endpoints[channel]
         if self.finished is not None or ep.closed:
             return
@@ -145,8 +155,10 @@ class Host:
                 self._start()
             return
         if not self.started:
-            self.early.append((channel, raw))
+            self.early.append((channel, raw, at))
             return
+        if at is not None:
+            self.transcript.append("arrived", channel, "private", ARRIVED.encode(Message("Arrived", {"ns": at})))
         try:
             msg = ep.accepts.decode(raw)
         except Refused as e:
@@ -154,12 +166,12 @@ class Host:
             ep.closed = True
             told = Message("Refused", {"name": e.name, "detail": e.detail[:1024]})
             refused = _refused(e.name, channel=channel, detail=e.detail)
-            self._act(lambda: self.party.on(Received(channel, told)), refused)
+            self._act(lambda: self.party.on(Received(channel, told, at)), refused)
             if self.finished is None:
                 self._end(refused)
             return
         self.transcript.append("in", channel, ep.accepts.kind(msg.type, msg.version), raw)
-        self._act(lambda: self.party.on(Received(channel, msg)))
+        self._act(lambda: self.party.on(Received(channel, msg, at)))
 
     def event(self, channel: str, msg: Message) -> None:
         ep = self.endpoints[channel]
@@ -347,7 +359,7 @@ class Runtime:
                     continue
                 raw = ep.pipe.take()
                 if raw is not None:
-                    h.receive(ch, raw)
+                    h.receive(ch, raw, None if h.clock is None else h.clock())
                 elif ep.pipe.closed:
                     h.event(ch, Message("Closed", {"how": (ep.pipe.ended or "end")[:1024]}))
                 else:
@@ -438,8 +450,9 @@ def _describe(e: Entry) -> str:
 
 
 def replay(protocol: ProtocolDef, name: str, party: Party, recorded: Transcript, identity: Identity) -> RunResult:
-    """`party` re-run as `name` from its own transcript `recorded`: each input fed to it in order, each entry it makes held
-    to the recorded one. It stops by name (`divergence`) at the first that differs; the handshakes are not replayed."""
+    """`party` re-run as `name` from its own transcript `recorded`: each input fed to it in order, a frame with the stamp
+    recorded just before it, each entry it makes held to the recorded one. It stops by name (`divergence`) at the first
+    that differs; the handshakes are not replayed."""
     old = [e for e in recorded if not e.dir.startswith("handshake")]
     if not old or old[0].dir != "start":
         raise Refused("malformed", f"{name}'s transcript begins with its start")
@@ -461,12 +474,15 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: Transcript,
             j = len(made)
             if j == len(old):
                 break
-            nxt = old[j]
+            k, at = j, None
+            if old[j].dir == "arrived" and j + 1 < len(old) and old[j + 1].dir == "in":
+                k, at = j + 1, ARRIVED.decode(old[j].data).fields["ns"]
+            nxt = old[k]
             if nxt.elided and nxt.dir in ("in", "event"):
-                raise Refused("elided", f"entry {j} of {name}'s transcript keeps only its frame's digest, which a replay "
+                raise Refused("elided", f"entry {k} of {name}'s transcript keeps only its frame's digest, which a replay "
                                         "can't feed")
             if nxt.dir == "in":
-                host.receive(nxt.channel, nxt.data)
+                host.receive(nxt.channel, nxt.data, at)
             elif nxt.dir == "event":
                 host.event(nxt.channel, RUNTIME.decode(nxt.data))
             else:
@@ -610,6 +626,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
     for a in here:
         role = m.role(a)
         given = (sources or {}).get(a, {})
+        clock = None
         for need in SOURCES:
             if need not in role.needs:
                 continue
@@ -619,6 +636,8 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
                        if seed is not None else S.RealClock())
             elif src is None:
                 src = S.seeded(seed, a, "coins") if seed is not None else S.OsCoins()
+            if need == "clock":
+                clock = src.now
             mine, theirs = MemoryPipe.pair(S.VirtualTime())
             pipes[a][need] = mine
             rt.sources.append(_Source(a, need, src, theirs))
@@ -634,7 +653,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
                                       key=keys[a], verify=verify, peer_key=None if peer_key is None else bytes.fromhex(peer_key))
         t = Transcript(a, None if tdir is None else tdir / f"{a}.transcript")
         rt.hosts[a] = Host(a, protocol.parties[a](), identity(a), config.get("params", {}), t,
-                           _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished)
+                           _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished, clock)
     from .process import spawn  # here, since process imports this module
 
     for b, spec in sorted(processes.items()):
@@ -675,5 +694,5 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
     return result
 
 
-__all__ = ["FAILED", "MODES", "RUNTIME", "Diverged", "Endpoint", "Host", "ProtocolDef", "RunResult", "Runtime",
+__all__ = ["ARRIVED", "FAILED", "MODES", "RUNTIME", "Diverged", "Endpoint", "Host", "ProtocolDef", "RunResult", "Runtime",
            "configuration_hash", "protocol_of", "replay", "run"]

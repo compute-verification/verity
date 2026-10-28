@@ -1,16 +1,16 @@
-"""RT4-INT's witnesses against the auditor ledger v1 (`test_rt4_auditor.py` on cursor/ca-rt4-int-ea24 @ 116856a03a), ported to
-v2 as the refusals they now meet, where they hit infra's code: the gate, the ledger and its publisher.
+"""The witnesses against the auditor ledger v1, ported to v2 as the refusals they now meet, where they hit the auditor
+host's code: the gate, the ledger and its publisher.
 
-* RT4-INT-24: a root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane;
-  `serve.py` is told the window's root (its refusal of a salt after any other root is proofs').
-* RT4-INT-25: `end` counts the coins each family released, so a client that takes the salt and one of three round coins and
-  then closes ends `complete: false`.
-* RT4-INT-27: a restored key state signs at a leaf the ledger has passed, which `append` and `verify_ledger` refuse; a restored
-  key state and ledger fork the chain, which `extends` and `publish.sh` refuse.
-* RT4-INT-30: the gate's checks are whole-string, so a trailing newline opens nothing, and a root is kept in lowercase.
+* A root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane; `serve.py` is
+  told the window's root (its refusal of a salt after any other root is `test_serve.py`'s).
+* `end` counts the coins each family released, so a client that takes the salt and one of three round coins and then closes
+  ends `complete: false`.
+* A restored key state signs at a leaf the ledger has passed, which `append` and `verify_ledger` refuse; a restored key state
+  and ledger fork the chain, which `extends` and `publish.sh` refuse.
+* The gate's checks are whole-string, so a trailing newline opens nothing, and a root is kept in lowercase.
 
-RT4-INT-26 (one `verify_window` joining the ledger, the end's seal of out/ and the key pin) and the verifier halves of -24, -25
-and -27 are proofs' (CHAL1, PRF-117)."""
+The verifier's halves of the first three, and one `verify_window` joining the ledger, the end's seal of out/ and the key pin,
+are the verifier's tests."""
 
 from __future__ import annotations
 
@@ -169,7 +169,7 @@ def test_rt4_int_25_a_client_that_takes_the_salt_and_one_round_coin_then_closes_
 
 
 def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answers(host, signer, tmp_path, monkeypatch):
-    """vllm's ask (VLLM-58): the serving side checks, before its first coin, that the challenger it reached is its session's."""
+    """The serving side checks, before its first coin, that the challenger it reached is its session's."""
     session = reserve(host, signer, token="ab12")
     rc, out = ssh(host, signer, f"open --session {session} --root {COMMIT}", ready=lambda s: "ef" * 64)
     assert rc == 0 and json.loads(out)["commitment"] == "ef" * 64

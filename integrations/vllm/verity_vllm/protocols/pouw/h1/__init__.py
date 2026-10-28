@@ -15,12 +15,12 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   off(w) the proof blocks of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
   positions comes from its tokens, batch or EOS. Gate-passed is the served rows of the calls the credit gate passes only;
   the padded work is shown beside it.
-* **u** (`H1Run.utilization`, PERIOD-PATH's ``u`` in `benchmarks/pouw/period_cost.py`): the window's served rows over its
+* **u** (`H1Run.utilization`, the ``u`` of `benchmarks/pouw/period_cost.py`): the window's served rows over its
   declared rows, Σ_s m_s / (S·T). A `Static` declaration (the static schedule's ``sampling.ignore_eos``: every request admitted at
-  step 0, prefilled there and run to its cap) fixes each step's rows ahead of serving, so its u is public: SERVE-H1's 5
+  step 0, prefilled there and run to its cap) fixes each step's rows ahead of serving, so its u is public: 5 batched
   prompts (44 tokens) at cap 16 are 119/1152, and `FILL`'s 64 one-token prompts fill all 16 served steps, 16/18. A served
   step short of its declared rows is padded in the layout (its calls keep their positions) and refused by `Static.check`.
-* **Groups.** A call is one site and one seed group (decision 122: a batched call over a step's batch is one site): its
+* **Groups.** A call is one site and one seed group (a batched call over a step's batch is one site): its
   (root(A), root(B)) seeds its proof blocks. Calls are never grouped together, since a later call reads an earlier one's output.
 * **Proof blocks** are in compile's order, the order the manifest lists them in: the call, then its row tile, then its column
   tile, row-major.
@@ -695,7 +695,7 @@ class H1Run:
 
     def credit(self) -> dict[str, Any]:
         """Gate-passed: the served rows' MACs of the calls the serving process's own credit gate passes (`gated`), only. No
-        verifier reads this: a window's credit is its verifier's (`pouw_h1_challenger.credit_reason`, RT4-INT-31). The padded
+        verifier reads this: a window's credit is its verifier's (`pouw_h1_challenger.credit_reason`). The padded
         work (empty slots and pad columns) is shown beside it, and so are the refused calls' rows, with each
         refusal's reason."""
         served = [c for c in self.calls if c.m]

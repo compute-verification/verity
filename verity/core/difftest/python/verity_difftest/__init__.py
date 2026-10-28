@@ -44,7 +44,7 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from hypothesis.strategies import SearchStrategy
@@ -166,14 +166,14 @@ class Server:
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
-            ok = isinstance(msg, dict) and canonical(msg) == reply
-        except (ValueError, TypeError):
-            ok = False
-        if not ok:
+            why = "" if isinstance(msg, dict) and canonical(msg) == reply else "not canonical"
+        except (ValueError, TypeError) as e:
+            why = f"{type(e).__name__}: {e}"
+        if why:
             proc.kill()
             self._dead()
-            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object "
-                                f"(stdout is the protocol's: write anything else to stderr): {reply[:500]}")
+            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object ({why}; "
+                                f"stdout is the protocol's: write anything else to stderr): {reply[:500]}")
         return msg
 
     def call(self, fn: str, value: Any) -> Outcome:
@@ -215,8 +215,15 @@ def _exe(exe: str | Path, package: Path | None) -> str:
     return str(build(Path(package), str(exe)) if package is not None else Path(exe))
 
 
-def _undeclared(e: Exception, declared: tuple[type[BaseException], ...]) -> Outcome:
-    return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in declared]}"
+def _reference(port: Port | ProtocolPort, value: Any) -> tuple[str, Any]:
+    """The reference on a copy of `value`: `("returned", its output)`, `("reject", reason)` for one of the port's
+    `rejects`, or `("error", what)` for anything else it raises, which every comparison counts as a difference."""
+    try:
+        return "returned", port.reference(copy.deepcopy(value))
+    except port.rejects as e:
+        return "reject", str(e)
+    except Exception as e:  # noqa: BLE001 -- whatever else the reference raises is its outcome: an error, a difference
+        return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in port.rejects]}"
 
 
 #: A port's sides that can be of record.
@@ -259,12 +266,9 @@ class Port:
         return server.call(self.fn, value)
 
     def python(self, value: Any) -> Outcome:
-        try:
-            out = self.reference(copy.deepcopy(value))
-        except self.rejects as e:
-            return "reject", str(e)
-        except Exception as e:
-            return _undeclared(e, self.rejects)
+        kind, out = _reference(self, value)
+        if kind != "returned":
+            return kind, out
         try:
             return "output", canonical(out)
         except TypeError as e:
@@ -306,6 +310,7 @@ class ProtocolPort:
     serve: tuple[str, ...] = ("serve",)
     of_record: str = "python"
     accepted = "accept"
+    rejects: ClassVar[tuple[type[BaseException], ...]] = ()
 
     def __post_init__(self) -> None:
         _check_record(self)
@@ -324,10 +329,9 @@ class ProtocolPort:
             raise ProtocolError(f"{server.argv[0]}: {e}") from None
 
     def python(self, case: Any) -> Outcome:
-        try:
-            out = self.reference(copy.deepcopy(case))
-        except Exception as e:
-            return _undeclared(e, ())
+        kind, out = _reference(self, case)
+        if kind != "returned":
+            return kind, out
         try:
             return _outcome(out, "the reference's")
         except (ValueError, TypeError) as e:

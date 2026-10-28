@@ -1,4 +1,4 @@
-"""CPU tests for TP-08: the per-rank sampled-replay record (manbind MAN-06 form (A) run inside each rank's worker) -- the driver's fold over
+"""CPU tests for the per-rank sampled-replay record (run inside each rank's worker) -- the driver's fold over
 ranks/pairs (`tp.c2.sampled_replay_components`) and the worker's fail-closed paths (`_tp2_sampled_replay`: no map, no Build dir,
 a Program that is not of record is REFUSED by name before any evaluation)."""
 from __future__ import annotations
@@ -61,7 +61,7 @@ def test_earlier_pair_failure_is_not_forgotten():
 
 
 def test_every_collective_the_cross_rank_pass_evaluates_is_annotated_with_its_site_coverage_and_the_rest_are_not():
-    """The world-8 routed all-reduces (GLM-5.3 TP8: Mnnvl, Multimem, the fused RMSNorm) are evaluated by TP-12 like AllReduce_v2 and
+    """The world-8 routed all-reduces (GLM-5.3 TP8: Mnnvl, Multimem, the fused RMSNorm) are evaluated by the cross-rank pass like AllReduce_v2 and
     carry its record into the fold; a family the pass does not evaluate (AllGather2_v1 at world 8) stays a named gap."""
     from verity_vllm.pipeline.tp import c2 as C2
     from verity_vllm.program.frontend import collective_kinds as CK
@@ -174,7 +174,7 @@ if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
 
 
-# ---- [MAN-09 per rank] the weights-pin fold ------------------------------------------------------------------------------------------
+# ---- the per-rank weights-pin fold ------------------------------------------------------------------------------------------
 
 def _rows_with_pins(p0, p1):
     from verity_vllm.pipeline.tp.c2 import weights_pin_component

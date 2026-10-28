@@ -29,7 +29,7 @@ each of which pays its units (`Machine`'s G2).
 tensor core, is in the set as an **exact integer version**, at the unit's rate and in the unit's register layout: on
 the integers the unit computes exactly (its format's exact range), the version computes the same values, read and
 written as two's-complement integers where the card holds float codes. `Card.decode` is that reading of the card's
-registers, and `Assumptions.CardWithinAccel` is a refinement up to it (RT-LEAN-2 L30). Out of range the version reads
+registers, and `Assumptions.CardWithinAccel` is a refinement up to it. Out of range the version reads
 an operand as zero and keeps its result's low bits where the unit rounds; such uses are outside the claim on the
 contents where they occur (`CardWithinAccel`'s per-input scope limit). These are:
 DMMA (`Op.dmma`, exact on operands within FP64's ±2^53, each element two words); the FP64 lanes (`Lane.dfma`,
@@ -455,7 +455,7 @@ inductive Op (S : Type) where
   /-- `n` words from store `s` to store `t` -/
   | copy (s t : S) (n : ℕ)
   /-- a broadcast load: `n` words of store `s`, read once, to the registers of `k` lanes (output `i` is word `i % n`),
-  as when the lanes of a warp instruction read one address (`LDS`, `LDG`; RT-MODEL M6(c)) -/
+  as when the lanes of a warp instruction read one address (`LDS`, `LDG`) -/
   | bcast (s : S) (n k : ℕ)
   /-- an atomic on a word of store `s`: input 0 and output 0 are that word, input 1 the register operand, and output
   1 the word's old value -/

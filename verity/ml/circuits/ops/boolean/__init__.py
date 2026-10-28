@@ -1,32 +1,7 @@
 """verity.ml.circuits.ops.boolean: word arithmetic as Boolean circuits.
 
-    gemm         the BF16 steps, F2FP cast, DotBf16_v3, GemmCoordinate_v3 and Gemm_v3 on bits, and the E4M3, E5M2, NVFP4 and
-                 MXFP4 steps and their coordinates
-    attention    FA2 attention's FTZ f32 operations, max, -inf guard and inverse sum as Boolean Definitions
-    softmax      attention's FTZ f32 operations, strict compare, max and -inf guard as circuits over `forms`
-    mufu         the MUFU operations as Boolean Definitions, every table read a plain And/Xor/Not circuit
-    elementwise  element-wise FP32, BF16 and I32 arithmetic as Boolean Definitions
-    cast         the bf16 <-> f32 casts as Boolean Definitions
-    s8           the exact s8 matmul family on bits: the u8 x s8 step, S8Dot_v2, S8Matmul_v2, LimbSplit_v2 and its four limb steps
-    int8         the exact-int8 profile's f32 / f64 steps (rint, the s8 casts, the exact and RN64 products, the u32 cast, the LUT
-                 index) as circuits over `forms`, for `verity.ml.definitions.registry.boolean_int8`'s Definitions
-    moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
-                 low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
-    sqrt         sqrt.rn.f32 as a circuit over `forms` (PoUW's `PouwF32SqrtRn_v2` is traced from it) and its digit-by-digit root
-    scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
-                 (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
-    rowwise      the e2e demo's row ops split so that each Definition outputs at most 16 bits: a bf16 row's softmax (its max,
-                 a 16-bit half of its reciprocal sum, one output) and the embedding's coordinate
-    softmax_row  a head's attention scores and their softmax as one Definition, one proof block a head writing its
-                 probability row
-    rmsnorm      a bf16 row's RMSNorm: one proof block a row where the row fits, and a two-level form where it doesn't
-    rows         `ops.rows`'s composites on bits: the residual add and the greedy argmax, one proof block a row
-    argmax       `ops.argmax`'s chunk and combine Definitions on bits
-    quant        `ops.quant`'s per-row s8 quantizer on bits
-    s8split      a W8A8 coordinate split along K into Definitions that each output at most 16 bits
-    shared_row   a proof block's output written as a segment of a shared committed row, and an input read from one
-    gf2k         GF(2^128) and GF(2^256) products as C-Flock's verifier has them, and the sums of products its algebra reduces
-                 to once its coins are values
+Each module's docstring says what it holds, most of them the next version of an `ops` module's word Definitions, the
+same function on bits.
 
 The builders live elsewhere: `forms`, `gather` and `trace` in `verity.ml.circuits.boolean`; `fp`, `fp4` and `tc_step` in
 `verity.ml.circuits.silicon`; the universal unit in `verity.ml.private_circuits.universal`; `sha512` and `merkle` in

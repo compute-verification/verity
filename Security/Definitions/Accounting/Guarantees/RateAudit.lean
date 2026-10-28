@@ -51,15 +51,15 @@ least `(1 − μ)·|E|` bits, except with probability `ε = (1 − ε_s)^s + s·
   `μ = ε_s + (S + c_free + λ)/|E| + (F − tagging)/(N·c_enc)`,
 
 `c_free = L − ρ` is the side capacity the certified stream leaves free and `tagging = k·c_tag`. Against the
-actual-circuit model's B3 (`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.4, at `e = 0`), whose chip reads
-at least `k·b − M_chip − c − λ` bits from HBM with `c = β_side·(T + RTT)`: `S` is `M_chip`, `L` is `c` with no `2^e`
-factor, the certified stream (certified ingress) takes `ρ` of it, and DMA into HBM during the window is side traffic.
-The footprint is the distinct device-memory bits the window read, so device memory held at least that much of the
-store's information (residency; the on-chip `S` is on the device too and counts against reads, not residency); the
-ingress counts every read, so it is at least the footprint (bandwidth). `(F − tagging)/(N·c_enc)` is `μ_rebuild`: with
-`x = N·c_enc/F`, the encode time of one pass's data in units of the window's compute, it is `(1 − τ)/x` when tagging
-takes the fraction `τ` of `F`, and in a joint run `F` is the compute residual (`RateOfAudit`). The bound holds at every
-`F`; a device whose compute is within `F` on every run has the conjunct always.
+actual-circuit model's B3 (at `e = 0`), whose chip reads at least `k·b − M_chip − c − λ` bits from HBM with
+`c = β_side·(T + RTT)`: `S` is `M_chip`, `L` is `c` with no `2^e` factor, the certified stream (certified ingress) takes
+`ρ` of it, and DMA into HBM during the window is side traffic. The footprint is the distinct device-memory bits the
+window read, so device memory held at least that much of the store's information (residency; the on-chip `S` is on the
+device too and counts against reads, not residency); the ingress counts every read, so it is at least the footprint
+(bandwidth). `(F − tagging)/(N·c_enc)` is `μ_rebuild`: with `x = N·c_enc/F`, the encode time of one pass's data in units
+of the window's compute, it is `(1 − τ)/x` when tagging takes the fraction `τ` of `F`, and in a joint run `F` is the
+compute residual (`RateOfAudit`). The bound holds at every `F`; a device whose compute is within `F` on every run has
+the conjunct always.
 
 **The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Bandwidth.Guarantees.AuditRO`'s. A sampled word
 passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h` per
@@ -72,10 +72,10 @@ it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, 
 so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
 
 The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
-(the red team's F27: at one codec round with the payload known, a lattice completes a word's bottom third far below
-its per-bit price) is outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor
-and error, under the named assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion
-form, for codecs with `k ≥ 2` rounds).
+(at one codec round with the payload known, a lattice completes a word's bottom third far below its per-bit price) is
+outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor and error, under the named
+assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion form, for codecs with `k ≥ 2`
+rounds).
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
@@ -173,15 +173,14 @@ the certified stream and every bit sent so far, but not of the oracle. `L` bound
 bits and stream bits together); sends are free. The rebuild charge `(F − k·c_tag)·b` and the stream's `ρ` are
 `RateAudit`'s.
 
-**The reading.** In the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 6), the
-rest of the prover answers the chip as such a source: localization's table of replies, keyed by what the chip sent, is
-a side source addressed by what was sent, and the chip reads only its own entry. When nothing the chip sends depends on
-the seed (`e = 0`), the rest can't evaluate the tag at the fresh seed, so its answers ignore the oracle. The certified
-ingress of the HBM link (and the residency it implies) is then `RateAudit`'s `(1 − μ)·|E|`, with `L` the side links'
-signals in the window, `β_side·(T + RTT)`, and no `2^e` factor: the compression behind `RateAudit` encodes the bits
-the chip read, not what its sources hold, so a table of any size costs only what the chip read of it. A source may see
-the certified stream as well (the host that sends it, a tap on the link): the stream is fresh, so whatever the chip
-learns of it still came in over the link.
+**The reading.** In the actual-circuit model, the rest of the prover answers the chip as such a source: localization's
+table of replies, keyed by what the chip sent, is a side source addressed by what was sent, and the chip reads only its
+own entry. When nothing the chip sends depends on the seed (`e = 0`), the rest can't evaluate the tag at the fresh seed,
+so its answers ignore the oracle. The certified ingress of the HBM link (and the residency it implies) is then
+`RateAudit`'s `(1 − μ)·|E|`, with `L` the side links' signals in the window, `β_side·(T + RTT)`, and no `2^e` factor:
+the compression behind `RateAudit` encodes the bits the chip read, not what its sources hold, so a table of any size
+costs only what the chip read of it. A source may see the certified stream as well (the host that sends it, a tap on the
+link): the stream is fresh, so whatever the chip learns of it still came in over the link.
 
 Proof: `Accounting.SecurityProofs.RateAuditInteractiveRO`: an interactive device is a device whose side source,
 addressed by what was sent and where, may depend on the store and the stream, and `RateAudit`'s argument holds for such

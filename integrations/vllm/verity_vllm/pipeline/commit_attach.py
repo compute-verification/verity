@@ -44,32 +44,32 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     # MLA / DSA sparse MLA: no hidden class, no FA2 source
     if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
         from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-        # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
-        # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
+        # the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
+        # the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
         # the attention implementation the built engine executes (`observed_flash_attn_version`, the TargetProfile fact): a mismatch is
-        # refused here, before any run (F-hw-08: the FA2 tap under FA3 never fires).
-        src_cls = getattr(com, "hidden_source_cls", None)                # R11: native_collect_v2 supplies its C++ FA2 glue
+        # refused here, before any run (the FA2 tap under FA3 never fires).
+        src_cls = getattr(com, "hidden_source_cls", None)                # native_collect_v2 supplies its C++ FA2 glue
         if args.tap_cap_mb is not None:
-            settings.put("VERITY_FA2_TAP_CAP_MB", str(int(args.tap_cap_mb)))   # [R18 tap] read by NativeHiddenM1Source at construction
+            settings.put("VERITY_FA2_TAP_CAP_MB", str(int(args.tap_cap_mb)))   # read by NativeHiddenM1Source at construction
         com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
                                              fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
         print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)
         _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
         if _hsrc is not None and hasattr(_hsrc, "tap_cap_bytes"):
-            # [R18 tap, F-r17-23] the bounded tap's per-window telemetry + summary live in the attempt dir (fa2_tap_windows.jsonl / fa2_tap_bound.json)
+            # the bounded tap's per-window telemetry + summary live in the attempt dir (fa2_tap_windows.jsonl / fa2_tap_bound.json)
             if args.out:
                 _hsrc.telemetry_path = str(Path(args.out) / "fa2_tap_windows.jsonl")
-            print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
+            print(f"[delta] fa2 tap bound: cap {_hsrc.tap_cap_bytes >> 20} MiB "
                   f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                   f"telemetry {_hsrc.telemetry_path}", flush=True)
     required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
     if args.memory_map:
         from verity_vllm.acquire.sources import kv_slots_source
         kv_slots_source.attach(com)
-    # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
+    # the MoE block source stages six planes per MoE layer
     # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
     # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
-    # Program has no MOE-01 rows -- the MoeFfnFixedL_v1 row's identity is the module output (leg (a)) -- and the manifest names no
+    # Program has no MOE-01 rows -- the MoeFfnFixedL_v1 row's identity is the module output -- and the manifest names no
     # `moe_block_stream` identity: the source is then NOT attached (mode auto, the manifest decides; the reason is on the log), and
     # `--moe-source on` is refused by name.  A manifest that names the planes (MOE-01 rows) attaches exactly as before.
     _moe_planes_required = None
@@ -91,12 +91,12 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
             com.attach_source(msrc)
             moe_attached = True
             if args.required_classes is None and "moe_block_stream" not in required_classes:
-                required_classes = required_classes + ("moe_block_stream",)     # a bound MoE block is a required class of an MoE model (REL-02)
+                required_classes = required_classes + ("moe_block_stream",)     # a bound MoE block is a required class of an MoE model
             print(f"[delta] MoE block source attached: {len(msrc.layers)} MoE layers -> committer {com.name}; required classes {list(required_classes)}", flush=True)
         elif args.moe_source == "on":
             print("[delta] REFUSE: --moe-source on but the model has no MoE-runner modules", flush=True)
             sys.exit(3)
-    # [R19 int-20, F-r19-int-20] MANIFEST-DRIVEN INPUT ACQUISITION: a promoted manifest row (an interior Program row whose output another
+    # MANIFEST-DRIVEN INPUT ACQUISITION: a promoted manifest row (an interior Program row whose output another
     # module reads -- e.g. a value produced in a parent module's forward body and consumed by a child leaf, which no module OUTPUT
     # carries) is observed at its first consumer's input: the committer acquires `<consumer>/in` (the embedding-ids mechanism, by the
     # manifest instead of by class) and the binding map binds it to the producer's identity.  Armed BEFORE size_arena / install; a
@@ -118,11 +118,11 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                   f"{', '.join(f'{op}: {p['spec']} width {p['width']} {p['dtype']} at {p['consumer']}' for op, p in sorted(_pia['producers'].items()))})", flush=True)
             if _absent:
                 print(f"[delta] NOTE: {len(_absent)} promoted-member consumer(s) are not modules of the built model ({_absent[:3]}): their identities stay unbound (coverage names them)", flush=True)
-    # [X-03 F-r19-int-22] the per-layer attention plane class is DERIVED from the Program's attention Call statics (NH, KVH, D, window per
+    # [X-03] the per-layer attention plane class is DERIVED from the Program's attention Call statics (NH, KVH, D, window per
     # layer -- the Build record's `attention_impls_observed`, the facts each Call's Definition and `inert_window` were selected from) x
     # the step's active sequences (fa2_plane_classes): a windowed layer's decode launch stages 6 per-sequence planes while a global GQA
     # layer's stages one swapped row, so "every layer the same count" is a consequence for one-class Programs, not a rule.  Without the
-    # record the committer keeps the R13 uniformity rule (fails closed on a two-class Program, as before) and says so here.
+    # record the committer keeps the uniformity rule (fails closed on a two-class Program) and says so here.
     if required_manifest is not None and hasattr(com, "identity_check"):
         from collections import Counter as _Cnt
 
@@ -138,8 +138,8 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
         else:
             print(f"[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under "
                   f"--program-dir/--programs-root ({getattr(args, 'program_dir', None)!r}, {getattr(args, 'programs_root', None)!r}); "
-                  f"the R13 uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
-    # [v2 acquire, Phase 4a] the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the built engine's
+                  f"the uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
+    # the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the built engine's
     # runtime tree): the plan is written into the attempt dir first; an UNSUPPORTED Value refuses by name.  An external source (the
     # served values) acquires every value itself: the committer wraps nothing.
     if served is not None:

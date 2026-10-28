@@ -1,4 +1,4 @@
-"""The staging decode's CPU parts: the store's layout as CMP-95 item 2's fixture gives it, the stream's bytes laid out as
+"""The staging decode's CPU parts: the store's layout as p2_v1's fixture gives it, the stream's bytes laid out as
 the store's W, the scatter of decoded rows into a staging buffer, P2's reference decode of one block (pinned to the
 spec's deployment vector), the fixture's toy store through the staging path under P2's reference, and the GEMM's twin
 against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`."""
@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -85,8 +86,8 @@ def test_blocks_of():
         L.blocks_of(-1, 2)
 
 
-def test_store_layout_is_cmp95s_at_the_frozen_shape():
-    """CMP-95 item 2's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
+def test_store_layout_at_the_frozen_shape():
+    """The frozen layout's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
     262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
     68,011,580 over 2,043 blocks."""
     lay = L.store_layout(layout_doc(model(16384, 52, 256, 65536)), PREFIX)
@@ -127,7 +128,7 @@ def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts():
         L.store_layout(doc, PREFIX[:-1])
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_layout_doc_is_the_toys():
     toy = json.loads((TOY / "toy.json").read_text())["layout"]
     assert layout_doc(model(64, 2, 1, 64), per_segment=11) == {k: toy[k] for k in layout_doc([]).keys()}
@@ -277,7 +278,7 @@ class RefKernels:
         return 0
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
     """The toy's C* through `decode_layer` under P2's reference: each layer's staging buffer by its digest, each negative
     block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
@@ -408,7 +409,7 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
         L.segment_path(root, s, "json").write_text(json.dumps({"segment": s, "sha512": hashlib.sha512(data).hexdigest()}))
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypatch):
     """The toy's coin and commitment give its salt; its C* as an encoded store's segment files stages each layer to
     toy.json's digest under P2's reference; a setup of another commitment, layout, parameters or salt is refused, and so
@@ -573,7 +574,7 @@ def toy_stream(doc: dict) -> tuple[dict, bytes]:
     return {"tensors": rows, "stream_bytes": len(w) + len(scales)}, bytes(w + scales)
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypatch):
     """The toy's C* as an encoded store through `full.py` under P2's reference: every tensor of every layer and the head
     staged and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
@@ -655,3 +656,13 @@ def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypa
     L.segment_path(root, 1, "json").unlink()
     with pytest.raises(SystemExit, match="not done"):
         full.main(run + ["--out", str(tmp_path / "o4")])
+
+
+def test_every_kept_path_has_a_reason_in_keep_json():
+    """session.sh keeps each node path under keep.json's owner and expiry with that path's reason; a `keep PATH WHAT`
+    whose WHAT has no reason would keep nothing."""
+    keep = json.loads((HERE / "keep.json").read_text())
+    whats = re.findall(r'^\s*keep "\$\w+" (\w+)$', (HERE / "session.sh").read_text(), re.M)
+    assert sorted(whats) == sorted(keep["why"])
+    assert keep["owner"].startswith("@") and keep["expires"]
+    assert all("{layer}" in why for why in keep["why"].values())

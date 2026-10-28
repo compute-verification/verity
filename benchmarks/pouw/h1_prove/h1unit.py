@@ -709,5 +709,5 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
     head = {"format": FC.INST_FORMAT, "statement": meta.get("statement", FC.STATEMENT), "scheme": FC.SCHEME, "set": set_name,
             "subcircuit": subcircuit, "range": [0, n], "instances": n, "circuit_sha512": pin, "units": units, "frame_v3": fv,
             "rows": False, "registered": registered, "shared_rows": {p.name: len(tabs[p.name]) for p in ports}}
-    return (json.dumps(head, sort_keys=True).encode() + b"\n" + b"".join(bc for p in ports for bc in tabs[p.name])
-            + np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes())
+    return FC.public_file(head, b"".join(bc for p in ports for bc in tabs[p.name])
+                          + np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes())

@@ -1,4 +1,4 @@
-"""The word codec, byte-exact: Sloth in one 61-bit word (`note:console/20261012T0355Z-draft-rate-based-memory-audits`).
+"""The word codec, byte-exact: Sloth in one 61-bit word.
 
 ~~~text
 p          2^61 − 1 (3 mod 4), so a square root is a^((p+1)/4) = a^(2^59): 59 squarings

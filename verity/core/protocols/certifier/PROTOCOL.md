@@ -384,7 +384,7 @@ and the row is row t of the network certifier's registered root, which the proof
 So a duplicated, dropped, reordered, moved or altered cell, a byte anywhere outside the id, a cell on another request's
 stream or in another connection's slots, an output in the wrong bucket, a fabricated output, an early, late or missing
 `END`, a `FAIL`, a wrong id and a port row that isn't the Commit's each refuse the window. Nothing is drawn within the
-window, so there is no ε: the verdict covers every cell. In proofs' sampled-audit statement (`SampledAuditAccepted`),
+window, so there is no ε: the verdict covers every cell. In the sampled-audit statement (`SampledAuditAccepted`),
 a class drawn `All` has error 0. That statement doesn't yet model the transfer gates' tie to the certifier's
 signed rows, so this unit's place in it is still to state.
 
@@ -490,7 +490,7 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   `verity/core/protocols/certifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the network
   certifier's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
   In v4 the permutation is public with the map, in the named gap; at the target it is in the committed map's rows,
-  which the compile unit holds to the advice. A server that admits in release order (a serve-openai change, vllm's)
+  which the compile unit holds to the advice. A server that admits in release order (a serve-openai change in vLLM)
   makes it the identity and the charge zero.
 - **The order within a bucket.** W4 releases a bucket's frames in queue order, a channel of up to log2 n_t! bits a
   bucket that neither advice v0 nor the timing term charges. The active
@@ -515,8 +515,8 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   follow from its ids by the stop rule is the compile unit's (advice v1's `finish`). The map record stays 8 bytes,
   with f in e's top two bits (none 0, `length` 1, `eos` 2), which needs E < 2^30 (2^20 served); the `PAD` and `END`
   markers keep top bits 11, which no f is. A compact record's ordinal is at least 1, so none is an unheld slot's, and
-  it is the map's stream, order[i] + 1. The unit is the tie's compact form,
-  owner network-accounting: `IoTieCell`'s parse of the record (ok, data, the ordinal and the field, zero
+  it is the map's stream, order[i] + 1. The unit is the tie's compact form:
+  `IoTieCell`'s parse of the record (ok, data, the ordinal and the field, zero
   fill after the record) and `IoTieMatch`'s check of the field against f, the routed id and the EOS ids. It is built
   when the compact record lands; until then the tie reads id-event cells, whose `finish_reason` is the template's null and which
   carry no finish.
@@ -667,9 +667,9 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   Commit registers (`verity.ml.commitments.advice`'s registration of the rows). The unit's `port` input is its
   bucket's S rows at the map's steps, each a registered port (`io_tie.port_reads`: `port[s]` reads the bucket's s-th
   step), so the proof system's registered reads check them under the Commit's root, and no gate of the unit hashes a
-  row or climbs the tree. This is the fake upstream's layout. The real port is vllm's Commit
-  (`runner.sampler/sampled_token_ids`, int32 [num_reqs, 1], under the run root's binding map): vllm owns its layout,
-  and the reads follow it.
+  row or climbs the tree. This is the fake upstream's layout. The real port is vLLM's Commit
+  (`runner.sampler/sampled_token_ids`, int32 [num_reqs, 1], under the run root's binding map), and the reads follow
+  its layout.
 - **The content** (`IoTieContent{B, R, P, S}`) parses each cell, routes the bucket's port entries and matches them.
 - **Public:** the network certifier's registration (root and domain id), the port's root and domain id, the statics, and in v4
   the bucket's records and steps (the named gap). At the target the map registration's root and domain id replace
@@ -696,7 +696,7 @@ So each `release[k]` is output k's frame bucket in the network certifier's certi
 advised floor reads. The unit checks this by position: a cell's bucket is its row in the network certifier's registered tree,
 and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
-`window_map` computes the map and the steps. vllm and compute own the port's layout and its binding to
+`window_map` computes the map and the steps. The Commit sets the port's layout and its binding to
 `c00.input/ids` and `sampled_token_ids`, in zero knowledge what `check/commit_tokens.py` does in the clear. The tie
 reads the Commit's root as public.
 
@@ -730,7 +730,7 @@ unit reads its row there by a registered read. The reference is `io_tie.data_cel
   This equals `tree_levels` over the domain's `row_leaf`s.
 - **Registered:** the root and the domain id, with the window w; bucket t is session bucket w·T + t. The T salts go
   to the prover, privately: they are its witness, and it rebuilds the cells from the map and the port.
-- **The port's rows** (the fake upstream's; the real ones are vllm's) are the same leaves and tree over the session's
+- **The port's rows** (the fake upstream's; the real ones are vLLM's) are the same leaves and tree over the session's
   2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`:
   `verity.ml.commitments.advice`'s registration of the rows), which each unit reads as registered rows
   (`port_reads`).
@@ -750,7 +750,7 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
 - **The map** is the advice's, charged as `A_c`. In v4 the verifier computes it from the opened advice v0, the named
   gap. At the target it is registered with the advice before the draw and read in the proof, and the compile unit
   holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root are
-  compute's and vllm's.
+  the Commit's.
 
 **Reuse.** The new Definitions (`IoTieCell`, `IoTieSwitch`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`,
 `IoTieBucket`) are Boolean composites with no hash. No unit hashes a row or climbs a tree: both ties read the network certifier's
@@ -763,7 +763,7 @@ refuse each tamper of the cells, the map, the port and the routing.
 
 Still to build: a unit proved on the network certifier's registered rows through `bucket_port` (the tests hold each bucket's row to
 the network certifier's registered row and its port to row t a unit; no proof reads them yet), the port's real layout and
-registration (vllm's Commit), the target's map registration and its range read, the ingress tie's view read under the
+registration (vLLM's Commit), the target's map registration and its range read, the ingress tie's view read under the
 advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
 
 **Open for proofs.**
@@ -780,7 +780,7 @@ and for responses of any length. What it doesn't establish:
 - zero knowledge for the advice: v4 reads the map and the steps in the clear from the opened advice, the named gap,
   which the target and the compile unit close;
 - the advice's prompt lengths against the ingress record, which is the ingress tie's (`IoTieRequest`);
-- the port's layout and the registration of its root (vllm's and compute's);
+- the port's layout and the registration of its root (the Commit's);
 - anything about the text a client shows beyond the public tokenizer's decode.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
@@ -897,8 +897,8 @@ requests, whose frames are a function of the prompt's length alone), for every p
   request) lowers the early request's end, and so the floor, and an output released before its request's frames were
   in is accepted on the same certified record, under an advice `advice.bits` charges no more (the phase-6 attack, a
   regression in `test_network_certifier_advised_phase6.py`).
-- **The tie is IoTieRequest's verdict, and without it every advised link is refused** (fail closed; owned by
-  network-accounting). The certified prompts are witness, so the verifier can't derive the prompt lengths and order on
+- **The tie is IoTieRequest's verdict, and without it every advised link is refused** (fail closed).
+  The certified prompts are witness, so the verifier can't derive the prompt lengths and order on
   the host, and a tie the prover states is no tie: the phase-7 attack showed that one stating the swapped split reopens
   phase 6's acausal release. Nor is a verdict the prover delivers: the phase-10 attack built one for
   the forged advice's digest, every window accepted, and the verifier of record, which read it off the delivered
@@ -936,7 +936,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]`
   `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
   counts end its request in. The rule is exact, since each window's own frame leaves in its first bucket.
-- **Named gap: the record doesn't hold the prompt lengths the unit reads** (owned by network-accounting). The unit
+- **Named gap: the record doesn't hold the prompt lengths the unit reads.** The unit
   takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), because the
   ingress head doesn't sign them. Design: the ingress head signs each bucket's completed requests inside
   `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
@@ -945,7 +945,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
   certificate beside its egress record, so it needs no head change
   ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
-- **Named gap: the clock's opening** (owned by network-accounting). A window's clock certificate signs its sync salted
+- **Named gap: the clock's opening.** A window's clock certificate signs its sync salted
   (`certificate.clock_commitment`), and until N2's advised unit opens it the verifier of record opens it on the host
   (`advised.SignedClocks`), so on a refused window it reads the sync the certifier ran. Closing it is a circuit change
   to N2's advised unit, with its `circuit-check` report, not a Lean one: the design is in
@@ -1163,7 +1163,8 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation.
+the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
+link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
 
@@ -1940,7 +1941,9 @@ them.
   | Fault | Status |
   |---|---|
   | A tick that runs more than `slack` after its boundary, read when it reads its link (the ticks due at one boundary run in one step, ingress first: `active.TICK_ORDER`). Its bucket is still emitted, as padding, so no bucket slips into the next | `monitor-unavailable` |
-  | More than a bucket left unwritten on the link at a tick | `delivery-refused` |
+  | More than a bucket left unwritten on the link at a tick (with a pacer, more than one bucket past its time whose write hasn't ended) | `delivery-refused` |
+  | With a pacer, a bucket that reached it after its time, or whose write started more than `slack` after it | `monitor-unavailable`, on the bucket's window: the open one, or the record held until its last bucket's write is reported |
+  | With a pacer, a bucket the link refused, and every one after it | `delivery-refused`, on the bucket's window as above |
   | A server that refuses a stream, or the salt's connection | `delivery-refused` (ingress) |
   | A released request not written to its server connection by `slack` after its release tick, nor by the end of its anchor's egress bucket | `delivery-refused`: ingress, on its window if still open; egress, from the check until the stream has ended and every frame that arrived before its end is handed |
   | The shaper's buffer or the queue past Q | `overflow` |
@@ -1962,6 +1965,14 @@ them.
   one too, with the same reason, until a faulted window closes with none.
 - **The slack** bounds how late a tick may run: 25 ms by default, a quarter bucket. A deployment sets it from the jitter
   its timing bounds assume (J).
+- **The pacer** (`Proxy(paced=…)`, `pacer.Pacer`). One loop runs the ticks and reads the link and every server
+  connection, so when the server writes within a bucket moves when the tick runs, and a bucket written at its tick leaves
+  then: the prover's offset within a bucket reaches the client, against J. With `paced`, a time past the slack, the
+  egress tick hands its bucket to a process of its own, which writes it to the link `paced` after the bucket's boundary
+  on the host's monotonic clock, a time fixed before the bucket is made. A thread would share the loop's interpreter
+  lock, which the loop holds while it reads. So a tick late by up to the slack never moves when a bucket leaves, and a
+  bucket that can't leave at its time fails its window closed (above). `benchmarks/network_traces/certifier_serve.py`
+  paces at 50 ms (`PACED_MS`).
 
 The clock and the sleep are injected (`VirtualClock` serves a run driven event by event). `Shaper` and `Bucketer` do no
 I/O, so the tests drive real sockets without reading the wall clock. `benchmarks/network_traces/active_replay.py`
@@ -2094,6 +2105,11 @@ how they were read.
     failing the connection.
   - Within a bucket the jitter is the ticker's, bounded by the slack as for the active certifier (its J). A tick past
     the slack faults every record's window.
+  - With `paced` (`Warden(paced=…)`), the tick hands each connection's cells to the egress pacer, as the active
+    certifier's pacer (above), which writes them to the connection's socket `paced` after the bucket's boundary, a
+    time fixed before the bucket is made. A bucket that reaches the pacer after that time, or whose release starts
+    past the slack, faults every record's window: the open one, or the records held until each of its buckets'
+    releases is reported. `benchmarks/network_traces/warden_serve.py` paces at 50 ms by default (`--paced-ms`).
 - **The advice is not on the wire.** The network certifier sends no advice. Whatever the proofs need beyond the committed values
   travels on the proof side and is charged there (`A_c`).
 - **log2 of the schedule's public parameters**, once per deployment: log2 of the number of parameter sets it may
@@ -2147,7 +2163,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's host and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
   loopback on the prover's host.
-- **The cells' wiring is open to the verifier (owner: network-accounting).** A unit's read is (q, k), connection q's
+- **The cells' wiring is open to the verifier.** A unit's read is (q, k), connection q's
   cell k of the sampling block. The verifier places it at its bucket's row and slot with the network certifier's wiring
   (`Wiring.place`), which the signed head names by a salted digest, so the reads are the network certifier's and never the
   prover's (the phase-8 attack's finding, closed). Which cell each unit reads is the Program's: the units' wiring

@@ -189,7 +189,7 @@ __device__ __forceinline__ void tcgen05_tile_body(const uint8_t* __restrict__ A,
     asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
 
     // 4. The MMA(s), issued by one thread, one commit.  `#pragma unroll 1` keeps exactly ONE tcgen05.mma instruction in the
-    //    SASS of each kernel (stage0_sm100.py counts it), whichever `steps` is at runtime.
+    //    SASS of each kernel, whichever `steps` is at runtime.
     if (tid == 0) {
 #pragma unroll 1
         for (int s = 0; s < steps; s++) {

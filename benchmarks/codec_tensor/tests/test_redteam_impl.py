@@ -1,8 +1,8 @@
-"""Red team ra-remote-redteam-impl against the device side of the remote bandwidth audit: the fused weight GEMM's
+"""The red team's attacks on the device side of the remote bandwidth audit: the fused weight GEMM's
 receipt blocks (`sketch_receipt.gemm_vectors`, wt.cu's sketch warps) and attention's KV receipts (`kv_vectors`,
 `kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`remote_bandwidth.receipts`, `audit.Session`)
 credits and opens.  Each test asserts the property the driver's ledger needs and was marked xfail with its finding id
-while the device broke it (the report is note:memory-accounting/ra-remote-redteam-impl); RB-D1's pass since
+while the device broke it; RB-D1's pass since
 store-order/v0, RB-D2's since form 13."""
 from __future__ import annotations
 

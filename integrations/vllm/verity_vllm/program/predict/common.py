@@ -1,6 +1,6 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
-batch a request's calls run in (`_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
+batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
 token select over a row's whole-vocabulary logits (`select_token`)."""
 
 from __future__ import annotations
@@ -143,6 +143,21 @@ class _Launch:
         if Counter(own) - Counter(keys):
             raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
         return keys
+
+
+def launch_batch(phi, LP: int, T: int) -> list | None:
+    """The batch each call of φ's (LP, T) request runs in where its kernel choices read the launch (`launch_context.batch_dispatch`:
+    a target without batch invariance co-scheduling several requests), as the Build is given it (`launch_context.shape_contexts`);
+    None for a request that is its own launch.  Requests of the shape co-scheduled differently have no one Program."""
+    from verity_vllm.pipeline import launch_context as LC
+    w = {"requests": phi.requests, "engine": {"target": {"batch_invariant": phi.target_profile().batch_invariant}}}
+    if not LC.batch_dispatch(w):
+        return None
+    batch = LC.shape_contexts(w).get((int(LP), int(T)))
+    if batch is None or batch == "conflict":
+        raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
+                            f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")
+    return batch
 
 
 def launch_rows(phi, LP: int, T: int, C: int = 0) -> dict | None:

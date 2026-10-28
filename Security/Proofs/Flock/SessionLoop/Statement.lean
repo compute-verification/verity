@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcVals
 /-!
 # C-Flock's zero knowledge at the session loop's own frames (trusted)
 
-`SessionLoopZK` is the session loop's zero-knowledge bound (Stage B, `note:20261022T0001Z-report-zkfin-stageb`) as a
+`SessionLoopZK` is the session loop's zero-knowledge bound as a
 guarantee: at the deployed relation (`Flock.Readable.relation`), at the release whose transport state is the loop's own
 frames (`LeanRelease.ofLoop`, each rep's frame driven on `Drive.reqs` from the decoded coins), at every statement `x` the
 loop serves (`Loop.Serves`: its `Hello` leaves at `x`'s setup, which it refuses where the setup's sizes are past its

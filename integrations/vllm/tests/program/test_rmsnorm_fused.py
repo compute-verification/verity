@@ -1,7 +1,7 @@
 """`RMSNormFusedCuda_v2` (generic `fused_add_rms_norm_kernel` under `VLLM_BATCH_INVARIANT=1`): the circuit body equals its
 numpy twin gate for gate, and the twin reproduces every fused-norm row of the B0 commit store (v1 does not).
 
-Needs the numerics lane's MUFU.RSQ model (`verity.ml.definitions.numerics`: `librms_triton_model.so`, built on demand into the
+Needs the numerics package's MUFU.RSQ model (`verity.ml.definitions.numerics`: `librms_triton_model.so`, built on demand into the
 `_jit` cache outside the checkout); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _standalone(spec):
 def test_ir_body_equals_numpy_twin(N, eps):
     _numerics()
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
     from verity_vllm.program import rmsnorm_fused_sweep as SW
     rng = np.random.default_rng(1234 + N)

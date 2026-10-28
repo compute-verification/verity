@@ -94,7 +94,7 @@ noncomputable def overhead {In L Srv : Type} [Fintype Srv] {m : ℕ} (G : Task I
 
 /-- **The physical model's class** `𝒜_phys` on the hardware `H`: the computations whose runs are feasible under the
 physical model on every input (`Feasible`, each run read with an annotation of its own). The fleet's fixed-machine
-dynamics and its chosen-state budget (`FixedMachine`, `InitialBudget`, LEAN-70) join it when stated. -/
+dynamics and its chosen-state budget (`FixedMachine`, `InitialBudget`) join it when stated. -/
 def physClass {In L E : Type} (H : Hardware L E) : Class In L :=
   {p | ∀ x, ∃ ann, Feasible H (p.1 x).A ann}
 

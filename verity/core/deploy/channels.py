@@ -12,8 +12,9 @@ and channel:
 
 A pipe never parses: the runtime parses what `take` returns with the wire (`verity.core.wire`), as adversarial. A stream
 that ends inside a frame, or announces one past its bounds, yields the bytes it has as the frame, which the wire refuses
-by name, and the pipe ends there. A stream that fails (a reset, a send to a peer gone) keeps what failed as `ended`,
-which the runtime records: in the `Closed` it tells the party, so in its transcript, and in the run's result.
+by name, and the pipe ends there. A stream that fails (a reset, a send to a peer gone, a connect reset or refused)
+keeps what failed as `ended`, which the runtime records: in the `Closed` it tells the party, so in its transcript, and in
+the run's result.
 """
 
 from __future__ import annotations
@@ -179,12 +180,44 @@ class TcpPipe:
             self.sock.close()
 
 
-def dial(address: str, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> TcpPipe:
-    """A `TcpPipe` to `HOST:PORT`."""
+class EndedPipe:
+    """A stream that failed before it carried a frame: it sends and yields nothing, and is closed with what failed as
+    `ended`."""
+
+    def __init__(self, ended: str) -> None:
+        self.ended: str | None = ended
+
+    def send(self, frame: bytes) -> None:
+        pass
+
+    def take(self) -> bytes | None:
+        return None
+
+    def due(self) -> int | None:
+        return None
+
+    def fileno(self) -> int | None:
+        return None
+
+    @property
+    def closed(self) -> bool:
+        return True
+
+    def close(self) -> None:
+        pass
+
+
+def dial(address: str, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> TcpPipe | EndedPipe:
+    """A `TcpPipe` to `HOST:PORT`, or an `EndedPipe` when the connect fails (a peer that resets the connection before
+    the dialer resumes from the handshake makes a blocking connect raise `ConnectionResetError`)."""
     host, sep, port = address.rpartition(":")
     if not sep or not port.isdigit():
         raise ValueError(f"an address is HOST:PORT, not {address!r}")
-    return TcpPipe(socket.create_connection((host, int(port))), max_head, max_body)
+    try:
+        sock = socket.create_connection((host, int(port)))
+    except OSError as e:
+        return EndedPipe(f"{type(e).__name__} on connecting: {e}")
+    return TcpPipe(sock, max_head, max_body)
 
 
 class TcpListen:

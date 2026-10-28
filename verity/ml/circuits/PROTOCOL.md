@@ -213,6 +213,9 @@ have):
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
+- a binding record of a composite the registry holds that names a static the registered composite lacks, or that its `refuse`
+  names a reason against: the record `defs.bind` refuses, judged with each function reference the registry's own where it
+  holds it;
 - a primitive id that a family materialised by id matches only in part, or spells otherwise than its member's id (§5.2, §9);
 - a root that is not a composite without parameters;
 - an input node (§5.2) in a definition other than the root;

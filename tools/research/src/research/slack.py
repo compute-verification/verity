@@ -142,6 +142,7 @@ EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
+BARE_GROUP_RE = re.compile(r"@(S[0-9A-Z]{8,})\b")
 DATE_TOKEN_RE = re.compile(r"<!date\^\d+\^[^|>]*\|([^>]*)>")          # `read` and `roster` show a date token as its fallback
 ANNOUNCE = "\U0001f4e3"                                            # 📣
 DONE, DECLINED = "\u2705", "\u274c"                                 # ✅ ❌
@@ -887,10 +888,14 @@ def stamp_time(text: str, now: datetime) -> str:
     return f"{text[:m.end()]} (sent {real:%H:%M}Z){text[m.end():]}"
 
 
-def plain(text: str) -> str:
-    """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes)."""
+def plain(text: str, reg: dict | None = None) -> str:
+    """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes).  With `reg`, a
+    user group shows as its handle, a bare id copied into a doorbell included."""
+    names = {g: h["handle"] for h in (reg or {}).get("handles", []) for g in group_ids(h)}
     text = FOOTER_RE.sub("", text or "")
-    text = SUBTEAM_RE.sub(lambda m: "@" + (m[2] or m[1]).lstrip("@"), text)
+    text = SUBTEAM_RE.sub(lambda m: "@" + (m[2] or names.get(m[1]) or m[1]).lstrip("@"), text)
+    if names:
+        text = BARE_GROUP_RE.sub(lambda m: "@" + names.get(m[1], m[1]), text)
     text = DATE_TOKEN_RE.sub(r"\1", text)
     text = LINK_RE.sub(lambda m: m[1] if not m[2] or m[2] == m[1] else f"{m[2]} ({m[1]})", text)
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
@@ -1163,7 +1168,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
     A quiet post wakes only the names at its start.  A reply under an announcement wakes only the names it starts with,
     whatever PRs and runs its body names, and of its status lines only a decline wakes the announcer (`roster` reads the
-    rest): the replies to an announcement to every handle were about 3,000 doorbells a week (reach PR 7).  The author
+    rest): otherwise the replies to an announcement to every handle are thousands of doorbells a week.  The author
     is never a target, unless
     `author_rings` (`rings_own_inbox`: another agent posting as the author's handle, such as the outgoing generation of a
     handover), when a post naming the author's handle is for it like a post naming anyone else."""
@@ -1761,19 +1766,23 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
     warn_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
-    body = linear_ask(ns, owner, h["handle"], body)
-    _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
+    text = f"{tag(owner)} {linear_ask(ns, owner, h['handle'], body)}"
+    check_length(reg, ch, text, POST_WORDS)
+    _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
 
 def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> str:
     """The ask filed as an issue in its owner's Linear team (`linear` in the registry), which holds the whole brief; what
-    Slack carries is then its first line and the issue's link.  The body as it was when the owner has no team
-    or Linear fails, so the ask still goes out on Slack in full."""
-    if not ASKS_ON_LINEAR or ns.dry_run or not owner.get("linear"):
+    Slack carries is then its first line and the issue's link (with `--dry-run`, nothing filed, a stand-in link).  The body
+    as it was when the owner has no team or Linear fails, so the ask still goes out on Slack in full."""
+    if not ASKS_ON_LINEAR or not owner.get("linear"):
         return body
     from . import linear
 
+    if ns.dry_run:
+        print(f"dry-run: would file the ask in Linear team {owner['linear']}", file=sys.stderr)
+        return f"{linear.first_line(body)}\nLinear: <https://linear.app|{owner['linear']}-?>"
     parent = getattr(ns, "parent", None)
     issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None))
     if not issue:
@@ -1995,8 +2004,8 @@ def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
     _check_audience(to, body := _body(ns), reg)
-    _post(client(ns), ch, h["handle"], announcement(h, to, body, ns.verify, ns.ships),
-          route=_route(ns, reg, ch), urgent=ns.urgent)
+    check_length(reg, ch, text := announcement(h, to, body, ns.verify, ns.ships), ANNOUNCE_WORDS)
+    _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
 
@@ -2040,6 +2049,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
+    if not getattr(ns, "report", False):
+        check_length(reg, ch, text, ANNOUNCE_WORDS if kind == "announce" else POST_WORDS)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
     return 0
 
@@ -2055,6 +2066,8 @@ def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg)
     body = _body(ns)
     warn_unrouted(body, reg, h["handle"])
+    if not getattr(ns, "report", False):
+        check_length(reg, ch, body, POST_WORDS)
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent,
           tags=(QUIET,) if ns.quiet else ())                         # a footer tag rides on the first piece of a long post
     return 0
@@ -2259,7 +2272,7 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         who = "@" + m["username"] if m.get("username") else poster(m, reg) or m.get("user") or m.get("bot_id") or "?"
         tags = [t for t in tags_of(m.get("text") or "") if t != "ask"]
         at = datetime.fromtimestamp(float(m["ts"]), UTC).strftime("%H:%M:%SZ") if m.get("ts") else "?"
-        print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
+        print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''), reg)}")
     return 0
 
 
@@ -2457,7 +2470,7 @@ def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
     for where in dict.fromkeys(c for m in msgs if is_doorbell(m, reg) and (c := doorbell_channel(m.get("text") or ""))):
         lines[0] += f"; one from #{where} is answered there, `... {_channel_flag(where)} --thread T`"
     for m in msgs:
-        text = plain(m.get("text") or "")
+        text = plain(m.get("text") or "", reg)
         if not is_doorbell(m, reg):
             who = "@" + m["username"] if m.get("username") else m.get("user") or m.get("bot_id") or "?"
             text = f"(posted in the inbox by {who}, not a doorbell) {text}"
@@ -2743,6 +2756,20 @@ def render_latency(rep: dict, hours: float) -> str:
 
 VOLUME_WORDS = 80                                                # a post longer than this is a brief: it belongs in its issue
 VOLUME_THREADS = 10                                              # the busiest threads `traffic --volume` names
+POST_WORDS, ANNOUNCE_WORDS = 60, 150                             # the coordinating skill's lengths ("How long, and where")
+LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment ISSUE --file BODY.md --as ME`), or in a file, "
+              "PR or note, and post a short line that links it")
+
+
+def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
+    """A post `send`, `reply`, `announce` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
+    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted."""
+    if ch != channel_id_for(reg, FRONT_DOOR) or (n := len(plain(text).split())) <= limit:
+        return
+    if n > 2 * limit:
+        raise SlackError(f"{n} words, past twice the {limit} a post in #{FRONT_DOOR} may have, so nothing was posted: {LENGTH_FIX}")
+    print(f"research msg: {n} words, past the {limit} a post in #{FRONT_DOOR} may have (posted; past {2 * limit} it is refused): "
+          f"{LENGTH_FIX}", file=sys.stderr)
 
 
 def volume(api: Slack, reg: dict, ch: str, since: float, now: float) -> dict:
@@ -2762,7 +2789,7 @@ def volume(api: Slack, reg: dict, ch: str, since: float, now: float) -> dict:
             posts += replies
             if replies:
                 threads.append({"ts": root["ts"], "by": poster(root, reg) or root.get("username") or root.get("user") or "?",
-                                "replies": len(replies), "first": " ".join(plain(root.get("text") or "").split())[:80]})
+                                "replies": len(replies), "first": " ".join(plain(root.get("text") or "", reg).split())[:80]})
     by: dict[str, list[int]] = {}
     for m in posts:
         by.setdefault(poster(m, reg) or m.get("username") or m.get("user") or "?", []).append(len(plain(m.get("text") or "").split()))
@@ -3883,6 +3910,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                                                                                help="checkout paths (none: read them from stdin)")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True)
+    p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
@@ -3975,6 +4003,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
+    p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
     p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list")
     p.add_argument("verb", choices=("open", "read", "close", "list"))
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")

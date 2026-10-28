@@ -1,4 +1,4 @@
-"""The red team's resume attack on the band fill (art:7617c8017e80), adapted to the streamed-label wipe and run against
+"""The red team's resume attack on the band fill, adapted to the streamed-label wipe and run against
 it at fixture scale on CPU.
 
 **What the attack uses in the band fill.** A band label is the deployed `Π₂` (Feistel10 over SHAKE256), which the

@@ -1,5 +1,5 @@
-"""Argmax over the head's logits (greedy decoding) in circuits' form (the CMP-96 replay's ArgmaxChunkBest_v1,
-ArgmaxChunkIdx_v1 and ArgmaxCombine_v1, whose token is `ops.rows.Argmax_v1{V}`'s scan, CIR-104: fixture.py holds every
+"""Argmax over the head's logits (greedy decoding) in circuits' form (the CPU replay's ArgmaxChunkBest_v1,
+ArgmaxChunkIdx_v1 and ArgmaxCombine_v1, whose token is `ops.rows.Argmax_v1{V}`'s scan: fixture.py holds every
 pool token to `rows.argmax`): units_argmax, one thread per row, and its twin.
 
 OPS, a row x of V bf16 logits, C = min(128, V), nch = ceil(V / C) chunks (the frozen vocabulary 256: 2 chunks of 128):

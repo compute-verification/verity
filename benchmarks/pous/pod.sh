@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# The POUS benchmark on a GPU pod, as a research Attempt:
+# The POUS benchmark on a GPU pod (from the source tree's root; it writes to $RESEARCH_RUN_DIR):
 #
-#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: #188's cursor/dense-decode-opt-6667
-#   research run --on <pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
-#     -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
-#   research run --on <pod> --project verity --source . --cwd source --campaign pous \
-#     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
+#   git -C <tree> archive -o $RESEARCH_RUN_DIR/inputs/impl.tar <commit>   # the implementation's tree: cursor/dense-decode-opt-6667
+#   bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
+#   bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
@@ -29,8 +26,8 @@
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
 # POUS_BUILD=<dir> is the pous_native JIT build directory (default $W/pous_build). A timed run needs a directory no other run
 # builds into: a rebuild inside a timed lease is a compile the node's ops daemon stops.
-# A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- vy-pous-quiet CMD`, with VCPU and
-# RCPU among its cores: outside it, neighbours' load makes honest answers late (r20261005-231145-6d0f accepted 18 of 20).
+# A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- QUIET CMD` (QUIET, the node's quiet-slice wrapper), with VCPU and
+# RCPU among its cores: outside it, neighbours' load makes honest answers late (a run there accepted 18 of 20).
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # LOAD_TOKENS=T (band-gpu and the P2 arms, bench.py --load-tokens) is T of the POUS forwards run during the honest audit (0: none,
@@ -48,11 +45,11 @@
 #
 # GATE_ROLE=<role> runs the run as that party of the proof service (memory-challenger for the auditor's timed audit on a node):
 # before anything is built or timed, bench/placement.py's gate checks where it runs and records placement-gate.json, and a
-# refusal exits 4. GATE_CORES are the role's dedicated CPUs (vy-pous-quiet's 124-127 on node 2), GATE_PEERS its peers' probe
+# refusal exits 4. GATE_CORES are the role's dedicated CPUs (the quiet slice's 124-127 on an RTX PRO 6000 node), GATE_PEERS its peers' probe
 # records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer
 # roles not deployed yet:
-#   gpu-lease 1 --on 7 --max-min M --timed -- vy-pous-quiet bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
-#     GATE_CORES=124-127 GATE_PEERS=worker:vy-nebius-2=/etc/vy/placement/vy-nebius-2.json GATE_ABSENT='firewall challenger'
+#   gpu-lease 1 --on 7 --max-min M --timed -- QUIET bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
+#     GATE_CORES=124-127 GATE_PEERS=worker:NODE=PLACEMENT.json GATE_ABSENT='firewall challenger'
 #
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
@@ -82,8 +79,8 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/pyth
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
-#   research run --on vy-nebius-2 --cwd clone ... -- bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
-#     gpu-lease 1 --on N --max-min M -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
+#   bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
+#     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
     p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
@@ -124,7 +121,7 @@ case "$GPU" in                                            # the census id is the
   *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<benchmarks/census/hardware.json id>"; exit 2; } ;;
 esac
-SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
+SCHEME=${SCHEME:-band-chain/d12/v1}
 AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}; P2_ARM=${P2_ARM:-p2-v3-gpu}
 GO=$([ "${GATES_ONLY:-0}" = 1 ] && echo --gates-only)
 mkdir -p "$W" "$O/bench"
@@ -301,22 +298,6 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
   fi
   clocks after
   exit $RC
-elif [ "$IMPL" = p2-gpu ]; then
-  # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for the device's arch
-  export PATH=/usr/local/cuda/bin:$PATH
-  ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
-  echo '#include <gmp.h>' | cpp >/dev/null 2>&1 || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
-  CG=$W/CGBN
-  [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
-  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
-  BIN=$W/p2bin-$ARCH
-  make -C benchmarks/pous/p2_gpu CGBN="$CG" BIN="$BIN" ARCH="$ARCH" -j2 > "$O/p2-make.log" 2>&1 || { tail -20 "$O/p2-make.log"; exit 3; }
-  cp "$BIN"/*.ptxas "$O/" 2>/dev/null
-  PY=$W/ref312/bin/python
-  [ -x "$PY" ] || { uv venv -q "$W/ref312" --python 3.12 && uv pip install -q --python "$PY" numpy; } || exit 3
-  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl p2-gpu --p2-bin "$BIN" --scratch "$W/scratch" \
-    --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" \
-    ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
 else
   PY=$W/ref312/bin/python
   [ -x "$PY" ] || { uv venv -q "$W/ref312" --python 3.12 && uv pip install -q --python "$PY" numpy; } || exit 3

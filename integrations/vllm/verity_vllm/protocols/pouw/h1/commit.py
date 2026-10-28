@@ -73,7 +73,7 @@ class Sites(dict):
 
 
 class _EveryStep(dict):
-    """`Int8Source`'s names at each engine step (its ``_at``, X-03's targets): step 0's at every step."""
+    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
 
     def get(self, key: Any, default: Any = None) -> Any:
         return self[0] if 0 in self else default

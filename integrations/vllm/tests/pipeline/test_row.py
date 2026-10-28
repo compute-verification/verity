@@ -297,7 +297,7 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
 
 # ---------------------------------------------------------------------------------------------------------------- Build: derives
 
-#: request derives of the 2026-09-29 epoch's stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
+#: request derives of stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
 EPOCH_DERIVES = (("#11", 4096, 511, 16, 124529), ("#75", 1024, 127, 48, 43974), ("#74", 1024, 127, 36, 34107), ("#74", 817, 120, 36, 26893),
                  ("#57", 1024, 127, 26, 21118), ("#67", 1024, 127, 16, 14071), ("#67", 1024, 28, 16, 11067))
 
@@ -639,8 +639,7 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
 
 
 def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
-    """`commit` read `commit_prepare`'s local manifest once the two were split: every passing single-GPU Commit raised NameError
-    before its manifest check and verdict (r20261017-204707-7b27, Llama-3.2-1B B1)."""
+    """`commit` reads `commit_prepare`'s local manifest: a passing single-GPU Commit reaches its manifest check and verdict."""
     r, man, verified = _row(tmp_path), _tap_manifest(tmp_path / "manifest.json"), []
     (tmp_path / "tap.so").write_bytes(b"")
     r.hidden_so, r.B, r.I, r.O = str(tmp_path / "tap.so"), 1, 256, 32
@@ -687,7 +686,7 @@ def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
 
 
 def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
-    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row."""
+    """The Commit keeps the Build's Q_word manifest: moving it aside as "not the query path's" and rebuilding it is a third full build per row."""
     r, built = _row_with_build(tmp_path, monkeypatch)
     assert r.program_digest() == PD
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
@@ -848,7 +847,7 @@ def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
 
 
 def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after(tmp_path, monkeypatch):
-    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the legs they recorded."""
+    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the stages they recorded."""
     gpu, cpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu"), _tp_row(tmp_path, GLM53, "--match-phase", "cpu")
     os.makedirs(gpu.M)
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
@@ -868,7 +867,7 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
     monkeypatch.setattr(R, "tp_passed", lambda p: True)
 
-    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU leg in the cpu phase"))
+    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU stage in the cpu phase"))
     monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
     cpu.match()
     last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
@@ -877,7 +876,7 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
 
 @pytest.mark.parametrize("argv, leg", [((), 7200), (("--fold-timeout", "100"), 100)])
 def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path, monkeypatch, argv, leg):
-    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank leg: one leg's limit
+    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank check: one stage's limit
     on the whole would stop a fold that fits its own (a GLM-5.3 B8 rank folds for ~100 min of the default 120)."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
@@ -900,7 +899,7 @@ def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path,
 def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, folds, reuse, shared):
     """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
     (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time, the far lighter
-    folds `--fold-workers` at a time; a capture removes the folds and legs of any earlier one, so none is ever kept.  Under the row's
+    folds `--fold-workers` at a time; a capture removes the folds and stages of any earlier one, so none is ever kept.  Under the row's
     `--match-pipeline shared` (the default) each rank's X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
@@ -927,8 +926,8 @@ GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
 
 
 def _b8_cpu_half(tmp_path: Path, monkeypatch, *argv: str, mem_gb: str) -> tuple[Any, dict[str, tuple[int, list[str]]]]:
-    """GLM-5.3 TP8 B8's Match CPU half over legs on disk, its checkpoint's 78 layers, under research run --mem-gb `mem_gb`: the row
-    and each leg's (limit, command)."""
+    """GLM-5.3 TP8 B8's Match CPU half over stages on disk, its checkpoint's 78 layers, under research run --mem-gb `mem_gb`: the row
+    and each stage's (limit, command)."""
     t = _tp_row(tmp_path, GLM53_B8, "--match-phase", "cpu", *argv, environ={"RESEARCH_RUN_MEM_GB": mem_gb})
     ck = tmp_path / "glm-ck"
     ck.mkdir(parents=True)
@@ -946,10 +945,10 @@ def _b8_cpu_half(tmp_path: Path, monkeypatch, *argv: str, mem_gb: str) -> tuple[
 
 @pytest.mark.parametrize("mem_gb, ranks, folds", [("450", 1, 2), ("1000", 2, 6), ("1300", 3, 4)])
 def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_gb, ranks, folds):
-    """GLM-5.3 B8's fold Match held 339 GiB a rank in GM-01 (with the shared X-09) beside folds near 40 GB, and took 17 h one GM-01 at
-    a time (r20261019-162751-9b01): every rank at once overfills any host, and four legs of 7200 s stop it at 8 h.  Sized to research
-    run's --mem-gb, as many GM-01 legs run at once as fit beside one fold (one at 450 GB, two at 1000, three at 1300, as the GLM v2
-    tree placed them by hand), and as many folds as the rest holds; a leg's limit grows with the rank's Programs, and the whole
+    """GLM-5.3 B8's fold Match held 339 GiB a rank in GM-01 (with the shared X-09) beside folds near 40 GB, and takes 17 h one GM-01 at
+    a time: every rank at once overfills any host, and four stages of 7200 s stop it at 8 h.  Sized to research
+    run's --mem-gb, as many GM-01 stages run at once as fit beside one fold (one at 450 GB, two at 1000, three at 1300),
+    and as many folds as the rest holds; a stage's limit grows with the rank's Programs, and the whole
     tp-fold-match gets the rounds those widths take."""
     t, seen = _b8_cpu_half(tmp_path, monkeypatch, mem_gb=mem_gb)
     t.match()
@@ -964,14 +963,14 @@ def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_
 
 
 def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_flags_override_the_sizing(tmp_path, monkeypatch):
-    """At --mem-gb 300 no planned B8 GM-01 leg fits beside a fold: the CPU half runs one rank and one fold at a time and row.log warns
+    """At --mem-gb 300 no planned B8 GM-01 stage fits beside a fold: the CPU half runs one rank and one fold at a time and row.log warns
     (the plan's ratios are fitted on this row alone, so a smaller row's estimate may be high).  The flags override the sizing:
-    --fold-rank-workers 2 runs two ranks (folds as tp-fold-match defaults them), and --fold-timeout bounds each leg."""
+    --fold-rank-workers 2 runs two ranks (folds as tp-fold-match defaults them), and --fold-timeout bounds each stage."""
     t, seen = _b8_cpu_half(tmp_path / "short", monkeypatch, mem_gb="300")
     t.match()
     cmd = seen["match.fold_match"][1]
     assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1]) == ("1", "1")
-    assert "WARNING: 300 GB holds no planned GM-01 leg beside one fold" in open(f"{t.d}/row.log").read()
+    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in open(f"{t.d}/row.log").read()
     t, seen = _b8_cpu_half(tmp_path / "explicit", monkeypatch, "--fold-rank-workers", "2", "--fold-timeout", "100", mem_gb="300")
     t.match()
     to, cmd = seen["match.fold_match"]
@@ -981,7 +980,7 @@ def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_
 
 def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):
     """Under --reuse-legs a B>1 rank's written X-09 document (`match_decomp.json`) is its compare, as cb_a.compare's is at B1; one a
-    killed batch-decomp left unparseable runs again (here `/bin/false`, so a leg that runs fails)."""
+    killed batch-decomp left unparseable runs again (here `/bin/false`, so a stage that runs fails)."""
     from verity_vllm.pipeline.tp import fold_match as FM
     doc = tmp_path / "match_decomp.json"
     for text, reuse, verdict in (('{"verdict": "PASS", "requests": []}', True, "PASS"), ('{"verdict": "PASS", "requests": []}', False, "FAIL"),
@@ -1058,9 +1057,9 @@ def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_st
 
 
 @pytest.mark.parametrize("argv, reads", [
-    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: vy-glm53-cpu-2 runs them
+    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: a CPU node runs them
     (("--stages", "match", "--match-phase", "gpu"), True),
-    (("--stages", "match"), True),                                  # the GPU legs and the CPU half in one run
+    (("--stages", "match"), True),                                  # the GPU stages and the CPU half in one run
     (("--stages", "commit"), True),
 ])
 def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it(tmp_path, monkeypatch, argv, reads):

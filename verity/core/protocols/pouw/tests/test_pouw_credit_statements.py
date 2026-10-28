@@ -1,4 +1,4 @@
-"""`credit.window` and `credit.period_credit` on a window's statements, each call's proof files (PRF-132): credit runs the
+"""`credit.window` and `credit.period_credit` on a window's statements, each call's proof files: credit runs the
 verifier of record itself (`one_stage.proofs.verify`) on the circuit file the period's open committed for the call's K,
 with the partition object and the ``--registered`` file it builds from the committed descriptor and the window's entries,
 and credits nothing from a verdict the evidence carries.

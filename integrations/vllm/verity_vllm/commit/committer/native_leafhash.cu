@@ -1,4 +1,4 @@
-// [R16 sys SYS-05] Device-side weight registration: the SAME leaves and the SAME tree as native_host.register_weights' host path
+// Device-side weight registration: the SAME leaves and the SAME tree as native_host.register_weights' host path
 // (verity_vllm.commit.scheme.pos_leaf over CHUNK-byte position-identified leaves, scheme.fold: node / lift rule), computed on the
 // GPU where the parameters already live.  The host path hashes 256-byte leaves in Python (~0.9 us per leaf + the fold): 2.5 GB of weights =
 // 10 M leaves = 17-24 s per registration, 120 s for a 7B model, and a Commit registers twice (before the workload, again at the C2 replay
@@ -8,7 +8,7 @@
 //   pos_leaf(value)  = SHA-256("verity/pos-leaf/v0" || u64be(len(value)) || value)          (scheme.pos_leaf)
 //   node(l, r)       = SHA-256(NODE_PREFIX || l || u64be(32) || r), lift(c) = SHA-256(LIFT_PREFIX || c)   (scheme.fold: odd trailing node)
 //
-// SHA-256 core and tree_level_kernel are VERBATIM native_tree.cu (R9 cmt-hidden, checked against hashlib there); only pos_leaves_kernel is new.
+// SHA-256 core and tree_level_kernel are VERBATIM native_tree.cu (checked against hashlib there); only pos_leaves_kernel is new.
 #include <torch/extension.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <cuda_runtime.h>

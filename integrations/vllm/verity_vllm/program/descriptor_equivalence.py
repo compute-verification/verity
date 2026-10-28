@@ -1,4 +1,4 @@
-"""Graph/reference correspondence of two encodings of one program (frontend rulings §8.5).
+"""Graph/reference correspondence of two encodings of one program.
 
 A reference-codec change moves the program digest even when the denoted circuit is unchanged, because the digest
 hashes the serialised descriptor. Digest equality is therefore the wrong test across a codec transition; this
@@ -34,7 +34,7 @@ from typing import Any, Iterator
 
 from verity.ml.circuits.codec import decode_program, program_digest
 from verity.ml.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided
 

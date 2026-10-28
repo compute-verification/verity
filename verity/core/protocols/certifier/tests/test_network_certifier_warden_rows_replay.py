@@ -1,11 +1,10 @@
-"""REDTEAM phase 8, target 2 (cursor/redteam-phase8-warden-061a @44bd32c5a2), as regressions on the warden's bucket rows
-(`warden_rows`): replays of real warden-signed roots and certificates across windows and directions, and a certificate
-the warden signed over another digest, stay refused. The two findings are closed:
+"""Regressions on the warden's bucket rows (`warden_rows`): replays of real warden-signed roots and certificates across
+windows and directions, and a certificate the warden signed over another digest, stay refused. Two gaps are closed:
 - the layout is bound: the signed head carries S, T and the wiring's digest, and the domain S and T, so a head of
   another layout is another digest, which the certificate doesn't sign;
-- the reads are no longer the prover's: a read is (connection, cell), and the verifier places it with the warden's
-  signed wiring, so a crossed, duplicate or padding read, and a wiring the warden didn't sign, are refused. The channel
-  of log2 N bits a read is gone.
+- the reads aren't the prover's: a read is (connection, cell), and the verifier places it with the warden's signed
+  wiring, so a crossed, duplicate or padding read, and a wiring the warden didn't sign, are refused, and no read carries
+  log2 N bits.
 
 The link-window is synthetic: connection A (ordinal 0) holds rows 0 and 1, connection B (ordinal 1) row 0, so row 1's
 last r slots are padding (empty: cells no connection sent)."""

@@ -1,4 +1,4 @@
-"""[X-07, M-NOPROFILE] `profiles.dense_generic`: a κ profile derived from a role's HF config.json on import — no per-model
+"""`profiles.dense_generic`: a κ profile derived from a role's HF config.json on import — no per-model
 module, no name allowlist.  Applicability = patterns (kernels) + check_header (facts)."""
 from __future__ import annotations
 
@@ -33,8 +33,8 @@ def test_shipped_mistral_config_is_the_manifest_bytes():
 
 
 def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
-    """[R16 fp8] the DENSE Qwen3-4B (bf16, H100 panel row `qwen3-4b h100 b1 1024/128`, R13 Match FAIL F-hopper-02 'dense_generic refuses
-    model_type qwen3'): the checkpoint's config.json is shipped (manifest bytes) and derives the same qwen3 mechanism the FP8 twin uses
+    """The DENSE Qwen3-4B (bf16, H100 panel workload `qwen3-4b h100 b1 1024/128`, whose Match once failed with 'dense_generic
+    refuses model_type qwen3'): the checkpoint's config.json is shipped (manifest bytes) and derives the same qwen3 mechanism the FP8 twin uses
     (per-head q/k RMSNorm, `QK_NORM == "head"`) with bf16 linears (no FP8 block) -- no per-model module."""
     cfg = dg.HF_CONFIG_DIR / "QWEN3_4B.config.json"
     entry = dg.checkpoint_entry("QWEN3_4B")
@@ -52,7 +52,7 @@ def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
 
 def test_mistral_role_resolves_to_a_derived_module_without_an_allowlist_entry():
     assert profile_module_for_case("MISTRAL7B") == "derived_MISTRAL7B"
-    mod = importlib.import_module("verity_vllm.observe.fold.profiles.dense_MISTRAL7B")          # the X-07 name recorded runs cite: the same module
+    mod = importlib.import_module("verity_vllm.observe.fold.profiles.dense_MISTRAL7B")          # the name recorded runs cite: the same module
     p = mod.PROFILE
     assert p.id == profile_for_case("MISTRAL7B").id and p.config == profile_for_case("MISTRAL7B").config   # two module names, one derivation
     assert p.notes["case"] == "MISTRAL7B" and p.id == "vllm-d9105ea80-sm89-eager-bf16-mistral7b"
@@ -82,7 +82,7 @@ def test_pattern_list_is_the_shared_one_with_the_target_tuned_gemm_specializatio
     names = [type(x).__name__ for x in p.patterns]
     assert names.index("GemmLaunchTuned") == names.index("GemmLaunch") - 1
     tuned = next(x for x in p.patterns if isinstance(x, GemmLaunchTuned))
-    # a TARGET fact (vLLM's sm_89 table), not a model fact.  [R13 rel: X-07 x AMP-01] since AMP-01 the pattern's `table` is None and
+    # a TARGET fact (vLLM's sm_89 table), not a model fact.  The pattern's `table` is None and
     # the rows come from the registered GEMM target of the RECORD at resolution time (`gemm_targets.REGISTERED["ada"].tuned_table`).
     table = tuned.table if tuned.table is not None else ADA_TUNED_GEMM
     assert (2048, 2048) in table
@@ -100,7 +100,7 @@ def test_check_header_compares_facts_including_untied_embeddings():
 
 
 def test_x07_name_and_derived_name_are_one_profile():
-    """[P6] `dense_<ROLE>` (the X-07 name recorded runs cite) and `derived_<ROLE>` build the same profile."""
+    """`dense_<ROLE>` (the name recorded runs cite) and `derived_<ROLE>` build the same profile."""
     d = importlib.import_module("verity_vllm.observe.fold.profiles.dense_LLAMA32_1B").PROFILE
     g = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B").PROFILE
     assert d.config == g.config and d.id == g.id
@@ -119,7 +119,7 @@ def test_x07_name_and_derived_name_are_one_profile():
     ({"hidden_size": 4000}, "multiple of 64"),
 ])
 def test_refuses_fail_closed_outside_the_family_facts_table(patch, needle):
-    """[P6] the vocabulary is the family facts table: an unknown model_type, or a known one whose structure the table does not describe
+    """The vocabulary is the family facts table: an unknown model_type, or a known one whose structure the table does not describe
     (a MoE type without experts, a windowed Mistral), refuses with the stated reason."""
     cfg = {**json.loads(MISTRAL_CFG.read_text()), **patch}
     with pytest.raises(ValueError, match=needle):

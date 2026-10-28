@@ -1,6 +1,6 @@
 """Declarations of real hardware, with every number's source: the one place a datacenter is declared.
 
-`rtx_node` is one of our nodes as vy-nebius-1 and -2 read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem` (18 Oct):
+`rtx_node` is one of our nodes as vy-nebius-1 and -2 read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
 `Accounting.Device`'s one Python mirror, `verity.core.protocols.remote_bandwidth.timing`: a GPU's S_chip, read and write
@@ -80,7 +80,7 @@ def rtx_node(name: str = "node") -> Datacenter:
 
 def with_dpu(node: Datacenter) -> Datacenter:
     """`node` (one block, as `rtx_node` declares it) with a BlueField-3 DPU after its NIC, which becomes the block's way
-    out, and the DPU's BMC behind it. Amodo, 2 Oct 2026: the DPU's 32 GB DDR is at least 85% wipeable and its 40 GB eMMC
+    out, and the DPU's BMC behind it. Amodo's measurements: the DPU's 32 GB DDR is at least 85% wipeable and its 40 GB eMMC
     and 128 GB NVMe at least 99%; the BMC's 1 GB DDR at least 75%, its 256 MB SPI flash at least 50%, and its 64 MB
     secure-firmware flash not at all. Each device's residual is what those leave."""
     (block,) = node.blocks

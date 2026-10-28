@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
 import shutil
 import tempfile
@@ -28,6 +27,7 @@ import numpy as np
 import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
+from verity_difftest import settings
 from verity_flock import rec_algebra as A
 from verity_flock import rec_cap as RC
 from verity_flock import rec_live as RL
@@ -97,7 +97,8 @@ def _top(nodes: list[bytes], salts: list[bytes]) -> V.Top:
 def session(g: random.Random, levels: list[tuple[int, int, int]], rounds: list[int], nv: int) -> SimpleNamespace:
     """A small consistent session: ``levels`` (H, c, openings a rep) of `LANES` lanes, level 0's top both reps' one tree, every
     opening climbing to its own node of its rep's top; message rounds of ``rounds`` elements; each rep's v of ``nv``."""
-    salt = lambda: g.randbytes(SALT)
+    def salt():
+        return g.randbytes(SALT)
     qs, tops = [], {0: [], 1: []}
     for lv, (H, c, q) in enumerate(levels):
         reps = [0] if lv == 0 else [0, 1]
@@ -241,7 +242,8 @@ def test_a_wrong_input_moves_the_fingerprints(server):
     bad = json.loads(json.dumps(honest))
     x = bad["src"]["fresh"]["L0"]["aux"][0]
     bad["src"]["fresh"]["L0"]["aux"][0] = f"{int(x[:2], 16) ^ 1:02x}" + x[2:]
-    ports = lambda v: json.loads(server.call("part_in", v)[1])["ports"]
+    def ports(v):
+        return json.loads(server.call("part_in", v)[1])["ports"]
     assert [nm for (nm, a), (_, b) in zip(ports(honest), ports(bad), strict=True) if a != b] == ["aux"]
 
 
@@ -298,10 +300,12 @@ def _inner(tmp: Path) -> Path:
         assert len(out) == n, "a coin the record does not hold"
         return out
 
-    coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
+    def coins(hexes):
+        return b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
     proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192),
                      schedule=RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3}))
-    send = lambda *req: RL.decode_resp(proxy.handle(RL.encode_req(*req)))
+    def send(*req):
+        return RL.decode_resp(proxy.handle(RL.encode_req(*req)))
     hello = json.loads(rec["hello"])
     del hello["coins"]
     lk = rec["link"]
@@ -382,7 +386,7 @@ def _agrees(server, inner: Path, fold: dict, out: Path, salts: Path, levels: lis
     return checked
 
 
-DEPLOYED = pytest.mark.skipif(not os.environ.get("VERITY_VSTAR_IN_DEPLOYED"), reason="stages a recorded session's every "
+DEPLOYED = pytest.mark.skipif(not settings.get("VERITY_VSTAR_IN_DEPLOYED"), reason="stages a recorded session's every "
                               "statement (the pod's): set VERITY_VSTAR_IN_DEPLOYED=1")
 COINS = FLOCK_TESTS / "fixtures" / "rec-coins" / "16-16-8-n64"
 

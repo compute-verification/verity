@@ -22,7 +22,7 @@ import test_template_instance as TT
 
 from verity.ml.circuits import codec, cut, partition_object as PO, partition_v2 as V
 from verity.ml.circuits.defs import REGISTRY
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation import evaluate_region
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value

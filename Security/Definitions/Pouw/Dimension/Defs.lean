@@ -4,12 +4,12 @@ import Definitions.Pouw.NCP.Relation
 /-!
 # Theorem D: the dimension bound in AlgM_16 (trusted statements)
 
-`docs/pouw/milder-assumptions.md` §2 and §5 (a Sketch there), with the red team's statement fixes TD-1 to TD-3
-(`red-team.md`, Phase 6). A program of AlgM is straight-line and noise-oblivious: a list of instructions, and the
-constants of its free instructions, fixed before the salt. Its slots are functions of the noise `ω = (E₁, F₁)` on the
-whole grid (`Noise`: every entry in `[−31, 32]`): first its inputs `L`, then one slot per instruction.
+`docs/pouw/milder-assumptions.md` §2 and §5 (a Sketch there). A program of AlgM is straight-line and noise-oblivious: a
+list of instructions, and the constants of its free instructions, fixed before the salt. Its slots are functions of the
+noise `ω = (E₁, F₁)` on the whole grid (`Noise`: every entry in `[−31, 32]`): first its inputs `L`, then one slot per
+instruction.
 
-* **Adaptive inputs (TD-1).** `F₁` and `R` are public before `A` is committed, so `A` is any function `g(F₁)` (for the
+* **Adaptive inputs.** `F₁` and `R` are public before `A` is committed, so `A` is any function `g(F₁)` (for the
   fixed `R` and salt), quantified. `B` does not depend on `F₁`: it is committed before `F₁` is drawn. The inputs `L`
   are any functions in `V₀` (`V0`): the constants, the noise coordinates and every function of `F₁` (so of `F₁`, `R`
   and `A`), all free.
@@ -17,11 +17,11 @@ whole grid (`Noise`: every entry in `[−31, 32]`): first its inputs `L`, then o
   at no cost. This is more generous than W1, which prices adds; it gives every `E·B` term for nothing.
 * `priced p f` outputs any function `f` of the noise, at price `p`. A function of the earlier slots is a function of
   the noise, so this is at least as strong as the survey's 'any function of the earlier slots'.
-* **Registers (TD-3).** A slot is one 32-bit register written by one instruction; an instruction that writes several
+* **Registers.** A slot is one 32-bit register written by one instruction; an instruction that writes several
   registers is several instructions, one per register. Predicates are not slots: a free instruction reads only
   register slots, so an instruction whose output depends on a predicate other than ℚ-linearly is priced. `H16`
   prices every priced register write at 16 or more.
-* **Integer semantics (TD-2).** A program outputs a word when some slot's ℚ value equals the checked word's integer
+* **Integer semantics.** A program outputs a word when some slot's ℚ value equals the checked word's integer
   value at every grid point. The checked words are the integer ones (`Pouw.NCP.Relation.checked`); their link to
   the protocol's mod-`2^32` words is `int7Int32` (`AlgBoundWrapped`).
 
@@ -83,7 +83,7 @@ def coords (N m n k : ℕ) : List (Noise N m n k → ℚ) :=
 def fnF (N m n k : ℕ) : Submodule ℚ (Noise N m n k → ℚ) :=
   Submodule.span ℚ {φ | ∀ ω ω' : Noise N m n k, ω.2 = ω'.2 → φ ω = φ ω'}
 
-/-- `V₀` (TD-1): the free values, the affine functions of the noise plus every function of `F₁`. -/
+/-- `V₀`: the free values, the affine functions of the noise plus every function of `F₁`. -/
 def V0 (N m n k : ℕ) : Submodule ℚ (Noise N m n k → ℚ) := span1 (coords N m n k) ⊔ fnF N m n k
 
 /-- The non-final positions of a unit: `3k/16 − 1` checkpoints of `m·n` entries. -/
@@ -100,7 +100,7 @@ def Outputs (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ 
     (P : List (Instr (Noise N m n k))) (L : List (Noise N m n k → ℚ)) : Prop :=
   ∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ slots P L
 
-/-- **MinRank ≥ 2** (TD-5): no combination `Σ_τ q_τ·M_τ` of the non-final checkpoint matrices is a nonzero rank-1
+/-- **MinRank ≥ 2**: no combination `Σ_τ q_τ·M_τ` of the non-final checkpoint matrices is a nonzero rank-1
 matrix `x·yᵀ` on `{0, …, k − 1}²`. -/
 def MinRank2 (k : ℕ) (R : Mat) : Prop :=
   ∀ q x y : ℕ → ℚ,

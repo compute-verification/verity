@@ -4,7 +4,7 @@ import Proofs.Flock.Level3.Placed
 /-!
 # An instance's rows, placed by the statement the verifier accepted
 
-The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifier's `FlockLevel3.Placed`, PR #156): column
+The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifier's `FlockLevel3.Placed`): column
 `j`'s entries come from the last range covering `j`, rows in the same slot only, plus Δ's pairs. This file proves
 `Placement` for an instance's stacked rows (`Rows.stack`, `placement_stack`) from the layout facts `Layout` names:
 - **the ranges:** their spans are pairwise disjoint (`HmRow.check`'s pairwise test), a net range's slots are its net's
@@ -716,7 +716,7 @@ def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit
       (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) c')
 
-/-- **A drawn unit's place in the accepted statement** (#145's `UnitPlace`, which `loweringSoundB_of_place` and #171's
+/-- **A drawn unit's place in the accepted statement** (`UnitPlace`, which `loweringSoundB_of_place` and the
 `_placed` forms take): VU `g`'s stacked unit slots in block `o`, given the unit's instance in the audit circuit
 (`inst`, the circuit side), whose inputs on one gate carry one value there (`hal`). -/
 noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}

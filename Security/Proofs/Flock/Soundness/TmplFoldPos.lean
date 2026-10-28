@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.TmplFoldClassOk
 import Proofs.Flock.Soundness.TmplPosMap
 
 /-!
-# The template fold is its reference (PRF-133, part 3, stage 2)
+# The template fold is its reference
 
 `fold_refVal` has the unit's fold as the root copy's `refVal`, which reads every column at `A + B · posIn`; `foldRef_tree`
 has the reference as the call tree's `placeSum`, which reads every column at `π = posMap`. They agree wherever each copy

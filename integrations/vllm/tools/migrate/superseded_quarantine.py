@@ -14,7 +14,7 @@ that old records replay. A superseded version that no kept Program or record nam
 the quarantine lanes in `MOVE` to `<DEST>/<PACKAGE>/<lane>` (`--dest`, by default `experimental/vllm/quarantine`; the package's
 import name is the one constant `PACKAGE`, and its distribution's name is derived from it), rewrites their imports, test paths
 and the lint and dead-code lists that name them, and registers the new workspace member. Before that it promotes the lanes core
-binds into the registry as ordinary Definitions (`PROMOTE`, under top's ruling of 5 Oct 2026, Slack 1791150333.889129): each
+binds into the registry as ordinary Definitions (`PROMOTE`): each
 module's Definitions keep their bodies verbatim, so every id and descriptor digest stays what it was; the code that imports them
 imports the registry module instead, the lists keyed by them follow them or drop them, the target facts they carry out of P8's
 home are allowlisted where they now live (`P08_ADDED`), and an emptied lane package goes; core's quarantine package stays, the

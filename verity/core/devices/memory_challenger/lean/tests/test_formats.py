@@ -61,7 +61,7 @@ def with_malformed(valid: st.SearchStrategy) -> st.SearchStrategy:
     return mostly(valid, st.one_of(malformed(valid), st.none()), 4)
 
 
-def WIDE(bits: int) -> st.SearchStrategy:  # noqa: N802
+def WIDE(bits: int) -> st.SearchStrategy:
     """A natural of `bits` bits, now and then one past them."""
     return mostly(st.integers(0, 2 ** bits - 1), st.integers(2 ** bits, 2 ** (bits + 2)))
 

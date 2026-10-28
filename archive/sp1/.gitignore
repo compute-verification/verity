@@ -1,4 +1,0 @@
-/target
-*.bin
-# the SiLU table is compiled into the common crate (include_bytes!); it is source, not an output
-!common/src/elem_silu_table.bin

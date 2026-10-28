@@ -40,6 +40,7 @@ S8 = [bind(BG.BlackwellS8ImmaDot32), bind(BG.S32ToF32Rn), bind(BG.GemmAccumulato
       bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8)]
 PADS = [bind(BG.GemmCoordinatePad, T=1, K=32, **BG.GEMM_HOPPER), bind(BG.GemmCoordinatePad, T=17, K=32, **BG.GEMM_HOPPER)]
 ROWS = bind(BG.ScaledMmS8CoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8)
+RESIDUAL = bind(BG.ScaledMmS8ResidualCoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8)
 PVROWS = [bind(BG.PvRow, T=T, K=32, D=64, **BG.GEMM_HOPPER) for T in (1, 8, 32)]
 PVROWPAD = bind(BG.PvRowPad, T=32, K=32, D=64, **BG.GEMM_HOPPER)
 
@@ -72,13 +73,14 @@ PINS = {
     PADS[0].id: (15810, 30196, 1537, "5b7d01d00c96f657cc50610f32444b115d4eeef67f3bbc35b8b7d4797f92b9d42c8d5df9d4af5a7a29b9ad8e1189258001ede667860a887e60553279b54c5fa0"),
     PADS[1].id: (15810, 30196, 1537, "881b9ed3708fd486d94a3f476c27a71d34f4ff7c8b5dfc6a376f33e5e47ae0dc551a1ab1ca4a217265638dd9bc3ab998c678eb166fec4f648fd95c5a72860726"),
     ROWS.id: (13546, 30500, 1286, "a41ad1ee8f4e69ac0d97cd1ffaaaffdab0d665388f3447e517a8e611b898cfe206b1bd0259094bda0683d588c903f851529707467bbc0abacc85e717d2a77771"),
+    RESIDUAL.id: (14263, 31561, 1408, "3c691bca7c9dd21686fd75d1c37096c0609d5bc05a1473efbad46e38c8fa921e0ba2624e92c9e673aa2f717ddf034995f4492de69f05675a878f7e13a35cb552"),
     PVROWS[0].id: (1011840, 1932544, 98368, "d1073d6d6cce761273e1431921924db345f441efd139b081eca21994371562c0fa2910abf53780ced933673655347a5cee79b6adceacecf15e3563e1d8498a67"),
     PVROWS[1].id: (1011840, 1932544, 98368, "404904a5f6b17d5010aa17c68f93cb69ce514c3719a0e5746431bda079e5cccc990d4172ea25769a06ceb9bc9c9d1f1c187c38dc46959737a11673f55a4a1568"),
     PVROWS[2].id: (1011840, 1932544, 98368, "52c7bce9fe1c63421d9a49037aa7585fb5e4a2c5fe93e1744ebdcfb28250da30ce33367174aa2489d4a4a660213c9466185d2a32d5c1998302a6f8aba3f3b55a"),
     PVROWPAD.id: (1046175, 2002233, 99424, "26bdff43d4ddbf9f867054015d45e79557aad78f57346b82e5b48785f517360c54af59f1a89268d75dcd5834f298bb45b0dd54c076944e43cf58d7c4d3610ee7"),
 }
 TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
-           *(t for t, _ in FP4), *S8, *PADS, ROWS, *PVROWS, PVROWPAD]
+           *(t for t, _ in FP4), *S8, *PADS, ROWS, RESIDUAL, *PVROWS, PVROWPAD]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -99,17 +101,21 @@ FAMILIES = [(BG.DotBf16, 16, BG.GEMM_AMPERE), (BG.GemmCoordinate, 16, BG.GEMM_HO
             (BG.PvRowPad, 16, {"T": 1, "D": 2, **BG.GEMM_HOPPER}),
             (BG.GemmCoordinateE4m3, 32, BG.GEMM_HOPPER_E4M3_MMAV2), (BG.GemmCoordinateNvf4, 64, BG.GEMM_SM120_NVF4),
             (BG.GemmCoordinateMxf4, 64, BG.GEMM_SM120_MXF4), (BG.GemmAccumulatorS8, 32, BG.GEMM_SM120_S8),
-            (BG.ScaledMmS8Coordinate, 32, BG.GEMM_SM120_S8), (BG.ScaledMmS8CoordinateRows, 32, {"R": 1, **BG.GEMM_SM90_S8})]
+            (BG.ScaledMmS8Coordinate, 32, BG.GEMM_SM120_S8), (BG.ScaledMmS8CoordinateRows, 32, {"R": 1, **BG.GEMM_SM90_S8}),
+            (BG.ScaledMmS8ResidualCoordinateRows, 32, {"R": 1, **BG.GEMM_SM90_S8})]
 
 
 @pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
 def test_each_composite_refuses_the_k_its_word_definition_refuses(defn, k, rest) -> None:
     """A K that isn't a multiple of the step, and for the s8 composites K = 2^17 (`test_gemm`, `test_integer_mma`)."""
-    for K in (k + 1, 3 * k // 2):
-        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={K} is not a multiple of the "
+    for bad in (k + 1, 3 * k // 2):
+        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={bad} is not a multiple of the "
                                                        f"{k}-wide step")):
-            bind(defn, K=K, **rest)
+            bind(defn, K=bad, **rest)
     if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate, BG.ScaledMmS8CoordinateRows):
+        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
+            bind(defn, K=1 << 17, **rest)
+    if defn is BG.ScaledMmS8ResidualCoordinateRows:
         with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
             bind(defn, K=1 << 17, **rest)
 
@@ -270,6 +276,26 @@ def test_the_row_split_s8_coordinate_agrees_with_its_word_definition_and_is_the_
     assert np.array_equal(BS.evaluate_words(ROWS, *parts), BS.evaluate_words(S8[3], x, sx, w, sw))
 
 
+def test_the_residual_coordinate_agrees_with_its_word_definition_and_is_the_coordinate_then_the_add() -> None:
+    """`ScaledMmS8ResidualCoordinateRows_v2{K=64, R=2}` is `Bf16AddF2fp_v2(r, ScaledMmS8CoordinateRows_v2{K=64, R=2})`, r
+    random, special and the coordinate's word negated."""
+    from verity.ml.circuits.ops.boolean import elementwise as EW
+
+    assert TR.word_of(RESIDUAL).id == "ScaledMmS8ResidualCoordinateRows_v1{K=64,R=2,DOT=BlackwellS8ImmaDot32_v1}"
+    rng = np.random.default_rng(36)
+    n = 1000
+    x, w = _s8_operands(rng, n, 64)
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = (np.abs(rng.standard_normal(n)) * 0.02 / 127).astype(np.float32).view(np.uint32)
+    parts = [x[:, :32], x[:, 32:], sx, w[:, :32], w[:, 32:], sw]
+    y = BS.evaluate_words(ROWS, *parts).reshape(n).astype(np.uint16)
+    special = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81], np.uint16)
+    r = rng.integers(0, 1 << 16, n, dtype=np.uint32).astype(np.uint16)
+    r[:len(special)], r[len(special):2 * len(special)] = special, y[len(special):2 * len(special)] ^ np.uint16(0x8000)
+    _agree(RESIDUAL, parts + [r])
+    assert np.array_equal(BS.evaluate_words(RESIDUAL, *parts, r).reshape(n), BS.evaluate_words(EW.Bf16AddF2fp, r, y).reshape(n))
+
+
 def test_the_padded_coordinate_agrees_with_its_word_definition_and_is_the_coordinate_on_zero_padded_rows() -> None:
     """`GemmCoordinatePad_v2{T, K=32}` on T words is `GemmCoordinate_v3{K=32}` on them followed by K - T words of +0 bits."""
     coord = bind(BG.GemmCoordinate, K=32, **BG.GEMM_HOPPER)
@@ -279,7 +305,10 @@ def test_the_padded_coordinate_agrees_with_its_word_definition_and_is_the_coordi
         target = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
         assert TR.word_of(target).id == f"GemmCoordinatePad_v1{{T={T},K=32,DOT=HopperBF16WgmmaDot16_v1}}"
         _agree(target, [xs[:, :T], ws[:, :T]])
-        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
+        def pad(a):
+            return np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
         assert np.array_equal(BS.evaluate_words(target, xs[:, :T], ws[:, :T]), BS.evaluate_words(coord, pad(xs), pad(ws)))
 
 

@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
-# The drawn-unit replay bundle proved (prove_bundle.py; M1, and with PB_K M3's rehearsal): the torch loop's window
-# and its tampered twin written under the fixture's test key, and the bundle made from the window (`prove_bundle.py make`).
-# Without PB_K the draw is the fixture's FIXTURE_DRAW under its registered subset:4; with PB_K=K the windows register
-# subset:K, the challenger logs its receipt of the window's registration, and Lean `flock-verify draw --registration`
-# draws the registered law's units uniformly over the window's whole partition on its own coins.
-# Then each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
-# decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the tampered
-# loop's member, stopped by the firewall and refused by Lean without it.
+# The drawn-unit replay bundle proved (prove_bundle.py; M1): the bundle PB_BUNDLE (its .bin beside it) of the
+# window PB_WINDOW; without PB_WINDOW, the store's art:d0b6e81f (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
+# tampered twin and the H200 interfaces' bundle of four drawn units under the window's registered subset:4, a fixture's draw).
+# Each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
+# decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
+# member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall
+# and refused by Lean without it. PB_LIVE=1 requires the bundle's draw to be live, with its receipt.
 #   research run --on vy-nebius-cpu-4 --pool proofs --as proofs --project verity --source . --cwd clone \
-#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_K=8] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
+#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from
 # (verity/ml/flock and verity/core/service/flock), and stops. PB_BINARIES=DIR (on the node, e.g. that run's out/bin) uses them
 # when DIR's stamp is this source's, and otherwise builds here: M3 builds before its window, not in it.
-# Kept in $OUT: the summary, the logs, the session records and a live draw's receipt and record; never a window's private
-# file or the bundle's payload.
+# Kept in $OUT: the summary, the logs and the session records; never a window's private file or the bundle's payload.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
@@ -28,7 +26,14 @@ PY=$REPO/.venv/bin/python
 
 STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
-log "prove-bundle: source $(git rev-parse HEAD), draw ${PB_K:+live, k }${PB_K:-FIXTURE_DRAW}, builds in $W"
+BUNDLE_WINDOW=art:d0b6e81fa20a0e2c9c6701ca4495e8092434ad8c9e7c08038d114ad42210980c
+FX=$W/bundle-window
+if [ -n "${PB_WINDOW:-}" ]; then
+  BUNDLE=${PB_BUNDLE:?PB_WINDOW needs its PB_BUNDLE} WINDOW=$PB_WINDOW TAMPERED=${PB_TAMPERED:-}
+else
+  BUNDLE=$FX/bundle.json WINDOW=$FX/window TAMPERED=${PB_TAMPERED-$FX/tampered}
+fi
+log "prove-bundle: source $(git rev-parse HEAD), bundle $BUNDLE, window $WINDOW, builds in $W"
 if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$STAMP" ]; then
   BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/flock-verify FWL=$PB_BINARIES/flock-firewall
   log "binaries: prebuilt in $PB_BINARIES, stamp $STAMP"
@@ -50,22 +55,22 @@ if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   log "build only: $O/bin, stamp $STAMP"
   exit 0
 fi
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/torch_loop:$REPO/benchmarks/e2e_demo:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/examples/h200/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
 # (prove_path/run.sh)
 export RUST_MIN_STACK=$((64 << 20))
 
-log "windows: the torch loop's (honest) and the tampered loop's, under the fixture's test key; then the bundle"
-"$PY" benchmarks/one_stage/prove_bundle.py make --scratch "$W" --out "$W/bundle" ${PB_K:+--k "$PB_K" --lean "$LEAN"} \
-  > "$O/make.log" 2>&1 || { tail -30 "$O/make.log"; exit 8; }
-grep '^MAKE' "$O/make.log" | tee -a "$O/job.log"
-cp "$W/bundle/receipt.json" "$W/bundle/draw.json" "$W/bundle/draw.log" "$O/" 2>/dev/null
-BUNDLE=$W/bundle/bundle.json
+if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path/run.sh's R
+  PYTHONPATH=$REPO/benchmarks/proof_throughput "$PY" -c 'import os, sys
+from verity_proof_throughput.store import store_env
+os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' data fetch $BUNDLE_WINDOW --to "$FX" > "$O/fetch.log" 2>&1 \
+    || { tail -20 "$O/fetch.log"; exit 8; }
+fi
 
 log "prove: the bundle's drawn members, then the negatives"
-"$PY" benchmarks/one_stage/prove_bundle.py --bundle "$BUNDLE" --window "$W/window" --tampered "$W/tampered" \
-  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_K:+--live} ${PB_FLIPS:+--flips $PB_FLIPS} \
+"$PY" benchmarks/one_stage/prove_bundle.py --bundle "$BUNDLE" --window "$WINDOW" ${TAMPERED:+--tampered "$TAMPERED"} \
+  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_LIVE:+--live} ${PB_FLIPS:+--flips $PB_FLIPS} \
   > "$O/prove_bundle.log" 2> "$O/prove_bundle.err"
 rc=$?
 grep '^PROVEBUNDLE' "$O/prove_bundle.log" | tee -a "$O/job.log"
