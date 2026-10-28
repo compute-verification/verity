@@ -297,8 +297,8 @@ def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     path = RAMLOCK / f"check-{slot['name']}.json"
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     doc = {"owner": "check", "gb": gb, "started": f"{now:%Y-%m-%dT%H:%M:%SZ}", "pid": os.getpid(),
-           "note": f"check slot {slot['name']}: {os.environ.get('RESEARCH_RUN_ID') or os.getcwd()}",
-           **({"priority": True} if priority else {}), **({"run_id": os.environ.get("RESEARCH_RUN_ID"), "run_dir": run_dir} if run_dir else {})}
+           "note": f"check slot {slot['name']}: {run_id() or os.getcwd()}",
+           **({"priority": True} if priority else {}), **({"run_id": run_id(), "run_dir": run_dir} if run_dir else {})}
     try:
         RAMLOCK.mkdir(parents=True, exist_ok=True)
         with open(RAMLOCK / ".admission.lock", "a") as lock:
@@ -451,7 +451,7 @@ def asker(by: str | None = None, twin: str | None = None) -> dict:
     """Who asked for a slot: this process, the run it belongs to, the tree it checks and its commit (RESEARCH_SOURCE_SHA, the
     shipped tree's: a run's clone of it is <root>/scratch/<run id>/tree, which names none), who (--by, else RESEARCH_AGENT_URL),
     and its pair when it is a twin."""
-    return {"pid": os.getpid(), "run": os.environ.get("RESEARCH_RUN_ID"), "tree": os.getcwd(),
+    return {"pid": os.getpid(), "run": run_id(), "tree": os.getcwd(),
             **({"commit": c} if (c := os.environ.get("RESEARCH_SOURCE_SHA")) else {}),
             "by": by or os.environ.get("RESEARCH_AGENT_URL"), **({"twin": twin} if twin else {})}
 
@@ -497,6 +497,11 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
     if rank is not None and not (priority and re.fullmatch(r"\d{1,6}", rank)):
         sys.exit(f"slot: --rank {rank!r} needs --priority and a whole number below 1,000,000; {USAGE}")
     return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin, None if rank is None else int(rank)
+
+
+def run_id() -> str | None:
+    """The `research run` this process is part of (RESEARCH_RUN_ID), or None."""
+    return os.environ.get("RESEARCH_RUN_ID")
 
 
 def min_mem_gb() -> int | None:
@@ -909,7 +914,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if slot.get("scope") and (why := scope_refusal()):
         print(f"slot: scope=1 but systemd-run --user doesn't run here ({why}); running unscoped", file=sys.stderr, flush=True)
     elif slot.get("scope"):
-        cmd, unit = scoped(cmd, slot["name"], os.environ.get("RESEARCH_RUN_ID") or str(os.getpid()))
+        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()))
         env[SCOPE_ENV] = unit
         print(f"slot: check in its own scope {unit}.scope", file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
