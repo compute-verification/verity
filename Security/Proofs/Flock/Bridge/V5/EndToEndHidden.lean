@@ -6,7 +6,7 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 
 `EndToEndHiddenC.lean` at the verifier's public inputs:
 
-* `Layout.keyProgP_readsOwn`: `keyProgP`'s units read only their own gates and input gates (`keyProgP_reads`);
+* `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_regCP`: `zk_session_soundHJ_custody_regC` at flock-verify `--zk --public-inputs`'s
   acceptance (`zk_headline_exec_tablesA` at `AcceptsZKP I own`, through `decodesZCJH_custodyP`), at `keyProgP` and the
   binding `rsZHJP`;
@@ -18,7 +18,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Audit Placed
 
-/-- **`keyProgP`'s units read only their own gates and input gates** (`keyProg_readsOwn`). -/
+/-- **`keyProgP`'s proof blocks read only their own gates and input gates** (`keyProg_readsOwn`). -/
 theorem keyProgP_readsOwn (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
     (outs : Finset (Fin (keyN c hU n))) (u : Fin n) : ((keyProgP c pi hU n).partition outs).ReadsOwn u :=
   readsOwn_of_rows (fun u => Const.Prog.instC (keyProgP c pi hU n) outs u)
