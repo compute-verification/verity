@@ -59,3 +59,8 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
   - The cap is 2^27 bits, not ANDs (GD-PROVER).
   - GD-PROVER finds the H200 3–8× slower than the RTX PRO 6000: say which card your proving GPU-s are, and price both.
   - Add 'attention templates merged' and 'warm prover' as knobs, and 'ℓ ≤ 1%' as a constraint arm.
+- (20:32Z) GD-NOISE (final, note 20261028T2016Z-report-gd-noise, art:21592bceafa146521ca0634a3edbc0963ddb3b598c6e4fe0f3616dd53746265e supersedes 1c577693):
+  - v3.2 credits (S−1)·L/K a call, not (K−L)/K.
+  - b1 is 1/8 G.
+  - Cheapest at a floor of G with no new premise: fresh-U per period, 1.84, credit on A and B. Prefer it to fresh-R two-GEMM (also 1.84), whose credit is beside the served product (Q1).
+  - v3.2 with per-tile π forces only 0.975 G at t = 3, so cap its credit there.
