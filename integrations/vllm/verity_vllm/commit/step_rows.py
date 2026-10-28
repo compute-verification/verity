@@ -1,9 +1,8 @@
 """The Commit's ``rows-sha512`` scheme: COMMIT-GPU's construction (``benchmarks/pouw/commit_gpu``) over a step's
 stream, on the windowed worker (``NativeCollectCommitter``, whose unset scheme it is) and its offline CPU core
-(``NativeHostCommitter.commit_block_offline``, by name).  Every Commit commits under it by default: the single-GPU Commit
-(``pipeline.commit``'s ``--commit-scheme``, on the windowed ``native_collect_v2b``) and every rank of a TP Commit (``pipeline.tp.commit``,
-under the SHA-512 TP run root ``pipeline.tp.run_root``); ``vllm-v1`` is by name (any other collector, an old record's configuration),
-and a single-GPU Commit takes it only to commit again the recorded vllm-v1 Commit ``--of-record`` names (`pipeline.commit.scheme_refusal`).
+(``NativeHostCommitter.commit_block_offline``, by name).  Every Commit commits under it: the single-GPU Commit
+(``pipeline.commit``'s ``--commit-scheme``, on the windowed ``native_collect_v2b``), the served Commit (``pipeline.serve_seal``) and
+every rank of a TP Commit (``pipeline.tp.commit``, under the SHA-512 TP run root ``pipeline.tp.run_root``).
 Every rule is core's (``hm96.SHA512``, ``rowleaf``, ``merkle``, ``vllm_v1``); this module only names the step's pieces, and ``native_rows.cu`` hashes the same bytes (``tests/commit/test_step_rows.py`` pins this module to core's
 conformance vectors, ``tests/commit/test_rows_cuda.py`` the kernels to this module).
 
