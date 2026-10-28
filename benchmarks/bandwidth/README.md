@@ -25,8 +25,3 @@ destination poisoned with 0xA5, sampled slots checked, and a control that writes
 - `write_host.c` (`bwwrite_host`) on the host's cores: labels by non-temporal and by cached stores, and `rep stosb`,
   one thread a core over 1, 2, 4, ... cores and each NUMA node's. `run_write_host.sh` is one Attempt on the CPUs the job
   was given.
-
-## Shared kernels
-
-`tagger.cu` holds device code that `word_codec/wc.cu`, `word_codec/wide.cu` and `kv_filler/topup.cu` include. Its
-header comment explains how each kernel is laid out.

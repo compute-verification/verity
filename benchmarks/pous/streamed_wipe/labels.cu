@@ -63,7 +63,7 @@ static const uint64_t IV_HOST[8] = SHA512_IV;
 
 __host__ __device__ __forceinline__ uint64_t rotr(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
 
-// One SHA-512 compression of the big-endian words `w` (clobbered) into `s` (benchmarks/bandwidth/tagger.cu's).
+// One SHA-512 compression of the big-endian words `w` (clobbered) into `s` (`benchmarks/codec_tensor/sha512.cuh`'s).
 __host__ __device__ __forceinline__ void compress(uint64_t s[8], uint64_t w[16]) {
 #ifdef __CUDA_ARCH__
   const uint64_t* K = K_DEV;

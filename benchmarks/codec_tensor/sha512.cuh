@@ -1,4 +1,5 @@
-// SHA-512's constants and compression, shared by wt.cu and reader.cu; included inside a namespace that defines u64.
+// SHA-512's constants and compression, shared by wt.cu, reader.cu and kv_filler/topup.cu; included inside a namespace
+// that defines u64.
 #define WT_SHA512_K                                                                                              \
   {0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL, 0x3956c25bf348b538ULL, \
    0x59f111f1b605d019ULL, 0x923f82a4af194f9bULL, 0xab1c5ed5da6d8118ULL, 0xd807aa98a3030242ULL, 0x12835b0145706fbeULL, \
@@ -26,7 +27,7 @@ static const u64 SHA512_IV_HOST[8] = WT_SHA512_IV;
 
 __host__ __device__ __forceinline__ u64 rotr64(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
 
-// One SHA-512 compression of the big-endian words w (clobbered) into s (`benchmarks/bandwidth/tagger.cu`'s).
+// One SHA-512 compression of the big-endian words w (clobbered).
 __host__ __device__ __forceinline__ void sha512_compress(u64 s[8], u64 w[16]) {
 #ifdef __CUDA_ARCH__
   const u64 *K = kSha512K;
