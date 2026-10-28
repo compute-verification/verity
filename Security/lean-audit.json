@@ -2465,7 +2465,7 @@
   "Definitions.Core.TC.Relation": {
    "imports": ["Definitions.Core.TC.Pipeline", "Definitions.Core.TC.Relation"],
    "except": [],
-   "why": "the relation (relation.py) imports no proofs and nothing of the semantics: the two transcriptions are independent"
+   "why": "the relation imports no proofs and nothing of the semantics: the two definitions are independent"
   },
   "Definitions.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions"],
