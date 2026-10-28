@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from collections import deque
 from collections.abc import Mapping
@@ -51,6 +52,8 @@ from verity.ml.commitments import MerkleTree
 from verity.core.protocols.pouw import circuit as pouw_circuit
 from verity.core.protocols.pouw import schemes as pouw_schemes
 from verity.core.protocols.pouw.audit import (
+    HM96,
+    HM96_WEIGHTS,
     TILE_SCHEMA,
     Epoch,
     Workload,
@@ -375,9 +378,10 @@ def _like(y: np.ndarray, x: Any) -> Any:
 class _Run:
     """One install's workload: the units served so far, their activation roots and the transcript's leaves."""
 
-    def __init__(self, scheme: Any, entry: str, settings: Settings, weight_roots: dict[int, bytes], salt: bytes) -> None:
+    def __init__(self, scheme: Any, entry: str, settings: Settings, weight_roots: dict[int, bytes], salt: bytes,
+                 salt_key: bytes) -> None:
         self.scheme, self.entry, self.settings = scheme, entry, settings
-        self.weight_roots, self.salt = weight_roots, salt
+        self.weight_roots, self.salt, self.salt_key = weight_roots, salt, salt_key
         self.units: list[Matmul] = []
         self.roots_a: list[bytes] = []
         self.leaves: list[bytes] = []
@@ -411,7 +415,7 @@ class _Run:
         rows = [a[i].tobytes() for i in range(mp)]
         u = Matmul(len(self.units), Shape(mp, k, n), w)
         self.scheme.check(u)
-        root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows).commitment.root
+        root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows, HM96, self.salt_key, u.index).commitment.root
         ctx = UnitContext(self.salt, u, root_a, self.weight_roots[w])
         tiles = ncp_tiles(self.scheme, ctx, self.scheme.noise(ctx), a, ops)
         z = np.empty((mp, n), np.int64)
@@ -555,7 +559,7 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-# The Pearl-C prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
+# The prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
 # and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
 _SALT_KEYS: dict[str, bytes] = {}
 
@@ -659,10 +663,12 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-    roots = {}
+    key, roots = os.urandom(32), {}
+    _SALT_KEYS[f"{NAME}:{scheme}"] = key
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
-        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])]).commitment.root.hex()
+        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,
+                                    HM96_WEIGHTS + w).commitment.root.hex()
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
@@ -718,7 +724,7 @@ def install(scheme: str, target: Target) -> Option:
             run.commits["registration"] = weights_claim(s)
         else:
             run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
-                   else _Run(s, entry, settings, roots, salt))
+                   else _Run(s, entry, settings, roots, salt, _SALT_KEYS.setdefault(entry, os.urandom(32))))
             run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
         if session is not None:
             run.commits.update(coin_source=PH.CHALLENGER, session=carried)

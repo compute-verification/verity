@@ -262,7 +262,8 @@ class _PearlC4:
             beacon = hashlib.sha256(f"verity/pouw/pearl-c4-arm/beacon/{shape.label}/{operands.seed}/{operands.index}"
                                     .encode()).digest()
             raw = self.d.read(operands.b.ptr, n * k * 2)
-            root_b = au.commit_rows(au.weight_binding(weight), -2, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(n)])
+            root_b = au.commit_rows(au.weight_binding(weight), -2, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(n)], "sha256",
+                                    public=True)
             unit = Matmul(0, PShape(m_pad, k, n), weight)
             self._epochs[key] = beacon, au.Epoch.unverified(au.Workload((unit,)), {weight: root_b.commitment.root}, beacon).salt
         return self._epochs[key]
@@ -332,7 +333,7 @@ class _PearlC4:
         got = self._commits.get((binding, index, count, k))
         if got is not None and got[0] == raw:
             return got[1]
-        tree = au.commit_rows(binding, index, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)])
+        tree = au.commit_rows(binding, index, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)], "sha256", public=True)
         self._commits[binding, index, count, k] = (raw, tree)
         return tree
 

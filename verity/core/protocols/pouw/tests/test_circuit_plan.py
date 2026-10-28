@@ -612,9 +612,9 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     rows = [bytes(v & 0xFF for v in r) for r in call.a]
     binding = audit.activation_binding(call.salt, 7)
-    domain = audit.rows_domain(binding, 7, len(rows))
-    tree = audit.commit_rows(binding, 7, rows)
-    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows])
+    domain = audit.rows_domain(binding, 7, len(rows), audit.HM96)
+    tree = audit.commit_rows(binding, 7, rows, salt_key=bytes(32), nonce=7)
+    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows], salt_key=bytes(32), nonce=7)
     _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
     assert window.commitment(an) == tree.commitment.root
     plan = t.draw(PL.WorkLaw(2), an, window)

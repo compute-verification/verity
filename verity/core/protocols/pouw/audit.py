@@ -124,13 +124,20 @@ def activation_binding(salt: bytes, index: int) -> bytes:
     return tagged("verity/pouw/activation-rows/v1", salt, index)
 
 
-def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
-                nonce: int = 0, digests: bool = False) -> MerkleTree:
-    """`rows` in one tree; under `HM96` each value is followed by its salt, `hm96_salt(salt_key, nonce, i)`."""
+def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = HM96, salt_key: bytes | None = None,
+                nonce: int = 0, digests: bool = False, public: bool = False) -> MerkleTree:
+    """`rows` in one tree.  Values are committed hiding, under `HM96` with the committer's 32-byte run key `salt_key`: each
+    value is followed by its salt, `hm96_salt(salt_key, nonce, i)`, so no one without the key recomputes the root from
+    candidate values.  A plain ``sha256`` or ``sha512`` tree is not hiding, and is refused unless ``public``, the caller's
+    statement that its rows need no hiding: rows the protocol makes public, or a plain format's tree (h0's) that a reference
+    tool or a recorded run replays, which no served commitment is."""
     if hash == HM96:
         if salt_key is None:
             raise ProtocolError(f"an {HM96} tree takes the prover's salt key")
         rows = [r + hm96_salt(salt_key, nonce, i) for i, r in enumerate(rows)]
+    elif not public:
+        raise ProtocolError(f"a plain {hash} tree is not hiding: values are committed under {HM96} with the committer's "
+                            "salt key, and public=True is for rows the protocol makes public")
     return MerkleTree(rows_domain(binding, owner, len(rows), hash, digests), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
 
 
