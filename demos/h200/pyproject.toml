@@ -29,6 +29,10 @@ inputs = [
     # the P2 v4 reference encode and decode the store runs
     "benchmarks/pous/p2_v1/__init__.py",
     "benchmarks/pous/p2_v1/reference.py",
+    # the staging decode `--stage-lib` stages through, and the wrapper of memory-accounting's library it calls
+    "benchmarks/torch_gpu/p2_stage/stage.py",
+    "benchmarks/torch_gpu/p2_stage/layout.py",
+    "benchmarks/pous/p2_v1/gpu.py",
     # the drawn-unit bundle's cross-step reads `kv_reads.py` opens and checks (`replay_bundle.open_reads`, `check_reads`)
     "demos/h200/interfaces/verity_e2e_demo",
 ]
