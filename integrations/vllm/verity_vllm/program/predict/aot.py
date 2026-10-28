@@ -248,7 +248,7 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         if log:
             log(f"[predict] {name}: {r.digest[:16]}… ({r.n_root_nodes} nodes)")
     wl = write_workload(phi, comps, canon, os.path.join(out, "build_workload"))
-    policy = dict(word="16/32", norm_scales=True, guarded_max=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
+    policy = dict(word="16/32", norm_scales=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
                   jobs=jobs or MN.cpus(), log=log)
     if len(phi.requests) > 1:
         man = MN.build_global(w, out, workload_digest=wl.digest, **policy)
