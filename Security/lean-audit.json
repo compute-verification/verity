@@ -970,6 +970,10 @@
    "owner": "@proofs",
    "digest": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8"
   },
+  "FlockSoundness.Assumptions.PinnedWindowDraws": {
+   "owner": "@training",
+   "digest": "9b1b85e1093e379908a5e2a85ee37d45f6362595fce48ee87163e867d3d6b408"
+  },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
    "owner": "@proofs",
    "digest": "9aaf647d65d56a4c584fe7f90319613b4e47f457a9de6f115e9f6716727e2645"
@@ -6670,6 +6674,30 @@
    "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
    "assumptions": [],
    "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
+  },
+  "Flock.SecurityProofs.WindowBound": {
+   "owner": "@training",
+   "signature": ["Flock.SecurityProofs.WindowBound : Flock.Guarantees.WindowBound"],
+   "assumptions": [],
+   "type_hash": "e3b5f9cec3436509dfd4ee10f1fea8b7b10b79d96e88549edc6b781dd2a9987f"
+  },
+  "Flock.SecurityProofs.WindowBound_honest": {
+   "owner": "@training",
+   "signature": ["Flock.SecurityProofs.WindowBound_honest : Flock.Guarantees.WindowBound_honest"],
+   "assumptions": [],
+   "type_hash": "6bd4b0660c5b418ebe152f9fcd326b094964b1f6d82edfba46b03f729c42f934"
+  },
+  "Flock.SecurityProofs.WindowBound_nontrivial": {
+   "owner": "@training",
+   "signature": ["Flock.SecurityProofs.WindowBound_nontrivial : Flock.Guarantees.WindowBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "470d47a84df1dc0ceeec5fc13e307d501a74af3aecce98a53114637681d84744"
+  },
+  "Flock.SecurityProofs.WindowDraw": {
+   "owner": "@training",
+   "signature": ["Flock.SecurityProofs.WindowDraw : Flock.Guarantees.WindowDraw"],
+   "assumptions": [],
+   "type_hash": "98bf94e97d1f48ee7a24fe150309b4d22db009a64d9b0808645bcf54c92cbfed"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
@@ -13012,7 +13040,11 @@
    "Flock.SecurityProofs.ServedDraw_nontrivial": "lemma: ServedDraw's nontrivial lemma, its conclusion false at the honest instance when a check accepting every units array replaces the served draw (the live draw is one set at an outcome, not both #[] and #[0]'s); not a property of a Lean function.",
    "Flock.SecurityProofs.JointServed_honest": "lemma: JointServed's honest lemma, A3 at the honest challenger's coins (every Lc-byte string, Lc > 0) and so at every served sampling block's tapes; not a property of a Lean function.",
    "Flock.SecurityProofs.JointServed_nontrivial": "lemma: JointServed's nontrivial lemma, its bound false at a served sampling block whose wrong units are outside the budget and whose errors sum below 1 when a verifier accepting everything replaces flock-verify (the event is certain); not a property of a Lean function.",
-   "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizonBlocks with the state a block carries across a wipe read at its carried leaves, so it takes what IntegrityHorizonBlocks takes (TableCRZ, LinkCRZC, A3, RecordCustodyZKJ, hscope) and, at each carried leaf, ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states."
+   "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizonBlocks with the state a block carries across a wipe read at its carried leaves, so it takes what IntegrityHorizonBlocks takes (TableCRZ, LinkCRZC, A3, RecordCustodyZKJ, hscope) and, at each carried leaf, ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states.",
+   "Flock.SecurityProofs.WindowDraw": "frozen (no-function): The decomposition of a window's stratified law at a member, and the service's split of a draw file into the members' session files (Member.sessionFile, a model of benchmarks/one_stage/a5.py's split in Security/Definitions/Flock/Audit/Window rather than executable code): a statement about a law and a model, with no acceptance of a function to take.",
+   "Flock.SecurityProofs.WindowBound": "frozen (no-function): The union bound of a window's members' session bounds, over any window body and members' events: it takes each member's bound in its own subset session game as a hypothesis (what a member's session guarantee gives once its strategy runs the rest of the window around the session) and composes them, with no acceptance of a function to take.",
+   "Flock.SecurityProofs.WindowBound_honest": "completeness: the honest lemma of WindowDraw and WindowBound: at the deployed window, through the one premise PinnedWindowDraws (its draw file and its three sessions' draw files by SHA-512), the window's draw is a draw of its stratified law (3744 units, strata of 2496, 624 and 624 units, one unit each), its thirteen members tile it inside their strata, the service's split of its draw file is the three pinned session files, every share has at most one unit, and the composed bound is at most 3 b when every member's session bound is at most b",
+   "Flock.SecurityProofs.WindowBound_nontrivial": "completeness: the nontrivial lemma of WindowBound, its conclusion negated at a closed toy: at a window of 3 units in two strata drawing one unit each, with one member across both whose event is a share of two units and whose session bound is 0, the window's event is above the composed bound 0; WindowBound's other premises hold at the toy and the member's being inside its stratum fails, by helper lemmas outside the record"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -21316,6 +21348,10 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ServedDraw",
     "Flock.SecurityProofs.ServedDraw_nontrivial",
+    "Flock.SecurityProofs.WindowBound",
+    "Flock.SecurityProofs.WindowBound_honest",
+    "Flock.SecurityProofs.WindowBound_nontrivial",
+    "Flock.SecurityProofs.WindowDraw",
     "FlockSoundness.Audit.Adaptive.harm_budget",
     "FlockSoundness.Audit.Adaptive.harm_count",
     "FlockSoundness.Audit.Adaptive.harm_count_kstar",
@@ -21351,6 +21387,36 @@
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Definitions.Flock.Audit.Window": {
+   "digest": "0aacf5690d8865397970a92217ff06d8cefece816329b02d362c7da6b1a9d7f7",
+   "definitions": {
+    "FlockSoundness.Audit.Window.DrawFile": "b15026008141c2849eca0289d649bbb79dd7fcb403ea321b60af68c52f6538c4",
+    "FlockSoundness.Audit.Window.DrawFile.k": "423b156cb97895609b396b26660f8c6ea801c23487f054832160ad86b7ffb496",
+    "FlockSoundness.Audit.Window.DrawFile.law": "d184acdc1c7528ee14f3183326f104278d9a5ac8a38e66212210caa99e82aecd",
+    "FlockSoundness.Audit.Window.DrawFile.population": "c45e89a2efee4a625cb9580c0bb0eb318e851fc587800cc9dbaf3a1480dba098",
+    "FlockSoundness.Audit.Window.DrawFile.strata": "84f63ea7d593a727ddd6135260c3bdeb803f032c14b394d260dbf4c9899ec2f6",
+    "FlockSoundness.Audit.Window.DrawFile.stratumOf": "2891691c5df1058afeba9b34bd382fc18d6368f3fafd8e59542a4c6aaa69da2d",
+    "FlockSoundness.Audit.Window.DrawFile.units": "f8db03b76f4fa1934742c0f4584371a307b0fa55a3033c494578280244b3d7d2",
+    "FlockSoundness.Audit.Window.Member": "d3bd6f3080b1ea7e5c4709354e87d377466254d7b721ee1b54db7b7d422c16ee",
+    "FlockSoundness.Audit.Window.Member.base": "835e9520704d649434c7b95763df4b2d1e0059df12292e3a73f2b9eefa69fcc2",
+    "FlockSoundness.Audit.Window.Member.localUnits": "602bb945aa713a128416beb9e10ff2228335840932e522d74f68bd65cb7cfa95",
+    "FlockSoundness.Audit.Window.Member.range": "0210145bb4a50bf29a778b95658cdca1f700f56ef2e885e02d47960aeb7e8647",
+    "FlockSoundness.Audit.Window.Member.sessionFile": "78815b8925a950adb9e42905c5c946698944f1d1731d759c62b3847360081a0c",
+    "FlockSoundness.Audit.Window.Member.share": "ae5a2411f8853992a8b3df37fcb8738c48ef01a17a8481146b4b833cb4adebad",
+    "FlockSoundness.Audit.Window.Member.size": "e7a3edf01b9d0ea7889b67bc45d595425a943164bde970a2d9366d9ff54da968",
+    "FlockSoundness.Audit.Window.Member.unshift": "8e3f03a3efa7a1a4885ac3bdbd1d62d1cced3472ed88359dd1c4de53aa2fe252",
+    "FlockSoundness.Audit.Window.StratumFile": "0860f50ef536bf16f40c3cdccb55271268dbaf1082070e03a0bb80c93da5d0bd",
+    "FlockSoundness.Audit.Window.StratumFile.k": "2e6b3ea920ac3aaa3fa7fa4eea3f646c7ecdbfe5d5bc940153462564831e3a95",
+    "FlockSoundness.Audit.Window.StratumFile.units": "d317accb5bc9df8f604b034c40b4f48a6caaf779e1b7473345136dff78702f0b",
+    "FlockSoundness.Audit.Window.audit": "9209426e77fc3e836833e6b06a3bf09d2944441529f2bcc2988a112126d2f7ed"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.WindowBound",
+    "Flock.SecurityProofs.WindowBound_honest",
+    "Flock.SecurityProofs.WindowBound_nontrivial",
+    "Flock.SecurityProofs.WindowDraw"
    ]
   },
   "Definitions.Flock.Circuit": {
@@ -21718,6 +21784,10 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ServedDraw",
     "Flock.SecurityProofs.ServedDraw_honest",
+    "Flock.SecurityProofs.WindowBound",
+    "Flock.SecurityProofs.WindowBound_honest",
+    "Flock.SecurityProofs.WindowBound_nontrivial",
+    "Flock.SecurityProofs.WindowDraw",
     "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -48848,6 +48918,33 @@
    },
    "guarantees": ["Flock.SecurityProofs.EndToEnd"]
   },
+  "Proofs.Flock.EndToEnd.WindowDraw.Statement": {
+   "digest": "2108fb94741cfd33b806c1dbaf7126f9837eef39f97f916f30e8d95ba79d1103",
+   "definitions": {
+    "Flock.Guarantees.WindowBound": "9eb845e51ec60d9e2ba9db29abebd26eebc4e6cb1e277ee82c53e459dbd8b7e8",
+    "Flock.Guarantees.WindowBound_honest": "a8d0194da7b02ec0fa00b07b412c82c7b1bc66011ef1d746fde95c2fd1d46172",
+    "Flock.Guarantees.WindowBound_nontrivial": "ef8db94c08c4773e1054c37c25c4293866f8b65198e2afbc49a001fbb875f1d1",
+    "Flock.Guarantees.WindowDeployed.drawDigest": "ef2490fcdcbbf569904c476a7690772f00b005ae0bee9004c36640b70c34d12e",
+    "Flock.Guarantees.WindowDeployed.k": "0791b65e78d3631fbe76a0ff73a86a9b09c803556a7ad5722c2eecdd846fd439",
+    "Flock.Guarantees.WindowDeployed.m10Digest": "048e5ee178dedad105c88f69b266fec4369bb1e9bd1e251c3edaffe906330a17",
+    "Flock.Guarantees.WindowDeployed.m12Digest": "145131cfcefbc2dab49d030b61e0b0b2694668aad4308e503651684ac46351bd",
+    "Flock.Guarantees.WindowDeployed.m1Digest": "7658f56037c432a78076ab3e9a6344fc2490ba93fbd4f0703248034c044131e1",
+    "Flock.Guarantees.WindowDeployed.member": "d0fcee70112f722a9f26f224b531f422f26c010f113c764afacea8e13c416355",
+    "Flock.Guarantees.WindowDeployed.str": "9df866f6220e807e98077c9af9026e81a6c2c5468ad39db319ac909011fdd5df",
+    "Flock.Guarantees.WindowDeployed.strata": "b07f194276f31c53b6ba619ac8a32d06db94b31c95a6fa29d3d7f87a5808a4a5",
+    "Flock.Guarantees.WindowDraw": "49c3175bc57b9e9aae7987659349e6320f3f88757f07c28d250f4d32508c095d",
+    "Flock.Guarantees.WindowToy.body": "358636b5e29a56b5cf7fc897c5dda7aa00dfce782cf9e7afb5b3a4cf16361853",
+    "Flock.Guarantees.WindowToy.k": "f16e59790891acd9adac20b475ed3742b529a68a98e9825ced427edcea139f4b",
+    "Flock.Guarantees.WindowToy.member": "5ae66e00b011e9f27969cf931e1cd6527934f7d5d0ee8d78962775304b2e19ee",
+    "Flock.Guarantees.WindowToy.strata": "f041a1128fae9764bb8a9f538eb57da0643e4f00d674fad2aab9041a8f404937"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.WindowBound",
+    "Flock.SecurityProofs.WindowBound_honest",
+    "Flock.SecurityProofs.WindowBound_nontrivial",
+    "Flock.SecurityProofs.WindowDraw"
+   ]
+  },
   "Proofs.Flock.EndToEndDrawn.Statement": {
    "digest": "eca515cb92ce8c381ce717240858b108d237e479ef4f4be80f92196407fab14a",
    "definitions": {
@@ -50954,6 +51051,13 @@
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
+  "Proofs.Flock.Soundness.Assumptions.WindowDraws": {
+   "digest": "3124e35af56db83fa413006b43515c6b34ac7441c5caea99f359535e70ff4a23",
+   "definitions": {
+    "FlockSoundness.Assumptions.PinnedWindowDraws": "9b1b85e1093e379908a5e2a85ee37d45f6362595fce48ee87163e867d3d6b408"
+   },
+   "guarantees": ["Flock.SecurityProofs.WindowBound_honest"]
+  },
   "Proofs.Flock.Soundness.Assumptions.Zk": {
    "digest": "ae8f3eb0afdd377ba4f48cff1c8e3d5e5122733af5dd06dd2b5e915203df2041",
    "definitions": {
@@ -51349,6 +51453,10 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.WindowBound",
+    "Flock.SecurityProofs.WindowBound_honest",
+    "Flock.SecurityProofs.WindowBound_nontrivial",
+    "Flock.SecurityProofs.WindowDraw",
     "FlockSoundness.Audit.Law.covers_window",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
