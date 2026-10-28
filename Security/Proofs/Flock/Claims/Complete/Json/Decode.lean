@@ -89,7 +89,7 @@ def streamRec (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array 
 
 /-- **The honest record, decoded.** -/
 def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray) (points : Array (Array F128))
-    (streams : Array (Array Round)) (proofs : Array ByteArray) : Session :=
+    (streams : Array (Array Round)) (proofs : Array ByteArray) : RunRecord :=
   { rootF := spec.sigma, rootB, publics := spec.tables.map fun _ => ByteArray.empty, points, y := yOf spec,
     streams := (spec.repStreams.zip streams).map (streamRec spec h rootB),
     proofSha := (spec.repStreams.zip proofs).map fun q => (q.1.2.2, hexOf (dgOf spec h q.2)) }

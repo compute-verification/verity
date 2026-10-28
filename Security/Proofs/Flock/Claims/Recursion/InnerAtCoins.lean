@@ -246,7 +246,7 @@ stream, or one fewer, skipping the round `j` of `R`'s stream that has no coins. 
 theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
-    {spec : SessionSpec} {sess : Session} {name : String} {st : StreamRec}
+    {spec : SessionSpec} {sess : RunRecord} {name : String} {st : StreamRec}
     (hic : RecVStar.innerCommits tr record reg bound shape = .ok cs)
     (hR : RecSetup.checkReads ish tt tr record cs = .ok ())
     (hdec : Record.decode spec record = .ok sess) (hst : sess.streams.find? (·.name == name) = some st) :

@@ -28,7 +28,7 @@ namespace Record
 /-- **`Record.decodeJWith` with its digests of encodings read through `keep`** (S5–S7, S12's digest width and
 retained bytes' digest, S13, S14), at the record's parsed value `j`: `keep := id` is `decodeJWith`
 (`decodeJWith_eq_decodeJWithK`). -/
-def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j : Json) : M Session := do
+def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord := do
   -- S1
   check ((← str j "kind") == "flock-live-session/v1") "S1: not a flock-live-session/v1 record"
   check (isNull j "aborted") "S1: the live session aborted"
@@ -129,7 +129,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
 
 /-- **`Record.decodeWith` with its digests of encodings read through `keep`**: the parse, then `decodeJWithK`.
 `keep := id` is `decodeWith` (`decodeWith_eq_decodeWithK`), `keep := fun _ => true` drops them (`decodeWithE`). -/
-def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session := do
+def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (text : String) : M RunRecord := do
   let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"
@@ -145,7 +145,7 @@ theorem decodeJWith_eq_decodeJWithK (hs : Hashes M) (spec : SessionSpec) (j : Js
   rfl
 
 /-- `Record.decodeWith` with its digests of encodings dropped. -/
-def decodeWithE (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session :=
+def decodeWithE (hs : Hashes M) (spec : SessionSpec) (text : String) : M RunRecord :=
   decodeWithK (fun _ => true) hs spec text
 
 theorem decodeWith_eq_decodeWithK (hs : Hashes M) (spec : SessionSpec) (text : String) :

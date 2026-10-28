@@ -166,7 +166,7 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
   exact (Claims.Bridge.Custody.mapM_forall₂ hmap').imp fun _ _ hx => mapError_forall₂ hx
 
 /-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
-theorem held_eq {spec : SessionSpec} {text : String} {sess : Session} {j l : Lean.Json}
+theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : Lean.Json}
     {rp : Array (Array String)} {pts : Array (Array F128)}
     (hdec : Record.decode spec text = .ok sess) (hj : Flock.JsonParse.parse text = .ok j)
     (hl : j.getObjVal? "link" = .ok l) (hrp : l.getObjValAs? (Array (Array String)) "points" = .ok rp)

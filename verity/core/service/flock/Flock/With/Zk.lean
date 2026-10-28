@@ -294,7 +294,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
   return rec
 
 /-- `Zk.verifyRep` with the oracle's hashes. -/
-def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"

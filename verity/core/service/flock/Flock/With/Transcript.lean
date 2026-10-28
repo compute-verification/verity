@@ -65,7 +65,7 @@ def SessionSpec.dgWith (hs : Hashes M) (spec : SessionSpec) (b : ByteArray) : M 
 namespace Record
 
 /-- `Record.decodeWith` at the record's parsed value `j`: S1–S14 after the parse. -/
-def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M Session := do
+def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord := do
   -- S1
   check ((← str j "kind") == "flock-live-session/v1") "S1: not a flock-live-session/v1 record"
   check (isNull j "aborted") "S1: the live session aborted"
@@ -158,7 +158,7 @@ def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M Session := d
   return { rootF, rootB, publics, points := pts, y, streams, proofSha }
 
 /-- `Record.decode` with the record's digests through the oracle: the parse, then `decodeJWith` at its value. -/
-def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session := do
+def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M RunRecord := do
   let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"

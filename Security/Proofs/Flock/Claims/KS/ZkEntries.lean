@@ -171,7 +171,7 @@ reads off the proof files accepts at a cap has every level-0 opening verifying a
 entries, rep 0's then rep 1's, at the table's shape, the reps' stream rounds and the proof files. -/
 theorem zk_table_opens₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
-    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
     (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
