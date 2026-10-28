@@ -1,4 +1,4 @@
-"""The PoUB session over the node's `Store`, inside the prover's process (the Commit's, or the serve
+"""The remote bandwidth session over the node's `Store`, inside the prover's process (the Commit's, or the serve
 driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role `device.Device`
 and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
 `config.CommitConfig.remote_verifier`).
@@ -607,7 +607,7 @@ class Lockstep:
 
 
 class CommitSession:
-    """The Commit's PoUB session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
+    """The Commit's remote bandwidth session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
 
     ~~~text
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV

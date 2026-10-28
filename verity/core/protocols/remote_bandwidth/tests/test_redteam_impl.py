@@ -1,4 +1,4 @@
-"""Red team ra-remote-redteam-impl against PoUB as implemented: each test asserts the property the
+"""Red team ra-remote-redteam-impl against the remote bandwidth audit as implemented: each test asserts the property the
 audit's claim needs, and was marked xfail with its finding id while the reference broke it (the report is
 note:memory-accounting/ra-remote-redteam-impl); RB-1, RB-2 and RB-3 are fixed and pass.  The exploits run on
 `test_remote_bandwidth`'s store and drivers."""

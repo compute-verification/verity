@@ -524,7 +524,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     is to be read per statement for a stream (RS6).
 - **τ_ans**, from a passing measured run (see "Timing").
 - **The coin root** (see "Coins"): how a certifier checks a forwarded frame's derivation from its opened c is the
-  challenger's spec, as PoUB's is on #4968 and the network certifier's coin link's on #4946.
+  challenger's spec, as remote bandwidth's is on #4968 and the network certifier's coin link's on #4946.
 - **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price** (Daniel's open Ask).

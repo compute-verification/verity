@@ -1,4 +1,4 @@
-"""PoUB run over the node's `Store` end to end on the CPU: `remote.prove` (the prover's side, the
+"""The remote bandwidth audit run over the node's `Store` end to end on the CPU: `remote.prove` (the prover's side, the
 Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s verifier, registers the store, records its
 memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
 over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2 windows).  The honest audit run is

@@ -1,4 +1,4 @@
-# PoUB's sessions end to end: the verifier's process (`verifier.py`), the prover's (`prover.py`,
+# The remote bandwidth audit's sessions end to end: the verifier's process (`verifier.py`), the prover's (`prover.py`,
 # its GPU backend `device.py` and `session.cu`, and `inplace.py`, its pass over vLLM's tensors where they are), and their
 # wire (`wire.py`). Not a package: `run.sh` runs both on a GPU node (`inplace.sh` gates the in-place pass), and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
@@ -12,7 +12,7 @@
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
 # on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
 # of the gate node's boundary. That store, what a pinned
-# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are PoUB's own
+# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
 # (`verity/core/protocols/remote_bandwidth/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -25,12 +25,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # the challenger's coins name their claim instance (sampled_proofs/challenger.py's `coin_claim`)
           "verity/core/claims/__init__.py",
           # the Lean verifier the sessions run beside audit.Session, which computes auditor_line.py's line
-          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, PoUB's package and its
+          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
           # path requires
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
-          # a transcript replayed through both verifiers (PoUB's lean/tests/replay.py, over the difftest)
+          # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/core/difftest/python",
           # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
           "verity/core/protocols/bandwidth",

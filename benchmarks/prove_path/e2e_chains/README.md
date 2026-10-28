@@ -29,7 +29,7 @@ recursion's knowledge form (12). The rest (2–6, 8 and 13) are the refactor pla
 
 **Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts 33 module prefixes from the tree rule
 until C-Flock's spec is extracted (RECKSLOCK, Wed 4 Nov). 31 are C-Flock's; the other two, `Proofs.Accounting.TS.Session`
-and `Proofs.Pouw.PearlC.FlockTile`, are on PoUW's chain. None is PoUS's, bandwidth's, PoUB's, the
+and `Proofs.Pouw.PearlC.FlockTile`, are on PoUW's chain. None is PoUS's, bandwidth's, remote bandwidth's, the
 certifier's, NCI's or accounting's, so this is a C-Flock question, plus one PoUW definition.
 - **lean's list** (run r20261025-031300-0fcc, in CHAINMAP's note): 40 `Prop`-valued definitions under `trees.except`
   that a locked statement takes without a lock entry. 39 are C-Flock's, and one, `SoundAtBridge.RowsSession.CanonRead`,

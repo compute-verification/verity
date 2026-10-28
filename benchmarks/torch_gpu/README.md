@@ -24,7 +24,7 @@ Each GPU script's header gives its command and the hardware it needs: CUDA's nvc
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.
 - `sha512_rows/`: the SHA-512 compression engine that `commit_slots` runs on: row digests, hm96-sha512 leaves and
   frame-v3-sha512 levels. `gpu.sh` holds every variant to `verity.ml.commitments`' reference, bit for bit.
-- `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with the PoUB
+- `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with the remote bandwidth
   audit's receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
 - `s8_dec_linear/`: P2's decode kernel (`p2stage.cu`) and the exact INT8 linear over its output. `h200.sh` holds the
