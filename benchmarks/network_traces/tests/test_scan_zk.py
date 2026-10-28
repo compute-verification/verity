@@ -69,27 +69,32 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert last.ports["sin"]["reads"] == [T - 1] and "o1" not in last.ports and "o1" not in last.bcs
     assert last.made["o1"] == [at.chain.states[T]] and last.buckets == [T - 1]
     assert first.ports["o1"]["root"] == ing.ports["sin"]["root"] == last.ports["sin"]["root"] == st.root.hex()
-    # the slot entries: leaf j·nb + b slot j's entry of the Programs' row at boundary b; the block one unit an entry,
-    # its o0 (no public word) the prog tree's leaf k, the tree under its o0 frame binding
-    (blk,) = h.rounds["block"]
-    cls, tr, nb = sz.CLASS, at.trees["prog"], T // sz.CLASS.EVERY
+    # the slot entries: lane j's tree, leaf b slot j's entry of the Programs' row at boundary b; the block a member a
+    # lane (block-c<j>), its unit j·nb + b's o0 (no public word) lane j's leaf b, each lane's tree under its member's
+    # o0 frame binding
+    cls, nb = sz.CLASS, T // sz.CLASS.EVERY
+    trs = [at.trees[p] for p in sz.lane_kinds(cls)]
     E = sz.entries_of(cls, 1, T)
-    assert len(tr.rows) == E == cls.NR * nb == 8
-    assert all(sum((sz._bits(tr, sz.entry_at(cls, nb, j, b * cls.EVERY)) for j in range(cls.NR)), [])
+    assert [len(tr.rows) for tr in trs] == [nb] * cls.NR and E == cls.NR * nb == 8
+    assert all(sum((sz._bits(trs[j], sz.entry_at(cls, b * cls.EVERY)) for j in range(cls.NR)), [])
                == at.chain.progs[b * cls.EVERY] for b in range(nb))
-    assert (blk.name, blk.base, blk.n, blk.refused, blk.outputs, blk.warden) == ("block", 0, E, None, None, {})
-    assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports["prog0"]["root"] == ing.ports["prog3"]["root"]
-    assert blk.ports["o0"]["reads"] == list(range(E)) and list(blk.ports) == ["o0"]
-    assert blk.made["o0"] == [sz._bits(tr, k) for k in range(E)] == [u[0] for u in blk.units]
-    assert blk.set_name == at.block_set and tr.binding == sz.block_binding(at.block_set, E)
-    # bucket t's prog<j> is one table row a boundary, its entry j·nb + ⌊t / EVERY⌋
+    blks = h.rounds["block"]
+    assert [(m.name, m.base, m.n, m.lane, m.refused, m.outputs, m.warden) for m in blks] == [
+        (f"block-c{j}", j * nb, nb, j, None, None, {}) for j in range(cls.NR)]
+    for j, (blk, tr) in enumerate(zip(blks, trs, strict=True)):
+        assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == first.ports[
+            f"prog{j}"]["root"]
+        assert blk.ports["o0"]["reads"] == list(range(nb)) and list(blk.ports) == ["o0"]
+        assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
+        assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
+    assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
+    # bucket t's prog<j> is one table row a boundary, lane j's leaf ⌊t / EVERY⌋
     for j in range(cls.NR):
-        reads = [sz.entry_at(cls, nb, j, t) for t in range(1, T - 1)]
-        assert ing.ports[f"prog{j}"]["reads"] == reads and reads[:2] == [j * nb] * 2
-        assert ing.entries[f"prog{j}"]["positions"] == [j * nb, j * nb + 1] and ing.refs[f"prog{j}"] == sz.REG.table(
-            reads)[1]
-        assert last.ports[f"prog{j}"]["reads"] == [sz.entry_at(cls, nb, j, T - 1)]
-    assert first.ports["prog1"]["reads"] == [nb] and "prog1" not in first.refs
+        reads = [sz.entry_at(cls, t) for t in range(1, T - 1)]
+        assert ing.ports[f"prog{j}"]["reads"] == reads and reads[:2] == [0] * 2
+        assert ing.entries[f"prog{j}"]["positions"] == [0, 1] and ing.refs[f"prog{j}"] == sz.REG.table(reads)[1]
+        assert last.ports[f"prog{j}"]["reads"] == [sz.entry_at(cls, T - 1)]
+    assert first.ports["prog1"]["reads"] == [0] and "prog1" not in first.refs
     assert first.bcs["o1"] + ing.bcs["o1"] == ing.bcs["sin"] + last.bcs["sin"]
     assert first.bcs["o2"] + ing.bcs["o2"] + last.bcs["o2"] == eg.bcs["state"]
     assert ing.ports["o1"]["root"] == ing.ports["sin"]["root"] and ing.ports["o2"]["root"] == eg.ports["state"]["root"]
@@ -116,13 +121,15 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert (U, at.unread.slot, at.unread.q) == (16, 0, 1) and sz.targets(at, "unread") == [u.name] == ["ingress-0"]
     assert (u.base, u.n, u.buckets, u.refused, u.outputs) == (0, 1, [U], None, [0])
     k = at.unread.entry
-    assert k == sz.entry_at(cls, nb, 0, U) == 1
-    row = sum((sz._bits(at.unread.tree, sz.entry_at(cls, nb, j, U)) for j in range(cls.NR)), [])
+    assert k == sz.entry_at(cls, U) == 1
+    row = sum((sz._bits(at.unread.tree if j == 0 else trs[j], k) for j in range(cls.NR)), [])
     assert sz.IS.prog_decode(cls, row) == [(0, *sz.IS.prog_decode(cls, at.chain.progs[U])[0][1:]),
                                            *sz.IS.prog_decode(cls, at.chain.progs[U])[1:]]
-    assert [sz._bits(at.unread.tree, x) for x in range(E) if x != k] == [sz._bits(tr, x) for x in range(E) if x != k]
+    assert [sz._bits(at.unread.tree, x) for x in range(nb) if x != k] == [sz._bits(trs[0], x) for x in range(nb)
+                                                                          if x != k]
     assert {p: u.made[p][0] for p in ("o1", "o2")} == {p: ing.made[p][U - 1] for p in ("o1", "o2")}
     assert u.ports["prog0"]["root"] == at.unread.tree.root.hex() != ing.ports["prog0"]["root"]
+    assert all(u.ports[f"prog{j}"]["root"] == ing.ports[f"prog{j}"]["root"] for j in range(1, cls.NR))
     assert u.ports["o1"]["root"] == u.ports["sin"]["root"] == ing.ports["o1"]["root"]
     assert u.ports["prog0"]["reads"] == [k] and u.ports["o1"]["reads"] == [U + 1] and u.ports["sin"]["reads"] == [U]
 
@@ -163,9 +170,10 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)
     at = h.at
-    assert at.windows == [0, 1] and [len(at.trees[k].rows) for k in ("state", "prog", "view")] == [
-        G * T, sz.TEST.cls.NR * G * T // sz.TEST.cls.EVERY, G * T]
-    assert h.rounds["block"][0].n == sz.entries_of(sz.TEST.cls, G, T)
+    cls, nb = sz.TEST.cls, G * T // sz.TEST.cls.EVERY
+    assert at.windows == [0, 1] and [len(at.trees[k].rows) for k in ("state", *sz.lane_kinds(cls), "view")] == [
+        G * T, *[nb] * cls.NR, G * T]
+    assert [m.n for m in h.rounds["block"]] == [nb] * cls.NR and cls.NR * nb == sz.entries_of(cls, G, T)
     honest = {m.name: m for m in h.rounds["honest"]}
     assert [(k, m.base, m.n) for k, m in honest.items()] == [
         ("first", 0, 1), ("ingress-0", 1, T - 1), ("ingress-1", T, T - 1), ("last", G * T - 1, 1),
@@ -208,13 +216,15 @@ def test_the_members_are_the_programs_ranges(G):
     """`members_of` against the partition's own ranges (stand-in templates; `program` asserts the same of the scan's):
     each template's first unit its first member's base and its count its members', the units 0 … N − 1 in order, the
     ingress units computing buckets 1 … G·T − 1, the last of them a member of its own (``last``), and the egress units
-    0 … G·T − 1; the unread round's one unit its bucket; the block round's one member every slot entry, which it must
-    be given."""
-    T, E, defs = 4, 3 * G, {"first": FIRST, "ingress": ING, "egress": EG, "block": BLK}
+    0 … G·T − 1; the unread round's one unit its bucket; the block round's members the slot entries, which it must be
+    given, a lane each, lane j's the nb consecutive units j·nb … (``block-c<j>``, as one-stage cuts a template)."""
+    T, E, L, defs = 4, 3 * G, 3, {"first": FIRST, "ingress": ING, "egress": EG, "block": BLK}
     with pytest.raises(ValueError, match="give entries"):
         sz.members_of(sz.BLOCK, G, T)
+    with pytest.raises(ValueError, match="the lanes dividing the entries"):
+        sz.members_of(sz.BLOCK, G, T, entries=E, lanes=2)
     for templates in {t for t, _o in sz.ROUNDS.values()}:
-        members = sz.members_of(templates, G, T, bucket=T + 1, entries=E)
+        members = sz.members_of(templates, G, T, bucket=T + 1, entries=E, lanes=L)
         counts = sz.counts_of(members)
         program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in templates])
         ranges = sz.PA.ranges(program, sz.PA.template_instances_query([defs[t] for t in templates]))
@@ -228,6 +238,9 @@ def test_the_members_are_the_programs_ranges(G):
             list(range(G * T)) if "first" in templates else list(range(E)) if block else [T + 1] if unread else [])
         if unread:
             assert [m.name for m in members] == [f"ingress-{(T + 1) // T}"]
+        if block:
+            assert [(m.name, m.base, list(m.buckets), m.lane) for m in members] == [
+                (f"block-c{j}", j * G, list(range(j * G, (j + 1) * G)), j) for j in range(L)]
         if "first" in templates:
             assert [(m.name, m.window, list(m.buckets)) for m in members if m.template == "ingress"][-2:] == [
                 (f"ingress-{G - 1}", G - 1, list(range(max(1, (G - 1) * T), G * T - 1))),
@@ -245,9 +258,10 @@ def _lanes(name: str, fixed: tuple[str, ...], L: int, NE: int) -> object:
 def test_the_scans_root_reads_each_units_slot_entries_at_one_root():
     """`scan_root`, the generator form `NetworkCheck.Period`'s `scanOf` reads (stand-in templates with the scan's
     parameters; the rows form's slow test reads the scan's own): each template one batch, the partition's ranges the
-    members', and one-stage's reads of the slot entries (`entry_reads`, `registered.reads` on the root's ``prog``)
-    each ingress unit's ``prog<j>`` at row j·nb + ⌊t / EVERY⌋ and no egress unit's. A root that gathers the entries
-    at other boundaries is refused by name."""
+    members', its inputs past the templates' own each lane's ``prog<j>`` of nb rows, and one-stage's reads of the slot
+    entries (`entry_reads`, `registered.reads` on the root's ``prog<j>``) each ingress unit's ``prog<j>`` at row
+    ⌊t / EVERY⌋ of lane j's own input and no egress unit's. A root that gathers the entries at other boundaries is
+    refused by name."""
     cls = SimpleNamespace(NR=2, EVERY=2, KO=1, IDB=1)
     G, T, NE = 1, 8, sz.IS.entry_bits(cls)
     nb = G * T // cls.EVERY
@@ -259,9 +273,10 @@ def test_the_scans_root_reads_each_units_slot_entries_at_one_root():
     root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, cls.EVERY)
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     assert [(lo, n) for _t, lo, n in sz.PA.ranges(root, query)] == [(0, 1), (1, T - 1), (T, T)]
-    assert [n for n, _t in root.fn.signature()[0]] == ["0.row", "1.row", "1.sin", "2.state", "prog"]
+    assert [(n, t.n) for n, t in root.fn.signature()[0]][3:] == [("2.state", T), ("prog0", nb), ("prog1", nb)]
+    assert [n for n, _t in root.fn.signature()[0]][:3] == ["0.row", "1.row", "1.sin"]
     assert sz.entry_reads(root, query, members, cls, nb) == {
-        f"prog{j}": [j * nb + t // cls.EVERY for t in range(T)] + [None] * T for j in range(cls.NR)}
+        f"prog{j}": (f"prog{j}", [t // cls.EVERY for t in range(T)] + [None] * T) for j in range(cls.NR)}
     skewed = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, 2 * cls.EVERY)
     with pytest.raises(SystemExit, match="aren't each unit's slot entries"):
         sz.entry_reads(skewed, query, members, cls, nb)
@@ -469,7 +484,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
-    ``SlotEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's, and
+    ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
     and two row registrations, each named by the registration's roots. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
@@ -477,8 +492,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
-    whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
-    the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
+    whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
+    swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
+    entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
     that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
@@ -497,11 +513,12 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     sz.entry_reads(program, query, members, cls, nb)
     (scan / "joint").mkdir(parents=True)
     (scan / "joint" / "program.json").write_bytes(canonical_json(encode_program(program)))
-    tr, st = h.at.trees["prog"], h.at.trees["state"]
-    prog = {"root": tr.root.hex(), "leaves": E, "domain": sz.ADV.domain(tr.binding, E).domain_id.hex()}
+    trs, st = [h.at.trees[p] for p in sz.lane_kinds(cls)], h.at.trees["state"]
+    progs = [{"root": tr.root.hex(), "leaves": nb, "domain": sz.ADV.domain(tr.binding, nb).domain_id.hex()}
+             for tr in trs]
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
-        {"port": "scan/prog", **prog}, {"port": "scan/state", **state}]
+        *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
     law = sz.DR.parse_law(f"stratified:{2 * T}")
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
                   for x in ("ee", "ff"))
@@ -514,12 +531,14 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     answer = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_law(f"stratified:{E}")
-    entries = PC.entries_port(sz.PA.template_id(defs["block"]))
-    assert entries == f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block'))}/o0"
+    entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
+    assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
+                       for j in range(cls.NR)]
 
-    def block_audit(o0: dict, port: str = entries, scan_state: dict | None = state) -> dict:
+    def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state) -> dict:
         stated = [{"port": "scan/state", **scan_state}] if scan_state else []
-        breg = R.record(block, bquery, blaw, sz.S.SCHEME, [{"port": port, **o0}, *stated], {"kind": "stand-in"},
+        breg = R.record(block, bquery, blaw, sz.S.SCHEME,
+                        [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated], {"kind": "stand-in"},
                         leaf_layer="cc" * 64)
         bdraw = {**sz.DR.derive(block, bquery, blaw), "population": E, "units": list(range(E))}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": list(range(E))}
@@ -527,7 +546,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                 "free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "registration": breg, "steps": 0}
 
     registrations = [h.at.sides[s][0].registration for s in ("ingress", "egress")]
-    audit = block_audit(prog)
+    audit = block_audit(progs)
     doc = {"audits": [audit], "registration": reg, "windows": [
         {"window": 0, "answer": answer, "registrations": registrations}]}
     (scan / "answers.json").write_text(json.dumps(doc))
@@ -569,18 +588,23 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
                    "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
-    elsewhere = {**prog, "root": "dd" * 64}
+    elsewhere = [{**o, "root": "dd" * 64} for o in progs]
     (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(elsewhere)]}))
     got = PC.reference(SP.rows_case(run, scan))
     assert (got["verdict"], got["reason"]) == ("reject", "window 0: the scan's prog is no compute audit's output")
-    (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(prog, entries[:-1] + "1")]}))
+    at_o1 = [q[:-1] + "1" for q in entries]
+    for unwired in ([*progs[1:], progs[0]], [progs[0], {**progs[1], "root": "dd" * 64}], progs[:1]):
+        (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(unwired, entries[:len(unwired)])]}))
+        got = PC.reference(SP.rows_case(run, scan))
+        assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), got
+    (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, at_o1)]}))
     got = PC.reference(SP.rows_case(run, scan))
     assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), got
     rows = [sz._bits(st, t) for t in range(T)]
     skipped = sz.tree("state", rows[:sz.TEST.A + 1] + rows[sz.TEST.A + 2:] + rows[-1:],
                       [w.head for w in h.at.sides["ingress"]], h.at.session)
     for scan_state in ({**state, "root": skipped.root.hex()}, None):
-        (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(prog, scan_state=scan_state)]}))
+        (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, scan_state=scan_state)]}))
         got = PC.reference(SP.rows_case(run, scan))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))

@@ -214,12 +214,13 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
-reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
-outside due and occupied slots, so a link-window's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
-compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
-prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the link-window by
-name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`, `io_shell.SlotEntry_v1`
-at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1` stand-in, whose entries,
+reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
+and ignores it outside due and occupied slots, so a link-window's entries are its NR·nb boundaries'. Unless each lane's
+`scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v1` or `SelectEntry_v1` template's entries
+(`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
+passes the scan), so `NetworkCheck.Period` refuses the link-window by name (`wired`). `wired` pins the template's whole
+body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and `SelectEntry_v1`'s),
+so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member, whose entries,
 read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the requests from its
 own registered `SCAN_STATE`, and the check refuses, last, by name, a link-window whose scan's state isn't a wired
 audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
