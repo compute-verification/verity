@@ -4,5 +4,5 @@
 q = 1.22                  # lane instructions a table word
 bytes = 3.5               # L2 bytes a table word (6.0 single-field: --lookup-bytes 6)
 sms = 148
-mhz = 1965                # f_max at default clocks (EPS1 DC, 06:01Z)
+mhz = 1965                # f_max at default clocks (EPS1 DC)
 source = "SPEC's SCALAR-ROUTE as restated (named assumption): a right fresh word costs >= 2.03 issue slots, or >= 1.22 slots and 3.5 B of table loads (6.0 B single-field); the B200's L2 unmeasured, so unbounded"
