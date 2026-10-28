@@ -94,9 +94,9 @@ def path (D : Nat) (leaves : List (Nat × ByteArray)) (pos : Nat) : Except Strin
 of the row's `leaf`. A unit past `UB` bits or a row past `PB` bits is refused. -/
 def rowLeaves (UB PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) : Except String (List (Nat × ByteArray)) := do
   checkShape UB PB
-  rows.mapM fun ((u, r), bc) => do
-    unless u < 2 ^ UB && r < 2 ^ PB do throw s!"row {r} of unit {u} does not fit UB {UB}, PB {PB}"
-    pure (index u r PB, leaf bc)
+  if let some ((u, r), _) := rows.find? fun ((u, r), _) => !(u < 2 ^ UB && r < 2 ^ PB) then
+    throw s!"row {r} of unit {u} does not fit UB {UB}, PB {PB}"
+  pure (rows.map fun ((u, r), bc) => (index u r PB, leaf bc))
 
 /-- **A rows tree's root**: the input rows' tree, or the output rows', of depth `UB + PB` over the inner statement's rows
 `((unit, row), b ‖ c)` in increasing order. A root of 64 zero bytes is refused: it is the output of an instance whose row
