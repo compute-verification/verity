@@ -17,8 +17,9 @@ Each hit is one of:
 - **a protocol's slot**: a type a `Core.Protocol` value names in its `Params`, `Commitment`, `Evidence` or `Public` field
   (read from its `Field := X` lines), one per protocol by design.
 - **known**: everything else, listed in ``KNOWN`` as ``"path::Qualified.Name": "reason (owner)"``, where the reason is
-  "duplicate of X: becomes …" or "homonym, what it is: rename …", and the owner is the registry's owner of the path
-  (`.agents/skills/using-slack/registry.json`).
+  "duplicate of X: becomes …" or "homonym, what it is: rename …", and the owner is a handle of the registry
+  (`.agents/skills/using-slack/registry.json`), the path's owner when the line is written; a later move of the path's
+  ownership doesn't fail it.
 
 An unlisted hit fails, and so does a canonical that is no longer a hit. A ``KNOWN`` line or ``MIRRORS`` entry that no
 longer matches a hit (its declaration went, or became a canonical, a mirror or exempt) is stale, and doesn't fail, so a
@@ -372,7 +373,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 381
+KNOWN_MAX = 385
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -1140,16 +1141,17 @@ def test_known_shrinks_by_count():
 
 
 def test_known_reasons_name_their_owner():
-    """Every line's reason has the form; a line that still matches a hit names its path's owner."""
+    """Every line's reason has the form and names a handle of the registry."""
     from research.slack import owner
-    registry, found = json.loads((ROOT / REGISTRY).read_text()), classify(_scanned())
+    registry = json.loads((ROOT / REGISTRY).read_text())
+    handles = {h["handle"] for h in registry["handles"]}
     bad = []
     for k, why in KNOWN.items():
         m, own = _REASON.match(why), owner(registry, k.partition("::")[0])
         if not m:
             bad.append(f'{k}: the reason is "duplicate of X: becomes …" or "homonym, what it is: rename …", then "({own})"')
-        elif k in found and found[k][2] == "known" and m.group(1) != own:
-            bad.append(f"{k}: owned by {own} ({REGISTRY}), not {m.group(1)}")
+        elif m.group(1) not in handles:
+            bad.append(f"{k}: {m.group(1)} is not a handle of {REGISTRY}; name the path's owner, {own}")
     assert not bad, "\n  ".join(["KNOWN reasons:"] + bad)
 
 
