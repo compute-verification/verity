@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B prefill mix (VLLM-33), one arm a run, measured
+# The whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B prefill mix, one arm a run, measured
 # on the GPU by Nsight Systems' GPU metrics (Tensor Active, 10 kHz) over the engine's steady state; `served_util.py` reads
 # the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's Build and the
 # taps under UTIL_ROOT.
@@ -60,7 +60,7 @@ if [ "${1:-}" != leased ]; then
     [ "$lrc" = 0 ] || exit 4
   fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
-    --why "vllm-util80 (VLLM-33): serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
+    --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
   say "ARM $ARM T $T N $N WARM $WARM row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
     "learn budget ${VERITY_LEARN_HOST_BUDGET_MB:-4096} MiB"
   GPU_LEASE_WHO=vllm-util80 gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
