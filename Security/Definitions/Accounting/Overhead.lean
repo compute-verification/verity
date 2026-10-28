@@ -93,10 +93,10 @@ noncomputable def overhead {In L Srv : Type} [Fintype Srv] {m : ℕ} (G : Task I
   threshold G 𝒜 X η / threshold G 𝒜phys X η
 
 /-- **The physical model's class** `𝒜_phys` on the hardware `H`: the computations whose runs are feasible under the
-physical model on every input (`Feasible`, each run read with an annotation of its own). The fleet's fixed-machine
+physical model on every input (`Feasible`, each run read with a usage of its own). The fleet's fixed-machine
 dynamics and its chosen-state budget (`FixedMachine`, `InitialBudget`) join it when stated. -/
 def physClass {In L E : Type} (H : Hardware L E) : Class In L :=
-  {p | ∀ x, ∃ ann, Feasible H (p.1 x).A ann}
+  {p | ∀ x, ∃ usage, Feasible H (p.1 x).A usage}
 
 /-- **The envelope** `𝒜_a` of a subprotocol application `a` whose claim on a run is `claim`: the computations on whose
 run at the input the claim holds. Protocol soundness bounds `Pr[accept ∧ (C, x) ∉ 𝒜_a]` by its failure bound `δ_a`
