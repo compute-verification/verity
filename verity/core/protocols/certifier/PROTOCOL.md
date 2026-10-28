@@ -1092,7 +1092,7 @@ Admission is the network certifier's decision on its own schedule. A cell, or th
 its bucket fails the connection there with one fail cell that carries no reason, and the lane stays held to its
 scheduled end. So the client's view of the server side is the schedule, each connection's fail cell or none, and the
 data in the cells (`WardenViewEqClientView`): the server's accept time, send timing, ACKs and flow control reach it only
-through the fail cells. The inference-only policy's transfer gates are these cells' bits, whose number per window the schedule fixes. The
+through the fail cells. NCI's transfer gates are these cells' bits, whose number per window the schedule fixes. The
 schedules are charged `log2 #schedules`, so a schedule that came to depend on the server is still counted. The content
 term (`k`: the egress data bits no proved unit fixes, `ε` times the data bits at the draw's `δ`) is a premise of the run,
 not an assumption. For the circuit's Program, `SecurityProofs.SampledLeakAccepted` counts it: the faulty proof blocks'

@@ -92,11 +92,11 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   U/s_× (above) replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
   Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
-  needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the slowdown lower bound only. For the served PoUW,
+  needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the overhead lower bound only. For the served PoUW,
   the one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's
   no-fold receipt, which takes none. PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee
   beside it is the size credit alone.
-- **The slowdown lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
+- **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the registered circuit computes anyway, through inference-block yields) as well as free
   compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
   compute can do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split
