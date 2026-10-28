@@ -23,9 +23,10 @@
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. Each request's
-#     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
-#     committed step's end is the serve dir's step_trace.jsonl's t_end, on the clock of the timings' start_unix. The serve
-#     dir's requests.jsonl, step traces and load.jsonl hold request values and stay on the node (`serve_commit.MIRRORED`).
+#     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) stay in the serve dir beside
+#     load.jsonl; each committed step's end is the serve dir's step_trace.jsonl's t_end, on the clock of the timings'
+#     start_unix. The serve dir's requests.jsonl, step traces, load.jsonl and timings hold request values and stay on the
+#     node (`serve_commit.MIRRORED`); what leaves is `served_overhead.py metrics`' aggregate ($OUT/serve/overhead.json).
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
@@ -57,7 +58,8 @@
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing, `accept` only when every
 #     one accepted on this node; any other server's answer is carried as elsewhere. Then, unless COMPOSITE is set empty,
-#     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring), which gate nothing.
+#     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
+#     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -279,7 +281,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
-    mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"
+    [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
   if [ "$LOAD" != front ] || [ "$rc" = 0 ]; then  # a front that failed sent the run's only requests, so none will close
@@ -414,7 +416,7 @@ fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
-  say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS"
+  say "COINS sampled proofs: Lean's IO.getRandomBytes in the verifier's process on $(hostname -s), the served node, not an auditor's challenger (PP_CHALLENGER unset); $H1_COINS"
 fi
 
 # 1-2. the endpoint and its requests, under the GPU lease
@@ -449,7 +451,7 @@ for s in seals:
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
     ok &= good
     print(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
-          f"({len(rr) // 2} bytes), {len(s.get('requests') or [])} requests; bundle {opened}: {'PASS' if good else 'FAIL'}")
+          f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed window(s), scheme {serve.get('scheme')}, "
       f"precision {serve.get('precision')})")
 sys.exit(0 if ok else 1)
@@ -469,7 +471,8 @@ done
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
 [ -n "$PICK" ] || { say "WINDOW refused: $(cut -c1-600 "$OUT/window.err")"; stop window 12; }
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
-say "WINDOW $PICK"
+echo "$PICK" > "$D/picked-window.json"
+say "WINDOW w$K (its requests, users and steps in the serve dir's picked-window.json, on the node)"
 cd "$TREE/integrations/vllm" || exit 9
 CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
@@ -479,17 +482,18 @@ WA=()
 [ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
   # shellcheck disable=SC2086
-  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1
+  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$D/advice.log" 2>&1
   [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
   [ "$k" = "$K" ] && break
 done
-[ -f "$D/advice/w$K/registration.json" ] || { tail -20 "$OUT/advice.log"; say "ADVICE w$K: none written"; stop advice 14; }
-cp "$D/advice/w$K/registration.json" "$OUT/registration-w$K.json"
-"$PY" tools/advice_compile.py "$D" --window "$K" > "$OUT/compile_w$K.log" 2>&1
+# the advice's length, the request Programs' names (their prompt lengths) and the window's request count are values: the
+# advice and compile logs and the registration stay in the serve dir, and only the advice's root leaves
+[ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE w$K: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
+"$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
-say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits", w["bits"])' \
+say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…")' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
-  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc: $(tail -1 "$OUT/compile_w$K.log" | cut -c1-300)"
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", the serve dir's compile_w$K.log on the node")"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
@@ -511,9 +515,10 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
-[ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT"
+comp=0
+[ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 # V3c after the record, each step within its limit: it gates nothing
 v3c_commit && v3c_audit
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
+[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"

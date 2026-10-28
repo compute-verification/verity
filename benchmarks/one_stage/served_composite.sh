@@ -16,7 +16,7 @@
 # output directories are under SERVE_DIR/private/composite/PRODUCT, on the node, with every log of this step.
 # OUT/verdicts.txt gets each case's protocol and verdict (served_case.py's CASE lines) and each product's NOT_ESTABLISHED
 # and VERDICT lines, headed COMPOSITE, and nothing else. Without served_case.sh or composite.py in the tree it says so and
-# does nothing. It makes no verdict: exit 0 when each product's Lean answered, else 1.
+# exits 1, since no product's Lean answered. It makes no verdict: exit 0 when each product's Lean answered, else 1.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -27,7 +27,7 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 for f in benchmarks/pous/served_case.sh benchmarks/one_stage/composite.py; do
-  [ -f "$f" ] || { say "COMPOSITE: not run, this tree has no $f"; exit 0; }
+  [ -f "$f" ] || { say "COMPOSITE: not run, this tree has no $f"; exit 1; }
 done
 mkdir -p "$P" && chmod 700 "$D/private" "$P"
 exe() {  # Lean executable $1 of package dir $2, built, its path printed

@@ -581,7 +581,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     """served_composite.sh with a stand-in lake, served_case.sh and composite.py: PoUS's case is written under the serve
     dir's private dir with both Lean answers built and passed; onsite gets the cases of its own subprotocols and remote
     none of them; OUT/verdicts.txt gets the CASE line's protocol and verdict and each product's NOT_ESTABLISHED and VERDICT
-    lines, never a PIECE line, a log or a path; and without composite.py in the tree it does nothing."""
+    lines, never a PIECE line, a log or a path; and without composite.py in the tree it says so and fails, since no Lean
+    answered."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -612,7 +613,7 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     assert oct((d / "private").stat().st_mode & 0o777) == "0o700" and list(out.iterdir()) == [out / "verdicts.txt"]
     (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
     (out / "verdicts.txt").unlink()
-    assert run().returncode == 0
+    assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
 
 
