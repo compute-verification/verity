@@ -1,7 +1,9 @@
 """A templated statement (`verity/flock-circuit/tmpl`) staged from a flat one: the fixture `pod/90-tmpl-unit.sh`
 proves and hands to the Lean verifier.
 
-``template`` composes the flat hidden-output statement of ``N`` RoPE d64 instances (``flat.txt``) and writes its unit as a
+``template`` composes the flat hidden-output statement of ``N`` RoPE d64 instances (``flat.txt``), bound to the
+`verity/partition/v1` object `Q_template_instance` over `population_program` of the set's template at ``N`` (instance i is
+unit i), which the verifier holds (``partition.json``, with its program, ``program.json``), and writes its unit as a
 `flock-ir-tmpl/v2` template (``unit.tmpl``, :func:`verity_flock.tmpl.emit`). ``stage`` then writes the templated statement
 (``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's, its
 ``template`` the template's lines and its ``layout`` the layout mode, and every section but ``CIRCUIT unit``, which the
@@ -46,13 +48,20 @@ def sections(text: str) -> tuple[str, dict, list[tuple[str, str]]]:
 
 
 def template(out: Path) -> dict:
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_flock import circuit as FC
     from verity_flock import tmpl as T
 
     out.mkdir(parents=True, exist_ok=True)
     s = _set(out)
     low = FC.lowering_for_set(s)
-    text = FC.compose(low, s.subcircuit, statics=FC.set_statics(s))
+    definition = s.subcircuit.definition(**FC.set_statics(s))
+    program = P.population_program(definition, N)
+    part = P.partition(program, P.template_instance_query(definition))
+    text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=part["program"], statics=FC.set_statics(s))
+    (out / "partition.json").write_text(json.dumps(part))
+    (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     (out / "flat.txt").write_text(text)
     unit = dict(sections(text)[2])["unit"]
     t, stats = T.emit(T.parse_flat(unit.rstrip("\n").split("\n")))
