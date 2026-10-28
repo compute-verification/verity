@@ -307,6 +307,7 @@ theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (
       exact ⟨ops, hs.symm, Walk.operands_nil P _ _ _ ops hargs hops⟩
   · simp [throw, throwThe, MonadExceptOf.throw] at hs
 
+omit hB in
 /-- **A gate of an input node reads nothing.** -/
 theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.defs[P.root]!).body.nodes.size)
     (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
@@ -372,7 +373,7 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
       obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
       exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht _ y h⟩
   · obtain ⟨-, hqK, hin⟩ := inputArg_some hq
-    have := gate_input P hroot hB hL hqK hin hx1 hx2 (hinp q hqK hin) hgate
+    have := gate_input P hroot hL hqK hin hx1 hx2 (hinp q hqK hin) hgate
     rw [this] at hyo
     simp at hyo
 
