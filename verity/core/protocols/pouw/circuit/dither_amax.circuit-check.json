@@ -1,0 +1,32 @@
+{
+ "definitions": {
+  "PouwAmaxBlock_v1{W=8}": {
+   "and": 368,
+   "type": "29c3661ee8baa38c177b497f969e2653295fdc8137e61ea312fb7cd435d535c7de3170eb0c13091876e6f395c7dd9946434cb45c1af273cf8aed73ebfc548df7"
+  },
+  "PouwAmaxEq_v2": {
+   "and": 15,
+   "type": "962cbeeb164284963627bf9d4c61311e25cbbc6eed6c2b78e593043a610f818d8b65fdab96f4d217fdb878590df2d274fe65ce3c7703231077d6b7b5df8da8f4"
+  },
+  "PouwAmaxFold_v2": {
+   "and": 47,
+   "type": "4b9fb620520c7cbb85faa8bc03a3df46cf3e8c9f28ad90db840df1816290de2a7abcfd1ceb46ecec87d6c2323d6d0e900244015368e6c1feecb3ce71e6486b63"
+  },
+  "PouwAmaxMax_v2": {
+   "and": 32,
+   "type": "46cc9ecde4820804065b3af682b306357e65b6b3f643f768313c5400cc080ff38f7c4396b57f593faea03f66a67b1c7196fd0209f3929ac8c91f7e236fd23bd0"
+  },
+  "PouwAmaxRow_v1{N=1792}": {
+   "and": 57327,
+   "type": "566c0a71bdd067b3b33b66a447e5e16f97d124218aaf6d6fce4afadfa10a67beb40cb0e635ce3ef17556e1980dd8c68f4af55162fd54a80dce38285dae9553f2"
+  },
+  "PouwAmaxRow_v1{N=64}": {
+   "and": 2031,
+   "type": "bd1bd55acae0c9670c2ccfebcb385d527d467460a9f36f53270725d73ac1194483f08c3d9a0459a1a30c588838714173c1b68c07a3c4d4f975e55e6d337ed08e"
+  },
+  "PouwSiluMulBf16_v2": {
+   "and": 1380,
+   "type": "e37c82831d93fadb44233f8cca602000af6e05939824bb659540f0bceb49254654db687a8748f44e277fb3391a7a2c66fed99b65d4c128046e4afb071bf45d79"
+  }
+ }
+}
