@@ -4,13 +4,14 @@
 The measured step, `TrainStep_v1{L=30,B=8,S=512}` at smollm2-135m's shape (benchmarks/rho/data/circuits.toml), is 3.1e15
 gates, and the smallest step the registry builds (L = 1, B·S = 256) is about 1e13: neither is traversed gate by gate. The
 scaled step is the same body at `SCALED`'s model shape, with B·S = 16 tokens (the bmm's k16 step makes 16 the fewest a
-sequence holds). The registry refuses that shape in four places, which `scaled` lifts for as long as it is entered:
+sequence holds). The registry refuses that shape in five places, which `scaled` lifts for as long as it is entered:
 
 * `TrainStep_v1`'s captured M (`cublas_bf16.TRAIN_M`) and attention shapes (`cublas_bf16.TRAIN_BMM_SHAPES`);
 * the cuBLAS route table (`cublas_bf16.train_route`): every GEMM of the scaled step takes the unsplit route, the one the
   measured step takes for every forward and input-gradient GEMM but the LM head's (its weight gradients are split-K);
 * `RmsNormTorch`'s H ≥ 128 (`torch_train._lanes`, `reduce_lanes`), torch's vectorized reduce, at `setReduceConfig`'s
   lane count for the scaled row;
+* its weight gradient's column CTAs (`torch_train.column_ctas`, H ≥ 128 and M ≥ 64): the scaled columns are one CTA;
 * the optimizer's and SiLU's run lengths (`ADAM_N`, `ACT_N`), to divide the scaled tensors.
 
 Every Definition below the root is bound as `TrainStep_v1`'s body binds it; none is changed.
