@@ -605,9 +605,9 @@ class H1Run:
             z = int_mm(a, weight)
         call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
-            y = ZR.split(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
+            y = ZR.split(ZR.host(records), call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
-        self._recorded = (call, z, None if records is None else (records, numpy_of(s_a), numpy_of(weight_scale)))
+        self._recorded = (call, z, None if records is None else (records, s_a, weight_scale))
         return call
 
     def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
@@ -618,7 +618,7 @@ class H1Run:
             return None
         call, z, held = made
         v = CG.verdict(trace, y, z)
-        if v["credit"] and (why := ZR.refusal(held, call, TD.row_words(y, call.m, "<i2"))):
+        if v["credit"] and (why := ZR.refusal(held, call, y)):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v
