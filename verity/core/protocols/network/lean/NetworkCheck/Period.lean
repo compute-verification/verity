@@ -182,7 +182,6 @@ def protocolId : String := "verity/certifier/v0"
 def commitmentTag : String := "verity-network-certifier/period/v0"
 def clockTag : String := "verity-network-certifier/clock/v1"
 def oneStage : String := "verity/sampled-proofs/one-stage/v1"
-def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
 /-- A proof unit's public outputs are at most 16 bits (the values it commits can be wider). -/
 def outBits : Nat := 16
 def unitLevel : String := "unit"
@@ -257,7 +256,7 @@ structure Params where
   form : Form
   windows : Nat
 
-/-- A registration record and its one-stage digest. -/
+/-- A one-stage window record and its digest (`Flock.WindowRecord.digest`). -/
 structure Registration where
   record : Json
   digest : ByteArray
@@ -486,13 +485,13 @@ def paramsOf (j : Json) : V Params := do
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
 
-/-- A record of one of `formats` and its digest, the window record's (`Flock.WindowRecord.digestOf` of its format and
-canonical JSON, `registration.digest`). -/
+/-- A window record of one of `Flock.WindowRecord.FORMATS` and its digest (`Flock.WindowRecord.digest`,
+`registration.digest`). -/
 def registrationOf (j : Json) (ctx : String) : V Registration := do
   let format ← Flock.J.str j "format" ctx
-  unless formats.contains format do throw s!"{ctx}: format is not {" or ".intercalate formats}"
-  let body ← Flock.canon j
-  pure ⟨j, Flock.WindowRecord.digestOf format body.toUTF8⟩
+  unless Flock.WindowRecord.FORMATS.contains format do
+    throw s!"{ctx}: format is not {" or ".intercalate Flock.WindowRecord.FORMATS}"
+  pure ⟨j, ← Flock.WindowRecord.digest j⟩
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
