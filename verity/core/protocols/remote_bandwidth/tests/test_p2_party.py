@@ -1,7 +1,8 @@
 """The P2 session's party (`p2_party.py`): its registration, plan and openings round-trip their JSON, and a registration
-whose digest isn't its fields' or a plan that isn't one of its units is refused; its answer in the core interface's
-form is one `core_check` reads, and the prover reads a challenge in either form. Its sessions, decided by the Lean
-verifier with these books beside it, are `lean/tests/test_p2_party.py`'s, which run where Lake is."""
+whose digest isn't its fields' or a plan that isn't one of its units is refused; a session's parameters are the
+auditor's, and a request carrying other values is refused by name; its answer in the core interface's form is one
+`core_check` reads, and the prover reads a challenge in either form. Its sessions, decided by the Lean verifier with
+these books beside it, are `lean/tests/test_p2_party.py`'s, which run where Lake is."""
 
 from __future__ import annotations
 
@@ -70,6 +71,52 @@ def test_the_registrations_plan_round_trips_its_json_and_a_bad_one_is_refused(st
     for bad in ([[0, reg.blocks + 1]], [[0, 1], [1, 1]], [], "0,1", [[0]]):
         with pytest.raises(ValueError):
             p2_party.plan_of(doc | {"plan": bad}, reg)
+
+
+def _held(params) -> tuple[int, ...]:
+    return params.deadline_ns, params.min_passes, params.samples, params.window_ns, params.windows
+
+
+def test_the_honest_request_passes_and_the_params_are_the_auditors(store) -> None:
+    """A request carrying the auditor's values as they are passes, and `audit.Params` gets the auditor's: `SESSION`,
+    the served bandwidth piece's, by default, or the values a toy party is held to."""
+    reg = store.registration
+    assert p2_party.SESSION == {"deadline_ns": 10**9, "passes": 1, "samples": 1024, "window_ns": 10**9, "windows": 2}
+    params = p2_party.params_of(reg, p2_party.request_of(reg.node, **p2_party.SESSION))
+    assert _held(params) == (10**9, 1, 1024, 10**9, 2)
+    assert (params.blocks, params.codec, params.rows) == (reg.blocks, reg.codec, reg.rows)
+    toy = {"deadline_ns": 400, "passes": 2, "samples": 4, "window_ns": 800, "windows": 3}
+    assert _held(p2_party.params_of(reg, p2_party.request_of(reg.node, **toy), toy)) == (400, 2, 4, 800, 3)
+
+
+@pytest.mark.parametrize("key, value", [("deadline_ns", 2 * 10**9), ("samples", 1023), ("window_ns", 10**9 // 2),
+                                        ("windows", 1), ("passes", 2)])
+def test_a_request_off_the_auditors_session_is_refused_by_name(store, key, value) -> None:
+    """A longer allowance, fewer openings, a shorter window, fewer windows or another pass count than the auditor's is
+    refused, naming the parameter and both values."""
+    reg = store.registration
+    request = p2_party.request_of(reg.node, **p2_party.SESSION | {key: value})
+    with pytest.raises(ValueError) as e:
+        p2_party.params_of(reg, request)
+    assert str(e.value) == f"the request's {key} is not the auditor's ({value}, not {p2_party.SESSION[key]})"
+    toy = p2_party.SESSION | {key: value}
+    assert _held(p2_party.params_of(reg, request, toy)) == tuple(toy[k] for k in sorted(toy))
+
+
+def test_a_request_off_the_auditors_session_in_two_values_names_both(store) -> None:
+    reg = store.registration
+    request = p2_party.request_of(reg.node, **p2_party.SESSION | {"deadline_ns": 5 * 10**9, "samples": 16})
+    with pytest.raises(ValueError, match=r"^the request's deadline_ns is not the auditor's \(5000000000, not "
+                                         r"1000000000\); the request's samples is not the auditor's \(16, not 1024\)$"):
+        p2_party.params_of(reg, request)
+
+
+def test_the_party_refuses_session_parameters_that_are_not_positive(tmp_path, capsys) -> None:
+    path = tmp_path / "registration.json"
+    path.write_text("{}")
+    with pytest.raises(SystemExit):
+        p2_party.main(["--registration", str(path), "--stdio", "--deadline-ns", "0"])
+    assert "the session's parameters are positive integers" in capsys.readouterr().err
 
 
 ACCEPTED = {"protocol": p2_party.PROTOCOL, "registration": "ab" * 64, "unit_bytes": p2.UNIT_BYTES, "units": 40,
