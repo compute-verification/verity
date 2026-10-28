@@ -23,8 +23,10 @@ Writes sweep.jsonl (every config's record), best.json after each shape ({"arch",
 vllm_tiles_us, stock_us] (with `--zy` also zy_us, vllm_tiles_zy_us), ...]}}, what exactlin.CONFIGS[arch] takes, and with
 `--zy` "sass_gate"), quant.json, and with `--zy` cubins/ and sass_gate.json.
 
+`--only CFG,...` skips coarse and refine: the final stage runs on those configs and vLLM's tiles (a confirmation).
+
     python ksweep.py --out OUT [--models llama-3.1-8b,qwen3-8b] [--ms 1,16,32,64,256] [--top 4] [--reps 9] [--skip-quant]
-                     [--tma] [--zy]
+                     [--tma] [--zy] [--only CFG,...]
 """
 from __future__ import annotations
 
@@ -206,29 +208,31 @@ def sass(out: Path) -> dict:
 
 
 def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock, tma: bool = False,
-         zy: bool = False) -> dict:
+         zy: bool = False, only: tuple[X.Cfg, ...] = ()) -> dict:
     from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
         triton_scaled_mm,
     )
     table: dict = {}
     for n, k, m, names in kgate.shapes_of(models, ms):
         shape = Shape(n, k, m, zy)
-        med = stage(out, shape, coarse_grid(m, tma), 3, clock, "coarse")
-        refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, top) for w in WARPS for st in STAGES]
-        med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine")
+        if not only:
+            med = stage(out, shape, coarse_grid(m, tma), 3, clock, "coarse")
+            refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, top) for w in WARPS for st in STAGES]
+            med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine")
         vt = X.default_cfg(m, n, k)
         sa2 = shape.sa.reshape(-1, 1)
 
         def stock(xq=shape.xq, sa2=sa2, ws=shape.ws):
             for w, sw in ws:
                 triton_scaled_mm(xq, w.t(), sa2, sw, torch.bfloat16)
-        final = list(dict.fromkeys(best(med, top) + [vt]))
+        final = list(dict.fromkeys((list(only) if only else best(med, top)) + [vt]))
         med = stage(out, shape, final, reps, clock, "final", {"stock_triton_scaled_mm": stock}, zy)
         win = best(med, 1, skip=("stock_triton_scaled_mm",))[0]
         row = [m, str(win), med[str(win)], med.get(str(vt)), med.get("stock_triton_scaled_mm")]
         if zy:
             cubins(out, shape, win)
-            arms = {f"zy:{c}": shape.fn_zy(c) for c in dict.fromkeys([win, vt]) if str(c) in med}
+            timed_zy = list(dict.fromkeys(final if only else [win, vt]))
+            arms = {f"zy:{c}": shape.fn_zy(c) for c in timed_zy if str(c) in med}
             zmed = stage(out, shape, [], reps, clock, "zy", arms)
             row += [zmed.get(f"zy:{win}"), zmed.get(f"zy:{vt}")]
         table.setdefault(f"{n},{k}", []).append(row)
@@ -285,15 +289,18 @@ def main() -> int:
     ap.add_argument("--tma", action="store_true", help="add the TMA kernel's configs to the coarse grid")
     ap.add_argument("--zy", action="store_true", help="gate the final configs' zy path too, time the winner's, and "
                                                       "sass_gate.py the winners' cubins")
+    ap.add_argument("--only", default="", help="comma-separated configs: no coarse or refine stage, the final stage on "
+                                               "these and vLLM's tiles (with --zy each timed on the zy path too)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     models = tuple(a.models.split(","))
     ms = tuple(int(v) for v in a.ms.split(","))
+    only = tuple(X.Cfg.parse(c) for c in a.only.split(",") if c)
     clock = kbench.nvml()
     if not a.skip_quant:
         (out / "quant.json").write_text(json.dumps(quant(out, ms, a.reps, clock), indent=1) + "\n")
-    table = gemm(out, models, ms, a.top, a.reps, clock, a.tma, a.zy)
+    table = gemm(out, models, ms, a.top, a.reps, clock, a.tma, a.zy, only)
     if not a.zy:
         return 0
     doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models, "table": table, "sass_gate": sass(out)}
