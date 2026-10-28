@@ -217,8 +217,8 @@ def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), drawing `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordDraw {κ : ℕ} {X : Type} (node : Setup) (rec : Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
+def recordDraw {κ : ℕ} {X : Type} (node : Setup) (rec : Accounting.Remote.Draw.DrawCoins node.draws κ X → Record)
+    (correct : Fin node.draws → Accounting.Remote.Draw.DrawCoins node.draws κ X → Finset ℕ) :
     Accounting.Remote.Draw.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).drawReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
@@ -227,8 +227,8 @@ def recordDraw {κ : ℕ} {X : Type} (node : Setup) (rec : Accounting.Remote.Dra
 `ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordDraw`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Setup)
-    (recs : Cm → Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
+    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.draws κ X → Record)
+    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.DrawCoins node.draws κ X → Finset ℕ) :
     Accounting.Remote.Draw.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordDraw node (recs c) (correct c)
 

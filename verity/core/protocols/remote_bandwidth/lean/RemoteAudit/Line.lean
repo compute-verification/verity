@@ -51,6 +51,7 @@ structure Rates where
   rebuildBurstBytes : Rat
   diskBurstBytes : Rat
   linkBurstBytes : Rat
+  deriving DecidableEq
 
 /-- The rates by `line.RATES`' names, in its order. -/
 def Rates.named (r : Rates) : List (String × Rat) :=
@@ -380,6 +381,7 @@ structure Inputs where
   rates : Rates
   chipBytes : Nat
   nodeBytes : Nat
+  deriving DecidableEq
 
 /-- Host `h`'s devices' card figures, in the log's order, each by the SKU its sheet names (`Core.Site.sheetOf`): refused
 for an `h` the Site registers as no host, a node with no device, and an SKU `gpus` has no figures for. -/
