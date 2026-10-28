@@ -2086,6 +2086,10 @@
    "owner": "@proofs",
    "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492"
   },
+  "Verity.Commits": {
+   "owner": "@proofs",
+   "digest": "d52dead901517c8f0c7ccb600d9d81469ff650189855e2b28992f76bf6602215"
+  },
   "Verity.Committed.Honest": {
    "owner": "@lean",
    "digest": "c3f32aeb6eaac8b444a4289e3b60c65616ec8e84eb541e1b0aaa7272e9b3c3f1"
@@ -2113,10 +2117,6 @@
   "Verity.Partition.IsCK": {
    "owner": "@lean",
    "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
-  },
-  "Verity.Registered": {
-   "owner": "@proofs",
-   "digest": "3778760cbac2e147aa72e75c7d7a8ea0ffd2cf16a061bc3fefe48c076a8f75d0"
   },
   "Verity.Sound": {
    "owner": "@proofs",
@@ -11885,6 +11885,12 @@
    "assumptions": [],
    "type_hash": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370"
   },
+  "Verity.SecurityProofs.CommittedMeets": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.CommittedMeets : Verity.Guarantees.CommittedMeets"],
+   "assumptions": [],
+   "type_hash": "23ce138a5a4b4f8bdc80e54091214851203a150bac2e97dd721d86e5f82557c4"
+  },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
@@ -12064,12 +12070,6 @@
    "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
-  },
-  "Verity.SecurityProofs.RegisteredMeets": {
-   "owner": "@proofs",
-   "signature": ["Verity.SecurityProofs.RegisteredMeets : Verity.Guarantees.RegisteredMeets"],
-   "assumptions": [],
-   "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
   },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
@@ -13075,9 +13075,8 @@
    "Verity.SecurityProofs.SoundBatch": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.ProbBatchInduced": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundBind": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
-   "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Nci.Cover.SecurityProofs.FanOutIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutReadIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
@@ -13317,7 +13316,8 @@
    "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Overhead.Toy, a computation costing 0, below the floor Lc = 5 so the floor premise fails, succeeds with probability 1, above η = 0, so CapabilityFloor's conclusion is not a tautology.",
    "Pous.SecurityProofs.ObligationWide320": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) at every block count from 2^19 to 2^27, 320 reads with the state at most S0 at each, by 2^-20, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
-   "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption."
+   "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
+   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22009,8 +22009,14 @@
    ]
   },
   "Definitions.Core.Advice": {
-   "digest": "a2e25b694bc132cfe5dbc53e1bdf0f26f4f0758e80f03350905654d702e864f1",
+   "digest": "aa698e6169678c10b2555c8f503011f5b5b4aef5dc613084c59f15894d7d91b9",
    "definitions": {
+    "Verity.Advice.Committed": "4e174ceee455a13262d0e97f5cdd8d21d010e413fb82d547f441099dc2c79038",
+    "Verity.Advice.Committed.P": "a9180440cab194886f1d705c7d89265739fb5b47faac5c7e8a1eb19117ba4ca9",
+    "Verity.Advice.Committed.hashInputs": "a60bfe54cfe03cdc800351344e77691fb91bd19337aecd9d0b8d7293d289d462",
+    "Verity.Advice.Committed.n": "45fb15c70eb75c1ccfe54b90ee2d4bffff71c8571492d59cb03386b107ba3fb4",
+    "Verity.Advice.Committed.root": "2c3008ad0949d13fc302ff60ce70c8a908f5f80f50dc70429a6cac3f810f7e9a",
+    "Verity.Advice.Committed.salt": "599adc6bff46dde5fe938e1bd79ac4457f8b694218090563ef00ca473c4d5ac0",
     "Verity.Advice.Framing": "13cd31ed31eeff9c40606fc9030a26638b54a47bb1c7ce8c2bf1a249a352f5fd",
     "Verity.Advice.Framing.Separated": "89bf09e0b9e2b02bc60528ddcc4bce060d8726e861ed61d07d2a4774a37bde8d",
     "Verity.Advice.Framing.leaf": "bf4365eb0e9dbf52c35de90765c928758c019a6d7f981c8409f378a06c3198f2",
@@ -22020,12 +22026,6 @@
     "Verity.Advice.Framing.pad": "4a91f4240526fbed292361126d273210dbbb49e5e4c76cbccf84cfd9a11164c6",
     "Verity.Advice.Framing.rowPrefix": "864db8071ba5cc717ce5c40c3ae66fad4490070ae4fc8c2a4dd136803ba9afeb",
     "Verity.Advice.Framing.saltPrefix": "413346e557ac896442347ae2c8f6b6116ed3dded791d41bb110b072cbbfa1c8e",
-    "Verity.Advice.Registration": "63501ede3617bae83f18c220eb11c44c4ab4d272fb5c4c4a21dc06d46b66b4b7",
-    "Verity.Advice.Registration.P": "e729bbf0d07ee52acfc01dc2503d7375e7847b8331d4afc52eb40c71af96370b",
-    "Verity.Advice.Registration.hashInputs": "42e44633ac6b63bfccdef5c0bf2dcd4bf43cbe74416f5155368a96311b48c327",
-    "Verity.Advice.Registration.n": "69c036aab223d7841c5f5c9865359bb771ce2668dbdd60208861e697b5f0077b",
-    "Verity.Advice.Registration.root": "d8a86671062d5a741727caaaf5629c6a33119b939eec372f0bb2e1c5529f9f37",
-    "Verity.Advice.Registration.salt": "b8b725178d7af75eade81093167e480f246518003c27b955ece0054d1c9e60a1",
     "Verity.Advice.Rows": "d6b3071c8a0b434e3004cfa522927969c825ad175302573f12cf2ee9389f567e",
     "Verity.Advice.Rows.Decodes": "2e9228b3a4629702b902a2f18b295af7675ae8c2269eb61a4afd2e591bb697ac",
     "Verity.Advice.Rows.decode": "f3e3696fe15ada28c5e1ec8d4e8af9b51664b0717ad99a20f5ce60b080141a51",
@@ -22041,7 +22041,7 @@
     "Verity.Advice.rowInput": "e4f45cd2cb576a4445a3bec2df74d16aa4963241cc75498c9f78c3e9b350b151",
     "Verity.Advice.saltInput": "a569d0eb1b9698594b64c8adfae3f195e0fbdd0235fb79f091a4a689ec46a75f"
    },
-   "guarantees": ["Verity.SecurityProofs.RegisteredMeets"]
+   "guarantees": ["Verity.SecurityProofs.CommittedMeets"]
   },
   "Definitions.Core.Assumptions": {
    "digest": "a6b1940a89d9e1e3257e570c806ade30787f6cc303b568efa4fd90125fead4dd",
@@ -22500,6 +22500,7 @@
     "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -22517,7 +22518,6 @@
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
-    "Verity.SecurityProofs.RegisteredMeets",
     "Verity.SecurityProofs.ServingBlockSum",
     "Verity.SecurityProofs.ToCircuitAnd"
    ]
@@ -22700,7 +22700,7 @@
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
-    "Verity.SecurityProofs.RegisteredMeets"
+    "Verity.SecurityProofs.CommittedMeets"
    ]
   },
   "Definitions.Core.Draw": {
@@ -23182,16 +23182,16 @@
    "guarantees": ["Verity.SecurityProofs.NaiveBeatsStrassenServed", "Verity.SecurityProofs.NaiveBeatsStrassenServedSize"]
   },
   "Definitions.Core.Guarantees.PrivatePartition": {
-   "digest": "e0397d4508252f58fa2184b2f671c0c48a1a5971a4ca779d4a56100919783045",
+   "digest": "3277afc6bc0fce86e6322a1c6cd51cc282ea4cc511e7f7fd95780c056ed0d53d",
    "definitions": {
+    "Verity.Guarantees.CommittedMeets": "5688ec09dba8b97215da2635651326c72224091b6985904ca44e5c1b328e7d92",
     "Verity.Guarantees.PrivateFitsOfLocal": "bda50bc4624e8b69a82ebb9ea924780d4296e5d46627155c12176a3b424e4610",
-    "Verity.Guarantees.PrivateOutBitsLe": "2bc4f92c0528b91c666d92d814289a5e6ee11ed256b9aefb902aa3f9ed17ef94",
-    "Verity.Guarantees.RegisteredMeets": "eafb3516996dea1b25e5f208275e3c41de88bbc736d55ac8f560fb18286b6f7e"
+    "Verity.Guarantees.PrivateOutBitsLe": "2bc4f92c0528b91c666d92d814289a5e6ee11ed256b9aefb902aa3f9ed17ef94"
    },
    "guarantees": [
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
-    "Verity.SecurityProofs.PrivateOutBitsLe",
-    "Verity.SecurityProofs.RegisteredMeets"
+    "Verity.SecurityProofs.PrivateOutBitsLe"
    ]
   },
   "Definitions.Core.Guarantees.TC": {
@@ -23408,6 +23408,7 @@
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.CorrectOfOpening",
@@ -23420,7 +23421,6 @@
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
-    "Verity.SecurityProofs.RegisteredMeets",
     "Verity.SecurityProofs.ServingBlockSum"
    ]
   },
@@ -23452,11 +23452,12 @@
    ]
   },
   "Definitions.Core.PrivatePartition": {
-   "digest": "2b380d0e87f5ec31a826f900b8670091d3f4889009414316e9234a7cda384647",
+   "digest": "bbc6c453f4dc2624a706226e138795cbf540a9ec7cf705ee1b6767eeda514b25",
    "definitions": {
     "Verity.Calls": "a53969f84e6274782fa92e782aef23dbc0c600275220f0999517694aa386abb0",
     "Verity.Calls.returned": "b6ea8f95f9d58a8d75d5b134fe0ff42315b1c6baba77a46b69aa87e1aa1ccd19",
     "Verity.Calls.toPartition": "24b6f8215c4f2cf219475ac1774724a4bc7689434ed9f18f591ca60bb51cf9a6",
+    "Verity.Commits": "d52dead901517c8f0c7ccb600d9d81469ff650189855e2b28992f76bf6602215",
     "Verity.Partition.Fits": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9",
     "Verity.Partition.FitsLocally": "8bc2d5170ca9e1848fc8e9cfa283d048b98ed61ec44e401861ed89b9bb01bb19",
     "Verity.Partition.Meets": "d9947b317895c4fd0697f63fc544a9946914ebfadaf54e4702c8e59cca0b4a24",
@@ -23468,13 +23469,12 @@
     "Verity.Predicates.X": "929c6b8b8ab8dcee830c4b6aaef718f1a813afcf4687d60f71974d39785c1c29",
     "Verity.Predicates.maxGates": "81e5b1266951a4416a67877da81ad55ee8804135a6a139a2856df7af409dcdfd",
     "Verity.Predicates.maxInBits": "6b96c844ba4735fc268a338eaa79ae1b23e27d65a0e8176a9d702505149d3d8d",
-    "Verity.Predicates.units": "8bde5c6c212a94a5b83d49d43519fd9bdeb3b7758ee4bc2177407ddc4aa47817",
-    "Verity.Registered": "3778760cbac2e147aa72e75c7d7a8ea0ffd2cf16a061bc3fefe48c076a8f75d0"
+    "Verity.Predicates.units": "8bde5c6c212a94a5b83d49d43519fd9bdeb3b7758ee4bc2177407ddc4aa47817"
    },
    "guarantees": [
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
-    "Verity.SecurityProofs.PrivateOutBitsLe",
-    "Verity.SecurityProofs.RegisteredMeets"
+    "Verity.SecurityProofs.PrivateOutBitsLe"
    ]
   },
   "Definitions.Core.Scalar": {
