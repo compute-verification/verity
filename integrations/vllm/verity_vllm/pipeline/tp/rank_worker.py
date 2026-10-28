@@ -1,4 +1,4 @@
-"""Lane tp2 (mechanism prototype): install the UNCHANGED observer inside every tensor-parallel rank's worker process.
+"""Mechanism prototype: install the UNCHANGED observer inside every tensor-parallel rank's worker process.
 
 With `tensor_parallel_size > 1` the pinned vLLM (V1 engine, `d9105ea80`) runs one worker process per rank under the
 multiprocess executor; `VLLM_ENABLE_V1_MULTIPROCESSING=0` keeps the *engine core* in the driver process but the model,
@@ -364,7 +364,7 @@ class TP2CaptureWorkerExtension:
         return {"rank": rank, "n_params": doc["n_params"], "n_buffers": doc["n_buffers"], "total_bytes": doc["total_bytes"],
                 "modules": len(mods)}
 
-    # ------------------------------------------------------------------ R13 P4 step 3: every collective of the run, per rank, in order
+    # ------------------------------------------------------------------ every collective of the run, per rank, in order
 
     def tp2_coll_install(self, *, out_dir: str, store_steps: int = 1 << 30) -> dict[str, Any]:
         """Record EVERY TP collective this rank issues during the instrumented run, in call order: `step` (the model forward it
@@ -430,7 +430,7 @@ class TP2CaptureWorkerExtension:
                 return y
             return w
 
-        # [R15 moe TP-MOE-AR] the fused-MoE layer's FINAL all-reduce (RowParallel-style reduction of the expert partials, one per MoE
+        # the fused-MoE layer's FINAL all-reduce (RowParallel-style reduction of the expert partials, one per MoE
         # layer per step) is issued from vLLM's fused_moe runner module through ITS OWN module-level import of
         # `tensor_model_parallel_all_reduce`, not from linear/vocab_parallel_embedding/logits_processor -- patching only those three left
         # every MoE all-reduce unrecorded (Qwen3-30B-A3B TP2 on 2x L40S: 50 recorded collectives per rank per step vs the rank Build's
@@ -439,9 +439,9 @@ class TP2CaptureWorkerExtension:
         sites = [(L, "tensor_model_parallel_all_reduce", "all_reduce"), (VE, "tensor_model_parallel_all_reduce", "all_reduce"),
                  (LP, "tensor_model_parallel_all_gather", "all_gather"), (LP, "tensor_model_parallel_gather", "gather")]
         sites += [(mod, "tensor_model_parallel_all_reduce", "all_reduce") for mod in st["moe_sites"]]
-        # [R19 moe F-r19-moe-1, row #70] MID-module sites: a model class that imports a collective name into ITS OWN module and calls it
+        # MID-module sites: a model class that imports a collective name into ITS OWN module and calls it
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
-        # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one census shared
+        # above, so structure would count fewer collectives per step than the Build's links and FAIL.  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
         from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
         census = mid_module_site_census(model, world)
@@ -459,7 +459,7 @@ class TP2CaptureWorkerExtension:
         from verity_vllm.acquire.sources.moe_align_source import capture_witness
         st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 
-        # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
+        # `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
         # layer's all-reduce is recorded at the outermost MoE module = the Program's module path (the same site the committer binds and
         # the site tp_links names) -- the site-identity criterion compares record.module to that path per k.
@@ -478,7 +478,7 @@ class TP2CaptureWorkerExtension:
         cand = [(n, type(m).__name__, m) for n, m in model.named_modules()
                 if type(m).__name__ in ("RowParallelLinear", "VocabParallelEmbedding", "LogitsProcessor", "ParallelLMHead") + MOE_COLLECTIVE_CLASSES
                 or getattr(m, "reduce_results", False) is True
-                or n in st["mid_sites"]]                                          # [R19 moe] mid-module sites: hooked for the module name
+                or n in st["mid_sites"]]                                          # mid-module sites: hooked for the module name
         moe_paths = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES]
         nested_moe = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES and any(n.startswith(p + ".") for p in moe_paths)]
         hooked = []
@@ -517,7 +517,7 @@ class TP2CaptureWorkerExtension:
         return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"],
                           "witness": witness})
 
-    # ------------------------------------------------------------------ R13 P4 step 4: rank-aware commitment (the collector in every rank)
+    # ------------------------------------------------------------------ rank-aware commitment (the collector in every rank)
 
     def tp2_commit_make(self, *, kind: str, run_id: str, cp: dict, case: str, engine_kwargs: dict, hidden_so: str | None, hidden_ns: str | None,
                         envelope: dict, arena_mb: int | None = None, tp_partials: bool = True, program_digest: str | None = None,
@@ -555,7 +555,7 @@ class TP2CaptureWorkerExtension:
             com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
                                                  fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
-        # [R15 moe TP-MOE-SRC] the fused-MoE layer source (R13 MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class
+        # the fused-MoE layer source (MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
         # rank unbound, coverage FAIL) -- the manifest requires the six planes per rank at shard widths, and this rank's kernel sees them.
@@ -575,9 +575,9 @@ class TP2CaptureWorkerExtension:
         if tap_sources is not None:                   # the taps the row's manifest names: `acquire.sources.taps.for_ranks`, bound by the TP driver
             res["tap_sources"] = tap_sources(com, model, required_manifest, rank)
         if tp_partials_omit_rank is not None and int(tp_partials_omit_rank) == rank:
-            tp_partials = False          # NEGATIVE (R15 TP-04): THIS rank binds collective outputs only; its manifest partials must go unbound
+            tp_partials = False          # NEGATIVE: THIS rank binds collective outputs only; its manifest partials must go unbound
         if tp_partials:
-            # [R14 TP-03] bind THIS rank's rank-local inputs of every TP collective (partial GEMMs before the all-reduce, masked embedding
+            # bind THIS rank's rank-local inputs of every TP collective (partial GEMMs before the all-reduce, masked embedding
             # partial, logits shard before the all-gather) -- the values the rank Program requires; the module hooks only see the outputs
             from verity_vllm.acquire.sources.partial_source import TPPartialSource
 
@@ -586,23 +586,23 @@ class TP2CaptureWorkerExtension:
                 relabel = int(tp_relabel.get(str(rank), tp_relabel.get(rank)))       # NEGATIVE: this rank tags its partials as another rank's
             omit_site = None
             if isinstance(tp_partials_omit_site, dict) and str(rank) in {str(k) for k in tp_partials_omit_site}:
-                omit_site = str(tp_partials_omit_site.get(str(rank), tp_partials_omit_site.get(rank)))   # NEGATIVE (rev-cb M-0214): ONE site's partial dropped
+                omit_site = str(tp_partials_omit_site.get(str(rank), tp_partials_omit_site.get(rank)))   # NEGATIVE: ONE site's partial dropped
             flip_site = None
             if isinstance(tp_partials_flip_site, dict) and str(rank) in {str(k) for k in tp_partials_flip_site}:
-                flip_site = str(tp_partials_flip_site.get(str(rank), tp_partials_flip_site.get(rank)))   # NEGATIVE (R16 TP-12): the collective's input is not the committed partial
+                flip_site = str(tp_partials_flip_site.get(str(rank), tp_partials_flip_site.get(rank)))   # NEGATIVE: the collective's input is not the committed partial
             tps = TPPartialSource(com, model, rank=rank, world=int(facts["tp"]["world_size"]), relabel_rank=relabel, omit_site=omit_site, flip_site=flip_site)
             com.attach_source(tps)
             res["tp_partial_source"] = {"sites": tps.sites, "extra_step_bytes": tps.extra_step_bytes(envelope, model), "relabel_rank": relabel, "omit_site": omit_site,
                                         "flip_site": flip_site}
         else:
-            res["tp_partial_source"] = None      # negative: collective outputs only (the R13 state) -- must fail the required classes
+            res["tp_partial_source"] = None      # negative: collective outputs only -- must fail the required classes
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None:
             res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1="hidden_source" in res))
             if getattr(com, "windowed", False):
-                # [R13 tp / P0-01 parity] windowed staging (VERITY_WINDOW_MB > 0): the ring replaces the per-step blocks -- the same call
+                # windowed staging (VERITY_WINDOW_MB > 0): the ring replaces the per-step blocks -- the same call
                 # commit_delta makes after size_arena; without it every windowed step fails closed (`win_log2_chunks` unset -> 0 tensors).
                 res["window_ring"] = _jsonable(com.enable_windows(com.arena_sizing))
-        # NEGATIVE (rev-cb M-0610 flipweight, TP form): {"rank": r, "param": <served name>, "index": i, "value": v} -- ONE element of THIS
+        # NEGATIVE (flipweight, TP form): {"rank": r, "param": <served name>, "index": i, "value": v} -- ONE element of THIS
         # rank's shard is changed BEFORE register_weights (the committer serves a model that is not the checkpoint the Program names)
         res["flip_weight"] = None
         if isinstance(flip_weight, dict) and int(flip_weight.get("rank", -1)) == rank:
@@ -617,7 +617,7 @@ class TP2CaptureWorkerExtension:
                 before = float(flat[idx].item())
                 flat[idx] = float(flip_weight.get("value", 1.0))
             res["flip_weight"] = {"rank": rank, "param": pname, "index": idx, "before": before, "after": float(flat[idx].item())}
-        # NEGATIVE (R16 tp TP-10, pin's acceptance set 'TP shard / reference mismatch'): THIS rank serves ANOTHER rank's shard of a parameter,
+        # NEGATIVE ('TP shard / reference mismatch'): THIS rank serves ANOTHER rank's shard of a parameter,
         # composed from the SAME pinned checkpoint by weights_of_record.compose(rank=<from>) -- every byte is checkpoint bytes and the set of
         # shards over the world is unchanged (a whole-tensor / whole-checkpoint hash is blind to it); only the rank<->slice assignment the rank
         # Program's shard map prescribes is wrong.  Applied BEFORE register_weights (the rank commits what it serves); the per-rank pin,
@@ -664,7 +664,7 @@ class TP2CaptureWorkerExtension:
                                              else (model, None))
         with hooks.patched(com, "model", weights):
             res["weight_registration"] = _jsonable(com.register_weights())
-        # [manbind MAN-09, COORD M-0614 (1)] WEIGHTS OF RECORD per rank: sha256 of every live parameter of THIS rank (the shards the root
+        # WEIGHTS OF RECORD per rank: sha256 of every live parameter of THIS rank (the shards the root
         # covers) == the digest composed from the PINNED checkpoint shards by the rank Program's shard map (weights_of_record.build_record,
         # engine-free, from result.json tp {world, rank}); self-consistency with the run's own root is not this check.  Absent -> unpinned
         # (named); the driver fails closed on it with --required-manifest unless told not to.
@@ -692,7 +692,7 @@ class TP2CaptureWorkerExtension:
                 chk = WR.check(rec, live)
                 chk["rank"] = rank
                 chk["program_dir"] = str(pdir)
-                # [rev-cb M-0659 W1/W2 on MAN-09, applied on the TP record] check() alone says 'served == the files at --checkpoint-dir'; the
+                # check() alone says 'served == the files at --checkpoint-dir'; the
                 # checkpoint OF RECORD needs (W1) every shard's sha256 == manifests/checkpoints.json's pin and (W2) the record built from THIS
                 # rank's Program of record.  W2 holds by construction here (built in-process from the rank Program dir, never a stored file);
                 # W1 is gated: unpinned / unverified shards -> result False, NAMED.
@@ -702,13 +702,13 @@ class TP2CaptureWorkerExtension:
                     chk["result_before_w1"] = chk.get("result")
                     chk["result"] = False
                     chk["why"] = (f"rank {rank}: checkpoint shards NOT pinned by manifests/checkpoints.json (all_shards_pinned={chk.get('all_shards_pinned')!r}): "
-                                  f"the record is over the files at the checkpoint dir, not the checkpoint of record (rev-cb M-0659 W1); " + str(chk.get("why") or ""))[:400]
+                                  f"the record is over the files at the checkpoint dir, not the checkpoint of record (W1); " + str(chk.get("why") or ""))[:400]
                 elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str((weights_pin.get("program_dirs") or {}).get(str(rank))), "instances.json.gz")) \
                         and str(rec.get("program_digest") or "") not in ("", chk["w2_program_of_record"]["rank_program_digest_of_record"]):
                     chk["result_before_w2"] = chk.get("result")
                     chk["result"] = False
                     chk["why"] = (f"rank {rank}: weights of record built from Program {str(rec.get('program_digest'))[:16]} != this rank's Program of record "
-                                  f"{chk['w2_program_of_record']['rank_program_digest_of_record'][:16]} (rev-cb M-0659 W2)")
+                                  f"{chk['w2_program_of_record']['rank_program_digest_of_record'][:16]} (W2)")
                 chk["live_params"] = live.get("n")
                 chk["committed_weights_root"] = (res["weight_registration"] or {}).get("root") if isinstance(res["weight_registration"], dict) else None
                 res["weights_pin"] = chk
@@ -721,11 +721,11 @@ class TP2CaptureWorkerExtension:
         swapped = None
         swap_rule = None
         if isinstance(tp_swap_requests, dict) and str(rank) in {str(k) for k in tp_swap_requests}:
-            # NEGATIVE (rev-cb M-0359 T6-3 "equal-count request-label swap"): THIS rank's request->rows map labels request a's rows as b and
+            # NEGATIVE (equal-count request-label swap): THIS rank's request->rows map labels request a's rows as b and
             # b's as a.  With equal (prompt, max_tokens) the per-request identity COUNTS and the composition are unchanged, so coverage
             # cannot see it -- the per-(request, engine step) attribution against the Match record (sampled ids) must FAIL naming this rank.
-            # [rev M-0460] `[ra, rb, lo, hi]` = the swap applies ONLY on engine steps lo..hi (decode-only: prefill rows untouched, each swapped
-            # row one token) -- the discriminating case for ruling 26: coverage cannot see it, the per-(step, request) attribution must.
+            # `[ra, rb, lo, hi]` = the swap applies ONLY on engine steps lo..hi (decode-only: prefill rows untouched, each swapped
+            # row one token) -- the discriminating case: coverage cannot see it, the per-(step, request) attribution must.
             swap_rule = parse_swap_spec(list(tp_swap_requests.get(str(rank), tp_swap_requests.get(rank))))
             if swap_rule is not None:
                 ka = [k for k, v in rid_map.items() if v == swap_rule["a"]]
@@ -735,12 +735,12 @@ class TP2CaptureWorkerExtension:
                 else:
                     swap_rule = None
             res["swap_requests_applied"] = swapped
-        # [lane vllm-tp-n; x03 F-r19-int-22 on the TP record] the per-layer attention plane class is DERIVED from THIS RANK's Program record
+        # the per-layer attention plane class is DERIVED from THIS RANK's Program record
         # (`attention_impls_observed` of the rank Build: the rank-local NH/world, KVH/world, D and window each rank Call's Definition was
         # selected from) x the step's active sequences -- exactly commit_delta's wiring, on the rank's own record: a GQA layer that folds
         # on decode at world 1 (NH > KVH) may be MHA-shaped at a world where NH/world == KVH/world, so the class is per rank, never copied.
-        # Without a rank record the committer keeps the R13 uniformity rule and the result says so (named, not assumed).
-        res["attention_plane_classes"] = {"rank": rank, "declarations": 0, "source": None, "rule": "R13 uniformity (no rank Build record with attention_impls_observed)"}
+        # Without a rank record the committer keeps the uniformity rule and the result says so (named, not assumed).
+        res["attention_plane_classes"] = {"rank": rank, "declarations": 0, "source": None, "rule": "uniformity (no rank Build record with attention_impls_observed)"}
         if hasattr(com, "identity_check"):
             try:
                 from verity_vllm.acquire import fa2_plane_classes as FP
@@ -760,13 +760,13 @@ class TP2CaptureWorkerExtension:
                             "required_manifest": required_manifest, "request_order": list(request_order or []), "arrivals": dict(arrivals or {}),
                             "caps": dict(caps or {}), "match_tokens": dict(match_tokens) if match_tokens else None, "swap_requests": swapped, "swap_rule": swap_rule,
                             "match_capture_dir": (str(match_capture_dir) if match_capture_dir else None), "weights_pin": st_pin,
-                            # [TP-08] per-rank sampled replay config: {"programs": {"<rank>": <build dir>}, "of_record": {"<rank>": [digests]},
+                            # per-rank sampled replay config: {"programs": {"<rank>": <build dir>}, "of_record": {"<rank>": [digests]},
                             # "requests": [{request_id r<i>, arrive_step, prompt_len, max_tokens, prompt_token_ids, seed (declared)}], per_stratum, max_evaluate, seed, workers}
                             "replay": (dict(replay) if replay else None),
-                            # workload request_id -> r<declared index> (COORD R15 ruling 2); the driver's map when given, else declaration order
+                            # workload request_id -> r<declared index>; the driver's map when given, else declaration order
                             "request_ids": rid_map}
         if required_manifest:
-            # [R15 tp TP-04] the population of record is the Program x query manifest (never the structural table, never the collector):
+            # the population of record is the Program x query manifest (never the structural table, never the collector):
             # this rank's Program digest must be the manifest's digest for this rank (a manifest of another Program = wrong Program)
             try:
                 man = json.loads(Path(required_manifest).read_text())
@@ -813,7 +813,7 @@ class TP2CaptureWorkerExtension:
         d = st["decl"] = com.coverage_declaration(rc)
         binding = self._tp2_binding(rc) if record else None
         attribution = self._tp2_attribution(rc) if record else None
-        # [coord M-0481 C2 form (B), TP family] committed partials / MoE received outputs vs the Match capture's stored collectives (same rank)
+        # committed partials / MoE received outputs vs the Match capture's stored collectives (same rank)
         match_oracle, match_dir = None, record and st.get("match_capture_dir")
         if match_dir and st.get("tps") is not None:
             try:
@@ -828,7 +828,7 @@ class TP2CaptureWorkerExtension:
             from verity_vllm.acquire.sources.moe_align_source import replay_stats
 
             match_oracle["schedule_replay"] = replay_stats(getattr(com, "sources", ())) or st.get("schedule_replay")
-        # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
+        # the C2 OF RECORD on THIS rank's map, Programs and shards
         sampled_replay = None
         if record and st.get("replay"):
             from verity_vllm.pipeline.tp.rank_replay import host_slot
@@ -970,7 +970,7 @@ class TP2CaptureWorkerExtension:
         except Exception as e:  # noqa: BLE001
             return {"skipped": f"binding module unavailable: {e!r}"}
         com, rank = st["com"], int(st["rank"])
-        # B>1 [R15 TP-04 x BIND-01]: the per-step request->row map recorded by the rank's collector at sample time (`InputBatch.req_ids` x
+        # B>1: the per-step request->row map recorded by the rank's collector at sample time (`InputBatch.req_ids` x
         # `scheduler_output.num_scheduled_tokens`, every rank executes the same scheduler_output) names the batched rows' requests
         step_rows = getattr(com, "step_rows", None) or {}
         _logical = self._tp2_logical_request
@@ -1012,26 +1012,26 @@ class TP2CaptureWorkerExtension:
             man_hdr = None
             source = "structure(model modules x MEMBER_RULES + TP partial sites) x workload(requests, steps, rank)"
             if st.get("required_manifest"):
-                # [R15 TP-04] population of record = manbind's Program x canonical query manifest for THIS rank (rows with rank=r; the
+                # population of record = the Program x canonical query manifest for THIS rank (rows with rank=r; the
                 # manifest's per-rank Program digest already checked at make)
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
                 man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
-                source = "required-manifest (manbind: Program(rank) x canonical query, rows with rank=r)"
+                source = "required-manifest (Program(rank) x canonical query, rows with rank=r)"
                 if not pop:
                     return {"error": f"required manifest has no rows for rank {rank} ({man_hdr.get('path')})", "rank": rank}
             else:
                 pop = pop_struct
             pdig, pn = bd.population_digest(pop)
             cov = bd.coverage_check(pop, bmap)
-            # [R15 manbind B8, mirrored per rank] B>1: the map's per-engine-step request->rows partition of THIS rank's packed members must be
+            # B>1: the map's per-engine-step request->rows partition of THIS rank's packed members must be
             # exactly the manifest's declared composition (Program x workload, never the collector) -- request-local identity ranges are blind
             # to WHICH block a request was bound to; this is what makes an omitted / relabelled / duplicated request fail named on a rank
             comp = bd.composition_check(man_hdr, bmap) if (man_hdr is not None and hasattr(bd, "composition_check")) else None
             if comp is not None:
                 cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
-            if man_hdr is not None and man_hdr.get("complete") is False:            # [MAN-02] unmodelled Program families -> not a population
+            if man_hdr is not None and man_hdr.get("complete") is False:            # unmodelled Program families -> not a population
                 cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted((man_hdr.get("unmodelled") or {}).items())))
             elif man_hdr is not None and man_hdr.get("program_digest_for_rank") not in (None, pd):
                 cov = dict(cov, ok=False, error=f"manifest Program digest for rank {rank} {str(man_hdr.get('program_digest_for_rank'))[:16]} != this rank's Program {pd[:16]}")
@@ -1052,7 +1052,7 @@ class TP2CaptureWorkerExtension:
             return {"error": repr(e)[:400], "trace": traceback.format_exc()[-1200:]}
 
     def _tp2_sampled_replay(self, rc: Any) -> dict[str, Any]:
-        """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim)]
+        """Sampled exact replay (`verity_vllm.check.replay.sampled_replay`, taken verbatim)
         The C2 OF RECORD on THIS rank (`pipeline.tp.rank_replay`): a seeded stratified sample of the rank Program's rows is re-evaluated
         from the rank's COMMITTED input members + the rank's registered weight SHARDS (the rank Program's weights params ARE the shards
         this worker holds) and compared bit-for-bit with the rank's committed output members; plus the exhaustive boundary linkage
@@ -1061,7 +1061,7 @@ class TP2CaptureWorkerExtension:
         root), REFUSED by name unless every loaded digest is a digest of record for this rank (the GP-01 workload_program's component
         list / the manifest's per-rank Program, both already checked against the Build by the driver).  Rows that read a peer rank's
         partial (`peers_*` inputs of AllReduce2 / AllGather2) have no evaluator and are counted by name -- never PASS by omission.  The
-        stratum key's rank label comes from manbind's population(rank=0) at v1; this record carries the true rank
+        stratum key's rank label comes from the population(rank=0) at v1; this record carries the true rank
         beside it."""
         from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -1074,11 +1074,11 @@ class TP2CaptureWorkerExtension:
         return RR.defer(self._tp2_commit, rc, defer)
 
     def tp2_repo_modules(self) -> dict[str, Any]:
-        """[TP-11] the repo-local modules THIS rank process imported so far (call after finalize: replay / pin / linkage imports included)."""
+        """The repo-local modules THIS rank process imported so far (call after finalize: replay / pin / linkage imports included)."""
         return dict(repo_modules_loaded(), rank=int(self._tp2_commit["rank"]) if getattr(self, "_tp2_commit", None) else None)
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
-        """[TP-12] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
+        """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
 
@@ -1119,7 +1119,7 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_open_population(self, *, k: int, salt: str, combined_root_hex: str, source_hex: str,
                                    claimed_root_hex: str | None = None) -> dict[str, Any]:
-        """[BIND-01 x TP] openings drawn from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
+        """Openings drawn from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
         this rank's map digest + salt, from the pair's identities coin `source_hex`, drawn after that root: `pipeline.commit_coins`;
         forced late step + one per family), opened against the rank's retained tree and verified
         with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
@@ -1175,7 +1175,7 @@ class TP2CaptureWorkerExtension:
                           "claimed_root": rcv.run_root.hex(), "claimed_root_is_own": rcv is rc,
                           "bytes_mean": statistics.fmean(len(o.value) + len(o.salt) + sum(len(p) for p in o.path if p is not None) for o in ops) if ops else None})
 
-    # ------------------------------------------------------------------ [R15 TP-04 C2] value correspondence, per rank
+    # ------------------------------------------------------------------ value correspondence, per rank
 
     def tp2_commit_value_check_install(self) -> dict[str, Any]:
         """One extra instrumented run: the committer + bind's ValueChecker (hook-time reference clones + re-execution of the registered
@@ -1216,9 +1216,9 @@ class TP2CaptureWorkerExtension:
             res["tp_partials"] = tps.compare(OC.OpenedReader(com, rc)) if tps is not None else {"verdict": "NOT_RUN", "why": "no tp partial source"}
         except Exception as e:  # noqa: BLE001
             res["tp_partials"] = {"verdict": "FAIL", "error": repr(e)[:300]}
-        try:                                   # [R15 moe, rev-cb M-0424 T6-4 / report M-0435] while the retained bytes still exist (before reset)
+        try:                                   # while the retained bytes still exist (before reset)
             res["t6_4"] = self._t6_4_check(com, rc)
-            # [report M-0478] the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
+            # the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
             # (compare()'s by_member['out']: tensors - tap_equal); any nonzero = late read whatever the next-norm/0 comparison says
             tpp = res.get("tp_partials") or {}
             bm = (tpp.get("by_member") or {}).get("out") or {}
@@ -1240,9 +1240,9 @@ class TP2CaptureWorkerExtension:
         st["rc"] = None
         assert_pristine(st["eng"], st["base"])
         res["verdict"] = "PASS" if (res["modules"].get("verdict") == "PASS" and res["tp_partials"].get("verdict") == "PASS") else "FAIL"
-        # COORD M-0111 (1) vocabulary: this is a per-identity ORACLE compare (committed bytes vs values computed independently of the
+        # this is a per-identity ORACLE compare (committed bytes vs values computed independently of the
         # collector -- the hook-time clone and a re-executed relation), not a root compare against another run; the oracle is named so
-        # the reader knows it is NOT the Match fold's values (M-0111 (2) `--oracle` is manbind's shared check, not yet released)
+        # the reader knows it is NOT the Match fold's values
         res["method"] = ("oracle-compare: per identity, committed bytes == hook-time reference clone (T) AND == re-execution of the registered relation on the "
                          "clone's inputs (R) per module output [value_check.ValueChecker]; TP partials: == collective INPUT reference clone (T) AND == rank-local "
                          "shard-GEMM re-execution (R) [TPPartialSource.compare]; per rank; FAIL names the identity (tap_mismatch/reexec_mismatch/missing_in_commit)")

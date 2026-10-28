@@ -49,7 +49,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **One thread per request**: the root is the ask or announcement, and everything about it is a reply (`research msg
   read --thread T` shows the conversation so far).
 - **Only the names a post starts with ring** (`@name`s, user-group tags, or `handle:` as the first word; slack.py's
-  docstring has the rule), so start with the owner you need (`@circuits #1585 failed`), even under an announcement. A
+  docstring has the rule), so start with the owner you need (`@circuits #<pr> failed`), even under an announcement. A
   reply that names no one rings the root's poster, or, from the poster, everyone the root addressed, so a progress note
   is `send --kind fyi` (or `--quiet`), ringing only its `--to` names.
 - **Status.** On an ask or alert, the owner `pickup`s (👀), `reply`s only when the asker must act or decide, and
@@ -65,7 +65,9 @@ msg owners PATH...` names each path's owner (longest prefix).
   Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
   the unanswered; take a linked ask on its issue.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
-  is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`).
+  is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,
+  `ask` and `announce` warn past 60 words (150 for an announcement) and refuse past twice that: put the body in its issue
+  (`research msg linear comment ISSUE --file BODY.md --as ME`) and post a line that links it.
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 - **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (needs `SLACK_BOT_TOKEN`; the doorbells
   it rang keep their copy).

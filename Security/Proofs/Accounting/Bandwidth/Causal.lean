@@ -7,9 +7,9 @@ import Definitions.Accounting.Guarantees.Bandwidth.Causal
 /-!
 # B3 on a strategy causal from every tick: the chip as a `Ticked.Chip`
 
-What remained of B3 in v2.4 of `note:console/20261012T0645Z-draft-actual-circuit-model`: the chip of a run causal from
-every tick as the tick transducer `Ticked.Chip`, so that `Ticked.audit_reads` bounds it. A strategy here is a run for each
-store and oracle, `S : Store × Oracle → Actual.Run L`; the chip is the location `X`, and the window is `[t₀, t₀ + T)`.
+What remained of the actual-circuit model's B3: the chip of a run causal from every tick as the tick transducer
+`Ticked.Chip`, so that `Ticked.audit_reads` bounds it. A strategy here is a run for each store and oracle,
+`S : Store × Oracle → Actual.Run L`; the chip is the location `X`, and the window is `[t₀, t₀ + T)`.
 
 What the model doesn't state yet is one hypothesis, `Splits`: at each tick of the window, what crosses into the chip is a
 fixed function (`Interface.cross`) of what the chip has done since `t₀` and of three replies, each read through its link:

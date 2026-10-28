@@ -799,10 +799,10 @@ class _Staged(_Prepared):
 
 
 def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_its_asked_them(monkeypatch):
-    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA device
-    (kernels' device codes, note:kernels-rcpt/20261024T0430Z-draft-served-device-codes): the engine's tensor itself, in call
-    order, before any of its step's calls of K are asked; each receipt table is still the producer's ask's words. Rows on
-    the host stage nothing, and a ``stage`` that refuses refuses the window, naming the call."""
+    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA
+    device: the engine's tensor itself, in call order, before any of its step's calls of K are asked; each receipt table
+    is still the producer's ask's words. Rows on the host stage nothing, and a ``stage`` that refuses refuses the
+    window, naming the call."""
     commit, seen = SV.Served.commit, {}
 
     def on_device(self, run, call, a, *rest):
@@ -908,7 +908,9 @@ def test_chunk_words_are_the_specs_leaf_bytes(k, n):
 
 def test_k_up_to_4096_roots_are_unchanged():
     """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
-    from a seeded torch, have the roots they had before chunk rows (the ``b/<K>`` under θ's domain, `weights.THETA`)."""
+    from a seeded torch, have the roots they had before chunk rows. The A tables are registered under the declared
+    Program's digest, so a change to the window's layout repins them; ``b/<K>`` is under θ's domain (`weights.THETA`),
+    which no layout moves."""
     with torch.random.fork_rng():
         torch.manual_seed(0)
         ws = _weights()
@@ -917,8 +919,8 @@ def test_k_up_to_4096_roots_are_unchanged():
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
     assert period.root().hex()[:32] == "fca5b5059f232fca9b253acd6a425087"
     assert got == {SV.PREFIX + v: h for v, h in {
-        "a/16@0": "5f173d832fee3e3bd52ff128b2c32023", "a/16@1": "f1e0c408b7c261e2bdfdba32dfe500d6",
-        "a/32@0": "fc273f9145df0611d6daf4d4633ed36e", "a/32@1": "8b0fc9c2aaefbf95fcd4ebe001d312c1",
+        "a/16@0": "04b9eb08e826e1494240fc36ab0bc5e4", "a/16@1": "e899d34fbfa90038cbdf2585410f56b5",
+        "a/32@0": "3087ac7de2b46030df6a89c0dde76fca", "a/32@1": "9d7cca0084a5daad92b6536fba6fd31c",
         "b/16": "b80ba3179e86632eb1c234319b9272f9", "b/32": "6447efe8062ae62235355123016d40bf"}.items()}
 
 

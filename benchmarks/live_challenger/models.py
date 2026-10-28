@@ -1,4 +1,4 @@
-"""The auditor's model registry (the #3201 recheck's decision 1): each served model's weights, committed by the auditor with
+"""The auditor's model registry: each served model's weights, committed by the auditor with
 its own salts, so a period's weights' root is never the prover's choice.
 
 - **A registration** (`register`, vy-admin's `vy-challenger-gate model-register`, run as `auditor`) takes a model's int8
