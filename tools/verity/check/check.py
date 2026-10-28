@@ -128,6 +128,11 @@ doesn't name:
                     kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
                     run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
                     vouches for nothing: the audit decides
+    ratchet-gate    `integrations/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
+                    commit in the run's `check-base.txt`, which `--record --on` sends: its --base REF's; else origin/main)
+                    grows the vLLM integration's lint ratchets.  On a train each `Queue: #N` merge is judged against the one
+                    below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`), which drive takes as
+                    the culprit; a BASE that names no commit here skips it
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -155,6 +160,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     tests
     preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the environment); a tree
                     with uncommitted changes has no key, and runs them
+    ratchet-gate    the gate's own, under `ratchet-gate/` ($RATCHET_GATE_CACHE): each change's verdict, keyed by the gate's bytes
+                    and the change's commits (and BASE, for a verdict that read it)
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
@@ -218,6 +225,8 @@ CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
 #: integrations/vllm's reference regression (`tests/regression`): on in a recorded run, its T0 tier less the manifest rebuilds
 REGRESSION_ENV = "VERITY_REGRESSION"
+#: the vLLM integration's ratchet gate, which ratchet-gate runs as its base has it, so no change it judges can weaken it
+RATCHET_GATE = "integrations/vllm/tools/ratchet_gate.py"
 
 
 def custody_dir() -> Path | None:
@@ -285,6 +294,8 @@ LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 #: the parts a recorded shard runs (none for a combine), among its inputs: the preflight asks only for the Lean dependencies of
 #: the packages it audits, since it carries URLs for no others
 SHARD_PARTS = "check-shard-parts.json"
+#: the commit a `--record --on` check's --base REF names, among its inputs: ratchet-gate judges the merges above it
+BASE_FILE = "check-base.txt"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 
@@ -922,9 +933,9 @@ def nested_record(argv: list[str]) -> str:
 def record(argv: list[str]) -> int:
     """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
     pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
-    REF (default origin/main, fetched first), or whenever --agreement is given, and the newest recorded checks' verdicts
-    (`gather_verdicts`) unless it is given a pack or --no-cache without --circuit-cache. A commit that can't land on REF as it is
-    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    REF (default origin/main, fetched first), or whenever --agreement is given, with `--on` REF's commit (`BASE_FILE`,
+    ratchet-gate's base), and the newest recorded checks' verdicts (`gather_verdicts`) unless it is given a pack or
+    --no-cache without --circuit-cache. A commit that can't land on REF as it is (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
@@ -1045,6 +1056,8 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
+        (d / BASE_FILE).write_text(f"{_rev(base)}\n")
+        cmd += ["--send", str(d / BASE_FILE)]
     try:
         if both:
             procs = []
@@ -1185,6 +1198,19 @@ def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None
     os.replace(tmp, path)
 
 
+def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
+    """ratchet-gate's command: `ratchet_gate.py BASE HEAD` as BASE has it, BASE being the commit in the run's `BASE_FILE`
+    (`--record --on` sends it) else origin/main, with its verdicts kept under the check's cache unless ``cache`` is off."""
+    sent = out / "inputs" / BASE_FILE
+    named = sent.read_text().strip() if sent.is_file() else "origin/main"
+    if not (base := _rev(f"{named}^{{commit}}")):
+        return f"skipped: no base: {named} names no commit here"
+    keep = str(cache_dir() / "ratchet-gate") if cache else ""
+    script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/ratchet_gate.py" && '
+              'RATCHET_GATE_CACHE="$3" "$4" "$g/ratchet_gate.py" "$1" HEAD')
+    return ["bash", "-c", script, "ratchet-gate", base, RATCHET_GATE, keep, sys.executable]
+
+
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None, regenerate: bool = True,
            circuit_cache: bool | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
@@ -1222,7 +1248,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
-             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT)}
+             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
+             "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
         changed: list[str] | str = ([py, str(LEAN_JOBS / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),

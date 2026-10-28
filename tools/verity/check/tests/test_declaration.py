@@ -36,7 +36,8 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
     assert runs == [["pytest"], ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
-                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"]]
+                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"],
+                    ["ratchet-gate"]]
     assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
     assert CHECK.AFTER == {"lean-suites": "lean-build"}
 
@@ -134,7 +135,7 @@ def test_a_step_declared_after_a_step_that_failed_is_stopped_without_starting(tm
 def test_each_part_runs_its_jobs_and_what_they_need_and_the_parts_cover_every_job():
     assert all(j.part in D.PARTS for j in D.load())
     jobs = CHECK.JOBS
-    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build"}
+    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build", "ratchet-gate"}
     assert D.select(jobs, ["circuits"]) == {"flock-circuit-build", "circuit-check", "flock-rust-tests"}
     assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit", "lean-changed"}
     assert D.select(jobs, list(D.PARTS)) == {j.name for j in jobs}

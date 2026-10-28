@@ -367,6 +367,86 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         launched.clear()
 
 
+def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_allowlist(tmp_path, monkeypatch):
+    """With the ratchet gate out of drive's per-merge landing gates, the train's check is where an allowlist that grows is caught:
+    the step judges each `Queue: #N` merge above the run's sent base against the one below, with the gate as the base has it, so
+    a train holding one merge that grows an allowlist fails naming that PR, even when the PR also rewrites the gate to pass, and a
+    clean train passes.  Its verdicts are kept under the check's cache, and none under --no-cache; a base that names no commit
+    in the tree skips it, which no after-landing run passes."""
+    import json
+    import os
+    import subprocess
+
+    p01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", *args], cwd=repo, env=env, check=True, capture_output=True, text=True).stdout.strip()
+
+    def commit(message: str, files: dict[str, str]) -> str:
+        for path, text in files.items():
+            (repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (repo / path).write_text(text)
+            git("add", path)
+        git("commit", "-q", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    def allowlist(*files: str) -> str:
+        return json.dumps({"rule": "p01", "entries": [{"file": f, "kind": "k", "symbol": "s", "detail": "d"} for f in files]})
+
+    git("init", "-q", "-b", "main")
+    base = commit("base", {CHECK.RATCHET_GATE: (ROOT / CHECK.RATCHET_GATE).read_text(), p01: allowlist("a.py", "b.py")})
+    heads = {}
+    for n, files in ((1, {"a.py": "A = 1\n"}),
+                     (2, {"c.py": "C = 1\n", p01: allowlist("a.py", "b.py", "c.py"),
+                          CHECK.RATCHET_GATE: "import sys\nsys.exit(0)\n"}),
+                     (3, {"d.py": "D = 1\n"})):
+        git("checkout", "-q", "-b", f"pr{n}", base)
+        heads[n] = commit(f"pr {n}", files)
+
+    def train(name: str, prs: tuple[int, ...]) -> dict[int, str]:
+        git("checkout", "-q", "-b", name, base)
+        merges = {}
+        for n in prs:
+            git("merge", "-q", "--no-ff", "-m", f"Queue: #{n} pr {n}\n\nPR: #{n}\nHead: {heads[n]}\nOwner: lane\n", heads[n])
+            merges[n] = git("rev-parse", "HEAD")
+        return merges
+
+    def step(cache: bool = True) -> subprocess.CompletedProcess:
+        argv = CHECK.ratchet_gate(out, cache)
+        assert not isinstance(argv, str), argv
+        return subprocess.run(argv, cwd=repo, capture_output=True, text=True,
+                              env={**env, "RATCHET_GATE_CACHE": "elsewhere", "XDG_CACHE_HOME": str(tmp_path / "xdg")})
+
+    out = tmp_path / "run"
+    (out / "inputs").mkdir(parents=True)
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
+    (out / "inputs" / CHECK.BASE_FILE).write_text(f"{CHECK._rev('HEAD')}\n")
+    (built,) = [s[1] for g in CHECK.groups(out, 2) for s in g if s[0] == "ratchet-gate"]
+    assert built == CHECK.ratchet_gate(out, True) and CHECK._rev("HEAD") in built, built
+    monkeypatch.setattr(CHECK, "ROOT", repo)
+    (out / "inputs" / CHECK.BASE_FILE).write_text(f"{base}\n")
+    merges = train("next", (1, 2, 3))
+    got = step()
+    assert got.returncode == 1, got.stdout + got.stderr
+    assert re.search(rf"^  #2 \({merges[2][:12]}\): failed: grows {p01} 2 -> 3 entries", got.stdout, re.M), got.stdout
+    assert [line.split()[0] for line in got.stdout.splitlines() if ": failed: " in line] == ["#2"]
+    assert list((tmp_path / "cache" / "ratchet-gate").glob("*.json")) and not (repo / "elsewhere").exists()
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cold"))
+    assert step(cache=False).returncode == 1
+    assert not (tmp_path / "cold").exists() and not (tmp_path / "xdg").exists(), "--no-cache: no verdict kept anywhere"
+    train("clean", (1, 3))
+    got = step()
+    assert got.returncode == 0 and "2 change(s), 0 failed" in got.stdout, got.stdout + got.stderr
+    (out / "inputs" / CHECK.BASE_FILE).write_text("0" * 40 + "\n")
+    assert CHECK.ratchet_gate(out, True) == f"skipped: no base: {'0' * 40} names no commit here"
+    (out / "inputs" / CHECK.BASE_FILE).unlink()
+    assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
+
+
 def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_cache(tmp_path, monkeypatch):
     """`--verdicts-in` adds to the gathered pack, never replaces it: a stale pack given once turned reuse off for every check
     it rode with, because the gathered pack it replaced held the passes."""
@@ -583,7 +663,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, cc, rust), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -591,6 +671,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
+    assert gate[0] == "ratchet-gate" and cold[-1][0][0] == "ratchet-gate"
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
@@ -1100,14 +1181,14 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 6 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
+    assert len(gs) == 7 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
     argv, audit = gs[4][0][1], gs[3][0][1]
     assert argv[1].endswith("tools/verity/lean/lean_changed.py")
     assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
     assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
     assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
-    assert len(CHECK.groups(out, 8)) == 3
+    assert len(CHECK.groups(out, 8)) == 4
 
 
 def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
