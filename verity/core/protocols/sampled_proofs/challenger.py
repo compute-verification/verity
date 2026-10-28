@@ -82,8 +82,9 @@ more entries, its `period-open` and `period-close`, which name the prover in the
               null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each line as the auditor writes it (`ledger_text`, every character past ASCII escaped), and each signature over the entry's
-canonical JSON in UTF-8 (`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
+each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
+(`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
+(`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -132,7 +133,7 @@ through `pinned_session`: `credited_session` (the pin first, then the circuit) a
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
+`verity.ml.commitments`, `verity.core.claims` and `verity.core.protocols.record`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -151,6 +152,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.core import claims
+from verity.core.protocols import record as core_record
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import hm96
@@ -213,7 +215,7 @@ RECORD_FILE, CLOSE_FILE, HELLOS_FILE = "record.json", "challenger.json", "hellos
 SEALED_FILES = (RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE)
 #: an auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits
 MAX_LEDGER_LINE = 1 << 18
-_ZERO = "0" * 128
+_ZERO = core_record.ZERO
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _LEDGER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
@@ -743,11 +745,10 @@ def ledger_message(I: bytes, entry: dict) -> bytes:
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    body = {k: v for k, v in entry.items() if k != "sig"}
-    canonical_json_text(_hexed(body))
-    text = json.dumps(body, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
-    digest = tagged_sha512(tag, text.encode())
-    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(digest)).digest()
+    unsigned = core_record.unsigned(entry)
+    canonical_json_text(_hexed(unsigned))
+    text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
 
 
 def leaf_of(sig: Any) -> int:
@@ -963,7 +964,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
         else:
             raise ValueError(f"entry {i}: kind {kind!r}")
         leaves.add(q)
-        prev, last = hashlib.sha512(ln).hexdigest(), q
+        prev, last = core_record.prev_of(ln), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
     return ({root: {"reserve": (reserves.get(w["open"]["session"]) or {}).get("entry"), "open": w["open"], "end": w["end"]}
@@ -972,15 +973,16 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
 
 
 def ledger_text(entry: dict) -> str:
-    """An entry's line as the auditor writes it: sorted keys, no whitespace, every character past ASCII escaped."""
-    return json.dumps(entry, sort_keys=True, separators=(",", ":"))
+    """An entry's line as the auditor writes it (`core_record.line`): sorted keys, no whitespace, every character past ASCII
+    escaped."""
+    return core_record.line(entry)
 
 
 def ledger_line(lines: Sequence[str], kind: str, session: str | None, body: dict, I: bytes,
                 sign: Callable[[bytes], bytes], schema: str = LEDGER_SCHEMA) -> str:
     """The auditor's next ledger line after `lines`: entry `kind` for session `session` (None for a period's) with body
     `body`, signed with `sign` under the key whose identifier is `I`."""
-    entry = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else _ZERO,
+    entry = {"body": body, "kind": kind, "prev": core_record.prev_of(lines[-1]) if lines else _ZERO,
              "schema": schema, "seq": len(lines), "session": session}
     return ledger_text({**entry, "sig": bytes(sign(ledger_message(I, entry))).hex()})
 
@@ -996,17 +998,17 @@ def _outcome(w: Any) -> bool:
 
 
 def _ledger_entry(line: Any) -> dict | None:
-    """A ledger line's entry when it is its own `ledger_text` of the ledger's form, else None."""
+    """A ledger line's entry when it is its own `ledger_text`, a record entry (`core_record.of_json`) and of the
+    ledger's form, else None."""
     try:
         e = json.loads(line) if type(line) is str and len(line) <= MAX_LEDGER_LINE else None
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
         canonical_json_text(_hexed(e))
+        core_record.of_json(e)
     except (ValueError, TypeError, RecursionError):
         return None
-    if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]
-            and type(e["schema"]) is str and e["schema"] in LEDGER_TAGS and _nat(e["seq"]) and _digest_hex(e["prev"]) and type(e["sig"]) is str
-            and len(e["sig"]) >= 8 and _HEX.fullmatch(e["sig"]) is not None and isinstance(e["body"], dict)):
+    if e["schema"] not in LEDGER_TAGS or len(e["sig"]) < 8:
         return None
     b, kind, v2 = e["body"], e["kind"], e["schema"] == LEDGER_SCHEMA
     if kind in SESSION_KINDS:
