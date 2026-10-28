@@ -69,7 +69,7 @@ ALLOWED = {
     "core.wire": set(),
     "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
-    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
+    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     # Its challenger, firewall, workers and verifier are
     # parties of the deployment layer (`parties`), their messages the wire's.
@@ -84,7 +84,7 @@ ALLOWED = {
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof service's one challenger's (`sampled_proofs.challenger`).
+    # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
@@ -94,7 +94,7 @@ ALLOWED = {
     # card files (`circuit.h1device`).
     "core.protocols.pouw": {"hardware", "ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
-    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
+    # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
 }
