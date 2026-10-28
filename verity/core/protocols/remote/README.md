@@ -112,7 +112,6 @@ what it establishes, what it assumes, its Lean and that Lean's status:
 - **proved**: its proof is in a lock on `main` (`<Area>.SecurityProofs.G : <Area>.Guarantees.G` in
   `Security/lean-audit.json`, or a property's proof in `Security/Properties/lean-audit.json`);
 - **stated**: its statement is in a lock, with no proof yet;
-- **written, not in a lock**: its Lean exists, but no lock records it yet;
 - **open**: not in Lean.
 
 C-Flock's guarantee statements (`Flock.Guarantees.*`) are in `Security/Proofs/Flock/`, not `Definitions/`: its spec
@@ -140,7 +139,7 @@ else is a theorem or a named gap.
 
 That each use of a weight needs its own token's context is not an assumption. It is a property of the training
 circuit's wiring: every gate a use requires reaches, inside that use's own upstream computation, the operand the use
-reads (`Nci.Capability.Upstream`, checkable on the circuit, not yet checked on a named one). The two learning rows are all the overhead lower bound assumes
+reads (`Nci.Capability.Consumers.Upstream`, checkable on the circuit, not yet checked on a named one). The two learning rows are all the overhead lower bound assumes
 about learning, and they are where its scientific content lies; the second is the least certain.
 
 ### 1. The proofs of the drawn proof blocks
@@ -272,13 +271,15 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds' caps `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.ImportOrRecompute`,
-  `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and `Nci.Guarantees.WeightedProductCap`, and the
-  floor `Nci.Guarantees.CapabilityFloor`: **stated** (held in the lock by `Nci.Guarantees.LocalBoundsStated` and
-  `Nci.Guarantees.CapabilityFloorStated`), not proved.
-- Their premises: `Nci.Assumptions.CoversEfficientMethods` is a named assumption in the lock;
-  `Nci.Assumptions.DescriptionHard` and the wiring property `Nci.Capability.Upstream` are recorded through those
-  statements but **written, not in a lock** as named assumptions.
+- The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
+  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
+  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
+  (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
+- Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
+  `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
+  the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
+  certificate is not checked on a named training circuit.
 - `Nci.Guarantees.DampenerRemote`: **proved**, but it is the threaded dampener, an older and different bound,
   ρ = max(1, 1/(s + …)/MFU₀) over the thread structure, not the bound displayed above. It is arithmetic over inline
   hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
@@ -314,7 +315,9 @@ unregistered share, the prices), each labelled with its source in the calculator
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
   - Coverage is untested.
-  - The caps and the floor are stated, not proved.
+  - The caps and the floor are proved, but their honest witnesses hold `DescriptionHard`, `SourceHard`, `Recovers` and
+    coverage only degenerately (a decoder that compresses nothing, coverage of every computation): that the premises
+    can hold together at a positive deficit isn't shown yet.
   - The displayed overhead bound has no Lean statement; `DampenerRemote` is the older threaded dampener.
 
 ### Promising directions
@@ -338,10 +341,8 @@ unregistered share, the prices), each labelled with its source in the calculator
 ## Assumptions, by name
 
 Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
-for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only) and `DescriptionHard`
-(written, not yet a named assumption in the lock). The local bounds' lock entries (`LocalBoundsStated`,
-`CapabilityFloorStated` and `CoversEfficientMethods`) arrive in the same change as this section. The two `*Stated`
-entries are `s = s`, proved by `rfl`: they hold the statements in the lock, not proofs.
+for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). The local
+bounds' premises and proofs arrive in the lock in the same change as this section.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -409,7 +410,7 @@ The overhead, `DampenerRemote`:
 
 The local bounds (part 5):
 
-- `Nci.Assumptions.DescriptionHard` (written, not yet a named assumption in the lock): every selection of an item
+- `Nci.Assumptions.DescriptionHard` (in the lock): every selection of an item
   family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
 - `Nci.Assumptions.CoversEfficientMethods` (in the lock): every sufficiently cheap successful method carries at least
   the covered work Ω_*, except with probability η.
