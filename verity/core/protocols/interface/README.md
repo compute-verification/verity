@@ -74,17 +74,6 @@ the toy protocol whose guards cover both.
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
 
-## Periods (`CoreProtocol/Period.lean`)
-
-The code's copy of the spec's ticks, spans and monitoring period (`Security/Definitions/Core/Period.lean`), so a
-verifier reads them without requiring `Security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
-clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
-spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
-when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
-`{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
-that isn't valid. `Properties.Core` states that the copy is the spec's. `verity.core.periods` mirrors it in Python, and
-`core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest harness.
-
 ## Properties
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
@@ -100,3 +89,15 @@ port, are what makes a verifier proven. All protocols share one Lake package for
 
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
 round trips and refusals; `core-protocol-example` runs it.
+
+## Periods (`CoreProtocol/Period.lean`)
+
+The code's copy of the spec's ticks, spans and monitoring period (`Security/Definitions/Core/Period.lean`), so a
+verifier reads them without requiring `Security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
+clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
+spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
+when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
+`{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
+that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.core.periods` mirrors it in
+Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest
+harness, which builds it by name.
