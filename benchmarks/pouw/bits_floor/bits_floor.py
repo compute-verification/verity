@@ -12,7 +12,8 @@ noised-floor), where X = d_A + V and W′ = d_B + Uπ exactly.
 The price is tensor-pipe time at the card's weights, as in the floor note (*tensor*), and *in-model*, the max over the
 tensor and alu pipes (ACCEL's rate premise G2 bounds each resource on its own): Strassen at depth 1 or 2 with its
 additions and sparse corrections on the alu (`direct_inmodel`), and F's high limb on a 2:4 sparse MMA (`Op.mmaSp`, E7),
-its leftover on the alu. Approximate routes are judged by the rate condition of
+its leftover on the alu. Every price is also given with b1 at 3/16 (`B1_WGMMA`, `price_wgmma` in out.json). Approximate
+routes are judged by the rate condition of
 `SAKMatmul` (Security/Definitions/Pouw/Assumptions/Dither.lean), linearized: a route of cost c failing a checked
 window with probability p_err stays within the moment iff p_err ≥ (1 − c/pub)(1 − p).
 """
@@ -32,6 +33,8 @@ import numpy as np
 from verity.core.protocols.pouw.circuit import dither as D
 
 B1 = 1 / 8
+#: b1 against wgmma's s8, which the served GEMM uses: 5.33× (r20261028-090323-2c56 measured 8.00× on mma.sync)
+B1_WGMMA = 3 / 16
 STRASSEN = 7 / 8
 COIN = hashlib.sha512(b"gd-bits coin").digest()
 RECEIPT = hashlib.sha512(b"gd-bits receipt").digest()
@@ -721,6 +724,31 @@ def price(res: dict) -> dict:
     return tabs
 
 
+def price_at(res: dict, b1: float) -> dict:
+    """`price` with b1 at `b1` of an s8 MAC; the experiments don't depend on it."""
+    global B1
+    old, B1 = B1, b1
+    try:
+        return price(res)
+    finally:
+        B1 = old
+
+
+def price_summary(tabs: dict) -> dict:
+    out = {}
+    for name, tb in tabs.items():
+        r, _ = RECOMMENDED[name]
+        rec = tb["windows"][f"{r},8"]
+        out[name] = {**{k: tb[k] for k in ("full_floor", "full_floor_inmodel", "n_star", "n_star_inmodel", "b_min",
+                                           "b_min_inmodel")},
+                     "low_bits_floor": [x["floor"] for x in tb["rows"]],
+                     "low_bits_floor_inmodel": [x["floor_inmodel"] for x in tb["rows"]],
+                     "windows_that_hold": {b: v["windows_that_hold"] for b, v in tb["by_b"].items()},
+                     "windows_that_hold_inmodel": {b: v["windows_that_hold_inmodel"] for b, v in tb["by_b"].items()},
+                     "recommended_window": [r, r + 8], "recommended_holds": [rec["holds"], rec["holds_inmodel"]]}
+    return out
+
+
 def tables_md(res: dict) -> str:
     out = []
 
@@ -765,6 +793,17 @@ def tables_md(res: dict) -> str:
             ps = ", ".join(f"{v['p_err'][key]:.3g}" for key in ("4,8", "8,8", "10,6", "12,4", "14,2"))
             out.append(f"| {k} | {c0[k]:.4f} | {c1[k]:.4f} | {v['err_std']:.1f} | {ps} |")
         out.append("")
+    if "price_wgmma" in res:
+        out.append(f"### b1 at {B1_WGMMA} of an s8 MAC (wgmma), tensor / in-model\n")
+        out.append("| design | full-word floor | n* | fewest bits in a window that holds | windows that hold, b = 8 (r) | "
+                   "recommended [r, r+8) holds |")
+        out.append("|---|---|---|---|---|---|")
+        for name, v in res["price_wgmma"].items():
+            out.append(f"| {name} | {v['full_floor']:.4f} / {v['full_floor_inmodel']:.4f} | {v['n_star']} / "
+                       f"{v['n_star_inmodel']} | {v['b_min']} / {v['b_min_inmodel']} | "
+                       f"{v['windows_that_hold'][8] or '—'} / {v['windows_that_hold_inmodel'][8] or '—'} | "
+                       f"{v['recommended_window']}: {v['recommended_holds'][0]} / {v['recommended_holds'][1]} |")
+        out.append("")
     out.append("### PoUW word bytes a token, Llama-3.2-1B linear layers (estimate)\n")
     out.append("| design | format | bytes a token | ANDs a MAC in-circuit (arithmetic only) |")
     out.append("|---|---|---|---|")
@@ -791,6 +830,7 @@ def main() -> None:
     res["e6"] = e6(calls)
     res["e7"] = e7(calls)
     res["price"] = price(res)
+    res["price_wgmma"] = price_summary(price_at(res, B1_WGMMA))
     res["bytes"] = word_bytes(res)
     alt = {k: Call(*v, call=1, kind=KIND.get(k, "dither")) for k, v in DESIGNS.items()}
     res2 = {"e3": res["e3"], "e5": e5(alt), "e6": e6(alt), "e7": e7(alt)}
