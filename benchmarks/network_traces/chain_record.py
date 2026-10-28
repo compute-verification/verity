@@ -703,7 +703,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
 
 
 #: each reading of the scan's free inputs, as the report labels it
-READINGS = {"registered": "`prog` as registered (the record's K)",
+READINGS = {"registered": "`prog` as registered today (the record's K)",
             "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering)"}
 
 
