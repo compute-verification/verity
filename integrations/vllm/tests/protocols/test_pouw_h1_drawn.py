@@ -18,26 +18,24 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import h1window as HW
+from verity_vllm.pipeline import commit_coins as CC
+from verity_vllm.pipeline import serve_h1 as SH
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import served as SV
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity_vllm.pipeline import commit_coins as CC  # noqa: E402
-from verity_vllm.pipeline import serve_h1 as SH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
-
-from tests.pipeline.test_commit_coins import GATE, PEER  # noqa: E402
-from tests.pipeline.test_serve_h1 import PROMPTS, _PeriodAuditor, _Server  # noqa: E402
-from tests.protocols import pouw_h1_circuits as PC  # noqa: E402
-from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS  # noqa: E402
-from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
-from verity.ml.circuits.boolean import NOT, XOR, operands  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition  # noqa: E402
-from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
-from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Value  # noqa: E402
+from tests.pipeline.test_commit_coins import GATE, PEER
+from tests.pipeline.test_serve_h1 import PROMPTS, _PeriodAuditor, _Server
+from tests.protocols import pouw_h1_circuits as PC
+from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS
+from tests.protocols.test_pouw_h1_served import _unit
+from verity.ml.circuits.boolean import NOT, XOR, operands
+from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.ports import In, Out, Ports
+from verity.ml.circuits.refs import Coll, coll_concat
+from verity.ml.circuits.types import Value
 
 V1 = Value(1)
 J10R_UNIT = HW.tile_unit
@@ -47,11 +45,14 @@ def _sig(S):
     return HW._chunked(S.K, J10R_UNIT(S.K, (S.R, S.C), HT.PouwH1Tile5)).signature()
 
 
+def _bit(c, i):
+    return Coll(V1, c.refs.slice(i, i + 1))
+
+
 def _body(B, S, a, b, zy, salt, position, roots, call, blocks):
-    bit = lambda c, i: Coll(V1, c.refs.slice(i, i + 1))  # noqa: E731
     receipt, ok = (t for _n, t in _sig(S)[1].fields)
-    x = B.call(XOR, operands(bit(a, 0), bit(b, 0)))
-    return coll_concat(_sig(S)[1], [coll_concat(receipt, [B.call(XOR, operands(bit(a, i), bit(zy, i)))
+    x = B.call(XOR, operands(_bit(a, 0), _bit(b, 0)))
+    return coll_concat(_sig(S)[1], [coll_concat(receipt, [B.call(XOR, operands(_bit(a, i), _bit(zy, i)))
                                                           for i in range(receipt.leaves)]),
                                     B.call(NOT, B.call(XOR, operands(x, x)))])
 
