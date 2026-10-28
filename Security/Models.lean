@@ -49,6 +49,7 @@ import Definitions.Accounting.Assumptions.Remote
 import Definitions.Accounting.Assumptions.RemoteOutside
 import Definitions.Accounting.Assumptions.CreditedWords
 import Definitions.Accounting.Assumptions.RemoteP2
+import Definitions.Accounting.Assumptions.Parties
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period
