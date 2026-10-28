@@ -87,11 +87,17 @@ GRIDS["core"] = {**GRIDS["full"], "fuse": ("fuse",), "credit": ("all4",), "joint
                  "ptile": ((1, 1), (4, 8), (32, 32))}
 #: the core grid near its optimum, for the one-at-a-time and Monte Carlo sweeps
 GRIDS["sweep"] = {**GRIDS["core"], "open": ("exact",), "lp": (32, 128, 512), "t": (1, 2), "drow": (1024, 4096),
-                  "ptile": ((1, 1), (4, 8)), "akeys": (32, 64), "kmax": (27, 30), "mmax": (40,), "reps": (1,),
-                  "sampling": ("work", "stratified"), "stmt": ("template",), "row": (1024, 4096)}
+                  "ptile": ((1, 1), (4, 8)), "row": (1024, 4096, 16384), "mmax": (40,), "reps": (1,),
+                  "sampling": ("work",), "stmt": ("template", "universal")}
 #: the accounting period n over the sweep grid, both hiding arms and both reps
-GRIDS["period"] = {**GRIDS["sweep"], "kmax": (27,), "reps": (2, 1), "hiding": ("hm96", "prf"),
+GRIDS["period"] = {**GRIDS["sweep"], "kmax": (27,), "akeys": (32,), "reps": (2, 1), "hiding": ("hm96", "prf"),
                    "period": (1, 10, 100, 1000, 10_000, 100_000)}
+#: the core grid with every lever that needs new work held at today's: the H200 proving, two reps, m <= 35, whole-row
+#: openings, a statement a template, k_log <= 27, hm96, retention on the device
+GRIDS["today"] = {**GRIDS["core"], "open": ("whole",), "kmax": (27,), "mmax": (35,), "reps": (2,), "device": ("h200",),
+                  "stmt": ("template",), "retain": ("device",)}
+#: today's grid against the accounting period n
+GRIDS["today-period"] = {**GRIDS["today"], "period": (1, 10, 100, 1000, 10_000, 100_000)}
 
 
 def size(name: str) -> int:
