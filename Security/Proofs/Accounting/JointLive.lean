@@ -196,9 +196,9 @@ theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontr
     _ = prob (fun _ => True) (Game.ret ()) Live.toyStrategy := (prob_true _ _).symm
     _ ≤ _ := prob_mono (fun _ _ => ⟨.sampled, trivial, hfail⟩) _ _
 
-/-- **The joint guarantee over a monitoring period's periods played as one causal game**
-(`Accounting.Guarantees.JointMonitoringPeriodLive`). -/
-theorem JointMonitoringPeriodLive : Accounting.Guarantees.JointMonitoringPeriodLive := by
+/-- **The joint guarantee over a horizon of periods played as one causal game**
+(`Accounting.Guarantees.JointHorizonLive`). -/
+theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
   intro ι α _ d m C O G r c err h s
   calc prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s
       ≤ ∑ j, prob (fun o => ∃ a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s :=
@@ -207,11 +207,11 @@ theorem JointMonitoringPeriodLive : Accounting.Guarantees.JointMonitoringPeriodL
         Finset.sum_le_sum fun j _ => Live.prob_exists_univ_le _ G s
     _ ≤ _ := Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun a _ => h j a s
 
-/-- **The joint guarantee over a monitoring period's server-time blocks and their wipes, played as one causal game**
-(`Accounting.Guarantees.JointMonitoringPeriodBlocksLive`). -/
-theorem JointMonitoringPeriodBlocksLive : Accounting.Guarantees.JointMonitoringPeriodBlocksLive := by
+/-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
+(`Accounting.Guarantees.JointHorizonBlocksLive`). -/
+theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
   intro ι α _ _ d B C O G S c fw σ err εWipe δPous h hW hM s
-  have hA := JointMonitoringPeriodLive ι α d B C O G S.block c err h s
+  have hA := JointHorizonLive ι α d B C O G S.block c err h s
   have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hW b s)
   have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o) G s ≤ ∑ b, δPous b s :=

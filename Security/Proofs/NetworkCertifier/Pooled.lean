@@ -10,7 +10,7 @@ A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(
 set fixed before its own draw, every draw missing its window's set while the sets hold `F` units in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
 (`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
-each window's soundness error added by a union bound, that is `pooledWrongUnits`.
+each window's soundness error added by a union bound, that is `horizonWrongUnits`.
 -/
 
 namespace NetTiming
@@ -220,7 +220,7 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
 /-! ### The monitoring period -/
 
 /-- **The wrong units over a monitoring period**: `Guarantees.PooledWrongUnitsLe`. -/
-theorem pooledWrongUnits : Guarantees.PooledWrongUnitsLe := by
+theorem horizonWrongUnits : Guarantees.PooledWrongUnitsLe := by
   intro m Ω _ _ n k draw hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩
   · classical

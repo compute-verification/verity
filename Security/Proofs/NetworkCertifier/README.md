@@ -123,13 +123,13 @@ PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved
 Pooled.lean     the wrong units over a monitoring period: a uniform draw misses `f` units with probability at most
                                          `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over windows on
                                          independent coins (pr_adaptive_le), and with each window's soundness error
-                                         added, the monitoring period's bound (pooledWrongUnits)
+                                         added, the monitoring period's bound (horizonWrongUnits)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
                                          each window's error added (pr_adaptive_add_le, the monitoring-period step
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
                                          under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
                                          decode to at each draw, read back from the certifier's record
-                                         (encard_pooledGood_le, pooledLeak)
+                                         (encard_pooledGood_le, horizonLeak)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
@@ -235,7 +235,7 @@ four (`../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean` and
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `pooledWrongUnits` and `pooledLeak`). All 44 are under `shape.frozen` as
+last two by `horizonWrongUnits` and `horizonLeak`). All 44 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the leak bound also over an abstract charge and compiler; advice v1's over its
 charge as `Definitions` states it, the mirror of `ChargeCount_v1{N}`'s or `ChargeCount_v2{N, H, O}`'s Python reference,

@@ -1,7 +1,7 @@
 import Definitions.Accounting.JointLive
 
 /-!
-# The joint guarantee over a causal game: a period, a monitoring period's periods, and server-time blocks (trusted)
+# The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
 Soundness's R5 and R4′ (26 Oct, LEAN-62, LEAN-64): a period is one causal game (`Verity.Game`), each device release
 drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
@@ -20,9 +20,9 @@ the probability that some subprotocol accepts while its claim fails is at most t
   certifier);
 * `JointPeriodLiveECR`: the same in Daniel's form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
-* `JointMonitoringPeriodLive`: a monitoring period's `m` periods read off one game's run, each over its own circuit;
-* `JointMonitoringPeriodBlocksLive`: a monitoring period's `B` server-time blocks read off one game's run, with the wipe
-  that opens each block and each block's memory term (`Accounting.BlocksRun`'s wipes and memory terms, on the run).
+* `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
+* `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block and each
+  block's memory term (`Accounting.BlocksRun`'s wipes and memory terms, on the run).
 
 Two statements say the bound is not vacuous: an honest prover meets every claim on every run
 (`JointPeriodLive_honest`), and some prover fails a claim with positive probability at an accepting verdict
@@ -98,13 +98,13 @@ def JointPeriodLive_nontrivial : Prop :=
     (r : PeriodLive d α C G) (c : Certificates) (s : Verity.Game.Strategy G),
     0 < Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s
 
-/-- **The joint guarantee over a monitoring period's periods played as one causal game.** On any device, for any `m`
-periods read off the run of one causal game `G`, period `j` over the circuit `C j` (each period's parameters and
-commitment sent after the coins of the periods before it, so a period may adapt to them), whose subprotocols have their
-per-period guarantees over `G`, period `j`'s at certificates `c j` and errors `err j`, each a function of the strategy:
-at every strategy `s`, the probability that some subprotocol of some period accepts while its claim fails is at most
+/-- **The joint guarantee over a horizon of periods played as one causal game.** On any device, for any `m` periods
+read off the run of one causal game `G`, period `j` over the circuit `C j` (each period's parameters and commitment sent
+after the coins of the periods before it, so a period may adapt to them), whose subprotocols have their per-period
+guarantees over `G`, period `j`'s at certificates `c j` and errors `err j`, each a function of the strategy: at every
+strategy `s`, the probability that some subprotocol of some period accepts while its claim fails is at most
 `∑_j ∑_a err_{j,a}(s)`. -/
-def JointMonitoringPeriodLive : Prop :=
+def JointHorizonLive : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (m : ℕ) (C : Fin m → Verity.Circuit) (O : Type) (G : Verity.Game O)
     (r : (j : Fin m) → PeriodLive d α (C j) G) (c : Fin m → Certificates)
     (err : Fin m → Audit → Verity.Game.Strategy G → ℝ≥0∞),
@@ -113,9 +113,9 @@ def JointMonitoringPeriodLive : Prop :=
       Verity.Game.prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s ≤
         ∑ j, ∑ a, err j a s
 
-/-- **The joint guarantee over a monitoring period's `B` server-time blocks and the wipes that open them, played as one
-causal game.** On any device and any `B` blocks read off the run of one causal game `G`, block `b` over the circuit
-`C b`, suppose, over `G` at every strategy `s`:
+/-- **The joint guarantee over a horizon of `B` server-time blocks and the wipes that open them, played as one causal
+game.** On any device and any `B` blocks read off the run of one causal game `G`, block `b` over the circuit `C b`,
+suppose, over `G` at every strategy `s`:
 
 * each subprotocol `a` of block `b` has its per-period guarantee at certificates `c b` and error `err b a`;
 * the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
@@ -129,7 +129,7 @@ survivor bound fails, or some block's memory term fails while its PoUS accepted 
 $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{wipe},b}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s).$$
 **Gap (PRF-167):** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
 it) is outside the integrity bound. -/
-def JointMonitoringPeriodBlocksLive : Prop :=
+def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
     (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (fw : ℝ) (σ : Fin B → ℝ)
     (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (εWipe δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞),

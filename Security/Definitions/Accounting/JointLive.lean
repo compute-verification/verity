@@ -37,11 +37,11 @@ run realized (`PeriodWorld`: accounts, window, schedule and the network certifie
 verdict. A subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds its failure over the whole game at every
 strategy: its coins may come before, between or after the other subprotocols', and the prover may adapt every byte to
 every coin released before it. The joint guarantees are union bounds over the one game
-(`Accounting.Guarantees.JointPeriodLive`, `JointMonitoringPeriodLive`, `JointMonitoringPeriodBlocksLive`).
+(`Accounting.Guarantees.JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`).
 
-The period's game may be a monitoring period's: one game, several periods, each read off the same run, each period's
-parameters and commitment sent after the coins of the periods before it, so a period's extractor may read the run's
-prefix up to its commitment (`extract` reads the run).
+The period's game may be a horizon's: one game, several periods, each read off the same run, each period's parameters
+and commitment sent after the coins of the periods before it, so a period's extractor may read the run's prefix up to
+its commitment (`extract` reads the run).
 -/
 
 namespace Accounting
@@ -156,8 +156,8 @@ structure WipeLive {ι : Type} (d : Device ι) (O : Type) where
 def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) (f : ℝ) (o : O) : Prop :=
   (w.kept o : ℝ) ≤ f * w.fill + 2 * 128 + (d.chip + (d.mem - w.fill))
 
-/-- A monitoring period's `B` server-time blocks read off one run of the game `G`: each block's period, over its own
-circuit, the wipe that opens it, its PoUS challenge times on the run, and the read deadline. -/
+/-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
+the wipe that opens it, its PoUS challenge times on the run, and the read deadline. -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/
