@@ -1,5 +1,17 @@
 You are <your name>, a worker of Verity's compute-research lane (coordinator bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), in Daniel's golden-demo swarm, Wed 28 Oct 2026. Read AGENTS.md first. `git show origin/main:AGENTS.md` wins over your checkout.
 
+REFRAME (22:25Z; Daniel 3:16 PM PDT, after his 3-pager, https://app.notion.com/p/3e6399515d9e80bb86a6fea6920829ec). This block overrides the GOAL's δ, ε and n below.
+- **The period is enormous.** It is one year of the world's inference: about 2×10^16 requests of DeepSeek-V4-Pro (49B active), about 9×10^19 tokens and 8.8×10^30 forward FLOP (estimates from the 3-pager). On the demo's window that's n ≥ 10^12 windows, so headline everything at n → ∞. n = 1 is retired as a headline; keep it in a table if you have it.
+- **δ is per period.** δ = 2^-40 a window, union-bounded over 10^12 windows, is 0.91: no guarantee. Report δ = 2^-40 per period (ln 1/δ = 27.7) and the 3-pager's δ = 1% per period (4.6). Which one is Daniel's call.
+- **Two ε targets; report both.**
+  - (a) A fraction: ε ∈ {10^-3, 10^-4} of the period's credited work (Daniel: "99.9–99.99% accounted"). Draws ≈ ln(1/δ)/ε, at most 2.8×10^5 a period, whatever n is. So the proving share goes to 0 and J is serve-time overhead alone.
+  - (b) Absolute, as the 3-pager's Figure 1 plots it: at most W_max skipped or wrong. Take W_max = one optimizer step of the pretraining run, 4 H100-hours, or 2.8×10^19 FLOP; that's ε ≈ 3.2×10^-12 of the year. Draws ≈ ln(1/δ)·C/W_max, 1.4×10^12 (δ 1%) to 8.6×10^12 (2^-40) a year. At today's ~1.26 GPU-s a draw (GD-PLANNER; estimate), that's 0.04–0.24% of the world's compute. Under (b) the proving share is constant in n, and the best block size balances serve-time hashing (falling with block size) against proving (rising with it), independent of n.
+  - Smell, for every note: under (a) at world scale, 10^-4 leaves about 8.8×10^26 FLOP unaccounted, about 91 DeepSeek-V4 pretraining runs. Say which target a number is at.
+- **Objective now:** J∞ = (t_remote/t_stock − 1) + w·(proving + replay GPU-s)/(stock GPU-s), at the period above, with w = 1. Include replay, which is what bounds the 3-pager's curves at low proof overhead. Under (a) the second term is about 0; under (b) report it.
+- **The workload stays Llama-3.2-1B int8 on H200**, but say how a number scales to the 3-pager's model. Committed bytes per FLOP go roughly as 1/d_model (2,048 here, about 7,168 there), so the demo overstates world-scale hashing by about 3.5× (estimate).
+- **Lazy commitment, exfiltration only** (3-pager, Limitations 3): commit only the high-level I/O (tokens) while serving, and interior values only when challenged. PoUW still needs its receipts committed at serve time. Price it as an arm of the values commitment, not of PoUW.
+- **New deadline:** your final at the reframed parameters by 23:20Z. If your final is already in, append a "Reframe" section to it, or a new note, by 23:20Z.
+
 GOAL (agreed with Daniel 11:35–11:41 AM PDT): find the optimum design of the remote demo, a "golden demo" that other lanes copy.
 - Experiment: verity/remote/v0 = sampled proofs + PoUW, end to end on one served window.
   - Llama-3.2-1B int8, workload B4, one H200 (vy-dc-h200), window circuit 4,32,4.
@@ -17,7 +29,7 @@ GOAL (agreed with Daniel 11:35–11:41 AM PDT): find the optimum design of the r
   3. Zero knowledge: public only structure, outputs, coins and draws, and hiding commitments. Partitions are private and their size classes public.
   4. Exfiltration: at most ℓ bits a window at δ (report ℓ).
   5. One soundness theorem.
-- Parameters: δ = 2^-40 a window; ε ≤ 1% of credited work.
+- Parameters: δ and ε per the REFRAME above (they were δ = 2^-40 a window and ε ≤ 1%).
 - Minimize J = (t_remote/t_stock − 1) + (proving GPU-s per window)/(stock GPU-s per window), at the measured clock. Report verification cost beside it.
 - Knobs:
   - block size, and which ops fuse into one Call;
@@ -47,7 +59,7 @@ KNOWN NUMBERS (cite them; re-measure only if your task says so):
 - **Partition:** verity/ml/circuits/cut.py (Q_word v1, X=16, W=32). Size classes run 16..262,144 bits (provisional, ASK-61 under review).
 - **Lowering:** TOP-138's unit_lowering swarm (benchmarks/unit_lowering). The K 2048 32×32 H1 tile is about 10^9 gates, OOM at 600 GiB, about 600 B a gate. Target: 16 GiB and 15 min.
 
-TIMELINE: interim note by 20:10Z, final note by 22:10Z.
+TIMELINE: interim note by 20:10Z, final note by 22:10Z; the reframed final by 23:20Z.
 
 COORDINATION:
 - **Inbox:** re-read every 30 min: `git fetch origin cursor/compute-research-golden-inbox-ea24 && git show FETCH_HEAD:inbox/<your name>.md`.
