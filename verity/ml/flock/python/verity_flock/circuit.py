@@ -548,6 +548,47 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
     return blocks
 
 
+def _type_bits(t) -> int:
+    from verity.ml.circuits.types import Array, Record, Value
+
+    if isinstance(t, Value):
+        return t.w
+    if isinstance(t, Array):
+        return t.n * _type_bits(t.elem)
+    return sum(_type_bits(f[1] if isinstance(t, Record) else f) for f in t.fields)
+
+
+def unit_witness(definition) -> dict:
+    """What a unit needs read off its Definition, before any lowering: its ANDs (`ir_lower.definition_ands`), its parameters'
+    and returns' bits, and ``k``, the least with ``2^k`` above their sum, so the smallest slot `compose` could give the unit
+    (whose block holds its rows' hashes and the mask besides)."""
+    from verity.ml.circuits.evaluation.reference import signature_of
+
+    params, ret = signature_of(definition)
+    ands, ports = IL.definition_ands(definition), sum(_type_bits(t) for t in params) + _type_bits(ret)
+    return {"ands": ands, "port_bits": ports, "k": (ands + ports).bit_length(), "k_max": K_MAX}
+
+
+def past_range(w: dict) -> str | None:
+    """Why a unit needing `unit_witness`'s ``w`` is past C-Flock's proved range of 2^`K_MAX` witness bits, or None."""
+    if w["k"] <= K_MAX:
+        return None
+    return (f"the unit needs a slot of 2^{w['k']} witness bits ({w['ands']:,} ANDs and {w['port_bits']:,} port bits, read off its "
+            f"Definition); C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean Stmt.InRange): split the unit (e.g. PoUW's "
+            f"lanes form, verity/core/protocols/pouw/leaf_lanes.py) or extend the proved range (proofs)")
+
+
+def refuse_past_range(definition, name: str) -> dict:
+    """`unit_witness`, or ValueError (`past_range`), before any lowering, for a unit whose Definition alone needs more than
+    C-Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
+    32 × 32 H1 tile at K = 2048 OOM'd at 600 GiB on the way, TOP-138). `compose` refuses every unit this refuses unless its
+    lowering lays out fewer than half the witness bits its Definition counts (its slot alone would be 2^`K_MAX`)."""
+    w = unit_witness(definition)
+    if (why := past_range(w)) is not None:
+        raise ValueError(f"{name}: {why}")
+    return w
+
+
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),

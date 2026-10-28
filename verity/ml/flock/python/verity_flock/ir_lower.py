@@ -314,6 +314,61 @@ def lower(C: Circuit, target, inputs: Sequence[list]) -> list[list]:
     return [wires[r] for r in call.returns]
 
 
+_PIECE_ANDS: dict[str, int] = {}
+
+
+def _piece_ands(prim) -> int:
+    """The ANDs of ``prim``'s piece on free operands (none for a primitive without one), each primitive id lowered once."""
+    if prim.id not in _PIECE_ANDS:
+        from verity.ml.circuits.evaluation.reference import signature_of
+
+        C = Circuit()
+        try:
+            params, _ = signature_of(prim)
+            outs = lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
+        except (KeyError, NotImplementedError, ValueError):
+            outs = None
+        if outs is not None:
+            C.output("out", [b for w in outs for b in w])
+        _PIECE_ANDS[prim.id] = C.counts()["ands"] if outs is not None else 0
+    return _PIECE_ANDS[prim.id]
+
+
+def definition_ands(target) -> int:
+    """``target``'s ANDs read off its Definition, never lowered: each specialized Definition's body counted once and multiplied
+    through its calls, batch members and scan iterations; an n-input And n - 1 (core's Boolean work, Lean's
+    ``Circuit.andSize``), an Xor, a Not, a constant and an input none, any other primitive its piece's ANDs on free operands.
+    `lower` builds about this many: fewer where an AND folds to a constant or nothing reads it, more by a Boolean builder's
+    commits. Seconds where `lower` takes the unrolled unit (a 32 × 32 H1 tile at K = 2048: 613M And gates)."""
+    import re
+
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    memo: dict[int, int] = {}
+
+    def prim_ands(p) -> int:
+        fam = getattr(p, "family", None)
+        if fam in ("Input", "Const") or not p.params:
+            return 0
+        if (m := re.fullmatch(r"And([0-9]+)_v1", p.id)) is not None:
+            return int(m[1]) - 1
+        if p.id == "Not_v1" or re.fullmatch(r"Xor[0-9]+_v1", p.id):
+            return 0
+        return _piece_ands(p)
+
+    def ands(fn) -> int:
+        if isinstance(fn, PrimitiveDefinition):
+            return prim_ands(fn)
+        if id(fn) not in memo:
+            body = getattr(fn, "body", None)
+            memo[id(fn)] = 0 if body is None else sum((nd.n if nd.form in ("batch", "scan") else 1) * ands(nd.fn)
+                                                      for nd in body.nodes)
+        return memo[id(fn)]
+
+    return ands(resolve(target))
+
+
 @dataclass(frozen=True)
 class _PrimGate:
     prim: object
