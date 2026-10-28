@@ -1,7 +1,10 @@
 """GD-KNOBS: one-at-a-time sensitivity of J to each knob, on GD-MODEL's golden/model.py (an estimate, not a measurement).
 
 Run from the root of a checkout that has GD-MODEL's golden/ (cursor/compute-research-gd-model-6eb4 at e6ab8cbc31):
-python3 -m golden.knobs_sweep [--json OUT]
+python3 -m golden.knobs_sweep [--json OUT] [--sha512 ROWS]
+
+--sha512 ROWS prices a SHA-512 compression at ROWS in circuit (and hm96's hiding part at twice that) instead of the
+model's INPUTS, e.g. 81402, C-Flock's SHA-512 circuit (the coordinator, 20:00Z).
 """
 from __future__ import annotations
 
@@ -68,6 +71,10 @@ def run(preset: str, sec: str | None, key: str, value, inp: bool = False) -> dic
 
 
 def main() -> None:
+    if "--sha512" in sys.argv:
+        rows = int(sys.argv[sys.argv.index("--sha512") + 1])
+        for key, n in (("sha512_ands", rows), ("hm96_ands", 2 * rows)):
+            M.INPUTS[key] = (n, "E", f"--sha512 {rows}: C-Flock's SHA-512 circuit, rows a compression")
     out = {}
     for preset in PRESETS:
         base = M.J(M.design(preset))
