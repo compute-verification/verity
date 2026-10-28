@@ -1273,7 +1273,7 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     reg = slack.load_registry(registry)
     assert reg["collaborators"] == [{"name": "Luke Example", "slack_user": LUKE, "note": "a visiting researcher (COMM-52)",
                                      "email": "luke@example.org"}]
-    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == ["top"]
+    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == []
 
     rc, out, _ = run(capsys, "chat", "open", "luke", "--user", LUKE)
     assert rc == 0 and f"#chat-luke {c['id']}: reused" in out and out.count(": already in") == 2
@@ -1516,9 +1516,9 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
     assert rc == 0 and "how do I read a PoUW receipt?" in out and "@proofs: it proves the sum" in out and "and the Lean side?" in out
     late = fake.add("CCHAT1", text="is anyone there?", user=LUKE)
     rc, _, err = run(capsys, "match", "--as", "top", "--event", json.dumps({"channel": "CCHAT1", **late}), "--why")
-    assert rc == 0 and "top-level post in #chat-luke, which @top subscribes to" in err
+    assert rc == 1                                    # no channel subscription: the post reaches top as a doorbell in its inbox
     out = run(capsys, "subscriptions", "--as", "top")[1]
-    assert 'subscribe_slack_channel(channelId="CCHAT1", topLevelOnly=true' in out and "# #chat-luke" in out
+    assert "CCHAT1" not in out and "#chat-luke" not in out                    # a private chat the subscription tool can't join
 
     published = tmp_path / slack.PEOPLE_DIR                                             # the routes' sibling
     assert slack.ChatPeople().base == f"file://{published}/"
@@ -2576,7 +2576,7 @@ def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
     """Drive and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
     root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
     for verb in ("send", "reply"):
-        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--machine", "--text", words(400))
+        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--report", "--text", words(400))
         assert rc == 0 and "words" not in err
     assert len(posts(fake)) == 2
 

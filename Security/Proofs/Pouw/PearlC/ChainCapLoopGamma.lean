@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.DeviceChainCapGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
-# v2 at the chain cap 1/1,000 at sm_120's in-loop prices (the price-twins lane's file; staged)
+# v2 at the chain cap 1/1,000 at sm_120's in-loop prices (staged)
 
 The twins of `DeviceChainCapGamma`'s instances at `Prices.sm120Loop` in place of `Prices.sm120`, with the same
 hypotheses otherwise and the same general theorems. At any record with `G = 0`: per unit `64899/17487500` (0.37112%) at

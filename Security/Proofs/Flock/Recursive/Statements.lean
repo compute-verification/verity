@@ -17,7 +17,7 @@ and C-Flock `--zk --registered` sessions of the public verifier circuits V* (`zs
 form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
 (`Proofs.Flock.Recursive.Guarantees`).
 
-* `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, PRF-212, since its event is
+* `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, since its event is
   possibilistic and nearly empty; the recursion's guarantee is `Flock.Guarantees.RecursiveKS`): either a run of the prover's own strategy finds a SHA-512 collision
   (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
   hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
@@ -91,21 +91,21 @@ Every `∃` in a fork ranges over `σ`'s own runs and what they output, never ov
 for a prover that never collides on a fork, and says nothing for one that collides on a single pair: no term counts
 SHA-512 evaluations.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): Its event asks that the inner statement have no witness (`¬
+**A nearly empty event**: Its event asks that the inner statement have no witness (`¬
 holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
 with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
-with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
-cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
+with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, probes
+outside this tree). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
 computation. The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by
 extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about
-65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight
-(ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight.
+Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
 states no bits.
 
-**Retired from the lock** (PRF-212): its break is possibilistic, so the lock lists no theorem of it; the recursion's
+**Retired from the lock**: its break is possibilistic, so the lock lists no theorem of it; the recursion's
 guarantee is the knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS` (`Proofs.Flock.Recursive.KSStatement`). -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
@@ -447,15 +447,15 @@ whose last round isn't committed (candidate 3 today) doesn't give.
 
 Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): its event, as `RecursiveSound`'s, asks that the inner
+**A nearly empty event**: its event, as `RecursiveSound`'s, asks that the inner
 statement have no witness (`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its
 hm96 commit string `b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also
 opens to the right row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`,
-`shift_reachable`, on cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds
+`shift_reachable`, probes outside this tree). For any cheater the event is then nearly empty, and the bound bounds
 it, not a wrong computation. The fix is the knowledge form the claims API states recursion in;
 `EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
 `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form

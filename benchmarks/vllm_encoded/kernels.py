@@ -8,11 +8,11 @@ BF16 (`ve_reduce`), so a plain and an encoded linear over the same weight return
 decodes the layer into a scratch FP8 matrix for vLLM's CUTLASS GEMM: prefill is compute-bound and isn't what's timed.
 
 Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a later fused kernel (a tag stage, a wider
-codec) is another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs ra-codec-wide's fused GEMM instead
+codec) is another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs the wide codec's fused GEMM instead
 (`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 or
 2^512 − 569, and with a tag seed set the bandwidth audit's ro-blake3/v1 tag of every block of encoded words it reads, or
 with its sketch set ro-sketch-blake3/v0 over the encoded words its CTAs hold, `wide_sketch`); its chunk sums have the
-same layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs ra-codec-tensor's
+same layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs the tensor-core codec's
 (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead of one MMA warp, and
 tag warps hashing the store's 4,088-byte blocks, or sketch warps sketching the stored bytes on the tensor cores before the
 decoders overwrite them, ro-sketch-blake3/v0), with the same chunk sums.
@@ -177,7 +177,7 @@ class WideLib:
         tags go to one slot of a two-slot ring, which L2 holds, and the next linear hashes their leaves into the step's
         tree on a second stream beside its own GEMM; when every linear's tags are whole 16·2^sub, a third stream folds
         those leaves `sub` levels, waiting only for them, so the ring slot is free once the leaves have read it
-        (ra-codec-wide's run E); the step's last linear hashes its own and the tree."""
+        (the wide codec's run E); the step's last linear hashes its own and the tree."""
         if self.sketch is None:
             raise ValueError("the in-step commit is the sketch tag's")
         vectors, n = sum(per_linear), -(-sum(per_linear) // 16)
@@ -247,7 +247,7 @@ class WideLib:
 
 
 class TensorLib:
-    """One build of ra-codec-tensor's `wt.cu` (one field, `WT_FIELD`): its key, its tag key and the tag buffer its fused
+    """One build of the tensor-core codec's `wt.cu` (one field, `WT_FIELD`): its key, its tag key and the tag buffer its fused
     GEMMs write, and each launch's tweak steps."""
 
     def __init__(self, path: str | Path) -> None:
@@ -370,14 +370,14 @@ class TensorLib:
         st["roots"][m] = (nvec, root.value)
 
     def configs(self, tagged: bool) -> list[tuple[int, int, int, int]]:
-        """(decoders, stages, taggers, k_s) as ra-codec-tensor's `fused_cfgs("auto")` picks them: untagged (taggers
+        """(decoders, stages, taggers, k_s) as the tensor-core codec's `fused_cfgs("auto")` picks them: untagged (taggers
         -1), the most decoder warps the field's registers allow at 4 and 6 stages fewer than fit at M = 32; tagged, 0
         or 2 of them tagging from the start instead (every other warp tags once its own work is done); sketched, the
-        most decoder warps and 2 fewer (ra-codec-tensor's p1536 picks at T = 32: 8 x 8 for qkv and o, 10 x 9 for
+        most decoder warps and 2 fewer (the tensor-core codec's p1536 picks at T = 32: 8 x 8 for qkv and o, 10 x 9 for
         gate_up and down), all of them sketching the words they decode, at 0 to 4 stages fewer than fit with the
         sketch's buffers and fewer than 2 t (the kernel puts k_s = 16's signs in shared memory when they fit beside
         the stages).  Not 4 or 6 tag warps: with that many gate_up's sums at M = 32 differ from launch to launch (p511 and
-        p767, r20261012-092414-7dcc and r20261012-092945-296e)."""
+        p767)."""
         def smax(ks: int) -> int:
             return (SMEM_PER_BLOCK - 4 * 8 * 528 - 32 - 192 * ks) // (self.sb + 40)
 
@@ -694,7 +694,7 @@ class WideLinear(Linear):
 
 
 class TensorLinear(Linear):
-    """Only `wt.cu`'s words (ra-codec-tensor's fused decode GEMM): `store` (S bytes a word, held as int16 so no uint8
+    """Only `wt.cu`'s words (the tensor-core codec's fused decode GEMM): `store` (S bytes a word, held as int16 so no uint8
     tensor of a linear's size is in the process: `bytes` is its uint8 view) holds W's payloads (`layout.tensor_limbs`)
     encoded k >= 1 rounds under the tensor lib's key at word indices base, base + 1, ...  With the lib's tag seed set,
     its tag warps write the ro-blake3/v1 tag of each 4,088-byte block jl of the store at index tag_base + jl to the lib's

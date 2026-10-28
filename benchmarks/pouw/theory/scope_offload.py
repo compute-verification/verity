@@ -1,12 +1,12 @@
 """SCOPE-OFFLOAD, mechanically: how much of a credited GPU's int8 work a helper the prover controls can do OFF that GPU's
-facets, and what bounds it (RT-SCOPE, the compute-accounting red team).
+facets, and what bounds it.
 
 Where `isa_escape.py` asks whether a unit ON the die can head a committed word more cheaply than the SM menu, this script
 asks the same of helpers off the die: the host CPU/AMX, a peer GPU, a machine behind a NIC, or device memory holding
 precomputed words. Which of two bounds applies decides the answer:
 
   - WORD-LEVEL, if the credited GPU must head every committed word itself. A helper can then import only words or
-    additive partials (the fixed-word rule lets those in without un-fixing the head, card 0f7721ff). A word is a fresh
+    additive partials (the fixed-word rule lets those in without un-fixing the head). A word is a fresh
     s32 packing 32 int8 products (FOLD-BW), 4 bytes carrying 32 MACs, so the helper is link-bound:
 
         f_word <= BW_in * (MACs_per_word / bytes_per_word) / MAC_rate = 8 * BW_in / MAC_rate.
@@ -31,11 +31,11 @@ So the word-level numbers are floors on each channel's exposure, not caps. The c
     each word's credited time (tensor, fold and filler), so the share is the host's words a second times the headline
     design's credited time a word (`setup(...).baseline.T`, eps's own denominator), not a share of the tensor peak,
     which understates it by the design's tensor utilization (printed per device). The machine model's per-GPU eps has
-    no host term; LOC (decision 37) deducts the host at node level at its int8 peak, and the data-sheet rows price that
+    no host term; LOC deducts the host at node level at its int8 peak, and the data-sheet rows price that
     peak (AMX's 1,024 int8 MACs a cycle a core at Intel ARK's clocks).
 
 Each fraction is read against the 1% target as counted eps, the headline's eps plus the fraction, at the sheet reading
-and at decision 89's measured one, and printed as a `verdict` line. Those verdicts move with whichever designs
+and at the measured one, and printed as a `verdict` line. Those verdicts move with whichever designs
 headline.toml names, so the checks assert only what holds for any of them: the relations between the bounds, the
 sheet-constant ceilings and the arithmetic. The word-level ceilings stay shares of the tensor peak: an imported word
 still costs the GPU its fold, so they bound the time it frees from above.
@@ -48,7 +48,7 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
-Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); the headline eps at both
+Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); device memory 96 / 141 / 192 GB; H1's smallest tile
@@ -73,11 +73,11 @@ DIGEST_BYTES = 64  # a tile's SHA-512 digest, the transcript's leaf
 H1_SMALLEST_TILE_MACS = 4 * 8 * 64  # one lane (4 x 8) at K = 64
 M32 = 0xFFFFFFFF
 
-# The design's operand alphabets (decisions 29, 44, 51), as isa_escape.py uses: int8 activations, weights |w| <= 63.
+# The design's operand alphabets, as isa_escape.py uses them: int8 activations, weights |w| <= 63.
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
-# Per device: s8 dense MACs a SM clock, SMs, f_max (Hz). Sheet constants, note:20261017T1818Z-draft-axioms sec 2.1.
+# Per device: s8 dense MACs a SM clock, SMs, f_max (Hz). Sheet constants.
 DEVICES = {
     "sm_120 RTX PRO 6000": (1024, 188, 2430e6),
     "H200 sm_90": (4096, 132, 1980e6),
@@ -113,22 +113,22 @@ CHANNELS = {
 }
 
 # Host AMX words, per core: `ncp_amx` with a snapshot every 32 deep (k_s = 32, one word per 32 MACs a cell), best m, on
-# 24 Xeon 6776P cores of node 2 (r20261012-211331-ae6a, ncp_resident.jsonl and ncp_stream.jsonl, Y stored). Resident is
+# 24 Xeon 6776P cores of node 2 (ncp_resident.jsonl and ncp_stream.jsonl, Y stored). Resident is
 # operands blocked in L2, as a large-m (prefill) tile allows; streamed reads Y from DRAM.
 AMX_PER_CORE = {"resident": 1.3879e13 / 24, "streamed": 5.2886e12 / 24}
 # Sapphire and Emerald Rapids, resident, the same bench one thread a core, gated bit-exact, best m: vy-dc-h200's 8 Xeon
-# 8468 cores (r20261019-093714-2359), 4.3% under node 2's a core, for the H200's hosts; vy-dc-b200's 10 Xeon 8580 cores
-# (r20261019-101102-af5e), 46% over, for the B200's. Streamed keeps node 2's rate: the slots' cores stream faster
+# 8468 cores, 4.3% under node 2's a core, for the H200's hosts; vy-dc-b200's 10 Xeon 8580 cores,
+# 46% over, for the B200's. Streamed keeps node 2's rate: the slots' cores stream faster
 # (2.8486e12 on 8, 4.4766e12 on 10), which a socket's 56 cores would not.
 AMX_RESIDENT_BY_HOST = {"vy-dc-h200 slot, Xeon 8468": 4.4278e12 / 8, "DGX H200, 2 x Xeon 8480C": 4.4278e12 / 8,
                         "vy-dc-b200 slot, Xeon 8580": 8.4242e12 / 10, "DGX B200, 2 x Xeon 8570": 8.4242e12 / 10}
-# The fold's and fillers' lane work, per core: LOP3+IMAD chains on AVX-512, best of 10 cores (r20261019-064611-062c,
-# Xeon 8580), priced at the design's own lane instructions a word.
+# The fold's and fillers' lane work, per core: LOP3+IMAD chains on AVX-512, best of 10 cores
+# (Xeon 8580), priced at the design's own lane instructions a word.
 LANE_PER_CORE = 5.1349e11 / 10
 AMX_MACS_PER_CYCLE = 1024  # TDPBSSD: int8 MACs a cycle a core (Intel's 2,048 int8 ops)
 
 # The hosts beside each device: (name, cores, GPUs sharing them, ARK base and max turbo clocks in Hz). Node 2's VM
-# exposes 48 of each 6776P's 64 cores (lscpu, r20261012-211331-ae6a); bare metal has all 128.
+# exposes 48 of each 6776P's 64 cores (lscpu); bare metal has all 128.
 HOSTS = {
     "sm_120 RTX PRO 6000": [("node 2 VM, 2 x Xeon 6776P", 96, 8, 2.3e9, 3.9e9),
                             ("node 2 bare metal, 2 x Xeon 6776P", 128, 8, 2.3e9, 3.9e9)],
@@ -235,7 +235,7 @@ def main() -> int:
                      "Ingress docstring")
         checks.check("Device.lean models no NVLink/NVSwitch ingress channel",
                      "NVLink" not in lean and "NVSwitch" not in lean, "so intra-node peer ingress is unmodeled")
-        checks.check("Device.lean states there is no host-RAM channel (Daniel 3 Oct)", "no host RAM" in lean,
+        checks.check("Device.lean states there is no host-RAM channel", "no host RAM" in lean,
                      "host offload rides the PCIe channel, which the docstring frames as 'from NVMe'")
 
     # 3. The per-device, per-channel ceiling, and the counted eps each bound gives, against 1%.
@@ -298,7 +298,7 @@ def main() -> int:
                      f >= 0.003, f"{f * 100:.3f}%")
         nv = counted(device, f)
         checks._print(f"      verdict {device:20s} word-level NVLink alone: {shown(nv)}: {against(nv)} "
-                      "(a peer doing whole tiles is RT-SCOPE-1)")
+                      "(a peer doing whole tiles is a separate route, not bounded here)")
 
     # 5. Whole-tile: the host's measured rates, not PCIe, bound what it lends, as a share of the design's credited time,
     #    paying the design's own fold and fillers.
@@ -360,7 +360,7 @@ def main() -> int:
         checks.mutation("a word-sized digest does not beat the word's density",
                         not macs_per_byte(MAC_PER_WORD, BYTES_PER_WORD) > macs_per_byte(MAC_PER_WORD, BYTES_PER_WORD))
         hosts = [(d, i) for d in DEVICES for i in range(len(HOSTS[d]))]
-        # Bounding the host by PCIe at word level, the 07:00Z error, understates the whole-tile share on every host.
+        # Bounding the host by PCIe at word level understates the whole-tile share on every host.
         ratio = min(min(lent(d, i, "resident").values()) / offload_fraction(64 * GB, mac_rate(d)) for d, i in hosts)
         checks.mutation("a word-level PCIe bound on the host understates its whole-tile share on every host",
                         ratio > 1, f"by {ratio:.1f}x at the least")
@@ -369,7 +369,7 @@ def main() -> int:
                      for d, i in hosts for r in READINGS)
         checks.mutation("dropping the fold's lane work raises every host's estimate to the AMX-only bound", raised > 1,
                         f"by {raised:.2f}x at the least")
-        # The host as a share of the tensor peak, the 08:15Z error, understates it by 1/u on the least-utilized design.
+        # The host as a share of the tensor peak understates it by 1/u on the least-utilized design.
         u, device, reading = min((words[d, r][1] / words[d, r][0] / mac_rate(d), d, r)
                                  for d in DEVICES for r in READINGS)
         name, cores, gpus, _, _ = HOSTS[device][-1]

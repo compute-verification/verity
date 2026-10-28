@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The node-side jobs of the erase calibration, run by `research run --on vy-nebius-2 --cwd source/benchmarks/pous/erase_calib`.
+# The node-side jobs of the erase calibration, run on a GPU node from benchmarks/pous/erase_calib with RESEARCH_RUN_DIR set.
 # Each driver step takes its own preemptible `gpu-lease 1` on GPUs $ERASE_GPUS with its host threads on cores $ERASE_CPUS of
 # NUMA node 0 (off node 2's merge-check slot, cores 0-47; the research user may run on 0-91), and writes small JSON to $RESEARCH_RUN_DIR/out. No lease is held
 # past $ERASE_STOP_EPOCH. A validate or sweep step that is preempted (143) or reaches its --max-min (124) is taken up again and
