@@ -59,6 +59,9 @@ ALLOWED = {
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with

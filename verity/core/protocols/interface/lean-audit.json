@@ -1,7 +1,8 @@
 {
- "roots": ["CoreProtocol"],
+ "roots": ["CoreProtocol", "CoreProtocol.PeriodDifftest"],
  "exempt": {
-  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "CoreProtocol.PeriodDifftestMain": "the core-periods-difftest server's entry point, one line: Difftest.serve of Core.PeriodDifftest.table, which verity/core/periods/tests/test_periods_difftest.py drives against the Python mirror; audited under CoreProtocol.PeriodDifftest"
  },
  "escapes": {
   "Core.BlobProtocol.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.BlobsExample's guards cover BlobProtocol.case, which it runs on each line",
@@ -17,6 +18,16 @@
    "imports": ["Lean.Data.Json", "Flock.Canon", "CoreProtocol.Ratio"],
    "except": [],
    "why": "the interface is spec: a protocol's properties are stated over `Protocol`, `Outcome`, `Answer`, `Integrity` and `Ratio`, so these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another"
+  },
+  "CoreProtocol.Period": {
+   "imports": ["Lean.Data.Json", "Flock.Canon"],
+   "except": [],
+   "why": "the code's ticks, spans and monitoring period are spec: `Properties.Core.Period` states them equal to Security's, so they import only Lean's JSON and C-Flock's canonical JSON"
+  },
+  "CoreProtocol.PeriodDifftest": {
+   "imports": ["CoreProtocol.Period", "Difftest", "Lean.Data.Json", "Flock.Canon"],
+   "except": [],
+   "why": "the difftest's functions reach Lean only through the code's periods and the harness"
   },
   "CoreProtocol.Protocol": {
    "imports": ["Lean.Data.Json", "Flock.Bytes", "Flock.Canon"],
