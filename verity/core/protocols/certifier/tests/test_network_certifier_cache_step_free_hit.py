@@ -1,4 +1,4 @@
-"""Adversarial cases against ENC-DERIVED's CacheStep_v1 (`cache_step`), which fixes the prefix hit `ReplayStep_v1`
+"""Adversarial cases against CacheStep_v1 (`cache_step`), which fixes the prefix hit `ReplayStep_v1`
 takes as bounded witness. Its own suite shows the hit is pinned to the cached prefix; these
 cases pin down what the piece does NOT constrain.
 

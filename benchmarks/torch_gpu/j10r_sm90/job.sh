@@ -2,20 +2,18 @@
 # The jobs (cwd = the source tree's root):
 #   build  (a CPU node) the fallback, j10r_ref.cu, at sm_90a: $OUT/lib/sm_90a/j10r_ref.so, ptxas's report, BUILD.txt
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
-#   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
-#          expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch), and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h, sass_gate.py, wgmma.py and configs.py as
-#          the bench's wgmma arm, built here by that build.sh (its plain arm is this tree's s8_linear/int_mm.py). Fixtures not
-#          sent are computed here, the fallback not sent is built here (BUILD_REF=0: not) and with no h1u_*.so sent
-#          h1u_build makes the arms H1U_ARMS names from this tree (BUILD_H1U=0: not), all before the lease, as are the
-#          operands, in a scratch directory removed at exit.
+#   gpu    (an H200) check.py, then bench.py, on the files in LIBS (default a run directory's inputs/,
+#          RESEARCH_RUN_DIR): expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u
+#          build (and its _sm launch), and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h, sass_gate.py, wgmma.py and
+#          configs.py as the bench's wgmma arm, built here by that build.sh (its plain arm is this tree's
+#          s8_linear/int_mm.py). Fixtures not in LIBS are computed here, the fallback not in LIBS is built here
+#          (BUILD_REF=0: not) and with no h1u_*.so in LIBS h1u_build makes the arms H1U_ARMS names from this tree
+#          (BUILD_H1U=0: not), all before the lease, as are the operands, in a scratch directory removed at exit.
 #
-#   research run --on vy-nebius-cpu-4 --as LANE --project verity --source . --cwd source -- \
-#     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/torch_gpu/j10r_sm90/job.sh cpu
-#   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=LANE --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
-#     --send CPU_RUN/out/lib/sm_90a/j10r_ref.so [--send .../h1u_kr.so ...] -- bash benchmarks/torch_gpu/j10r_sm90/job.sh gpu
+#   OUT=CPU_OUT bash benchmarks/torch_gpu/j10r_sm90/job.sh cpu   # a CPU node with CUDA 13's nvcc and uv
+#   mkdir -p LIBS && cp CPU_OUT/fixtures/expected.npz CPU_OUT/fixtures/fixtures.json \
+#     CPU_OUT/lib/sm_90a/j10r_ref.so LIBS/
+#   OUT=DIR LIBS=LIBS bash benchmarks/torch_gpu/j10r_sm90/job.sh gpu   # an H200 with nvcc and `gpu-lease` on PATH
 # gpu's steps (STEPS, default "check bench") run in that order under one lease; "prof" is prof.py's one call a linear of
 # the h1u build PROF_ARM (default kraq) under ncu (NCU, default the ncu beside NVCC; NCU_SET, default --set full; NCU_K,
 # its kernel filter), --clock-control none, into $OUT/prof/units.ncu-rep, its raw, details and SASS pages and
@@ -85,7 +83,7 @@ h1u_build() {
   return $rc
 }
 
-# s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), sent as files: its build.sh run unchanged
+# s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
 # from a scratch copy, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
   local w=$S/s8/benchmarks/torch_gpu/s8_linear nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}

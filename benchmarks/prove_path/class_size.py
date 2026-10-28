@@ -4,23 +4,22 @@
 (`window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a Program at
 Llama-3.2-1B is 46,028,317 units, and the class's 8 take a pod some 22 minutes and 42 GB to lower. So the size is also a
 projection (`project`) from an exact lowering of one Program of the same registration at a small probe class within one
-key block, which the tests hold to the exact lowering past one block and two, and at the class of record itself:
+key block, which the tests hold to the exact lowering at larger classes:
 
-* every template but the heads and their key gathers is a fixed number of units a position (`projected`), a slot's where
-  it places them (`placed`: `TokenFeed_v1` a prompt position; `ScanSlots_v1`, at the class's scan state row, `SlotRow_v1`
-  and `SlotEntry_v1` one a Program; `OutCollect_v1` one a position, its first the first's), read off the probe, which is
+* every template but the heads is a fixed number of units a position (`projected`), a slot's where it places them
+  (`placed`: `TokenFeed_v1` a prompt position past the first; `ScanSlots_v2`, at the class's scan state row, and
+  `SlotEntry_v1` one a Program; `OutCollect_v1` one a position, its first the first's), read off the probe, which is
   refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
-  ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). Its
-  keys and values reach it as an `AllGather_v1{BN, D}` row a full block, written once (when the block fills) and read by
-  every later position, and an `AllGather_v1{NVIS, D}` of its first block, none where that block is one key (RoPE's row)
-  or a full one.
+  ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). A
+  block reads its keys and values a row a key, so the exact lowering refuses a block past 126 keys, more than a unit's 256
+  rows; the projection counts it all the same.
 
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
-interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log). A gather's
-k_log is its rows' (`rows_k`: C-Flock's composer gives each row a unit reads or writes an hm96 slot), so a unit past 256
-rows in and out, past a 2^27-bit block, is refused as C-Flock refuses it.
+interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log), refusing a
+unit past a 2^27-bit block as C-Flock refuses it. A unit composed of few ANDs takes its rows' k_log (`rows_k`: C-Flock's
+composer gives each row a unit reads or writes an hm96 slot).
 
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe 1,2,2]
@@ -43,11 +42,9 @@ FIRST = "AttnBlockFirst_v1"
 END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
-ROW = "SlotRow_v1"
-SCAN = "ScanSlots_v1"
+SCAN = "ScanSlots_v2"
 COLLECT = "OutCollect_v1"
 ENTRY = "SlotEntry_v1"
-GATHER = "AllGather_v1"
 
 
 def label(fn: Any) -> str:
@@ -82,12 +79,12 @@ def _one(xs: list[Any], what: str) -> Any:
 
 def placed(lab: str, T: int, P: int) -> int | None:
     """A Program's units of template ``lab`` at position T of its P, for a slot's template: `TokenFeed_v1` at each of its NP
-    prompt positions (its first the first's), `ScanSlots_v1` and `SlotRow_v1` at the first, `SlotEntry_v1` at the last and
-    `OutCollect_v1` at each (its first the first's); None for any other, a fixed count at every position."""
+    prompt positions past the first, `ScanSlots_v2` at the first, `SlotEntry_v1` at the last and `OutCollect_v1` at each
+    (its first the first's); None for any other, a fixed count at every position."""
     fam, s = statics(lab)
     if fam == FEED:
-        return int(T == 1) if s["FIRST"] else int(1 < T <= s["NP"])
-    if fam in (SCAN, ROW):
+        return int(1 < T <= s["NP"])
+    if fam == SCAN:
         return int(T == 1)
     if fam == ENTRY:
         return int(T == P)
@@ -98,7 +95,7 @@ def placed(lab: str, T: int, P: int) -> int | None:
 
 def projected(lab: str, n: int, at: Any, cls: Any) -> tuple[str, int]:
     """A template outside the heads, ``n`` units of one Program at the probe's class ``at``, as one Program at class ``cls``
-    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v1` at its scan state row) and
+    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v2` at its scan state row) and
     `placed`'s units there, any other the probe's fixed count a position at each of the class's, refused unless ``n`` is
     the probe's by that rule."""
     if placed(lab, 1, at.positions) is None:
@@ -115,9 +112,9 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     """One Program's census at class ``cls`` from one Program's ``probe`` census at class ``at`` (`census` of
     ``class_circuit(registered, at, 1)``), the probe's heads within one key block."""
     P0, P, NP0 = at.positions, cls.positions, at.prompt
-    if P0 < 3 or NP0 < 2:
-        raise ValueError(f"a probe of {P0} positions and {NP0} prompt ids: it needs 3 and 2, to read a key gather twice and a "
-                         "feed past the first")
+    if P0 < 2 or NP0 < 2:
+        raise ValueError(f"a probe of {P0} positions and {NP0} prompt ids: it needs 2 of each, for a head and a feed past the "
+                         "first")
     hs = {lab: n for lab, n in probe.items() if lab.startswith(FIRST + "{")}
     ss = [statics(lab)[1] for lab in hs]
     D, BN = (_one([s[k] for s in ss], k) for k in ("D", "BN"))
@@ -125,20 +122,15 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     if P0 > BN or sorted(by_t) != list(range(1, P0 + 1)) or len(set(by_t.values())) != 1:
         raise ValueError(f"the probe's heads are not one count of first blocks at each T of 1..{P0}, within one key block of "
                          f"{BN}: {by_t}")
-    H, G, end = by_t[1], probe.get(f"{GATHER}{{WORLD=2,N={D}}}", 0), f"{END}{{D={D}}}"
+    H, end = by_t[1], f"{END}{{D={D}}}"
     if probe.get(end) != H * P0 or any(lab.startswith(BLOCK + "{") for lab in probe):
         raise ValueError(f"the probe has {probe.get(end, 0)} {end} units, not one a head at each of its {P0} positions, or a "
                          f"{BLOCK} unit within one key block")
-    rest = Counter({lab: n for lab, n in probe.items() if lab not in hs and lab != end})
-    for t in range(2, P0 + 1):
-        key = f"{GATHER}{{WORLD={t},N={D}}}"
-        if rest[key] < G:
-            raise ValueError(f"the probe has {rest[key]} {key} units, fewer than its {G} key gathers a position")
-        rest[key] -= G
     out: Counter[str] = Counter()
-    for lab, n in rest.items():
-        to, k = projected(lab, n, at, cls)
-        out[to] += k
+    for lab, n in probe.items():
+        if lab not in hs and lab != end:
+            to, k = projected(lab, n, at, cls)
+            out[to] += k
     for T in range(1, P + 1):
         nb, mf = -(-T // BN), fa2_masked_from(T, 1, 0, BN, False)
         nvis = T - (nb - 1) * BN
@@ -146,8 +138,6 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
         for b in range(nb - 1):
             out[f"{BLOCK}{{D={D},NVIS={BN},FIRST=false,BN={BN},CHECK={json.dumps(b >= mf)}}}"] += H
         out[end] += H
-        out[f"{GATHER}{{WORLD={nvis},N={D}}}"] += G if 1 < nvis < BN else 0
-    out[f"{GATHER}{{WORLD={BN},N={D}}}"] += G * (P // BN)
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
@@ -171,12 +161,12 @@ MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][
     "Gemm_v2{K=2048,N=1}": (1_053_595, 24, None),
     "RoPEHead_v1{D=64}": (191_872, 22, COMPOSED + ", x cut 4"),
     "SiluMul_v2{I=8192}": (8192 * 1380, 26, None),
-    "TokenSelectChunk_v2{C=768}": (91_823, 22, COMPOSED),
-    "TokenSelectCombine_v2{V=128256,C=768}": (27_355, 27, COMPOSED + ", idx cut 167"),
+    "TokenSelectGroups_v1{C=2672,G=16}": (292_083, 27, None),
+    "TokenSelectCombine_v2{V=128256,C=16}": (1_346_657, 26, None),
     "AttnHeadEnd_v1{D=64}": (169_842, 22, None),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, None),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, None),
-    "ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (0, 23, None),
+    "ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (120, 24, None),
     "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
     "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, None),
@@ -195,8 +185,8 @@ FEED_K = ((1024, 23), (2048, 24))
 
 def rows_k(rows: int) -> int:
     """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
-    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` composed
-    (W 2 to 128) and `{64, 16}` take exactly this at their W + 1 rows (`COMPOSED`), so a gather of 256 parts takes 2^28."""
+    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every copy unit of W + 1 rows composed (W 2
+    to 128, `COMPOSED`) takes exactly this, so a unit of 257 rows takes 2^28."""
     return max(22, 19 + (rows - 1).bit_length())
 
 
@@ -206,8 +196,6 @@ def measured(lab: str) -> tuple[int, int, str]:
         return MEASURED[lab]
     fam, s = statics(lab)
     by = SOURCES["families"]
-    if fam == GATHER and s["WORLD"] >= 2:
-        return 0, rows_k(s["WORLD"] + 1), f"a copy (b1_tp2); k_log its {s['WORLD'] + 1} rows' (rows_k)"
     if fam == "AttnBlockFirst_v1" and (s["D"], s["BN"]) == (64, 128) and 1 <= s["NVIS"] <= 128:
         v, (lo, hi) = s["NVIS"], next((a, b) for a, b in zip(FIRST_BLOCKS, list(FIRST_BLOCKS)[1:]) if s["NVIS"] <= b)
         ands = round(FIRST_BLOCKS[lo] + (FIRST_BLOCKS[hi] - FIRST_BLOCKS[lo]) * max(v - lo, 0) / (hi - lo))
@@ -216,11 +204,6 @@ def measured(lab: str) -> tuple[int, int, str]:
     if fam == FEED and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
         return 30 if s["FIRST"] else 62, k, by[fam] + "; k_log " + COMPOSED + (
             "" if s["NP"] in dict(FEED_K) else ", an upper bound")
-    if fam == ROW and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
-        return 0, k, ("a copy (" + by[fam] + "); k_log an estimate, not composed: TokenFeed_v1{NP, "
-                      "FIRST=true}'s, whose rows it holds but for one i32 more")
-    if lab == "SlotMask_v1{}":
-        return 32, 22, by[fam] + "; k_log the least block, its 3 rows of one i32 each"
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
 
 

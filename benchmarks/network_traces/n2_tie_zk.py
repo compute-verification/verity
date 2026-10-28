@@ -9,7 +9,7 @@ and the stream's registrations built from the stream's outcomes of record alone 
     python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
-* **The link** (`PARAMS`, the pinned size class): REDTEAM phase 9's span, three id requests of 5, 40 and 5 prompt tokens
+* **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
   served through the warden's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes of r = 2
   512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice is v0
   of one prefill step, each request one kept output, with the link's `received`; it and the warden's release are
@@ -27,10 +27,10 @@ and the stream's registrations built from the stream's outcomes of record alone 
   ``forged``: the honest advice on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
   warden never signed, so Lean's registered reads refuse it ("does not open").
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
-  its lane's carry-in fields + 5 with its carry-out's + 5 (REDTEAM phase 9 (b)), which IoTieRequest accepts but which
+  its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but which
   opens to no public row of the verifier's, so window 1 is refused; ``forged``, an advice whose request 1 is 45 prompt
-  tokens in the same cells (REDTEAM phase 9's forged advice), which IoTieRequest refuses in both windows; ``split``,
-  REDTEAM phase 6's split, prompts of 40 and 5 tokens in cells the advice swaps, proved on the cells' own lanes, which
+  tokens in the same cells, which IoTieRequest refuses in both sampling blocks; ``split``,
+  prompts of 40 and 5 tokens in cells the advice swaps, proved on the cells' own lanes, which
   the verifier refuses in every window, the release not being the swapped advice's schedule (`EXPECT`).
 * **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_unit` lowered once (the gate
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
@@ -80,11 +80,11 @@ PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 T = PARAMS.window
 LINK = "requests"
 SESSION = hashlib.sha512(b"n2-tie-zk").digest()
-#: REDTEAM phase 9's span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4
+#: the span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4
 SPAN, ARRIVALS, RATES = (5, 40, 5), (0, 2, 4), (10 ** 6, 600, 10 ** 6)
-#: REDTEAM phase 9's forged advice: request 1 45 tokens, in the same cells
+#: the forged advice: request 1 45 tokens, in the same cells
 FORGED = (5, 45, 5)
-#: REDTEAM phase 6's prompts, whose cells the split advice swaps
+#: the split's prompts, whose cells the split advice swaps
 SPLIT, SPLIT_ARRIVALS, SPLIT_RATES = (40, 5), (0, 0), (600, 10 ** 6)
 #: what the carried member adds to bucket 4's lane 0 carry-in fields and carry-out fields
 CARRIED = 5

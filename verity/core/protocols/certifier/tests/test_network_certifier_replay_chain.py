@@ -21,7 +21,7 @@ NARROW = RC.Shape(R=2, W=1, A=4, L=16, NB=8, IW=3, Q=6, D=1, P=1, K=2)
 #: async scheduling and 5-bit walk entries; walk entries alone
 ASYNC = RC.Shape(**{**SMALL.statics(), "AS": 1, "EW": 5})
 WALK = RC.Shape(**{**NARROW.statics(), "EW": 3})
-#: vLLM run 8eb1's engine class (protocol/served-shape.md) under its AsyncScheduler
+#: The served vLLM run's engine class (protocol/served-shape.md) under its AsyncScheduler
 SERVED = RC.Shape(R=8, W=1, A=9, L=512, NB=101626, IW=9, Q=4, D=32, P=54, K=4, AS=1)
 SHAPES = (SMALL, NARROW, ASYNC, WALK, SERVED)
 PROGRAM, REGISTRATION = "replay-chain-test", "ab" * 64

@@ -462,13 +462,13 @@ def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
 
 class WindowLocate:
     """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Window.locate(step, slot, family, index, port)``
-    (circuits' interface on CIR-115, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
+    (circuits' interface, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
     order: ``Segment(step, slot, row, offset, nbytes)`` (bytes of a committed row, ``row`` its index in the slot: a `Read`),
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Window.locate` names CMP-160's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Window.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.Layout, weights: Mapping[str, Any] | None = None,
@@ -1106,7 +1106,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
     return bad
 
 
-#: a step's commit-slots roots registered before a coin draws its proof blocks (PRF-172's M3): the draw's population is
+#: a step's commit-slots roots registered before a coin draws its proof blocks (M3): the draw's population is
 #: every (slot, layout unit) of the step, and each drawn block is proved from a one-member window of its own. ``steps``
 #: (optional, `STEPS_KEY`) names the root of every step of the block a drawn block can read (attention's K and V rows at
 #: steps 0 .. the drawn step), ``[{step, root}]``; a registration without it holds every read to the drawn step

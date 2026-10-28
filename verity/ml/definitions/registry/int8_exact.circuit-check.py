@@ -16,6 +16,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     return [
         ("Int8Linear_v1", lambda: bind(X.Int8Linear, K=64, N=2)),
         ("Int8RowQuant_v1", lambda: bind(X.Int8RowQuant, K=64)),
+        # the same quantizer with x as 32 rows of 2
+        ("Int8RowQuant_v3/r32", lambda: bind(X.Int8RowQuantV3, K=64, R=32)),
         ("Int8KvQuant_v1", lambda: bind(X.Int8KvQuant, S=3, D=32)),
         ("Int8LutAttentionRow_v1/s33", lambda: bind(X.Int8LutAttentionRow, D=32, S=33, SCALE=scale)),
         # the same row reading the registered `exp2_lut127` (`Int8LutSoftmax_v2`, `Exp2Lut127_v2`, `TableRead8x2_v1`)

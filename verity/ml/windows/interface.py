@@ -1910,7 +1910,8 @@ class Window:
         made by ``registrar`` (core's ``one_stage.registration``), its window naming ``provenance``, the circuit record's
         SHA-512, the advice binding and each registered value's root by parameter (``registered_roots``, which
         `input_count` holds to the verifier's pins); each member reading a registered value, its header naming each table
-        row's position and path (`close`)."""
+        row's position and path (`close`), each path and each row it reads by reference written once for the window
+        (`rows.write`)."""
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
