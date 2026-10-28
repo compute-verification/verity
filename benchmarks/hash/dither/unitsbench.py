@@ -67,7 +67,7 @@ from h1bench import auto_j
 from h1ubench import call_data, digest
 from hb_kbench import LINEARS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 ORDER = ("qkv", "o", "gate_up", "down")
 

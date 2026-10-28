@@ -13,7 +13,7 @@ its served y and its weight side). `replay` checks:
 3. each weight side's Y unit leaves open to its units root and its inputs (the weight's rows as read) to its inputs digest;
    each call's unit leaves open to its units root, its inputs (Y and c₀ as the call read them) to its inputs digest, and its
    served y to its dequantization units' leaves;
-4. the window's draw (`verity.core.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
+4. the window's draw (`verity.ml.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
    on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
    `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call draws its plan (`Traced.draw`) under the work law at its share of the window's budget
@@ -48,9 +48,9 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-from verity.core.protocols.pouw.circuit import anchors as CA
-from verity.core.protocols.pouw.circuit import plan as CPL
-from verity.core.protocols.pouw.circuit.ncp2 import D
+from verity.ml.protocols.pouw.circuit import anchors as CA
+from verity.ml.protocols.pouw.circuit import plan as CPL
+from verity.ml.protocols.pouw.circuit.ncp2 import D
 from verity.core.protocols.pouw.protocol import DomainError
 
 from verity.ml.circuits.evaluation import evaluate

@@ -48,7 +48,7 @@ OPERATIONS: frozenset[str] = frozenset({
     "DotBf16_v2", "DotBf16_v3", "GemmCoordinate_v3", "GemmCoordinateE4m3_v1", "GemmCoordinateE4m3_v2",
     "GemmCoordinateMxf4_v1", "GemmCoordinateMxf4_v2", "GemmCoordinateNvf4_v1", "GemmCoordinateNvf4_v2",
     # SHA-512's compression function and the Keccak-f[1600] permutation, with their round constants (PoUW's circuit,
-    # `verity.core.protocols.pouw.circuit.hashes`)
+    # `verity.ml.protocols.pouw.circuit.hashes`)
     "PouwKeccakF1600_v1", "PouwSha512Compress_v1",
 })
 

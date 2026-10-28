@@ -877,9 +877,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/core/protocols/certifier/cache_step_v2.py::Op":
+    "verity/ml/protocols/certifier/cache_step_v2.py::Op":
         "homonym, a cache call's inputs: rename (network-accounting)",
-    "verity/core/protocols/certifier/egress.py::Record": "homonym, a slot's record: rename (network-accounting)",
+    "verity/ml/protocols/certifier/egress.py::Record": "homonym, a slot's record: rename (network-accounting)",
     "verity/core/protocols/certifier/io_request.py::Layout":
         "homonym, a request's cell layout: rename (network-accounting)",
     "verity/core/protocols/certifier/io_request.py::Link":
@@ -891,7 +891,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/certifier/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
-    "verity/core/protocols/certifier/window_charge.py::Window":
+    "verity/ml/protocols/certifier/window_charge.py::Window":
         "homonym, what one sampling block of the network certifier is charged: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
@@ -946,14 +946,14 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pouw/circuit/anchors.py::Ledger":
+    "verity/ml/protocols/pouw/circuit/anchors.py::Ledger":
         "homonym, a window's admitted calls: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/compile.py::Site":
+    "verity/ml/protocols/pouw/circuit/compile.py::Site":
         "homonym, a node of the served function and a kind of dot: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1device.py::Device":
+    "verity/ml/protocols/pouw/circuit/h1device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
+    "verity/ml/protocols/pouw/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
+    "verity/ml/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/core/protocols/pouw/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
     "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
@@ -966,9 +966,9 @@ KNOWN: dict[str, str] = {
         "homonym, a frame's hash kind: rename (compute-accounting)",
     "verity/core/protocols/pouw/protocol.py::Certificate":
         "homonym, what a scheme's guarantee rests on: rename (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_c_device.py::Device":
+    "verity/ml/protocols/pouw/schemes/pearl_c_device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_kw.py::Device":
+    "verity/ml/protocols/pouw/schemes/pearl_kw.py::Device":
         "homonym, a code's parameters: rename (compute-accounting)",
     "verity/core/protocols/registration.py::Card":
         "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",

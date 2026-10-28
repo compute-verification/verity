@@ -3,7 +3,7 @@
 PoUW's served linear in compiled vLLM, on int8-exact Llama-3.1-8B. Each arm replaces the int8 linear with kernels that
 compute the served y and, from the same operands, the window's tables, seeds and receipts (H1 + fx1's, or J10-R's
 per-call noise). An arm is gated in its own run before it is timed: its roots, receipts and z against its CPU twin and the
-Definition (`h1tile.reference` and `h1tile.j10r_reference`, `verity/core/protocols/pouw/circuit/h1tile.py`), a no-write
+Definition (`h1tile.reference` and `h1tile.j10r_reference`, `verity/ml/protocols/pouw/circuit/h1tile.py`), a no-write
 control refused and its faults caught. It is then timed against stock vLLM int8, rep by rep. Nothing a verifier runs reads
 this directory.
 
@@ -27,7 +27,7 @@ What the rest of the tree reads from here:
 - `h1u.cu`: the proof-block kernels on the GPU. H1 + fx1's seeds and proof blocks (`h1_seeds`, `h1u`, the one-stream
   `kh_one`) and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r` and its `_sm` form). `benchmarks/pouw/served_h1` and
   `benchmarks/torch_gpu/j10r_sm90` build it, `verity/core/protocols/pouw`'s tests read it, and
-  `verity/core/protocols/pouw/circuit/h1device.py` states the domain it serves on sm_90.
+  `verity/ml/protocols/pouw/circuit/h1device.py` states the domain it serves on sm_90.
 - `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one function (`form_of`), which each arm's stats, checks and gate verdicts carry.

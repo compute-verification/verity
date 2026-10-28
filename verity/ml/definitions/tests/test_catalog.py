@@ -4,7 +4,7 @@ removes a Definition (`uv run python verity/ml/definitions/tests/test_catalog.py
 Each scope of `load` registers the Definitions of the walk it replaced (`REPLACED`), in the same order, whatever the registry
 holds: a module only `load`'s walk reaches, a registry subpackage's, can't register on import or move one unnoticed.
 
-The list is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
+The list is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.ml.protocols.pouw.circuit`
 registers) is not in it.
 
 Each check reads `catalog.load()` in an interpreter of its own (`fresh`): the registry and `sys.modules` are the process's, and

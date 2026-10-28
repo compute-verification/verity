@@ -56,7 +56,7 @@ def band_of(arm: str, base: str) -> tuple[int, str] | None:
 @contextmanager
 def leader_rows(seed_l: bytes):
     """h1tile.noise with its rows from the band leader's seed_j and its columns from the seed it's given."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     noise0 = HT.noise
     HT.noise = lambda seed_j, lay: (JB.rows_of(seed_l, lay), JB.cols_of(seed_j, lay))
     try:
@@ -100,7 +100,7 @@ class HBBand:
         import hb_peel
         from j10rtx import BandH1R
 
-        from verity.core.protocols.pouw.circuit import seeds as SD
+        from verity.ml.protocols.pouw.circuit import seeds as SD
         lead, cell = layout(win, win.caps.get(which, {}).get("s", 0), self.g)
         unit0, peel0, itself0, peeled0, h1r0 = DO.h1v3_unit, hb_peel.peel_cpu, DO.h1v3_itself, hb_peel.h1v3_peeled, hb_peel.H1R
 
@@ -184,7 +184,7 @@ class DABand:
         import dither_one as DO
         from j10rtx import BandH1R
 
-        from verity.core.protocols.pouw.circuit import seeds as SD
+        from verity.ml.protocols.pouw.circuit import seeds as SD
         lead, cell = layout(win, win.caps.get(which, {}).get("s", 0), self.g)
         unit0, itself0, h1r0 = DO.h1v3_unit, DO.h1v3_itself, DA.H1R
 

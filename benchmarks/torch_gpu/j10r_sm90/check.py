@@ -39,8 +39,8 @@ import shape as S
 import units as UN
 
 import fixtures as F
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 ANCHORS = ((64, 64, 512), (64, 32, 1024), (32, 64, 4608))
 

@@ -8,10 +8,10 @@ import random
 import pytest
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -265,7 +265,7 @@ def test_a_j10r_leafs_statements_and_every_port_are_its_v2_definitions(k):
     """A J10-R leaf's statements are `h1zy.lane_statements` lane by lane, then the combine, and each one's registered
     ports (`own`) are exactly its Definition's C-Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
     ``o0`` reads row i of ``oks`` and the combine's ``ok<i>`` the same row."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
 
     t, n = HW.h1_tile(k, (32, 32), H.PouwH1Tile5), LL.n_chunks(k)
     sts = LL.statements(32, 32, j10r=k)
@@ -318,7 +318,7 @@ def test_a_j10r_chunks_rows_carries_and_partials():
 def test_a_j10r_lanes_pub_row_is_v1s_then_its_call_and_blocks_then_its_index():
     """A J10-R lane's ``pub`` row is v1's 100 words, then its call's and its two blocks' leaves as the unit reads them
     (`seeds.position_leaves`), 12 words, then the index, at the fields `h1zy.statement_ports` states."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
 
     call, blocks = 0x0123456789ABCDEF, (5, 1 << 40)
     w = LL.pub_words(SALT, POSITION, ROOTS, 9, call=call, blocks=blocks)

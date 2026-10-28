@@ -248,7 +248,7 @@ class DitherState:
         self._epoch()
 
     def _epoch(self) -> None:
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         self.HT = HT
         self.coins = CO.open_coins(CO.session(), 1, DF.ROUNDS)
         self.rounds = self.coins.rounds
@@ -657,9 +657,9 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
     z - b B^T - A c^T - b c^T, and with the term the s8 X's wrap needs, + 256 xw (B + c)^T, xw = [A = 127 and b = 1]
     (X = -128 there): A B^T, as a peeled kernel's z must be; and the peeled kernel's own form of it (H1V3's PouwPeelSeg),
     z + 256 xw B^T - X c^T - b B^T."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
-    from verity.core.protocols.pouw.circuit import segment as SG
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import segment as SG
     a = [[int(v) & 0xFF for v in row] for row in a32]
     b = [[int(v) & 0xFF for v in row] for row in b32]
     lay = HT.Layout(32, 32, len(a[0]))
@@ -709,8 +709,8 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
 def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
     """F_FAULT_WB's move of unit 0's z column 0 (rows of `a`, 32 x K; `b` the unit's 32 B rows), mod 2^32: its wb⁺ bit at
     entry 0 flipped changes wb⁺ - wb⁻ there by 1 - 2 wb⁺, so z[i, 0] moves by 256 (1 - 2 wb⁺) X[i, 0]."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     s = int(b[0, 0]) + int(cols[0][0][0]) + int(_sx(np.array(cols[0][1][0])))
     d = 1 - 2 * int(s > 127)
@@ -720,8 +720,8 @@ def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
     """F_FAULT_XA's move of unit 0's z row 0 (as `wb_fault_expected`), mod 2^32: its xa bit at entry 0 flipped changes
     xa there by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0]."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     d = 1 - 2 * int(int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1)
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]

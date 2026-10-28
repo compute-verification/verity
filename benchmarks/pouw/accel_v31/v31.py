@@ -2,7 +2,7 @@
 verifier's checks, so the GPU prover's output (v31.cu's Fill, bound per call by v31lib.py) is judged bit for bit and a
 call is accepted or refused by the checks its proof blocks' Programs make.
 
-The call is verity/core/protocols/pouw/circuit/dither.py's, and this module is its client: `Fill` is `dither.Shape` at
+The call is verity/ml/protocols/pouw/circuit/dither.py's, and this module is its client: `Fill` is `dither.Shape` at
 the GPU prover's defaults (its segments, layout and domain), the seeds are `dither.seeds` (a served call's) and
 `dither.fill_seeds` (a filler's), every stream is `dither.prg`'s, the permutations are `dither.perms` and the tree is
 `dither.commit` under `dither.salts(Ks, off)`. What it adds is numpy, where dither's own forms are pure Python: the
@@ -44,8 +44,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
-from verity.core.protocols.pouw.circuit import dither
-from verity.core.protocols.pouw.circuit.dither import NOISE, PAD, STREAMS, TILE, leaf_h, prf_salt, prg, wrap8
+from verity.ml.protocols.pouw.circuit import dither
+from verity.ml.protocols.pouw.circuit.dither import NOISE, PAD, STREAMS, TILE, leaf_h, prf_salt, prg, wrap8
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.commitments.rowleaf import row_leaf
 

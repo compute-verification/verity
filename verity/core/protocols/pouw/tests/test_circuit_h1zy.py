@@ -20,12 +20,12 @@ from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array
 
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.pouw.circuit import reference as REF
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import reference as REF
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 M32 = (1 << 32) - 1
 

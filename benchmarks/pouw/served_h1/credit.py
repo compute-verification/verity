@@ -49,7 +49,7 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
     """The request queue from the scheduler's record: ``spans[s]``, step s's (request id, rows) in batch order, its rows the
     step's slots in that order.  Requests take indices 1, 2, .. by first appearance; each is live from its first step to
     one past its last.  Steps past the record are empty."""
-    from verity.core.protocols.pouw.circuit import admit as A
+    from verity.ml.protocols.pouw.circuit import admit as A
     if len(spans) > steps:
         raise ValueError(f"the record has {len(spans)} steps, past the window's {steps}")
     index: dict[str, int] = {}
@@ -72,7 +72,7 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
 
 def queue_select(queue: dict, s: int) -> np.ndarray:
     """(T,) bool: step s's selection, the slots the queue assigns a request live at s (`admit.select_bit`)."""
-    from verity.core.protocols.pouw.circuit import admit as A
+    from verity.ml.protocols.pouw.circuit import admit as A
     req = queue["requests"]
     return np.array([bool(A.select_bit(s, int(x), *req[int(x)])) for x in queue["slot_map"][s]], dtype=bool)
 
@@ -85,7 +85,7 @@ def scales(rows: np.ndarray) -> list[int]:
 
 def queue_admit(queue: dict, s: int, rows: np.ndarray) -> np.ndarray:
     """(T,) bool: step s's admit bits, `PouwQueueAdmit`'s word on each 16 slots' queue entries and committed rows' scales."""
-    from verity.core.protocols.pouw.circuit import admit as A
+    from verity.ml.protocols.pouw.circuit import admit as A
     q = [int(x) for x in queue["slot_map"][s]]
     req, sc = queue["requests"], scales(rows)
     if len(sc) != len(q):

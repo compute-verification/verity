@@ -116,7 +116,8 @@ and `prf/sha-512` (`verity.core.claims`).
 ## Core API
 
 ~~~python
-from verity.core.protocols.pouw import audit, core_check, credit, schemes, verifier, window
+from verity.core.protocols.pouw import audit, core_check, credit, verifier, window
+from verity.ml.protocols.pouw import schemes
 
 scheme = schemes.get("pearl-c-sm120-v1-h3")                 # a configured PoUWScheme
 root = audit.weights_root(weight_roots)                    # the weights' root a credit period's open signs

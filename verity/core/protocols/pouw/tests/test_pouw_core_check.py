@@ -358,7 +358,7 @@ def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
     of byte t // 8."""
     import hashlib
     import numpy as np
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos in (0, 1, 5, 1 << 39, (1 << 64) - 1):
         bits = np.unpackbits(np.frombuffer(CC.public_row(salt, pos, roots), np.uint8), bitorder="little").tolist()
@@ -372,7 +372,7 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
     (`seeds.position_leaves`, `seeds.POS_BITS`)."""
     import hashlib
     import numpy as np
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos, call, blocks in ((5, 0, (0, 64)), (1 << 39, 7, (3, (1 << 33) + 1)), ((1 << 64) - 1, 1 << 63, (1, 2))):
         row = CC.public_row(salt, pos, roots, (call, blocks))
@@ -388,7 +388,7 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
 def test_the_verifiers_j10r_blocks_are_the_tiles():
     """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
     blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):
         assert CC.n_digits(k) == H.SG.n_digits(k // 32), k
         for m, (r, c) in ((4, (4, 8)), (8, (4, 8)), (32, (32, 32)), (64, (32, 32))):
@@ -400,7 +400,7 @@ def test_the_verifiers_j10r_blocks_are_the_tiles():
 def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
     assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
@@ -428,8 +428,8 @@ def test_the_pinned_tiles_are_their_templates():
     tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded windows'. The salted H1 tile unit at
     K = 64 (4 x 8 dot products of K) is pinned salted, its R and C its Definition's. The served circuit is tied to the build
     by benchmarks/pouw's staged-unit test, and the H1 unit's by its pin test (`test_h1_pin.py`)."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
     from verity.core.protocols.sampled_proofs.one_stage import partition as PT
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG

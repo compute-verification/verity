@@ -1,4 +1,4 @@
-"""CacheStep_v2's specification (`verity.core.protocols.certifier.cache_step_v2.reference`) against vLLM's block pool as
+"""CacheStep_v2's specification (`verity.ml.protocols.certifier.cache_step_v2.reference`) against vLLM's block pool as
 the replay models it (`replay._KV`) over whole async traces, through `cache_pool_vectors.drive`: the unit's pool after
 every pool operation, the refused witnesses beside each call, the N = NB − 1 bound, and the certifier's difftest
 vectors as `cache_pool_vectors` makes them now."""

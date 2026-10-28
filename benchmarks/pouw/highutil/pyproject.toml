@@ -14,4 +14,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "benchmarks/pouw/accel_v31/v31.py", "benchmarks/pouw/accel_v31/v31lib.py",
           "benchmarks/pouw/accel_v31/h200_step.py",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
-          "verity/core/protocols/pouw/circuit"]
+          "verity/ml/protocols/pouw/circuit"]

@@ -27,11 +27,11 @@ from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon import fp32
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -850,7 +850,7 @@ def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
 def test_f2_c_l_table_takes_the_lower_value_between_its_points():
     """The pinned table never lies above Strassen's formula and falls in each of m, k and n, so a shape between tabled
     points reads the next tabled point up in each dimension, whose c_L is the lower one."""
-    from verity.core.protocols.pouw.schemes import pearl_c4_c_L as CL
+    from verity.ml.protocols.pouw.schemes import pearl_c4_c_L as CL
     for (i, m), (j, k), (l, n) in itertools.product(enumerate(CL.MS), enumerate(CL.KS), enumerate(CL.NS)):
         v = CL.C_L[i][j][l]
         assert v / 10_000 <= strassen_c_L(m, k, n) + 1e-12

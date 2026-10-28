@@ -52,7 +52,7 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
-from verity.core.protocols.certifier import served_tie as ST  # noqa: E402
+from verity.ml.protocols.certifier import served_tie as ST  # noqa: E402
 
 CLASSES = {
     "slice": dict(R=2, P=7, IW=6, L=4096, T=256, IB=8, PB=8),

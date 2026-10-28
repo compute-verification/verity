@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
-from verity.core.protocols.pouw.circuit.h1tile import (FOLD, M32, Layout, col_wrap, fold_keys, lane_sets, noise,  # noqa: F401
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit.h1tile import (FOLD, M32, Layout, col_wrap, fold_keys, lane_sets, noise,  # noqa: F401
                                                        one_stream, wrap_bits, wrap_seg)
 
 SOURCE = "h1tile's word functions; the unpeeled stream_cell and reference at 5f54fbe355"

@@ -34,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from h200_step import MODELS
 
-from verity.core.protocols.pouw.circuit import dither
+from verity.ml.protocols.pouw.circuit import dither
 from verity.ml.commitments import merkle, scheme
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 

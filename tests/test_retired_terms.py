@@ -89,7 +89,7 @@ PENDING: dict[str, str] = {
     "verity/README.md": "#4502 rewrites its lines",
     "verity/core/protocols/certifier/blocks.py": "#4441 adds it",
     "verity/core/protocols/certifier/boundary.py": "#4721 rewrites its lines",
-    "verity/core/protocols/certifier/egress.py": "#4721 rewrites its lines",
+    "verity/ml/protocols/certifier/egress.py": "#4721 rewrites its lines",
     "verity/core/protocols/certifier/tests/test_network_certifier_egress.py": "#4721 rewrites its lines",
     "verity/core/protocols/network/tests/period_case.py": "#4721 rewrites its lines",
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#4721 adds lines",

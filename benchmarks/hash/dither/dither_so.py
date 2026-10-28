@@ -397,7 +397,7 @@ class SoWindow(DO.DitherState):
         """A window opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
         opened after the window's root, the epoch round (round 0) over the B tables' roots, and the round pipe; under -we
         its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` window's."""
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
         self.clean_from = None
@@ -2303,7 +2303,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     step's receipts against h1r v1 under its coin's salt, `rehashed_calls`' A tables and receipt tables rehashed; under -we
     three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
     when it is refused exactly where its fault is."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     rec = win.end_recs.get(name)
     if rec is None or rec.get("rows") is None or "last" not in rec:
         return {"which": name, "ok": False, "complete": False, "why": f"no ended window {name!r} with its rows"}

@@ -1,7 +1,7 @@
 """PoUW's `ncp-v2` under sampled proofs: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
 executed linear call as its own `NcpLinear_v1` Program call reading it.
 
-`verity.core.protocols.pouw.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
+`verity.ml.protocols.pouw.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
 count and the closure-draw layout; P is the scheme's). Here is what the vLLM integration does with it:
 
 - **Build.** A model Program's row at a PoUW site is lowered to `ROW_FAMILY` (`lower`): the served output of one row of
@@ -30,11 +30,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw import circuit as C
+from verity.ml.protocols.pouw import circuit as C
 from verity.core.protocols.pouw.audit import commit_rows
-from verity.core.protocols.pouw.circuit import partition as CP
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.ncp2 import D, Shape
+from verity.ml.protocols.pouw.circuit import partition as CP
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit.ncp2 import D, Shape
 from verity.core.protocols.pouw.protocol import tagged
 
 from verity.ml.circuits import partition_object as PO
@@ -58,9 +58,9 @@ M32 = 0xFFFFFFFF
 
 
 def kind_of(scheme: str) -> str:
-    """The permutation P that ``scheme`` pins (`verity.core.protocols.pouw.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
+    """The permutation P that ``scheme`` pins (`verity.ml.protocols.pouw.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
     if scheme not in C.SCHEMES:
-        raise ValueError(f"{scheme}: no circuit (verity.core.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise ValueError(f"{scheme}: no circuit (verity.ml.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
     return C.SCHEMES[scheme]
 
 
@@ -317,7 +317,7 @@ def sides(records: Sequence[CallRecord]) -> list[WeightRecord]:
 
 @dataclass(frozen=True)
 class Compiled:
-    """One call shape's Programs, their template partitions and their trace (`verity.core.protocols.pouw.circuit.traced_as`)."""
+    """One call shape's Programs, their template partitions and their trace (`verity.ml.protocols.pouw.circuit.traced_as`)."""
 
     traced: Any
     program: Any
@@ -336,7 +336,7 @@ def program(scheme: str, m: int, k: int, n: int) -> Compiled:
     ValueError for a scheme without one."""
     t = C.traced_as(scheme, m, k, n)
     if t is None:
-        raise ValueError(f"{scheme}: no circuit (verity.core.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise ValueError(f"{scheme}: no circuit (verity.ml.protocols.pouw.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
     prog, wprog = CP.program(t.shape, t.kind), CP.weight_program(t.shape, t.kind)
     return Compiled(t, prog, PO.TemplatePartition(prog, t.query), wprog, PO.TemplatePartition(wprog, t.weight_query))
 

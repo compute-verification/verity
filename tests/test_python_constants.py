@@ -168,7 +168,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/certifier/active.py::WEIGHTS_ROOT_BYTES": "#5891 reads scheme.DIGEST_BYTES",
     "verity/core/protocols/certifier/certificate.py::DIGEST_BYTES": "#5891 reads scheme.DIGEST_BYTES",
     "verity/core/protocols/pous/streamed_wipe.py::LABEL_BYTES": "#5891 reads scheme.DIGEST_BYTES",
-    "verity/core/protocols/pous/verdict_circuit.py::DIGEST_BITS": "#5891 reads scheme.DIGEST_BYTES",
+    "verity/ml/protocols/pous/verdict_circuit.py::DIGEST_BITS": "#5891 reads scheme.DIGEST_BYTES",
     "verity/core/protocols/pous/verifier.py::DIGEST_BYTES": "#5891 reads scheme.DIGEST_BYTES",
     "verity/core/protocols/pouw/salt.py::ANCHORS_ROOT_BYTES": "#5891 reads scheme.DIGEST_BYTES",
     "verity/core/protocols/pouw/salt.py::REQUESTS_ROOT_BYTES": "#5891 reads scheme.DIGEST_BYTES",

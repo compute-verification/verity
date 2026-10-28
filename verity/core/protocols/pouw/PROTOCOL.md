@@ -626,7 +626,7 @@ docstring states every parameter.
   signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
   sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
 
-## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity/core/protocols/pouw/circuit`)
+## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity/ml/protocols/pouw/circuit`)
 
 Sampled proofs is PoUW's verifier here: the call is a `verity.ml.circuits` Program, drawn units are proved, never recomputed, and
 the audit's integrity profile carries the work bound. This package has NCP-INT at small shapes (16 | m, 16 | n,

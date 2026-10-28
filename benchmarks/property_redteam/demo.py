@@ -504,7 +504,7 @@ def main() -> None:
     ap.add_argument("--words", type=int, default=1, help="codec words to encode in-circuit (each ~6,100 modmuls)")
     args = ap.parse_args()
     rng = random.Random(args.seed)
-    import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+    import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
     for e in catalog.load(("ops", "registry"))[1]:
         print(f"skip {e}", file=sys.stderr)
     prims = {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}

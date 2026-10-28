@@ -1,7 +1,7 @@
 """Lean's integer form of the cap circuit's tests (`Security/Proofs/Pouw/PearlC/Cap/IntForm.lean`) against the scheme:
 its `IntPrices` are the devices' prices, and each kernel-checked pin in `Cap/Pins.lean` is what Python computes at that
 shape: `creditInt` is `PearlC(forming="v1").credit_of`, and `capPin` / `capPinTop` are `cap._cap_constants` at the device's
-g, prices and cap (that test skips where `verity.core.protocols.pouw.circuit.cap` is absent)."""
+g, prices and cap (that test skips where `verity.ml.protocols.pouw.circuit.cap` is absent)."""
 from __future__ import annotations
 
 import ast
@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.pouw.protocol import DomainError, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 CAP = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Pouw" / "PearlC" / "Cap"
 INT_FORM = (CAP / "IntForm.lean").read_text()
@@ -56,7 +56,7 @@ def test_credit_pins_are_credit_of():
 def test_cap_pins_are_cap_constants():
     """Each `capPin` pin is `_cap_constants(k, tm, tn, n, rho, dev)` (`capPinTop`: with the table's last entry alone), on the
     device's g and at ρ = 1/rho its cap, with `CapDomain` and `CapFits` at the same shape; each refused shape raises."""
-    cap = pytest.importorskip("verity.core.protocols.pouw.circuit.cap", reason="the cap circuit is `verity.core.protocols.pouw.circuit.cap`'s")
+    cap = pytest.importorskip("verity.ml.protocols.pouw.circuit.cap", reason="the cap circuit is `verity.ml.protocols.pouw.circuit.cap`'s")
     for name, stmt in _theorems("pin_").items():
         domain = re.search(r"CapDomain (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)", stmt)
         fits = re.search(rf"CapFits {SHAPE}", stmt)

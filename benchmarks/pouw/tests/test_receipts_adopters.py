@@ -51,6 +51,6 @@ def test_the_scorers_fold_table_is_the_references():
 
 def test_e2e_segment_runs_the_served_schedules():
     """PouwSegCheck's word twins, and its fold Definitions (PouwDuoAbsorb_v2, PouwXinAbsorb_v2, their finals) on bits."""
-    sg = pytest.importorskip("verity.core.protocols.pouw.circuit.segment")
+    sg = pytest.importorskip("verity.ml.protocols.pouw.circuit.segment")
     assert C.e2e_segment(sg) > 10
     assert C.e2e_definitions(sg) == 9
