@@ -71,7 +71,10 @@ window's last step are kept, and their first proof block of each row block is he
 (`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
 them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
 J10-R's tile proof block (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
-and they are held to `h1tile.j10r_reference`; v1's proof block is the default.
+and they are held to `h1tile.j10r_reference`; v1's proof block is the default. ``--ks K[,K...]`` is the pouw setting ``ks``:
+H1 hooks and the period's Program declares only the linears at those K's, the rest serving on their arm unhooked, and each
+window's calls are held to those K's (``call_ks``); with ``--j10r`` it is serve-openai's ``--protocols-config
+'{"pouw": {"unit": "j10r", "ks": [...]}}'``.
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
 (`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
@@ -165,10 +168,11 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
 
-def period_program(model: Any, rows: int, steps: int, j10r: bool = False,
-                   arch: str | None = None) -> tuple[Any, str, dict[str, Any]]:
+def period_program(model: Any, rows: int, steps: int, j10r: bool = False, arch: str | None = None,
+                   ks: tuple[int, ...] | None = None) -> tuple[Any, str, dict[str, Any]]:
     """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
-    over `period_unit`'s tile proof block on the serving card's ``arch``, which refuses a K outside its H1 record's domain), its
+    with ``ks`` the linears at those K's alone, the pouw setting ``ks``, over `period_unit`'s tile proof block on the
+    serving card's ``arch``, which refuses a K outside its H1 record's domain), its
     digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares them.
     The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window pays, so
     this process's RSS is the windows' own."""
@@ -176,7 +180,7 @@ def period_program(model: Any, rows: int, steps: int, j10r: bool = False,
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import served as SV
 
-    layers = PHK.layers(model, pouw.linear_types())
+    layers = PHK.layers(model, pouw.linear_types(), ks)
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
     child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps, j10r, arch])],
@@ -636,10 +640,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         doc["serve_h1"] = {"prompt_lens": list(lens), "u": None, "why": str(e)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
     arch = doc["arch"] = a.arch or (SV.card_arch() if a.served else None)
-    period = period_program(eng.model, decl.rows, decl.steps, a.j10r, arch) if a.served else None
+    period = period_program(eng.model, decl.rows, decl.steps, a.j10r, arch, a.ks) if a.served else None
     if period is not None:
         doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {
-            "circuit": period[1], "noise": "j10r" if a.j10r else "v1", "arch": arch}
+            "circuit": period[1], "noise": "j10r" if a.j10r else "v1", "arch": arch, "ks": a.ks,
+            "linears": len(period[2]["shapes"])}
         print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     gpu_peak()
     t0 = time.monotonic()
@@ -661,7 +666,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         from verity_vllm.engine.hooks import Hooks
         rss0 = rss_gib()
         reserved = sessions(name) if sessions is not None else a.session
-        layers = layers or PHK.layers(eng.model, pouw.linear_types())
+        layers = layers or PHK.layers(eng.model, pouw.linear_types(), a.ks)
         com = tap = None
         if commit:
             from verity_vllm.acquire import h1_commit as HC
@@ -709,7 +714,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, reserved, a.gate, retain_steps=a.retain,
-                                              transcript_dir=str(tdir), admission="round-0", served=served))
+                                              transcript_dir=str(tdir), admission="round-0", served=served,
+                                              **({"ks": list(a.ks)} if a.ks else {})))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1), "host": host_memory()}
@@ -775,6 +781,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 h1.close()
                 out["close_s"] = round(time.monotonic() - end, 1)
                 closed_measures(h1, out, len(want), lambda w: layers[w].weight, bad, decl)
+                if a.ks:
+                    out["call_ks"] = sorted({c.k for c in h1.calls})
+                    out["ok"] = bool(out["ok"] and out["call_ks"] == list(a.ks))
                 if made is not None:
                     t1 = time.monotonic()
                     out["receipts"] = {**receipts_check(made), "check_s": round(time.monotonic() - t1, 1)}
@@ -1555,6 +1564,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="fill with --served: declare the period's window Program over J10-R's tile unit "
                          "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "
                          "receipts and public rows are J10-R's; v1's unit otherwise")
+    ap.add_argument("--ks", metavar="K[,K...]", type=lambda v: tuple(sorted({int(x) for x in v.split(",")})),
+                    help="fill with --served: the pouw setting ks, H1 over the linears at those K's alone, the period's "
+                         "Program declared over them and the rest served on their arm unhooked (serve-openai's "
+                         "--protocols-config '{\"pouw\": {\"unit\": \"j10r\", \"ks\": [2048]}}' with --j10r)")
     ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
                          "of pouw_h1.FILL's 64,16,64,18")
@@ -1582,6 +1595,8 @@ def main(argv: list[str] | None = None) -> int:
                  "the units kernel)")
     if a.j10r and not (a.served and a.workload == "fill"):
         ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
+    if a.ks and not (a.served and a.workload == "fill"):
+        ap.error("--ks is the fill workload's, with --served (the period's declared Program)")
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--commit is the fill workload's, with --served, without --handoff")
     if a.commit and a.challenger and not a.peer:
