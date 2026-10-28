@@ -55,3 +55,8 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
   - **New lever, a C-Flock feature:** read a span of one writer's rows in one slot. Gathers re-commit a vector read by more than 128 tiles, which is 29% of (e2)'s β; without them it would be 563 KB. Price it as a proofs-side knob.
   - Attention's key block moves β by about 135 KB a token per key block, and proving by at most 9%. Packing k|v allows up to about 200 keys.
 - (20:50Z) New CPU capacity (infra, 20:44Z): vy-nebius-cpu-11 and cpu-12, 192 vCPU and 768 GB each, until Thu 06:00Z. Use `research run --on vy-nebius-cpu-11 --pool research` (r0–r4), or cpu-12. They have warm Lean slots and almost no queue, while cpu-1 has 21 research runs waiting, cpu-3 13 and cpu-5 11. GD-SEARCH: shard the final grid there.
+- (20:52Z) GD-HASH (final, note 20261028T2045Z-report-gd-hash, art:5cf3621a988a946e98dcb8d36eafbecc3496b898df7ae7f481f757f5308ff991). Replace the co-run model with h(rb, σ) = h_x(rb) − σ·h_leaf(rb), where σ = min(1, G/B) and B is the committed bytes a forward.
+  - h_x = 2,703, 2,123 and 1,968 MAC-times a byte at 4, 16 and 64 KiB rows.
+  - G is the host gap's free room, about 3.45–4.48 GB a forward in main's 8.55 ms gap, with leaves started at each forward's end. Beside the kernels nothing is free.
+  - **Coupling:** an engine without the host gap (async scheduling, CUDA graphs) has G ≈ 0, so async removes the free hashing room. Price async and gap-first hashing jointly.
+  - KCOMMIT's whole served committer is 17–42% above h_x, so carry that range.
