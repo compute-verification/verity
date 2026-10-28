@@ -61,7 +61,7 @@ Lemmas.lean     the statements that are only steps of the guarantees' proofs, Th
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
 Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO certifier's tightness)
 Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
-Advice.lean     Theorem 3 (the 2^A cap)
+Advice.lean     Theorem 3 (the 2^A cap, and at k bits per execution block)
 Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bits per execution block,
                                          causality, the blocks opened, the composed statement) and its witness
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
@@ -199,16 +199,16 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds the 17 statements of `Guarantees.lean`, the sampled audit's charge
+The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
 (`Guarantees/Period.lean`), the horizon's wrong units (`../../Definitions/NetworkCertifier/Guarantees/Horizon.lean`)
 and the leak over a monitoring period (`../../Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `horizonWrongUnits` and `horizonLeak`). All 24 are under `shape.frozen` as
+last two by `horizonWrongUnits` and `horizonLeak`). All 25 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
-program implements yet), not over the network check's code, and an accepted run reaches the first 17 through
+program implements yet), not over the network check's code, and an accepted run reaches the first 18 through
 `AcceptedRunsAreProgramRuns`. Four are the
 theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
@@ -218,15 +218,16 @@ theorems whose bounds the calibration reports (`verity.core.protocols.certifier.
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
-The other 20 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The other 21 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
   `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
-- **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`,
-  `NetTiming.SecurityProofs.PerWindow`), `k` advice bits per execution block: `EncardAccSeqsLeConstantRate`,
-  `ExpectedRowCausal`, `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`. Advice of any
-  finite type is `EncardAccSeqsLeAdvice` (`Lemmas.lean`), which the check's count (`EncardAcceptedObservationsLe`) reads
-  at its clock syncs.
+- **Theorem 3, `k` advice bits per execution block** (`NetTiming.SecurityProofs.Advice`,
+  `NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`): `EncardAccSeqsLeAdviceBits` for any
+  Program, and for the constant-rate Program `EncardAccSeqsLeConstantRate`, `ExpectedRowCausal`,
+  `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`. Advice of any finite type is
+  `EncardAccSeqsLeAdvice` (`Lemmas.lean`), which the check's count (`EncardAcceptedObservationsLe`) reads at its clock
+  syncs.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
