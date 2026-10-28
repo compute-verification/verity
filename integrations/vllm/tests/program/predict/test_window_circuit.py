@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -35,8 +36,10 @@ from verity.core.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.pouw import audit as AU
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
+from verity.ml.windows import wiring as WI
 
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 CLASS = WindowClass(2, 4, 2)
@@ -483,16 +486,16 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
 
 
 def test_inference_entries_are_the_slots_runs_side_by_side():
-    """`_inference` takes a template's runs in unit order (a slot's are allocated before the next slot's, each allocation's
+    """`window_builder.inference` takes a template's runs in unit order (a slot's are allocated before the next slot's, each allocation's
     slots side by side), merges its units of one (slot, step) into runs, takes each ``slots`` runs (slots 0, 1, ... of one
     length at one step) as an entry, and merges like entries that follow on at one step under a ``-`` digit, then at
     consecutive steps under a ``step`` digit; units that aren't such runs are refused by name."""
-    assert WC._inference({"t": [(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]}, 2) == [
+    assert WB.inference({"t": [(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]}, 2) == [
         IF.InferenceEntry("t", 0, (2, 2, 2), ("step", "slot", "-"), 0)]
     for spans in ([(0, 1, 0, 3), (1, 1, 1, 3), (2, 1, 0, 3), (3, 1, 1, 3)], [(0, 1, 0, 3), (2, 1, 0, 3), (1, 1, 1, 3), (3, 1, 1, 3)]):
-        assert WC._inference({"t": spans}, 2) == [IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
+        assert WB.inference({"t": spans}, 2) == [IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
     with pytest.raises(Unexpressible, match=r"t: units from 0 are not 2 slots' runs of one length at one step"):
-        WC._inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
+        WB.inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
 
 
 def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):
@@ -898,3 +901,78 @@ def test_a_token_select_is_its_function_at_the_grains_units_of_groups():
     for select in (96, 8):
         with pytest.raises(Unexpressible, match=rf"256 logits aren't units of {select}, each groups of 16"):
             _circuit(WINDOW, Grain(gemm_words=1024, rows=256, select=select))
+
+
+#: TINY at Llama's MLP ratio (intermediate four times hidden) and GEMM slices of 512 weight words: down_proj writes 32 rows of
+#: 2 columns where o_proj writes 16 of 4, and a value GEMM's slice is half a key's value
+SPLIT, SPLIT_GRAIN = {**S.TINY, "intermediate_size": 256}, Grain(gemm_words=512, rows=256, select=64, norm=16)
+NORM, TAIL = "RMSNormFusedCuda_v2{N=64}", "RMSNormFusedCudaTail_v1{N=64}"
+
+
+def _add(at: int) -> str:
+    return f"RMSNormFusedCudaAdd_v1{{N=64,C=16,AT={at}}}"
+
+
+@pytest.fixture(scope="module")
+def split():
+    return class_circuit(S._registered(SPLIT), CLASS, None, SPLIT_GRAIN, provable=False)
+
+
+def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_order_of_at(split):
+    """The norm after o_proj reads its x as o_proj's 16 rows, so the norm after down_proj (the next layer's input norm and the
+    final norm), whose x is down_proj's 32, is cut at its residual add: 4 `RMSNormFusedCudaAdd_v1{N=64, C=16, AT}` units, part
+    AT reading x's elements [16·AT, 16·(AT+1)) as 8 of down_proj's rows and res whole, and `RMSNormFusedCudaTail_v1{N=64}`,
+    its r row j part AT = j's sum and its w a weight read. The GEMMs read the tail's normed row and the next residual add its
+    r, as they read v2's. A first key block whose keys' values are two value-GEMM rows each is `AttnBlockFirst_v2{VS=8}`, its
+    v cut a row a slice. No input row is free."""
+    n = {_label(fn): k for fn, k in split.templates}
+    ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in split.templates}
+    tail, down = ids[TAIL], ids["Gemm_v2{K=256,N=2}"]
+    assert n[NORM] == n[TAIL] == 20 and [n[_add(at)] for at in range(4)] == [20] * 4
+    assert (split.cuts[ids[NORM]], split.cuts[tail]) == ({"x": 16}, {"r": 4})
+    assert all(_source(split, tail, "r", u, j) == (ids[_add(j)], u, "o0") for u in range(20) for j in range(4))
+    for u in range(20):
+        xs = [_source(split, ids[_add(at)], "x", u, r) for at in range(4) for r in range(8)]
+        assert {w for w, _, _ in xs} == {down} and [k for _, k, _ in xs] == list(range(xs[0][1], xs[0][1] + 32))
+    assert all(split.cuts[ids[_add(at)]] == {"x": 8} for at in range(4))
+    readers = {(o, _label(split.template(w.reader)), w.port) for w in split.wires if w.writer == tail for o in [w.out]}
+    assert readers == {("o0", "Gemm_v2{K=64,N=8}", "x"), ("o0", "Gemm_v2{K=64,N=1}", "x"), ("o1", NORM, "res")}
+    first = {lab: split.cuts[ids[lab]]["v"] for lab in n if lab.startswith("AttnBlockFirst")}
+    assert first == {f"AttnBlockFirst_v2{{D=16,NVIS={t},BN=128,VS=8}}": 2 * t for t in range(1, 6)}
+    assert IF.input_count(split.description(), **held(split))["free"] == 0
+
+
+def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
+    """The tail is `RMSNormFusedCuda_v2` on its parts' sums in order of AT, and out of that order it normalizes another row. A
+    window of one norm cut as the class circuit cuts it (its parts and tail, the tail's r wired as the circuit wires it)
+    commits each sum and the tail's row of it as one public string, so the verifier's wiring check holds the tail's r to its
+    writers on the public bodies, and the same rows read in a swapped order are refused there."""
+    ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in split.templates}
+    tail, v2 = split.template(ids[TAIL]), split.template(ids[NORM])
+    parts = [split.template(ids[_add(at)]) for at in range(4)]
+    order = {w.cut[0]: w.writer for w in split.wires if (w.reader, w.port) == (ids[TAIL], "r")}
+    norm = IF.Circuit("norm", tuple((fn, 1) for fn in (*parts, tail)), cuts={ids[TAIL]: {"r": 4}},
+                      wires=tuple(IF.Wire(ids[TAIL], "r", order[j], "o0", at=0, radix=(1,), base=0, step=(0,), cut=(j, 1))
+                                  for j in range(4)))
+    rng = np.random.default_rng(5)
+    x, res, w = (_bf16(rng, 1, 64) for _ in range(3))
+
+    def ev(fn, *args):
+        return np.asarray(evaluate_batch(fn, *args, kernel="reference")).astype(np.uint16)
+
+    sums = [ev(p, x[:, 16 * at:16 * (at + 1)], res).reshape(1, 16) for at, p in enumerate(parts)]
+    out = ev(tail, np.concatenate(sums, axis=1), w).reshape(1, 128)
+    assert np.array_equal(out, ev(v2, x, res, w).reshape(1, 128))
+    assert not np.array_equal(ev(tail, np.concatenate([sums[1], sums[0], *sums[2:]], axis=1), w).reshape(1, 128), out)
+    win = IF.Window(norm, "ab" * 64, {"law": "stratified", "k": 2}, 1)
+    for at, p in enumerate(parts):
+        win.record(p, [x[:, 16 * at:16 * (at + 1)], res], [sums[at]])
+    win.record(tail, [None, w], [out[:, :64], out[:, 64:]])
+    assert win.mismatches() == {}
+    c, members = win.close(salt_key=bytes(32)), win.window.members
+    publics = {m.key: c.public_body(k) for k, m in enumerate(members)}
+    assert WI.check(members, publics) == {}
+    (t,) = [m for m in members if m.wired]
+    rows, swap = {q: (o, ws) for q, o, ws in t.wired}, {"r#0": "r#1", "r#1": "r#0"}
+    moved = [replace(m, wired=tuple((q, *rows[swap.get(q, q)]) for q, _o, _ws in m.wired)) for m in members]
+    assert set(WI.check(moved, publics)) == {t.key}
