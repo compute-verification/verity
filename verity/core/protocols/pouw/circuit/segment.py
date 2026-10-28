@@ -117,7 +117,7 @@ of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two 
 
 FOLD li (P = 1, `PouwWarpCheck_v1`), duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1
 of rc are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
-binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain.
+binding proved without a whole-state assumption is a set's 4 words a chain.
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
 noise, keys and selections from the coin and the draw.
@@ -255,7 +255,7 @@ ROT = tuple(((t * 7 + 5) % 31) + 1 for t in range(MI * NI))
 
 
 def key_ok(a: int) -> bool:
-    """XOR-in's multiplier condition (the Lambda8 half of P2-FF r9's key_ok_r9): a odd, and neither +a nor -a mod 2^30 in
+    """XOR-in's multiplier condition (the Lambda8 half of the filler's `key_ok_r9`): a odd, and neither +a nor -a mod 2^30 in
     Lambda8 = {lambda : lambda b = b' mod 2^30 for some int8 b != 0 and int8 b'}."""
     if not a & 1:
         return False
