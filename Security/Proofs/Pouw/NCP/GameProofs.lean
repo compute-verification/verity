@@ -8,7 +8,7 @@ import Proofs.Pouw.Sanity
 /-!
 # NCP's game instance: proofs
 
-* `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]` (red-team N4), a sanity
+* `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]`, a sanity
   bound; `lastChecked`, `leadComplete` (checked values mod `2^32`, NA2).
 * `gammaFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
 * `oneSegment`: the zero-input adversary of class (c), in `Pouw.Barrier.gemmModel`.
@@ -471,7 +471,7 @@ theorem shiftR_not_admissible {k : ℕ} (hk : 16 ≤ k) : ¬ Admissible k 16 (sh
 /-- The involution swapping `j` and `j + 24` in every period of `48`. -/
 def swap24 (j : ℕ) : ℕ := if j % 48 < 24 then j + 24 else j - 24
 
-/-- Sanity (red-team P2-1): the unsigned `swap24` is a signed permutation for `48 ∣ k` that passes the first two
+/-- Sanity: the unsigned `swap24` is a signed permutation for `48 ∣ k` that passes the first two
 clauses of the rejection rule (step `t`'s image is `24` away and straddles two steps), but `R² = I`, so the third
 clause rejects it. -/
 theorem swap24_not_admissible {k : ℕ} (h48 : 48 ∣ k) :
@@ -510,7 +510,7 @@ def stepSwap (j : ℕ) : ℕ := if j / 16 % 2 = 0 then j + 16 else j - 16
 /-- The sign `−1` on step `0` and `+1` elsewhere, so that the signed step swap has `R² ≠ ±I`. -/
 def stepSign (j : ℕ) : ℤ := if j < 16 then -1 else 1
 
-/-- Sanity (red-team P2-4): the step swap with signs `stepSign` is a signed permutation for `32 ∣ k`, `k ≥ 64`, that
+/-- Sanity: the step swap with signs `stepSign` is a signed permutation for `32 ∣ k`, `k ≥ 64`, that
 passes the first clause (no step meets its image) and the third (`R²` is `−1` at `(0, 0)` and `1` at `(32, 32)`), but
 maps step `0` onto step `1`, so the second clause rejects it. -/
 theorem stepSwap_not_admissible {k : ℕ} (hk : 64 ≤ k) (h32 : 32 ∣ k) :

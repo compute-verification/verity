@@ -5,12 +5,12 @@
 #                            fixture}.json, the SASS opcodes and the device identity.
 #   f8_sm100.sh eval SCRATCH [EVAL ARGS]   re-score a kept scratch (no GPU).
 #
-#   research run --on vy-dc-b200 --project verity --campaign eps1 --source <tree> --cwd source --env GPU_LEASE_WHO=b200-fp8 \
-#     -- bash benchmarks/tc_probe_fp4/f8_sm100.sh [--tiles N] [--bulk-scale F] [--seed S]
+# From the source tree's root on a B200:
+#   OUT=DIR bash benchmarks/tc_probe_fp4/f8_sm100.sh [--tiles N] [--bulk-scale F] [--seed S]
 # Exit: 0 captured and scored, 3 a kind failed the layout gate (the others captured and scored), 1 build or SASS gate failed,
 # 2 no device or no nvcc.
 set -uo pipefail
-OUT=${OUT:?run under research run}
+OUT=${OUT:?OUT names the output directory}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export PYTHONPATH="$(cd "$HERE/../.." && pwd)" PYTHONDONTWRITEBYTECODE=1
 PY=${PYTHON:-python3}
