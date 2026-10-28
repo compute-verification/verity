@@ -21,11 +21,12 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
               gather, padded
     pouw      scheme ("off" | "j10r" | "jr2" | "dither"), K, L, L_prime, noise ("periodic" | "fresh" | "permuted"),
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
-              hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, unit_cells
+              hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, unit_cells,
+              form ("tile" | "lanes")
     sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform"), retain_GB
-    partition units: [{name, per_token, work, extra_ands, open_rows, out_bits}] or None for the preset of
-              `commit.values`
-    prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, shared
+    partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
+              `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}]
+    prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, k_pad, shared
     lowering  gates_per_and, s_per_gate, bytes_per_gate, per ("template" | "instance"), ram_gib
     verify    stmt_fixed, stmt_per_and
     price     cpu_s_in_gpu_s, cpu_in_J, baseline ("same" | "fastest")
@@ -156,6 +157,14 @@ INPUTS: dict[str, tuple[float, str, str]] = {
                                                "(note:top/20261028T1845Z-report-lowering-struct): 1.36"),
     "k_max": (27, "M", "circuit.compose's K_MAX and the prover's IN_RANGE_K_LOG (live/src/circuit.rs:120): a block with "
                        "k_log > 27 is refused (note:top/20261028T1845Z-report-lowering-struct)"),
+    "k_pad": (1, "E", "bits past ceil(log2 ANDs) a block's k_log takes: compose pads each range (gates, hm96 slots, "
+                      "sha512x3 slots, mask) to a power of two and lays them side by side (circuit._ranges), so a block "
+                      "of 2^26 ANDs is a 2^27 block. The struct worker's 'a lane fits 2^27 to K about 5,041' (~57 M "
+                      "ANDs at 350 a MAC) agrees; the inbox's '2^27 ANDs' (top, 19:16Z) is k_pad 0"),
+    "h1_ands_per_mac": (350, "E", "J10-R's H1 leaf, ANDs a MAC with its noise and openings: the coordinator's "
+                                  "calibration point (inbox 19:16Z: the 32x32 K 2,048 tile ~736 M ANDs, 32 lanes of "
+                                  "~23 M; TOP-138 19:25Z: a lane ~92 M at K 8,192, ~161 M at K 14,336) until GD-PROVER"),
+    "partial_words_per_ks": (2, "M", "leaf_lanes: a lane partial is 2 (KS + m) u32, KS = K / 32 segments"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
 }
 
@@ -297,6 +306,9 @@ SCHEMA = {
         "denoise_g_frac": (None, "dither: de-noising's cost as a share of G (None: from noise and L')"),
         "value_row_bytes": (16384, "dither: the value root's hm96 row (16 KiB pinned in PROTOCOL.md)"),
         "unit_cells": (1, "PoUW proof block: cells (dither: 1 cell x 1 segment; J10-R tile: 32 x 32 = 1,024)"),
+        "form": ("tile", "j10r/jr2 leaf's proof: tile (one block; ~2^30 at K 2,048, refused by compose) | lanes "
+                         "(TOP-138, pouw.leaf_lanes: its 32 lanes of 4 x 8 cells, each in weights.chunks(K) chunks, and "
+                         "a combine over the lanes' partials, drawn as one group: delta counts leaves)"),
     },
     "sampling": {
         "delta": (2.0 ** -40, "failure probability a window"),
@@ -320,6 +332,8 @@ SCHEMA = {
         "stmt_per_and": (None, "GPU-s a statement per AND of its block"),
         "speed": (None, "prover speed on the H200 over sm_120's (None: 1.0, estimate)"),
         "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above INPUTS k_max, 27)"),
+        "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: 1, compose's range padding; 0: the "
+                        "inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
     },
     "lowering": {
@@ -622,6 +636,25 @@ def s8_coord_work(K: int) -> float:
     return K // 32 * I("s8_step_ands") + I("s8_epilogue_ands")
 
 
+def h1_chunks(K: int) -> int:
+    """pouw.weights.chunks: the chunks an H1 lane at K is proved in (1 to K 4,096, CHUNK_MAX; then the least n >= 2
+    whose chunks are at most 4,096 entries and whole 512-entry noise blocks)."""
+    if K <= 4096:
+        return 1
+    for n in range(-(-K // 4096), K // 512 + 1):
+        if K % (n * 512) == 0:
+            return n
+    raise ValueError(f"K = {K}: no chunking")
+
+
+def h1_digits(ks: int) -> int:
+    """pouw.leaf_lanes.n_digits: H1's digit count m at KS segments."""
+    m = 1
+    while not (-(128 ** m) <= -128 * ks and 127 * ks // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
 def preset_units(d: dict) -> list:
     """The per-op partition (every committed value a unit's output, at most 16 bits, one unit an output word):
     one s8 coordinate a unit (opening its two K-byte operand rows and three one-block rows, costfit's
@@ -651,12 +684,25 @@ def pouw_units(d: dict) -> list:
         return []
     cells = H1_CELLS_PER_TOKEN
     if w["scheme"] in ("j10r", "jr2"):
+        K = w["K"]
         tile = w["unit_cells"] if w["unit_cells"] > 1 else 1024
-        gates = I("h1_tile_gates") * tile / 1024 * w["K"] / 2048
-        work = tile * s8_coord_work(w["K"])
-        return [{"name": f"H1 tile ({tile} cells, K {w['K']})", "per_token": cells / tile,
-                 "work": work, "extra_ands": max(0.0, gates / I("gates_per_and") - work),
-                 "open_rows": [], "out_bits": 16, "gates": gates}]
+        work = tile * s8_coord_work(K)
+        ands = I("h1_ands_per_mac") * tile * K
+        unit = {"name": f"H1 leaf ({tile} cells, K {K}, {w['form']})", "per_token": cells / tile, "work": work,
+                "extra_ands": max(0.0, ands - work), "open_rows": [], "out_bits": 16}
+        if w["form"] == "lanes":
+            lanes = tile // 32
+            n = h1_chunks(K)
+            ks = K // 32
+            partial = 4 * I("partial_words_per_ks") * (ks + h1_digits(ks))
+            carry = [partial] * (2 if n > 1 else 0)            # a middle chunk reads carry_in and writes carry_out
+            combine = lanes * row_ands(partial) + row_ands(16) + (lanes * n * row_ands(2) if n > 1 else 0)
+            unit["blocks"] = [{"name": "lane chunk" if n > 1 else "lane", "count": lanes * n,
+                               "ands": ands / (lanes * n) + sum(row_ands(b) for b in carry)},
+                              {"name": "combine", "count": 1, "ands": combine}]
+        elif w["form"] != "tile":
+            raise ValueError(f"pouw.form {w['form']!r}")
+        return [unit]
     L, Rv = w["L"], w["value_row_bytes"]
     noise_ands = 2 * L * I("sha512_ands") / 64                 # V and U pi entries expanded from the coins (estimate)
     units = []
@@ -709,7 +755,9 @@ def proving(d: dict, units: list, label: str) -> dict:
     with C = eps F, so draws ~ Lambda F / C = Lambda / eps; or the deployed uniform kd-subset over the population's
     units (ε then counts units, not ANDs). Each drawn block costs o (ANDs + row openings) and each touched statement
     stmt_fixed + stmt_per_and ANDs, with ceil(draws / cap) statements a class (cap = 2^(m_max - k_log), k_log =
-    ceil(log2 ANDs) + 1). Lowering is per class (template) or per draw (instance)."""
+    ceil(log2 ANDs) + k_pad). A unit drawn as a group (its `blocks`, the lanes form) pays each of its blocks on
+    every draw, each block class its own k_log, cap and statements. Lowering is per class (template) or per draw
+    (instance)."""
     s = d["sampling"]
     T, S = window_tokens(d), 1                                 # units cover what the forwards compute
     lam = math.log(1 / s["delta"])
@@ -738,41 +786,52 @@ def proving(d: dict, units: list, label: str) -> dict:
         out["uniform_kd"] = kd
     elif s["law"] != "achievability":
         raise ValueError(f"sampling.law {s['law']!r}")
+    k_pad = pv["k_pad"] if pv["k_pad"] is not None else I("k_pad")
     for u in units:
         n = u["per_token"] * T * S
         q = kd / n_all if s["law"] == "uniform" else min(1.0, lam * u["work"] / C)
         draws = n * q
-        ands = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
-        k_log = math.ceil(math.log2(max(ands, 2))) + 1
-        cap = 1 << max(0, pv["m_max"] - k_log)
-        if k_log > I("k_max"):
-            out["infeasible"].append(f"{u['name']}: {ands:.3g} ANDs needs k_log {k_log} > {I('k_max')} (compose and "
-                                     f"the prover refuse it)")
-        stmts = math.ceil(draws / cap) if draws > 0 else 0
-        staged = draws if pv["shared"] else min(n, stmts * cap)
-        gpu = (draws * o * ands + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
-        gates = u.get("gates", ands * gpa)
-        lowerings = (1 if draws > 0 else 0) if lo["per"] == "template" else draws
-        lower = lowerings * gates * spg
-        peak = gates * bpg / 2 ** 30
-        if peak > lo["ram_gib"]:
-            out["infeasible"].append(f"{u['name']}: lowering needs {peak:.3g} GiB > {lo['ram_gib']} GiB")
-        stage = stmts * (I("stage_fixed") + I("stage_per_and") * ands) + staged * I("stage_per_and_staged") * ands
-        verify = stmts * (vf + va * ands)
-        out["classes"].append({"name": u["name"], "units": n, "work": u["work"], "ands_with_openings": ands,
-                               "openings_share": 1 - (u["work"] + u["extra_ands"]) / ands, "q": q, "draws": draws,
-                               "cap": cap, "statements": stmts, "gpu_s": gpu, "lower_cpu_s": lower,
-                               "lower_peak_GiB": peak,
-                               "lower_peak_GiB_today": ands * I("lower_bytes_per_and_today") / 2 ** 30,
-                               "lower_cpu_s_today": lowerings * ands * I("lower_s_per_and_today"),
-                               "k_log": k_log, "stage_cpu_s": stage, "verify_cpu_s": verify})
+        own = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
+        blocks = u.get("blocks") or [{"name": u["name"], "count": 1, "ands": own}]
+        cls = {"name": u["name"], "units": n, "work": u["work"], "q": q, "draws": draws, "statements": 0,
+               "gpu_s": 0.0, "lower_cpu_s": 0.0, "lower_peak_GiB": 0.0, "lower_peak_GiB_today": 0.0,
+               "lower_cpu_s_today": 0.0, "stage_cpu_s": 0.0, "verify_cpu_s": 0.0, "blocks": []}
+        for b in blocks:
+            ands, nb = b["ands"], draws * b["count"]
+            where = u["name"] if len(blocks) == 1 else f"{u['name']}, {b['name']}"
+            k_log = math.ceil(math.log2(max(ands, 2))) + k_pad
+            cap = 1 << max(0, pv["m_max"] - k_log)
+            if k_log > I("k_max"):
+                out["infeasible"].append(f"{where}: {ands:.3g} ANDs needs k_log {k_log} > {I('k_max')} (compose "
+                                         f"and the prover refuse it)")
+            stmts = math.ceil(nb / cap) if nb > 0 else 0
+            staged = nb if pv["shared"] else min(n * b["count"], stmts * cap)
+            gpu = (nb * o * ands + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
+            gates = b.get("gates", u.get("gates") if len(blocks) == 1 else None) or ands * gpa
+            lowerings = (1 if nb > 0 else 0) if lo["per"] == "template" else nb
+            peak = gates * bpg / 2 ** 30
+            if peak > lo["ram_gib"]:
+                out["infeasible"].append(f"{where}: lowering needs {peak:.3g} GiB > {lo['ram_gib']} GiB")
+            part = {"statements": stmts, "gpu_s": gpu, "lower_cpu_s": lowerings * gates * spg,
+                    "lower_cpu_s_today": lowerings * ands * I("lower_s_per_and_today"),
+                    "stage_cpu_s": stmts * (I("stage_fixed") + I("stage_per_and") * ands)
+                    + staged * I("stage_per_and_staged") * ands,
+                    "verify_cpu_s": stmts * (vf + va * ands)}
+            for k, v in part.items():
+                cls[k] += v
+            cls["lower_peak_GiB"] = max(cls["lower_peak_GiB"], peak)
+            cls["lower_peak_GiB_today"] = max(cls["lower_peak_GiB_today"],
+                                              ands * I("lower_bytes_per_and_today") / 2 ** 30)
+            cls["blocks"].append({"name": b["name"], "count": b["count"], "ands": ands, "k_log": k_log, "cap": cap,
+                                  **part})
+        group = sum(b["count"] * b["ands"] for b in blocks)
+        cls.update({"ands_with_openings": group, "openings_share": 1 - (u["work"] + u["extra_ands"]) / own,
+                    "k_log": max(b["k_log"] for b in cls["blocks"]), "cap": min(b["cap"] for b in cls["blocks"])})
+        out["classes"].append(cls)
         out["draws"] += draws
-        out["gpu_s"] += gpu
-        out["statements"] += stmts
-        out["lower_cpu_s"] += lower
-        out["stage_cpu_s"] += stage
-        out["verify_cpu_s"] += verify
-        out["lower_peak_GiB"] = max(out["lower_peak_GiB"], peak)
+        for k in ("gpu_s", "statements", "lower_cpu_s", "stage_cpu_s", "verify_cpu_s"):
+            out[k] += cls[k]
+        out["lower_peak_GiB"] = max(out["lower_peak_GiB"], cls["lower_peak_GiB"])
     out["lower_peak_GiB_today"] = max((c["lower_peak_GiB_today"] for c in out["classes"]), default=0.0)
     out["draws_bound"] = lam / s["eps"]
     return out
