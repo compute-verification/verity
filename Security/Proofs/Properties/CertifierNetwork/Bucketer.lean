@@ -387,16 +387,16 @@ theorem bucketerTick_spec {c : Config} {b : Bucketer} (hb : BuGood c b) (hT : 0 
   · simp only [hm, ne_eq, not_true_eq_false, ↓reduceIte, Id.run_pure]
     have hw := succ_div_of_mod hm
     obtain ⟨-, hlast, -⟩ := mod_last hm
-    refine ⟨⟨hsh.closeWindow, by simp [Certifier.closeWindow, hm], ?_, by simp [Certifier.closeWindow]⟩, trivial,
-      fun _ => rfl, ?_⟩
-    · simp only [Certifier.closeWindow, t3, hw1, hb.window, hw]
+    refine ⟨⟨hsh.closeSamplingBlock, by simp [Certifier.closeSamplingBlock, hm], ?_,
+      by simp [Certifier.closeSamplingBlock]⟩, trivial, fun _ => rfl, ?_⟩
+    · simp only [Certifier.closeSamplingBlock, t3, hw1, hb.window, hw]
     · rintro r ⟨⟩
-      refine ⟨trivial, by simp [Certifier.closeWindow, t1, hs1.link], by simp [Certifier.closeWindow, t3, hw1, hb.window],
-        ?_, ?_⟩
-      · simp only [Certifier.closeWindow, t4, hr1, Array.size_push, hb.rows, hlast]
+      refine ⟨trivial, by simp [Certifier.closeSamplingBlock, t1, hs1.link],
+        by simp [Certifier.closeSamplingBlock, t3, hw1, hb.window], ?_, ?_⟩
+      · simp only [Certifier.closeSamplingBlock, t4, hr1, Array.size_push, hb.rows, hlast]
         omega
       · intro row' hr'
-        simp only [Certifier.closeWindow, t4, hr1] at hr'
+        simp only [Certifier.closeSamplingBlock, t4, hr1] at hr'
         rcases Array.mem_push.1 hr' with hr' | rfl
         · exact hb.packed row' hr'
         · exact hrow
