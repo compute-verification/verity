@@ -20,7 +20,8 @@
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
 #           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
-#           row, as graphs
+#           row, as graphs: not the served stack either (the Commit and H1 refuse async scheduling), so util.json's
+#           served_stack is false for both
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
@@ -153,7 +154,19 @@ while True:
     time.sleep(0.2)' "$D" "$STANDIN_DRAWS" > "$OUT/standin_draws.txt" 2>&1 &
   drawer=$!
 fi
-trap '"$NSYS" shutdown --session="$SESS" --kill=sigterm >/dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 143' TERM INT
+spid=
+alive() { case $(ps -o stat= -p "$1" 2>/dev/null) in ''|Z*) return 1 ;; esac; }
+# `wait "$srv"` waits on the `nsys launch` client, which returns at the session's shutdown even when the server itself
+# hangs in its stop (a sealer that died leaves it waiting on seals), and a server left up keeps the GPU lease's lock
+reap() {
+  [ -n "$spid" ] || return 0
+  for _ in $(seq 1 $(( ${SERVE_STOP_S:-600} / 2 ))); do alive "$spid" || return 0; sleep 2; done
+  local kids; kids=$(ps -o pid= --ppid "$spid" 2>/dev/null | tr -s ' \n' ' ')
+  say "SERVE: pid $spid still up ${SERVE_STOP_S:-600} s after the shutdown ($(grep -a 'SERVE-OPENAI stopping' "$SCR/serve.log" | tail -1 | cut -c1-120)); killed with its children$kids"
+  # shellcheck disable=SC2086
+  kill -KILL "$spid" $kids 2>/dev/null
+}
+trap '"$NSYS" shutdown --session="$SESS" --kill=sigterm >/dev/null 2>&1; wait "$srv"; reap; [ -n "$drawer" ] && kill "$drawer"; exit 143' TERM INT
 up=0
 for _ in $(seq 1 1500); do
   grep -q "SERVE-OPENAI listening" "$SCR/serve.log" && { up=1; break; }
@@ -165,7 +178,8 @@ if [ "$up" != 1 ]; then
   log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
   "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 10
 fi
-say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200)"
+spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
+say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
 load() {  # $1 requests, $2 seed, $3 name
   "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
@@ -178,8 +192,11 @@ load "$N" 1 main; lrc=$?
 say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
 "$NSYS" stop --session="$SESS" > "$OUT/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
+# the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
+[ -n "$spid" ] && { kill -TERM "$spid"; reap; say "SERVE: its own stop $(grep -a 'SERVE-OPENAI stopping' "$SCR/serve.log" | tail -1 | cut -c1-120)"; }
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
+reap
 [ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_draws.txt") ($STANDIN_DRAWS, the step-input port only)"; }
 trap - TERM INT
 log

@@ -112,6 +112,30 @@ def test_tensor_active_at_the_reference_clock(tmp_path):
     assert U.mhz(1599.3) == 1599.3
 
 
+def test_the_steady_cut_drops_steps_over_one_and_a_half_medians(tmp_path):
+    """Full steps 1 to 4 of 10, 5, 20 and 3 ms: the median is 7.5 ms, so the 20 ms step goes, and Tensor Active is read over
+    the kept steps' samples only (12 of 20, 10 of 10 and 2 of 6 at 90%)."""
+    ends = [10, 20, 25, 45, 48, 55]
+    recs = [{"kind": "header", "schema": "verity-vllm/step-trace/v1"}]
+    recs += [{"kind": "step", "step": k, "T": 8 if 1 <= k <= 4 else 4, "t": (Z + e * MS) / 1e9} for k, e in enumerate(ends)]
+    (trace := tmp_path / "advice_trace.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+    s = U.analyse(_report(tmp_path / "prof.sqlite"), trace, 8)["all"]["steady"]
+    assert (s["steps"], s["dropped"]) == (3, 1)
+    assert s["step_wall_ms"] == {"mean": pytest.approx(6.0), "median": pytest.approx(5.0)}
+    assert s["tensor_active_pct"] == pytest.approx(60.0)
+    assert s["sm_clock_mhz"] is None
+
+
+@pytest.mark.parametrize("arm, served", [("stock", True), ("noseal", True), ("graphs", False), ("async", False)])
+def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm, served):
+    out = tmp_path / "util.json"
+    monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
+                                      str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", arm, "--out", str(out)])
+    assert U.main() == 0
+    assert json.loads(out.read_text())["served_stack"] is served
+    assert ("(not the served stack)" in capsys.readouterr().out) is not served
+
+
 def test_too_few_full_steps_is_said(tmp_path):
     got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8)
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]
