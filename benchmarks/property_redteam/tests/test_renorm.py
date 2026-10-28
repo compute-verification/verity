@@ -1,4 +1,5 @@
-"""The N_L search's port of 6b's model, its tables, its circuits and its p1024 families compute what `renorm.py` claims."""
+"""The N_L search's restriction of the gate model, its tables, its circuits and its p1024 families compute what `renorm.py`
+claims."""
 
 from __future__ import annotations
 
@@ -12,40 +13,37 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+import gates as G  # noqa: E402
 import renorm as R  # noqa: E402
 
 
-def _col(n, v):
-    return np.full(n, v, dtype=np.int64)
-
-
 def test_mma_clamps_or_wraps_outside_s32_and_proven_refuses_a_wide_operand():
-    big = R.WordGate(R.WordOp("const", c=2 ** 20), (), 2 ** 20, 2 ** 20)
-    zero = R.WordGate(R.WordOp("const", c=0), (), 0, 0)
-    sat = R.WordGate(R.WordOp("mma", k=1, sat=True), (1, 0, 0), R.S32_MIN, R.S32_MAX)
-    wrap = R.WordGate(R.WordOp("mma", k=1, sat=False), (1, 0, 0), R.S32_MIN, R.S32_MAX)
-    vs, window, _hold = R.evaluate([big, zero, sat, wrap], {}, 1)
-    assert vs[2][0] == R.S32_MAX and vs[3][0] == (2 ** 40 - R.S32_MIN) % 2 ** 32 + R.S32_MIN
-    assert not window[0]  # the operand 2^20 leaves s8, and the exact sum leaves the declared interval
-    assert any("outside" in m for m in R.proven([big, zero, sat]))
+    b = G.Builder()
+    big, zero = b.const(2 ** 20), b.const(0)
+    sat = b.gate(G.op_mma(G.S8, G.S8, 1, sat=True), (zero, big, big), G.S32_MIN, G.S32_MAX)
+    wrap = b.gate(G.op_mma(G.S8, G.S8, 1, sat=False), (zero, big, big), G.S32_MIN, G.S32_MAX)
+    vs, window, _hold = b.evaluate({})
+    assert vs[sat] == G.S32_MAX and vs[wrap] == (2 ** 40 - G.S32_MIN) % 2 ** 32 + G.S32_MIN
+    assert not window  # the operand 2^20 leaves s8, and the exact sum leaves the declared interval
+    assert any("outside" in m for m in G.proven(b))
 
 
 def test_derive_is_the_interval_image_and_a_budgeted_gate_keeps_its_declaration():
-    a = R.WordGate(R.WordOp("input", slot=0), (), 0, 15)
-    b = R.WordGate(R.WordOp("input", slot=1), (), -8, 7)
-    zero = R.WordGate(R.WordOp("const", c=0), (), 0, 0)
-    m = R.WordGate(R.WordOp("mma", fa=(False, 4), fb=(True, 4), k=1), (2, 0, 1), 0, 0)
-    f = R.WordGate(R.WordOp("affine", c=3, coeff=(2, -1)), (0, 1), 0, 0)
-    g = R.WordGate(R.WordOp("budgeted", f=lambda v: v[0] // 2), (0,), 0, 7)
-    ivs = R.intervals([a, b, zero, m, f, g])
-    assert ivs[3] == (-120, 105) and ivs[4] == (3 + 0 - 7, 3 + 30 + 8) and ivs[5] == (0, 7)
+    b = G.Builder()
+    x, y, zero = b.inp(0, 0, 15), b.inp(1, -8, 7), b.const(0)
+    m = b.gate(G.op_mma((0, 15), (-8, 7), 1), (zero, x, y), 0, 0)
+    f = b.gate(G.op_affine(3, (2, -1)), (x, y), 0, 0)
+    g = b.budgeted(lambda v: v[0] // 2, [x], 0, 7)
+    ivs = G.intervals(b)
+    assert ivs[m] == (-120, 105) and ivs[f] == (3 + 0 - 7, 3 + 30 + 8) and ivs[g] == (0, 7)
 
 
 def test_fan_in_and_width_are_restricted_s():
-    a = R.WordGate(R.WordOp("input", slot=0), (), 0, 255)
-    g = R.WordGate(R.WordOp("budgeted", f=lambda v: v[0]), (0, 0, 0, 0, 0), 0, 255)
-    assert not R.fan_in(4, [a, g]) and R.fan_in(5, [a, g])
-    assert R.width(8, [a]) and not R.width(7, [a])
+    b = G.Builder()
+    a = b.inp(0, 0, 255)
+    b.budgeted(lambda v: v[0], [a] * 5, 0, 255)
+    assert not R.fan_in(4, b) and R.fan_in(5, b)
+    assert R.width(8, b) and not R.width(7, b)
 
 
 @pytest.mark.parametrize("B,L", [(4, 4), (16, 3), (256, 2)])

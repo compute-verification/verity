@@ -74,7 +74,7 @@ def materialize(prog, inputs: list[list[int]]) -> dict[int, int]:
     """Materialize *every* circuit value (live and `canonical, not captured` alike, spec §12) from the
     committed inputs by the registered gate semantics: the full transcript `{root gate index: word}` of
     `prog` on `inputs` (one flat word list per program input, leaf order)."""
-    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.evaluation.reference import evaluate_region
     from verity.ml.circuits.layout import resolve
     circ = prog.circuit
     t: dict[int, int] = {}
