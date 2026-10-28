@@ -100,8 +100,8 @@ def fitted_answers(answers: Callable[[], Any]) -> list[tuple[str, dict]]:
     """The components' answers in ``answers()``, else none when the case doesn't fit the composition."""
     try:
         out = answers()
-    except (Reject, KeyError, TypeError):
-        return []
+    except (Reject, KeyError, TypeError) as e:
+        out = str(e)
     return [] if isinstance(out, str) else out
 
 
@@ -361,21 +361,23 @@ class Product:
         return fitted_verdicts(answers)
 
 
-def v2_record(commitment: bytes, evidence: bytes) -> list[str] | None:
-    """`Core.Composition.committed` at v2: its commitment's digest, the registration record's, as v2 decodes it."""
+def v2_record(commitment: bytes, evidence: bytes) -> list[str] | Reject:
+    """`Core.Composition.committed` at v2: its commitment's digest, the registration record's, as v2 decodes it; else
+    v2's refusal of the commitment, which reads as no records."""
     try:
         return [ONE_STAGE.decode_commitment(commitment)[1].hex()]
-    except Reject:
-        return None
+    except Reject as e:
+        return e
 
 
-def window_records(commitment: bytes, evidence: bytes) -> list[str] | None:
+def window_records(commitment: bytes, evidence: bytes) -> list[str] | core_check.Refused | None:
     """`Core.Remote.windowRecords`: the digests of each window's Commit record (`credit.commit_of`) in a period's
-    evidence, in the close's order; none when the evidence doesn't decode or a window names no Commit record."""
+    evidence, in the close's order; else the period's refusal of the evidence, or None when a window names no Commit
+    record, either of which reads as no records."""
     try:
         j = period_check.evidence(evidence)
-    except core_check.Refused:
-        return None
+    except core_check.Refused as e:
+        return e
     if not isinstance(j["windows"], list):
         return None
     out = []
@@ -402,7 +404,7 @@ class Same(Product):
         out: list[tuple[str, str | None]] = []
         for s, read in self.same:
             ds = read(by_id[s][2], by_id[s][3]) if s in by_id else None
-            out += [(s, None)] if ds is None else [(s, d) for d in ds]
+            out += [(s, d) for d in ds] if isinstance(ds, list) else [(s, None)]
         return out
 
     def strays(self, ev) -> str | None:
