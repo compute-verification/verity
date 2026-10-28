@@ -8,18 +8,14 @@ check of a run (`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandw
 (`RemoteAudit.P2Protocol.protocol`, `verity/remote-bandwidth/p2/v0`), communication by the network certifier over the
 period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the
 bound `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
-(`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). Composed on the caller's blobs, every component accepts or
-onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before composing, in its commit
-phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`, `verity/nci/v1`, a
-registration check and not a component): a registration it refuses refuses onsite, and so does one other than the
-registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`). Once the cases fit, PoUS and
-the remote bandwidth audit must also have committed to one store (`store`), else onsite rejects whatever the components
-answer.
+(`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedB` composes them on the caller's
+blobs: every component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others
+answer. Once the cases fit, PoUS and the remote bandwidth audit must also have committed to one store (`store`), else
+onsite rejects whatever the components answer.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
 import MemoryChallenger.WipeProtocol
-import NciCheck.Protocol
 import NetworkCheck.Period
 import PousCheck.RunProtocol
 import PouwCheck.Period
@@ -45,16 +41,14 @@ def store : Tie :=
       (RemoteAudit.P2Protocol.protocol.id,
         fun b => (RemoteAudit.P2Protocol.decodeCommitment b).toOption.map (·.held.reg.root))]⟩
 
-def protocol : BlobProtocol :=
-  registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components [store]
+def protocol : BlobProtocol := tiedB "verity/onsite/v0" components [store]
 
 /-- A case its component's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=
   { id := P.id, params := "{}", commitment := ByteArray.empty, evidence := ByteArray.empty }
 
-/-- The answer of what onsite composes once NCI accepts the registration. -/
 private def answer (xs : List Case) (blobs : Array ByteArray := #[]) : Answer :=
-  Cases.answerCases ((productB protocol.id components).on blobs) xs ⟨(List.replicate 64 0).toArray⟩
+  Cases.answerCases (protocol.on blobs) xs ⟨(List.replicate 64 0).toArray⟩
 
 private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
@@ -79,16 +73,5 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer ((components.take 4).map refused ++
     [refused SampledProofs.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
-
--- a registration NCI refuses refuses onsite before any component is run, and onsite's params carry the registration
-private def unregistered (blobs : Array ByteArray := #[]) : Answer :=
-  Cases.answerRegistered (protocol.on blobs) (refused NciCheck.Protocol.protocol) (components.map refused)
-    ⟨(List.replicate 128 0).toArray⟩
-#guard (unregistered).verdict == .reject && (unregistered).published.isNone
-#guard (unregistered).reason.map (·.startsWith "registration: verity/nci/v1 reject: params: ") == some true
-#guard !components.any fun P => ((unregistered).reason.map (contains · s!"{P.id} reject")).getD false
-#guard (unregistered #["not a circuit file".toUTF8]).reason == (unregistered).reason
-#guard (Cases.answerCases (protocol.on #[]) (components.map refused) ⟨(List.replicate 128 0).toArray⟩).reason ==
-  some "params: the composition's params: the keys must be [components, registration], not [components]"
 
 end Core.Onsite

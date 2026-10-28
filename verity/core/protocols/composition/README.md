@@ -7,12 +7,13 @@ subprotocols' packages, with no Mathlib:
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
   `registered id R s components`, the same after a registration check `R`, on the registration the subprotocol `s`
-  commits to, and `same id ss components`, the product whose subprotocols `ss` must commit to one record
-  (`Registered.lean`); all three over blobs (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s
+  commits to, `tied id components ties`, the product whose subprotocols must name one value for each tie, and `same id
+  ss components`, the one whose subprotocols `ss` must commit to one record (`Registered.lean`); all four over blobs
+  (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s
   that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
-  bandwidth (PoUB-P2, on PoUS's store), network certification and the memory challenger's wipe, after NCI's
-  registration check.
+  bandwidth (PoUB-P2, on PoUS's store), network certification and the memory challenger's wipe, a `tiedB` with PoUS
+  and PoUB-P2 on one store.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one window
   record.
 
@@ -64,8 +65,9 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | proof of useful bandwidth, PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
 
-Every subprotocol of both products is ported to its own `Core.Protocol`. NCI is a registration check, not a subprotocol
-(below), and the inference-only policy is not a subprotocol of either product yet.
+Every subprotocol of both products is ported to its own `Core.Protocol`. NCI is neither a subprotocol nor a
+registration check of either product: its check reads the division into inference blocks in the clear, which is private,
+so onsite doesn't run it. The inference-only policy is not a subprotocol of either product yet.
 
 A subprotocol without a port is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port replaces
 its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package a
@@ -83,10 +85,8 @@ carries them as hex under `blobs`.
 ## A registration check
 
 `registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
-same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
-`registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components`, whose
-registration is the one sampled proofs' one-stage audit commits to, one registration digest in both. Onsite has six
-subprotocols, and NCI is none of them. Its formats are the product's with the registration's beside the subprotocols':
+same over blobs, the registration being the one the subprotocol `s` commits to, one registration digest in both. Neither
+product is one today. Its formats are the product's with the registration's beside the subprotocols':
 
 | input | format |
 | --- | --- |
@@ -108,16 +108,17 @@ Every subprotocol whose commitment is a window record must commit to the composi
 all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `record: s committed D, t
 committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Remote is
 one: `sameB "verity/remote/v0" [verity/pouw/v1, verity/sampled-proofs/one-stage/v2] components`, whose PoUW window and
-one-stage audit each commit to the window record. At onsite the one-stage audit commits to the record NCI checked
-(above). Onsite's PoUW period and network certification name one record a window, in their evidence and their period
+one-stage audit each commit to the window record. At onsite the one-stage audit commits to the window record too.
+Onsite's PoUW period and network certification name one record a window, in their evidence and their period
 commitment, so they join the check when each window's record names the registration log's head (`Core.Registration`,
 `../interface`), which then is the one every subprotocol names.
 
 A tie (`Tie`, `Registered.lean`) generalizes this: a value each named subprotocol reads off its own commitment's bytes
 with its own decoder, which must be one value once the cases fit (`Tie.strays`: `what: s committed D, t committed D'`),
 else the composition rejects whatever the subprotocols answer; a subprotocol whose commitment doesn't decode rejects as
-itself. `same`'s check is the tie `records` of its subprotocols' digests, and `registered id R s components ties` checks
-its ties after the registration. Onsite has one, `Core.Onsite.store`: PoUS and PoUB-P2 on one store, the root of `C*`
+itself. `tied id components ties` (`tiedB` over blobs) is the product with its ties checked once the cases fit, `same`
+is `tied` on the tie `records` of its subprotocols' digests, and `registered id R s components ties` checks its ties
+after the registration. Onsite is `tiedB` with one tie, `Core.Onsite.store`: PoUS and PoUB-P2 on one store, the root of `C*`
 PoUS's setup published (its commitment's `root`) and the root PoUB-P2's registration names (its commitment's `root`,
 the case's `store_root`). The generic remote bandwidth audit (`verity/remote-bandwidth/v0`), whose payload root is its
 own salted tree's, is not a component. Once the log exists, both read the store's hardware entry.

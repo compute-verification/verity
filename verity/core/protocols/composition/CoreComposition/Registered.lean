@@ -130,19 +130,23 @@ def records (ss : List String) (cs : List Protocol) : Tie :=
 /-- Why the components `ss` of `cs` didn't all commit to one record on the cases `ev` (`records`' strays). -/
 def strays (ss : List String) (cs : List Protocol) (ev : List Case) : Option String := (records ss cs).strays ev
 
-/-- `check` of the components `cs`, except that once the cases fit, components `ss` that didn't all commit to one
-record reject whatever the components answer. -/
-def checkSame (id : String) (ss : List String) (cs : List Protocol) (ps : List Named) (c : ByteArray) (ev : List Case) :
+/-- `check` of the components `cs`, except that once the cases fit, the components of a tie of `ties` that didn't all
+name one value reject whatever the components answer. -/
+def checkTied (id : String) (ties : List Tie) (cs : List Protocol) (ps : List Named) (c : ByteArray) (ev : List Case) :
     Outcome Keyed Keyed :=
   match run cs ps ev with
   | .error r => .reject r
-  | .ok answers => match strays ss cs ev with
+  | .ok answers => match ties.findSome? (·.strays ev) with
     | some r => .reject r
     | none => judge id c answers
 
+/-- The composition `id` of the components `cs`, which must be listed in the order of their ids, each once, with the
+components of each tie of `ties` on one value: `product`'s formats, and its check once no tie strays. -/
+def tied (id : String) (cs : List Protocol) (ties : List Tie) : Protocol :=
+  { product id cs with check := checkTied id ties cs }
+
 /-- The composition `id` of the components `cs`, which must be listed in the order of their ids, each once, whose
-components `ss` must all commit to one record. -/
-def same (id : String) (ss : List String) (cs : List Protocol) : Protocol :=
-  { product id cs with check := checkSame id ss cs }
+components `ss` must all commit to one record: `tied` on their `records`. -/
+def same (id : String) (ss : List String) (cs : List Protocol) : Protocol := tied id cs [records ss cs]
 
 end Core.Composition

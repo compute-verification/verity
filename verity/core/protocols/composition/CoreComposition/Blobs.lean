@@ -5,8 +5,8 @@ three byte strings). `productB` hands the caller's blobs to every component, and
 `product`'s: on the caller's blobs it is `product` of its components on those blobs (`productB_on`), and without blobs
 `product` of its components without them. So what `product` accepts, a `productB` accepts on blobs, with each component
 answering its own case on the same blobs. `registeredB` is `registered` over blobs in the same way (`registeredB_on`):
-the registration check reads none, and the components read the caller's. `sameB` is `same` over blobs too
-(`sameB_on`).
+the registration check reads none, and the components read the caller's. `tiedB` and `sameB` are `tied` and `same`
+over blobs too (`tiedB_on`, `sameB_on`).
 -/
 import CoreComposition.Registered
 import CoreProtocol.Blobs
@@ -54,11 +54,23 @@ theorem registeredB_on (id : String) (R : Protocol) (s : String) (cs : List Blob
     (blobs : Array ByteArray) :
     (registeredB id R s cs ties).on blobs = registered id R s (cs.map (·.onBlobs (Blobs.ofArray blobs))) ties := rfl
 
+/-- The composition `id` of the components `cs`, which read the caller's blobs, with the components of each tie of
+`ties` on one value: `tied` of the components without blobs, whose check on blobs `bs` is `tied`'s check of the
+components on `bs`. -/
+def tiedB (id : String) (cs : List BlobProtocol) (ties : List Tie) : BlobProtocol :=
+  { tied id (cs.map (·.toProtocol)) ties with checkBlobs := fun ps c ev bs => checkTied id ties (cs.map (·.onBlobs bs)) ps c ev }
+
+/-- On the caller's blobs a `tiedB` is `tied` of its components on them. -/
+theorem tiedB_on (id : String) (cs : List BlobProtocol) (ties : List Tie) (blobs : Array ByteArray) :
+    (tiedB id cs ties).on blobs = tied id (cs.map (·.onBlobs (Blobs.ofArray blobs))) ties := rfl
+
 /-- The composition `id` of the components `cs`, which read the caller's blobs, whose components `ss` must all commit
 to one record: `same` of the components without blobs, whose check on blobs `bs` is `same`'s check of the
 components on `bs`. -/
 def sameB (id : String) (ss : List String) (cs : List BlobProtocol) : BlobProtocol :=
-  { same id ss (cs.map (·.toProtocol)) with checkBlobs := fun ps c ev bs => checkSame id ss (cs.map (·.onBlobs bs)) ps c ev }
+  { same id ss (cs.map (·.toProtocol)) with
+    checkBlobs := fun ps c ev bs =>
+      checkTied id [records ss (cs.map (·.onBlobs bs))] (cs.map (·.onBlobs bs)) ps c ev }
 
 /-- On the caller's blobs a `sameB` is `same` of its components on them. -/
 theorem sameB_on (id : String) (ss : List String) (cs : List BlobProtocol) (blobs : Array ByteArray) :

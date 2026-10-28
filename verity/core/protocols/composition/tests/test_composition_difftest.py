@@ -5,12 +5,10 @@ fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases` and
 periods, the network certifier's period `build`,
 sampled proofs' audits as v2's cases, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
-store, `periods.OTHER_STORE`), and onsite's registration case from NCI's declarations
-(on v2's own registration record and log, mostly, else on NCI's own, which onsite refuses: one registration digest in
-both), hands every component the same blobs (`BLOBS`, v2's circuit and public file), then often breaks the composition's
+store, `periods.OTHER_STORE`), hands every component the same blobs (`BLOBS`, v2's circuit and public file), then often
+breaks the composition's
 own inputs (a component dropped, unknown, repeated or out of order, a case under other params, a wrong or short
-commitment, non-canonical or malformed evidence, blobs missing or malformed; onsite's registration under another id or
-other params, its digest unbound, or left out) or the case itself (a field missing or not hex, not an object), and every
+commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a field missing or not hex, not an object), and every
 field of the outcome but its reason must agree exactly. v2 accepts only on a session's proof, which no case carries, so
 integrity is undecided at best and no product accepts here."""
 
@@ -119,9 +117,6 @@ NP = R.PERIOD
 PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
                 for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
 
-#: NCI's changes by the verdict they aim at; NCI is never undecided (`kinds`).
-NCI_CASES = {R.ACCEPT: ("honest",), R.REJECT: tuple(m for m in R.NCI.MUTATIONS if m != "honest")}
-
 #: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
 KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", periods.OTHER_STORE, "broken-params", "broken-evidence"]
 
@@ -134,8 +129,6 @@ def kinds(C) -> list[str]:
         return list(V2_CASES)
     if C is R.WIPE:
         return list(R.WIPE_CASES.KINDS)
-    if C is R.NCI_CHECK:
-        return list(NCI_CASES)
     if C is R.POUW_PERIOD:
         return [R.ACCEPT, R.REJECT]
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
@@ -160,32 +153,12 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.WIPE:
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
-    elif C is R.NCI_CHECK:
-        case = draw(R.NCI.cases(NCI_CASES[kind]))
     else:
         case = draw(V2_CASES[R.UNDECIDED if kind == R.ACCEPT else kind])
     root = bytes.fromhex(case["commitment"])
     digest = C.answer({**case, "blobs": BLOBS} if getattr(C, "blobs", False) else case)["commitment"]
     return {"id": C.id, "params": case["params"], "root": root, "evidence": bytes.fromhex(case["evidence"]),
             "digest": bytes.fromhex(digest) if digest else root}
-
-
-@st.composite
-def registration_case(draw, committed: dict) -> dict:
-    """NCI's case, as `component_case` gives it, on the registration ``committed`` (the committing component's case)
-    commits to: an honest declaration with its θ and provenance dropped, which reads the record only through the log's
-    chain, on that case's record and log, so that one registration digest is in both when the record chains; one time in
-    four, NCI's own declaration on its own record at any verdict, which a registered composition refuses."""
-    if draw(st.integers(0, 3)) == 0:
-        return draw(component_case(R.NCI_CHECK, None))
-    s = R.NCI.split(draw(st.sampled_from(R.NCI.seeds()[0])))
-    log = committed["params"].get("log", []) if isinstance(committed["params"], dict) else []
-    params = {**s["params"], "log": log}
-    evidence = canonical({**s["evidence"], "theta": [], "provenance": []}).encode()
-    digest = R.NCI_CHECK.answer({"commitment": committed["root"].hex(), "evidence": evidence.hex(),
-                                 "params": params})["commitment"]
-    return {"id": R.NCI_CHECK.id, "params": params, "root": committed["root"], "evidence": evidence,
-            "digest": bytes.fromhex(digest) if digest else committed["root"]}
 
 
 def one_record(product: R.Same, cases: list[dict]) -> list[dict]:
@@ -217,22 +190,14 @@ MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-
                            "blob-extra", "generic-bandwidth"] + ["binding", "binding-id"] * 5
 #: The breaks of the commitment alone, which leave every component's case standing.
 BINDING = ["binding", "binding-id", "commitment-size"]
-#: A registered composition's breaks of its registration (`Core.Composition.registered`): its entry or its case under
-#: another id, its case under other params, a commitment that doesn't bind its digest, and its entry or case left out.
-REGISTRATION_MUTATIONS = [None] * 24 + ["registration-id", "registration-case-id", "registration-params",
-                                        "registration-digest", "registration-dropped", "registration-case-dropped"]
 
 
 @st.composite
-def composite(draw, product: R.Product | R.Registered) -> dict:
+def composite(draw, product: R.Product) -> dict:
     """One case of `product`: its components' cases (one time in six every one aimed at acceptance, one in six every one
     but one that is aimed at undecided, so that a product of six reaches its binding breaks and its undecided verdict,
     and each at any verdict otherwise), then at most one break of the composition's own inputs (half the time a break of
-    the commitment alone, `BINDING`, when every case stands). A registered composition's case carries its registration's
-    too (`registration_case`, on the registration the committing component's case commits to three times in four), with
-    at most one break of its own (`REGISTRATION_MUTATIONS`)."""
-    registered = product if isinstance(product, R.Registered) else None
-    product = registered.product if registered else product
+    the commitment alone, `BINDING`, when every case stands)."""
     mode = draw(st.integers(0, 5))
     pending = draw(st.sampled_from([j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]))
     aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
@@ -282,25 +247,6 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
     elif m == "garbage-params":
         params = draw(JSON)
     body: dict = {"components": entries}
-    if registered:
-        reg = draw(registration_case(cases[[C.id for C in product.components].index(registered.committer)]))
-        rm = draw(st.sampled_from(REGISTRATION_MUTATIONS))
-        rnamed = {"id": reg["id"], "params": reg["params"]}
-        rentry = {"commitment": reg["root"].hex(), "evidence": reg["evidence"].hex(), "id": reg["id"],
-                  "params": reg["params"]}
-        rdigest = reg["digest"]
-        if rm in ("registration-id", "registration-case-id"):
-            (rnamed if rm == "registration-id" else rentry)["id"] = draw(st.sampled_from(
-                [R.POUW.id, "verity/stub/nci/v0", ""]))
-        elif rm == "registration-params":
-            rentry["params"] = {"k": draw(st.integers(4, 6))}
-        elif rm == "registration-digest":
-            rdigest = draw(st.binary(min_size=64, max_size=64).filter(lambda b: b != reg["digest"]))
-        if isinstance(params, dict) and "components" in params and rm != "registration-dropped":
-            params = {**params, "registration": rnamed}
-        if rm != "registration-case-dropped":
-            body["registration"] = rentry
-        commitment = draw(st.binary(max_size=63)) if m == "commitment-size" else commitment + rdigest
     evidence = canonical(body).encode()
     if m == "evidence-noncanonical":
         evidence = json.dumps(body).encode()
@@ -322,7 +268,7 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
     return case if m == "no-blobs" else {**case, "blobs": blobs}
 
 
-def reference(product: R.Product | R.Registered, seen: collections.Counter):
+def reference(product: R.Product, seen: collections.Counter):
     """The Python side of `serve`: a case's outcome. Counts the verdicts it gives in `seen`, the rejections with an
     undecided component among them, and those no component's rejection explains."""
     def answer(case):
@@ -335,11 +281,11 @@ def reference(product: R.Product | R.Registered, seen: collections.Counter):
             seen["reject, no component rejected"] += 1
         if isinstance(product, R.Same) and (got := product.committed(case)) and None not in got:
             seen["two records" if len(set(got)) > 1 else "one record"] += 1
-        if isinstance(product, R.Registered) and isinstance(case, dict) and isinstance(case.get("evidence"), str) \
+        if isinstance(product, R.Tied) and isinstance(case, dict) and isinstance(case.get("evidence"), str) \
                 and GENERIC_BANDWIDTH.encode().hex() in case["evidence"]:
             assert out["verdict"] == R.REJECT, out
             seen["generic bandwidth"] += 1
-        if isinstance(product, R.Registered):
+        if isinstance(product, R.Tied):
             for what, one in product.tied(case):
                 seen[f"one {what}" if one else f"two {what}s"] += 1
         return out
@@ -359,7 +305,7 @@ class RejectingPort(D.ProtocolPort):
     accepted = R.REJECT
 
 
-def port(name: str, product: R.Product | R.Registered, seen: collections.Counter) -> D.ProtocolPort:
+def port(name: str, product: R.Product, seen: collections.Counter) -> D.ProtocolPort:
     """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
     kind = RejectingPort if isinstance(product, R.Same) else UndecidedPort
     return kind(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
@@ -454,7 +400,7 @@ def test_onsite_agrees(onsite_server, recorded):
 
 def test_onsites_bandwidth_is_p2():
     """Onsite's bandwidth component is PoUB-P2, and the generic audit's id names none of its components."""
-    ids = [C.id for C in R.ONSITE.product.components]
+    ids = [C.id for C in R.ONSITE.components]
     assert R.BANDWIDTH.id == "verity/remote-bandwidth/p2/v0" and R.BANDWIDTH.id in ids and GENERIC_BANDWIDTH not in ids
     assert [s for s, _ in R.STORE.names] == [R.POUS.id, R.BANDWIDTH.id]
 
@@ -481,13 +427,14 @@ def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
     assert seen["same"] > 20 and seen["was undecided, two"] > 0, dict(seen)
 
 
-class Trial(R.Product):
+class Trial(R.Tied):
     """The trial's rule over the components' verdicts (`trial_verdict`): a component left undecided leaves the product
-    undecided even when another rejects. Everything else is the port's."""
+    undecided even when another rejects, once its ties hold. Everything else is the port's."""
 
     def check(self, ps, c, ev, blobs=()) -> tuple:
         answers = self.run(ps, ev, blobs)
-        if not isinstance(answers, str) and self.binds(answers, c) and R.trial_verdict(
+        if not isinstance(answers, str) and not any(t.strays(answers, ev) for t in self.ties) \
+                and self.binds(answers, c) and R.trial_verdict(
                 [a["verdict"] for _, a in answers]) == R.UNDECIDED:
             return R.UNDECIDED, "a component is undecided"
         return super().check(ps, c, ev, blobs)
@@ -497,8 +444,7 @@ class Trial(R.Product):
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
     """The difftest tells the composition's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
-    trial = R.Registered(R.ONSITE.id, R.ONSITE.registration, R.ONSITE.committer,
-                         Trial(R.ONSITE.id, R.ONSITE.product.components), R.ONSITE.ties)
+    trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
         D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
               server=onsite_server)
