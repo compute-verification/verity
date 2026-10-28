@@ -3512,7 +3512,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     gk::summary(tm, arms, stderr);
     // the lt, gemm, ovl and wgl arms' power (w): each arm's calls back to back for V31_POWER_MS (default 1500; 0: none),
     // after a fifth of that as a lead-in, NVML's energy over their event time; wmax, the most of its power sampled every
-    // 20 ms over them
+    // 20 ms over them after their first second (gk::PowerTrace)
     std::vector<double> watts(arms.size(), NAN), wmax(arms.size(), NAN);
     const double pms = env_int("V31_POWER_MS", 1500);
     for (size_t a = 0; pms > 0 && nv.energy_mj() && a < arms.size(); a++) {

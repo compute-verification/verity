@@ -150,14 +150,18 @@ class Nvml {
   std::string uuid_;
 };
 
-// The board's power sampled every `period_ms` on a thread of its own, from construction to stop(); period 0: none
+// The board's power sampled every `period_ms` on a thread of its own, from construction to stop(); period 0: none.
+// Samples from the first `skip_ms` don't count: NVML's reading averages over its last second, so they carry what ran
+// before.
 class PowerTrace {
  public:
-  PowerTrace(const Nvml& nv, double period_ms) {
+  PowerTrace(const Nvml& nv, double period_ms, double skip_ms = 1000) {
     if (period_ms <= 0 || !nv.ok()) return;
-    th_ = std::thread([this, &nv, period_ms] {
+    th_ = std::thread([this, &nv, period_ms, skip_ms] {
+      const auto from = std::chrono::steady_clock::now() + std::chrono::microseconds((long long)(1000 * skip_ms));
       while (!stop_.load()) {
-        if (const unsigned p = nv.power_mw()) { max_mw = std::max(max_mw, p); sum_mw += p; n++; }
+        const unsigned p = std::chrono::steady_clock::now() >= from ? nv.power_mw() : 0;
+        if (p) { max_mw = std::max(max_mw, p); sum_mw += p; n++; }
         std::this_thread::sleep_for(std::chrono::microseconds((long long)(1000 * period_ms)));
       }
     });

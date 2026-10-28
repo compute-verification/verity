@@ -31,12 +31,15 @@
 // the loss); the hash's compressions a second over the bar (sx's 4.355 G/s), and hash_bar_clk, a SM-clock over 0.018029.
 // The arms are medians of REPS launches. Then an energy item: the arm's launches back to back for ITEM_MS or longer, the
 // board's energy over it (NVML's counter): mean watts, pJ a MAC and nJ a compression, and the most of its power sampled
-// every 20 ms. The operands are random bytes. Each line of output is JSON.
+// every 20 ms after its first second. The operands are bytes of one kind (OPS): s8, random int8, or u2, the 2-bit values 0..3 stored as int8,
+// whose MMAs draw less power. Each line of output is JSON.
 //
 //   coresident [REPS] [KTILES] [HREPS] [ITEM_MS] [K]   (KTILES: a resident configuration's k-tiles a CTA; ITEM_MS 2000;
 //                                                        K, the loaded operands' depth, 4096; CFGS in the environment:
 //                                                        the configurations whose names start with one of its
-//                                                        comma-separated prefixes, else all)
+//                                                        comma-separated prefixes, else all; OPS: the operands' kinds
+//                                                        to run every configuration on, comma-separated, s8 by
+//                                                        default, the hash alone with the first)
 //
 // Build (sm_90a): nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -o coresident coresident.cu -lcuda
 #include <cuda.h>
@@ -90,6 +93,7 @@ struct alignas(128) Prm {
   int* O;
   Stamp* st;
   int M, N, K, groups, nhw, hreps;
+  u32 mask;   // each operand byte's: 0xFF random int8, 0x03 the 2-bit values 0..3
 };
 
 __device__ __forceinline__ u64 gtimer() {
@@ -135,7 +139,7 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   if (!(FL & LOAD))   // resident operands
-    for (int i = tid; i < S::STAGE / 4; i += NT) reinterpret_cast<u32*>(smem + (base - wgp::smem_at(smem)))[i] = mix32(i);
+    for (int i = tid; i < S::STAGE / 4; i += NT) reinterpret_cast<u32*>(smem + (base - wgp::smem_at(smem)))[i] = mix32(i) & p.mask * 0x01010101u;
   __syncthreads();
   asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
   __syncthreads();
@@ -313,9 +317,9 @@ static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
   return m;
 }
 
-__global__ void fill_k(uint8_t* p, size_t n, u64 seed) {
+__global__ void fill_k(uint8_t* p, size_t n, u64 seed, u32 mask) {
   for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x)
-    p[i] = (uint8_t)mix32(seed * 0x100000000ull + i);
+    p[i] = (uint8_t)(mix32(seed * 0x100000000ull + i) & mask);
 }
 
 static double median(std::vector<double> v) {
@@ -338,7 +342,15 @@ int main(int argc, char** argv) {
     fprintf(stderr, "K is a positive multiple of %d, and KTILES a positive even number\n", 4 * BK);
     return 2;
   }
-  const std::string sel = getenv("CFGS") ? getenv("CFGS") : "";
+  const std::string sel = getenv("CFGS") ? getenv("CFGS") : "", opl = getenv("OPS") ? getenv("OPS") : "s8";
+  std::vector<std::pair<std::string, u32>> kinds;   // the operands' kinds, each a byte mask
+  for (size_t i = 0; i <= opl.size();) {
+    const size_t j = std::min(opl.find(',', i), opl.size());
+    const std::string k = opl.substr(i, j - i);
+    if (k == "s8" || k == "u2") kinds.push_back({k, k == "s8" ? 0xFFu : 0x03u});
+    else if (!k.empty()) { fprintf(stderr, "OPS lists s8 (random int8) and u2 (the 2-bit values 0..3)\n"); return 2; }
+    i = j + 1;
+  }
   auto chosen = [&](const Cfg& c) {
     if (sel.empty()) return true;
     for (size_t i = 0; i <= sel.size();) {
@@ -354,8 +366,9 @@ int main(int argc, char** argv) {
   const double peak = nsm * 4096.0 * PEAK_MHZ * 1e6;
   gk::Nvml nv(0);
   printf("{\"device\": \"%s\", \"sms\": %d, \"M\": %d, \"N\": %d, \"K\": %d, \"groups\": %d, \"hreps\": %d, \"item_ms\": %.0f, "
-         "\"nvml\": %s, \"energy\": %s}\n",
-         dp.name, nsm, M, N, K, groups, hreps, item_ms, nv.ok() ? "true" : "false", nv.energy_mj() ? "true" : "false");
+         "\"ops\": \"%s\", \"nvml\": %s, \"energy\": %s}\n",
+         dp.name, nsm, M, N, K, groups, hreps, item_ms, opl.c_str(), nv.ok() ? "true" : "false",
+         nv.energy_mj() ? "true" : "false");
   uint8_t *A, *B;
   int* O;
   Stamp* st;
@@ -363,9 +376,6 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&B, (size_t)N * K));
   CK(cudaMalloc(&O, (size_t)M * N * 4));
   CK(cudaMalloc(&st, nsm * sizeof(Stamp)));
-  fill_k<<<1024, 256>>>(A, (size_t)M * K, 1);
-  fill_k<<<1024, 256>>>(B, (size_t)N * K, 2);
-  CK(cudaDeviceSynchronize());
   for (const Cfg& c : CFGS) {
     if (!chosen(c)) continue;
     CK(cudaFuncSetAttribute(c.k, cudaFuncAttributeMaxDynamicSharedMemorySize, c.smem));
@@ -375,6 +385,8 @@ int main(int argc, char** argv) {
            "\"smem\": %d, \"fl\": %d}\n",
            c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem, c.fl);
   }
+  std::string ops;
+  u32 mask = 0xFF;
   auto prm = [&](const Cfg& c, int g, int nhw) {
     Prm p{};
     const int bn = c.form == N128 ? 128 : 256;
@@ -382,7 +394,7 @@ int main(int argc, char** argv) {
     p.b = tmap(B, K, N, bn);
     p.O = O;
     p.st = st;
-    p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps;
+    p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps; p.mask = mask;
     return p;
   };
   auto launch = [&](const Cfg& c, int g, int nhw) {
@@ -428,42 +440,54 @@ int main(int argc, char** argv) {
       cm.push_back(comps);
     };
     stamped();
-    const int n = std::max(1, (int)std::ceil(item_ms / std::max(ms[0], 1e-3)));
+    const int chunk = std::max(1, (int)std::ceil(0.25 * item_ms / std::max(ms[0], 1e-3)));
     const Prm p = prm(c, g, nhw);
     gk::PowerTrace pt(nv, 20);
     const unsigned long long j0 = nv.energy_mj();
     CK(cudaEventRecord(e0));
-    for (int i = 0; i < n; i++) c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
-    CK(cudaEventRecord(e1));
-    CK(cudaEventSynchronize(e1));
+    int n = 0;
+    float ims = 0;
+    while (ims < item_ms) {
+      for (int i = 0; i < chunk; i++) c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
+      n += chunk;
+      CK(cudaEventRecord(e1));
+      CK(cudaEventSynchronize(e1));
+      CK(cudaEventElapsedTime(&ims, e0, e1));
+    }
     const unsigned long long j1 = nv.energy_mj();
     pt.stop();
     CK(cudaGetLastError());
-    float ims = 0;
-    CK(cudaEventElapsedTime(&ims, e0, e1));
     th.clear(); thc.clear(); hb.clear(); hbc.clear(); mhz.clear(); ms.clear(); mc.clear(); cm.clear();
     for (int r = 0; r < reps; r++) stamped();
     const double mj = j0 && j1 >= j0 ? (double)(j1 - j0) : NAN, macs = median(mc), comps = median(cm);
-    printf("{\"cfg\": \"%s\", \"arm\": \"%s\", \"nhw\": %d, \"theta\": %.4f, \"theta_clk\": %.4f, \"hash_bar\": %.4f, "
+    printf("{\"cfg\": \"%s\", \"ops\": \"%s\", \"arm\": \"%s\", \"nhw\": %d, \"theta\": %.4f, \"theta_clk\": %.4f, \"hash_bar\": %.4f, "
            "\"hash_bar_clk\": %.4f, \"mhz\": %.0f, \"ms\": %.4f, \"item_ms\": %.1f, \"launches\": %d, \"theta_item\": %s, "
            "\"w\": %s, \"wmax\": %.1f, \"wsampled\": %.1f, \"pj_mac\": %s, \"nj_comp\": %s}\n",
-           c.name, what, nhw, median(th), median(thc), median(hb), median(hbc), median(mhz), median(ms), ims, n,
+           c.name, ops.c_str(), what, nhw, median(th), median(thc), median(hb), median(hbc), median(mhz), median(ms), ims, n,
            jnum(macs > 0 ? n * macs / (ims * 1e-3) / peak : NAN, 4).c_str(), jnum(mj / ims, 1).c_str(), pt.max_mw / 1e3,
            pt.mean_mw() / 1e3, jnum(macs > 0 ? mj * 1e9 / (n * macs) : NAN, 3).c_str(),
            jnum(comps > 0 ? mj * 1e6 / (n * comps) : NAN, 3).c_str());
     fflush(stdout);
   };
-  for (const Cfg& c : CFGS) {
-    if (!chosen(c)) continue;
-    const int maxhw = (c.nwg - c.nm) * 4 - 1;
-    arm(c, groups, 0, "gemm");
-    std::vector<int> hws;
-    for (int h : {7, 11})
-      if (h < maxhw) hws.push_back(h);
-    if (maxhw > 0) hws.push_back(maxhw);
-    for (int nhw : hws) {
-      arm(c, groups, nhw, "gemm+hash");
-      if (!(c.fl & (LOAD | NOSW | KG2))) arm(c, 0, nhw, "hash");
+  // the hash alone reads no operands: once, with the first kind
+  for (size_t ki = 0; ki < kinds.size(); ki++) {
+    ops = kinds[ki].first;
+    mask = kinds[ki].second;
+    fill_k<<<1024, 256>>>(A, (size_t)M * K, 1, mask);
+    fill_k<<<1024, 256>>>(B, (size_t)N * K, 2, mask);
+    CK(cudaDeviceSynchronize());
+    for (const Cfg& c : CFGS) {
+      if (!chosen(c)) continue;
+      const int maxhw = (c.nwg - c.nm) * 4 - 1;
+      arm(c, groups, 0, "gemm");
+      std::vector<int> hws;
+      for (int h : {7, 11})
+        if (h < maxhw) hws.push_back(h);
+      if (maxhw > 0) hws.push_back(maxhw);
+      for (int nhw : hws) {
+        arm(c, groups, nhw, "gemm+hash");
+        if (ki == 0 && !(c.fl & (LOAD | NOSW | KG2))) arm(c, 0, nhw, "hash");
+      }
     }
   }
   return 0;
