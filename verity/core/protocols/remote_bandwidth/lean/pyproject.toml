@@ -40,4 +40,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/devices/memory_challenger/lean/lean-toolchain", "verity/core/primitives/lms/lean/lakefile.toml",
           "verity/core/primitives/lms/lean/lake-manifest.json", "verity/core/primitives/lms/lean/lean-toolchain",
           "verity/core/protocols/remote_bandwidth/tests/fixtures/p2-c-star.bin",
-          "verity/core/protocols/remote_bandwidth/tests/fixtures/p2-store.json"]
+          "verity/core/protocols/remote_bandwidth/tests/fixtures/p2-store.json",
+          # the deployment layer and its wire, which the period hook's verifier side is started through
+          # (`deploy.stream.Side`)
+          "verity/core/deploy", "verity/core/wire"]
