@@ -29,13 +29,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5, 6, 7 and 8 are any lane's
-#: (slot_only.POOLS on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other
-#: pools had 180 runs waiting; cpu-4's cores are the train slot's, proofs' and soundness's; cpu-9's research slots span every
-#: core of its ci pool, so it stays out.
+#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5 and 6 are any lane's (slot_only.POOLS
+#: on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other pools had 180 runs
+#: waiting; cpu-4's cores are the train slot's, proofs' and soundness's.
 SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
-         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
-         ("vy-nebius-cpu-8", "research"))
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
