@@ -362,7 +362,7 @@ def periodParamsOf (θ : ByteArray) : Option NetworkCheck.Period.Params :=
 theorem networkPeriod_params {s : Sent} {p : NetworkCheck.Period.Params} {c : NetworkCheck.Period.Commitment}
     {e : NetworkCheck.Period.Evidence} (h : NetworkPeriod .onsite s p c e) : periodParamsOf s.params = some p := by
   obtain ⟨ps, b, ev, ⟨hps, -, -⟩, x, hx, hx1, hp, -, -⟩ := h
-  obtain ⟨ps', rfl⟩ := network_triple_first (bs := Core.Blobs.ofArray s.blobs) hx (congrArg Core.Protocol.id hx1)
+  obtain ⟨ps', rfl⟩ := network_triple_first (bs := Core.Blobs.ofArray s.blobs) hx ((congrArg Core.Protocol.id hx1).trans rfl)
   unfold periodParamsOf
   rw [hps]
   exact congrArg Except.toOption hp
