@@ -102,3 +102,6 @@ cpu-6's full disk is killing runs (#5324's 863f shows `runner-gone`). Check each
 
 ## Nodes at 01:40Z
 lean reports cpu-5 and cpu-6 running its runs fine again; cpu-4 was out of disk earlier tonight (rc 75 at 0 s); cpu-2's trees fail writing .olean files. New runs go to cpu-6 or cpu-4, whichever has the shorter soundness line. Never cpu-2. After launching, check with `research status RUN` that the run is waiting or running, not failed at 0 s.
+
+## cpu-7 is up (01:50Z)
+vy-nebius-cpu-7 gives soundness slots at once (ONE3B's seven records started there at 01:41Z). Prefer `--on vy-nebius-cpu-7` for new runs, then cpu-6. If a run of yours has waited over an hour on cpu-4, cancel it by id and resend it on cpu-7.
