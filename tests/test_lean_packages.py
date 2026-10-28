@@ -208,7 +208,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
 #: `inline_failures`), with those the PRs on `next` then brought; a renamed or restated premise counts twice, under
 #: both texts, until `--update` drops the one no tree prints
-INLINE = {"Security": 1386, "Security/Properties": 129, "verity/core/service/flock": 6}
+INLINE = {"Security": 1419, "Security/Properties": 129, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():

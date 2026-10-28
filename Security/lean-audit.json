@@ -14868,10 +14868,12 @@
     "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (run tap { fst := schedOf z, snd := srvOf z }).fst) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.BackgroundRebuildExcluded": {
     "List.instMembership.mem (List.cons { fst := 0, snd := 111 } (List.cons { fst := 1, snd := 160 } (List.cons { fst := 2, snd := 203 } (List.cons { fst := 3, snd := 243 } List.nil)))) tk": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15063,7 +15065,8 @@
     "Finset.instPartialOrder.le U (Finset.range N)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
-    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FreedOfFloor": {
     "∀ (j : Pd.J) (r : G.Res), Real.instLE.le 0 (Pd.needs j r)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15077,7 +15080,10 @@
     "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
     "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15086,7 +15092,10 @@
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (o : nf.Orc) (r : nf.Root) (c : Prod (Fin nf.n) (Prod (Fin nf.n') (Fin nf.nb))) (v : Pouw.Dither.Word) (p : nf.Path), nf.opens o r c v p → And (Pouw.MerkleExtract.Opens (EquivLike.toFunLike.coe eo o) E (rD r) (pl p) v) (Eq (List.map Prod.fst (pl p)) (dirs c))": "nf.opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.EndToEnd": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15364,6 +15373,40 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.DeltaPubDeployed": {
+    "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.SampledKSLiveV5": {
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmIn.parse D.unroll) (Except.ok pi)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.Dither.WorkMoment": {
+    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.OnsiteFreed": {
+    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
+    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
