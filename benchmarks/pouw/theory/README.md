@@ -51,7 +51,6 @@ What each one checks, and the Lean or the test that reads it.
 
 - `isa_escape.py`: no instruction or unit outside the TS menu heads a committed word more cheaply than the menu allows.
   Cited by `Sheet.lean`'s `SheetSemantics` and `FpG1.lean`.
-- `isa_escape_fp.py`: that menu for FP words, per device: FP8 and FP4 sums of products and int8 words on FP pipes.
 - `nosum.py`: no fixed-function unit on sm_120 writes a fresh committed sum-of-products word (`NoSum`, claim
   `accounting-ts-nosum`).
 - `scalar_route.py`: whether a program outside class P makes a fresh word in fewer than 2.03 issue slots without tables
@@ -62,9 +61,6 @@ What each one checks, and the Lean or the test that reads it.
   (`created_le_65`).
 - `scope_offload.py`: how much of a credited GPU's int8 work a helper off the die (the host, a peer GPU, a NIC, device
   memory) can do, and which bound applies.
-- `fp_step_bounds.py`: every MMA an exact-integer FP8 route issues stays where the FP adder's sum is exact, on every
-  input. The premise its docstring names, `Fp8GridExact`, is no longer in the Lean; the ACCEL model's `P1Dot`
-  (`Core/Accel/Principles.lean`) states a dot's exact sum.
 
 ### The receipt's binding
 
