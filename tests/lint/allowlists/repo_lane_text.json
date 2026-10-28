@@ -1153,8 +1153,6 @@
     {"file": "tools/agent-guard/shell_hook.py", "count": 5},
     {"file": "tools/agent-guard/task_hook.py", "count": 1},
     {"file": "tools/agent-guard/worktree_guard.py", "count": 8},
-    {"file": "tools/move/layout_map.toml", "count": 6},
-    {"file": "tools/move/tests/test_rename.py", "count": 1},
     {"file": "tools/research/README.md", "count": 5},
     {"file": "tools/research/src/research/agents.py", "count": 1},
     {"file": "tools/research/src/research/auto.py", "count": 2},
