@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,9 @@ def test_the_plans_are_the_documented_ones():
         3: ((*SECURITY, "pytest"),
             ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests")),
+        4: ((*SECURITY, "circuit-check:1/4"),
+            ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"),
+            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*")),
         5: (SECURITY, ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"),
             ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
 
@@ -81,8 +85,8 @@ def test_a_well_formed_plan_parses_and_resolves():
     ('[["a", "b", "lean-audit:*"]]', "two or more"),
     ('[["a", "b"], []]', "two or more"),
     ('[["a", "b", "lean-audit:*"], ["x"]]', "'x' names no declared job"),
-    ('[["a", "b", "lean-audit:*"], ["c:1"]]', "only lean-audit split"),
-    ('[["a", "b", "lean-audit:*"], ["lean-audit:"]]', "only lean-audit split"),
+    ('[["a", "b", "lean-audit:*"], ["c:1"]]', "only lean-audit, circuit-check split"),
+    ('[["a", "b", "lean-audit:*"], ["lean-audit:"]]', "only lean-audit, circuit-check split"),
     ('[["a", "b", "lean-audit:*"], ["a", "c"]]', "a is in more than one shard"),
     ('[["a", "b", "lean-audit:*"], ["lean-audit", "c"]]', "lean-audit is in more than one shard"),
     ('[["a", "b"], ["lean-audit:*"]]', "no shard runs c"),
@@ -125,7 +129,7 @@ def test_the_jobs_that_read_lean_builds_or_the_rust_builds_output_need_it():
 
 @pytest.mark.parametrize("spec", ["0/3", "4/3", "1/2", "1/3/4", "x", "3"])
 def test_a_shard_no_plan_declares_is_refused(spec):
-    with pytest.raises(D.DeclarationError, match="ci.toml's plans are K/3, K/5"):
+    with pytest.raises(D.DeclarationError, match="ci.toml's plans are K/3, K/4, K/5"):
         CHECK.shard(spec)
 
 
@@ -205,12 +209,11 @@ def test_a_shards_result_names_its_plan_commit_config_and_each_steps_parts(tmp_p
     assert json.loads((tmp_path / "result.json").read_text())["kind"] == "check/v1", "an unsharded check is as it was"
 
 
-def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fails_what_it_refuses(tmp_path, monkeypatch):
-    """Inside a recorded run, a `check/v1` of `shard_set`'s steps (which the gate compares with its own reading); a failed one when
-    the set is refused or the checkout is dirty; outside a run it only says."""
+def _combine_tree(tmp_path: Path, monkeypatch, steps: list[dict], store) -> tuple[Path, str, list]:
+    """A clean one-commit checkout with a check tool, `shard_set` answering ``steps`` for the shards r1 and r2 (and refusing
+    any other set), ``store`` as the store, and a recorded run's id: (tree, its commit, what `shard_set` was asked)."""
     import research.merge
     import research.store.local
-    from research import result as RES
 
     tree = tmp_path / "tree"
     (tree / "tools" / "verity" / "check").mkdir(parents=True)
@@ -220,21 +223,30 @@ def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fai
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tree, check=True,
                        capture_output=True)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tree, capture_output=True, text=True).stdout.strip()
-    steps = [{"step": "preflight-lock", "status": "passed", "shards": ["r1", "r2"]},
-             {"step": "pytest", "status": "passed", "shard": 1, "run_id": "r1", "seconds": 1.0}]
     asked = []
 
     def shard_set(store, repo, commit, ids, tool, command):
         asked.append((repo, commit, ids, tool, command))
         return (steps, None) if ids == ["r1", "r2"] else (None, "shard 2/2 is not among them")
 
+    monkeypatch.setattr(CHECK, "ROOT", tree)
+    monkeypatch.setattr(research.merge, "shard_set", shard_set)
+    monkeypatch.setattr(research.store.local, "LocalStore", store)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261004-000000-ffff")
+    return tree, head, asked
+
+
+def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fails_what_it_refuses(tmp_path, monkeypatch):
+    """Inside a recorded run, a `check/v1` of `shard_set`'s steps (which the gate compares with its own reading); a failed one when
+    the set is refused or the checkout is dirty; outside a run it only says."""
+    from research import result as RES
+
     class Store:
         remote = None
 
-    monkeypatch.setattr(CHECK, "ROOT", tree)
-    monkeypatch.setattr(research.merge, "shard_set", shard_set)
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
-    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261004-000000-ffff")
+    steps = [{"step": "preflight-lock", "status": "passed", "shards": ["r1", "r2"]},
+             {"step": "pytest", "status": "passed", "shard": 1, "run_id": "r1", "seconds": 1.0}]
+    tree, head, asked = _combine_tree(tmp_path, monkeypatch, steps, Store)
     run = tmp_path / "run"
     run.mkdir()
     assert CHECK.combine(["r1", "r2"], run) == 0
@@ -247,6 +259,77 @@ def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fai
     assert doc["validation"] == {"status": "failed", "checker": "tools/verity/check/check.py --combine", "detail": "shard 2/2 is not among them"}
     (tree / "tools" / "verity" / "check" / "tool.py").write_text("# dirty\n" + (tree / "tools" / "verity" / "check" / "tool.py").read_text())
     assert CHECK.combine(["r1", "r2"], None) == 1
+
+
+def test_circuit_check_s_parts_are_its_shards_and_a_check_runs_only_those_it_holds(tmp_path):
+    """circuit-check's parts are its `shards`, ``circuit-check:K/4``: a check that holds all four (unsharded, the 3- and 5-pod
+    plans) runs `--all` whole; the 4-pod plan gives each pod one, run as ``--shard K/4`` into ``CC_SHARDS/K``; a check that
+    holds some but not all runs each in turn and fails when any does."""
+    [cc] = [j for j in CHECK.JOBS if j.name == "circuit-check"]
+    assert cc.shards == 4 and D.job_parts(cc, {}) == ["1/4", "2/4", "3/4", "4/4"]
+    every = D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})
+    assert [p for p in every if p.startswith("circuit-check")] == [f"circuit-check:{k}/4" for k in range(1, 5)]
+
+    def argv(only):
+        return next(argv for g in CHECK.groups(tmp_path, 16, only=only) for name, argv, _ in g if name == "circuit-check")
+
+    for whole in (argv(None), argv(_resolved(3)[2]), argv(_resolved(5)[4])):
+        assert whole[2:4] == ["circuit_check", "--all"] and "--shard" not in whole and "--shard-dir" not in whole
+    for k, parts in enumerate(_resolved(4), 1):
+        assert [p for p in parts if p.startswith("circuit-check")] == [f"circuit-check:{k}/4"]
+        a = argv(parts)
+        assert a[2:4] == ["circuit_check", "--all"] and a[-4:] == ["--shard", f"{k}/4", "--shard-dir", str(tmp_path / CHECK.CC_SHARDS / str(k))]
+    script = argv(["circuit-check:1/4", "circuit-check:3/4"])
+    assert script[:2] == ["bash", "-c"] and script[2].startswith("rc=0; ") and script[2].endswith("; exit $rc")
+    runs = [shlex.split(c.removesuffix(" || rc=$?")) for c in script[2].removeprefix("rc=0; ").removesuffix("; exit $rc").split("; ")]
+    assert [r[-4:] for r in runs] == [["--shard", f"{k}/4", "--shard-dir", str(tmp_path / CHECK.CC_SHARDS / str(k))] for k in (1, 3)]
+    assert CHECK.circuit_shards(None) is None and CHECK.circuit_shards(["pytest"]) is None
+    assert CHECK.circuit_shards([f"circuit-check:{k}/4" for k in range(1, 5)]) is None
+
+
+def test_combine_joins_circuit_check_s_shards_and_fails_unless_they_join_to_the_unsharded_pass(tmp_path, monkeypatch):
+    """With circuit-check's parts in more than one shard, the combine reads each shard's `CC_SHARDS` from its Attempt's run
+    files and gives them to `circuit-check --combine`, and fails when that fails (a by-calls root whose callee another shard
+    checked, a known failure that no longer fails) or refuses them; a shard that held every part ran `--all` whole, and nothing
+    is joined."""
+    from research import result as RES
+
+    fetched, joined, rc = [], [], [0]
+
+    class Store:
+        remote = None
+
+        def get_attempt(self, rid):
+            return {"outputs": {"run_files": f"art:{rid}"} if rid != "lost" else {}}
+
+        def fetch(self, art, to=None, *, paths=None):
+            fetched.append((art, paths))
+            return to
+
+    def combine(dirs, out):
+        joined.append([d.relative_to(out.parent) for d in dirs])
+        why = {1: "FAIL by-calls/callee-failed Root_v1\n", 2: "circuit-check --combine: refused: shard(s) 4 of 4 missing\n"}
+        return subprocess.CompletedProcess([], rc[0], "", why.get(rc[0], ""))
+
+    monkeypatch.setattr(CHECK, "circuit_combine", combine)
+    steps = [{"step": "preflight-lock", "status": "passed", "shards": ["r1", "r2"]}] + [
+        {"step": f"circuit-check:{k}/4", "status": "passed", "shard": 1 + (k > 2), "run_id": "r1" if k <= 2 else "r2"}
+        for k in range(1, 5)]
+    _combine_tree(tmp_path, monkeypatch, steps, Store)
+    run = tmp_path / "run"
+    run.mkdir()
+    assert CHECK.combine(["r1", "r2"], run) == 0
+    assert fetched == [("art:r1", [CHECK.CC_SHARDS]), ("art:r2", [CHECK.CC_SHARDS])]
+    assert joined == [[Path(r, CHECK.CC_SHARDS, str(k)) for r, k in (("r1", 1), ("r1", 2), ("r2", 3), ("r2", 4))]]
+    assert RES.check(run, "r20261004-000000-ffff").validation_status == "passed"
+    for rc[0], why in ((1, "circuit-check --combine of its 4 shards exited 1: FAIL by-calls/callee-failed Root_v1"),
+                       (2, "circuit-check --combine of its 4 shards refused them: circuit-check --combine: refused: shard(s) 4 of 4 missing")):
+        assert CHECK.combine(["r1", "r2"], run) == 1
+        doc = json.loads((run / "result.json").read_text())
+        assert doc["validation"]["status"] == "failed" and doc["validation"]["detail"] == why and doc["steps"] == steps
+    joined.clear()
+    assert CHECK.circuit_join(Store(), [{**s, "run_id": "r1"} for s in steps], run) is None and not joined
+    assert "lost published no run files" in CHECK.circuit_join(Store(), [{**s, "run_id": "lost"} for s in steps[:2]] + steps[3:], run)
 
 
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):

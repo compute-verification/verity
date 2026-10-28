@@ -24,6 +24,10 @@ name = "circuit-check"
 owner = "circuits"
 part = "circuits"
 group = 2
+# its targets in 4 shards by the hash of each one's id, parts circuit-check:1/4 .. 4/4: a check that holds all four runs
+# `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
+# (`circuit-check --combine`), whose verdict is the unsharded run's
+shards = 4
 
 [[job]]
 name = "flock-rust-tests"
@@ -98,6 +102,16 @@ shards = [
     ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]
+
+# 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
+# circuit-check (about 4 h whole on one pod, drive.toml) is no single pod's long pole.
+[[plan]]
+shards = [
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "circuit-check:1/4"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"],
+    ["pytest", "circuit-check:3/4"],
+    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*"],
 ]
 
 # 5 pods: each of those apart.

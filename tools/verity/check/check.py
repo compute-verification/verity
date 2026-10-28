@@ -63,8 +63,9 @@
                                                             when they are together a passing one (`research merge` reads them)
 
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
-declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package), so one commit's check runs on N pods at
-once and takes about as long as its longest shard. Its result is a `check-shard/v1` (`SHARD_KIND`) that names the shard, the
+declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
+targets by the hash of each one's id), so one commit's check runs on N pods at once and takes about as long as its longest
+shard. Its result is a `check-shard/v1` (`SHARD_KIND`) that names the shard, the
 commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
 each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
 parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
@@ -73,6 +74,10 @@ no step failed or stopped, all of one plan (one N, K = 1..N once each) and one c
 every part, each once, covering every job the commit's `ci.toml` declares. `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
+When circuit-check's parts ran in more than one shard, the combine also joins their records (`circuit_join`: each shard's
+`CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless that gives the verdict the
+unsharded `--all` gives: a by-calls root whose callee another shard checked, and a known failure that no longer fails, are
+judged only there.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -111,7 +116,8 @@ doesn't name:
                     slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it, less pytest's share
                     alone when no Lean step does (`cc_mem_gb`), and all of it once every step beside it has ended
                     (`grant_when_alone`): every registered Definition and template
-                    (`tools/verity/circuit_check`),
+                    (`tools/verity/circuit_check`), or in a shard that holds some of its parts (`circuit-check:K/N`) only
+                    those shards of them (`--shard K/N`, records under `CC_SHARDS`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
@@ -1173,6 +1179,19 @@ def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
 
 #: where circuit-check finds the memory it is granted once it runs alone in the slot (its ``--mem-gb-file``, `grant_when_alone`)
 CC_GRANT = "circuit-check.mem-gb"
+#: where a check that holds some of circuit-check's parts writes each one's records and manifest, ``K`` of ``K/N`` (its
+#: ``--shard-dir``), published with the result for `circuit_join` to read
+CC_SHARDS = "circuit-check-shards"
+
+
+def circuit_shards(only: list[str] | None) -> list[str] | None:
+    """The shards of circuit-check's targets (``K/N``) a check of the parts ``only`` runs, or None when it runs `--all` whole
+    (unsharded, or holding all of circuit-check's parts) or not at all."""
+    if only is None:
+        return None
+    held = [p.partition(":")[2] for p in only if p.partition(":")[0] == "circuit-check" and p.partition(":")[2]]
+    every = DECLARATION.job_parts(next(j for j in JOBS if j.name == "circuit-check"), {}) or []
+    return held if held and sorted(held) != sorted(every) else None
 
 
 def slot_mem_gb() -> int | None:
@@ -1223,6 +1242,9 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
           *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
           *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
+    if held := circuit_shards(only):
+        each = [[*cc, "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])] for s in held]
+        cc = each[0] if len(each) == 1 else ["bash", "-c", "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in each) + "; exit $rc"]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1321,16 +1343,60 @@ def combine(ids: list[str], run_dir: Path | None) -> int:
     done, why = shard_set(store, ROOT, commit, ids, tool.CHECK.name, tuple(tool.CHECK.command))
     if dirty:
         why = "the checkout has uncommitted changes"
+    if not why:
+        why = circuit_join(store, done, run_dir or Path(tempfile.mkdtemp(prefix="check-combine-")))
     if run_dir is not None:
         doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
                "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
                "validation": {"status": "failed" if why else "passed", "checker": "tools/verity/check/check.py --combine",
                               "detail": why or f"{len(ids)} shards of {commit[:12]}"},
-               "steps": done or [], "shards": ids}
+               "steps": done or [], "shards": ids,
+               **({"artifacts": ["circuit-check.json"]} if (run_dir / "circuit-check.json").exists() else {})}
         (run_dir / "result.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"check: --combine {' '.join(ids)}: " + (f"refused: {why}" if why else f"a passing check of {commit[:12]} "
                                                     f"({len(done)} steps)"), flush=True)
     return 1 if why else 0
+
+
+def circuit_join(store, steps: list[dict], into: Path) -> str | None:
+    """Why the circuit-check parts of a set of shards (``steps``, `shard_set`'s, each part with the run that ran it), joined, are
+    not the passing `--all` each part's own pass makes them look, or None.  Joined only when they ran in more than one shard
+    (one that holds every part runs `--all` whole): each shard's `CC_SHARDS`, from its Attempt's run files into ``into``, goes
+    to `circuit-check --combine` (`circuit_combine`, its report ``into``'s circuit-check.json), which refuses shards that are not
+    every one of one list exactly and otherwise fails as the unsharded run does."""
+    held: dict[str, list[str]] = {}
+    for s in steps:
+        job, _, part = s["step"].partition(":")
+        if job == "circuit-check" and part:
+            held.setdefault(s["run_id"], []).append(part)
+    if len(held) < 2:
+        return None
+    dirs = []
+    for rid, parts in held.items():
+        try:
+            files = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+            if not files:
+                return f"circuit-check: {rid} published no run files, so its shards' records can't be joined"
+            (into / rid).mkdir(parents=True, exist_ok=True)
+            got = Path(store.fetch(files, to=into / rid, paths=[CC_SHARDS]))
+        except Exception as e:  # noqa: BLE001  (a guard never fails open)
+            return f"circuit-check: {rid}'s shards' records can't be read ({type(e).__name__}: {e})"
+        dirs += [got / CC_SHARDS / p.partition("/")[0] for p in parts]
+    r = circuit_combine(dirs, into / "circuit-check.json")
+    if r.returncode == 0:
+        return None
+    said = [line for line in (r.stderr + r.stdout).splitlines() if line.strip()][-3:]
+    return (f"circuit-check --combine of its {len(dirs)} shards {'refused them' if r.returncode == 2 else f'exited {r.returncode}'}"
+            + (f": {' / '.join(said)}" if said else ""))
+
+
+def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:
+    """`circuit-check --combine` of the shard directories ``dirs``, its report to ``out``: exit 0 for the unsharded run's pass,
+    1 for its failure, 2 when it refuses the shards."""
+    r = subprocess.run([sys.executable, "-m", "circuit_check", "--combine", *map(str, dirs), "--out", str(out)], cwd=ROOT,
+                       capture_output=True, text=True)
+    print(r.stdout + r.stderr, end="", flush=True)
+    return r
 
 
 #: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
@@ -2065,7 +2131,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", f"{CC_SHARDS}/", "lean-audit/",
                                                     *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}

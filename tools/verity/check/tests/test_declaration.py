@@ -68,6 +68,14 @@ def test_a_well_formed_job_parses_with_its_defaults():
     assert j == D.Job("a", "ci", 1)
 
 
+def test_a_sharded_job_s_parts_are_its_shards_and_without_shards_it_runs_whole():
+    (j,) = _parse('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\nshards = 3\n')
+    assert j.shards == 3 and D.job_parts(j, {}) == ["1/3", "2/3", "3/3"]
+    assert D.all_parts([j], {}) == ["circuit-check:1/3", "circuit-check:2/3", "circuit-check:3/3"]
+    (whole,) = _parse('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\n')
+    assert D.job_parts(whole, {}) is None and D.all_parts([whole], {}) == ["circuit-check"]
+
+
 @pytest.mark.parametrize("body, why", [
     ('[[job]]\nname = "a"\nowner = "ci"\n', "missing group"),
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nshape = "big"\n', "unknown keys ['shape']"),
@@ -82,6 +90,9 @@ def test_a_well_formed_job_parses_with_its_defaults():
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nafter = "a"\n', "in its own group"),
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nafter = "c"\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n'
      '[[job]]\nname = "c"\nowner = "ci"\ngroup = 3\n', "which itself waits on 'c'"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nshards = 4\n', "shards is N >= 1, for circuit-check alone"),
+    ('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\nshards = 0\n', "shards is N >= 1"),
+    ('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\nshards = "4"\n', "shards must be int"),
 ])
 def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
     with pytest.raises(D.DeclarationError, match=why.replace("[", r"\[").replace("]", r"\]").replace("(", r"\(")):
