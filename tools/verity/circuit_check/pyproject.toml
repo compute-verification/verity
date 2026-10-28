@@ -44,14 +44,14 @@ worker_gb = 8
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program), with verity_vllm/records, which its replay modules import.
+# verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
+# the package's names.
 # Read only to check the catalog's records (conftest.py):
 # pouw/window.py and sampled_proofs/service.py, which the records digest as import sites of the PoUW modules they hold
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. sampled_proofs/challenger.py and
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 # pouw/core_check.py and pouw/leaf_lanes.py: circuit/h1window.py imports both, so building the H1 units reads them.
-# verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
-# the package's names.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
