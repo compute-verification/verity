@@ -4,6 +4,8 @@ challenger on the auditor's host; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
       [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
+      [--bw-party CMD --bw-host HOST --bw-minutes M] [--bw-windows W --bw-passes P --bw-samples S --bw-window-s T]
+      [--bw-out DIR] [--bw-private P] [--bw-case-exe EXE] [--no-bandwidth]
 
 `served_piece.sh` runs it under a lease of the card, as the composed run starts a piece (``bash -c CMD _ SERVE_DIR WINDOW
 DIR``).
@@ -34,6 +36,17 @@ DIR``).
    on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size.
+
+6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, and before ``C*`` is released, the same
+   process runs PoUB-P2's session over the store it holds on the card, so both audits are of one store and no second one
+   is encoded. The session's request carried setup's published outputs (`challenger_party.request_of`'s ``setup``),
+   which the challenger kept on its host with the session's id; the bandwidth party there (``--bw-party``, the gate's
+   ``bw_party --pous-session SID`` with ``--bw-minutes`` its cap) builds its registration from that record, never from
+   the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
+   0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
+   case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
+   piece's, `served_bandwidth.py collect`). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s``
+   set its length (`held_bandwidth`'s defaults: two minutes); ``--no-bandwidth`` runs none.
 
 Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes, timings and the rounds' latencies) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
@@ -72,6 +85,7 @@ from verity_vllm import protocols as PO
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import held_bandwidth as HB
 import served_case as SC
 
 pous = PO.adapter("pous")
@@ -95,6 +109,11 @@ CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesO
 #: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`)
 TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
                   "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
+#: the bandwidth party on the auditor's host: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
+BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 "
+            "research@10.96.0.36 bw_party")
+BW_PARTY_HOST = "10.96.0.36"
+BW_MINUTES = 10
 BINDING_TAG = b"verity/pous/served-window/v1"
 #: the period's challenges: the 320-read window's, at which an accepted run certifies at `2^-20`
 ROUNDS = P2.CERT_K_WIDE320
@@ -263,10 +282,15 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
         node: str | None = None, party: CP.Party | None = None, trusted_sha512: str = TRUSTED_SHA512,
         private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
-        protocol: str = period.PROTOCOL, rounds: int = ROUNDS) -> dict[str, Any]:
+        protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
+        bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
+        bw_private: Path | None = None, bw_case_exe: str | None = None) -> dict[str, Any]:
     """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in
-    tests), ``rounds`` the session's challenges."""
+    tests), ``rounds`` the session's challenges. With ``bw_party`` (the bandwidth party's command), PoUB-P2's session
+    over the held store once PoUS's has completed (`held_bandwidth.session`, under ``bw_request``, by default
+    `held_bandwidth.request`'s), its public answer to ``bw_out`` (by default ``out``'s sibling ``bandwidth``) and its
+    case to ``bw_private`` (by default ``SERVE_DIR/private/bandwidth``)."""
     if not (serve_dir / "serve.json").is_file():
         raise Refusal(f"{serve_dir} has no serve.json")
     serve = json.loads((serve_dir / "serve.json").read_text())
@@ -280,6 +304,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     party = party or CP.Party(CHALLENGER_HOST, tuple(os.path.expanduser(a) for a in CHALLENGER_COMMAND),
                               _address(CHALLENGER_ADDRESS))
     private = private or serve_dir / "private" / "pous" / f"w{window}"
+    bw_out = bw_out or out.parent / "bandwidth"
+    bw_private = bw_private or serve_dir / "private" / "bandwidth"
     out.mkdir(parents=True, exist_ok=True)
     reg_file = serve_dir / "weights_registration.json"
     reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
@@ -302,7 +328,10 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             wrong.append(f"the weights registration is of {reg.get('repo')}@{reg.get('revision')}, not the served "
                          f"{repo}@{rev}")
     if wrong:
-        return done(_no("reject", "the served weights are not the pinned checkpoint's: " + "; ".join(wrong), None, protocol))
+        why = "the served weights are not the pinned checkpoint's: " + "; ".join(wrong)
+        if bw_party is not None:
+            HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
+        return done(_no("reject", why, None, protocol))
     dev = torch.device(device)
     model, outside = linears(ck, dev)
     total = sum(ck.bytes_of(k) for k in ck.tensors)
@@ -330,12 +359,15 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                         "details": details}
             t = time.monotonic()
             try:
-                rep = CP.session(party, CP.request_of(node, point, s.root), opt.prover(()))
+                rep = CP.session(party, CP.request_of(node, point, s.root, s.published()), opt.prover(()))
                 key, sid = bytes.fromhex(rep["public_key"]), bytes.fromhex(rep["session_id"])
                 session = R.Session.from_json(rep["session"])
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
-                return done(_no("undecided", f"the memory challenger's session on {party.host} did not complete: "
-                                f"{type(e).__name__}: {e}"[:1000], None, protocol), session_s=round(time.monotonic() - t, 3))
+                why = (f"the memory challenger's session on {party.host} did not complete: "
+                       f"{type(e).__name__}: {e}"[:1000])
+                if bw_party is not None:
+                    HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
+                return done(_no("undecided", why, None, protocol), session_s=round(time.monotonic() - t, 3))
             session_s = round(time.monotonic() - t, 3)
             key_sha = hashlib.sha512(key).hexdigest()
             trusted = (key,) if key_sha == trusted_sha512 else ()
@@ -357,7 +389,17 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                              "session": rep["session"], "session_id": sid.hex(), "trusted": [k.hex() for k in trusted],
                              "public_key": key.hex(), "host": rep.get("host")}}, s.digests)
             SC.write(private, case, inner)
+            pous_case = {"commitment": case["commitment"]}
             del case
+            bandwidth = None
+            if bw_party is not None:
+                t = time.monotonic()
+                bw = HB.session(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
+                                request_=bw_request or HB.request(node.encode()), private=bw_private, public=bw_out,
+                                bind=HB.binding(repo, rev, window), window=window, pous_case=pous_case,
+                                case_exe=bw_case_exe)
+                bandwidth = {"verdict": bw["verdict"], "out": str(bw_out), "session_s": round(time.monotonic() - t, 3)}
+                print(HB.line(bw), flush=True)
             answer = inner | {"commitment": hidden.root.hex()}
             if inner["verdict"] == "accept":
                 answer["profile"] = inner["profile"] | {
@@ -372,7 +414,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             return done(answer, session_s=session_s, answer_s=answer_s, key_sha512=key_sha,
                         key_pinned=bool(trusted), reported_host=rep.get("host"), rounds_answered=rep.get("rounds"),
                         warmups=rep.get("warmups"), latency=_latencies(session, point.limit_ns),
-                        private=str(private), public=inner["public"])
+                        private=str(private), public=inner["public"], bandwidth=bandwidth)
         finally:
             comp.close()
     finally:
@@ -410,12 +452,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-address", default=CHALLENGER_ADDRESS, help="HOST:PORT the prover connects to")
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
+    bw = ap.add_argument_group("the bandwidth session over the held store (held_bandwidth.py)")
+    bw.add_argument("--bw-party", default=BW_PARTY, help="the shell command that starts the bandwidth party (the gate's "
+                                                         "bw_party verb), to which --minutes and --pous-session are added")
+    bw.add_argument("--bw-host", default=BW_PARTY_HOST, help="where the party's port is reached from here")
+    bw.add_argument("--bw-minutes", type=int, default=BW_MINUTES, help="the party's minutes, the gate's cap on the session")
+    bw.add_argument("--bw-windows", type=int, default=HB.WINDOWS)
+    bw.add_argument("--bw-passes", type=int, default=HB.PASSES)
+    bw.add_argument("--bw-samples", type=int, default=HB.SAMPLES)
+    bw.add_argument("--bw-window-s", type=float, default=HB.WINDOW_S)
+    bw.add_argument("--bw-deadline-s", type=float, default=HB.DEADLINE_S)
+    bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
+    bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
+    bw.add_argument("--bw-case-exe", help="remote-audit-p2-protocol, which answers the case (else p2_case.answer)")
+    bw.add_argument("--no-bandwidth", action="store_true", help="no bandwidth session")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
     party = CP.Party(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
+    node = a.node or socket.gethostname()
+    bw_party = None if a.no_bandwidth else f"{a.bw_party} --minutes {a.bw_minutes}"
+    bw_request = HB.request(node.encode(), windows=a.bw_windows, passes=a.bw_passes, samples=a.bw_samples,
+                            window_s=a.bw_window_s, deadline_s=a.bw_deadline_s)
     try:
-        answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=a.node,
-                     party=party, trusted_sha512=a.trusted_sha512, private=a.private, rounds=a.rounds)
+        answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=node,
+                     party=party, trusted_sha512=a.trusted_sha512, private=a.private, rounds=a.rounds,
+                     bw_party=bw_party, bw_host=a.bw_host, bw_request=bw_request, bw_out=a.bw_out,
+                     bw_private=a.bw_private, bw_case_exe=a.bw_case_exe)
     except Refusal as e:
         print(f"POUS: no answer: {e}", file=sys.stderr, flush=True)
         return 2
