@@ -35,8 +35,8 @@ import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
 import Proofs.Core.HongKung
 import Proofs.Core.Blocks
-import Proofs.Core.Site
 import Proofs.Core.DeviceFigures
+import Proofs.Core.Site
 import Proofs.Core.CapacityWithinEstimate
 
 /-!
