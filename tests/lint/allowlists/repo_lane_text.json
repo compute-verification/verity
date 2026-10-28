@@ -654,6 +654,7 @@
     {"file": "benchmarks/torch_gpu/p2_stage/README.md", "count": 2},
     {"file": "benchmarks/torch_gpu/p2_stage/gemm.py", "count": 1},
     {"file": "benchmarks/torch_gpu/p2_stage/pyproject.toml", "count": 1},
+    {"file": "benchmarks/torch_gpu/units/fixture.py", "count": 2},
     {"file": "benchmarks/verifier_cost/README.md", "count": 3},
     {"file": "benchmarks/verifier_cost/flock_read.py", "count": 1},
     {"file": "benchmarks/verifier_cost/flock_rows.py", "count": 1},
