@@ -416,13 +416,15 @@ def test_fill_table(tmp_path, capsys):
                  wbn=256, fused_leaves=3 * 28672, o_leaves=4 * 28672, fused_blocks=(3 * 129 + 40) * 28672, row_blocks=129)
     no_row = dict(fused, fused_leaves=0, fused_blocks=129 * 28672, lminb=4, sahead=1)
     words = dict(fused, rp=5, S=4, W=3, wgw=1, r5w=0, leaves=10 * 28672)
+    tst = dict(words, r5w=1, tst=1)
     pp, pp0 = dict(no_row, rp=6, ppm=8, pph=1, lord=1), dict(no_row, rp=6, ppm=0, pph=0)
-    lines = (line, later, served, fused, no_row, words, pp, pp0)
+    lines = (line, later, served, fused, no_row, words, tst, pp, pp0)
     (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in lines) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row, row2, row3, row4, row5, row6, row7, row8 = capsys.readouterr().out.splitlines()[-8:]
+    row, row2, row3, row4, row5, row6, row7, row8, row9 = capsys.readouterr().out.splitlines()[-9:]
     assert "| served r16384 hi k1 s1 wg256 rp5 r5w0 |" in row6 and row6.endswith("| 30.0% / 33.1% |")
-    assert "| served r16384 hi k1 s1 wg256 rp6 m4 sa pm8 lo |" in row7 and "| served r16384 hi k1 s1 wg256 rp6 m4 sa ph0 |" in row8
+    assert "| served r16384 hi k1 s1 wg256 rp5 tst |" in row7
+    assert "| served r16384 hi k1 s1 wg256 rp6 m4 sa pm8 lo |" in row8 and "| served r16384 hi k1 s1 wg256 rp6 m4 sa ph0 |" in row9
     assert row.endswith("| - | - | - |") and row3.endswith("| - | - | - |")
     assert "| served r16384 hi k1 s1 wg256 rp4 |" in row4 and row4.endswith("| 2.500 | 1.000 | 75.0% / 82.8% |")
     assert row5.endswith("| 0.0% / 25.0% |") and "| served r16384 hi k1 s1 wg256 rp4 m4 sa |" in row5
@@ -433,6 +435,39 @@ def test_fill_table(tmp_path, capsys):
     assert "| r1024 hi k1 s1 p2 ltw |" in row2 and "| 1.070 | 1.020 | 1.700 |" in row2
     assert "| served r16384 hi k1 s1 |" in row3 and "| 1.250 | 1.300 | - | - | 1.700 |" in row3
     assert "| 80.0% | 0.010, 0.020, -, 0.100, 0.200, 2.050, 1.200 |" in row3
+
+
+def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_path, capsys):
+    """A line that carries the commit's parts gets a second table: each part's compressions a SM-cycle, over the build's
+    ruler (of_sha) and, given --bar, over the card's bar; its variant names the leaf path (nofull: rows hashed through the
+    padding checks; mN and smN: the leaf and salt kernels at MINB N; cf: each group's levels folded by its own CTA rather
+    than by level kernels; mkN: the salt kernel's mask N). A line that timed only some arms (V31_ARMS) shows "-" for the
+    rest."""
+    arms = {a: {"ms": ms, "mhz": 2000} for a, ms in (("lt", 2.0), ("ovl", 2.1), ("commit", 1.2), ("leaf", 1.0),
+                                                      ("leaf_nomem", 0.9), ("salt", 0.2), ("sha", 0.5))}
+    line = {"fill": True, "shape": "8b-up", "m": 16384, "n": 28672, "k": 4096, "L": 4096, "S": 1, "row": 16384, "o": True,
+            "cprio": "hi", "ccta": 4, "sched": 1, "arms": arms, "gamma_ovl": 1.05, "gamma_ovl_w": 1.06, "gamma_call": 1.7,
+            "gamma_gemm": 1.025, "full": 1, "lminb": 6, "lfold": 0, "comp": {"sha": 1e8, "leaf": 3e8, "salt": 6e7},
+            "per_sm_cycle": {"sha": 0.018, "leaf": 0.0171, "leaf_nomem": 0.0175, "salt": 0.0144, "commit": None},
+            "of_sha": {"leaf": 0.95, "leaf_nomem": 0.9722, "salt": 0.8, "commit": None}}
+    before = dict(line, full=0, lminb=5, sminb=5, lfold=1)
+    only = dict(line, mask=2, arms={x: arms[x] for x in ("salt", "sha")}, gamma_ovl=None, gamma_ovl_w=None, gamma_call=None,
+                gamma_gemm=None)
+    (tmp_path / "b.jsonl").write_text("\n".join(json.dumps(x) for x in (line, before, only)) + "\n")
+    assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl"), "--bar", "0.018"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    parts = out[out.index("| shape | variant | sha / SM-cycle | part | ms | MHz | compressions | / SM-cycle | of sha | of bar |"):]
+    assert out[4].startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | served r16384 hi k4 s1 m6 mk2 | - | - | - | - |")
+    assert len(parts) == 2 + 3 * 4
+    assert parts[12].endswith(" s1 m6 mk2 | 0.01800 | salt | 0.200 | 2000 | 60000000 | 0.01440 | 0.800 | 0.800 |")
+    leaf, nomem, salt, commit = parts[2:6]
+    assert leaf == "| 8b-up | served r16384 hi k4 s1 m6 | 0.01800 | leaf | 1.000 | 2000 | 300000000 | 0.01710 | 0.950 | 0.950 |"
+    assert nomem.endswith("| leaf_nomem | 0.900 | 2000 | 300000000 | 0.01750 | 0.972 | 0.972 |")
+    assert salt.endswith("| salt | 0.200 | 2000 | 60000000 | 0.01440 | 0.800 | 0.800 |")
+    assert commit.endswith("| commit | 1.200 | 2000 | 360000000 | - | - | - |")
+    assert "| served r16384 hi k4 s1 sm5 cf nofull | 0.01800 | leaf |" in parts[6]
+    v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")])
+    assert capsys.readouterr().out.splitlines()[-12].endswith("| 0.01710 | 0.950 | - |")
 
 
 def test_perm_kernel_launches_within_its_bounds():

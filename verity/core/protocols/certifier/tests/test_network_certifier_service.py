@@ -1,4 +1,4 @@
-"""One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
+"""One link-window's network certificates through the proof system (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way a link-window fails closed, on injected coins and an injected clock. Each round's verdict of
 record is decided on a stand-in proof of the unit (`standin`: the prover's rows and output word by the gates'
