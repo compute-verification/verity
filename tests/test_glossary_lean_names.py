@@ -1,4 +1,5 @@
-"""Every Lean name the one symbol table gives exists (`GLOSSARY.md`, "Notation").
+"""Every Lean name the one symbol table gives exists (`GLOSSARY.md`, "Notation"), and every one the security argument's
+status table gives (`Security/README.md`, "Where each step stands").
 
 A row's Lean column names declarations of the tree's Lean (`Security/` and the Lean packages under `verity/`), written
 in backticks, full (`Verity.Circuit`) or as a suffix of the full name (`Circuit.size`); a structure's field counts
@@ -12,6 +13,7 @@ import re
 from test_repository import ROOT, _tracked
 
 GLOSSARY = "GLOSSARY.md"
+SECURITY = "Security/README.md"
 LEAN_ROOTS = ("Security/", "verity/")
 
 _DECL = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial|unsafe)\s+)*"
@@ -70,15 +72,38 @@ def test_every_row_names_its_lean_or_says_it_has_none():
     assert not bare, f"a row's Lean column names no declaration and says no 'not yet in Lean (ISSUE)': {bare}"
 
 
-def test_every_lean_name_in_the_symbol_table_exists():
+def security_status_cells() -> list[str]:
+    """The Lean column of the security argument's status table."""
+    text = (ROOT / SECURITY).read_text(encoding="utf-8")
+    section = text[text.index("### Where each step stands"):]
+    section = section[:section.index("\n#", 1)]
+    rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith(("| Step", "|---"))]
+    return [re.split(r"(?<!\\)\|", row)[2].strip() for row in rows]
+
+
+def missing_names(cells: list[str]) -> list[str]:
+    """The names in `cells` that no Lean declares, skipping each part that says it is not yet in Lean."""
     names = lean_names()
     missing = []
-    for cell in notation_cells():
+    for cell in cells:
         for part in cell.split(";"):
             if _PENDING.search(part):
                 continue
             for name in _NAME.findall(part):
                 if name not in names and not any(full.endswith("." + name) for full in names):
                     missing.append(name)
+    return missing
+
+
+def test_every_lean_name_in_the_symbol_table_exists():
+    missing = missing_names(notation_cells())
     assert not missing, (f"{GLOSSARY}'s Notation names Lean that doesn't exist: {missing}. Fix the name, or write the "
                          "part as 'not yet in Lean (ISSUE)' until the PR that adds it lands")
+
+
+def test_every_lean_name_in_the_security_argument_exists():
+    cells = security_status_cells()
+    assert len(cells) > 10, f"{SECURITY}'s status table was not found"
+    missing = missing_names(cells)
+    assert not missing, (f"{SECURITY}'s status table names Lean that doesn't exist: {missing}. Fix the name, or write "
+                         "the part as 'not yet in Lean' until the PR that adds it lands")
