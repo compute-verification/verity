@@ -319,7 +319,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         "the case's link, session: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    rows = period.case("accept", 0, "rows")
+    rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
         f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
@@ -415,12 +415,12 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_648, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
-    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
+    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     with pytest.raises(SystemExit, match="drew 16 of 64"):
@@ -463,6 +463,29 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     Path(steps.job).write_text(json.dumps(job | {"path": None}))
     off = cr.report(steps)
     assert off["verdict"] == "refused" and off["stubbed"] == []
+
+
+def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_exited_its_finds(tmp_path):
+    ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
+    assert cr.report(_steps(tmp_path, ok))["why"] is None
+    steps = _steps(tmp_path, ok | {"rc": {"n2": "0", "scan": "1"}})
+
+    def found(*k):
+        return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
+
+    Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
+        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
+    got = cr.report(steps)
+    why = ("scan_zk exited 1; honest: witness pieces found at the verifier: ['first o1 0 @0']; chain: witness pieces "
+           "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")
+    assert (got["verdict"], got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("refused", "failed", why)
+    assert got["why"] == {"scan": f"failed: {why}"}
+    Path(steps.job).write_text(json.dumps(ok | {"rc": {"n2": "0", "scan": "1"}, "why": {"scan": "done: FAILED"}}))
+    assert cr.report(steps)["why"] == {"scan": f"failed: done: FAILED; {why}"}
+    Path(steps.scan).unlink()
+    assert cr.report(steps)["why"] == {"scan": "failed: done: FAILED; scan_zk exited 1"}
+    stand_in = cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))
+    assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
 
 
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
