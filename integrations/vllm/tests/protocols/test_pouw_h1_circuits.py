@@ -159,6 +159,19 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
         GPU.period_files(out, _sha(raw), layout, decl)
 
 
+def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program():
+    """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
+    the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to
+    v2's."""
+    from verity.core.protocols.pouw.circuit import live as L
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    for t, (program, query) in ((8192, (L.program_rows(8192, 1, "h1/"), L.query_rows(8192))),
+                                (64, (L.program_v2(64, 1, "h1/"), L.query_v2(64)))):
+        assert PC.live_part(t, 1, "h1/") == P.partition(program, query)
+    assert P.evaluate(L.program_rows(8192, 1, "h1/"), L.query_rows(8192)).population == 128
+
+
 def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_stratum(program, tmp_path, monkeypatch):
     """The lowering is of the declared Program's own templates: when K's template (`h1window.template` over
     `tile_unit` at the layout's tile) is none of the descriptor's definitions, no file is built and nothing is
