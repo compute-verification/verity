@@ -827,7 +827,7 @@ def base_maps(base: Tree) -> list[tuple[dict, object]]:
             continue
         try:
             data = tomllib.loads(base.text(p) or "")
-            if data.get("words"):
+            if data.get("words") or data.get("words_in"):
                 out.append((data, R.Words(data)))
         except (tomllib.TOMLDecodeError, SystemExit, KeyError, TypeError, AttributeError):
             continue

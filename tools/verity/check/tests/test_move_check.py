@@ -607,6 +607,18 @@ def test_a_new_name_a_lean_comment_already_uses_is_no_merge(tmp_path):
         assert r["certified"] == (kind == "comment"), r["refusals"]
 
 
+def test_a_map_of_scoped_words_alone_is_read(tmp_path):
+    """A map whose `[words]` is empty renames only in the files of its `[[words_in]]` entries, and is read all the same."""
+    scoped = ('[words]\n\n[[words_in]]\nfiles = ["P/S/Law.lean", "P/S/Use.lean"]\nwords = { "escape" = "acceptProb" }\n\n'
+              '[rewrite]\nexclude = ["tools/move/**", "**/CHANGELOG.md"]\n')
+    keep = {p: DECL_BASE[p] for p in ("notes.md", "P/lean-audit.json")}
+    r = _declared(tmp_path, base_extra={"tools/move/sample_map.toml": scoped}, **keep, **{
+        "P/S/Law.lean": DECL_BASE["P/S/Law.lean"].replace("escape", "acceptProb"),
+        "P/S/Use.lean": DECL_BASE["P/S/Use.lean"].replace("escape", "acceptProb")})
+    assert r["certified"], r["refusals"]
+    assert {e["path"] for e in r["edits"]} == {"P/S/Law.lean", "P/S/Use.lean"}
+
+
 def test_a_scoped_word_renames_only_in_its_files(tmp_path):
     """`escape` is renamed only in the files its `[[words_in]]` entry names; a prose `escape` elsewhere stays."""
     [f] = _declared(tmp_path, **{"notes.md": "`SampleIsCoin` holds; an acceptProb is rare.\n"})["refusals"]
