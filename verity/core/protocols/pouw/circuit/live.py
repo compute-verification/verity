@@ -1,5 +1,5 @@
 """`PouwLiveSlots_v1{T}`: a round's served rows under rule A, the unit that makes dense credit's per-call row count m_s a proved
-value (its interface: note:compute-accounting/20261024T0212Z-draft-liveunit-interface).
+value.
 
 Rule A: a credited row serves an admitted request, a slot the round's slot table assigns to a request in the gate-signed
 request table under the window-open root. Round s's request table is the requests admitted before round s's root, one table

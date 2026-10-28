@@ -1,10 +1,12 @@
 # The one-stage audit runs (a0 ... a11). Not a package: the suite tests a5's coin sources (`a5_coins.py`) on a toy window
 # through `service.Stream` and the Lean verifier of record (`sampled-proofs-verifier`, built with lake on first use), and
-# M1's family census sizing split units and candidates (`m1_families.py --estimate`, on stand-ins: nothing is lowered),
-# R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.received`), on toy files,
-# a5_warden's transfer-gate window over a warden run's cells, and a5_tp_gates' two TP2 ranks' windows over each other's
-# registered partials, and the proof leg's served shapes (`prove_leg.served`), and served_verdicts' window pick, missing
-# pieces and block record on toy serve dirs (nothing is lowered or proved).
+# M1's family census sizing split proof blocks and candidates (`m1_families.py --estimate`, on stand-ins: nothing is
+# lowered), R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.scan`), on toy
+# files, a5_warden's transfer-gate window over a network certifier run's cells, and a5_tp_gates' two TP2 ranks' windows
+# over each other's registered partials, and the proof leg's served shapes (`prove_leg.served`), and served_verdicts'
+# window pick, missing pieces and block record on toy serve dirs, prove_bundle's hold of the H200 interfaces' bundle
+# fixture to its window's public part (nothing is lowered or proved), and a5_tp.sh's store of each session's circuits and
+# tables on a dry run's toy scratch (`test_a5_tp_store`, through `integrations/vllm/verity_vllm`'s `ops/store_trees.sh`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -16,12 +18,18 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
-# cells of a warden run its tests drive tick by tick (`test_warden_serve._run`).
-# `benchmarks/all_protocols` and `benchmarks/e2e_demo/verity_e2e_demo`: served_verdicts' rows (`runner.row_of`, the
-# integrity leg's answer) and its block record (`block_record`, its schema).
+# cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
+# `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
+# bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
+# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
+# served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
+# serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
-          "benchmarks/all_protocols/verity_all_protocols", "benchmarks/all_protocols/legs",
-          "benchmarks/e2e_demo/verity_e2e_demo",
+          "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
+          "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py",
+          "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
+          "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
+          "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",

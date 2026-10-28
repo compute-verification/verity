@@ -193,8 +193,8 @@ def _remote(tmp_path: Path, main: Path) -> Path:
 
 
 def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path, monkeypatch, capsys):
-    """The lander's train build (old-circuits-and-proofs, 2 Oct: a hand-built train fell back to the main checkout and put an
-    unchecked merge on main): run from a checkout on another branch with changes, the train is built in a scratch worktree from
+    """The lander's train build (a hand-built train that falls back to the main checkout puts an unchecked merge on main):
+    run from a checkout on another branch with changes, the train is built in a scratch worktree from
     origin's main, pushed as its branch, and the checkout is as it was; a second train stacks on the first's branch."""
     main, _feat, _tip = _repos(tmp_path)
     origin = _remote(tmp_path, main)
@@ -217,7 +217,7 @@ def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path
 
 
 def test_prepares_default_lint_runs_under_uv_when_this_interpreter_lacks_pytest(monkeypatch):
-    """A system python3 has no pytest, so the preflight's lints failed under it (old-circuits-and-proofs, 2 Oct)."""
+    """A system python3 has no pytest, so the preflight's lints failed under it."""
     import importlib.util
     import shutil
 
@@ -258,8 +258,8 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
 
 
 def test_prepare_refuses_a_train_the_gate_would_refuse_for_a_stacked_base_it_does_not_pin(tmp_path, monkeypatch, capsys):
-    """The lander's 15:41Z refusal (5 Oct): `--prepare` pushed a train holding #1204, stacked on #1203's open head, which only the
-    landing gate then refused.  Pinning the base below it builds the train."""
+    """`--prepare` would push a train holding a PR stacked on another's open head, which only the landing gate then refused.
+    Pinning the base below it builds the train."""
     main, _feat, _tip = _repos(tmp_path)
     origin, heads = _origin_with(tmp_path, main, {"base.txt": "base\n"}, {8: {"e.txt": "8\n"}})
     _git(main, "checkout", "-q", "-b", "pr9", "pr8")
@@ -280,8 +280,7 @@ def test_prepare_refuses_a_train_the_gate_would_refuse_for_a_stacked_base_it_doe
 
 
 def test_a_train_that_would_revert_a_landed_change_is_refused_unless_its_path_is_allowed(tmp_path, monkeypatch, capsys):
-    """ci's #1142 train (`25157eb17`) undid #1012: #1142's merge of main dropped #1012's lines, and merging #1142 then removed
-    them from main without a word. A line the train loses must be one a ref removes in a commit of its own."""
+    """A PR whose merge of main dropped another PR's lines would remove them from main without a word when it lands. A line the train loses must be one a ref removes in a commit of its own."""
     from research.merge import reverted
 
     main, _feat, _tip = _repos(tmp_path)
@@ -355,8 +354,7 @@ def _origin_with(tmp_path: Path, main: Path, files: dict[str, str], prs: dict[in
 
 
 def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_refuses(tmp_path, monkeypatch, capsys):
-    """Stacked PRs each adding a module to one root import list (old-circuits-and-proofs resolved #850, #857, #860, #861, #863
-    and #866 on FlockSoundness.lean by hand, 2 Oct): the train keeps ours, then the lines theirs adds, and says so in the
+    """Stacked PRs each adding a module to one root import list (a conflict otherwise resolved by hand): the train keeps ours, then the lines theirs adds, and says so in the
     merge's `Imports:` trailer; a conflict holding any other line still refuses, and nothing is pushed."""
     main, _feat, _tip = _repos(tmp_path)
     tail = "\ntheorem t : True := trivial\n"
@@ -393,7 +391,7 @@ print(json.dumps({"regenerated": ["gen.txt"] if new != old else [], "notes": []}
 
 
 def test_a_generated_file_is_regenerated_by_the_tree_s_pins_py_on_each_merge_never_merged_as_text(tmp_path, monkeypatch, capsys):
-    """0fcc (top, 8 Oct): two branches each added a Lake dependency, git merged the manifest's text and the train's manifest held
+    """Two branches each adding a Lake dependency: git merges the manifest's text, and the train's manifest would hold
     neither. Each merge runs the tree's own `pins.py --merged`: a conflict in a file it generates is resolved by regenerating
     it, the merge's `Regenerated:` trailer names it, and the lines regeneration drops (a stale `old` no pull request removes)
     don't count as a revert; a conflict in any other file still refuses."""
@@ -430,7 +428,7 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
 
 
 def test_a_change_to_a_lock_goes_into_a_train_and_lands_without_any_label(tmp_path, monkeypatch, capsys):
-    """No change waits on a per-head grant (Daniel, 8 Oct): a pull request changing a `lean-audit.json`, with no label at its
+    """No change waits on a per-head grant: a pull request changing a `lean-audit.json`, with no label at its
     head and no store remote to read one from, is built into a train and its checked tip lands."""
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
@@ -464,10 +462,10 @@ def _pr_train(tmp_path: Path, monkeypatch) -> tuple[Path, Path, str, str]:
 
 
 def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head(tmp_path, monkeypatch, capsys):
-    """A tip merging `Merge #1126 (83c25a27b)` would have landed after #1126 moved to a head that fixed two red-team findings
-    against that one (the lander, 4 Oct): pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
+    """A tip merging a PR at a pinned head mustn't land after that PR moved to a head that fixes findings against the pinned
+    one, as it would if pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
     on origin must still be the merged one, or add nothing the tip lacks; a check of the tip doesn't stand in for it.  No ready
-    mark is asked: the train's own check is the gate (Daniel, 6 Oct)."""
+    mark is asked: the train's own check is the gate."""
     main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
     capsys.readouterr()
     rc, err = merge_main(["train-prep/t", "--dry-run"]), capsys.readouterr().err
@@ -493,7 +491,7 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head(tmp_path
 
 
 def test_a_pr_stacked_on_another_lands_only_with_its_base_on_main_or_in_the_tip(tmp_path, monkeypatch, capsys):
-    """A base that is neither on main nor pinned in the tip at its head is refused, by name (root's condition, 5 Oct); a stacked
+    """A base that is neither on main nor pinned in the tip at its head is refused, by name; a stacked
     pull request lands with its base pinned below it, and one opened at another's head is no base it stacks on."""
     main, _feat, _tip = _repos(tmp_path)
     _origin, heads = _origin_with(tmp_path, main, {"f.txt": "\n"}, {30: {"f.txt": "the lock\n"}})
@@ -525,7 +523,7 @@ def test_a_pr_stacked_on_another_lands_only_with_its_base_on_main_or_in_the_tip(
     assert merge_main([_git(tmp_path / "tip-u", "rev-parse", "HEAD"), "--dry-run"]) == 3
     assert f"#31 at {heads[31][:12]} is stacked on #30 at {heads[30][:12]}" in capsys.readouterr().err
 
-    # #32 opened at #31's head (lean's #1385 at #1309's): it lands whole with #31, so it is no base #31 stacks on
+    # #32 opened at #31's head: it lands whole with #31, so it is no base #31 stacks on
     _git(main, "push", "-q", "origin", f"{heads[31]}:refs/pull/32/head")
     assert merge_main(["--train", "--prepare", "train-prep/d", f"30@{heads[30][:9]}", f"31@{heads[31][:9]}", "--lint", "true"]) == 0
     _git(main, "fetch", "-q", "origin", "train-prep/d:train-prep/d")
@@ -546,7 +544,7 @@ def test_a_tip_whose_pr_heads_cant_be_read_is_refused(tmp_path, monkeypatch, cap
 
 
 def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):
-    """The coordinator's ruling: no merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
+    """No merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
     An attempt of `check` that passed on the exact commit is refused when its result is of a kind in `REFUSED_KINDS`, or can't
     be read; the push guard reads the same `passing`. A `check/v1` result of the same commit merges."""
     from research.merge import REFUSED_KINDS, unchecked_pushes
@@ -577,7 +575,7 @@ def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_t
 
 def test_merge_admits_only_a_result_of_a_kind_the_targets_declaration_produces(tmp_path, monkeypatch, capsys):
     """Refusing the kinds it knew to refuse let through a `check` attempt with no result (`research run --tool check -- python3
-    tools/verity/lean/check.py --no-replay PKG` writes none) and a result of any other kind (red team, #966).  The gate admits only a
+    tools/verity/lean/check.py --no-replay PKG` writes none) and a result of any other kind.  The gate admits only a
     kind the target's own declaration produces (`check/v1` for check), and nothing when the target declares none."""
     from research.merge import produced
 
@@ -605,8 +603,8 @@ _FORGED = ("printf '%s' '{\"schema\": \"research/result/v0.1\", \"kind\": \"chec
 
 
 def test_merge_admits_only_a_run_of_the_declared_command_whose_own_result_passed_once(tmp_path, monkeypatch, capsys):
-    """The canary's control was a check that ran nothing (red team, #990): `research run --tool check -- sh -c '<write a check/v1
-    result.json>'` passed the gate, with its verdict failed too, since the gate read neither the attempt's argv nor the result's
+    """A check that runs nothing: `research run --tool check -- sh -c '<write a check/v1
+    result.json>'` would pass the gate, with its verdict failed too, if the gate read neither the attempt's argv nor the result's
     verdict.  An attempt passes only as a run of the command the target declares (`Tool.command`) whose own result passed, and
     lists no step twice (`step_status` reads the first, the train gate the last)."""
     main, feat, _tip = _repos(tmp_path)
@@ -634,6 +632,7 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
     cmd = ("uv", "run", "--locked", "python", "tools/verity/check/check.py")
     slot = ["python3", "tools/verity/check/slot.py"]
     for argv in ([*cmd], [*cmd, "--keep-going"], [*cmd, "--no-cache", "--cores", "8"], [*cmd, "--keep-going", "--verdicts-in", "v.tgz"],
+                 [*cmd, "--keep-going", "--no-cache", "--circuit-cache", "--verdicts-in", "v.tgz"],
                  [*cmd, "--verdicts-in", "v.tgz", "--cores", "4"], [*slot, "--", *cmd], [*slot, "--by", "x", "--", *cmd],
                  [*slot, "--priority", "--by", "gates", "--", *cmd, "--keep-going"], [*slot, "--twin", "p@vy-nebius-1", "--", *cmd],
                  [*slot, "--priority", "--by", "gates", "--twin", "p", "--", *cmd, "--keep-going"],
@@ -655,7 +654,7 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
 
 def test_a_refused_kind_or_another_runs_result_passes_no_gate_even_where_the_declaration_produces_its_kind(tmp_path):
     """`REFUSED_KINDS` (the Lean fast path's lean-fast/v1, an audit without the kernel replay) holds whatever a declaration says
-    (red team, #990): a passing run of the declared command whose result is one is refused for its kind alone.  A result that
+    a passing run of the declared command whose result is one is refused for its kind alone.  A result that
     names another run (which `research run` doesn't publish) is refused too."""
     from research.merge import refused
     from research.store.local import LocalStore
@@ -681,7 +680,7 @@ def test_a_refused_kind_or_another_runs_result_passes_no_gate_even_where_the_dec
 
 
 def test_a_train_whose_command_isnt_the_declared_one_is_refused_before_anything_is_checked(tmp_path, monkeypatch, capsys):
-    """`research merge --train --command "bash -c '... check.py || true'"` (red team, #990): the gate refuses every attempt of it,
+    """`research merge --train --command "bash -c '... check.py || true'"`: the gate refuses every attempt of it,
     so the train's check and its bisection would run for nothing.  Check.py's own flags are still the declared command."""
     monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
     monkeypatch.delenv("FAKE_CHECK", raising=False)
@@ -834,7 +833,7 @@ def test_a_path_rule_leaves_out_what_its_patterns_name():
 
 
 def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_checked_merge(tmp_path, monkeypatch, capsys):
-    """A push to main is the step a stray local merge reaches the remote through (old-circuits-and-proofs, 2 Oct): the hook
+    """A push to main is the step a stray local merge reaches the remote through: the hook
     `research merge` installs refuses every added first-parent commit whose tree no passing `check` attempt has."""
     import io
 
@@ -989,7 +988,7 @@ def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) ->
 
 
 def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_running_check_regenerated(tmp_path):
-    """CI-122: drive lands with `--defer` while the train's check runs, so the gate reads that check's records from its run dir on
+    """Drive lands with `--defer` while the train's check runs, so the gate reads that check's records from its run dir on
     its node, hashing the bytes it fetches; a lock commit whose records differ, that names another check, that leaves out a
     package the check regenerated, or whose check ran on another commit is refused, and without drive's verdict (`deferred`)
     the check, having no passing attempt, vouches for nothing."""
@@ -1019,8 +1018,8 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
 
 
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
-    """CI-122: `regenerated_records` returned {} both for a check that regenerated nothing and for one whose records it couldn't
-    read, and drive landed the train without them; a record the report names and the run's files lack now raises."""
+    """`regenerated_records` returning {} both for a check that regenerated nothing and for one whose records it couldn't
+    read would land the train without them; a record the report names and the run's files lack raises."""
     import pytest
     from research.merge import Unreadable, regenerated_records
     from research.store.local import LocalStore
@@ -1054,7 +1053,7 @@ def _relock(feat: Path, text: str, trailer: str | None) -> str:
 
 
 def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(tmp_path, monkeypatch, capsys):
-    """CI-64 (Daniel through top, 18 Oct): a train's Lean check passes by regenerating records, and drive lands the train with
+    """A train's Lean check passes by regenerating records, and drive lands the train with
     those locks committed on top.  That commit's tree is the one the check audited, byte for byte, so the check vouches for it;
     other bytes, another file or no `Regenerated:` trailer don't."""
     main, feat, tip = _repos(tmp_path)
@@ -1106,7 +1105,7 @@ def _part(name: str, rid: str | None, sha: str | None, state: str = "passed", **
 
 def test_verdicts_admits_a_commit_no_check_ran_on_when_its_plan_shows_every_part_passed_in_a_recorded_checks_pack(
         tmp_path, monkeypatch, capsys):
-    """CI-108: no attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
+    """No attempt of feat's tip exists, so the exact-attempt gate (the default) refuses it; with --verdicts, a plan whose
     every part (a Lake package's audit among them) passed in the pack of a check of main is admitted, and the merge cites that
     check in `Verdicts:`."""
     import research.merge as M

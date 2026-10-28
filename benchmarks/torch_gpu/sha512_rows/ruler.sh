@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sha512x.cuh's compression variants (README "Compression variants") on commit_gpu's ruler, against commit_gpu's default
-# build, on one leased GPU (HASH-23). commit_gpu (benchmarks/pouw/commit_gpu) is built from its own path, unedited: a0r0l as
+# build, on one leased GPU. commit_gpu (benchmarks/pouw/commit_gpu) is built from its own path, unedited: a0r0l as
 # is (SHA_ADD 0, SHA_ROT 0, SHA_ROLL 1), and sx<variant> with as_commit_gpu.cuh force-included, so its sha::compress is
 # sx::compress<V, ROLL>. Each build is checked bit for bit against reference.py before it is timed.
 # cwd = the source tree's root. Outside the leases: the builds (sm_90a on an H200), reference.py's full cases, and each
@@ -10,14 +10,15 @@
 # set; a lease waits its turn and holds the GPU at most LEASE_MIN minutes. mix.jsonl: per build, the rate and clock beside
 # the SASS pipe mix's bound (ALU/64, IMAD slots/64 with IMAD.WIDE 2 and IMAD.HI 2.09, issue/128; SM-clocks a compression).
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 240m \
-#     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/ruler.sh
+#   OUT=DIR bash benchmarks/torch_gpu/sha512_rows/ruler.sh
+#
+# Needs a CUDA GPU (an H200 for sm_90a), CUDA's nvcc and ncu, and `gpu-lease` on PATH.
 # VARIANTS (default "0000 0011 0003 0030 0033 1033 0333"), ROUNDS (9), LEASE_MIN (14), LEASES (0: builds and
 # counts only), JOBS (parallel nvcc, 6).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH
-export D=benchmarks/pouw/commit_gpu X=benchmarks/torch_gpu/sha512_rows PY=python3 PYTHONPATH=.
+export D=benchmarks/pouw/commit_gpu X=benchmarks/torch_gpu/sha512_rows PY=python3 PYTHONPATH=.:tools/config
 W=$(mktemp -d /dev/shm/sha512imad.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT

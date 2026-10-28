@@ -7,7 +7,7 @@ engine (vLLM, eager, batch invariant):
 
   (a) edge ids (0, START - 1, START, START + VS - 1, START + VS, the vocabulary's last id, and seeded random ids), through vLLM's own
       `vocab_parallel_embedding` with int32 and int64 ids inside a committed step: every committed row equals the circuit's values (`ir_values`:
-      the gates `query.vocab_range.slots` names, in the `verity.ml.circuits.evaluate.evaluate_call` trace) and the kernel's output agrees (the
+      the gates `query.vocab_range.slots` names, in the `verity.ml.circuits.evaluation.evaluate_call` trace) and the kernel's output agrees (the
       row is the shard's row `local` when both range bits are set, else zero), and the output is bit-identical to the launch without the
       source;
   (b) live: the engine generating with the source installed commits one `<site>/vocab_range` per step on every rank; every committed row
@@ -41,7 +41,7 @@ def ir_values(vs: int, start: int, tok: int) -> tuple[int, int, int]:
     its committed interior gates (`query.vocab_range.slots`).  The three values depend on the id alone, not on H or the table; H = 2 is the
     smallest width whose output words are separate units reading them, as at every served width."""
     from verity.ml.circuits.evaluation.reference import standalone_call
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
 
     key = (vs, start)
     if key not in _CALLS:

@@ -1,5 +1,5 @@
-"""REDTEAM phase 14, target 2 (branch cursor/redteam-phase14-tie-061a @ 6783098061) against #3788, the I/O tie as a
-required gate on the advice profile (`chain.tie_gate`, `chain.uncovered`), turned into regressions.
+"""An adversarial case against the I/O tie as a required gate on the advice profile (`chain.tie_gate`,
+`chain.uncovered`), turned into regressions.
 
 The finding: the gate's coverage check tested only that each certified request's user was a key of the ids map, not
 that its ids covered the request's served outputs. `negatives.tie_run` gives each sampled id one row of the Commit's
@@ -7,9 +7,9 @@ port and has no backstop for a served output with none (its unplaced count is co
 when nothing is committed), so a map naming a request with an empty or short list left those outputs untied, and on
 the advice profile, where the tie is the only check of the served content, the report read OK.
 
-The fix (NET-E2E): `uncovered` holds each certified request's sampled ids to its served outputs (``io.json``'s
+The fix: `uncovered` holds each certified request's sampled ids to its served outputs (``io.json``'s
 ``output``): fewer ids than outputs, an empty list for a request that served any among them, is a gap, so the run has
-no verdict and the report isn't OK (`test_e2e_tie_phase12.py` holds that end to end).
+no verdict and the report isn't OK (`test_e2e_tie_report.py` holds that end to end).
 """
 from __future__ import annotations
 

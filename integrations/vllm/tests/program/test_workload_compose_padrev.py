@@ -1,13 +1,13 @@
-"""padrev — regression guards on GP-01's compose (`verity_vllm.program.workload`) around global da3edf461 (M-0362 / coord ruling 33: the request
+"""Regression guards on GP-01's compose (`verity_vllm.program.workload`) around the request root's exemption (the request
 Program's ROOT is exempt from the shared-definition canon because two derives of one model at the same prompt length and different caps
 carry ONE root id `Root[Derived[..]{SRC=..}]` over two bodies -- SRC names the input shapes, not T).
 
-What a reviewer wants pinned so the exemption cannot widen: (1) the FIXED POPULATION counts DECLARED requests, not distinct shapes --
+Pinned so the exemption cannot widen: (1) the FIXED POPULATION counts DECLARED requests, not distinct shapes --
 two identical requests (one digest, one component object) are two members with two disjoint address intervals; (2) the exemption is the
 root's ONLY: a callee under one id with two bodies is refused by name in the SAME compose whose roots collide (the fail-closed
 E_IDENTITY rule does not spill), and an equal callee is shared (one object); (3) the request root id is not a name in the workload's
 namespace at all -- the component is `WorkloadRequest{program_digest, program_fn}`, keyed by the descriptor digest -- so nothing of
-record can key on the colliding id.  Tests that need da3edf461 skip BY NAME on a tree without it (the pre-fix refusal is the root's)."""
+record can key on the colliding id.  Tests that need the exemption skip BY NAME on a tree without it (there the refusal is the root's)."""
 from __future__ import annotations
 
 import pytest
@@ -51,12 +51,12 @@ def _derived_like(LP: int, T: int, layer):
 
 
 def _component_or_skip(desc, LP, canon):
-    """request_component; a refusal naming the ROOT id is the pre-da3edf461 tree -> skip by name (never a silent pass)."""
+    """request_component; a refusal naming the ROOT id is a tree without the exemption -> skip by name (never a silent pass)."""
     try:
         return W.request_component(desc, REGISTRY, _WP(LP), canon=canon)
     except IdentityConflict as e:
         if desc["root"] in str(e):
-            pytest.skip(f"global da3edf461 (request root exempt from the shared-definition canon) is not on this tree: {e}")
+            pytest.skip(f"the request root's exemption from the shared-definition canon is not on this tree: {e}")
         raise
 
 
@@ -85,7 +85,7 @@ def test_two_identical_requests_are_two_members_of_the_fixed_population_not_one(
 
 def test_the_request_root_id_is_not_a_name_in_the_workload_namespace():
     """The request root `Root[ToyRequest_v1{LP,T}]_v1` never reaches the composed workload's definitions: the component is
-    `WorkloadRequest_v1{program_digest, program_fn}` keyed by the descriptor digest.  So a colliding root id (da3edf461's case) is not
+    `WorkloadRequest_v1{program_digest, program_fn}` keyed by the descriptor digest.  So a colliding root id (the exempted case) is not
     a name anything of record keys on -- and no second identity per position can arise from it (ONE value namespace)."""
     d = _desc(3, 2)
     wl = _wl([(3, 2), (3, 3)])
@@ -97,7 +97,7 @@ def test_the_request_root_id_is_not_a_name_in_the_workload_namespace():
 
 
 def test_one_root_id_over_two_bodies_composes_and_the_shared_callee_is_one_object():
-    """da3edf461's positive, with the callee in view: same SRC (one root id) over T=2 / T=3 bodies, both calling the SAME
+    """The exemption's positive, with the callee in view: same SRC (one root id) over T=2 / T=3 bodies, both calling the SAME
     `PadrevLayer_v1{K=1}` (equal bodies) -> composes by digest; the callee is canonicalised to ONE object shared by both components;
     the root id is in neither the canon nor the workload's definitions; population Σ cap with two disjoint intervals."""
     La, Lb = _layer("a"), _layer("a")
@@ -133,6 +133,6 @@ def test_the_exemption_is_the_roots_only_a_colliding_callee_in_the_same_compose_
         with pytest.raises(IdentityConflict) as ei:
             W.request_component(d3, REGISTRY, _WP(3), canon=canon)
         if "PadrevLayer_v1{K=1}" not in str(ei.value):
-            assert d3["root"] in str(ei.value)                                    # the pre-fix tree refuses the ROOT first: named skip
-            pytest.skip(f"global da3edf461 not on this tree (the root, not the callee, is what was refused): {ei.value}")
+            assert d3["root"] in str(ei.value)                                    # a tree without the exemption refuses the ROOT first: named skip
+            pytest.skip(f"the request root's exemption is not on this tree (the root, not the callee, is what was refused): {ei.value}")
         assert canon["PadrevLayer_v1{K=1}"][0] is first_obj                       # the first body stays canonical; nothing was replaced

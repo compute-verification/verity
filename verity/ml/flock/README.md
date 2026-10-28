@@ -1,8 +1,7 @@
 # C-Flock (`verity-flock`)
 
 The active backend family. C-Flock proves a committed relation, the commitment's hash leaves included, in one
-binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patched here). Where the frozen families are
-and what the merge gate runs per family: `../../../archive/README.md`.
+binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patched here).
 
 ## Layout
 

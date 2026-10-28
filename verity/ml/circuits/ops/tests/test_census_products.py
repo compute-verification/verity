@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 import verity.ml.circuits.ops as OPS
-import verity.ml.circuits.ops.gemm  # noqa: F401  (registers the steps)
+import verity.ml.circuits.ops.gemm  # registers the steps
 import verity.ml.circuits.ops.boolean.s8  # noqa: F401  (binds the u8 x s8 step)
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, SILICON, census

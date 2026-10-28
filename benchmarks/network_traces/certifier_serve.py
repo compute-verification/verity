@@ -98,8 +98,8 @@ first `--probes` requests are probed straight to the endpoint at their arrival t
 after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
-frame is handed before its last window. N2's profile is `advice`: no egress profile, the counts are N2-ADVICE's to
-derive from the ingress head and the advice, and this check gives no N2 verdict.
+frame is handed before its last window. N2's profile is `advice`: no egress profile, N2's advised counts derive the
+counts from the ingress head and the advice, and this check gives no N2 verdict.
 
 **The certified I/O** (`certified_io`, the check on the advice profile), read from the records' frames alone: each
 request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
@@ -107,8 +107,9 @@ request's ingress ordinal (its stream on the link), release bucket and id reques
 that name its ordinal, with each frame's canonical position and egress bucket. Accepted when every request is an id
 request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
 by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
-(the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie (IO-TIE) and
-N2's advice counts (N2-ADVICE), and compares it with the ids the shim wrote and the requests the plan sent.
+(the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
+the I/O to `io.json` for the I/O tie and N2's advised counts, and compares it with the ids the shim wrote and the
+requests the plan sent.
 On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
 held to the certifier's key and session (`_certified`). The verdict is `accepted` when every window's records are
@@ -124,11 +125,11 @@ certified, the I/O, the audit and the salt accept.
         [--seed 0] [--eos-ids ID,...] [--compact B] [--margin 2] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
-        [--tamper late|extra|drop|token|byte] [--out-shape SHAPE.json]
+        [--tamper late|extra|drop|token|byte] [--out-shape SHAPE.json] [--paced-ms 50]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
-        [--out-shape SHAPE.json]
+        [--out-shape SHAPE.json] [--paced-ms 50]
 
 - `keys` makes an LMS key (`seed`, 0600, `public`, its tree, and its leaf state `state.json`), or loads one, and writes
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
@@ -138,7 +139,9 @@ certified, the I/O, the audit and the salt accept.
   are certified: `CertifyingPublisher.public`), and writes `deployment.json`, the auditor's record of the run: the
   certifier's public key, the proxy's run id, the certifier session (`--session`, which the challenger draws), the
   links, the addresses, the origin and the reveal deadline. It takes one link connection, which must come before the
-  origin. Once the link has ended it stops the shim, writes the logs and prints `{"served": ...}`, then serves reveals until every
+  origin. The proxy writes each egress bucket through its pacer, `--paced-ms` (`PACED_MS`) after the bucket's boundary
+  (`active.Proxy(paced=…)`), so that nothing on the proxy's loop moves when a bucket leaves; `--paced-ms 0` writes it
+  on the loop at its tick. Once the link has ended it stops the shim, writes the logs and prints `{"served": ...}`, then serves reveals until every
   window's salt is revealed or the last window's reveal deadline has passed. `--tamper` makes the shim an adversary of
   `active_replay.adversary_plan`: `late` holds one session of window 0 past every sync (on a varied plan, past every
   frame written before it is due), which the certifier's own audit faults; `extra` writes one event more at the end of
@@ -249,6 +252,9 @@ KEYGEN_WORKERS = 8
 PROMPT = "Count from one to one hundred in words, separated by commas:"
 FILLER = " one, two, three, four, five, six, seven, eight, nine, ten,"
 REVEAL_MARGIN_S = 300.0
+#: when the proxy's pacer writes each egress bucket, in ms after its boundary: twice the proxy's slack, so that a tick
+#: in time has handed it before
+PACED_MS = 50.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
@@ -257,7 +263,7 @@ TAMPERS = ("late", *ar.LIVE_TAMPERS)
 ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
-#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2-ADVICE)
+#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2's advised counts)
 ADVICE = "advice"
 #: a varied plan's first arrival is after this, in window 0's bucket 2 or later
 START_MS = 150.0
@@ -282,7 +288,7 @@ CHALLENGER = "certifier-serve-check"
 #: witness, the rows and their salts (the prover's alone)
 OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
 NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from the ingress head and the advice "
-         "(N2-ADVICE), which this check doesn't read")
+         "(its advised counts), which this check doesn't read")
 
 
 # Keys.
@@ -626,7 +632,7 @@ def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temp
     """The request every session of a served plan sends: exactly `tokens` tokens (`max_tokens`, never stopped early:
     `ignore_eos`), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
     applies its own generation config to a request that omits them. No `min_tokens`: it masks the EOS logit, which the
-    served Program's sampling doesn't model, so vllm's advice refuses it."""
+    served Program's sampling doesn't model, so the vLLM integration's advice refuses it."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True,
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
@@ -715,7 +721,7 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     F = frames or tokens
     if body.get("ignore_eos") is not True or not isinstance(tokens, int) or tokens < 1 or "min_tokens" in body:
         raise ValueError("a served plan's body asks for exactly its tokens (max_tokens, ignore_eos) and no min_tokens, "
-                         f"which vllm's advice refuses: not {body}")
+                         f"which the vLLM integration's advice refuses: not {body}")
     if F < tokens:
         raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
@@ -1049,10 +1055,12 @@ def _out_shape(path: str) -> dict:
 async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict, link: tuple[str, int],
                 reveal: tuple[str, int], key: Path, challenger_key: LmsKey, session: bytes,
                 start_in: float = 10.0, reveal_deadline: float | None = None, n2_link: str = N2_LINK,
-                tamper: str | None = None, out_shape: dict | None = None, announce=_announce) -> dict:
+                tamper: str | None = None, out_shape: dict | None = None, paced_ms: float = PACED_MS,
+                announce=_announce) -> dict:
     """One served run on the host's clock (the module docstring's `serve`), the certifier's key (the directory `key`)
     held by its `CertifierProcess`, which with `out_shape` also commits each egress link-window's output value at that
-    shape, the deployment's ``out``. Returns what `serve.json` holds."""
+    shape, the deployment's ``out``, and each egress bucket written `paced_ms` after its boundary by the proxy's pacer
+    (on its loop, with 0). Returns what `serve.json` holds."""
     out.mkdir(parents=True, exist_ok=True)
     setup = ar.Setup(report)
     e, i, windows = setup.egress_params, setup.ingress_params, plan["windows"]
@@ -1074,7 +1082,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
                         egress_link=setup.egress_link, ingress_link=setup.ingress_link, salt=fresh_salt,
                         reveal_deadline=deadline, challenger_key=challenger_key, signer=certifier,
                         served=served_profile(plan), ordinals=bool(plan.get("token_ids")),
-                        compact=bool(plan.get("compact")))
+                        compact=bool(plan.get("compact")), paced=paced_ms / 1000 if paced_ms else None)
     taken, served = loop.create_future(), loop.create_future()
 
     async def on_link(reader, writer) -> None:
@@ -1500,10 +1508,11 @@ def table(result: dict) -> str:
 # The rehearsal.
 
 def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, challenger_dir: Path,
-                 api_key_env: str | None, start_in: float, out_shape: dict | None = None) -> dict:
-    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest, and `--out-shape`, the
-    run's ``out-shape.json``, when given), then `client` (into the run's `client/`), then `check` while `serve` serves
-    reveals."""
+                 api_key_env: str | None, start_in: float, out_shape: dict | None = None,
+                 paced_ms: float = PACED_MS) -> dict:
+    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest, `--out-shape`, the
+    run's ``out-shape.json``, when given, and `--paced-ms`), then `client` (into the run's `client/`), then `check`
+    while `serve` serves reveals."""
     run = out / strategy
     run.mkdir(parents=True, exist_ok=True)
     if out_shape is not None:
@@ -1512,7 +1521,7 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
     served = me + ["serve", "--plan", str(out / "plan.json"), "--calibration", str(out / "calibration.json"),
                    "--upstream", url, "--out", str(run), "--link", "127.0.0.1:0", "--reveal", "127.0.0.1:0",
                    "--key", str(certifier_dir), "--challenger-key", str(challenger_dir / "public.json"),
-                   "--session", secrets.token_hex(32), "--start-in", str(start_in)]
+                   "--session", secrets.token_hex(32), "--start-in", str(start_in), "--paced-ms", str(paced_ms)]
     served += (["--tamper", strategy] if strategy != "honest" else []) + \
         (["--api-key-env", api_key_env] if api_key_env else []) + \
         (["--out-shape", str(run / "out-shape.json")] if out_shape is not None else [])
@@ -1615,7 +1624,8 @@ def rehearse(args) -> int:
         (out / "plan.json").write_text(json.dumps(plan))
         (out / "calibration.json").write_text(json.dumps(report))
         results = {s: rehearse_one(out, s, url=url, certifier_dir=certifier_dir, challenger_dir=challenger_dir,
-                                   api_key_env=args.api_key_env, start_in=args.start_in, out_shape=args.out_shape)
+                                   api_key_env=args.api_key_env, start_in=args.start_in, out_shape=args.out_shape,
+                                   paced_ms=args.paced_ms)
                    for s in args.strategies.split(",")}
     finally:
         shutil.rmtree(scratch)
@@ -1675,7 +1685,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--delta-buckets", type=int,
                        help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")
         q.add_argument("--profile", choices=PROFILES, default=PROFILES[0],
-                       help="N2's profile: the planned egress occupancy, or the served profile (NET-54), whose egress "
+                       help="N2's profile: the planned egress occupancy, or the served profile, whose egress "
                             "counts derive from the ingress head's")
         q.add_argument("--traffic", choices=TRAFFIC, default=TRAFFIC[0],
                        help="fixed: one body every session (--tokens, --prompt-tokens, --in-flight, --profile); varied: "
@@ -1717,6 +1727,9 @@ def parser() -> argparse.ArgumentParser:
                             "registered read): the network certifier commits each egress link-window's output (the "
                             "hex of u16 words) in its rows and signs its head (out-records.jsonl; its rows and salts "
                             "in out-witness.jsonl, the prover's)")
+        q.add_argument("--paced-ms", type=float, default=PACED_MS,
+                       help="when the proxy's pacer writes each egress bucket, ms after its boundary (past its 25 ms "
+                            "slack; 0: on the proxy's loop at its tick)")
     s.add_argument("--tamper", choices=TAMPERS,
                    help="late: the shim holds a window-0 session past every sync; extra: it writes one event more; "
                         "drop: one fewer; token: window 0's tokens' bytes changed")
@@ -1759,7 +1772,8 @@ def main(argv=None) -> int:
                                 link=args.link, reveal=args.reveal, key=args.key,
                                 challenger_key=read_public(json.loads(args.challenger_key.read_text())),
                                 session=session, start_in=args.start_in, reveal_deadline=args.reveal_deadline,
-                                n2_link=args.n2_link, tamper=args.tamper, out_shape=args.out_shape))
+                                n2_link=args.n2_link, tamper=args.tamper, out_shape=args.out_shape,
+                                paced_ms=args.paced_ms))
         return 1 if "error" in log else 0
     if args.command == "client":
         ar._quiet_runtime()

@@ -163,7 +163,7 @@ def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_p
 
 
 def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served_again(tmp_path):
-    """rows-sha512 is the default (VLLM-17): a committing run that names no scheme is refused before the model loads until it
+    """rows-sha512 is the default: a committing run that names no scheme is refused before the model loads until it
     names its bench row's manifest, and is never served under SHA-256. vllm-v1 is served only by name, to serve again a recorded
     vllm-v1 run of the same model (``--of-record``: its serve.json says vllm-v1, or predates the field); the committer refuses
     it too, before it builds anything."""
@@ -203,6 +203,33 @@ def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served
     assert "served m2@r, not m@r" in refusal(parse(*v1, "--of-record", record("other", model="m2", scheme="vllm-v1")))
     assert "not a recorded serve-openai run" in refusal(parse(*v1, "--of-record", str(tmp_path / "none")))
     assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
+
+
+def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
+    """``--retain-exclude`` (default off, and $VERITY_RETAIN_EXCLUDE's value when set) names the attention interiors only, the
+    values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
+    loads, and by the committer before it builds anything."""
+    (man := tmp_path / "manifest.json").write_text("{}")
+    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
+
+    def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", [*rows, *more], environ=environ or {}), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert cli.parse("serve-openai", list(rows), environ={}).retention.retain_exclude == ""
+    assert cli.parse("serve-openai", list(rows), environ={"VERITY_RETAIN_EXCLUDE": "hidden_m1"}).retention.retain_exclude == "hidden_m1"
+    for ok in ("hidden_m1", "hidden", "fa3_hidden_m1", "fa2_hidden_m1_stream,fa3_hidden_m1"):
+        assert refusal("--retain-exclude", ok) is None, ok
+    assert "['gemm_qkv'] aren't attention interiors" in refusal("--retain-exclude", "hidden_m1,gemm_qkv")
+    assert "aren't attention interiors" in refusal(environ={"VERITY_RETAIN_EXCLUDE": "weights"})
+    assert "needs the Commit under --scheme rows-sha512" in refusal("--retain-exclude", "hidden_m1", "--no-commit")
+    v1 = ("--scheme", "vllm-v1", "--of-record", str(tmp_path))
+    assert "needs the Commit under --scheme rows-sha512" in refusal("--retain-exclude", "hidden_m1", *v1)
+    with pytest.raises(cli.UsageError, match="aren't attention interiors"):
+        ss.committer(cli.parse("serve-openai", [*rows, "--retain-exclude", "weights"], environ={}), llm=None)
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
@@ -444,7 +471,7 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The warden's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
+    """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
     return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
                         offset=0)
 
@@ -471,8 +498,8 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
 
 
 def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
-    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the warden's release headers
-    (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
+    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
+    headers (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
     bytes that aren't a request."""
     p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
     assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
@@ -482,10 +509,10 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
 
 
 def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the warden's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
-    release headers the warden adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
+    """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+    release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
-    scan's P = 503 every P bytes are one id event, the cells the warden makes of them, and the whole is what
+    scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
     warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
     for payload in (140, proto.ID_PAYLOAD):
@@ -505,7 +532,7 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier's leg (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
@@ -742,7 +769,7 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
         status, raw = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=top_p))
         ok, _ = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=1))
     err = json.loads(raw)["error"]
-    assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
+    assert status == 400 and err["param"] == "top_p" and "split count" in err["message"] and f"top_p={top_p}" in err["message"]
     assert "split count" in err["message"] and ok == 200
     assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
 
