@@ -52,6 +52,8 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
+    "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
+                                     "Program it declares (H1Windows), which a period's offline Program must equal",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
