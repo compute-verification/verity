@@ -5638,7 +5638,7 @@
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
   "Definitions.Claims": {
-   "digest": "1539b91c4cd4ababb1eb9c76e5c31a61312ccaabeae2155b26e2ba1e849efc6d",
+   "digest": "98f6133c1f3dec215ef94c728f52aed43582cfae9163ec0259fa33aa0ac2d0f9",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -5647,7 +5647,7 @@
     "Claims.Circuit.gates": "4e81a83705dd6146e0b0469bb8126e2a336532e831b6236a85361873c11ff269",
     "Claims.Circuit.outs": "1705a77b16b689aceee74f743004da62a7fe5be6b596df9bd4119221c5c1e350",
     "Claims.Circuit.wires": "f8708ac3ad38967a4248946a259ff63e30df7d1d730160a15a61e761c9d9f289",
-    "Claims.Collision": "684d79c833f61a382736de6bea1d4837fddfeb6034c8b058487e8be7cf2d85ba",
+    "Claims.Collision": "c9aa38dcdefc9acdf1e2b55b91bd771bda4cbf43d796761cda34074058a3c4da",
     "Claims.Ex": "c2c94d12b1a732e69312adbfd75898bd82844441f36c75ab6c132a808e7f85ff",
     "Claims.Extractor": "a8889310c673883b020f9e32fa928f66caf976a7210eb35d1f81d41bae4c2f9f",
     "Claims.Extractor.C": "24eda09c044e6459c63b95d1c6e2471c831f8dec359553e2bb351f13088227bd",
@@ -5699,7 +5699,7 @@
     "Claims.Gate.casesOn": "cd98b0c8053164c9bf9dc167546161f9c17d6b092a7534453081f4bbf1f5593e",
     "Claims.Gate.rec": "a15061e5b2a5a52399814954bd106bae71f25dbfeb152b1c6f93a3458ec97bbb",
     "Claims.Gate.xor": "d15893d9ce85e9dc2195d4c1ef22a02b7bb293b8f15f0e5b01e01349725ee065",
-    "Claims.Msg": "cd27efe28dbe63e955675e914b64015f9a4bae60206675844abf0897070d4cbe",
+    "Claims.Msg": "9bc9b800b5bce281e5b98074a8e91abfc5cfac65815c16ebed337e3c22c81f1e",
     "Claims.OC": "aa299aa9ea49c6e96d2e93c739df50e7b47882d728b592be5226f456264f94a2",
     "Claims.OC.below": "ff178d187a2f6b722ca492a2d51058524828209d590813919c32ebe471021f48",
     "Claims.OC.brecOn": "da30a06282701fac4dc79d991644d51651dbc845af1b722ee4359745795f2ff6",
@@ -6261,8 +6261,9 @@
    ]
   },
   "Definitions.Hash.Basic": {
-   "digest": "6e6f69445e5c149662f4e0f35f5d81cdc63b91153cae465a8ded619ddc212675",
+   "digest": "1dda192b6c96a4e3c3853dee3a4c556b84b14db8da97ef3a5c4eab9e51025d27",
    "definitions": {
+    "Hash.Collision": "6352b7c1183e5a22df83ca267ec49a423df2fbf74845e167f5927c3873f3c545",
     "Hash.Msg": "eae8a43b934169e52427b2520a329dbf40092e7d809802407f5c6cb3402c20f0",
     "Hash.be": "01de3b21507c05069030c976948b20b0c990e472322a8eebdf51fd204eda0ba4",
     "Hash.cstr": "cc8a9d2799527c9325f6d52d1f4af04631d52ef3849529d96cd70def0f45ab7b",
@@ -6271,6 +6272,9 @@
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
    "guarantees": [
+    "Properties.NetworkCertifier.perServerIngress",
+    "Properties.NetworkCertifier.perServerIngress_drawn",
+    "Properties.NetworkCertifier.perServerIngress_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
