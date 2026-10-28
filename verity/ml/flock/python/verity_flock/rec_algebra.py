@@ -1,4 +1,4 @@
-"""V*'s algebra: the inner verifier's algebraic checks on one rep of a C-Flock session (`verifier/PROTOCOL.md` §9.2, §10, §12,
+"""V*'s algebra: the inner verifier's algebraic checks on one rep of a Flock session (`verifier/PROTOCOL.md` §9.2, §10, §12,
 §13), at the session's coins, as residuals over F that are all zero iff the checks hold.
 
 With the coins values, every check is linear in the rep's messages with coefficients that are functions of the coins and the
@@ -261,7 +261,7 @@ def rep_rounds(record: dict, stream: str) -> list[list[int]]:
 
 
 class Coins:
-    """The rep's coins in the order the verifier draws them (§6.2: a draw of n coins is one round of n; none is no round, so
+    """The rep's coins in the order the verifier samples them (§6.2: a sample of n coins is one round of n; none is no round, so
     a recorded round of no coins, z_partial's in a holo session's `verity_flock.rec_live.holo_rounds`, is skipped)."""
 
     def __init__(self, rounds: Sequence[Sequence[int]]):
@@ -825,7 +825,7 @@ def messages(sh: Shape, p: Proof, comb: Sequence[int], t: int | None = None, h: 
 T_NAME = ("T",)
 #: the running sums' elements w reads: (before the rep's first opening, after its last) x (the final check's c0, c1)
 ACC_NAMES = [("acc0", 0), ("acc0", 1), ("acc1", 0), ("acc1", 1)]
-#: a holo shape's round of h, absorbed after z_partial and before r′ is drawn
+#: a holo shape's round of h, absorbed after z_partial and before r′ is sampled
 H_ROUND = [("h", l) for l in range(64)]
 
 

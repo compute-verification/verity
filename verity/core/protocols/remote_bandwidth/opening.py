@@ -3,7 +3,7 @@ unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks 1-3 an
 so the verifier holds the drawn block, its payload, its receipt leaf, the step's plan row and every salt and path only
 inside the unit, and reads the unit's verdict.
 
-For a draw (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
+For a sample (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
 the receipt leaf on its path to the pass's receipt root and the plan row holding j at p, the block decoding to its
 payload under b_j(c_a) (under the seed's key for a registered block), the payload on its path to its append's root (the
 registration's payload root for a registered block) and, appended, to the canonical payload commitment at row j - NR (the
@@ -114,8 +114,8 @@ class Session(audit.Session):
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
-        """Window t's verdict from check 3's outcome on each of its draws, in the order drawn: the first failure (one of
-        `audit.FAILURES`) rejects it, and a window with no draws is `malformed`, as `verify` has it."""
+        """Window t's verdict from check 3's outcome on each of its samples, in the order drawn: the first failure (one of
+        `audit.FAILURES`) rejects it, and a window with no samples is `malformed`, as `verify` has it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
@@ -198,7 +198,7 @@ def check(d: Draw, args: dict, codec_seed: bytes, S, values: Values, plan_salt: 
 
 
 def reference(session: Session, store: Store, passes: dict, c3) -> list[audit.Verdict]:
-    """Every window of a session whose draws are drawn, decided by `check` on the honest prover's witness: the stand-in
+    """Every window of a session whose draws are sampled, decided by `check` on the honest prover's witness: the stand-in
     for the units' proofs. Stops at the first rejected window. ``c3`` holds the codec, the plan row's P and the depths DR,
     DP and DV, each step's plan row (``plan_rows``), its salt (``plan_salts``) and certified ``b || c`` (``plan_bcs``), and
     the value commitment (``values``)."""

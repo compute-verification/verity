@@ -18,7 +18,7 @@ sq(a)      a² mod p, negated (p − a² mod p) when a is odd
 σ_K(r)     r ⊕ K if r ⊕ K < p, else r             an involution on [0, p)
 encode     c = ρ(σ_K(ρ(m + t mod p)))            two roots: slow (w − 2 squarings each)
 decode     m = sq(σ_K(sq(c))) − t mod p           two squarings
-keys       fresh per block j of segment s, drawn after W through the salt, and expanded where they are used (on the
+keys       fresh per block j of segment s, sampled after W through the salt, and expanded where they are used (on the
            device), so nothing key-sized is stored.  K is the first w/8-byte big-endian word of a stream, and t the first
            later word below p (exact rejection sampling; a candidate is ≥ p with probability c0 / 2^w).
   v4       prefix = Z("verity/pous/p2/keys/v4\0" ‖ frame("p2/v4") ‖ frame(prime id) ‖ frame(salt)), Z zero-pads to

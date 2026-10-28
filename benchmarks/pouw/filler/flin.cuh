@@ -860,7 +860,7 @@ struct FillLaunch {
   unsigned long long tile0;
   int NC;
 };
-// the filler's MACs over `ls`, and up to n receipts drawn from the slots that stepped, checked on the host against
+// the filler's MACs over `ls`, and up to n receipts sampled from the slots that stepped, checked on the host against
 // fwarp_ref at the ring's coins, each with the control FW_CTL steps short that must differ; `ids` collects the checked tiles less
 // `tag`
 struct FlinTally {

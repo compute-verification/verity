@@ -385,9 +385,9 @@ class Stats:
 
 @contextlib.contextmanager
 def _no_local_constants() -> Iterator[None]:
-    """Hypothesis also draws, at p = 0.05 per draw, constants it scrapes from every local module the process has loaded
-    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's draws moved when a
-    module the reference imports gained a literal, or a test imported one first. Within this, it draws from its own
+    """Hypothesis also draws, at p = 0.05 per sample, constants it scrapes from every local module the process has loaded
+    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's samples moved when a
+    module the reference imports gained a literal, or a test imported one first. Within this, it samples from its own
     constants alone. `tests/test_constants.py` pins the hook, so a Hypothesis upgrade that moves it fails there."""
     from hypothesis.internal.conjecture import providers
     from hypothesis.internal.constants_ast import Constants

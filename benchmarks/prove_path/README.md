@@ -1,8 +1,8 @@
 # Prove path
 
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
-the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system draws
-units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, and the Lean verifier accepts or refuses them.
+the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
+units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
@@ -16,8 +16,8 @@ store, since their bundles and requests hold request values. The docstrings say 
 
 A declared run's audit (`a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.core.protocols.certifier.advice`) records those decisions. The advice is private: it is committed under hiding hm96
-rows and never published.
+`verity.core.protocols.certifier.advice`) records those decisions. The advice is private: it is committed under hiding
+commitments and never published.
 
 1. **Registration binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's
    `verity/registration/v1` item `window`, which the record's digest covers) carries `compiler: {name, digest}` and
@@ -35,13 +35,13 @@ rows and never published.
    (`advice_windows.window_of_advice`, reading no committed value), and holds the registration to it
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
    population). The compile unit below replaces the opening and the recompile. Nothing else in the audit changes.
-4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_sample`), as `pouw.credit.draw_root`
-   checks that the credit bits came before the draw coin. The digest of the registration the verifier opens the advice under
-   covers its `compiler` and `advice` root. That digest must be the one the draw's receipt names: the stream writes the receipt
+4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
+   checks that the credit bits came before the sampling coin. The digest of the registration the verifier opens the advice under
+   covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
    when it receives the registration, and its `select` reads the verifier's coins only after that (a5's
-   `verifier-coins-before-the-registration`). A registration whose advice root postdates the draw is refused
+   `verifier-coins-before-the-registration`). A registration whose advice root postdates the sample is refused
    (`advice-root-after-the-draw`): the same advice re-committed after the coins, under fresh salts and so a fresh root, passes
-   every check before the draw with its new opening, and `advice_before_sample` refuses it with `after-the-draw`.
+   every check before the sample with its new opening, and `advice_before_draw` refuses it with `after-the-draw`.
 5. **The compiler is total.** `compile_advice` takes any input and returns either the requests or a `ValueError` naming why.
    The refusal depends only on the input, so two runs give the same one. It refuses, in order:
    - not bytes;
@@ -63,15 +63,15 @@ rows and never published.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law draws every unit of theirs beside
+   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law samples every unit of theirs beside
    K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
-   of them, a draw trading one away, and a registration drawing them as the rest. Until the compiler lists the I/O shell's
+   of them, a sample trading one away, and a registration sampling them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
-- the draw: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
+- the sample: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
   outcome;
-- the per-member `--zk` sessions behind the firewall;
+- the per-member `--zk` sessions behind the ZK server;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
 
 ## What an accepted audit means
@@ -93,7 +93,7 @@ are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 
 every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and
 Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no faulty proof block is in a class drawn `all`: the transfer-gate units and the network certifier's head checks
+- no faulty proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
   (`allSlots`);
 - the advice (`traceVal`, free), its inputs pinned to the trace's committed values and `free` holding values exactly at
   the faulty proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation
@@ -135,7 +135,7 @@ history would discharge, and doesn't discharge them yet.
   log2 of the at most Σ_{j ≤ bound} C(n, j) faulty sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
-**A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified draw, each window one member with no registered
+**A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
 `SoundExecH` at hidden outputs, `SoundExecHR` with registered reads), in the game form
 (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
@@ -166,7 +166,7 @@ match is refused. It is never a soundness gap.
 The unit closes the named gap: the advice is never opened, and the verifier never recompiles.
 
 - **Selection All.** Each registration has one compile unit, always proved. Its Spec's selection is `service.All`, so it is
-  never sampled. It reads no coins, and its proof goes through the firewall like every unit's.
+  never sampled. It reads no coins, and its proof goes through the ZK server like every unit's.
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);
@@ -196,7 +196,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   routing over public row programs keeps the advice private. The clear map is a stepping stone.
 - **What it retires:** the opening handed to the verifier (`audit --opening`, `advice_windows.of_opening`), the verifier's
   recompile, and, with the routing form, `served_programs` in the clear.
-- **What stays:** `advice_before_sample`, which still holds ρ to the registration the draw followed.
+- **What stays:** `advice_before_draw`, which still holds ρ to the registration the sample followed.
 
 ## The pieces
 
@@ -216,23 +216,23 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     `own_builds`; no vLLM, and `--vllm-python` is ignored) into `--builds` (default `OUT/builds`, never under the row dir),
     each held to I2's digest. The prover's Builds are its row dir's. The audit summary's `i2` holds I2's Programs beside the
     Build's `build_request_LP*` digests.
-  - on a served window, the same over φ of the served engine as vllm's advice compiler compiles under (`phi_of_serve`:
+  - on a served window, the same over φ of the served engine as vllm's registered compiler compiles under (`phi_of_serve`:
     `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
     seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
-    as vllm's advice compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
+    as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
     as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
     digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
     whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
     tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
-    one the advice was registered under names another compiler, refused before the draw (`serve_check`'s `compiler`), and
+    one the advice was registered under names another compiler, refused before the sample (`serve_check`'s `compiler`), and
     one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
-    prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the row dir
+    prints the binding's compiler. I2's Programs are held to the ones vllm's registered compiler wrote into the row dir
     (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
-  commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
-  gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
+  commits the window under the published binding. Before any commit and before the sample (folded into the source check a5
+  gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
   (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
   (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
@@ -256,7 +256,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 
 ## The class circuit's size and its window's commit
 
-`class_size.py` sizes a class circuit in ANDs and C-Flock blocks, and `class_rows.py` counts its rows by what fills them and
+`class_size.py` sizes a class circuit in ANDs and Flock blocks, and `class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
 census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a

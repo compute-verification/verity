@@ -6,7 +6,7 @@
 # idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
 # --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
 # a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
-# committed under salts drawn from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
+# committed under salts sampled from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
 # check against the checkpoint's manifest; each window's registration records its roots, one a weight parameter, so the window
 # circuit's weight reads count registered at the pins the verifier holds before the first window's coins, `window-circuit
 # --pins weights_registration.json`; without it, which steps.txt says, they count free),

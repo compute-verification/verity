@@ -18,8 +18,8 @@ derives the window's units from its own copy of the Program under the `Q_templat
   window registers in one read, A row i of K's units under ``a_k<K>[i]`` (a lone row, R or C = 1, under the parameter's
   name, `row_key`), each port with its own width and domain, and that row's circuit port is ``a_k<K>_<i>``
   (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
-* **K's circuit file** is C-Flock's statement of K's template on the rows `statement_rows` gives (its A and B rows, the
-  record and the public row, each a ``row/v2`` row), which the auditor's lowering builds from this module and C-Flock's
+* **K's circuit file** is Flock's statement of K's template on the rows `statement_rows` gives (its A and B rows, the
+  record and the public row, each a ``row/v2`` row), which the auditor's lowering builds from this module and Flock's
   Python alone (numpy, no torch): flat, or templated (``flock-circuit/tmpl``) under a layout mode.
 * **Linears and calls.** ``linears`` are the window's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
@@ -63,15 +63,15 @@ derives the window's units from its own copy of the Program under the `Q_templat
   after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit in its tile order), which
   hang on nothing past the salt, its rows and the roots, are committed whole under its round's root too, and a
   statement then reads its units' receipts there as its output row o0 (`RECEIPT_PORT`).
-* **A drawn leaf's statements** (`pouw.leaf_lanes`): a drawn unit is proved as its lanes and their
+* **A drawn leaf's statements** (`pouw.leaf_lanes`): a sampled proof block is proved as its lanes and their
   combine, derived from the window's own template at its K (`leaf_unit`: `h1zy.lane` and `h1zy.combine` over the tile
   of its zy unit), so the window binds nothing more. Each runs under a one-call Program of its wrapper
   (`PouwH1WindowLane`, `PouwH1WindowCombine`; `leaf_program`), one unit, the same all period. Its reads are its leaf-local
   rows past the leaf's `place` in each value (`leaf_reads`, `leaf_reads_file`): the tile's own rows, its call's z table
-  and receipts, and the leaf's partials, produced after the draw. A J10-R window's leaf (over `PouwH1Tile_v5`) is
+  and receipts, and the leaf's partials, produced after the sample. A J10-R window's leaf (over `PouwH1Tile_v5`) is
   `h1zy`'s v2 statements, at a chunked K each lane's `h1zy.lane_chunk`s (`leaf_unit`'s ``ch``), and the combine that
   folds their oks; its chunks read the A and B tables' chunk rows, and its carries and ok rows are produced after the
-  draw like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
+  sample like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
 """
 from __future__ import annotations
 
@@ -189,7 +189,7 @@ RECEIPT_PORT = "o0"
 
 
 def statement_rows(template: Any, ports: dict[str, str] | None = None) -> list[tuple[str, str, int, list[str]]]:
-    """The input rows of K's statement (``template`` `template`'s at K), each ``(port, schema, bits, params)`` as C-Flock's
+    """The input rows of K's statement (``template`` `template`'s at K), each ``(port, schema, bits, params)`` as Flock's
     unit stager takes them (``a_k<K>[0]`` row 0 of ``a_k<K>``, `row_key`), in order: each A row and B row its own row, then the record
     ``zy`` and the public row ``pub`` (`PUBLIC`, a J10-R template's `PUBLIC_J10R`), every one a ``row/v2`` row of its
     leaves' bits (an A or B row 8 K/n + 32, `h1zy.ROW` of a chunk, n `weights.chunks` (K); the record 48 R C,
@@ -730,7 +730,7 @@ _LEAVES: "weakref.WeakKeyDictionary[Program, dict[tuple, tuple[Program, dict[str
 def leaf_program(program: Program, k: int, kind: str, ch: int | None = None) -> tuple[Program, dict[str, Any]]:
     """The Program and partition query every drawn leaf's statement ``kind`` (a chunk's ``ch``) at K runs under: the
     one-call Program of `leaf_template` and the instance query of its unit, a population of one unit, so the statement's
-    draw is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
+    sample is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
     kind and chunk."""
     memo = _LEAVES.setdefault(program, {})
     key = (int(k), kind, None if ch is None else int(ch))

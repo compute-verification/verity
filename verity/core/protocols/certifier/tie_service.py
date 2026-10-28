@@ -29,9 +29,9 @@ warden's salt, and its ``o0`` row one u16 word holding the output bit; the ``pub
 under a hiding salt (`IngressTie.layout`).
 
 **The verifier of record** is `IngressTie.verify(…, advice=A, releases=…, head=…)`, which decides on the delivered
-proof and public inputs alone. It accepts the window when the verifier's own run of C-Flock's Lean verifier, with its
+proof and public inputs alone. It accepts the window when the verifier's own run of Flock's Lean verifier, with its
 own registered reads at the warden's root (`registered`), accepts every session, they prove this tie's registered unit
-(`proved`: its gate names the pinned digest, every session the registered Program) and every drawn unit, and each
+(`proved`: its gate names the pinned digest, every session the registered Program) and every sampled proof block, and each
 unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes and its ``o0`` row to 1. Its public
 outputs are `verdict` and `advice`, A's `advised.digest`. A proof on another advice's lanes or another release opens
 to another ``pub`` row and is refused, and a row that isn't the warden's fails the registered read.
@@ -160,7 +160,7 @@ def prompt_lens(advice: AD.LinkAdvice) -> tuple[int, ...]:
 @dataclass(frozen=True)
 class Delivered:
     """An ingress link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
-    circuit file the auditor's own lowering of the unit), and for each drawn unit, by its index, the salts of its public
+    circuit file the auditor's own lowering of the unit), and for each sampled proof block, by its index, the salts of its public
     row and its output row (``pub``, ``o0``) and its output word, which the verifier opens against the public file's
     commitments to those rows. Never a witness row's salt: the warden's, which the registered read holds."""
 
@@ -405,10 +405,10 @@ class IngressTie:
     def verify(self, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
         """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
-        the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+        the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
         `circuit_sha512`, and the verifier's own registered reads at `head`, the warden's head of the registered root,
-        `registered`) accepts every session, they prove this tie's registered unit (`proved`) and every drawn unit, and
-        each drawn unit's public row opens to the verifier's own copy (`public_arguments` on its bucket's lanes from
+        `registered`) accepts every session, they prove this tie's registered unit (`proved`) and every sampled proof block, and
+        each sampled proof block's public row opens to the verifier's own copy (`public_arguments` on its bucket's lanes from
         `advice` and `releases`, `lanes`) and its output row to 1. It reports `advice`'s digest (`advised.digest`),
         None without an `advised.LinkAdvice`. A head that isn't the registered root's refuses. `opening` (the witness)
         is for a debug comparison only: given, the verdict also carries `clear`'s accept bit, which decides nothing."""

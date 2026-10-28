@@ -331,7 +331,7 @@ def nvfp4_sass(so: Path) -> dict:
 
 def nvfp4_fragments(nwarps: int, words_per_lane: int, seed: int = 20260922):
     """Random register fragments per lane: E2M1 nibbles for a[4] / b[2] (every code, both signs), UE4M3 scale bytes for sfa / sfb
-    drawn from the finite codes around 1 (0x30..0x47: 2^-3 .. 2^4 x mantissa) -- toggling operand bits, as a GEMM would, and
+    sampled from the finite codes around 1 (0x30..0x47: 2^-3 .. 2^4 x mantissa) -- toggling operand bits, as a GEMM would, and
     accumulators that stay finite over any run length this tool uses."""
     import numpy as np
 

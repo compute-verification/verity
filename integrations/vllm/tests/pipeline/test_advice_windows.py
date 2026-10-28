@@ -339,7 +339,7 @@ def _gated_mine(c, name: str = "gated"):
 
 
 class _Coins:
-    """Deterministic coin bytes for a test's draw: SHA-512 in counter mode."""
+    """Deterministic coin bytes for a test's sample: SHA-512 in counter mode."""
 
     def __init__(self) -> None:
         self.at = 0
@@ -360,7 +360,7 @@ def _draw(rec: dict, law: dict) -> dict:
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
     """The window's work law proves every RoPE head (work 0, its floor all 32: an All stratum) and draws 2 of the 8 SiluMul rows, as
-    the registration's law states and the verifier's own window derives; a draw by it holds every transfer-gate unit."""
+    the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D
 
     c = gated_tp
@@ -380,7 +380,7 @@ def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest
 
 
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
-    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a draw trading one for an undrawn SiluMul
+    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an undrawn SiluMul
     row (`check_draw`, the stratum's count), and a registration whose law draws the RoPE heads as the rest is (R1)."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D
 

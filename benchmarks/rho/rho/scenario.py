@@ -1,6 +1,6 @@
 """A scenario: one choice from every layer, and what overhead it gives.
 
-A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
+A scenario names a fleet (with its location and dark share), a regime, the inference-only policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
 lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
@@ -126,7 +126,7 @@ class Estimate:
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: the overhead inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's overhead
+    #: the overhead inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the registered circuit's overhead
     declared: float = math.nan
     #: every bound at once only: the bounds left out at a block that binds, their premises refuted there
     excluded: tuple[str, ...] = ()

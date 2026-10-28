@@ -77,7 +77,7 @@ def test_allreduce_world_n_is_the_descending_rank_bf16_chain(W, N):
     # acc = parts[W-1]; acc = Bf16Add(acc, parts[r]) for r = W-2..0, one RNE rounding per hop
     assert out == _chain(parts, range(W - 1, -1, -1))
     if N >= 256:
-        # per-hop rounding makes the order observable: the ascending chain (AllReduce_v1's) differs on this draw
+        # per-hop rounding makes the order observable: the ascending chain (AllReduce_v1's) differs on this sample
         assert out != _chain(parts, range(W))
 
 

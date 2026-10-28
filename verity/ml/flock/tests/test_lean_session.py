@@ -1,8 +1,8 @@
-"""The firewall's session loop in Lean (`Flock/Firewall/Session.lean`, `flock-firewall session`), which owns the auditor's
+"""The ZK server's session loop in Lean (`Flock/Firewall/Session.lean`, `flock-firewall session`), which owns the auditor's
 connection: a prover connects to it as it would to the auditor, and each connection is one session it relays on its own
 connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
 every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it does not serve refused), the `Hello`
-that leaves the Lean one at the auditor's draw (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
+that leaves the Lean one at the auditor's sample (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
 the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, and every coin after a refusal
 refused. The loop starts the reps' frames on a port of its
 own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled sessions through it
@@ -137,7 +137,7 @@ def call(s: socket.socket, f: bytes) -> bytes | None:
 
 
 def plain(f: bytes) -> bytes:
-    """The auditor's answers: Register a draw of none, Ping `Ok`, anything else 4 zero words."""
+    """The auditor's answers: Register a sample of none, Ping `Ok`, anything else 4 zero words."""
     return {10: draw("null"), 9: b"\x01"}.get(f[0], coins([b"\0" * 16] * 4))
 
 
@@ -293,7 +293,7 @@ def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
 
 @pytest.mark.slow
 def test_each_reps_frame_draws_its_own(zk):
-    """Each rep's frame the loop starts for a live session draws its own randomness at the statement's start, and starts
+    """Each rep's frame the loop starts for a live session samples its own randomness at the statement's start, and starts
     once: the two reps' draws have one size and differ, a rep started again is refused, and so is a table the session
     doesn't have."""
     S = Sessions(_args(zk, "pub-16.bin"))
@@ -368,7 +368,7 @@ class Sessions:
 @pytest.mark.slow
 @pytest.mark.parametrize("key_top, why", [(0x00, None), (0x80, STOP + "the verifier's session key has bit 2047 set")])
 def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
-    """At the fixture's statement and a draw of none, the `Hello` that leaves is the recorded one at the loop's own nonce,
+    """At the fixture's statement and a sample of none, the `Hello` that leaves is the recorded one at the loop's own nonce,
     whatever the prover sent; its answer passes through when it is a root and a key, else is refused. After it, a
     `Commit` whose roots no Lean level 0 drew is refused without reaching the auditor (`test_a_commit_leaves_only_with_
     the_loops_level_0` takes one that does)."""
@@ -428,10 +428,10 @@ def _zeros(m: int) -> bytes:
 
 @pytest.mark.slow
 def test_a_commit_leaves_only_with_the_loops_level_0(zk):
-    """The loop draws a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
-    in the hiding and the root. It draws a table's once a session: a second request for the table, or one for a table the
+    """The loop samples a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
+    in the hiding and the root. It samples a table's once a session: a second request for the table, or one for a table the
     session lacks, is refused, so the prover can't draw until a root suits it (NIGHTREV's grinding). A `Commit` leaves only
-    when each root it carries is the one the loop drew for its own session's table at its `m`: a root drawn for another
+    when each root it carries is the one the loop sampled for its own session's table at its `m`: a root drawn for another
     session, or at another `m`, is refused, never reaching the auditor, and one at the statement's leaves, its opening
     then checked (zero words refused). The `Commit` that leaves is the loop's own, whatever the prover's carried beside
     its roots: `root_F` the session's Σ, no public words, nothing after."""
@@ -501,7 +501,7 @@ def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
 
 
 def test_the_loops_finish_needs_a_statement(loop):
-    """A finish on the loop's frames port sets the session's statement up at its draw first: one the setup refuses ends
+    """A finish on the loop's frames port sets the session's statement up at its sample first: one the setup refuses ends
     it."""
     _, lp = loop
     f = TcpFrame(lp)
@@ -512,10 +512,10 @@ def test_the_loops_finish_needs_a_statement(loop):
 
 @pytest.mark.slow
 def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
-    """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop drew
-    at the table's `m`, for a session it still serves; its answer is that root. Each rep's salts for levels ≥ 1 it draws
+    """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop sampled
+    at the table's `m`, for a session it still serves; its answer is that root. Each rep's salts for levels ≥ 1 it samples
     itself, once: whole 192-byte leaves a level, fresh for each rep, and a rep asked again, or a rep's request before its
-    salts, is refused. Once the session that drew the level 0 ends, the loop has freed it, and finish refuses its root."""
+    salts, is refused. Once the session that sampled the level 0 ends, the loop has freed it, and finish refuses its root."""
     S = Sessions(_args(zk, "pub-16.bin"))
     s, name = S.session()
     lp = S.lp

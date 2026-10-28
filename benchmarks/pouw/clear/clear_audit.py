@@ -2,7 +2,7 @@
 "Lifecycle").  It is a reference tool, not a verifier: every protocol is zero-knowledge, PoUW's served path is the served-ZK
 window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`, `pouw.verifier`).  Benchmarks
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
-end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are difftested against `Sampled.select` and
+end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are difftested against `Sampled.select` and
 `draw_coin`.  This directory is not a package: callers put it on ``sys.path``.
 
 0.-2. **Coins, weights and the salt** are core's (`verity.core.protocols.pouw.audit`: `weights_root`, `Epoch.start`).
@@ -12,13 +12,13 @@ end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are dif
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
-   source is the epoch's draw coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
+   source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
    Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
    most ``target·|rows|·|cols|·k``.  The prover opens each selected tile's strips and leaf; the verifier recomputes the
    tile through the scheme.
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.
 
-The protocol owns every outer coin (the salt and the draw), and both are the challenger's live coins.  A scheme's noise is
+The protocol owns every outer coin (the salt and the sample), and both are the challenger's live coins.  A scheme's noise is
 its own derivation from the salt and the prover's roots, Fiat-Shamir inside the scheme.  The row and tile trees are core's
 (`audit.commit_rows`, `rows_domain`, `transcript_domain`), framed SHA-256 unless the scheme names another frame hash in
 ``commitment_hash`` (`commitment_hash`), and an opening's value under ``"hm96-sha512"`` carries its salt, which
@@ -53,7 +53,7 @@ def commitment_hash(scheme: PoUWScheme) -> str:
 
 
 def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:
-    """The epoch's draw coin, asked of the challenger once the verifier recorded `after`, and checked against the
+    """The epoch's sampling coin, asked of the challenger once the verifier recorded `after`, and checked against the
     epoch's coin commitment: (coin, None), or (None, why it is refused)."""
     if epoch.coins is None:
         return None, "the epoch has no coin commitment for its draw coin to open against"
@@ -285,7 +285,7 @@ class Verifier:
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
         """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
-        for the epoch's draw coin after the transcript is recorded; on one without, the draw's bare source bytes."""
+        for the epoch's sampling coin after the transcript is recorded; on one without, the sample's bare source bytes."""
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)
         if self.epoch.coins is not None or not isinstance(source, bytes):

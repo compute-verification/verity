@@ -1,9 +1,9 @@
-"""The bundle prover's inputs (`prove_bundle.py --bundle B --window DIR`) on the H200 interfaces' drawn-unit bundle (four drawn units
+"""The bundle prover's inputs (`prove_bundle.py --bundle B --window DIR`) on the H200 interfaces' drawn-unit bundle (four sampled proof blocks
 of a W8A8 MLP's window) and the part of its window that the hold reads (`fixtures/bundle-window-public`: its
 `window.json`'s run, registration and partition digests and the drawn members' public bodies, beside the H200 interfaces' copy of
 its registration): the honest bundle is held to its window with every check passing, and the command refuses, before
 staging or proving anything, a bundle whose payload was edited and a window whose drawn member's public body isn't the
-one the bundle names. Proving it end to end needs C-Flock, Lean and the window's private files: `prove_bundle.sh`."""
+one the bundle names. Proving it end to end needs Flock, Lean and the window's private files: `prove_bundle.sh`."""
 from __future__ import annotations
 
 import json

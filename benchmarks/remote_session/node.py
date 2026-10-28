@@ -222,7 +222,7 @@ def main() -> int:
     ap.add_argument("--after-s", type=float, default=20.0, help="serving after the last session, before stop")
     ap.add_argument("--wait-s", type=float, default=900.0, help="the longest wait for every engine's next state")
     ap.add_argument("--overlap-openings", action="store_true",
-                    help="open each window as its draws arrive, beside the later passes (`prover.py "
+                    help="open each window as its samples arrive, beside the later passes (`prover.py "
                          "--overlap-openings`), so the verifier checks while the session runs")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
                     help="the checkpoint the engines serve: before the hello each engine's arena is held to the one "

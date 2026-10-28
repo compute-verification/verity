@@ -1,7 +1,7 @@
 # commit_slots: the serve-time commit call, one subtree per sequence slot
 
 The call that commits a serving step's proof-block outputs: every proof block's outputs as
-`hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a drawn
+`hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled
 proof block opens by replaying its own request. `slots.py` is the CPU reference and this file's executable form;
 `slots_gpu.py` runs the same call on the GPU (or on its host twin) on the SHA-512 engine
 (`benchmarks/torch_gpu/sha512_rows/`): the engine hashes rows into hm96 leaves and builds frame-v3 levels, and
@@ -69,7 +69,7 @@ Row g of slot s (rows numbered in layout order within the slot), rank r in its p
 
 ```text
 x    = SHA-512(P(l) || row),  P(l) = ("verity/sha512-row/v2\0" || u64be l) zero-padded to 128 B, l = 8 len(row)
-y    = ChaCha20(salt_key, nonce s) chunks 3g, 3g+1, 3g+2               192 bytes: C-Flock's hm96_salt(salt_key, s, g)
+y    = ChaCha20(salt_key, nonce s) chunks 3g, 3g+1, 3g+2               192 bytes: Flock's hm96_salt(salt_key, s, g)
 c    = SHA-512(salt_prefix || y);  b = x xor M_key y                    hm96-sha512/v1, the pinned key
 leaf = SHA-512(leaf_prefix(key) || b || c), framed as rank r of unit_domain(u), schema hm96-sha512/row/v2
 ```
@@ -96,7 +96,7 @@ and slot pad tails are computed once.
 
 The salt key is the prover's private randomness, from the operating system's generator, never derived from anything
 public or from the transcript: no Fiat–Shamir. The verifier's only coins are live: the step's root goes to the challenger
-before the step's live coin is drawn, and the coin picks which (slot, proof block) pairs open. A slot's salts are a function of
+before the step's live coin is flipped, and the coin picks which (slot, proof block) pairs open. A slot's salts are a function of
 the key and the slot index alone, so replaying a slot's request regenerates its rows and their salts.
 
 ## Opening a proof block
@@ -135,7 +135,7 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
   `S._layout_json`. `launches.py`: an nsys report's enqueue calls a step (how long each held the thread, and from which
   call they block); `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root;
   `STEP_WRAP` runs `step.py` under a profiler).
-- `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
+- `tests/`: the reference against the fixture and Flock's salts and an independent tree build, openings and their
   refusals, the edge layout and FAMILIES' 1 KiB layout written and loaded back to the same layout, digests and roots,
   the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a

@@ -1,6 +1,6 @@
 """`forms.Circuit.commit`: a word as committed bits, one row for each bit that is not one committed bit already or a
 constant, with every value unchanged; a Definition traced from a builder that commits (`trace.TracingCircuit`) has no gate for
-it, so its And gates are the builder's ANDs without the commits. A `trace.part`'s ``build``, called as C-Flock's lowering
+it, so its And gates are the builder's ANDs without the commits. A `trace.part`'s ``build``, called as Flock's lowering
 calls it (statics first only when it has some), traces to the part's own gates."""
 from __future__ import annotations
 

@@ -191,7 +191,7 @@ def _build(m: str, seed: int) -> dict:
 
 
 def build(m: str, seed: int = 0) -> dict:
-    """A wipe's case with the change `m` (`EXPECT`), every choice drawn from `seed`."""
+    """A wipe's case with the change `m` (`EXPECT`), every choice sampled from `seed`."""
     return copy.deepcopy(_build(m, seed))
 
 
@@ -211,7 +211,7 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0) -> dict:
-    """A wipe aimed at `kind`, its change and every choice drawn from `seed`."""
+    """A wipe aimed at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[kind]
     return build(ms[random.Random(f"wipe-protocol {kind} {seed}").randrange(len(ms))], seed)
 

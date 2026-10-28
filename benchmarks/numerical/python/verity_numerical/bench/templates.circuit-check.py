@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-#: the parameters each template is checked at: the workload ones where C-Flock pins its unit circuit, else small (a template's
+#: the parameters each template is checked at: the workload ones where Flock pins its unit circuit, else small (a template's
 #: example is its served size)
 TEMPLATE_PARAMS = {
     "gemm-coordinate": [{"K": 64, "semantics": "sm80.mma.m16n8k16.bf16"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k16.bf16"},

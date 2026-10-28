@@ -3,9 +3,9 @@
 returns its output), flat GEMM (a tail stage returns it, one BF16 word in a 64-word row), typed RoPE (a flat class) and typed
 GEMM (a template). Each public file holds only roots, hiding leaves and structure. Both typed sets are forms the soundness
 proof does not cover (§16.15), which `verify` refuses after every check has passed; flat GEMM (its unit reads two input
-groups, a tail stage returns the outputs) is the general instance form, which it covers. No session has a draw, which
+groups, a tail stage returns the outputs) is the general instance form, which it covers. No session has a sample, which
 `verify` refuses after that (D12). So the honest session gets the form's refusal on the typed sets (`REFUSED`), on the flat
-ones the draw-less one (`DRAWLESS`), and each false statement the check that catches it.
+ones the sample-less one (`DRAWLESS`), and each false statement the check that catches it.
 
 It is the one test in `check` of the default statements against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has hidden outputs. So it catches a verifier that disagrees with the prover on the
@@ -95,7 +95,7 @@ def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_pat
 def test_a_session_past_the_proved_range_is_refused_naming_it(store, tmp_path):
     """A session whose statement is past the range the soundness bound covers (`Stmt.InRange`, PROTOCOL.md §16.5) is refused
     at setup, its reason naming the value: flat RoPE's honest session, replayed first (it passes every check and meets the
-    draw-less refusal), then the same session under its circuit with `k_log` 28, one past the cap. `k_log` is the one cap a
+    sample-less refusal), then the same session under its circuit with `k_log` 28, one past the cap. `k_log` is the one cap a
     session can cross: past 1024 regions takes over 1022 row ports, whose hm96 slots outgrow a `2^27` block, and
     `m_pts = 24 + nbl` is at most 53 once `m ≤ 35`."""
     d = store / "flat" / "rope-head"

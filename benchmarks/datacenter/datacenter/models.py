@@ -48,7 +48,7 @@ def bf16(x: float) -> int:
 
 
 def words(seed: str, n: int, scale: float = 1.0) -> list[int]:
-    """`n` BF16 words drawn uniformly from [-scale, scale], seeded by `seed`."""
+    """`n` BF16 words sampled uniformly from [-scale, scale], seeded by `seed`."""
     rng = random.Random(f"datacenter/{seed}")
     return [bf16(rng.uniform(-scale, scale)) for _ in range(n)]
 

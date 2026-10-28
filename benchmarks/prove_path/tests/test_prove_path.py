@@ -1,15 +1,15 @@
-"""The prove path's compiler, its advice commitment and its draw-order check, and its prover's and verifier's windows on the CPU
+"""The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's windows on the CPU
 TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
   refused the same way.
-* The advice is fixed before the draw: `advice_before_sample` holds the registration the verifier opens the advice under to the
-  one the draw's receipt names, and refuses the advice re-committed after the coins.
+* The advice is fixed before the sample: `advice_before_draw` holds the registration the verifier opens the advice under to the
+  one the sample's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
-  changed, every check before the draw passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
-  only inside plain's interim scope, one table under a stratified draw (`a5.plain_refusal`).
+  changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
+  only inside plain's interim scope, one table under a stratified sample (`a5.plain_refusal`).
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
@@ -154,27 +154,27 @@ def _bound(rec: dict) -> dict:
     return {k: rec["window"][k] for k in SRT.BINDING}
 
 
-def test_the_advice_must_be_in_the_registration_the_sample_followed():
+def test_the_advice_must_be_in_the_registration_the_draw_followed():
     rec = _rec("11" * 64)
     drawn = R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_sample(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
+    assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
         "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
-    assert PP.advice_before_sample(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
-    assert PP.advice_before_sample(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
-    assert PP.advice_before_sample(drawn, rec, _bound(late))["codes"] == ["advice"]
+    assert PP.advice_before_draw(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(drawn, rec, _bound(late))["codes"] == ["advice"]
     other = _rec("11" * 64, compiler="ef" * 64)
-    assert PP.advice_before_sample(drawn, rec, _bound(other))["codes"] == ["compiler"]
+    assert PP.advice_before_draw(drawn, rec, _bound(other))["codes"] == ["compiler"]
 
 
-def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_sampled_after():
+def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
     rec = _rec("11" * 64)
     theirs, ours = R.receipt(rec, A5.CHALLENGER, received="0"), R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_sample(theirs, rec, _bound(rec), "challenger")["ok"]
-    assert PP.advice_before_sample(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
-    assert PP.advice_before_sample(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(theirs, rec, _bound(rec), "challenger")["ok"]
+    assert PP.advice_before_draw(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
     late = _rec("22" * 64)
-    assert PP.advice_before_sample(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
 
 
 @dataclass(frozen=True)
@@ -286,13 +286,13 @@ def _summary(drawn: list[int], accepted: bool | None, lean: bool, before: bool =
     (_summary([0, 1, 2], False, True), False),
     (_summary([0, 1, 2], False, False, before=False), False),
 ], ids=["refused-by-lean", "forged-unit-not-drawn", "accepted", "lean-accepted", "refused-before-the-draw"])
-def test_a_forged_rank_passes_only_when_lean_refuses_its_sampled_forged_block(summary, ok):
+def test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit(summary, ok):
     assert PP.forged_row(summary, {"member": 0, "unit": 1})["ok"] is ok
 
 
 @pytest.fixture(scope="module")
 def tp(tmp_path_factory):
-    """The deferred stand-in TP Commit and its declared advice; both ranks' windows over every unit (subset:8), and rank 0's again
+    """The deferred stand-in TP Commit and its advice; both ranks' windows over every unit (subset:8), and rank 0's again
     with member 0's unit 1 forged, each commit with its own opening."""
     pytest.importorskip("torch")
     root = tmp_path_factory.mktemp("prove-path")
@@ -375,19 +375,19 @@ def test_the_advices_negatives_are_each_refused_by_name(tp):
 
 
 @pytest.mark.slow
-def test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused(tp):
+def test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_refused(tp):
     """With the receipt the stream writes on receiving the honest registration, the honest registration holds; the same advice
     committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
     compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
     rec = _registered(tp["honest"] / "rank0")
     receipt = R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_sample(receipt, rec, bound)["ok"]
-    got = PP.advice_after_sample(compiler, receipt, rec, opening, mine, held)
+    assert PP.advice_before_draw(receipt, rec, bound)["ok"]
+    got = PP.advice_after_draw(compiler, receipt, rec, opening, mine, held)
     assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
 
 
 @pytest.mark.slow
-def test_a_forged_block_passes_every_check_before_the_sample_and_differs_in_one_bit(tp):
+def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit(tp):
     """The forged window's registration holds to the verifier's window and its own public bodies, as the honest one does: its
     rows, commit strings and roots agree with the flipped word. Its rows differ from the honest window's in exactly one bit."""
     _c, _b, _o, mine, held = _mine(tp, "forged", 0)
@@ -401,9 +401,9 @@ def test_a_forged_block_passes_every_check_before_the_sample_and_differs_in_one_
 
 
 @pytest.mark.slow
-def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_sample(tp):
-    """`--plain` covers one table under a stratified draw (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under stratified:8, and refused before the draw under its own subset:8, drawn outside a stream, with a
+def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
+    """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
+    unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
     plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
@@ -676,7 +676,7 @@ def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0()
         PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
 
 
-def test_per_block_timing_is_over_the_members_sampled_blocks_not_flocks_virtual_units():
+def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units():
     s = {"draw_counts": {"T": 2}, "timing": {"T": {"session_s": 501.2, "verify_s": 6.2, "lean_verify_s": 47.0,
                                                    "timing": {"prove_total_s": 428.9, "units": 16384, "k_log": 26,
                                                               "proof_bytes": [830330, 830330]}}}}
@@ -716,7 +716,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
     another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
-    request Programs as vllm's advice compiler writes them (``manifest.json``);
+    request Programs as vllm's registered compiler writes them (``manifest.json``);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
     from verity_vllm.program.predict import steps as ST
 
@@ -945,7 +945,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does: a run
+    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
@@ -974,7 +974,7 @@ def test_a_served_run_registers_the_public_default_seed_and_one_that_records_ano
 def test_a_stand_in_records_the_public_default_seed_and_its_seedless_sampled_requests_bring_the_records(tmp_path, monkeypatch):
     """`serve-standin` lays a declared Commit out as serve-openai does, so its serve.json records the public default seed and
     passes `registered_seed`; a sampled request of the record that named no seed brings the declared run's default seed, the
-    one its draw used, and a greedy or seeded one brings what the record served it under."""
+    one its sample used, and a greedy or seeded one brings what the record served it under."""
     phi = SimpleNamespace(model={"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"},
                           execution="bi-eager", target=TARGET)
     ingress = {"r0": {"prompt": [0, 1, 2, 3, 4], "max_tokens": 3, "temperature": 0.0},
@@ -1075,7 +1075,7 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
 
 def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
-    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts drawn from ``--key``, a 32-byte
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
     file drawn there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``

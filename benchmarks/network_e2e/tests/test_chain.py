@@ -148,7 +148,7 @@ def test_a_prove_paths_output_is_adopted_and_held_to_the_given_advice(tmp_path):
         chain.prove_path(tmp_path, info)
 
 
-def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advice_it_is_the_fixed_workloads(tmp_path):
+def test_the_prove_paths_time_is_per_drawn_unit_and_beside_the_endpoints_advice_it_is_the_fixed_workloads(tmp_path):
     rank = {"draw_counts": {"S": 2}, "timing": {"S": {"lean_verify_s": 47.0, "timing": {
         "prove_total_s": 428.9, "units": 16384, "proof_bytes": [830330, 830330]}}}}
     assert chain.per_unit(rank) == {"S": {"units": 2, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
@@ -315,8 +315,8 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
                                     for a in ("served", "served-forged"))
 
 
-def test_at_serve_time_is_before_its_sample_and_no_later_than_the_next_windows_close(tmp_path):
-    """A Commit window's advice was registered at serve time when it was registered before its draw (every rank's
+def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close(tmp_path):
+    """A Commit window's advice was registered at serve time when it was registered before its sample (every rank's
     `advice_before_draw`, the verifier's receipt of the registration before any coin) and no later than the next
     window's close in the endpoint's trace; after serving when either fails, and unknown
     while either is. Its lag after its own window's close is always printed, in seconds."""

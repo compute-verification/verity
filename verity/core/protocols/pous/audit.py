@@ -1,6 +1,6 @@
 """The timed audit with sequential reveal (Lean `seqAccepts`), strict: every answer correct and on time.
 
-The memory challenger draws `k` indices uniformly with replacement from `0..B-1` through `verity.ml.randomness`,
+The memory challenger samples `k` indices uniformly with replacement from `0..B-1` through `verity.ml.randomness`,
 keyed by its own secret and bound to `vk`'s root, and reveals index `j` only once answer `j - 1` is in.
 
 The deadline is `Δ = deadline_ns` (0.5 ms: `docs/p3-gpu-measurements.md` found 300 µs fails about 1.5% of honest

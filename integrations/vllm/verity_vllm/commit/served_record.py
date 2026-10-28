@@ -5,7 +5,7 @@ chunk of it, one decode token a step, a recompute from position 0 after a preemp
 under async scheduling, a row past the token that finished it (an EOS, a stop token or string the scheduler hadn't seen
 yet). None of that is a rule here; each is a fact the record states. A `NativeHostCommitter` with a `SamplerInputsSource`
 attached keeps each step's rows (`Row`: the runner's request id, its token rows [lo, hi) of the step, its first position and
-its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
+its prefill length) and binds, beside the sampled ids, the seed and the position each row's sample read (`SAMPLER_INPUTS`). `Record.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
 - ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
@@ -45,7 +45,7 @@ PORT_NAMES = ("step.input/ids", "step.input/positions")
 #: path's (`NativeHostCommitter`'s ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
 IDS_NAMES = (PORT_NAMES[0], "c00.input/ids", "model.embed_tokens/in")
 SAMPLED = "runner.sampler/sampled_token_ids"
-#: Each sampled row's seed and the position its draw read, one i64 a row (`SamplerInputsSource`).
+#: Each sampled row's seed and the position its sample read, one i64 a row (`SamplerInputsSource`).
 SAMPLER_INPUTS = ("runner.sampler/seed", "runner.sampler/pos")
 _SUFFIX = re.compile(r"-[0-9a-f]{8}$")
 
@@ -92,7 +92,7 @@ class Row:
 
 class SamplerInputsSource:
     """The committer source (`NativeHostCommitter.attach_source`) that, on each sampled step, binds the seed and the position
-    each row's draw read (Model Runner V2's `gumbel_sample`: ``seeds[idx_mapping]`` and ``positions[logits_indices]``), one
+    each row's sample read (Model Runner V2's `gumbel_sample`: ``seeds[idx_mapping]`` and ``positions[logits_indices]``), one
     i64 a row under `SAMPLER_INPUTS`, and keeps the step's rows in ``rows`` (`Row`'s fields, keyed by the committer's step;
     a window's step 0 starts them afresh)."""
 

@@ -1,8 +1,8 @@
-# Served proof blocks under C-Flock
+# Served proof blocks under Flock
 
 A served model's proof blocks proved one type at a time, from synthetic values at the model's served statics, through the path the
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
-`serve --zk --draw subset:N` / `prove --zk` run of `flock-circuit` (C-Flock's circuit prover, Flock b684b12 with
+`serve --zk --draw subset:N` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with
 `verity/ml/flock`'s patches), and the Lean verifier of record (`flock-verify verify --zk`, built from `verity/core/service/flock`), which must accept the
 honest run and reject the selftest build's forgeries (a committed false output word, a false output claim, a flipped
 internal bit).

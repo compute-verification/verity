@@ -2803,7 +2803,7 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
 
-// Option A's prover side (partials.py): drawn leaves' lane partials after the draw. L units on gathered operands, unit u
+// Option A's prover side (partials.py): drawn leaves' lane partials after the sample. L units on gathered operands, unit u
 // A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
 // seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
 // leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes

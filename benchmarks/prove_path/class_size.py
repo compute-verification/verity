@@ -18,7 +18,7 @@ key block, which the tests hold to the exact lowering at larger classes:
 
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
 interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log), refusing a
-unit past a 2^27-bit block as C-Flock refuses it. A unit composed of few ANDs takes its rows' k_log (`rows_k`: C-Flock's
+unit past a 2^27-bit block as Flock refuses it. A unit composed of few ANDs takes its rows' k_log (`rows_k`: Flock's
 composer gives each row a unit reads or writes an hm96 slot).
 
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
@@ -143,7 +143,7 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
 #: the sources that cite a run, an artifact or a change, kept as data (``sources.json``): ``composed`` and ``rows_3``, a
 #: unit's by its label (``measured``) and a family's that `measured` prices past `MEASURED` (``families``)
 SOURCES: dict[str, Any] = json.loads(Path(__file__).resolve().with_name("sources.json").read_text())
-#: the compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
+#: the compositions of the blocks this estimate scaled or interpolated, each staged by Flock's `UnitStager` at V3b's
 #: cuts
 COMPOSED: str = SOURCES["composed"]
 #: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
@@ -180,12 +180,12 @@ FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 57
 FIRST_K = ((4, 22), (15, 23), (33, 24), (90, 25), (128, 26))
 #: `TokenFeed_v1{NP}`'s k_log as composed: (the most NP, k_log), an upper bound below a composed NP
 FEED_K = ((1024, 23), (2048, 24))
-#: C-Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
+#: Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
 K_MAX = 27
 
 
 def rows_k(rows: int) -> int:
-    """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
+    """The least k_log of a unit of ``rows`` rows in and out: Flock's composer gives each an hm96 slot, the slots rounded up
     to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every copy unit of W + 1 rows composed (W 2
     to 128, `COMPOSED`) takes exactly this, so a unit of 257 rows takes 2^28."""
     return max(22, 19 + (rows - 1).bit_length())

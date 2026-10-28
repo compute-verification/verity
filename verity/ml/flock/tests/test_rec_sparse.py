@@ -354,7 +354,7 @@ def _cases(sh: RS.Shape, seed: int = 0) -> list[dict]:
 @pytest.mark.slow
 @pytest.mark.parametrize("sh", [RS.Shape(2, 6, 1, 1), RS.Shape(1, 6, 2, 0), RS.Shape(2, 6, 0, 1)], ids=str)
 def test_the_unit_is_the_definitions_ands_and_computes_the_reference(sh):
-    """The M0 unit (through its layout, what C-Flock proves) on an honest rep, each forgery and random words equals the reference;
+    """The M0 unit (through its layout, what Flock proves) on an honest rep, each forgery and random words equals the reference;
     its inputs are the ports' bits, and its ANDs are the Definition's (`ands`: 2,187 a product and the selects) and
     `copy_rows`' rows of ``B = 1`` (the leaf sums and the committed operands; one stacked slot's all-ones ``w_t`` is one AND)."""
     from verity.ml.circuits.boolean.forms import ONE
@@ -395,7 +395,7 @@ def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(t
     at row 0 of its one row in both instances and every other port at row r; ``v`` is the verifier's own and ``out`` its zero
     rows. Both instances hold and the unit agrees with the reference; with rep 1's first H3 round forged (the prover's
     registration of another row), rep 1 alone fails at H3. When Lean is built, its `statement` accepts the honest files, and
-    refuses the forged prover's row against the verifier's own entry of the row the firewall committed (one salt each)."""
+    refuses the forged prover's row against the verifier's own entry of the row the ZK server committed (one salt each)."""
     from verity.ml.commitments import hm96
 
     sh = RS.Shape(2, 6, 1, 1)
@@ -475,7 +475,7 @@ def _draws(seed: int):
 
 
 def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
-    """On a hidden circuit's entries, h as the relay folds it, and coins drawn a round at a time: the reference accepts the
+    """On a hidden circuit's entries, h as the relay folds it, and coins flipped a round at a time: the reference accepts the
     rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG, u's P_LOG and the claim alone (no
     coins), the claim it sends; the registered claim is R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
     B is one entry, the one held twice in A none."""

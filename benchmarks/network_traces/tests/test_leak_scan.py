@@ -280,7 +280,7 @@ def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
 
 
 def test_a_zero_ring_switch_nonce_is_reader_fixed(tmp_path):
-    """The verifier requires each ring switch's grinding nonce to be 0 (C-Flock's PROTOCOL.md §8.3), so a zero one is a
+    """The verifier requires each ring switch's grinding nonce to be 0 (Flock's PROTOCOL.md §8.3), so a zero one is a
     field the reader fixes: a piece found inside a field whose bytes are a ring switch's nonce and the next one's length
     is ``public``, like the stream's other integers. A nonzero one, which the verifier refuses, stays the prover's, and
     the same find is leaked."""

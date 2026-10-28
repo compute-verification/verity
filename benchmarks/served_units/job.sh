@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# A served model's proof blocks under C-Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier of record
+# A served model's proof blocks under Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier of record
 # (`flock-verify`). Run from the source tree's root; results go to
 # $RESEARCH_RUN_DIR/out, scratch to a `mktemp -d` directory the job removes, builds and stagings to $SU_CACHE (kept, keyed by their
 # inputs) or the scratch directory. The builds, the run and the selftest controls are hidden_zk's (its job.sh, sourced):
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build; the selftest build, with
 #      seed-injection), the Lean flock-verify from verity/core/service/flock, and a venv with numpy and blake3
 #   2. per UNIT in SU_UNITS (stage.py's TYPE[:S=V,...]): stage N inputs of its Q_word proof block from synthetic values, one loopback
-#      --zk run drawing all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
+#      --zk run sampling all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
 #      and the Lean verifier on all of them:
 #        honest-own   the honest run                                                                         ACCEPT
 #        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;

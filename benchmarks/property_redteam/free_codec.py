@@ -3,7 +3,7 @@
 `squaring.free_square` shows a squaring mod p1024 at 0 units through the one-word gather (`gather [idx, const c]` is
 `c·[idx ≤ 0]`, and `Gate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
 fields 6b's `codecRows` (`Security/Proofs/Accounting/Gates.lean`) use, `⟨8, 5⟩` and `⟨16, 17⟩`: a circuit of the model
-that computes `byte (lessParity (encodeWord F.p d.key (d.tweak F i) m)) l` for every `l`, on every draw, from the
+that computes `byte (lessParity (encodeWord F.p d.key (d.tweak F i) m)) l` for every `l`, on every sample, from the
 `CodecInputs` slots (payload bytes registered, round constants', mask's and tweak's bytes coin), with its window
 `Proven`, no budgeted gate at all (so `OperandBits B` for every `B`), no run input, and `budgeted C = 0`. Then
 `words.length · E · (n − 1) ≤ budgeted C · (n − 1) + runBits C · E` reads `E · (n − 1) ≤ 0`, false for every `E ≥ 1`
@@ -176,7 +176,7 @@ def free_encode_word(n: int, c: int, rounds: int) -> tuple[Builder, list[int], d
 
 
 def draw_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, i: int, m: int) -> dict:
-    """The slot values of a draw `(cs, mask, τ)` for word `i` with payload `m` (`Slot.value`)."""
+    """The slot values of a sample `(cs, mask, τ)` for word `i` with payload `m` (`Slot.value`)."""
     p, L = (1 << n) - c, n // 8
     t = tau * i % p
     x: dict = {}

@@ -1119,8 +1119,8 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_open_population(self, *, k: int, salt: str, combined_root_hex: str, source_hex: str,
                                    claimed_root_hex: str | None = None) -> dict[str, Any]:
-        """Openings drawn from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
-        this rank's map digest + salt, from the pair's identities coin `source_hex`, drawn after that root: `pipeline.commit_coins`;
+        """Openings sampled from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
+        this rank's map digest + salt, from the pair's identities coin `source_hex`, sampled after that root: `pipeline.commit_coins`;
         forced late step + one per family), opened against the rank's retained tree and verified
         with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
         binding counts as a failed opening (fail-closed)."""

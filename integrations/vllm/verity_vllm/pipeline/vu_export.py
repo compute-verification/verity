@@ -1,10 +1,10 @@
-"""Sampled VUs of a passing row: the draw, the evaluation tap, the subcircuit decomposition and the flat input sets
-(`vllm-vu-set/v1`) it writes.  The stored form is the hierarchical VU store (`verity_vllm.pipeline.vu_store`, which runs the draw);
+"""Sampled VUs of a passing row: the sample, the evaluation tap, the subcircuit decomposition and the flat input sets
+(`vllm-vu-set/v1`) it writes.  The stored form is the hierarchical VU store (`verity_vllm.pipeline.vu_store`, which runs the sample);
 the flat input sets are its default extraction.
 
 Not on the record: the Commit stage calls `vu_store.after_replay` once pair 0's replay of record has passed and its value source
 is recorded (`--vu-export-dir`, env `VERITY_VU_EXPORT_DIR`; on by default under `verity-vllm row`).  `limits.json` (the `Limits`
-fields) and `provenance.json` (extra provenance: the row, the research run) in that directory are read when present.  The draw is a
+fields) and `provenance.json` (extra provenance: the row, the research run) in that directory are read when present.  The sample is a
 stratified sample over the population the replay samples (every evaluable VU of the executed prefix, the replay's strata), keyed by
 `verity.ml.randomness.derive` from the run root.  It is a benchmark selection, not a verifier challenge: fixed by the commitment and
 independent of the replay's own sample, nothing more.  Each drawn VU is
@@ -76,7 +76,7 @@ class Limits:
     heads_per_row: int = 4                   # attention / RoPE heads taken from one row
     max_instances_per_set: int = 8192
     max_row_words: int = 1 << 22             # a generic row whose operands exceed this is counted, not written
-    max_seconds: float = 600.0               # evaluation budget: the draw stops (named, per family) once it is spent
+    max_seconds: float = 600.0               # evaluation budget: the sample stops (named, per family) once it is spent
     max_population_seconds: float = 900.0    # population-build budget when the replay's is not reused, checked between Programs
     workers: int = 8                         # > 1: a forked pool (host-retained stores only; a device-retained one runs serial)
 
@@ -113,7 +113,7 @@ def selection_key(run_root: bytes) -> Key:
 
 
 class _Picker:
-    """`k` of `n` sub-indices of one evaluated row (coordinates, heads), drawn from the selection key at the row's own index."""
+    """`k` of `n` sub-indices of one evaluated row (coordinates, heads), sampled from the selection key at the row's own index."""
 
     def __init__(self, key: Key, index: tuple) -> None:
         self.key, self.index = key, index
@@ -212,7 +212,7 @@ def _decompose_gemm(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
 
 def _coordinate_rows(w: Any, N: int, K: int, word: type, pick: Callable[[int, int], list[int]],
                      limits: Limits) -> tuple[np.ndarray, np.ndarray]:
-    """(coordinates n, their weight rows): a stored weight's sampled rows, else `gemm_coords_per_row` drawn from the whole [N, K] rows."""
+    """(coordinates n, their weight rows): a stored weight's sampled rows, else `gemm_coords_per_row` sampled from the whole [N, K] rows."""
     if isinstance(w, RowSample):
         return np.asarray(w.rows, dtype=np.int64), np.asarray(w.data, dtype=word)
     sel = np.asarray(pick(N, limits.gemm_coords_per_row), dtype=np.int64)

@@ -1,4 +1,4 @@
-# Protocol soundness, the envelopes (rho/envelopes.py): the NCI check's registration (a policy) and each regime's envelopes, one
+# Protocol soundness, the envelopes (rho/envelopes.py): the inference-only check's registration (a policy) and each regime's envelopes, one
 # flat table per regime whose every key is a field of one envelope (Pouw, Detection, Wipe, Certifier) or the regime's
 # own form. A regime's `base` is a table it inherits and overrides.
 

@@ -1,4 +1,4 @@
-"""`flock-rows`, C-Flock's Lean rows, against a unit's size: the flat MoE classes (no calls, no table reads; 41k to 2M
+"""`flock-rows`, Flock's Lean rows, against a unit's size: the flat MoE classes (no calls, no table reads; 41k to 2M
 ANDs) and the derive vectors' fan-out unit at M placed calls and M placed reads (`test_derive.fanout_case`).
 
     python benchmarks/verifier_cost/flock_rows.py --out DIR --bin LABEL=PATH [--bin LABEL=PATH ...] [--target NAME ...]
@@ -14,7 +14,7 @@ of `verity_flock.derive`'s unit rows, Δ and logical list for the parts, and `ok
 seconds, peak RSS, exit code and whether the output equals the mirror's (null past `--cap`). `flock_rows.sh` builds the binaries
 before and after a change and runs this on a node.
 
-The MoE targets need circuits' static MoE forms (`verity.ml.circuits.ops.moe`) and C-Flock's MoE select pieces where their
+The MoE targets need circuits' static MoE forms (`verity.ml.circuits.ops.moe`) and Flock's MoE select pieces where their
 definitions do; each target imports only its own.
 """
 from __future__ import annotations

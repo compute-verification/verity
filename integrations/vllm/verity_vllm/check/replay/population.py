@@ -381,7 +381,7 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
 
 
 def split_not_executed(vus: list[dict], executed_prefix: dict[str, dict] | None) -> tuple[list[dict], list[dict]]:
-    """(rows the sampler may draw, rows at request-relative step >= n_exec of their request).  No `executed_prefix` -> nothing is split."""
+    """(rows the sampler may sample, rows at request-relative step >= n_exec of their request).  No `executed_prefix` -> nothing is split."""
     if not executed_prefix:
         return list(vus), []
     keep, out = [], []

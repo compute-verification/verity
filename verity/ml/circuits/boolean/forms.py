@@ -1,4 +1,4 @@
-"""GF(2) linear forms and the circuit builder that counts ANDs (formerly C-Flock's `gf2`).
+"""GF(2) linear forms and the registered compiler that counts ANDs (formerly Flock's `gf2`).
 
 Wires are GF(2) linear forms over committed bits (inputs, AND outputs, hints). XOR/NOT are free; every AND of two
 non-constant, non-trivially-related forms allocates one committed bit (one R1CS row A.z * B.z = z_i, C = I).

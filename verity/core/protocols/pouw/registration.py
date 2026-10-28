@@ -4,7 +4,7 @@ The keyed 8-block rotation (rung 3) is the rule, keyed after the weights' root i
 registers only from the curated list, with γ folded where it needs it, for Pearl-C4 and for served FP8.
 `check_registration` reads what a registration declares,
 `check_linear` which of its linears the stack's rotations reach, and `rotation_key` is the only key its keyed transforms take:
-one drawn from the epoch's live salt coin (`Epoch.start`).
+one sampled from the epoch's live salt coin (`Epoch.start`).
 No Lean statement reads a registration.
 """
 

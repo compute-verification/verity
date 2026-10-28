@@ -15,7 +15,7 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
                                                              prover/'s: candidate 3's, challenge only) and public.json,
                                                              written in the coin server's own format (rec_live.record_bytes)
     python rec_inner.py forge --what nodraw|partial --inner DIR [--record session|prover]
-                                                             the record without its draw, or with its last drawn unit dropped
+                                                             the record without its sample, or with its last sampled proof block dropped
     python rec_inner.py forge --what top|unsalted --inner DIR
                                                              top: flips one byte of rep 0's level-1 top in private.json;
                                                              unsalted: public.json's tops as their clear nodes (no salts)
@@ -80,7 +80,7 @@ def forge(what: str, inner: Path, level: int = 0, record: str = "session") -> di
     """Flip the low bit of one coin of rep 0, in the session record (``record``: ``session/``'s, or ``prover/``'s, which
     candidate 3's relay writes and whose rounds after z_partial are numbered apart, so only ``challenge``) and in the coin
     server's public record alike: the first coin after the binding round (``challenge``) or the first query coin of Ligerito
-    level ``level`` (``query``). ``nodraw`` and ``partial`` forge the record's draw (none, or its last unit dropped);
+    level ``level`` (``query``). ``nodraw`` and ``partial`` forge the record's sample (none, or its last unit dropped);
     ``top`` and ``unsalted`` forge the tree tops instead (the module docstring)."""
     if what in ("nodraw", "partial"):
         f = inner / record / "session.json"

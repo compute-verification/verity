@@ -317,7 +317,7 @@ and reps may interleave), so an auditor recomputes `q` only if the reps ran sequ
 then all of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
 pseudorandom (SHA-512 as a PRF, `prf/sha-512`; SHA-256 for a v1 session); with `os` coins it needs neither.
 
-### 7.3 The unit draw
+### 7.3 The unit sample
 
 The verifier draws the sampled units itself, in the clear, between registration and the session
 (`note:20260927T0210Z-finding-unit-draw-placement`). Serving registers its roots; the verifier draws the unit set from
@@ -2003,7 +2003,7 @@ Soundness of a verdict rests on:
 - **Custody:** the session record and proofs are the ones the verifier's server wrote (the record is evidence only under
   the verifier's custody; nothing in it authenticates its author).
 
-### 17.3 Trusted components
+### 17.3 Trusted code
 
 - **Lean's kernel,** for the level-3 theorems (re-checked with an independent checker).
 - **Lean's compiler, runtime and the C compiler, for the running binary.** Proofs are about Lean definitions, not the

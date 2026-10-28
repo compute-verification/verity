@@ -664,7 +664,7 @@ class Coins:
     starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
     which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
     epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
-    refusal, so nothing redraws."""
+    refusal, so nothing resamples."""
 
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier

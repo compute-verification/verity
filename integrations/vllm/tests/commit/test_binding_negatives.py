@@ -9,7 +9,7 @@ finalize; the expected population is independent of the collector (structure x w
 | read a buffer after overwrite             | openings verify, value-correspondence FAIL           | test_late_read_verifies_but_fails_correspondence |
 | relabel data from a different occurrence  | coverage ok, openings verify, correspondence FAIL    | test_relabelled_occurrence_is_rejected |
 | wrong root or layout                      | opening / context FAIL                               | test_wrong_root_or_layout_is_rejected |
-Openings are drawn from the expected population (incl. the last step and every family), not from the leaves that exist.
+Openings are sampled from the expected population (incl. the last step and every family), not from the leaves that exist.
 """
 from __future__ import annotations
 

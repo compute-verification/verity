@@ -164,7 +164,7 @@ TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 #: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
-#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")

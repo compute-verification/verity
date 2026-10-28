@@ -1,4 +1,4 @@
-"""F6's unit-cost inventory: pinned Boolean counts of small subcircuits, the exact affine check, the draw and the work model."""
+"""F6's unit-cost inventory: pinned Boolean counts of small subcircuits, the exact affine check, the sample and the work model."""
 from __future__ import annotations
 
 from fractions import Fraction

@@ -1,4 +1,4 @@
-"""Candidate 3's inner session (hiding model architectures with hidden unit circuits): the unmodified C-Flock prover proves the
+"""Candidate 3's inner session (hiding model architectures with hidden unit circuits): the unmodified Flock prover proves the
 inner statement against `rec_live.Proxy` through a relay on the prover's side, which gives the verifier ``h``, the hidden
 circuits' share of the lincheck's fold, as a round of its own after z_partial (`rec_live.holo_rounds`,
 `rec_algebra.Shape.holo`).
@@ -9,7 +9,7 @@ circuits' share of the lincheck's fold, as a round of its own after z_partial (`
 **The relay** (`Relay`) passes every request to the proxy except each rep's round that absorbs z_partial and squeezes r′. That
 round reaches the proxy as two: z_partial's frames ending in a squeeze of no coins, then a round that absorbs h's 64 elements
 and squeezes r′. h is computed between them, at the rep's fold points (`rec_algebra.fold_points`, from the coins the prover
-has had: they are drawn before z_partial). So the coin server draws r′ after the ``c_k`` of z_partial and of h, on the rep's
+has had: they are sampled before z_partial). So the coin server draws r′ after the ``c_k`` of z_partial and of h, on the rep's
 one coin stream, and the prover gets r′ as its round's answer and never sees h.
 
 **h** (`hidden_fold`) is `Stmt.partialRanges` (``Flock/Statement.lean``) on the hidden circuits' ranges alone: per range, its
@@ -26,7 +26,7 @@ Finish the relay runs each rep's sparse phase as a stream of its own, each its r
 opens the registered R at both reps' registered claims with ``flock-circuit stacked`` on a connection of its own into the
 same session (`Relay.stacked_phase`), whose binding round absorbs the circuit reps' statement digest, and only then passes
 the prover's Finish on. The prover's Hello and Commit pass as they are, the circuit table's alone: R's root is the salted
-top of its stream's binding round (`rec_live.stacked_rounds`), which the firewall holds to the registered top, so the
+top of its stream's binding round (`rec_live.stacked_rounds`), which the ZK server holds to the registered top, so the
 verifier's record has the statement's Hello, the bytes of the prover's own record.
 
 `serve` writes the proxy's directory (`rec_live.Proxy.write`: ``public.json``, ``private.json`` and ``session/``, whose rounds
@@ -370,7 +370,7 @@ class Relay:
         """The registered R (`stage_stacked`) opened at both reps' registered claims (`rec_sparse.registered_claim`, each
         checked to be R's value there, the sparse phase's claim) by ``flock-circuit stacked --points P.json
         --statement-digest D --verifier`` on a connection of its own into the same session, whose binding round absorbs the
-        circuit reps' statement digest ``D`` (the firewall's `rec_live.Proxy.statement_digest`) and commits R's root, the
+        circuit reps' statement digest ``D`` (the ZK server's `rec_live.Proxy.statement_digest`) and commits R's root, the
         registered top; its Finish is answered here, the prover's goes on to the proxy."""
         from . import rec_sparse as SP
 
@@ -464,7 +464,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     (with ``sparse``): flock-circuit, which opens R at the sparse claims (`Relay.stacked_phase`, under ``out/stacked``;
     ``forge`` its forgery), R and its registered top as staged beside ``circuit`` (`stage_stacked`, read by
     `staged_stacked`): the session is refused before it starts unless the circuit registration META binds carries the
-    entry `rec_live.STACKED` and the prover holds its opening. ``draw``: the verifier's draw, answered at ``Register`` and
+    entry `rec_live.STACKED` and the prover holds its opening. ``draw``: the verifier's sample, answered at ``Register`` and
     kept as both records' ``unit_draw`` (`rec_live.Proxy`). Returns its summary."""
     m, k_log = statement["dense_m"], statement["k_log"]
     nets, ranges, meta = hidden_circuits(Path(circuit), hidden)
@@ -533,7 +533,7 @@ def main(argv=None) -> int:
     ap.add_argument("--statement", help="flock-circuit statement's output (its STATEMENT record)")
     ap.add_argument("--circuit", help="the inner statement's circuit.txt (the hidden circuits' rows)")
     ap.add_argument("--hidden", default=",".join(HIDDEN), help="the hidden circuits, comma-separated")
-    ap.add_argument("--draw", help="the verifier's draw, answered at Register and recorded (rec_inner.py stage's draw.json)")
+    ap.add_argument("--draw", help="the verifier's sample, answered at Register and recorded (rec_inner.py stage's draw.json)")
     ap.add_argument("--check-fold", metavar="FOLD", help="InnerFold.lean --hide's output: check its comb plus the session's h "
                     "is its full fold, and exit (1 if not)")
     ap.add_argument("--inner", help="--check-fold: the session directory, whose private.json holds h")

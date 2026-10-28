@@ -1,7 +1,7 @@
 """The ``PoUWScheme`` interface: what every named proof-of-useful-work scheme exposes to the protocol (`audit`).
 
 A scheme turns one declared matmul's committed operand rows into the checked values of each tile, the tile's
-transcript leaf and the useful output.  Everything else (commitments, the salt, the draw, the openings, the profile) is
+transcript leaf and the useful output.  Everything else (commitments, the salt, the sample, the openings, the profile) is
 the protocol's, in `audit`, and is the same for every scheme.  Like `verity.ml.commitments.scheme.CommitmentScheme`, a
 scheme is a named, versioned object: its ``name`` is what `verity.core.protocols.pouw.schemes.get` looks up, and its spec section in
 ``PROTOCOL.md`` and its pinned vectors under ``tests/vectors`` carry the same string.

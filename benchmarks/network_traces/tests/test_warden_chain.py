@@ -134,7 +134,7 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
 
 
 def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_subset(tmp_path):
-    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the draw holds refuse
+    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the sample holds refuse
     it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--draw", "1", "--dry", "--out", str(tmp_path / "n2")]) == 0

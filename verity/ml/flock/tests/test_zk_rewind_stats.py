@@ -1,4 +1,4 @@
-"""The C-Flock ZK rewinding statistics (``zk_rewind_stats.py``) on synthetic dumps: matching real and simulated views pass; a simulator whose
+"""The Flock ZK rewinding statistics (``zk_rewind_stats.py``) on synthetic dumps: matching real and simulated views pass; a simulator whose
 views end elsewhere, or whose online values do not depend on the prover's randomness, fails. The dumps from
 ``flock-circuit zkrewind`` run on a VM; this checks the analysis itself."""
 from __future__ import annotations

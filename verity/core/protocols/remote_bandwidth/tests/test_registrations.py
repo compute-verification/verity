@@ -64,7 +64,7 @@ def test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing(monke
 
 def test_a_registration_ends_only_when_closed_with_every_session_counted() -> None:
     """Three sessions over one registration, accepted, rejected and unended: the registration stays live through the
-    rejection, so no fresh draw can replace it, and its close counts all three, two of them failed.  Only then does the
+    rejection, so no fresh sample can replace it, and its close counts all three, two of them failed.  Only then does the
     node register again, under a fresh codec seed, R = 2."""
     registry = audit.Registry()
     st = registered_in(registry)
@@ -105,7 +105,7 @@ def test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_regi
 
 
 def test_the_registry_outlives_the_verifier_s_process_without_its_secret() -> None:
-    """Read back, a live registration still refuses a second, runs no session (the verifier that drew it is gone),
+    """Read back, a live registration still refuses a second, runs no session (the verifier that sampled it is gone),
     and closes with its sessions as they stood; the record holds no secret and no codec seed."""
     registry = audit.Registry()
     st = registered_in(registry)

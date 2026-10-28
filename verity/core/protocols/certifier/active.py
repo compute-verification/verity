@@ -84,7 +84,7 @@ side never sees the salt.
 The certifier's record cells are its grids and two sealed slots per PoUW window: `_salts[p]`, which holds the salt and
 is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads. The prover
 hands that root once (`commit_weights(p, root, signature)`), signed under the prover key registered with the
-certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's draw, is still ahead;
+certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's sample, is still ahead;
 `committed(p, registration)` opens it on `reveal`'s conditions. So the certifier's word orders the prover's weights
 before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
@@ -92,7 +92,7 @@ grids, a function of the traffic, and what the certifier sends into the block is
 (`sampled_proofs.service.Registration`) and fails closed without it: it refuses unless the receipt is that
 registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
-window by default), for a window whose salt was never drawn, and for one it has revealed already. So the salt reaches
+window by default), for a window whose salt was never sampled, and for one it has revealed already. So the salt reaches
 one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
@@ -248,7 +248,7 @@ def weights_message(link: str, window: int, root: bytes, context: bytes = b"") -
 REVEAL_REQUEST_TAG = "verity-network-certifier/reveal-request/v1"
 REVEAL_RESPONSE_TAG = "verity-network-certifier/reveal-response/v1"
 SALT_KIND, WEIGHTS_KIND = b"salt", b"weights"
-#: a proxy's run id, drawn at its construction (`Proxy.run_id`)
+#: a proxy's run id, sampled at its construction (`Proxy.run_id`)
 RUN_ID_BYTES = 32
 #: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
@@ -1124,7 +1124,7 @@ class Proxy:
       off a registration, by default `served_window`), its last ingress record is published, and the certifier's clock
       is no more than `reveal_deadline` past p's end (one PoUW window by default); with `prover_key`,
       `commit_weights(p, root, signature)` records the weights' root the prover signed (`weights_message`, under
-      `prover_context`) before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s conditions;
+      `prover_context`) before p's salt is sampled, and `committed(p, registration)` gives it on `reveal`'s conditions;
     - with `challenger_key` and `signer`, both or neither, `reveal(p, registration, request)` and `committed(p,
       registration, request)` take only a request the auditor's challenger signed under `challenger_key`
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
@@ -1227,7 +1227,7 @@ class Proxy:
         self._salts: dict[int, bytes] = {}
         self._revealed: set[int] = set()
         self._weights: dict[int, bytes] = {}
-        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the draw and the commit never interleave
+        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the sample and the commit never interleave
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
@@ -1557,7 +1557,7 @@ class Proxy:
         certifier's word orders it before the window's salt. Only the registered prover's root is taken: `signature`
         verifies under `prover_key` over `weights_message(ingress link, window, root, prover_context)`. It refuses
         (`RuntimeError`) without a prover key, on a signature that doesn't verify, once the window's first ingress tick,
-        the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for the
+        the salt's sample, has run or was missed (a proxy back from maintenance after it), and a second root for the
         window."""
         if self.salt is None:
             raise ValueError("the salt is off")

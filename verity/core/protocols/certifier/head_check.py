@@ -346,7 +346,7 @@ GATE = re.compile(rf"Gate\[(?P<definition>.+)@(?P<digest>[0-9a-f]{{128}}|{UNPINN
 
 
 def circuit_digest(d) -> str:
-    """A Definition's circuit digest: core's `program_digest` of its Program, the digest a C-Flock statement names its
+    """A Definition's circuit digest: core's `program_digest` of its Program, the digest a Flock statement names its
     template by (META `program_digests`, `verity_flock.circuit.program_digests`). It encodes every Definition `d`
     reaches, the commitment gadgets' Boolean bodies included, whose tracing takes the head check minutes."""
     return program_digest(Program(d))

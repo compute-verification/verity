@@ -91,7 +91,7 @@ def _domain(rng: random.Random, first: int, count: int) -> CommitmentDomain:
 
 
 def _opening(rng: random.Random, S, bound: bool, encode, pass_seed: bytes | None = None) -> SimpleNamespace:
-    """An honest opening: block j (appended at first .. first + count - 1 under a coin, or registered among N blocks) drawn
+    """An honest opening: block j (appended at first .. first + count - 1 under a coin, or registered among N blocks) sampled
     at position pos of a pass whose receipt tree's leaf pos >> 4 holds its receipt; its payload committed in its append's
     tree (or the registration's) and, appended, in a value commitment of at most 2^DV rows, under one salt."""
     N, seed = 4, rng.randbytes(32)

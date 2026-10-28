@@ -6,7 +6,7 @@ prover's passes over its store, and the answer of the bandwidth component of ons
 process, `Local`), in the protocol's order:
 
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
-   verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
+   verifier samples the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
 2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each root

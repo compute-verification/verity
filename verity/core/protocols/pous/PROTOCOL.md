@@ -146,7 +146,7 @@ Pi2            = Feistel10 on 2ℓ + 64 B, F_i(x) = SHAKE256(0x48 || u8(i) || x)
 
 ## P3 (research)
 
-`W` is `N` segments of `n` lower inputs, each a label of `m = n · wc` bits (`n` components of `wc` bits). For segment
+`W` is `N` segments of `n` lower inputs, each a label of `m = n · wc` bits (`n` parts of `wc` bits). For segment
 `s`, with `tag_s = salt || u64(s)` and the band graph `B(n, k)` (the `max(k, 1)` nodes before `v`):
 
 ~~~text
@@ -172,7 +172,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 1. **Commit.** The server commits to `W` before any salt exists (`setup.commit`: tagged SHA-512 over the parameters and
    `W`, tag `verity-pous/w-commitment/v2`).
-2. **Salt.** The verifier draws the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.ml.randomness`
+2. **Salt.** The verifier samples the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.ml.randomness`
    from its own secret or a later beacon round).
 3. **Encode.** The server computes `C* = Enc(W, salt)` and sends it segment by segment. The verifier builds `vk` by
    `setup.verifier_setup`, one of two ways.
@@ -341,7 +341,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     either way;
   - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
     below;
-  - every coin comes from `verity.ml.randomness` through `setup` and `audit`, and a scheme draws none.
+  - every coin comes from `verity.ml.randomness` through `setup` and `audit`, and a scheme samples none.
 - **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
   segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
   - With a shared domain, identical segments get identical labels. An adversary storing one of them then answers every
@@ -364,7 +364,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 `continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory challenger
 of the continuous audit's model, `Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
-`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, drawn as the timed audit's indices, accepted
+`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, sampled as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). It is one
 `audit.UnsignedRounds` over the stream with a hard deadline, and it enforces the three requirements that
@@ -415,7 +415,7 @@ once the memory challenger's clock is past `until`, the open challenge's `closes
 `Δ_late + RTT`). A reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver
 closes the open challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open.
 A transport that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open.
-The caller chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the
+The caller chooses the arrival times and `n`, and nothing here samples or checks them. The game needs both to be the
 memory challenger's own randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`,
 `UnsignedRounds` is unchanged, the single audit's memory challenger. `tests/test_pous_continuous.py` tests each
 requirement.
@@ -443,7 +443,7 @@ c_j   = derive(coin_secret, "verity/pous/streamed-wipe-coins/v1", {server, sessi
 ~~~
 
 A label's message is 75 bytes, one SHA-512 compression, so a GPU derives labels faster than any link carries them.
-SHA-512 is the PRF (C3, claim `prf/sha-512`). `coin_secret` is drawn from the OS once the fill is complete, and the
+SHA-512 is the PRF (C3, claim `prf/sha-512`). `coin_secret` is sampled from the OS once the fill is complete, and the
 indices are uniform and independent, with replacement: live coins, never Fiat–Shamir.
 
 **Messages.** One session per server and wipe, under an id the auditor designates (`session`, 32 bytes):
@@ -452,12 +452,12 @@ indices are uniform and independent, with replacement: live coins, never Fiat–
 |---|---|---|
 | open | challenger, public | the `WipeCommitment` header: the protocol, the server, the session, `N`, the label size, `k`, the batch size, the deadline a batch (`limit_ns`), and every memory tier inside the boundary with its size, the sizes adding up to `N · 64` bytes; the id goes into the challenger's `SessionLog` first, which refuses it again |
 | fill | challenger, server | `L_0 … L_{N−1}` in index order, a chunk at a time; the challenger reads its clock at the first and last chunk |
-| challenge | challenger, server | once the fill is complete, the coins are drawn, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
+| challenge | challenger, server | once the fill is complete, the coins are flipped, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
 | answer | server, challenger | 64 bytes an index, in order; the receipt time is read before anything is hashed, then each answer is compared with `L_{c_j}` |
 | egress | network certifier, challenger | the bits that crossed the boundary over the session (C6), as the certifier counts them |
 | sign | challenger | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v1\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the fill's times, the batch count and the egress; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
 
-The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is redrawn, so a
+The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is resampled, so a
 failed wipe is a visible failure. `verdict(signed, commitment, trusted=...)` accepts a session only when it is
 signed under a trusted key and its header is the published commitment, its batch size is 1 (the reveal the guarantee
 covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the challenger's clock,
@@ -468,7 +468,7 @@ The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdi
 the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which refuses a record `to_json` can't have
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
-`verity/core/devices/memory_challenger/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on drawn sessions at every batch size, one adversarial edit of them (a wrong
+`verity/core/devices/memory_challenger/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on sampled sessions at every batch size, one adversarial edit of them (a wrong
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a field past its width),
 JSON the Lean must refuse, and named negative controls.
 
@@ -483,7 +483,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
-protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
+protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's samples). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
 prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
@@ -980,7 +980,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-host`) and the coins drawn
+  earlier copy: `trusted-host`) and the coins flipped
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor

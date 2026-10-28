@@ -7,7 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The references: the audit, its codec, receipts and coins, the store binding, the memory line and its pooled bound, on
 # the commitments, the randomness and the profile; core's pin (models.json),
 # which the binding's test reads as a pin; the difftest's Python half; and what `lake` builds: this package and,
-# through its path requires, C-Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
+# through its path requires, Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",

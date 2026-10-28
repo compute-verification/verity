@@ -1184,7 +1184,7 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
-    """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    """The period's open commits its circuit (the registered circuit's SHA-512), and `credited_session` counts the
     window only when the descriptor of the circuit its sessions prove hashes to it. The rehearsal's shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""

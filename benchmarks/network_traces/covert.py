@@ -48,7 +48,7 @@ def encode_writes(keys: Sequence[tuple[int, int, int, int]], sessions: Sequence[
 
     `keys` is the Program's canonical order, `(ready, anchor, session rank, index)` per position, as
     `active_replay.program_keys` gives it; `anchor` is the ingress-release bucket. Each window's frames are written
-    `g` buckets after their anchor, where `g` is a random symbol drawn from `[1, δ_declared]`, the feasible frontier
+    `g` buckets after their anchor, where `g` is a random symbol sampled from `[1, δ_declared]`, the feasible frontier
     that keeps the window accepted. The declarations are predicted by a replica of the proxy's `online.Prover`, fed the
     frames in the proxy's read order (by write bucket, then position). With `rule` None the declarations are `fixed`
     (syncs chosen before the run, `envelope` or `model`): the same sender then steers nothing, the control.

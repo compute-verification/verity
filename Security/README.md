@@ -9,8 +9,8 @@ protocol, a bound on the probability that the verifier accepts while a claim abo
 - `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
   `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its named assumptions (`Assumptions`) and its
   guarantee statements (`Guarantees`), each a `def G : Prop`.
-- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each component
-  runs, one `Properties.<Protocol>` module per component.
+- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
+  runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
   guarantee, and the lemmas behind them.
 
@@ -18,7 +18,7 @@ What may import what (`tests/test_lean_packages.py`): `security` requires only M
 `security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
 ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
 import (the spec imports only itself and Mathlib), and its `trees` forbid a statement from reading, or a definitions or
-properties module from importing, anything in `Proofs/`. C-Flock is the exception until its spec is extracted: its
+properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
 guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
 
 ## The lock
@@ -68,24 +68,24 @@ PoUW has other guarantees, outside protocol soundness.
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
-accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
+accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a subprotocol of neither yet.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
   not in Lean yet (above), so the two compose by hand, and nothing ties the deployed verdicts to the theorems: on
-  `main`, remote's sampled-proofs component is one-stage v1, which takes the sessions' verdicts as evidence; the
+  `main`, remote's sampled-proofs subprotocol is one-stage v1, which takes the sessions' verdicts as evidence; the
   verifier's run of `flock-verify --zk` produces them, and the link from remote's acceptance to that run's comes with
   v2.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
-  draws each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
+  flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
   `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
 - **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
-  different protocol from the remote composite, and a component of onsite only.
+  different protocol from the remote composite, and a subprotocol of onsite only.
 
 ## Building and checking
 

@@ -28,7 +28,7 @@ def _fleet(*operators: str, budget: int = 1, clock: Clock | None = None) -> tupl
 
 
 def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
-    """b = 1: one reject halts every stream of the operator. The other stream's draw, delivered and pending its verdicts,
+    """b = 1: one reject halts every stream of the operator. The other stream's sample, delivered and pending its verdicts,
     ends `halted` with no failure of its own, and its accepted verdicts come too late; every call on either stream is
     refused, so is another stream for the operator, and another operator's stream runs on."""
     fleet, (a, b, c) = _fleet("o", "o", "p")

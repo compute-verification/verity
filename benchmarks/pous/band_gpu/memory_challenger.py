@@ -28,7 +28,7 @@ harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudi
 - **Clocks.** `--clock wall` (the default) times each answer on this process's monotonic clock. `--clock logical` takes each
   answer's time to be the responder's reported server time (the CPU tests: no outcome there depends on the machine).
 - **Challenge sources.** Each audit's source is `os.urandom(32)`.  `--seed HEX`, accepted only with `--clock logical`,
-  derives them from the seed instead (`seeded_source`), so a CPU test's draws, and with them its controls' verdicts, are
+  derives them from the seed instead (`seeded_source`), so a CPU test's samples, and with them its controls' verdicts, are
   the same on every run: a control's gate is a statistical test that real draws fail now and then (a value control with
   every 10th block zeroed misses them all in an audit of 105 with probability about 1e-5).
 

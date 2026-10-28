@@ -207,7 +207,7 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
 
 
 def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
-    """Compute credit is the declared circuit's AND count under one pinned lowering, with the
+    """Compute credit is the registered circuit's AND count under one pinned lowering, with the
     multiply-adds reported by format beside it. A device's rate depends on the operand format, so each primitive's
     gates are work of its kind, timed at the block's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
     up; the roundings on the CUDA cores run beside them, so the block's busy share is the busiest

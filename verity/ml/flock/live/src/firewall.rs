@@ -1,4 +1,4 @@
-//! The firewall's Rust side on the outer `--zk` prover (PROTOCOL.md §10.1). The Lean session loop (`Flock.Firewall.Session`)
+//! The ZK server's Rust side on the outer `--zk` prover (PROTOCOL.md §10.1). The Lean session loop (`Flock.Firewall.Session`)
 //! owns the auditor's connection and each rep's frame: it places, checks and masks every round that leaves, and a rep it
 //! stops releases the statement's rounds in the device's place to the session's `Finish`. Here the device runs as a worker
 //! ([`run_worker`]) whose every failure (an error, a panic, silence past the deadline) fails its rep without choosing where
@@ -16,7 +16,7 @@ pub fn refused(what: impl std::fmt::Display) -> String {
     format!("FIREWALL-REFUSED: {what}")
 }
 
-/// What a firewalled rep's worker (the device prover, on a thread of its own: [`run_worker`]) asks the firewall, which serves it
+/// What a firewalled rep's worker (the device prover, on a thread of its own: [`run_worker`]) asks the ZK server, which serves it
 /// on the session's thread.
 pub enum Ask<T> {
     /// a round at its squeeze, and where its coins go
@@ -29,7 +29,7 @@ pub enum Ask<T> {
     Done(Result<T, String>),
 }
 
-/// The worker's end of [`run_worker`]: each call waits for the firewall's answer. Once the firewall has given the worker up
+/// The worker's end of [`run_worker`]: each call waits for the ZK server's answer. Once the ZK server has given the worker up
 /// (it failed, or fell silent past the deadline), every call panics and unwinds the worker: nothing it does reaches the stream.
 pub struct WorkerEnd<T>(Sender<Ask<T>>);
 
@@ -58,10 +58,10 @@ pub fn deadline<T>(secs: f64) -> impl FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>
 }
 
 /// Runs a firewalled rep's worker on a thread of its own and serves its rounds and its hook here, on the session's thread,
-/// until it returns. Every way the worker can fail is `Err`, which the firewall answers by releasing the rest of the schedule
+/// until it returns. Every way the worker can fail is `Err`, which the ZK server answers by releasing the rest of the schedule
 /// itself: an error it returns (a nonzero return code, output that does not decode), a panic, or silence past the deadline
 /// (`wait` gives `None`, or the worker's control ticks). A worker given up may still run; whatever it asks later finds no
-/// firewall. A stop of the firewall's own (a coin refusal, the verifier's) panics in `round` or `hook`, on this thread.
+/// ZK server. A stop of the ZK server's own (a coin refusal, the verifier's) panics in `round` or `hook`, on this thread.
 pub fn run_worker<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T, String> + Send + 'static,
                                      round: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
                                      wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> Result<T, String> {
@@ -186,14 +186,14 @@ pub fn level0_session(coins: &[F128]) -> String {
     crate::hex(&f128_wire(&coins[..4.min(coins.len())]))
 }
 
-/// The `flock-firewall` the firewall releases through: `FC_FIREWALL_LEAN`, else the Lean verifier's build in this checkout.
+/// The `flock-firewall` the ZK server releases through: `FC_FIREWALL_LEAN`, else the Lean verifier's build in this checkout.
 #[cfg(feature = "sha512")]
 pub fn lean_frame_exe() -> std::path::PathBuf {
     std::env::var_os("FC_FIREWALL_LEAN").map(Into::into)
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/service/flock/.lake/build/bin/flock-firewall"))
 }
 
-/// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every draw of this process
+/// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every sample of this process
 /// that is not a rep's own (`zk_hooks::set_os_source`): the mask slot's words, level 0's hiding, every tree's salts but the
 /// pads'. The coin tree's nonce is the Lean session loop's `Hello`'s. Set it before the first draw. A tap that fails later panics, as an OS
 /// generator that fails does.
@@ -219,9 +219,9 @@ pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
     })).map_err(refused)
 }
 
-/// One rep's frame in the Lean session loop (`Flock.Firewall.Frames`), which draws the rep's prover randomness from the OS
+/// One rep's frame in the Lean session loop (`Flock.Firewall.Frames`), which samples the rep's prover randomness from the OS
 /// at the statement's start, commits it, and places, checks and masks each of the rep's rounds as the loop relays them
-/// ([`LoopRep::start`]). The rep proves with the draws; here it only asks the loop where it stands ([`LoopRep::place`],
+/// ([`LoopRep::start`]). The rep proves with the samples; here it only asks the loop where it stands ([`LoopRep::place`],
 /// [`LoopRep::vals`]).
 #[cfg(feature = "sha512")]
 pub struct LoopRep {
@@ -235,7 +235,7 @@ pub struct LoopRep {
 #[cfg(feature = "sha512")]
 impl LoopRep {
     /// Starts table `table`'s rep `rep` of the session the Lean session loop names `name`, at its frames address `addr`
-    /// ([`LeanSession::frames`], `rep NAME TABLE REP`), and takes its draws, which must have the statement's layout `lay`.
+    /// ([`LeanSession::frames`], `rep NAME TABLE REP`), and takes its samples, which must have the statement's layout `lay`.
     pub fn start(addr: &str, name: &str, table: usize, rep: usize, lay: &crate::zk_veil::Layout) -> Result<(Self, Drawn), String> {
         use crate::zk_veil::{Code, K_PAD, TAU_SALT_BYTES};
         use std::io::{BufRead, Read, Write};
@@ -325,7 +325,7 @@ pub fn link_body(z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u
     body
 }
 
-/// A rep's request bytes to `flock-firewall finish` (`Flock.Firewall.Finish.parseRep`): the rep's draws (`pads`, then the pads
+/// A rep's request bytes to `flock-firewall finish` (`Flock.Firewall.Finish.parseRep`): the rep's samples (`pads`, then the pads
 /// tree's `salts`), the passed values, the extra claims' points, and every round's coins. Levels ≥ 1's salts are the
 /// finish's own ([`LeanFinish::salts`]).
 #[cfg(feature = "sha512")]
@@ -350,9 +350,9 @@ pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras
     b
 }
 
-/// The firewall's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
+/// The ZK server's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
 /// in the Lean verifier) on the session's statement, which reads each table's level 0 from the loop's own
-/// ([`LeanFinish::level0`]), then per rep, at its start, is asked for its salts for levels ≥ 1, which it draws itself, and at
+/// ([`LeanFinish::level0`]), then per rep, at its start, is asked for its salts for levels ≥ 1, which it samples itself, and at
 /// its end given its request. It ends at its first refusal, so every later request is refused too.
 #[cfg(feature = "sha512")]
 pub struct LeanFinish {
@@ -362,7 +362,7 @@ pub struct LeanFinish {
 
 #[cfg(feature = "sha512")]
 impl LeanFinish {
-    /// The Lean session loop's finish, on its frames port `addr` ([`LeanSession::frames`]), at the session's draw `draw` (the
+    /// The Lean session loop's finish, on its frames port `addr` ([`LeanSession::frames`]), at the session's sample `draw` (the
     /// JSON `Register` answered, `null` for none): the loop sets the statement up as its `Hello` does.
     pub fn connect(addr: &str, draw: &str) -> Result<Self, String> {
         use std::io::{BufRead, Write};
@@ -527,7 +527,7 @@ pub fn relations_held(cons: &[(String, crate::zk_veil::Lin)], replay: &[&str], l
     }
 }
 
-/// A table's level 0 as the Lean session loop drew and committed it (`Flock.Firewall.Level0`): the four extra lanes, every
+/// A table's level 0 as the Lean session loop sampled and committed it (`Flock.Firewall.Level0`): the four extra lanes, every
 /// lane's padding, the level-0 salts (192 bytes a leaf) and the root, the cap concatenated.
 #[cfg(feature = "sha512")]
 pub struct LeanLevel0 {
@@ -540,8 +540,8 @@ pub struct LeanLevel0 {
 /// The level-0 hiding of record on a firewalled table under the Lean session loop: the loop, on its frames port `addr`, draws
 /// level 0's hiding and salts from the OS for the host's packed witness `z` of the session's table `table` at `m`, commits
 /// level 0 on them and keeps it for that table of the session `session` names ([`level0_session`]) until that session ends
-/// (`level0 SESSION TABLE M LEN` followed by `z`, answered `ok N R` and the draws then the root, its last `R` bytes). The
-/// loop draws a table's level 0 once a session and refuses a second request for it. `extra_words`, `lanes` (the extra ones included),
+/// (`level0 SESSION TABLE M LEN` followed by `z`, answered `ok N R` and the samples then the root, its last `R` bytes). The
+/// loop samples a table's level 0 once a session and refuses a second request for it. `extra_words`, `lanes` (the extra ones included),
 /// `t_pad` and `leaves` are the statement's level-0 sizes, which the answer must have.
 #[cfg(feature = "sha512")]
 pub fn lean_level0(addr: &str, session: &str, table: usize, m: usize, z: &[F128], extra_words: usize, lanes: usize, t_pad: usize,
@@ -583,10 +583,10 @@ pub fn lean_level0(addr: &str, session: &str, table: usize, m: usize, z: &[F128]
                     salts: b[o_salts..o_root].to_vec(), root: b[o_root..].to_vec() })
 }
 
-/// The firewall's session loop of record: `flock-firewall session` (`Flock.Firewall.Session` in the Lean verifier) owns the
+/// The ZK server's session loop of record: `flock-firewall session` (`Flock.Firewall.Session` in the Lean verifier) owns the
 /// auditor's connection. The prover connects to [`LeanSession::addr`] as it would to the auditor, and each connection is one
 /// session, which the Lean loop relays on its own connection to `verifier`: the `Hello` that leaves is its own (at the
-/// statement `args` name, `flock-verify verify --zk`'s flags, and the auditor's draw), `Hello`'s answer and every coin are
+/// statement `args` name, `flock-verify verify --zk`'s flags, and the auditor's sample), `Hello`'s answer and every coin are
 /// checked there, and only the coins, without their openings, come back. Each rep's Lean frame is one of the loop's
 /// ([`LeanSession::frames`]), and a rep's round leaves only as its frame's release. It runs until this handle drops.
 #[cfg(feature = "sha512")]
@@ -640,7 +640,7 @@ impl Drop for LeanSession {
     }
 }
 
-/// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the device's unmasked
+/// The masking challenger's inner challenger under the ZK server. While a round's `release` is set (the device's unmasked
 /// round, which the Lean session loop's frame of the rep checks and masks), what the masking challenger hands it is dropped,
 /// and at the round's squeeze the release, and only the release, goes to the stream. With no release set it passes every
 /// call through: unfirewalled reps, and a firewalled rep's inner proof, whose rounds are the session's Lean finish's
@@ -808,7 +808,7 @@ mod tests {
         assert_eq!(g.inner.items, direct.items, "what the masking challenger handed over is dropped: only the release leaves");
     }
 
-    /// The firewall's side of [`run_worker`] for a test: every ask served in order into `log`, round `k`'s coins `[k]`.
+    /// The ZK server's side of [`run_worker`] for a test: every ask served in order into `log`, round `k`'s coins `[k]`.
     fn serve<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T, String> + Send + 'static,
                                 wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> (Result<T, String>, Vec<String>) {
         let log = std::cell::RefCell::new(Vec::new());
@@ -841,7 +841,7 @@ mod tests {
         assert_eq!(log, ["hook 9", "round 0 2", "round 1 2", "round 2 2"]);
     }
 
-    /// Each way a worker fails is the firewall's `Err` after the rounds it asked, never a panic on the firewall's thread: an
+    /// Each way a worker fails is the ZK server's `Err` after the rounds it asked, never a panic on the ZK server's thread: an
     /// error it returns, a panic, silence (the injected clock: `wait` says the deadline passed at the third ask), and its control's
     /// tick. A worker given up gets nothing more: its next round panics on its own thread.
     #[test]

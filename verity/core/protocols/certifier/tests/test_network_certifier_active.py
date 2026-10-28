@@ -1251,8 +1251,8 @@ def registration(window: int, provenance: dict | None = None) -> Registration:
 
 
 def salted_run(seed: int, **salting):
-    """The honest run with the salt on, each salt drawn from `random.Random(seed)`. Returns the proxy, the wire, the
-    salts drawn by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
+    """The honest run with the salt on, each salt sampled from `random.Random(seed)`. Returns the proxy, the wire, the
+    salts sampled by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
     gave its salt on its registration (True) or refused (None), so each window's True is the one tick it is revealed."""
     rng, drawn, revealable = random.Random(seed), {}, []
 
@@ -1416,7 +1416,7 @@ def prover_signer(seed: bytes = b"prover"):
 
 def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_conditions():
     """`commit_weights(p, root, signature)` records PoUW window p's 64-byte weights' root once, while p's first ingress
-    tick, the salt's draw, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
+    tick, the salt's sample, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
     over `weights_message`, which binds the ingress link, p, the root and the prover's context. It refuses a root after
     that tick, a second root, a root of another length or type, a window the proxy doesn't serve, a proxy without the
     salt or without a prover key, a signature by anyone else, and one over another window, root or context; a proxy back

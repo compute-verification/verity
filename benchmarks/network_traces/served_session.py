@@ -29,7 +29,7 @@ request's max_tokens, at most KO.
   400 requests at most.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
-  128,000 regular ids by default), drawn from a fresh secret seed this process alone holds: they are the prover's,
+  128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
   which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
     prompts on its stdin (``start.json``), ``status`` every `POLL_S` seconds until the run ends (``status.json``), then
@@ -68,12 +68,12 @@ request's max_tokens, at most KO.
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
   way out, whatever the exit.
 
-**The coin link.** A draw on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
+**The coin link.** A sample on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
 --main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
 (``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the lane's gate key and the kept
 fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link carries the
-session's coins over ssh to that port of P's loopback, where the draw's client connects. The gate key and the warden
-run's witness are the auditor's, so the draw never runs on the served node, which is the prover's: a ``--coin-peer``
+session's coins over ssh to that port of P's loopback, where the sample's client connects. The gate key and the warden
+run's witness are the auditor's, so the sample never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
 a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
@@ -441,7 +441,7 @@ def input_file(path: Path, what: str) -> Path:
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
-    """The scan's draw arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
     the auditor's side (`--coin-peer`)."""
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
@@ -683,7 +683,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--keep", type=Path, default=KEEP)
     q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
     q.add_argument("--eos-ids")
-    q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every unit by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
     q.add_argument("--coin-peer", default=AUDITOR, help="with --coins gate: this node, as the gate's peers file names it")
     q.add_argument("--challenger-key", type=Path)

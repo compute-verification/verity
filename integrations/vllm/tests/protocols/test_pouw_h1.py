@@ -1045,7 +1045,7 @@ def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refus
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, reserved=True):
     """`honest` (a served window's commitment) with its coins swapped for those of challenge phase `CH.session_id(seed)`, which
     the auditor's ledger reserved (unless not `reserved`) and opened on `opened_on` and whose salt coin opened after
-    `salt_after`, then its round and draw coins after the window's own roots; and that challenge phase's host (`name`)."""
+    `salt_after`, then its round and flip coins after the window's own roots; and that challenge phase's host (`name`)."""
     sid = CH.session_id(seed)
     host = _host(tmp_path, monkeypatch, name=name, seed=seed, session=sid, reserved=reserved)
     answer = host.open(sid, opened_on.hex())

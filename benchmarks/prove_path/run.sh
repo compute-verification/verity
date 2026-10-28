@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
-# commitment, drawn through a5's per-rank service.Stream on the verifier's own coins, proved by M0 --zk behind the Lean firewall
-# and verified by Lean, the advice's root then held to the registration the draw followed; then one forged run, a unit whose
+# commitment, drawn through a5's per-rank service.Stream on the verifier's own coins, proved by M0 --zk behind the Lean ZK server
+# and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
@@ -33,7 +33,7 @@
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
-#   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
+#   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     draw, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's

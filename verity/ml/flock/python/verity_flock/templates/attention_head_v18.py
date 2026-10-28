@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``attention-head-v18`` (``registry.dead_free.AttentionHead_v18{T, D, BN, DOT, INV, MASKED_FROM}`` on sm120's
+"""Flock lowering of ``attention-head-v18`` (``registry.dead_free.AttentionHead_v18{T, D, BN, DOT, INV, MASKED_FROM}`` on sm120's
 FA2 steps at a decode-only launch): every tensor-core k-step of the head is one unit (``verity_flock.ir_lower.tc_units``;
 ``fp.tc_dot16`` with ``HopperBF16WgmmaDot16``'s groups), ``ceil(D/16)`` QK steps a key (``acc + q . k``) and D per k-step of 16
 visible keys PV steps (``acc + p . v``). The key and value words come from their committed rows, a value row past T in the first

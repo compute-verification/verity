@@ -380,7 +380,7 @@ def registry_of(v: Any) -> audit.Registry:
 
 
 def registry_op(v: Any) -> tuple:
-    """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those drawn
+    """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those sampled
     in the case, or in full."""
     op = _str(v, "op")
     if op == "register":
@@ -492,7 +492,7 @@ def _encoded(c: codec.Codec, blocks: int) -> audit.Store:
 
 
 def store(world: World) -> audit.Store:
-    """A fresh store of the world's registration with no appends yet. The codec seed is drawn without the receipt kind
+    """A fresh store of the world's registration with no appends yet. The codec seed is sampled without the receipt kind
     (`audit.register`), so worlds of one codec and size share their encoded blocks."""
     base = _encoded(world.codec, world.blocks)
     r = base.registration
@@ -513,7 +513,7 @@ def _runs_json(runs) -> list | None:
 class Run:
     """One session over a world's store, the verifier's side (a real `Session`) and the prover's (`audit.Prover`, from
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
-    clock moves one tick an event unless a call needs more. Every receipt is drawn unless `samples` says fewer."""
+    clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
@@ -613,7 +613,7 @@ class Run:
         return self.receive(**sent)
 
     def close(self, t: int, at: int | None = None) -> Any:
-        """Window t's draws, at the earliest its roots are final unless `at`; each window of its draw keeps its share."""
+        """Window t's samples, at the earliest its roots are final unless `at`; each window of its sample keeps its share."""
         if at is None:
             w = self.s.windows[t] if 0 <= t < len(self.s.windows) else None
             d = self.s.deadline(t) if w is not None else None
@@ -633,7 +633,7 @@ class Run:
                           lambda: self.s.verify(t, opened))
 
     def finish(self, edit: Callable[[int, list[audit.Opening]], list[audit.Opening]] | None = None) -> None:
-        """Every draw not yet drawn closed at its last window and its windows verified in order, their openings
+        """Every sample not yet drawn closed at its last window and its windows verified in order, their openings
         through `edit`, until one fails; a window its close accepted, its share none, isn't verified."""
         for t in range(len(self.s.windows)):
             if t in self.draws:
@@ -737,7 +737,7 @@ def honest_appends(r: Run) -> None:
 
 def honest_by_root(r: Run) -> None:
     """Window 0's last pass arrives after its boundary, in flight; window 0 is final at window 1's first root, and is
-    drawn and verified while window 1 runs."""
+    sampled and verified while window 1 runs."""
     r.start()
     r.run()
     r.boundary()
@@ -1057,8 +1057,8 @@ def honest_paced(r: Run) -> None:
 
 
 def honest_paced_drawn_at_k(r: Run) -> None:
-    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a draw after one
-    root, or after k before the boundary, is refused; window 0 is drawn before window 1's first root, and the last
+    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a sample after one
+    root, or after k before the boundary, is refused; window 0 is sampled before window 1's first root, and the last
     window before its deadline."""
     r.start()
     r.run()
@@ -1105,8 +1105,8 @@ def boundary_before_root(r: Run) -> None:
 
 
 def honest_shared(r: Run) -> None:
-    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each draw closed at its
-    last window and its windows verified on their shares. A close at a window before its draw's last is refused, and
+    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each sample closed at its
+    last window and its windows verified on their shares. A close at a window before its sample's last is refused, and
     a window whose share is none, accepted at its close, is refused a verify."""
     r.start()
     for t in range(r.params.windows):
@@ -1139,7 +1139,7 @@ def skipper_shared(r: Run) -> None:
 
 
 def few_shared(r: Run) -> None:
-    """Window 0 of a draw over four sees no root: the draw's close at window 3 fails `few` at window 0."""
+    """Window 0 of a sample over four sees no root: the sample's close at window 3 fails `few` at window 0."""
     r.start()
     r.boundary()
     for _ in range(3):

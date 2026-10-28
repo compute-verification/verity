@@ -1,6 +1,6 @@
 """`verity.ml.commitments.gates.merkle`: the hidden-index Merkle read agrees with `opens` (``hashlib``) at every position of small binary
 and 4-ary trees, refuses a wrong root, sibling, leaf or position, is a function of its shape alone (pinned by gate counts and
-program digest), and costs per level the ANDs and C-Flock rows pinned here; `sha512.compress_ref` is SHA-512's compression."""
+program digest), and costs per level the ANDs and Flock rows pinned here; `sha512.compress_ref` is SHA-512's compression."""
 from __future__ import annotations
 
 import hashlib
@@ -24,7 +24,7 @@ PINS = {
     (2, 1): (103101, 479098, 14170, "292bd91ed222d65237d273ed86f6cf1f5bc7237c282b12abbaf0df48bb84728f8b5804070b4cf078cd2c8e357122860c022298aba2bb87fdaa4f1e3f2a592e7b"),
     (4, 1): (163576, 769803, 19049, "b8c72007efe698f6d379de091be61af8d46829b0641b989b58f762f475e3662d9df9c5e5ebd147b6b39998624c83788e150b30c86bb9520e61d236ed73fc80f5"),
 }
-#: ARITY -> (ANDs, C-Flock rows) one level adds: the node's compressions and the slot multiplexers; rows are the ANDs and the
+#: ARITY -> (ANDs, Flock rows) one level adds: the node's compressions and the slot multiplexers; rows are the ANDs and the
 #: copies `sha512.commit` adds (an untraced `forms.Circuit`, no common-subexpression pass)
 PER_LEVEL = {2: (102591, 142847), 4: (163066, 226774)}
 

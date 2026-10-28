@@ -656,7 +656,7 @@ IDEAL_DOMAIN = "verity/pous/ideal-model/v1"
 
 @dataclass(slots=True)
 class IdealPermutation:
-    """A lazily sampled uniform permutation of `width` bits, consistent in both directions, drawn from
+    """A lazily sampled uniform permutation of `width` bits, consistent in both directions, sampled from
     `verity.ml.randomness` under `seed`."""
 
     width: int

@@ -379,7 +379,7 @@ def cublas_routes_at(fits: list[int]) -> list[dict[str, Any]]:
 
 
 def route_probe_rows(M: int, K: int, C: int, rng: np.random.Generator) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words drawn from `rng`: spread rows (x of exponents -6 to 6,
+    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words sampled from `rng`: spread rows (x of exponents -6 to 6,
     w of -10 to 2), and cancelling rows (x all ones; each W row small words and one +-2^8..2^13 pair, so which chain each product
     lands in decides what the chains absorb, and the small sum shows it through the bf16 rounding)."""
     def words(shape, lo, hi):

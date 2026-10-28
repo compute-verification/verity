@@ -8,21 +8,21 @@ The records, every one in the window's directory but the advice's opening:
   and the advice's hiding commitment (``advice``: its root and its length in bits, which is charged); the advice is a bit
   string the audit never interprets;
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
-* **on a draw, the drawn units' openings** (``m<k>-private.bin``), which reach only the prover behind the firewall.
+* **on a sample, the sampled proof blocks' openings** (``m<k>-private.bin``), which reach only the prover behind the ZK server.
 
 The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`interface.resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
-is refused until its records carry their segment roots. Before the draw the audit holds the registration to that circuit,
+is refused until its records carry their segment roots. Before the sample the audit holds the registration to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
 (`source`), and runs the compile check (`compile_check`, the named gap until the compile unit exists): the advice's opening
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
-registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
-the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
-advice was fixed before the draw (`fixed_before_sample`), and advice re-committed after the coins is refused (`after_draw`).
+registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
+the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
+advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
-proved whole beside the draw, under a work law: every draw's closure (a5's `output_closure`).
+proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
 it (`leak_count`; a record that declares its inputs, `declared_count`). An integration's labels are never read.
 
@@ -37,7 +37,7 @@ them registered, its pins the ``--registered`` file's roots and the window's roo
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
-loop's activation rows) has them fixed before the draw with the rest of the registration;
+loop's activation rows) has them fixed before the sample with the rest of the registration;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
 the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
 the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
@@ -46,7 +46,7 @@ reads tie each reader's row to its writer's. One it reads only through input por
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
 have theirs pinned through ``--registered``, from the window's entries.
 
-The negatives (`negatives` before the draw, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
+The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
@@ -82,14 +82,14 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
-``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
+``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
 ``--forged``: the window holds a forged unit, and the
-audit passes when every check before the draw passed and Lean refused the outcome (the prover runs with its self-check
+audit passes when every check before the sample passed and Lean refused the outcome (the prover runs with its self-check
 skipped, ``FC_ZK_SELF_CHECK=skip``, so it sends proofs of the false witness).
 """
 from __future__ import annotations
@@ -430,7 +430,7 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
     """The per-window values the circuit reads (its registered parameters among the registration's ``activations``), by
     parameter, each refused (ValueError) unless it names its value and a root and its domain binds the window's run root,
     as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
-    an input port) are pinned: the registration fixes them before the draw, and the Lean verifier's registered reads open
+    an input port) are pinned: the registration fixes them before the sample, and the Lean verifier's registered reads open
     each writer's and each reader's rows against the same root, so a reader's rows are its writer's. An untied value (read
     only by input ports) is opened against its committed root too, since the Lean verifier opens every registered read, but
     nothing in the circuit fixes its rows: the prover chose them, so its reads count free (`declared_count`)."""
@@ -496,14 +496,14 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
     return {name: {"refused": not v["ok"], "codes": v["codes"]} for name, v in out.items()}
 
 
-def fixed_before_sample(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None,
+def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None,
                       coins: str = "verifier") -> dict[str, Any]:
     """That the circuit, its compiler and its advice were fixed before the coins, checked rather than assumed: the digest of the
-    registration (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the draw's receipt names, the
+    registration (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
     receipt the stream wrote when it received the registration and before its select read any coin (on the challenger's
     coins, ``coins="challenger"``, the coins also commit to that digest before any is read: a5_coins); and that registration
     binds the compiler and advice the compile check verified (``bound``, None for a circuit with none). -> {ok, codes, detail}:
-    ``after-the-draw`` where the draw followed another registration or another stream's, ``compiler`` or ``advice`` where the
+    ``after-the-draw`` where the sample followed another registration or another stream's, ``compiler`` or ``advice`` where the
     registration binds another."""
     import a5 as A5
 
@@ -517,9 +517,9 @@ def fixed_before_sample(receipt: Mapping[str, Any], rec: Mapping[str, Any], boun
 
 def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any], coins: str = "verifier") -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
-    in a registration binding that root, with its opening. Every check before the draw passes on it (the new opening opens
-    the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_sample` refuses it
-    (``after-the-draw``): the draw followed the registration received first."""
+    in a registration binding that root, with its opening. Every check before the sample passes on it (the new opening opens
+    the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_draw` refuses it
+    (``after-the-draw``): the sample followed the registration received first."""
     c = held["compiler"]
     data = bytes.fromhex(held["opening"]["advice"])
     late = IF.commit_advice(c, data)
@@ -527,12 +527,12 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
     advice = {**rec["window"]["advice"], "root": late.root.hex()}
     late_rec = {**rec, "window": {**rec["window"], "advice": advice}}
     src = source(late_rec["window"], {**held, "advice": advice})
-    v = fixed_before_sample(receipt, late_rec, {"compiler": held["compiler"], "advice": advice}, coins)
+    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice}, coins)
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": opens and src["ok"]}
 
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
-    """A template's circuit from its Definition and its statement in the circuit record (C-Flock's `UnitStager` on the record's
+    """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
     ``in_rows``, ``out_rows`` and ``reads``), bound to the window's partition and program: a5's composer for its members."""
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
         from verity_flock import circuit as FC
@@ -571,7 +571,7 @@ def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
     the population's indices from the templates' order), unless it reads one of the window's ``own`` values
-    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the draw samples like any other. A
+    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the sample samples like any other. A
     value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
     base, at = {}, 0
     for t, n in circuit["templates"]:
@@ -719,7 +719,7 @@ def audit(a: argparse.Namespace) -> int:
         coins = "challenger" if a.challenger else "verifier"
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
-        row["fixed_before_draw"] = fixed_before_sample(receipt, rec, bound, coins)
+        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound, coins)
         ordered = row["fixed_before_draw"]["ok"]
         if bound is not None:
             row["after_draw"] = after_draw(receipt, rec, held, coins)
@@ -773,7 +773,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
     p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out, proved "
-                   "whole beside the draw (`output_class`; a work law)")
+                   "whole beside the sample (`output_class`; a work law)")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
@@ -783,7 +783,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
                    "free now)")
     p.add_argument("--ports", type=int, default=None, help="how many ports from --port are the audit's: a session each for "
-                   "every member with a proved unit, a draw needing more refused before any listens (default one a member)")
+                   "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")

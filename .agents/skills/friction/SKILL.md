@@ -183,7 +183,7 @@ Protocols and claims:
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
+  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
@@ -194,9 +194,9 @@ Protocols and claims:
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
-  checks only padded counts. One key per protecting party, drawn once at setup from the OS before anything else, public
+  checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are drawn from the OS, not expanded by a PRG.
+  are sampled from the OS, not expanded by a PRG.
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the

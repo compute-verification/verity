@@ -6,8 +6,8 @@ you ask it to. The jobs it runs are data in `ci.toml`: each has an owner, a part
 | Part | Jobs |
 | --- | --- |
 | `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build) |
-| `circuits` | `flock-circuit-build`, `flock-rust-tests` (C-Flock's Rust), `circuit-check` (the property checks every circuit passes) |
-| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches C-Flock) |
+| `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
+| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.

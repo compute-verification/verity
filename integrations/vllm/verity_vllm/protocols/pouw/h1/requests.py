@@ -189,7 +189,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
     bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
-    comes after its round closes, and calls_root commits the bits before the draw root."""
+    comes after its round closes, and calls_root commits the bits before the sample root."""
     return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
                                        for row in rows))
 

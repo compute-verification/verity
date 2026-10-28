@@ -29,7 +29,7 @@
         and entry), a receipt changed re-commits the receipt tree (SERVED.json); the input rows a prover of it holds are
         PRIV's
     python window.py open PRIV SALT_HEX UNIT,... OUT_DIR [--tamper-a | --unregistered-ok]
-        the drawn units' rows (their public row's and ok row's too) and salts for staging, and each A row's, B row's,
+        the sampled proof blocks' rows (their public row's and ok row's too) and salts for staging, and each A row's, B row's,
         record's and ok row's registered value, position and path (OUT_DIR/rows.npz, the prover's: ``v_``, ``r_`` and
         ``p_`` of its port), and their opening (OUT_DIR/opening.json: each committed row's b || c and its path to its tree's
         root). The ok row is the one word 1 under its public salt (`h1unit.ok_salt`), row u of the verifier's registered

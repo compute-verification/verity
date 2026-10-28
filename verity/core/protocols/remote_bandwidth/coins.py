@@ -4,7 +4,7 @@ its own host when it is remote (`sampled_proofs.remote`), and each opened once, 
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
-families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the draw over windows
+families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the sample over windows
            cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append i's coin c_a; no append
            family when the session takes no appends (A = 0)
 coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
@@ -27,7 +27,7 @@ takes from the challenger afterwards, the commitment it signed and the roots its
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
 inside the period holding it, read only through `challenger.pinned_session`, so the session ran a tree the host's pins
 log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
-the same roots in the same order, σ_0 after R, and each draw's openings coin after its last window's last root, so a
+the same roots in the same order, σ_0 after R, and each sample's openings coin after its last window's last root, so a
 coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
 """
 
@@ -220,7 +220,7 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     coins weren't opened in order, once, each after the root recorded for it, or whose recorded roots aren't the ones
     the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's,
     and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of windows
-    0 … t − 1 (R if they have none), so before a root of window t − 1; a draw's openings coin opened after anything
+    0 … t − 1 (R if they have none), so before a root of window t − 1; a sample's openings coin opened after anything
     but its last window's last root (so before it); an append's coin after anything but its own root."""
     c = coins.commitment
     if signed != c:

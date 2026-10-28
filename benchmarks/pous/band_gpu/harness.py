@@ -70,7 +70,7 @@ LATE_EXTRA_NS = 50_000
 """How far past the limit the late control holds an answer (the red team's limit + 50 µs)."""
 PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
           "dense-chain/v1": ("dense/64kb/prefix16", "dense-w", 16)}
-"""Per scheme: its pinned vector in `vectors.json`, the label its `W` is drawn under, and how many leading blocks it pins
+"""Per scheme: its pinned vector in `vectors.json`, the label its `W` is sampled under, and how many leading blocks it pins
 (None: the whole segment; the rest of the segment is zeros)."""
 FROZEN_KERNELS = {"thread_rows": 500, "word_io": True, "fused": True, "pair": True, "pair_max_rows": 7500, "chunked": True,
                   "chunked_threads": 64, "split": True, "fused_x": True, "whole_chain": True, "chain_pairs": False}

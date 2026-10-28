@@ -113,7 +113,7 @@ def _file(head, body):
 
 
 def _shared(data, extra=0, first=False):
-    """The public file as a shared-row file: each port's table, `extra` instances of unit 1 beside the drawn unit (the
+    """The public file as a shared-row file: each port's table, `extra` instances of unit 1 beside the sampled proof block (the
     drawn one first or last), then the refs."""
     head, body = _header(data)
     unit, k = head["units"]["indices"][0], len(SVC.PORTS)

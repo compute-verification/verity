@@ -3,7 +3,7 @@ loads them), every Program row of the given request steps by its Definition (the
 rows' partition makes of it: its unit templates (`serving_rows.unit_templates`: the row itself, and a ``CUT`` family's
 batched members), whether it is a template the rows commit (`serving_rows.template`: u16 ports, else the reason), the rows
 `describe` cannot address, its port words (`serving_rows.members`' rule) and its Definition's word gates. No value is read.
-``--estimate`` adds each family's C-Flock size to a census: every distinct primitive (or Boolean Definition) of the row's
+``--estimate`` adds each family's Flock size to a census: every distinct primitive (or Boolean Definition) of the row's
 Definition lowered once on its own (`ir_lower.lower` on fresh inputs), its ANDs, table reads and assertions times how many
 times the Definition holds it. Constants folded and ANDs shared across leaves are not taken off, so it is an upper bound.
 With it, M0's block for the unit (`block`): the in-circuit hashing of its rows alone bounds it from below, so a family whose
@@ -26,7 +26,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-#: C-Flock's largest block (`circuit.K_MAX`) and the statement limit the brief measures against
+#: Flock's largest block (`circuit.K_MAX`) and the statement limit the brief measures against
 K_MAX, LIMIT_LOG = 27, 26
 
 
@@ -44,7 +44,7 @@ def _leaf_cost(fn, IL) -> dict:
 
 def estimate(fn, memo: dict, leaves: dict) -> dict:
     """fn's ANDs, table reads and assertions as the sum of its leaves' (a primitive or a Boolean Definition, each lowered once
-    by `_leaf_cost`), each times how often fn holds it; ``unpieced`` the leaves C-Flock has no piece for."""
+    by `_leaf_cost`), each times how often fn holds it; ``unpieced`` the leaves Flock has no piece for."""
     from verity_flock import ir_lower as IL
 
     from verity.ml.circuits.defs import PrimitiveDefinition
@@ -79,7 +79,7 @@ def estimate(fn, memo: dict, leaves: dict) -> dict:
 
 def block(fn, ands: int | None) -> dict:
     """The log2 of M0's block for fn's unit as `m1_unit.py` stages it (a ``row/v2`` bit row per parameter, an output row per
-    returned field), placed by C-Flock's own rule (`circuit._ranges`): its rows' compressions, the hm96 slots, the mask and
+    returned field), placed by Flock's own rule (`circuit._ranges`): its rows' compressions, the hm96 slots, the mask and
     the unit's slot, its table reads' slots left out, one unit to the block (the stager packs more while the block stays
     within 2^22). ``rows_log`` takes the unit's slot at its least, a lower bound for any number of ANDs; ``est_log`` sizes
     it at the estimate's ANDs plus the port bits. The unit fits a block at most `K_MAX`."""

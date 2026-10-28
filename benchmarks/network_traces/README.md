@@ -29,7 +29,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 - **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
   as a relay that knows bytes only, in front of any TCP server and checks what it published offline; `warden_chain.py`
   is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
-- **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean firewall
+- **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean ZK server
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_advised_zk.py` (N2's advised proof block), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress
   bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`),
@@ -59,7 +59,7 @@ two gate verbs on the auditor's machine:
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
-  its first sampling block, so one LMS key and one attachment carry the load and the sampling blocks. `load.json` (the
+  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
   registrations the server-time block's record pins) and `load-relay.json` are public in the run's `out/`.
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the prover's host. The certifier's host
   never writes a salt.
@@ -71,9 +71,9 @@ its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` 
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
-record from what the gate published. Each sampling block whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits a sampling block, with K that count and δ 0. The record is covered only when every
-one of those sampling blocks is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
+record from what the gate published. Each execution phase that meets [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
+one of those execution phases is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
 record and keeps the wipe uncounted otherwise.
 
 ## The served session
@@ -122,9 +122,9 @@ The run of record takes the network chain end to end on the gate's machines:
 2. It certifies each sampling block's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
 4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's
-   (each sampling block's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
+   (each execution phase's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
    reads.
-5. The verdict is the per-sampling-block acceptance that the certification period's leak bound reads.
+5. The verdict is the per-verification-phase acceptance that the certification period's leak bound reads.
 
 **How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate certifier-rehearse --peer HOST --port
 PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20` (or
@@ -141,13 +141,13 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
-| certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature, and the host audit of the client's own heads |
+| certificates | each execution phase's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature, and the host audit of the client's own heads |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
 | N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`, the integrity profile's count bound) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
-The job's environment picks what it runs: N2's sampled draw on the gate's coins is `CR_N2_CMD` (`n2_advised_zk.py prove
+The job's environment picks what it runs: N2's sample on the gate's coins is `CR_N2_CMD` (`n2_advised_zk.py prove
 --e2e --draw K --challenger gate:…`), the scan of the gate's own rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K
 --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the client's `certificates.jsonl` and `clocks.jsonl` are
 `CR_CLIENT`, by default the network certifier rehearsal's own `client/`. A step on a stand-in (the scan on its own
@@ -190,13 +190,13 @@ circuit-check pins (`advised.circuit-check.py`).
 `chain_record.py leak` computes K, the bits a covert sender's secrets can number over a monitoring period, from a run's
 files: its parameters (`deployment.json`), its traffic and the scan's class. The terms are those of
 `NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
-`Security/Proofs/NetworkCertifier.lean`), whose sampling blocks' failures `NetTiming.periodLeak_le_sum` sums by a union
+`Security/Proofs/NetworkCertifier.lean`), whose execution phases' failures `NetTiming.periodLeak_le_sum` sums by a union
 bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the pooled form is
 `NetTiming.Guarantees.HorizonLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`). The
-report's `d1` lists, per sampling block, whether its certificates, N2 and the scan accepted.
+report's `d1` lists, per execution phase, whether its certificates, N2 and the scan accepted.
 
 **K per monitoring period** (`chain_record.py leak`), on the full-traffic relay run of record with its scan, every
-unit drawn and accepted. K uses:
+unit sampled and accepted. K uses:
 - the run's parameters (`deployment.json`), the same on every active-warden run: B = 512, lanes = 4, r = 4, D = 21,
   T = 32 buckets of 100 ms, and egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
@@ -210,7 +210,7 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a sampling block as registered, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
+- No faulty term with every unit sampled, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
   warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
@@ -219,7 +219,7 @@ The two forms:
 - The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
-- The per-period form (`PeriodLeakAccepted`) has no δ term with every unit drawn.
+- The per-period form (`PeriodLeakAccepted`) has no δ term with every unit sampled.
 - Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.HorizonLeakAccepted`.
 
 The scale:

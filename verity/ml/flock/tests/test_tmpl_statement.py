@@ -167,7 +167,7 @@ def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_tem
         CS.UnitStager(*args, structural=True)
 
 
-#: the auditor's host runs the lowering on numpy and C-Flock's Python alone
+#: the auditor's host runs the lowering on numpy and Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
 class _Block(importlib.abc.MetaPathFinder):

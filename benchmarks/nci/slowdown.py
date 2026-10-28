@@ -1,4 +1,4 @@
-"""The NCI slowdown bracket for a board row: a proven lower bound and the cost of an explicit compliant construction.
+"""The inference-only policy's slowdown bracket for a board row: a proven lower bound and the cost of an explicit compliant construction.
 
 A policy is a calibration: blocks of at most ``Gamma`` gates, each reading at most ``K`` bits besides the committed
 parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method in one configuration) gives the inputs
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--calibration", help="a calibrations.json id (default: every calibration)")
     ap.add_argument("--row", action="append", help="a rows.json id (repeatable; default: every row)")
     ap.add_argument("--sweep", action="store_true", help="the proven bounds over a grid of b_w and b_a, per row")
-    ap.add_argument("--efficiency", action="store_true", help="m / rho for each training recipe, per row")
+    ap.add_argument("--efficiency", action="store_true", help="m over the slowdown for each training recipe, per row")
     args = ap.parse_args(argv)
     parameters, rows = catalog.load("parameters"), catalog.load("rows")
     cals = [c for c in catalog.load("calibrations") if args.calibration in (None, c["id"])]

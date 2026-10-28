@@ -22,27 +22,27 @@ proved.
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
   delta = 1/100) plus the certificate's floor, the share of the store rebuildable from public data within the deadline.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
-  computation's novel intake, alpha F under NCI once the count check is in the ZK flow.
+  computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
   counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
-  reads 2 b_p bits, and the developer relays only as many partial sums as buy more declared work than the relay's gates
+  reads 2 b_p bits, and the developer relays only as many partial sums as buy more registered work than the relay's gates
   would train directly.
 * The verdict lag: from its first faulty proof block until the halt (a window plus the verdict delay), a developer can skip
-  all declared work, once per identity, in every tier; that capacity joins the residual. Detection must end the
+  all registered work, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns faulty outputs into skipped work. A block that
-  injects a chosen output fails its proof whenever it is drawn, so luck doesn't multiply those: ln(1/delta) / q of them
+  injects a chosen output fails its proof whenever it is sampled, so luck doesn't multiply those: ln(1/delta) / q of them
   inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
   worth at most ``chord``, the steepest secant from K of one inference block's thread bound.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
-only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D, the
+only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
 mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
 (``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
@@ -96,7 +96,7 @@ NODE_FLOPS = 8 * GPU_FLOPS
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
+#: (about 35 GPU-s a sample), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
 #: its embedding, with ReferenceThreaded's e for a reference circuit written in Dot16 steps, as the declarations are, in
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable

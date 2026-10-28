@@ -1,6 +1,6 @@
 """n2_advised_zk's period draws on the auditor's challenger's coins (`ChallengerCoins`, ``--challenger local``): one local
 session for every member, under live_challenger's stub of the Lean verifier's coins (as `test_a5_reserve` runs it), so
-nothing builds `sampled-proofs-verifier` and nothing is proved. Each member's draw is `LinkWindows.period_draw`'s on the
+nothing builds `sampled-proofs-verifier` and nothing is proved. Each member's sample is `LinkWindows.period_draw`'s on the
 session's coins: committed to its period's commitment, then `subset:K` read, then its turn ended (`drawn`)."""
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ def _draw(ch, name: str, rounds) -> dict:
 
 def test_every_members_draw_holds_on_the_one_session_and_a_draw_after_another_commitment_does_not(tmp_path, monkeypatch):
     """Both members plan before the session opens (26 windows, `subset:8`), each reads its coins in its own turn after its
-    period's commitment, and each draw holds against the session's evidence (`coins.coins_reason`) on the root the
+    period's commitment, and each sample holds against the session's evidence (`coins.coins_reason`) on the root the
     verifier recomputes from what it received, every `a5_coins.negatives` refused, and the coins the period records it
     read (``read``, which the network verdict's Lean draws on) are the ones the session released. The same coins held to
     another commitment, or to a root over a period whose roots changed, and a period recording other coins than those
@@ -106,7 +106,7 @@ def test_every_members_draw_holds_on_the_one_session_and_a_draw_after_another_co
 
 def test_a_draw_that_never_ran_leaves_its_member_refused_and_the_session_closed(tmp_path, monkeypatch):
     """A member whose draw raised before its commitment (its turn never taken) is skipped when the session closes: the
-    other member's draw still holds, and the one with no segment is refused by name."""
+    other member's sample still holds, and the one with no segment is refused by name."""
     names = ["honest", "tampered_all"]
     ch, rounds = _session(tmp_path, monkeypatch, names)
     try:

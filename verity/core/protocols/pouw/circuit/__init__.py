@@ -45,7 +45,7 @@
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
-and the draw layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
+and the sample layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
 Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
 compares an offered one's digest with its own (X-SPC-73).
 """

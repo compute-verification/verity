@@ -1,7 +1,7 @@
-# A declared circuit's requirement in Lean
+# A registered circuit's requirement in Lean
 
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) as executable Lean: the Lake package
-`core_requirement` (lib `CircuitRequirement`, exe `requirement-difftest`). On one instance (a declared circuit's wiring, one
+`core_requirement` (lib `CircuitRequirement`, exe `requirement-difftest`). On one instance (a registered circuit's wiring, one
 scheduled execution of it and a layout of its values) and the audit's store, it computes each step's live and read values,
 their bits by value and by block, those in complete blocks (every value produced, and the step at or after the block's
 first encoded read, `Layout.encoded`: memory-map/v1's deferred residency), which the audit credits (`credited`,
@@ -42,13 +42,13 @@ vLLM tests' tiny configuration and `b1.RMSNormFusedCudaV1` at N = 64.
 
 `tests/test_census_and_memory_map.py` holds two more producers to the same Lean through the same instance format:
 `requirement.from_census` on those Programs' censuses (a census value per value, a value of 0 bits per scheduled root
-Call), and memory-map/v1 as the Commit's builder (`verity_vllm.commit.memory_map`) records it, a session's KV rows in the
+Call), and memory-map/v1 as the Commit's writer (`verity_vllm.commit.memory_map`) records it, a session's KV rows in the
 blocks it wrote under the free convention of 21:52Z (step s's record takes effect after step s's reads). The audit
 credits the live rows in complete blocks, and those it doesn't, a page's first rows until its last is born, lie in one
-block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last
+block per request, layer and plane (`OneBlockEach`). The writer frees each block in the record of its rows' last
 structural reader, a gather that may select one included, and leaves out a block no step reads while it is resident
 (one whose last structural reader is the step that completes it), and the link holds at every step. With r0's last step
-selecting its first page's rows instead of reading them (a stand-in census), the builder's free is unchanged and the
+selecting its first page's rows instead of reading them (a stand-in census), the writer's free is unchanged and the
 link holds, and the same map freeing the page at the rows' last use fails `StoreMatches` at that step alone. The link
 allows a dead block resident, so the tests check separately that the map holds none.
 With the session's coins back two steps late (`deferred`), each block is credited from its first encoded read, two are

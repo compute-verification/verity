@@ -1,4 +1,4 @@
-"""Figures for the compute dampener D, the hardware multiple at MFU_0 (``statement.dampener``: the overhead calculator's
+"""Figures for the slowdown D, the hardware multiple at MFU_0 (``statement.dampener``: the slowdown calculator's
 ``rho.theorem.multiple_bound`` on ``tiers.evaluate``'s terms, the residual at MFU_0), with the
 ladder, its scenarios and its numbers from ``statement.py``: D per rung by status, the (r̂, R_wipe) phase diagram,
 exposure tornados at the best PoUW design and at 6 GB streamed-label wipes, the memory cap by the fit bound and the
@@ -63,7 +63,7 @@ LADDER = [
     ("Floor, one-minute verdict lag", "Floor,\none-minute\nlag", "policy choice"),
 ]
 #: the rungs whose headline is the PoUW route, r̂ to 0 with no memory cap (``statement.ladder``'s closed-form D, which
-#: caps nothing there); the fit bound's cap at their 4 GB is drawn beside it
+#: caps nothing there); the fit bound's cap at their 4 GB is sampled beside it
 FLOORS = ("Floor (r̂ = 0, 4 GB)", "Floor, one-minute verdict lag")
 #: the Dot16 conjecture's (d, e), ``tiers.REFERENCE_THREADED``: conditional, as a run that trains its embedding reads
 #: Layered's lookup columns as updated weights
