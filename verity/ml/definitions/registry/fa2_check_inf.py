@@ -13,12 +13,13 @@ rescale is exp2(NaN), the guarded block's 0).
 `AttnBlock_v5{..., CHECK = b >= MASKED_FROM}`.  The row's first block is always at or above it.  `targets.attention_spec` binds `Attention_v5`
 on an FA2 target whose family registers `fa2_construction = "check-inf-per-iteration"`; the other FA2 targets keep their accepted chains.
 
-A key block cut into proof units: `AttnBlockSoftmax_v1{D, NVIS, FIRST, DOT, CHECK, PK}` is `AttnBlock_v5`'s steps up to P (and, past
-the first block, O's rescale), its P in groups of PK keys, and `AttnBlockPv_v1{D, N, VS, DOT, FIRST}` one group's P·V k-steps, its V
-as `AttnBlockFirst_v2`'s slices of VS columns.  Softmax, then its groups in order, each reading the last one's O, is `AttnBlock_v5`
-(and at the first block `AttnBlockFirst_v1`) word for word.  A block of 192 keys over a 64-dim head, a key and a value slice a proof
-unit's row, is three units of at most 201 rows at PK 96 and VS 32, where `AttnBlockFirst_v2{VS=32}` alone is 580 rows, past a proof
-block's 256.
+A key block cut into proof units: `AttnBlockSoftmax_v1{D, NVIS, FIRST, DOT, CHECK, PK, LAST}` is `AttnBlock_v5`'s steps up to P (and,
+past the first block, O's rescale), its P in groups of PK keys, and `AttnBlockPv_v1{D, N, VS, DOT, FIRST}` one group's P·V k-steps, its
+V as `AttnBlockFirst_v2`'s slices of VS columns.  Softmax, then its groups in order, each reading the last one's O, is `AttnBlock_v5`
+(and at the first block `AttnBlockFirst_v1`) word for word; at LAST, the head's last key block, whose state only the epilogue reads
+(the lane sums and O, never the running max), the step returns no running max, which it still computes for P and the rescale.  A block
+of 192 keys over a 64-dim head, a key and a value slice a proof unit's row, is three units of at most 201 rows at PK 96 and VS 32, where
+`AttnBlockFirst_v2{VS=32}` alone is 580 rows, past a proof block's 256.
 """
 from __future__ import annotations
 
@@ -218,8 +219,9 @@ def _softmax_type(S):
     params = [("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16)))]
     if not S.FIRST:
         params += [("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32))]
+    m = () if S.LAST else (F32,)
     o = () if S.FIRST else (Array(S.D, F32),)
-    return tuple(params), Tuple(F32, Array(4, F32), *o, *(Array(hi - lo, BF16) for lo, hi in pv_groups(S.NVIS, S.PK)))
+    return tuple(params), Tuple(*m, Array(4, F32), *o, *(Array(hi - lo, BF16) for lo, hi in pv_groups(S.NVIS, S.PK)))
 
 
 def softmax_steps(B, S, q, k, state, *, guard_max_scaled_only):
@@ -251,16 +253,18 @@ def softmax_steps(B, S, q, k, state, *, guard_max_scaled_only):
         lanes.append(acc)
     pb = [B.call(P.F2fpBf16, x) for x in p]
     o = [] if FIRST else [array_of([B.call(P.F32MulFtz, o_prev[d], scores_scale) for d in range(D)])]
-    return tuple_of(m_new, array_of(lanes), *o, *(array_of(pb[lo:hi]) for lo, hi in pv_groups(NVIS, S.PK)))
+    m = [] if S.LAST else [m_new]
+    return tuple_of(*m, array_of(lanes), *o, *(array_of(pb[lo:hi]) for lo, hi in pv_groups(NVIS, S.PK)))
 
 
-@composite("AttnBlockSoftmax", 1, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK"], _softmax_type,
+@composite("AttnBlockSoftmax", 1, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK", "LAST"], _softmax_type,
            conformance="not-yet-established: AttnBlock_v5's steps up to P", refuse=_softmax_refuse)
 def AttnBlockSoftmaxV1(B, S, q, k, *state):
     """`AttnBlock_v5{D, NVIS, FIRST, BN, DOT, CHECK}`'s steps up to P over its NVIS keys: S = Q K^T, the row max and the running
     max (FA2's `Check_inf`: CHECK guards the rescale, `max * scale` is guarded in every block), P, the lane sums, and when not
-    FIRST O's rescale `o_prev * scale`.  Returns (m, l, o when not FIRST, P_0 ... P_{G-1}), P_g the bf16 P of keys
-    [g PK, min(NVIS, (g + 1) PK)), each the `AttnBlockPv_v1` group that reads it."""
+    FIRST O's rescale `o_prev * scale`.  Returns (m unless LAST, l, o unless FIRST, P_0 ... P_{G-1}), P_g the bf16 P of keys
+    [g PK, min(NVIS, (g + 1) PK)), each the `AttnBlockPv_v1` group that reads it.  LAST is the head's last key block (block 0),
+    whose running max no later step reads."""
     return softmax_steps(B, S, q, k, state, guard_max_scaled_only=True)
 
 
