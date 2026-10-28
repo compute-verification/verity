@@ -76,9 +76,9 @@ _BASE = {
     "retain": ("device",),
     "period": (1,),
 }
-#: the full product (13.7 M designs at t8192, 2.3 M at t512)
+#: the full product (18 M designs)
 GRIDS: dict[str, dict[str, tuple]] = {
-    "full": {**_BASE, "steps": (1, 4, 16), "retain": ("device", "host")},
+    "full": {**_BASE, "steps": (1, 4, 16, 32), "retain": ("device", "host")},
 }
 GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["full"].items()}
 #: the knobs that interact, in full; what's committed and its word bits fixed (each moves J by under 1 part in 10^4,
