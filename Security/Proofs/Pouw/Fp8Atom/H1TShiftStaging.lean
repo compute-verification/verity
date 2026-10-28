@@ -17,7 +17,7 @@ reads slice `T − 1`'s salt. The same holds for `j′`, with `cs′ = []` at `q
 * `lateWords_split`: where both columns' sums after `A` stay in one binade of ulp at most `W / 2` for every word in a
   window, the words separate the two chains whenever no two staircases agree on them. `lateWords_of_tagSplit` takes
   that from `TagStaircaseSplit W`, a statement about one slice's two block-1 words that reads neither `A` nor the
-  positions. It is not proved; `internal/pouw-fp8/h1t-crosslate-small-delta.md` in the store has its evidence.
+  positions. It is not proved; its evidence is simulation.
 * `chainFrom_shift_ok`, `late_shift_ok`, `lateWords_split_on`: the same with each step checked on its own
   (`StepOK`: its two sums in one binade, which may change from step to step, or both exact; `stepOK_of_grid` is the
   exact region below `2^24` grid steps).

@@ -19,7 +19,7 @@ cannot both pass.
   (§16.16).
 * `check_metaLeaf_tags`, `check_metaLeaf`: a circuit file `ProvedScope.check` passes, whatever its public-input and
   registered flags, has the tags' leaf scheme as its META id, one `ProvedScope.leafOk` covers: `hm96-sha512/v1`, or
-  `flock-leaf/sha512-unsalted` at hidden outputs without `--zk` (#2411). The check requires those leaves and an untyped
+  `flock-leaf/sha512-unsalted` at hidden outputs without `--zk`. The check requires those leaves and an untyped
   statement, and parses the circuit (`ProvedScope.circuitOf`).
 * `check_of_innerOf`: so where `ProvedScope.check` passes a circuit file `RecVStar.innerOf` sets up, it ran in the
   plain-leaves form: without `--zk`, at hidden outputs and plain SHA-512 leaves.

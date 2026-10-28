@@ -34,7 +34,7 @@ from verity.ml.commitments.identity import canonical_json_bytes
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
 REPO, REV = "verity-test/Tiny-INT8", "a1" * 20
-NODE, AUDITOR = "vy-dc-h200-2", "vy-auditor-2"
+NODE, AUDITOR = "gpu-node", "auditor-host"
 COINS = bytes(range(64))
 SMALL = P2Params(period.W, period.C0, 8)
 TEST_PROTOCOL = mc.TEST_PREFIX + period.PROTOCOL
@@ -146,7 +146,7 @@ def _run(s: Served, tmp_path, monkeypatch, **kw):
     monkeypatch.setattr(CP, "session", session)
     kw.setdefault("trusted_sha512", hashlib.sha512(signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
-                    party=CP.Party(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("10.0.0.36", 47610)),
+                    party=CP.Party(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
     return answer, calls
 

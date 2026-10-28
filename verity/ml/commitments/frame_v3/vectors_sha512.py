@@ -6,7 +6,8 @@
 The same framing as ``vectors.json`` through SHA-512: domain ids, leaves, pads, nodes and roots are 64 bytes, and row leaves
 are ``sha512/row/v1`` digests or ``sha512/row/v2`` (bit row) digests, the latter also as hiding (``hm96-sha512/row/v2``)
 leaves, and ``sha512/row-seg/v1`` (segmented bit row) digests with their segments.  Domains bind a 32-byte digest, and
-``binding64_trees`` a 64-byte SHA-512 identity digest.  Every byte is spelled out.
+``binding64_trees`` a 64-byte SHA-512 identity digest.  ``range_u64_domains`` and ``range_u64_trees`` are the ``range-u64`` kind
+(``RangeU64Domain``): each domain's 173-byte message and id, and a tree over it.  Every byte is spelled out.
 """
 
 from __future__ import annotations
@@ -15,12 +16,12 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .. import hm96
 from ..identity import identity_digest_sha512
-from ..indexed import RangeIndexedDomain
-from ..merkle import CommitmentDomain, frame_hash, _uint, domain_message
+from ..indexed import U64_BOUND, RangeIndexedDomain, RangeU64Domain
+from ..merkle import CommitmentDomain, frame_hash, _uint, domain_message, range_u64_domain_message
 from ..rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_SHA512_ROW_SEG, bit_row, row_leaf,
                        sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_seg_segment_prefix, sha512_row_seg_segments)
 from . import NAME_SHA512, BitRowLeaf, FrameV3, Port, RowLeaf, WordLeaf
@@ -46,6 +47,11 @@ FORMAT_ROW_CASES = (("nvfp4/k32", ((4, 32), (8, 2))), ("mxfp4/k64", ((4, 64), (8
 #: ``identity_digest_sha512(BINDING64_TAG, {"n": n, "owner": owner})``
 BINDING64_CASES = ((1, -2), (3, -1), (5, 4))
 BINDING64_TAG = "frame-v3-sha512/vectors/binding64"
+#: range-u64 domains, ``(owner, start, count)``: no position; one at the largest start; counts either side of a byte (255, 256),
+#: at 2^32 and the largest, 2^64 - 1.  Every case binds ``identity_digest_sha512(RANGE_U64_TAG, RANGE_U64_DOC)``, so their
+#: messages share the first SHA-512 block.
+RANGE_U64_CASES = ((-2, 0, 0), (-1, U64_BOUND - 2, 1), (0, 0, 255), (4, 1 << 32, 256), (4, 1, 1 << 32), (0, 0, U64_BOUND - 1))
+RANGE_U64_TAG, RANGE_U64_DOC = "frame-v3-sha512/vectors/range-u64", {"kind": "range-u64"}
 
 
 def domain(n: int, label: str = "frame-v3-sha512/vectors") -> CommitmentDomain:
@@ -98,6 +104,42 @@ def _binding64_tree_vectors() -> list[dict[str, Any]]:
         case["domain_message"] = domain_message(d.binding, owner, positions.identity_sha512(), n, "sha512").hex()
         out.append(case)
     return out
+
+
+def _range_u64_domain(owner: int, start: int, count: int) -> CommitmentDomain:
+    return CommitmentDomain(identity_digest_sha512(RANGE_U64_TAG, RANGE_U64_DOC), owner, RangeU64Domain(start, count), hash="sha512")
+
+
+def _range_u64_doc(d: CommitmentDomain) -> dict[str, Any]:
+    p = cast(RangeU64Domain, d.positions)
+    return {"binding": d.binding.hex(), "owner": d.owner, "start": p.start, "count": p.count, "hash": d.hash,
+            "domain_id": d.domain_id.hex()}
+
+
+def _range_u64_vectors() -> list[dict[str, Any]]:
+    """``range-u64`` domains with the framed message whose SHA-512 is the domain id, and the empty one's empty root."""
+    out = []
+    for owner, start, count in RANGE_U64_CASES:
+        d = _range_u64_domain(owner, start, count)
+        case = {"domain": _range_u64_doc(d), "binding_identity": {"tag": RANGE_U64_TAG, "doc": RANGE_U64_DOC},
+                "message": range_u64_domain_message(d.binding, owner, start, count).hex()}
+        if count == 0:
+            case["empty_root"] = d.empty_root().hex()
+        out.append(case)
+    return out
+
+
+def _range_u64_tree_vectors() -> list[dict[str, Any]]:
+    """A ``u16`` word-leaf tree over a ``range-u64`` domain whose positions cross 2^32: each leaf binds its rank and position."""
+    start, n = (1 << 32) - 2, 5
+    d = _range_u64_domain(4, start, n)
+    scheme = FrameV3({"y": Port(d, WordLeaf("u16", 2))})
+    positions = list(range(start, start + n))
+    values = [expand(f"frame-v3-sha512/range-u64/{p}", 2) for p in positions]
+    leaves = [d.leaf(r, p, "u16", v) for r, (p, v) in enumerate(zip(positions, values, strict=True))]
+    return [{"domain": _range_u64_doc(d), "schema": "u16", "positions": positions, "values": [v.hex() for v in values],
+             "leaves": [x.hex() for x in leaves], "pads": [frame_hash(b"pad", d.domain_id, _uint(r), hash="sha512").hex() for r in range(n, 8)],
+             "root": scheme.root("y", leaves).hex(), "paths": [[p.hex() for p in scheme.path("y", leaves, r)] for r in range(n)]}]
 
 
 def random_bits(label: str, n_bits: int) -> bytes:
@@ -222,6 +264,8 @@ def build() -> dict[str, Any]:
         "row_leaves": _row_vectors(),
         "row_trees": _tree_vectors(),
         "binding64_trees": _binding64_tree_vectors(),
+        "range_u64_domains": _range_u64_vectors(),
+        "range_u64_trees": _range_u64_tree_vectors(),
         "bit_row_leaves": _bit_row_vectors(),
         "bit_row_trees": _bit_row_tree_vectors(),
         "bit_row_hiding_leaves": _bit_row_hiding_vectors(),

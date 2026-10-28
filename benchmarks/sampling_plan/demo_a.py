@@ -1,29 +1,28 @@
-"""Demo A's frontier on one H200 (PRF-166): plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step
-(HASH-20, its commit 1.0 s of it), on circuits' map of every subcircuit to a Definition C-Flock stages (FAMILIES, PRF-166
-db928eb0, 04:32Z) with PoUW's tiles as one more subcircuit (Daniel, 25 Oct 6:36 PM PDT), planned by `optimize.frontier`
-under Daniel's objective (25 Oct 5:45 PM PDT, its work half circuit size from 5:55 PM): half skipped work, half leaked
-output bits.
+"""Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
+commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`examples/h200/e2e_h200/plan.py`'s
+`Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
+circuit size): half skipped work, half leaked output bits.
 
 **Harm.** A unit's work is its subcircuit's own ANDs (`Candidate.ands`, not its rows' openings), every subcircuit alike,
 the PoUW tiles included, with no PoUW work table and no influence. Every unit carries its output bits. At each budget B
-the exchange rate is top's: each half is divided by the least bound B certifies for that half alone,
+the exchange rate divides each half by the least bound B certifies for that half alone,
 `Objective(delta, work=0.5/H_work(B), bits=0.5/H_bits(B))`, which is scale-free, and the plan reports the certificate's
 two bounds from its one draw, `free_compute` and `leak`, at delta = 1% and 1e-6, and the tile stratum's epsilon at delta
 (`pouw.window.eps_at`).
 
-**Units** (`families`). Each subcircuit is FAMILIES' Definition at its measured ANDs and C-Flock's staged k_log (at most
+**Units** (`families`). Each subcircuit is the map's Definition at its measured ANDs and C-Flock's staged k_log (at most
 27, its statement cap `min(2^(35 - k_log), 2^20)`), its units counted from the shape: the s8 coordinates as
 `ScaledMmS8CoordinateRows_v1` (x in the quantizer's 8 KiB chunk rows), the residual stream as 128 chunk rows of 256 B
 (`Bf16AddRow_v2{128}` x 128 an add, RMSNorm as `RmsSumSqPart_v1` and `RmsNormOutSums_v1` a chunk, the quantizer as
 `RowAbsMax_v1` and `QuantChunkS8_v1`), the gathers as `AllGather_v1` (the O projection's input `{2,64}`), attention as
 `QkSoftmaxRow_v1` and `PvRow_v1` a head and position, and the embedding and argmax a coordinate and a token. PoUW's tiles
 are J10-R's per-call lane units, `PouwH1LaneZy_v2` over `PouwH1Tile_v5` (a 32 x 32 leaf over the call's K), one
-subcircuit at each K, at compute-accounting's traced ANDs (CMP-126, 08:00Z, `TILE_TRACED`): a statement for each 131,072
+subcircuit at each K, at their traced ANDs (`TILE_TRACED`): a statement for each 131,072
 of its MACs (`PouwH1LaneZyChunk_v2`) and one for the combine, each statement's output the one bit `ok`,
 and about 257 bits of receipt committed a chunk. Drawn lanes share their chunks' statements, at the chunk's k_log.
 
-**Budget.** Daniel (6:05 PM PDT): proving within 1% of the block's compute. Serving's overhead is beside it, never in it
-(Daniel, 6:36 PM PDT): the commits (HASH-20's 1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
+**Budget.** Proving is within 1% of the block's compute. Serving's overhead is beside it, never in it: the commits
+(1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
 block's 1% is less than one statement's fixed cost, so the plan of record is given for sampling blocks (the proof blocks
 one draw covers, committed and registered before it) of the least length whose 1% affords a plan, a week, a month and a
 year: one draw over all their units, its statements shared per subcircuit. M3's live draw (`m3`) is a uniform 8 of one
@@ -33,14 +32,14 @@ budget, and what it certifies.
 **Certificate.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
-(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean, #4560, proved in #4590): per sampling block, one detection budget
+(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per sampling block, one detection budget
 `sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's wrong
 units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
-delta, from one draw at one delta. #4600's difftest holds `certify`'s fields to that supremum.
+delta, from one draw at one delta. A difftest holds `certify`'s fields to that supremum.
 
 **Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit a sampling block,
 `ceil(k / cap)` statements of drawn units), its feature a unit's ANDs with its rows' openings, every unit's outputs
-committed at the GPU row committer's 225 GB/s (CMP-92 00:45Z), and a drawn request replayed at its share of the block's
+committed at the GPU row committer's 225 GB/s, and a drawn request replayed at its share of the block's
 GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay domain,
 a drawn unit replayed at 32 requests' share (`TILE_REQUESTS`), unshared with the other subcircuits' replays.
 
@@ -68,27 +67,27 @@ from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
     Candidate, Certificate, CostModel, Objective, Plan, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 
-#: Demo A's block: 16,384 requests, a 6.35 s step (HASH-20: the commit 1.0 s of it), 32 steps a request
+#: Demo A's block: 16,384 requests, a 6.35 s step (the commit 1.0 s of it), 32 steps a request
 SHAPE = H.Shape(batch=16_384, step_s=6.35, steps=32)
-#: the step's GPU time by what runs (CMP-92 00:50Z), seconds: the INT8 linears, and attention with the row ops
+#: the step's GPU time by what runs, seconds: the INT8 linears, and attention with the row ops
 STEP_SPLIT = {"ScaledMmS8Coordinate_v1": 5.08, "attention and row ops": 0.25}
-#: committing a step's outputs (HASH-20), GPU-s: serving's overhead, beside the proving budget
+#: committing a step's outputs, GPU-s: serving's overhead, beside the proving budget
 COMMIT_STEP_S = 1.0
-#: the GPU row committer (HASH-17, r20261025-234226-299c), bytes a second
+#: the GPU row committer's measured rate, bytes a second
 COMMIT_BPS = 225e9
 DELTAS = H.DELTAS
 PERIODS = H.PERIODS
-#: Daniel's budget (25 Oct 6:05 PM PDT): proving at this share of the sampling block's GPU time
+#: the proving budget: proving at this share of the sampling block's GPU time
 BUDGET_SHARE = 0.01
 #: the budgets swept, in multiples of one serving block's GPU time, past the cheapest plan's
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: C-Flock's largest statement (r20261026-004208-a28d refused k_log 28)
+#: C-Flock's largest statement (it refuses k_log 28)
 K_LOG_MAX = 27
-#: M3's live draw (PRF-171): a uniform subset of this many of one block's units
+#: M3's live draw: a uniform subset of this many of one block's units
 M3_UNITS = 8
-#: PoUW's proof block (CMP-126, compute-accounting 08:00Z): J10-R's per-call lane unit `PouwH1LaneZy_v2` over
+#: PoUW's proof block: J10-R's per-call lane unit `PouwH1LaneZy_v2` over
 #: `PouwH1Tile_v5`, 1,024 outputs over the call's whole K, traced on its Boolean form: at each K its ANDs and its
 #: statements, one `PouwH1LaneZyChunk_v2` of 131,072 MACs each and the combine, each statement's output the one bit `ok`
 TILE_OUTPUTS = 1024
@@ -111,7 +110,7 @@ def tile_parts() -> tuple[int, int]:
     if rest or combine <= 0 or any(s - 1 != k * TILE_OUTPUTS // TILE_CHUNK_MACS for k, (_, s) in TILE_TRACED.items()):
         raise ValueError(f"TILE_TRACED is not chunks of {TILE_CHUNK_MACS} MACs plus one combine: {TILE_TRACED}")
     return chunk, combine
-#: `PvRow_v1{T}`'s staged ANDs (DSV4V2 r20261026-023338-0808, FAMILIES r20261026-040304-8200), linear between
+#: `PvRow_v1{T}`'s staged ANDs, linear between
 PV_ANDS = ((1, 111_104), (8, 321_024), (31, 1_009_152), (32, 1_039_168))
 
 
@@ -136,7 +135,7 @@ class Unit(H.Template):
 
 
 def qk_ands(t: int) -> int:
-    """`QkSoftmaxRow_v1{T=t}`'s ANDs, exact at T = 8, 16 and 32 (DEMOWL r20261026-035202-6542), pinned at T = 1."""
+    """`QkSoftmaxRow_v1{T=t}`'s ANDs, exact at T = 8, 16 and 32, pinned at T = 1."""
     return 39_924 if t == 1 else 37_692 * t + 2_218
 
 
@@ -148,12 +147,12 @@ def pv_ands(t: int) -> int:
 
 
 def attention_k_log(t: int) -> int:
-    """Both attention units' staged k_log at T keys (DEMOWL: 22 to T = 6, 23 to 14, 24 to 30, 25 at 31)."""
+    """Both attention units' staged k_log at T keys (22 to T = 6, 23 to 14, 24 to 30, 25 at 31)."""
     return max(22, 19 + ceil(log2(t + 2)))
 
 
 def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
-    """FAMILIES' partition of one block (PRF-166 db928eb0), each subcircuit's units counted per token (R T a block) and
+    """The map's partition of one block, each subcircuit's units counted per token (R T a block) and
     per generated token (R G), and with `tiles` PoUW's tile lanes over every s8 multiply-accumulate."""
     R, L, T, Gn, d, f, V = m.batch, m.layers, m.positions, m.generate, m.width, m.mlp, m.vocab
     q, kv, heads = m.heads * m.head_dim, m.kv_heads * m.head_dim, m.heads
@@ -321,7 +320,7 @@ def cheapest(cands: list[Candidate], cm: CostModel) -> float:
 
 
 def point(cands: list[Candidate], cm: CostModel, proving: float, *, grid: int = 41) -> Point | None:
-    """At proving budget `proving` each half's least bound alone, then the plan under top's rate there, certified at
+    """At proving budget `proving` each half's least bound alone, then the plan under the exchange rate there, certified at
     both deltas from its one draw; None once a half is proved whole (its least bound below 1)."""
     d, total = DELTAS[0], proving + commit(cands, cm)
     hw = _best(cands, cm, Objective(d, work=1.0), total, grid).certificate.free_compute
@@ -505,7 +504,7 @@ def render(o: dict) -> str:
     b = o["shape"]["block_s"]
     lines = [f"# Demo A's frontier: {o['templates']} subcircuits, {o['units']:.3g} units, {o['ands']:.3g} ANDs and "
              f"{o['bits']:.3g} output bits a block of {b:g} GPU-s", "",
-             f"Committing every unit's outputs: {o['commit_hash20']:.4g} GPU-s a block (HASH-20), beside every plan. "
+             f"Committing every unit's outputs: {o['commit_hash20']:.4g} GPU-s a block, beside every plan. "
              f"The cheapest plan proves for {o['cheapest']:.4g} GPU-s ({o['cheapest'] / b:.3g} of the block).", "",
              "| proving GPU-s | of the block | H_work(B) | H_bits(B) | free_compute at 1% | leak at 1% (bits) | "
              "free_compute at 1e-6 | leak at 1e-6 | drawn | |", "|---|---|---|---|---|---|---|---|---|---|"]

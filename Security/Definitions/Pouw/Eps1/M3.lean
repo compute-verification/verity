@@ -3,7 +3,7 @@ import Mathlib
 /-!
 # QSTAR's model M3 for Dither's words (trusted)
 
-EPS1-QSTAR's model M3: a straight-line program over 32-bit words, each
+The model M3: a straight-line program over 32-bit words, each
 instruction any fixed function of at most three earlier words.
 
 * At the zero instance the inputs are the dither words (`R i ℓ p`, bit `p` of `R_ℓ[i]`) and the columns of `U`

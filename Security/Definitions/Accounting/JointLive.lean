@@ -157,29 +157,26 @@ def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) 
   (w.kept o : ℝ) ≤ f * w.fill + 2 * 128 + (d.chip + (d.mem - w.fill))
 
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
-the wipe that opens it, the bits of weights its PoUS store holds, its PoUS challenge times on the run, and the read
-deadline. -/
+the wipe that opens it, its PoUS challenge times on the run, and the read deadline. -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/
   block : (b : Fin B) → PeriodLive d α (C b) G
   /-- the wipe that opens block `b` -/
   wipe : Fin B → WipeLive d O
-  /-- the bits of weights block `b`'s PoUS store holds (U) -/
-  weights : Fin B → ℕ
   /-- block `b`'s PoUS challenge times on the run -/
   chal : Fin B → O → Finset ℕ
   /-- the read deadline, in ticks (T_read) -/
   readDeadline : ℕ
 
-/-- **Block `b`'s memory term** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s, ASK-132): at each of its
-PoUS challenge times, the bits of its weights that its capacity account doesn't hold in device memory are at most
-`0.07 · U + S_chip + ∑_i cap_i · T_read`. -/
+/-- **Block `b`'s memory term at share `σ`** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s): at each of
+its PoUS challenge times, the bits of device memory its capacity account doesn't hold, `M` less what it holds, are at
+most `σ · M + S_chip + ∑_i cap_i · T_read`, `M` the device's memory. -/
 def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {B : ℕ}
-    {C : Fin B → Verity.Circuit} {O : Type} {G : Verity.Game O} (S : BlocksLive d α B C G)
+    {C : Fin B → Verity.Circuit} {O : Type} {G : Verity.Game O} (S : BlocksLive d α B C G) (σ : ℝ)
     (s : Verity.Game.Strategy G) (b : Fin B) (o : O) : Prop :=
-  ∀ t ∈ S.chal b o, (S.weights b : ℝ) -
+  ∀ t ∈ S.chal b o, (d.mem : ℝ) -
       ((((S.block b).world s o).schedule t).mem (((S.block b).world s o).acct .capacity) : ℝ) ≤
-    7 / 100 * S.weights b + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
+    σ * d.mem + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
 
 end Accounting

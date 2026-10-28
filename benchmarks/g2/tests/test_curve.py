@@ -297,7 +297,7 @@ def test_retention_modes_are_columns_of_their_own_and_a_cell_takes_4k_rows_over_
     ({}, {}, "none"),
 ])
 def test_a_tp_decode_arms_retention_is_its_summarys_else_t1rs_wrappers_else_none(summary, params, want):
-    """`params` is the attempt's, as `research data show RUN --json` has it: the run's command line is its `argv`."""
+    """`params` is the attempt's, as the store's record of the run has it: the run's command line is its `argv`."""
     assert C.tp_retain(summary, params) == want
 
 

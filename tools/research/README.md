@@ -418,13 +418,9 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- The r20 campaign's numbers live in the store. `python -m
-  verity_numerical.bench.ledger_to_store [--store ROOT] [--dry-run]` imports
-  the frozen ledger once (labels on the attempt when the run is in the store,
-  else on a `ledger-row/v1` artifact; red-team verdicts as separate assertions;
-  idempotent). `python -m verity_numerical.bench.store_tables --diff-ledger
-  [--proof-class-by 'red-team-*']` rebuilds the like-for-like table from store
-  queries alone and diffs it row by row against `decision_tables.py`.
+- The r20 campaign's numbers live in the store: the frozen ledger was imported
+  once (labels on the attempt when the run is in the store, else on a
+  `ledger-row/v1` artifact; red-team verdicts as separate assertions).
 - Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
@@ -542,7 +538,7 @@ SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
-budgets, the daily render and scheduled runs (`notes.py`). Three flags let it run on any
+budgets and scheduled runs (`notes.py`). Three flags let it run on any
 always-on host (`steward.py`):
 
 - `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
@@ -558,8 +554,7 @@ always-on host (`steward.py`):
 - `research notes service systemd|launchd` prints the service definition
   (restart on exit and after a reboot; `watch --lease --standby`).
 
-Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[render]]` entries (the tables render, `render_lines`) and
-`[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
+Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
 `weekday` (`run_lines`):
 
 ~~~toml
