@@ -543,7 +543,7 @@ theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : 
   have h0 := setup_size_pos x.hTags.1 hs
   have hck1 := array_forM_ok hv 0 h0
   obtain ⟨htag, htab, ss, s, hss, hj, hname, hn, hf, ho, -⟩ := checkStmt_ok hck1
-  obtain ⟨-, hcst, hpop⟩ := setup_of_accepts x t hs hck (isTmpl_of_name htag)
+  obtain ⟨_, hcst, hpop⟩ := setup_of_accepts x t hs hck (isTmpl_of_name htag)
   rw [hcst] at hname
   exact ⟨htag, htab, ss, s, hss, hj, hname, hpop ▸ hn, hf, ho⟩
 
