@@ -770,7 +770,9 @@ def _version(v: str) -> tuple[int, ...]:
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its pinned commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
+    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
+    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -792,7 +794,9 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], s["sessions"][0]["expect"])
+        e = s["sessions"][0]["expect"]
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
+                          {"accepted": e.get("upstream_accepted", e["accepted"])})
     return list(out.values())
 
 

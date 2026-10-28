@@ -312,7 +312,7 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
     reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
-                                          **{p: kp for p, (kp, _) in vk.items()}}, LL.COMPLETE: True}
+                                          **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: L.known_opening(ctx, sw, v_ok, row_ok, salt_ok)}

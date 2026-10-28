@@ -29,10 +29,8 @@ def WIDTH_KEY : String := "word_bits"
 def SCHEMA_KEY : String := "row_schema"
 def SCHEMAS : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_SCHEMA_SEG]
 
-/-- The key of a `--registered` file that names every port of the statement (`checkComplete`); absent, false. -/
-def COMPLETE_KEY : String := "complete"
 /-- The keys a `FORMAT` file holds. -/
-def FILE_KEYS : List String := ["format", "ports", COMPLETE_KEY]
+def FILE_KEYS : List String := ["format", "ports"]
 /-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`, `param` `PARAM_KEY`. -/
 def PORT_KEYS : List String :=
   ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known", "param"]
@@ -329,21 +327,14 @@ theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (s
         exact Array.eq_empty_of_size_eq_zero (by omega)
       · cases h
 
-/-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
-def completeOf (j : Json) : V Bool :=
-  match j.getObjVal? COMPLETE_KEY with
-  | .error _ => .ok false
-  | .ok (.bool b) => .ok b
-  | .ok _ => .error s!"registered reads: {COMPLETE_KEY} is true or false"
-
 /-- Every port of the circuit, each input port and each output row, is a port of `own`. -/
 def complete (c : Circuit) (own : Array Port) : Bool := c.ports.all fun p => own.any (·.name == p.name)
 
-/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10, a `--registered` file that sets
-`complete`): every port of the circuit is a port of the verifier's own registered reads (`checkComplete_ok`), so no
-output's cone reads a row the statement commits afresh and its public file states (a lane's index, say), and `check`
-opens each of them at its registered root. It reads the circuit's ports, not its gates: whatever an output's cone reads
-is a port's row. -/
+/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10; `flock-verify` runs it on every
+statement whenever `--registered F` is given): every port of the circuit is a port of the verifier's own registered
+reads (`checkComplete_ok`), so no output's cone reads a row the statement commits afresh and its public file states (a
+lane's index, say), and `check` opens each of them at its registered root. It reads the circuit's ports, not its gates:
+whatever an output's cone reads is a port's row. -/
 def checkComplete (c : Circuit) (own : Array Port) : V Unit :=
   if complete c own then .ok ()
   else
