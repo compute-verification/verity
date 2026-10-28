@@ -87,8 +87,12 @@ from __future__ import annotations
 
 import collections
 import functools
+import gc
+import gzip
 import hashlib
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -100,7 +104,7 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1device as HD
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
@@ -183,6 +187,31 @@ def descriptor(program: Program) -> bytes:
     is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
     layout (`credit.layout_of`)."""
     return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
+
+
+def write_program(program: Program, layout: Mapping[str, Any], out: Path | str, *, rows: int, steps: int) -> str:
+    """`program`'s `codec.program_digest`, streamed once into ``out``'s `pouw_h1.PROGRAM` (its `descriptor`, gzipped) as it
+    is hashed, and its `pouw_h1.PROGRAM_META`: the digest, the descriptor's bytes, its `layout` (`declared_layout`, which
+    core's `credit.layout_of` reads from it), T ``rows`` and S ``steps``. A period-open commits the digest and the circuit
+    files built from these (``served_verdicts.py period``)."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    h, size, on = hashlib.sha512(), 0, gc.isenabled()
+    gc.disable()
+    try:
+        with gzip.open(out / PH.PROGRAM, "wb", compresslevel=1) as f:
+            for chunk in descriptor_chunks(program):
+                h.update(chunk)
+                f.write(chunk)
+                size += len(chunk)
+    finally:
+        if on:
+            gc.enable()
+    digest = h.hexdigest()
+    meta = {"program_digest": digest, "file_sha512": digest, "bytes": size, "rows": int(rows), "steps": int(steps),
+            "layout": dict(layout)}
+    (out / PH.PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
+    return digest
 
 
 def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
@@ -766,4 +795,4 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
            "V2", "Weights", "WindowCommitmentEntries", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
-           "weights_of"]
+           "weights_of", "write_program"]

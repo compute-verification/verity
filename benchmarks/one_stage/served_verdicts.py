@@ -3,8 +3,13 @@ sampled proofs, and the one record of every verdict (the block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
     served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
+    served_verdicts.py period open SERVE_DIR --name P --circuits DIR --slots N --max-tokens N [--gate CMD] [--draw-k K]
+                                 [--model M]
+    served_verdicts.py period close SERVE_DIR [--gate CMD]
+    served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
+                                [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -29,12 +34,32 @@ the node it ran on.
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
 with ``--main``, whether that pin is on the verifier's first-parent line of main (a session pinned off it is refused).
 
+``period open``: the period the served windows join, opened once serve-openai listens and before its first window
+reserves (a window opens at its first engine step): its circuit is the Program digest serve-openai declared and wrote
+(serve.json's ``protocols.program``, ``h1/window-program.meta.json``), its rows and rounds the server's T and S, and its
+circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1 --out DIR --live T,S``'s manifest),
+held to that digest, T and S (`period_open_argv`). The live template's file is required. A stratum whose ``k<K>`` file
+isn't built yet is left out and named: core's credit refuses a drawn statement at that K (``circuit``), nothing else.
+Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its draw K ``--draw-k``, else
+`pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's registration of ``--model`` under the
+digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
+then refuses the window at its weights). The open's answer goes
+to ``SERVE_DIR/period.json``. ``period close`` closes that period and adds its answer there.
+
+``program``: serve-openai's declared window Program for ``--model`` at T, S, built on a CPU without serving (`program`,
+`DECLARED`) and written as serve-openai writes ``h1/``, so the circuit files can be built before the serve that needs
+them (the Program is a function of the linears, T and S). ``--like`` takes model, T and S from a serve-openai run and
+refuses unless the digest is that run's.
+
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
 (``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
 gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
-is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`).
+is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
+declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
+the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`).
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -117,6 +142,18 @@ DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger
 DEV_VERDICT = "development run, credits nothing"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
 H1_CALLS = "h1/w{k}/pouw-h1-calls.json"
+#: serve-openai's declared window Program's meta under the serve dir (`pouw_h1.PROGRAM_META`)
+H1_META = "h1/window-program.meta.json"
+#: `pouw_h1_circuits`' manifest in its ``--out``
+CIRCUITS_MANIFEST = "circuit-files.json"
+#: the period this serve dir's windows joined, its open's and close's answers (``period``)
+PERIOD = "period.json"
+#: the int8 linears serve-openai declares its window Program over, by served model: its layers and each layer's
+#: ``(module, n, K)`` in vLLM's module order (serve-openai's H1 arm: each ``weight.shape``, named by `pouw._named`)
+DECLARED: dict[str, tuple[int, tuple[tuple[str, int, int], ...]]] = {
+    "verity-int8/Llama-3.2-1B-INT8": (16, (("self_attn.qkv_proj", 3072, 2048), ("self_attn.o_proj", 2048, 2048),
+                                           ("mlp.gate_up_proj", 16384, 2048), ("mlp.down_proj", 2048, 8192))),
+}
 
 
 def _lines(path: Path) -> list[dict[str, Any]]:
@@ -243,13 +280,130 @@ def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, st
     return period is None, line
 
 
+def program(out: Path, model: str, rows: int, steps: int, like: Path | None = None) -> dict[str, Any]:
+    """``program``: the window Program serve-openai declares for `model` at T `rows` and S `steps`, built without serving
+    (`DECLARED`'s linears) and written as serve-openai writes it (`served.write_program`) into `out`; its meta. With
+    `like`, a serve-openai run's dir, its model, T and S are that run's and its digest must be the run's
+    (serve.json's ``protocols.program``), else ValueError."""
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    want = None
+    if like is not None:
+        serve = json.loads((like / "serve.json").read_text())
+        proto = serve.get("protocols") or {}
+        model, rows, steps, want = serve.get("served_model_name") or model, proto["rows"], proto["steps"], proto["program"]
+    if model not in DECLARED:
+        raise ValueError(f"no declared linears for {model!r}: add them to DECLARED ({sorted(DECLARED)})")
+    layers, linears = DECLARED[model]
+    named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in linears]
+    shapes = [(n, k) for _m, n, k in named]
+    modules = {w: m for w, (m, _n, _k) in enumerate(named)}
+    digest = SV.write_program(SV.declared(shapes, modules, rows, steps),
+                              SV.declared_layout(shapes, modules, rows, steps), out, rows=rows, steps=steps)
+    if want is not None and digest != want:
+        raise ValueError(f"{model}'s Program at T {rows}, S {steps} is {digest[:16]}..., not {like}'s {str(want)[:16]}...: "
+                         "DECLARED's linears aren't the ones that run served")
+    return json.loads((out / PH.PROGRAM_META).read_text())
+
+
+def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, max_tokens: int,
+                     draw_k: int | None = None, model: str | None = None) -> tuple[list[str], dict[str, Any]]:
+    """The gate's ``period-open`` of period `name` for serve-openai's run `serve_dir` (``period open``, module docstring)
+    and what it commits: ``{circuit, rows, steps, draw_k, circuit_files, missing, length, weights}``, ``missing`` the
+    strata with no ``k<K>`` file yet. ValueError naming what to build or rerun when the serve dir or `circuits` doesn't
+    hold the period's Program, T and S."""
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    proto = json.loads((serve_dir / "serve.json").read_text()).get("protocols") or {}
+    try:
+        meta = json.loads((serve_dir / H1_META).read_text())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{serve_dir} has no declared window Program ({H1_META}, {type(e).__name__}): serve it with "
+                         "--protocols pouw:eps1-sm120-h1fx1 from a tree whose serve_h1 writes it") from None
+    circuit, rows, steps = meta["program_digest"], int(meta["rows"]), int(meta["steps"])
+    if proto.get("program") != circuit:
+        raise ValueError(f"serve.json's Program {str(proto.get('program'))[:16]}... is not {H1_META}'s {circuit[:16]}...")
+    redo = (f"build them with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
+            f"--live {rows},{steps}")
+    try:
+        doc = json.loads((circuits / CIRCUITS_MANIFEST).read_text())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"no circuit files at {circuits} ({type(e).__name__}): {redo}") from None
+    if doc.get("program") != circuit:
+        raise ValueError(f"{circuits}'s circuit files are Program {str(doc.get('program'))[:16]}...'s, not the served "
+                         f"{circuit[:16]}...: {redo}")
+    lb, files = doc.get("live_bind") or {}, dict(doc.get("files") or {})
+    if (lb.get("T"), lb.get("S")) != (rows, steps) or "live" not in files:
+        raise ValueError(f"{circuits}'s live circuit file is for T = {lb.get('T')}, S = {lb.get('S')}, not the window's "
+                         f"{rows}, {steps}: {redo}")
+    strata = sorted({int(k) for _n, k, _w in meta["layout"]["linears"]})
+    missing = [k for k in strata if f"k{k}" not in files]
+    k = PHC.draw_k(meta["layout"]) if draw_k is None else int(draw_k)
+    length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
+    weights = ["--model", model] if model else []
+    compact = {"sort_keys": True, "separators": (",", ":")}
+    argv = ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
+            *weights, "--circuit-files", json.dumps(files, **compact), "--length", json.dumps(length, **compact)]
+    return argv, {"circuit": circuit, "rows": rows, "steps": steps, "draw_k": k, "circuit_files": files,
+                  "missing": missing, "length": length, "weights": weights}
+
+
+def _gate_json(gate: str, argv: Sequence[str]) -> dict[str, Any]:
+    """The gate's JSON answer to `argv`; RuntimeError naming what it said when it refuses."""
+    raw = _gate_out(gate, *argv)
+    said = raw.decode(errors="replace").strip()[-600:]
+    try:
+        answer = json.loads(raw)
+    except ValueError as e:
+        raise RuntimeError(f"the gate's answer to {argv[0]} is not JSON ({e}): {said}") from None
+    if not isinstance(answer, dict) or "refused" in answer:
+        raise RuntimeError(f"the gate refused {argv[0]}: {said}")
+    return answer
+
+
+def period_open(serve_dir: Path, gate: str, name: str, circuits: Path, **kw: Any) -> dict[str, Any]:
+    """``period open`` (module docstring): the open sent, its answer and what it committed, written to
+    ``serve_dir/PERIOD``."""
+    argv, doc = period_open_argv(serve_dir, name, circuits, **kw)
+    doc = {"name": name, **doc, "open": _gate_json(gate, argv)}
+    (serve_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc
+
+
+def period_close(serve_dir: Path, gate: str) -> dict[str, Any]:
+    """``period close``: the period `period_open` opened for `serve_dir` closed, its answer added to ``PERIOD``."""
+    doc = json.loads((serve_dir / PERIOD).read_text())
+    doc["close"] = _gate_json(gate, ["period-close", "--name", doc["name"]])
+    (serve_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc
+
+
+def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
+    """What core's credit reads of the window beyond its record and session, as ``--check-challenger``'s flags: the
+    declared Program serve-openai wrote (``--descriptor``, `pouw_h1.PROGRAM`), the period ``period open`` opened
+    (``--period``, `PERIOD`), the drawn calls' statements (``--statements``) and the live evidence (``--live-evidence``,
+    ``h1_prove/live.py evidence``'s), each where it exists."""
+    got: dict[str, str] = {}
+    if (p := serve_dir / "h1" / "window-program.json.gz").is_file():
+        got["--descriptor"] = str(p)
+    if (p := serve_dir / PERIOD).is_file():
+        got["--period"] = json.loads(p.read_text())["name"]
+    for flag, p in (("--statements", statements), ("--live-evidence", live)):
+        if p is not None:
+            got[flag] = str(p)
+    return got
+
+
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
-                     python: str) -> dict[str, Any]:
+                     inputs: Mapping[str, str], python: str) -> dict[str, Any]:
     """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
-    window's record `calls` against its session's tree `tree`; its ``pouw_h1_challenger.json``."""
+    window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
+    ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
-            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out)]
+            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
+            *(x for kv in inputs.items() for x in kv)]
     p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
@@ -259,20 +413,23 @@ def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Pa
                            f"{(p.stdout + p.stderr).strip()[-400:]}") from e
 
 
-Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path], Mapping[str, Any]]
+Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str, str]], Mapping[str, Any]]
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
-         check: Check) -> dict[str, Any]:
+         check: Check, statements: Path | None = None, live: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
-    `check` is `check_challenger` with its Python bound."""
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
+    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
     out.mkdir(parents=True, exist_ok=True)
+    inputs = credit_inputs(serve_dir, statements, live)
     line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
     h1 = line.get("pouw_h1") or {}
     calls = serve_dir / H1_CALLS.format(k=window)
     doc: dict[str, Any] = {"window": window, "credited": False, "why": DEV_WHY, "coin_source": h1.get("coin_source"),
                            "tied": h1.get("tied"), "steps_served": h1.get("steps_served"), "session": h1.get("session"),
-                           "gate_passed": (h1.get("gate") or {}).get("gate_passed"), "check": None, "credit": None}
+                           "gate_passed": (h1.get("gate") or {}).get("gate_passed"), "check": None, "credit": None,
+                           "credit_inputs": inputs}
     reasons = []
     if not h1 or "error" in h1:
         reasons.append(f"H1's window: {h1.get('error') or 'its line has no pouw_h1 (served without --protocols)'}")
@@ -291,12 +448,12 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
                 t.extractall(tree, filter="data")
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
-            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check")
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", inputs)
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:
             doc["check"] = {k: got.get(k) for k in ("ok", "reason", "manifest", "rounds", "coin_source")}
-            doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps")}
+            doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps", "calls", "credit")}
             reasons += [f"{k}: {got[r]}" for k, r in (("coins", "reason"), ("manifest", "manifest")) if got.get(r)]
     doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
@@ -525,6 +682,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
     g.add_argument("--lane", default="vllm")
     g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
+    pe = sub.add_parser("period")
+    pe.add_argument("verb", choices=("open", "close"))
+    pe.add_argument("serve_dir", type=Path)
+    pe.add_argument("--gate")
+    pe.add_argument("--name")
+    pe.add_argument("--circuits", type=Path)
+    pe.add_argument("--slots", type=int)
+    pe.add_argument("--max-tokens", type=int)
+    pe.add_argument("--draw-k", type=int)
+    pe.add_argument("--model")
+    pr = sub.add_parser("program")
+    pr.add_argument("out", type=Path)
+    pr.add_argument("--model", default="verity-int8/Llama-3.2-1B-INT8")
+    pr.add_argument("--rows", type=int, default=512)
+    pr.add_argument("--steps", type=int, default=16)
+    pr.add_argument("--like", type=Path)
     o = sub.add_parser("pouw")
     o.add_argument("serve_dir", type=Path)
     o.add_argument("window", type=int)
@@ -533,6 +706,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--key-sha512", default=os.environ.get("H1_KEY_SHA512"))
     o.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
+    o.add_argument("--statements", type=Path)
+    o.add_argument("--live-evidence", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -562,9 +737,39 @@ def main(argv: Sequence[str] | None = None) -> int:
             ok, line = False, f"GATE refused: {type(e).__name__}: {e}"[:800]
         print(line, flush=True)
         return 0 if ok else 1
+    if a.cmd == "period":
+        try:
+            if not a.gate:
+                raise ValueError("no gate command (--gate)")
+            if a.verb == "close":
+                doc = period_close(a.serve_dir, a.gate)
+                print(f"PERIOD closed {doc['name']}: {json.dumps(doc['close'], sort_keys=True)[:600]}", flush=True)
+                return 0
+            if not (a.name and a.circuits and a.slots and a.max_tokens):
+                raise ValueError("period open needs --name, --circuits, --slots and --max-tokens")
+            doc = period_open(a.serve_dir, a.gate, a.name, a.circuits, slots=a.slots, max_tokens=a.max_tokens,
+                              draw_k=a.draw_k, model=a.model)
+        except (OSError, RuntimeError, ValueError, KeyError) as e:
+            print(f"PERIOD refused: {type(e).__name__}: {e}"[:1200], flush=True)
+            return 1
+        print(f"PERIOD opened {doc['name']}: circuit {doc['circuit'][:16]}..., T {doc['rows']}, S {doc['steps']}, draw K "
+              f"{doc['draw_k']}, weights {' '.join(doc['weights']) or 'none'}, files {sorted(doc['circuit_files'])}"
+              + (f" (no k<K> file yet for K = {doc['missing']}: a drawn statement there is refused)" if doc["missing"]
+                 else ""), flush=True)
+        return 0
+    if a.cmd == "program":
+        try:
+            meta = program(a.out, a.model, a.rows, a.steps, a.like)
+        except (OSError, ValueError, KeyError) as e:
+            print(f"PROGRAM refused: {type(e).__name__}: {e}"[:1200], flush=True)
+            return 1
+        print(f"PROGRAM {meta['program_digest'][:16]}... T {meta['rows']}, S {meta['steps']}, {meta['bytes']} bytes"
+              + (f", serve-openai's at {a.like}" if a.like else ""), flush=True)
+        return 0
     if a.cmd == "pouw":
         doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,
-                   check=lambda *x: check_challenger(*x, python=a.python))
+                   check=lambda *x: check_challenger(*x, python=a.python), statements=a.statements,
+                   live=a.live_evidence)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":
