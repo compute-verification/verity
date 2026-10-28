@@ -8,8 +8,8 @@ digest, salt, hm96-sha512 string, tree leaf and frame leaf) and then the pads an
 returns the strings and levels as `Registered` holds them (64-byte nodes, 128-byte strings, as bytes). `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, the shared headers, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
-or the one on the path).
+(`row_tables_device._build`, keyed by sources, the shared headers, flags and compiler) and its per-device state
+(`row_tables_device.Device`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
 
@@ -166,31 +166,8 @@ def host_public_salts(head: bytes, first: int, n: int) -> bytes:
     return out.tobytes()
 
 
-class _Device:
-    """One CUDA device's build, its copies of the byte tables and midstates, and the stream values are hashed on."""
-
-    def __init__(self, torch: Any, device: Any) -> None:
-        major, minor = torch.cuda.get_device_capability(device)
-        self.lib = device_lib(f"{major}{minor}")
-        self.stream = torch.cuda.Stream(device)
-        with torch.cuda.stream(self.stream):
-            self.hm = torch.from_numpy(RTD._hm().view(np.int64)).to(device)
-            pre = torch.from_numpy(RTD._prefixes().view(np.int64)).to(device)
-            self.ms = torch.empty(16, dtype=torch.int64, device=device)
-            rc = self.lib.rr_midstates(self.stream.cuda_stream, pre.data_ptr(), self.ms.data_ptr())
-        if rc:
-            raise RuntimeError(f"rr_midstates: CUDA error {rc}")
-        self.stream.synchronize()
-
-
-_DEVICES: dict[int, _Device] = {}
-
-
-def _device(torch: Any) -> _Device:
-    index = torch.cuda.current_device()
-    if index not in _DEVICES:
-        _DEVICES[index] = _Device(torch, torch.device("cuda", index))
-    return _DEVICES[index]
+def _device(torch: Any) -> RTD.Device:
+    return RTD.Device.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
 
 
 @cache

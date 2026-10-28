@@ -39,7 +39,7 @@ from verity.ml.kernels import ROW_COMMIT, SHA512
 
 from . import row_tables as RTB
 
-__all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
+__all__ = ["Device", "Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
            "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
@@ -232,37 +232,52 @@ def host_step(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequ
 
 # --- the device -----------------------------------------------------------------------------------------------------------
 
-class _Device:
-    """One CUDA device's build, its copies of the byte tables and midstates, and the side stream steps hash on."""
+class Device:
+    """One CUDA device's build of a kernel library over hm96-sha512 (``lib(arch)``: this module's `device_lib`, or H1's
+    `tables_device` and `registered_device`'s), its copies of the byte tables and midstates (the library's ``midstates``
+    kernel over `_prefixes`), the side streams its kernels hash on (``stream`` the first, `next_stream` each in turn) and the
+    identity rank order its tables share (`ranks`).  `of` builds one per library and device, once a process."""
 
-    def __init__(self, torch: Any, device: Any) -> None:
+    _of: dict[tuple[Callable[[str], ctypes.CDLL], int], Device] = {}
+
+    def __init__(self, torch: Any, device: Any, lib: Callable[[str], ctypes.CDLL], midstates: str, streams: int) -> None:
         major, minor = torch.cuda.get_device_capability(device)
-        self.lib = device_lib(f"{major}{minor}")
-        self.stream = torch.cuda.Stream(device)
+        self.lib = lib(f"{major}{minor}")
+        self.streams, self.turn = [torch.cuda.Stream(device) for _ in range(streams)], 0
+        self.stream = self.streams[0]
         with torch.cuda.stream(self.stream):
             self.hm = torch.from_numpy(_hm().view(np.int64)).to(device)
             pre = torch.from_numpy(_prefixes().view(np.int64)).to(device)
             self.ms = torch.empty(16, dtype=torch.int64, device=device)
-            rc = self.lib.rt_midstates(self.stream.cuda_stream, pre.data_ptr(), self.ms.data_ptr())
+            rc = getattr(self.lib, midstates)(self.stream.cuda_stream, pre.data_ptr(), self.ms.data_ptr())
         if rc:
-            raise RuntimeError(f"rt_midstates: CUDA error {rc}")
+            raise RuntimeError(f"{midstates}: CUDA error {rc}")
         self.stream.synchronize()
+        self.perm = torch.arange(0, dtype=torch.int32, device=device)
 
+    @classmethod
+    def of(cls, torch: Any, index: int, lib: Callable[[str], ctypes.CDLL] = device_lib, midstates: str = "rt_midstates",
+           streams: int = 1) -> Device:
+        if (lib, index) not in cls._of:
+            cls._of[lib, index] = cls(torch, torch.device("cuda", index), lib, midstates, streams)
+        return cls._of[lib, index]
 
-_DEVICES: dict[int, _Device] = {}
+    def next_stream(self) -> Any:
+        self.turn = (self.turn + 1) % len(self.streams)
+        return self.streams[self.turn]
 
-
-def _device(torch: Any, device: Any) -> _Device:
-    if device.index not in _DEVICES:
-        _DEVICES[device.index] = _Device(torch, device)
-    return _DEVICES[device.index]
+    def ranks(self, torch: Any, n: int) -> Any:
+        """The identity rank order over at least ``n`` rows."""
+        if len(self.perm) < n:
+            self.perm = torch.arange(max(n, 2 * len(self.perm)), dtype=torch.int32, device=self.perm.device)
+        return self.perm
 
 
 def side_stream(device: Any = None) -> Any:
     """The side stream steps on ``device`` (default: the current CUDA device) hash on."""
     import torch
 
-    return _device(torch, torch.device("cuda", torch.cuda.current_device() if device is None else torch.device(device).index)).stream
+    return Device.of(torch, torch.cuda.current_device() if device is None else torch.device(device).index).stream
 
 
 @dataclass
@@ -310,7 +325,7 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
                 or s.shape != (c.shape[0],) or not c.is_contiguous() or not s.is_contiguous():
             raise ValueError(f"{op}: codes and scales are contiguous (B, K) int8 and (B,) float32 tensors on {dev}")
     p = plan(context, engine_step, {op: (ids, int(c.shape[0]), int(c.shape[1])) for op, (ids, c, _s) in outputs.items()}, key)
-    d = _device(torch, dev)
+    d = Device.of(torch, dev.index)
     side = stream or d.stream
     for i, op in enumerate(p.order):
         p.tabs[i, 0], p.tabs[i, 1] = outputs[op][1].data_ptr(), outputs[op][2].data_ptr()
