@@ -99,33 +99,33 @@ def genOut {m n Lseg : ℕ} (A : Rows m Lseg) (B : GCols n Lseg) (τ : Tau m n L
 /-- **An M3 program for Dither's words**, over row-side data `Rd` and column-side data `Cd`: its free words, each a
 function of the row side alone (`fr`) or of the column side alone (`fu`), its instructions over them, and the writer
 `out τ` of each output word. -/
-structure Prog (Rd Cd : Type) (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) where
+structure M3Algorithm (Rd Cd : Type) (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) where
   fr : FR → Rd → Word
   fu : FU → Cd → Word
   prog : M3 (FR ⊕ FU) G
   out : Tau m n Lseg → Fin G
 
-namespace Prog
+namespace M3Algorithm
 
 variable {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
 
 /-- The program's inputs on row data `x` and column data `y`. -/
-def inputs (P : Prog Rd Cd m n Lseg FR FU G) (x : Rd) (y : Cd) : FR ⊕ FU → Word :=
+def inputs (P : M3Algorithm Rd Cd m n Lseg FR FU G) (x : Rd) (y : Cd) : FR ⊕ FU → Word :=
   Sum.elim (fun a => P.fr a x) (fun b => P.fu b y)
 
 /-- The program computes `T` on the instances `ok` admits: on each, every run's output writers hold `T`. -/
-def Computes (P : Prog Rd Cd m n Lseg FR FU G) (ok : Rd → Cd → Prop) (T : Rd → Cd → Tau m n Lseg → Word) : Prop :=
+def Computes (P : M3Algorithm Rd Cd m n Lseg FR FU G) (ok : Rd → Cd → Prop) (T : Rd → Cd → Tau m n Lseg → Word) : Prop :=
   ∀ x y, ok x y → ∀ v, P.prog.IsRun (P.inputs x y) v → ∀ τ, v (P.out τ) = T x y τ
 
 /-- **Word-local** (Theorem B's class) with blocks `blk`: each output's writer is in its own block, and every argument
 of an instruction is a free word, an instruction of its block, or the previous segment's output writer of its block's
 `(i, j)`. -/
-def WordLocal (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) : Prop :=
+def WordLocal (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) : Prop :=
   (∀ τ, blk (P.out τ) = τ) ∧
     ∀ t j, ∀ s, P.prog.arg t j = .inr s →
       blk (M3.earlier t s) = blk t ∨ ∃ h : 0 < (blk t).1.val, M3.earlier t s = P.out ((blk t).prev h)
 
-end Prog
+end M3Algorithm
 
 /-- A field for `τ = (ℓ, i, j)` at the zero instance: `φ = β·T_{ℓ−1}[i,j] + Σ_{p∈E} R[i, 32ℓ+p]·U[j,p]`. -/
 structure Field (m n Lseg : ℕ) where
@@ -176,7 +176,7 @@ end Packing
 tuples `pk`: it writes an output `T_{ℓ'}[i,j]` with `ℓ' ≥ ℓ`, or its tuple has a field for `τ` with `p ∈ E`, or a
 field with a prefix covering segment `ℓ` of `(i, j)` (a field for `(ℓ', i, j)`, `ℓ' > ℓ`, with `β = true`). Free words
 hold nothing. -/
-def Holds {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+def Holds {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) (τ : Tau m n Lseg) (p : Fin 32) : Prop :=
   (∃ τ', P.out τ' = t ∧ τ'.2 = τ.2 ∧ τ.1 ≤ τ'.1) ∨
     ∃ π, pk t = some π ∧ ∃ f ∈ π.fields,
@@ -187,7 +187,7 @@ instance a function of the dither alone or of `U` alone), or a mixed-radix tuple
 every instance (and only a tuple has `pk t = some _`); and a field with a prefix (`β = true`) for `τ = (ℓ, i, j)` with
 `ℓ > 0` takes it from an argument that holds it: one argument holding every incidence of the segments before `ℓ` of
 `(i, j)`. -/
-def ClassP {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+def ClassP {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) : Prop :=
   ∀ t, ((∃ τ, P.out τ = t) ∧ pk t = none) ∨
     (pk t = none ∧
@@ -200,13 +200,13 @@ def ClassP {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (
 
 /-- Instruction `t` **creates** the incidence `(τ, p)`: it holds it and no argument that is an instruction holds it.
 Walking back from `τ`'s writer through arguments that hold `(τ, p)` ends at an instruction that creates it. -/
-def Creates {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+def Creates {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) (τ : Tau m n Lseg) (p : Fin 32) : Prop :=
   Holds P pk t τ p ∧ ∀ j s, P.prog.arg t j = .inr s → ¬ Holds P pk (M3.earlier t s) τ p
 
 /-- The number of incidences instruction `t` creates. -/
 noncomputable def created {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
-    (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) : ℕ :=
+    (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) : ℕ :=
   {x : Tau m n Lseg × Fin 32 | Creates P pk t x.1 x.2}.ncard
 
 end Pouw.Eps1

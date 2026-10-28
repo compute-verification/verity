@@ -71,7 +71,7 @@ abbrev EraseOutcome (sch : Scheme M) (S_φ : ℕ) (K : Type) (s : ℕ) : Type :=
 
 /-- The blocks the spot reads return for the indices `is`, from round `j` in memory `σ`, each with what `keep` reads off
 the memory at that round's arrival. -/
-def eraseAnswers {ℓ S S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S))
+def eraseAnswers {ℓ S S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S))
     (keep : ℕ → Bits S → Bits S_φ) : ℕ → List (Fin B) → Bits S → List (Bits ℓ × Bits S_φ)
   | _, [], _ => []
   | j, i :: is, σ =>

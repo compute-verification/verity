@@ -23,7 +23,7 @@ P2-EXP-IO frames SHAKE256. Parity, negation, equality and XOR act on labels, loc
 dense, so naming a label hands the adversary a uniform element for free. At `φ = id`, `p2ring` is `schemes/p2.py`'s
 `encode_segment` and `decode_segment` for given `(K, t)`.
 
-**The cost bound `Prog.RingBounded D Q L`**, beside `Prog.Bounded`: on every primitive, at most `D` rounds that
+**The cost bound `OracleAlgorithm.RingBounded D Q L`**, beside `OracleAlgorithm.Bounded`: on every primitive, at most `D` rounds that
 contain a `mul` (rounds of only `add`, `one` and `key` cost no depth), at most `Q` key queries and at most `L` ring
 queries (`add`, `mul`, `one`) in total. `Q` counts key queries, not Keccak-f calls: the certificate converts, at the
 key expander's cost per query. Hardware enters only through the certificate's numbers, never here: `D` from the
@@ -99,45 +99,45 @@ def ringRO (B w p : ℕ) [NeZero p] : IdealModel where
     | .key j .mask => (ω.2 j).1
     | .key j .offset => bitsOfNat w (ω.2 j).2
 
-/-! ## The cost bound, beside `Prog.Bounded` -/
+/-! ## The cost bound, beside `OracleAlgorithm.Bounded` -/
 
-namespace Prog
+namespace OracleAlgorithm
 
 variable {α : Type}
 
 /-- The number of rounds that contain a `mul`, on the path taken when queries are answered by `f`. -/
-def mulDepth (f : (ringRO B w p).Qry → (ringRO B w p).Ans) : Prog (ringRO B w p) α → ℕ
+def mulDepth (f : (ringRO B w p).Qry → (ringRO B w p).Ans) : OracleAlgorithm (ringRO B w p) α → ℕ
   | ret _ => 0
   | round qs k => (if qs.any RingQry.isMul then 1 else 0) + mulDepth f (k (qs.map f))
 
 /-- The number of key queries on the path taken. -/
-def keyWork (f : (ringRO B w p).Qry → (ringRO B w p).Ans) : Prog (ringRO B w p) α → ℕ
+def keyWork (f : (ringRO B w p).Qry → (ringRO B w p).Ans) : OracleAlgorithm (ringRO B w p) α → ℕ
   | ret _ => 0
   | round qs k => qs.countP RingQry.isKey + keyWork f (k (qs.map f))
 
 /-- The number of ring queries (`add`, `mul`, `one`) on the path taken. -/
-def ringWork (f : (ringRO B w p).Qry → (ringRO B w p).Ans) : Prog (ringRO B w p) α → ℕ
+def ringWork (f : (ringRO B w p).Qry → (ringRO B w p).Ans) : OracleAlgorithm (ringRO B w p) α → ℕ
   | ret _ => 0
   | round qs k => qs.countP (fun q => !q.isKey) + ringWork f (k (qs.map f))
 
 /-- **`(D, Q, L)`-bounded in the ring model**: at most `D` rounds with a multiplication, `Q` key queries and `L` ring
 queries, against every primitive. -/
-def RingBounded (D Q L : ℕ) (P : Prog (ringRO B w p) α) : Prop :=
+def RingBounded (D Q L : ℕ) (P : OracleAlgorithm (ringRO B w p) α) : Prop :=
   ∀ ω : (ringRO B w p).Ω, P.mulDepth ((ringRO B w p).answer ω) ≤ D ∧ P.keyWork ((ringRO B w p).answer ω) ≤ Q ∧
     P.ringWork ((ringRO B w p).answer ω) ≤ L
 
-end Prog
+end OracleAlgorithm
 
 /-! ## The audit game over the ring bound -/
 
 /-- `SimResponder` with `RingBounded D Q L` in place of `Bounded D Q`. -/
 structure SimResponderOn (sch : Scheme (ringRO B w p)) (S D Q L k : ℕ) : Type where
-  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → Prog (ringRO B w p) (Fin k → Bits sch.ℓ)
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → OracleAlgorithm (ringRO B w p) (Fin k → Bits sch.ℓ)
   bounded : ∀ W pp σ I, (prog W pp σ I).RingBounded D Q L
 
 /-- `SeqResponder` with `RingBounded D Q L` in place of `Bounded D Q`. -/
 structure SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
-  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog (ringRO B w p) (Bits sch.ℓ × Bits S)
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm (ringRO B w p) (Bits sch.ℓ × Bits S)
   bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
 
 /-- `simAccepts` for a `SimResponderOn`. -/
@@ -205,7 +205,7 @@ def nthAns {w : ℕ} (as : List (Bits w)) (i : ℕ) : Bits w := as.getD i fun _ 
 /-- **P2's per-block decoder as a program**: `m_j = sq(σ_K(sq(c_j))) − t_j`. Round 1 asks for both keys and `c²`;
 round 2 for `u²`, where `u = σ_K(sq(c))`; round 3 adds `−t`. Two rounds contain a multiplication. The output is the
 label read mod `2^b`. -/
-def decBlock (B w p b : ℕ) [NeZero p] (j : Fin B) (c : Bits w) : Prog (ringRO B w p) (Bits b) :=
+def decBlock (B w p b : ℕ) [NeZero p] (j : Fin B) (c : Bits w) : OracleAlgorithm (ringRO B w p) (Bits b) :=
   .round [RingQry.key j .mask, RingQry.key j .offset, RingQry.mul c c] fun r₁ =>
     let u := sigmaK p (nthAns r₁ 0) (sqFix p c (nthAns r₁ 2))
     .round [RingQry.mul u u] fun r₂ =>

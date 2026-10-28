@@ -11,7 +11,7 @@ model would have to assume three requirements on the protocol (no pipelining, a 
 counted late). Here the memory challenger is explicit and enforces each rule. The responder may
 try to break any of them, and no statement takes a hypothesis about its timing.
 
-**Time.** One unit is one round of parallel queries to the primitive (`Prog.depth`), as in the sequential audit. `D`
+**Time.** One unit is one round of parallel queries to the primitive (`OracleAlgorithm.depth`), as in the sequential audit. `D`
 units and `Q` queries fit in the deadline `Δ` plus the round trip, and `D_late` units and `Q_late` queries in the hard
 deadline `Δ_late` plus the round trip. The memory challenger's arrival times `arr j` are in the same units.
 
@@ -117,7 +117,7 @@ structure ContMachine (sch : Scheme M) : Type where
 /-- One round of the machine after the indices `h`, from memory `m`, with the message `msg` at its first unit and at
 most `T` units of queries. It returns the answer, if one came within `T` units, and the memory when the round closed. -/
 def ContMachine.round {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.t)
-    (h : List (Fin sch.B)) : ℕ → List Bool → Option (Fin sch.B) → Prog M (Option (Bits sch.ℓ) × List Bool)
+    (h : List (Fin sch.B)) : ℕ → List Bool → Option (Fin sch.B) → OracleAlgorithm M (Option (Bits sch.ℓ) × List Bool)
   | 0, m, msg =>
     match mach.step W pp h m msg with
     | .inl a => .ret (some a, m)
@@ -142,7 +142,7 @@ inductive ContVerdict : Type
 /-- The verdict on a round whose program is `p`, when the primitive answers by `f` and the right block is `c` (rules 3
 and 4). The program stops after `D_late` units on its own (`ContMachine.round`), so here a missing answer is one that
 did not come within `D_late` units. -/
-def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
+def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
     (c : Bits ℓ) : ContVerdict :=
   match (p.run f).1 with
   | none => .reject
@@ -172,7 +172,7 @@ def contMem {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bit
 /-- The program of the round that answers index `i` after the state `s`: the machine from its memory at the send
 time, with `i` at the first unit and at most `D_late` units (rules 2 and 3). -/
 def contProg {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
-    (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : Prog M (Option (Bits sch.ℓ) × List Bool) :=
+    (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : OracleAlgorithm M (Option (Bits sch.ℓ) × List Bool) :=
   mach.round W pp s.sent D_late (contMem mach W pp C ω arr s) (some i)
 
 /-- The state after that round: `i` sent, the round closed as many units after its send time as its program took on
@@ -225,7 +225,7 @@ noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
 
 Its statement is `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
 
-The memory challenger draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth`
+The memory challenger draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `OracleAlgorithm.depth`
 and of `arr` above. At slot `t` the memory challenger draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of
 everything else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, at most one arrival
 per slot, standing in for a Poisson process at `λ = (a/b)/call_ns`. A deployment is inside the statements only if it

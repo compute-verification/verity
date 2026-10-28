@@ -273,7 +273,7 @@ server learns from indices seen after one only helps a server the game counts as
 structure Server (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
   step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
-    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
   bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
 
 /-- **The server passes the session**: `ω`, the coins and the streams `x`; the code's sampler reads index `I j` from

@@ -8,7 +8,7 @@ import Definitions.Pous.Model.Scheme
 3. Preprocessing `A₁` is any function of `(W, pp, C, ω)` with an `S`-bit output `σ`. Nothing else survives: this
    is perfect isolation.
 4. The memory challenger draws `k` indices `I : Fin k → Fin B`, uniform and with replacement.
-5. The responder returns raw blocks, from `(W, pp)` (free) and its `S`-bit state, as a `(D, Q)`-bounded `Prog`.
+5. The responder returns raw blocks, from `(W, pp)` (free) and its `S`-bit state, as a `(D, Q)`-bounded `OracleAlgorithm`.
    The audit accepts iff every returned block equals the true one.
 
 **Simultaneous reveal:** one program receives all of `I` and answers all `k` blocks within one `(D, Q)` budget.
@@ -30,20 +30,20 @@ abbrev Preprocessor (sch : Scheme M) (S : ℕ) : Type :=
 
 /-- A responder for simultaneous reveal: all `k` indices at once, one `(D, Q)` budget for the whole answer. -/
 structure SimResponder (sch : Scheme M) (S D Q k : ℕ) : Type where
-  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → Prog M (Fin k → Bits sch.ℓ)
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → OracleAlgorithm M (Fin k → Bits sch.ℓ)
   bounded : ∀ W pp σ I, (prog W pp σ I).Bounded D Q
 
 /-- A responder for sequential reveal: `step W pp j σ i` answers index `i` in round `j` from state `σ`, and returns
 the block and the next state, within `(D, Q)`. -/
 structure SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type where
-  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog M (Bits sch.ℓ × Bits S)
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ × Bits S)
   bounded : ∀ W pp j σ i, (step W pp j σ i).Bounded D Q
 
 /-- The randomness of one audit: the primitive, the encoder's coins and the challenge indices. -/
 abbrev Outcome (sch : Scheme M) (k : ℕ) : Type := M.Ω × sch.Coins × (Fin k → Fin sch.B)
 
 /-- The blocks a sequential responder returns for the indices `is`, starting at round `j` in state `σ`. -/
-def seqAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) :
+def seqAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) :
     ℕ → List (Fin B) → Bits S → List (Bits ℓ)
   | _, [], _ => []
   | j, i :: is, σ =>

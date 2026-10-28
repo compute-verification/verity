@@ -30,7 +30,7 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each; `IMAD.WIDE` uses 2 `imad` lanes (Table 7's
   footnote 6, 32 for extended precision), and the pools overlap in full, generous as on the H200;
 * `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
-  (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card, and it measured
+  (`Opcode.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card, and it measured
   1.75 MACs an SM clock (`DMMA.8x8x4`): 32 tensor
   units a MAC, 32 MACs an SM clock, 18 × that, stays as a generous figure, since a measured rate bounds the card's
   from below only;
@@ -125,7 +125,7 @@ def f8f6f4 (f : Fmt) : Bool := f = .e4m3 || f = .e5m2 || f = .e2m1
 def pair (fa fb : Fmt) : Bool := intPair fa fb || (f8f6f4 fa && f8f6f4 fb) || fa = fb
 
 /-- The opcodes the RTX PRO 6000 has. -/
-def Avail : Op Store → Prop
+def Avail : Opcode Store → Prop
   | .mma fa fb _ sh sa sb => pair fa fb ∧ sh.k ∈ ks fa ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
   | .mmaSp fa fb _ sh sa sb =>
     pair fa fb ∧ fa ≠ .nvf4 ∧ fa ≠ .mxf4 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg

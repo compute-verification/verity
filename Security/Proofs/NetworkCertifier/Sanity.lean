@@ -103,7 +103,7 @@ theorem witnessCertifier_jitter_varies :
 
 /-- The witness Program over `n` steps and one link. Content advice is one bit `a.1`, and there is one timing block per
 step, whose advice `a.2 t ∈ Fin 3` is the step's count. The step's row is `a.2 t` frames `[a.1]`, left-packed. -/
-def witnessProgram (n : ℕ) : Program 1 2 Unit (Bool × ((β : Fin n) → Fin 3)) where
+def witnessProgram (n : ℕ) : EgressPrediction 1 2 Unit (Bool × ((β : Fin n) → Fin 3)) where
   rows t _ a _ s := if h : t < n then (if (s : ℕ) < (a.2 ⟨t, h⟩ : ℕ) then some [a.1] else none) else none
 
 theorem witnessProgram_rowCount (n : ℕ) (t : ℕ) (ins : List Unit) (a : Bool × ((β : Fin n) → Fin 3)) (ℓ : Fin 1) :
@@ -166,7 +166,7 @@ def rI (n : ℕ) : Interaction 1 1 2 (Fin n → Fin 3) (Fin 3) WAct (Obs 1 1 2) 
   snd z k _ := ⟨if h : k < n then z ⟨k, h⟩ else 0, 0, false⟩
 
 /-- A Program that reads ingress: step `t` releases `(a.2 t + ingress t) mod 3` frames `[true]`. -/
-def rP (n : ℕ) : Program 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 3)) where
+def rP (n : ℕ) : EgressPrediction 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 3)) where
   rows t ins a _ s :=
     if h : t < n then (if (s : ℕ) < ((a.2 ⟨t, h⟩ + ins.getD t 0 : Fin 3) : ℕ) then some [true] else none) else none
 
@@ -179,7 +179,7 @@ instance instDecidableAcceptedUpToFinOfNatNatProdUnitForallRP (n k : ℕ) (op : 
   unfold AcceptedUpTo; infer_instance
 
 /-- A = 0: no timing advice, and the step's count is the ingress, which the operator sets from the last count. -/
-def zP (n : ℕ) : Program 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 1)) where
+def zP (n : ℕ) : EgressPrediction 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 1)) where
   rows t ins _ _ s := if t < n then (if (s : ℕ) < ((ins.getD t 0 : Fin 3) : ℕ) then some [true] else none) else none
 
 instance instDecidableAcceptedFinOfNatNatProdUnitForallZP (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) (a : Unit × ((β : Fin n) → Fin 1)) :

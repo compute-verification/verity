@@ -5,11 +5,11 @@ import Definitions.Pouw.Assumptions.Dimension.Embed
 
 **Draft semantics, pending review**.
 
-`Op.mma outs p` is `M4090`'s tensor-core class: any functions `outs`, one per 32-bit accumulator register written, at
+`M4090Instr.mma outs p` is `M4090`'s tensor-core class: any functions `outs`, one per 32-bit accumulator register written, at
 the full instruction's price `p`, well-formed when `16·len(outs) ≤ p`. `Shape4090` names the 4090's `mma.sync` shapes
 with their measured prices (units of one int8 MAC), and
-`mmaOp s outs = Op.mma outs (regPrice s · len(outs))` is the instruction of shape `s`. Nothing in `Op` changes: the
-shapes are instances of `Op.mma`, so every `M4090` theorem (`EmbedM4090`, `PerWordM4090`, `PerWordM4090Gap`) covers
+`mmaOp s outs = M4090Instr.mma outs (regPrice s · len(outs))` is the instruction of shape `s`. Nothing in `M4090Instr` changes: the
+shapes are instances of `M4090Instr.mma`, so every `M4090` theorem (`EmbedM4090`, `PerWordM4090`, `PerWordM4090Gap`) covers
 programs that use them.
 
 * **Price per register** `regPrice s = k · elements per register · price per MAC`. An FP16 accumulator register is
@@ -90,7 +90,7 @@ def Shape4090.mac2 : Shape4090 → ℕ
 def Shape4090.regPrice (s : Shape4090) : ℕ := s.k * s.elems * s.mac2 / 2
 
 /-- The `M4090` instruction of shape `s` writing the accumulator registers `outs` (any functions). -/
-def mmaOp {G : Type} (s : Shape4090) (outs : List (G → ℚ)) : Op G := Op.mma outs (s.regPrice * outs.length)
+def mmaOp {G : Type} (s : Shape4090) (outs : List (G → ℚ)) : M4090Instr G := M4090Instr.mma outs (s.regPrice * outs.length)
 
 /-! ## Pinned statements (draft semantics, pending review) -/
 

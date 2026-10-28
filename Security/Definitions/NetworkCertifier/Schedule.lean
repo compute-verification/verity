@@ -14,7 +14,7 @@ Program's canonical gate order. A window declares one clock-sync value `ClockSyn
 shaper hands frames to the certifier in canonical order, each at `h(k) = max(eligible(k), h(k−1))`, and the certifier's own
 rule (FIFO at the allocation, left-packed: `fifoGrid`) fixes every row.
 
-**What the Program reads.** `constantRate T W ss frames` is a `Program` whose advice is content advice `Ac` and one
+**What the Program reads.** `constantRate T W ss frames` is an `EgressPrediction` whose advice is content advice `Ac` and one
 value of `ss` per window, `Fin W → ss.Elem`. Its frames (content, anchor, index, canonical order) are `frames ins c ℓ`:
 a function of the ingress and the content advice only, which is the Program's computation and is left abstract. The
 sync advice enters only through `eligible`. Declaring a value of the set is the audit's `advice` check: a run whose
@@ -104,7 +104,7 @@ frames `frames ins c ℓ` on each egress link `ℓ`, in canonical order, from th
 With advice `(c, σ)`, link `ℓ`'s row at step `t` is `expectedRow` of those frames under the declared syncs `σ`. Every
 link reads the same `σ`, one clock per spatial unit (`README.md`, modelling choice 15), which the audit enforces. -/
 def constantRate {L S : ℕ} {In Ac : Type} (T W : ℕ) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) : Program L S In (Ac × (Fin W → ss.Elem)) where
+    (frames : List In → Ac → Fin L → List LogicalFrame) : EgressPrediction L S In (Ac × (Fin W → ss.Elem)) where
   rows t ins a ℓ := expectedRow S T W (fun w => ss.sync (a.2 w)) (frames ins a.1 ℓ) t
 
 end NetTiming

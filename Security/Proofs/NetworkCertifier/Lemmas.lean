@@ -62,7 +62,7 @@ length `t`, the runs accepted up to `t + 1` continue with at most `N t` distinct
 `N_acc`, defined by prefix acceptance. Then there are at most `∏_{t<n} N t` such sequences. -/
 def EncardAcceptedRunsLe : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
-    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ) (N : ℕ → ℕ)
+    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ) (N : ℕ → ℕ)
     (hN : ∀ t < n, ∀ h : List (Obs L K S),
       {x | ∃ z, AcceptedUpTo P I.op (t + 1) (I.obsRun z (t + 1)) ∧ I.obsRun z (t + 1) = h ++ [x]}.encard ≤ N t),
     {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard ≤ ((∏ t ∈ Finset.range n, N t : ℕ) : ℕ∞)
@@ -73,7 +73,7 @@ has at most as many elements as there are accepted observation sequences. This n
 follows from it. -/
 def EncardObsDecodableLe : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
-    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ)
+    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
     (dec : List (Obs L K S) → Z) (hdec : ∀ z ∈ Zs, dec (I.obsRun z n) = z),
     Zs.encard ≤ {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard
@@ -83,7 +83,7 @@ secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs` has at most 
 observation sequences. -/
 def EncardDecodableLe : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
-    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (n : ℕ)
+    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
@@ -93,7 +93,7 @@ def EncardDecodableLe : Prop :=
 `i` whose window closes before `n`. (`hwin`: every step lies in its own window, which ends no earlier.) -/
 def NoFaultOfAccepted : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
-    (I : Interaction L K S Z In Act Wire) (P : Program L S In Adv) (winEnd : ℕ → ℕ)
+    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (winEnd : ℕ → ℕ)
     (hwin : ∀ i, i ≤ winEnd i)
     (hW6 : FailClosed I.certifier winEnd) (z : Z) (n : ℕ) (hacc : AcceptedUpTo P I.op n (I.obsRun z n))
     (i : ℕ) (hi : i < (I.actRun z n).length) (hend : winEnd i < n),
@@ -109,7 +109,7 @@ def RecordedRowEqFill : Prop :=
 /-- **Theorem 3, the `2^A` cap.** With `Fintype.card Adv = 2^A`, the accepted observation sequences of length `n` with
 jitter below `D` number at most `2^A · D^n`. -/
 def EncardAccSeqsLeAdvice : Prop :=
-  ∀ {L K S : ℕ} {In Adv : Type} [Fintype Adv] (P : Program L S In Adv)
+  ∀ {L K S : ℕ} {In Adv : Type} [Fintype Adv] (P : EgressPrediction L S In Adv)
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Adv * D ^ n : ℕ) : ℕ∞)
 
@@ -118,7 +118,7 @@ all of whose runs are accepted up to `n`. Then `Zs` is no larger than the block 
 def EncardDecodableLeBlocks : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Ac B C : Type} {At : B → Type} {U : C → Type}
     [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (I : Interaction L K S Z In Act Wire) (P : Program L S In (Ac × ((β : B) → At β))) (n D : ℕ)
+    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (n D : ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
     (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
     (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ)

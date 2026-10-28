@@ -524,7 +524,7 @@ def BackgroundRebuildExcluded : Prop :=
     Pous.Rebuild.gradedRoundSpan 5 D_late tk.2 tk.1 ≤ 1479) ∧
   ∀ d : ℕ, 5 ≤ d → ∀ dom : ℕ → Bits 512, Function.Injective (fun i : Fin (2 ^ 9) => dom i) →
     ∀ (W : Bits (2 ^ 9 * 524288)) (Q : ℕ), Q ≤ 2 ^ 128 → ∀ T : ℕ, T ≤ Pous.Rebuild.auditCap →
-    ∀ A : Fin (2 ^ 9) → Prog (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
+    ∀ A : Fin (2 ^ 9) → OracleAlgorithm (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
       (∀ i, (A i).Bounded T Q) →
       pr (fun π : Equiv.Perm (Bits (524288 + (524288 + 512))) =>
           ∀ i, (A i).run ((Pous.Sponge.idealPerm (524288 + (524288 + 512))).answer π) =

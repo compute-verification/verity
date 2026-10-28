@@ -88,22 +88,22 @@ def key (f : Bits (r + c) → Bits (r + c)) (dom : Bits c) (blks : List (Bits r)
 end Sponge
 
 
-namespace Prog
+namespace OracleAlgorithm
 
 variable {M : IdealModel} {α β : Type}
 
 /-- Apply `g` to the output. -/
-def map (g : α → β) : Prog M α → Prog M β
+def map (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun ys => map g (k ys)
 
 /-- Sequential composition: run `p`, then `k` on its output. Rounds add up. -/
-def bind : Prog M α → (α → Prog M β) → Prog M β
+def bind : OracleAlgorithm M α → (α → OracleAlgorithm M β) → OracleAlgorithm M β
   | .ret a, k => k a
   | .round qs k', k => .round qs fun ys => bind (k' ys) k
 
 
-end Prog
+end OracleAlgorithm
 
 
 /-- **The dense labels over the sponge**: `C_i = key_Π(IV(dom i); C_{i−1}, …, C_0, pad) ⊕ W_i`. -/
@@ -694,7 +694,7 @@ by `f`. This is the backbone of `henc`'s replay: positions index into this list,
 `P`-input in it, and the **multi-segment** trace is just the concatenation of per-segment traces **over the shared
 primitive `f`** (`segTrace`/`multiTrace` below), so the single-segment construction lifts to `N` replays over one `P`
 without change. -/
-def progTrace {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) : Prog M α → List M.Qry
+def progTrace {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) : OracleAlgorithm M α → List M.Qry
   | .ret _ => []
   | .round qs k => qs ++ progTrace f (k (qs.map f))
 
@@ -857,24 +857,24 @@ theorem pr_prod_le_snd {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [N
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
 
 /-- Post-process a program's output; the queries are unchanged. -/
-def progMap {M : IdealModel} {α β : Type} (g : α → β) : Prog M α → Prog M β
+def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
-theorem run_progMap {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem run_progMap {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) :
     (progMap g p).run f = g (p.run f) := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact ih _
 
-theorem bounded_progMap {M : IdealModel} {α β : Type} (g : α → β) {D Q : ℕ} {p : Prog M α} (h : p.Bounded D Q) :
+theorem bounded_progMap {M : IdealModel} {α β : Type} (g : α → β) {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) :
     (progMap g p).Bounded D Q := by
-  have hd : ∀ (f : M.Qry → M.Ans) (p : Prog M α), (progMap g p).depth f = p.depth f := by
+  have hd : ∀ (f : M.Qry → M.Ans) (p : OracleAlgorithm M α), (progMap g p).depth f = p.depth f := by
     intro f p
     induction p with
     | ret a => rfl
     | round qs k ih => exact congrArg (· + 1) (ih _)
-  have hw : ∀ (f : M.Qry → M.Ans) (p : Prog M α), (progMap g p).work f = p.work f := by
+  have hw : ∀ (f : M.Qry → M.Ans) (p : OracleAlgorithm M α), (progMap g p).work f = p.work f := by
     intro f p
     induction p with
     | ret a => rfl
@@ -1132,7 +1132,7 @@ theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
 
 
 /-- Post-process a program's output; the queries are unchanged. -/
-def progMap {M : IdealModel} {α β : Type} (g : α → β) : Prog M α → Prog M β
+def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
@@ -1140,22 +1140,22 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
-theorem run_progMap (p : Prog M α) : (progMap g p).run f = g (p.run f) := by
+theorem run_progMap (p : OracleAlgorithm M α) : (progMap g p).run f = g (p.run f) := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact ih _
 
-theorem depth_progMap (p : Prog M α) : (progMap g p).depth f = p.depth f := by
+theorem depth_progMap (p : OracleAlgorithm M α) : (progMap g p).depth f = p.depth f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (· + 1) (ih _)
 
-theorem work_progMap (p : Prog M α) : (progMap g p).work f = p.work f := by
+theorem work_progMap (p : OracleAlgorithm M α) : (progMap g p).work f = p.work f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (qs.length + ·) (ih _)
 
-theorem bounded_progMap {D Q : ℕ} {p : Prog M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
+theorem bounded_progMap {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
   fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
@@ -1263,7 +1263,7 @@ predict each block from `(W, pp, state)` within `(D, Q)`. Then the wrong predict
 `S + B + #wrong·ℓ ≤ β`, with probability at most `π` under `TimedINC D Q β π`. -/
 theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π)
     (W : Bits sch.n) (st : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S)
-    (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ))
+    (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
     (hpred : ∀ W pp σ i, (pred W pp σ i).Bounded D Q) :
     pr (fun a : M.Ω × sch.Coins => S + sch.B + (Finset.univ.filter fun i =>
       ¬ (pred W (sch.enc W a.1 a.2).1 (st W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run
@@ -1271,8 +1271,8 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
   obtain ⟨c, d, hcd⟩ := exists_code (fits S sch.B sch.ℓ β) β (card_fits_le S sch.B sch.ℓ β)
   let cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β :=
     fun W pp C ω => c (st W pp C ω, patch (fun i => (pred W pp (st W pp C ω) i).run (M.answer ω)) C)
-  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ) :=
-    fun W pp w i => ((d w).2 i).elim (pred W pp (d w).1 i) Prog.ret
+  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
+    fun W pp w i => ((d w).2 i).elim (pred W pp (d w).1 i) OracleAlgorithm.ret
   have hexp : ∀ W pp w i, (exp W pp w i).Bounded D Q := by
     intro W pp w i
     cases h : (d w).2 i with
@@ -1293,14 +1293,14 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
 
 /-- The state a sequential responder reaches after answering the history `h` from round `j` in state `σ`. -/
 def seqState {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
   | _, [], σ => σ
   | j, i :: is, σ => seqState f step (j + 1) is ((step j σ i).run f).2
 
 /-- **Chain rule for sequential audits.** If after every history of fewer than `k` indices a uniform next index is
 answered correctly with probability at most `c`, all `k` rounds are with probability at most `c^k`. -/
 theorem pr_seq_le {M : IdealModel} {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
     ∀ (k j : ℕ) (σ : Bits S),
       (∀ h : List (Fin B), h.length < k →
         pr (fun i : Fin B => ((step (j + h.length) (seqState f step j h σ) i).run f).1 = C i) ≤ c) →
@@ -1336,7 +1336,7 @@ theorem theorem1_ii_seq {M : IdealModel} (sch : Scheme M) (D Q β S k : ℕ) (π
   -- the state after history `h`, and whether round `|h|` answers block `i` correctly from it
   let st : List (Fin sch.B) → Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S :=
     fun h W pp C ω => seqState (M.answer ω) (A₂.step W pp) 0 h (A₁ W pp C ω)
-  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ) :=
+  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
     fun h W pp σ i => progMap Prod.fst (A₂.step W pp h.length σ i)
   let good : List (Fin sch.B) → M.Ω × sch.Coins → Fin sch.B → Prop := fun h a i =>
     (pred h W (sch.enc W a.1 a.2).1 (st h W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run
@@ -1523,7 +1523,7 @@ def P3ChainEPF : Prop :=
   ∀ (n wc m D Q k X : ℕ) (tag : Bits 256) (G : TopoDAG n) (W : Fin n → Lab n wc),
     0 < n → 0 < wc → n ≤ 2 ^ 255 → 2 * nPosC n Q ≤ 2 ^ wc → (2 * nPosC n Q) ^ 40 ≤ 2 ^ wc → X + 1 ≤ k →
     P3ChainHard G 512 wc D k X →
-    ∀ (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin n → Prog (p3ChainModel n wc) (Lab n wc)),
+    ∀ (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)),
       (∀ σ v, (A₂ σ v).Bounded D Q) →
       pr (fun ω : P3COmega n wc => k ≤ (Finset.univ.filter fun v =>
             (A₂ (A₁ ω) v).run ((p3ChainModel n wc).answer ω) = topLabelC tag G W ω v).card)
@@ -1532,7 +1532,7 @@ def P3ChainEPF : Prop :=
 
 /-- **The joint event over the chain**: at least `k` tops of every segment `s` (tag `tags s`, data `W s`). -/
 def JointEventC {n wc m N : ℕ} (G : TopoDAG n) (tags : Fin N → Bits 256) (W : Fin N → Fin n → Lab n wc)
-    (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (k : ℕ)
+    (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (k : ℕ)
     (ω : P3COmega n wc) : Prop :=
   ∀ s : Fin N, k ≤ (Finset.univ.filter fun v =>
     (A₂ (A₁ ω) s v).run ((p3ChainModel n wc).answer ω) = topLabelC (tags s) G (W s) ω v).card
@@ -1545,7 +1545,7 @@ def P3ChainEPFMulti : Prop :=
   ∀ (N n wc m D Q k X : ℕ) (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc),
     0 < n → 0 < wc → n ≤ 2 ^ 255 → 2 * (N * nPosC n Q) ≤ 2 ^ wc → (2 * (N * nPosC n Q)) ^ 40 ≤ 2 ^ wc → 1 ≤ N →
     X + 1 ≤ k → Function.Injective tags → P3ChainHard G 512 wc D k X →
-    ∀ (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)),
+    ∀ (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)),
       (∀ σ s v, (A₂ σ s v).Bounded D Q) →
       pr (JointEventC G tags W A₁ A₂ k) ≤
         (N : ℝ≥0∞) * 2 ^ m * (((N * nPosC n Q) ^ (14 * n * N) : ℕ) : ℝ≥0∞) / 2 ^ (N * (k - X - 1) * (n * wc)) +
@@ -1622,7 +1622,7 @@ theorem p3SchemeC_space (hwc : 1 ≤ wc) : (p3SchemeC wc Gr).SpaceBound Params.e
 /-- **Per-segment bound over the chain** on `Gr` at width `wc`, loss `L`, additive term `c`. -/
 def SegBoundC (D Q L : ℕ) (c : ℝ≥0∞) : Prop :=
   ∀ (m : ℕ) (tag : Bits 256) (W : Fin 220 → Lab 220 wc) (A₁ : P3COmega 220 wc → Bits m)
-    (A₂ : Bits m → Fin 220 → Prog (p3ChainModel 220 wc) (Lab 220 wc)), (∀ σ c, (A₂ σ c).Bounded D Q) →
+    (A₂ : Bits m → Fin 220 → OracleAlgorithm (p3ChainModel 220 wc) (Lab 220 wc)), (∀ σ c, (A₂ σ c).Bounded D Q) →
     pr (fun ω : P3COmega 220 wc =>
         220 ≤ (Finset.univ.filter fun v =>
           (A₂ (A₁ ω) v).run ((p3ChainModel 220 wc).answer ω) = topLabelC tag Gr W ω v).card)
@@ -1777,7 +1777,7 @@ theorem p3SchemeNC_space (hwc : 1 ≤ wc) : (p3SchemeNC wc Gr N).SpaceBound Para
 /-- **Joint bound over the chain** on `Gr`, loss `L` per segment. -/
 def JointSegBoundC (D Q L : ℕ) (ε : ℝ≥0∞) : Prop :=
   ∀ (m : ℕ) (tags : Fin N → Bits 256) (W : Fin N → Fin 220 → Lab 220 wc) (A₁ : P3COmega 220 wc → Bits m)
-    (A₂ : Bits m → Fin N → Fin 220 → Prog (p3ChainModel 220 wc) (Lab 220 wc)),
+    (A₂ : Bits m → Fin N → Fin 220 → OracleAlgorithm (p3ChainModel 220 wc) (Lab 220 wc)),
     Function.Injective tags → (∀ σ s c, (A₂ σ s c).Bounded D Q) →
     pr (JointEventC Gr tags W A₁ A₂ 220) ≤ (N : ℝ≥0∞) * 2 ^ m * (2⁻¹ : ℝ≥0∞) ^ (N * L) + ε
 
@@ -1912,22 +1912,22 @@ section Trace
 variable {M : IdealModel} {α : Type}
 
 /-- The queries on the path taken when queries are answered by `f`, in order, each with its round (from 0). -/
-def trace (f : M.Qry → M.Ans) : Prog M α → List (ℕ × M.Qry)
+def trace (f : M.Qry → M.Ans) : OracleAlgorithm M α → List (ℕ × M.Qry)
   | .ret _ => []
   | .round qs k => qs.map (fun x => (0, x)) ++ (trace f (k (qs.map f))).map fun e => (e.1 + 1, e.2)
 
-theorem length_trace (f : M.Qry → M.Ans) (P : Prog M α) : (trace f P).length = P.work f := by
+theorem length_trace (f : M.Qry → M.Ans) (P : OracleAlgorithm M α) : (trace f P).length = P.work f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp [trace, Prog.work, ih]
+  | round qs k ih => simp [trace, OracleAlgorithm.work, ih]
 
-theorem round_lt_depth (f : M.Qry → M.Ans) (P : Prog M α) : ∀ e ∈ trace f P, e.1 < P.depth f := by
+theorem round_lt_depth (f : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ e ∈ trace f P, e.1 < P.depth f := by
   induction P with
   | ret a => simp [trace]
   | round qs k ih =>
     intro e he
     simp only [trace, List.mem_append, List.mem_map] at he
-    simp only [Prog.depth]
+    simp only [OracleAlgorithm.depth]
     rcases he with ⟨x, _, rfl⟩ | ⟨e', he', rfl⟩
     · simp
     · have := ih _ e' he'
@@ -1935,20 +1935,20 @@ theorem round_lt_depth (f : M.Qry → M.Ans) (P : Prog M α) : ∀ e ∈ trace f
       omega
 
 /-- `f` and `g` agree on every point that `P` asks, under `f`, before round `r`. -/
-def AgreeBefore (f g : M.Qry → M.Ans) (P : Prog M α) (r : ℕ) : Prop :=
+def AgreeBefore (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) (r : ℕ) : Prop :=
   ∀ e ∈ trace f P, e.1 < r → f e.2 = g e.2
 
-theorem mem_trace_round (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → Prog M α) (x : M.Qry)
+theorem mem_trace_round (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → OracleAlgorithm M α) (x : M.Qry)
     (hx : x ∈ qs) : (0, x) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inl ⟨x, hx, rfl⟩
 
-theorem mem_trace_round_succ (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → Prog M α)
+theorem mem_trace_round_succ (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → OracleAlgorithm M α)
     (e : ℕ × M.Qry) (he : e ∈ trace f (k (qs.map f))) : (e.1 + 1, e.2) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inr ⟨e, he, rfl⟩
 
-theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans → Prog M α} {r : ℕ}
+theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans → OracleAlgorithm M α} {r : ℕ}
     (h : AgreeBefore f g (.round qs k) (r + 1)) :
     qs.map f = qs.map g ∧ AgreeBefore f g (k (qs.map f)) r :=
   ⟨List.map_congr_left fun x hx => h (0, x) (mem_trace_round f qs k x hx) (Nat.succ_pos r),
@@ -1956,7 +1956,7 @@ theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans �
 
 /-- **Transcript locality.** If `f` and `g` agree on the points asked before round `r`, then the transcripts agree,
 entry by entry, up to round `r`; and every entry of `g`'s transcript up to round `r` is one of `f`'s. -/
-theorem trace_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, AgreeBefore f g P r →
+theorem trace_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r : ℕ, AgreeBefore f g P r →
     (∀ (n : ℕ) (e : ℕ × M.Qry), (trace f P)[n]? = some e → e.1 ≤ r → (trace g P)[n]? = some e) ∧
     (∀ e ∈ trace g P, e.1 ≤ r → e ∈ trace f P) := by
   induction P with
@@ -2012,19 +2012,19 @@ theorem trace_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, Agre
 
 /-- **Output locality.** A program that stops by round `r` returns the same output, at the same depth, under any
 oracle that agrees with `f` on the points asked before round `r`. -/
-theorem run_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
+theorem run_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
     P.run g = P.run f ∧ P.depth g = P.depth f := by
   induction P with
   | ret a => intro _ _ _; exact ⟨rfl, rfl⟩
   | round qs k ih =>
     intro r hag hd
     cases r with
-    | zero => simp [Prog.depth] at hd
+    | zero => simp [OracleAlgorithm.depth] at hd
     | succ r =>
       obtain ⟨hqs, hag'⟩ := agree_round hag
-      have hd' : (k (qs.map f)).depth f ≤ r := by simp only [Prog.depth] at hd; omega
+      have hd' : (k (qs.map f)).depth f ≤ r := by simp only [OracleAlgorithm.depth] at hd; omega
       obtain ⟨h1, h2⟩ := ih (qs.map f) r hag' hd'
-      simp only [Prog.run, Prog.depth, ← hqs]
+      simp only [OracleAlgorithm.run, OracleAlgorithm.depth, ← hqs]
       exact ⟨h1, by rw [h2]⟩
 
 
@@ -2151,7 +2151,7 @@ structure P3Replay (n wc : ℕ) (ι : Type) where
   D : ℕ
   Q : ℕ
   /-- The online programs, over any program index (one segment: `Fin n`; all segments in lock-step: `Fin N × Fin n`). -/
-  A : ι → Prog (p3ChainModel n wc) (Lab n wc)
+  A : ι → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)
 
 namespace P3Replay
 
@@ -5014,18 +5014,18 @@ open Pous PousForwardCore
 variable {M : IdealModel} {α : Type}
 
 /-- The query batches of `p` answered by `f`, in round order. -/
-def rounds (f : M.Qry → M.Ans) : Prog M α → List (List M.Qry)
+def rounds (f : M.Qry → M.Ans) : OracleAlgorithm M α → List (List M.Qry)
   | .ret _ => []
   | .round qs k => qs :: rounds f (k (qs.map f))
 
-theorem progTrace_eq_flatten (f : M.Qry → M.Ans) (p : Prog M α) : progTrace f p = (rounds f p).flatten := by
+theorem progTrace_eq_flatten (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) : progTrace f p = (rounds f p).flatten := by
   induction p with
   | ret a => rfl
   | round qs k ih => simp [progTrace, rounds, ih]
 
 
 /-- The queries of the first `t` rounds. -/
-def upTo (f : M.Qry → M.Ans) (p : Prog M α) (t : ℕ) : List M.Qry := ((rounds f p).take t).flatten
+def upTo (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) (t : ℕ) : List M.Qry := ((rounds f p).take t).flatten
 
 
 end PousRounds
@@ -5075,7 +5075,7 @@ end Honest
 
 section Trace
 
-variable (ps : Fin n → Prog (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
+variable (ps : Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
 
 /-- Some challenge program sends `q` within its first `t` rounds. -/
 def Asked (q : (p3ModelT n wc).Qry) (t : ℕ) : Prop :=
@@ -5146,7 +5146,7 @@ def keyLow (G : Labelling.TopoDAG n) (C : KState n) (r : ℕ) (w : Fin n) : Prop
 
 section Credits
 
-variable (ps : Fin n → Prog (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
+variable (ps : Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
   (τ : Bits 256) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc)
 
 open Classical in
@@ -5214,7 +5214,7 @@ end Hits
 
 section Credits3
 
-variable (ps : Fin n → Prog (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
+variable (ps : Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
   (τ : Bits 256) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc)
 
 /-- **A hit on `t` in round `r`.** -/
@@ -5279,7 +5279,7 @@ def honestQ (τ : Bits 256) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) (
 
 section Slots
 
-variable (ps : Fin n → Prog (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
+variable (ps : Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)) (ω : (p3ModelT n wc).Ω)
 
 open Classical in
 /-- The first round in which `q` is asked (`0` if never). -/
@@ -5321,7 +5321,7 @@ noncomputable def luckyBits (D : ℕ) : ℕ :=
   wc * (cred3 ps ω τ G W D).size + n * wc * (hitsBy ps ω τ G W D).card
 
 
-theorem mem_progTrace_of_mem_upTo {M : IdealModel} {α : Type} {f : M.Qry → M.Ans} {p : Prog M α} {t : ℕ}
+theorem mem_progTrace_of_mem_upTo {M : IdealModel} {α : Type} {f : M.Qry → M.Ans} {p : OracleAlgorithm M α} {t : ℕ}
     {q : M.Qry} (h : q ∈ upTo f p t) : q ∈ progTrace f p := by
   rw [progTrace_eq_flatten]
   obtain ⟨l, hl, hq⟩ := List.mem_flatten.1 h
@@ -5426,7 +5426,7 @@ namespace PousKnowledge
 
 open Pous Pous.Invertible Pous.ColumnAware PousForwardCore PousTweaked PousTimedGame PousRounds
 
-variable {n wc : ℕ} {p : Fin n → Prog (p3ModelT n wc) (Lab n wc)}
+variable {n wc : ℕ} {p : Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)}
   {τ : Bits 256} {G : Labelling.TopoDAG n} {W : Fin n → Lab n wc} {D Q : ℕ}
 
 
@@ -5458,7 +5458,7 @@ namespace PousKnowledge
 
 open Pous Pous.Invertible Pous.ColumnAware PousForwardCore PousTweaked PousTimedGame PousRounds
 
-variable {n wc : ℕ} {pc : Fin n → Prog (p3ModelT n wc) (Lab n wc)}
+variable {n wc : ℕ} {pc : Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)}
   {τ : Bits 256} {G : Labelling.TopoDAG n} {W : Fin n → Lab n wc} {Dc Q : ℕ}
 
 
@@ -5493,13 +5493,13 @@ def jointSlot (n s : ℕ) (x : ℕ × ℕ) : ℕ × ℕ := (s * n + x.1, x.2)
 
 open Classical in
 /-- The joint lucky set: every segment's lucky slots, placed by `jointSlot`. -/
-noncomputable def jointLuckySet {N n wc : ℕ} (p : Fin N → Fin n → Prog (p3ModelT n wc) (Lab n wc))
+noncomputable def jointLuckySet {N n wc : ℕ} (p : Fin N → Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc))
     (ω : (p3ModelT n wc).Ω) (tags : Fin N → Bits 256) (G : Labelling.TopoDAG n) (W : Fin N → Fin n → Lab n wc)
     (D Q : ℕ) : Finset (ℕ × ℕ) :=
   Finset.univ.biUnion fun s : Fin N => (luckySet (p s) ω (tags s) G (W s) D Q).image (jointSlot n s)
 
 /-- The joint lucky bits: the sum of the segments' lucky bits. -/
-noncomputable def jointLuckyBits {N n wc : ℕ} (p : Fin N → Fin n → Prog (p3ModelT n wc) (Lab n wc))
+noncomputable def jointLuckyBits {N n wc : ℕ} (p : Fin N → Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc))
     (ω : (p3ModelT n wc).Ω) (tags : Fin N → Bits 256) (G : Labelling.TopoDAG n) (W : Fin N → Fin n → Lab n wc)
     (D : ℕ) : ℕ :=
   ∑ s : Fin N, luckyBits (p s) ω (tags s) G (W s) D
@@ -5508,7 +5508,7 @@ open Classical in
 /-- `JointClassWeight` (`P3MeetsFinal.lean`), verbatim. -/
 def JointClassWeight : Prop :=
   ∀ (N n wc D Q : ℕ) (tags : Fin N → Bits 256) (G : Labelling.TopoDAG n) (W : Fin N → Fin n → Lab n wc)
-    (p : Fin N → Fin n → Prog (p3ModelT n wc) (Lab n wc)),
+    (p : Fin N → Fin n → OracleAlgorithm (p3ModelT n wc) (Lab n wc)),
     okLuckyMulti N n wc Q → 1 ≤ N → Function.Injective tags → (∀ s c, (p s c).Bounded D Q) →
     ∀ S : Finset (ℕ × ℕ),
       ∑ ω ∈ Finset.univ.filter (fun ω => jointLuckySet p ω tags G W D Q = S), 2 ^ jointLuckyBits p ω tags G W D ≤
@@ -5632,11 +5632,11 @@ def q2 (s : Fin 2) (a : Lab 1 wc) : (p3ModelT 1 wc).Qry :=
 def q3 (s : Fin 2) (b : Lab 1 wc) : (p3ModelT 1 wc).Qry := Sum.inr (Sum.inl ((tagOf s, 0, 0), b))
 
 /-- Segment `s`'s program. -/
-def prog (s : Fin 2) : Prog (p3ModelT 1 wc) (Lab 1 wc) :=
+def prog (s : Fin 2) : OracleAlgorithm (p3ModelT 1 wc) (Lab 1 wc) :=
   .round [q1 s] fun a => .round [q2 s (a.headD zeroL)] fun b => .round [q3 s (b.headD zeroL)] fun _ => .ret zeroL
 
 /-- The family. -/
-def pJ : Fin 2 → Fin 1 → Prog (p3ModelT 1 wc) (Lab 1 wc) := fun s _ => prog s
+def pJ : Fin 2 → Fin 1 → OracleAlgorithm (p3ModelT 1 wc) (Lab 1 wc) := fun s _ => prog s
 
 /-- Segment `s`'s honest input `x_s = 0 ⊕ κ¹_s`. -/
 def Hn (s : Fin 2) (ω : (p3ModelT 1 wc).Ω) : Lab 1 wc := labXor zeroL (ω.1 (key (tagOf s)))
@@ -5879,8 +5879,8 @@ theorem jointLuckyBits_J {ω : (p3ModelT 1 wc).Ω} (hg : Good ω) : 2 * wc ≤ j
   omega
 
 theorem bounded_J (s : Fin 2) (c : Fin 1) : (pJ (wc := wc) s c).Bounded 3 (2 ^ 15) := fun ω =>
-  ⟨le_of_eq (show Prog.depth ((p3ModelT 1 wc).answer ω) (prog s) = 3 from rfl),
-    (show Prog.work ((p3ModelT 1 wc).answer ω) (prog s) = 3 from rfl).trans_le (by norm_num)⟩
+  ⟨le_of_eq (show OracleAlgorithm.depth ((p3ModelT 1 wc).answer ω) (prog s) = 3 from rfl),
+    (show OracleAlgorithm.work ((p3ModelT 1 wc).answer ω) (prog s) = 3 from rfl).trans_le (by norm_num)⟩
 
 
 theorem tweak0_ne : ((tagOf 1, 0, 0) : Tweak 1) ≠ (tagOf 0, 0, 0) := fun h =>
@@ -5997,7 +5997,7 @@ open Pous Pous.Labelling Pous.Invertible Pous.Sponge Pous.P3Concrete PousRounds
 
 section Joint
 
-variable {N n wc : ℕ} (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc))
+variable {N n wc : ℕ} (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc))
 
 
 /-- **Segment `s`'s replay of the joint family**: segment `s`'s tag and data, and all `N·n` programs. -/
@@ -6010,7 +6010,7 @@ variable (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → La
 
 /-- **Every segment wins**: at least `k` of segment `s`'s programs return their top label, for every `s`. -/
 def WinC (k : ℕ) (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc)
-    (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (ω : P3COmega n wc) : Prop :=
+    (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (ω : P3COmega n wc) : Prop :=
   ∀ s : Fin N, k ≤ (Finset.univ.filter fun v =>
     (A s v).run ((p3ChainModel n wc).answer ω) = topLabelC (tags s) G (W s) ω v).card
 
@@ -6699,7 +6699,7 @@ set_option relaxedAutoImplicit false
 
 namespace LazyPerm
 
-/-- A parallel round program over queries `Q` and answers `A`: Pous's `Prog` with `M.Qry = Q`, `M.Ans = A`. -/
+/-- A parallel round program over queries `Q` and answers `A`: Pous's `OracleAlgorithm` with `M.Qry = Q`, `M.Ans = A`. -/
 inductive RProg (Q A X : Type) where
   | ret : X → RProg Q A X
   | round : List Q → (List A → RProg Q A X) → RProg Q A X
@@ -7022,12 +7022,12 @@ theorem dec_qEntry (ω : P3COmega n wc) (q : (p3ChainModel n wc).Qry) :
 end Queries
 
 
-/-- A `Prog` as a lazy round program. -/
-def toRProg {M : IdealModel} {X : Type} : Prog M X → LazyPerm.RProg M.Qry M.Ans X
+/-- An `OracleAlgorithm` as a lazy round program. -/
+def toRProg {M : IdealModel} {X : Type} : OracleAlgorithm M X → LazyPerm.RProg M.Qry M.Ans X
   | .ret x => .ret x
   | .round qs k => .round qs (fun as => toRProg (k as))
 
-theorem trace_toRProg {M : IdealModel} {X : Type} (f : M.Qry → M.Ans) (P : Prog M X) :
+theorem trace_toRProg {M : IdealModel} {X : Type} (f : M.Qry → M.Ans) (P : OracleAlgorithm M X) :
     (toRProg P).trace f = Tr.trace f P := by
   induction P with
   | ret x => rfl
@@ -7039,37 +7039,37 @@ section Labeller
 variable {n wc : ℕ}
 
 /-- Sequencing programs. -/
-def pbind {M : IdealModel} {X Y : Type} : Prog M X → (X → Prog M Y) → Prog M Y
+def pbind {M : IdealModel} {X Y : Type} : OracleAlgorithm M X → (X → OracleAlgorithm M Y) → OracleAlgorithm M Y
   | .ret x, g => g x
   | .round qs k, g => .round qs fun as => pbind (k as) g
 
 /-- One forward `Π₂` query. -/
-def p2Fwd (x : Bits (n * wc + (n * wc + 512))) : Prog (p3ChainModel n wc) (Bits (n * wc + (n * wc + 512))) :=
+def p2Fwd (x : Bits (n * wc + (n * wc + 512))) : OracleAlgorithm (p3ChainModel n wc) (Bits (n * wc + (n * wc + 512))) :=
   .round [.inl (.inl x)] fun as => .ret (match as.headD (.inl x) with
     | .inl y => y
     | .inr _ => x)
 
 /-- One forward `P_T` query. -/
-def pFwd (T : Tweak n) (a : Lab n wc) : Prog (p3ChainModel n wc) (Lab n wc) :=
+def pFwd (T : Tweak n) (a : Lab n wc) : OracleAlgorithm (p3ChainModel n wc) (Lab n wc) :=
   .round [.inr (T, .inl a)] fun as => .ret (match as.headD (.inr a) with
     | .inr c => c
     | .inl _ => a)
 
 /-- An overwrite chain from `h`, one forward `Π₂` query per block; returns the last dropped part (the key). -/
 def chainProg (h : Bits (n * wc + 512)) (r : Bits (n * wc)) :
-    List (Bits (n * wc)) → Prog (p3ChainModel n wc) (Bits (n * wc))
+    List (Bits (n * wc)) → OracleAlgorithm (p3ChainModel n wc) (Bits (n * wc))
   | [] => .ret r
   | b :: bs => pbind (p2Fwd (Fin.append b h)) fun y => chainProg (ovH y) (ovR y) bs
 
 /-- A row: its chain from its IV over `labs`' parents, then the forward `P` query on `pinOf key`. -/
 def rowProg (tag : Bits 256) (G : TopoDAG n) (L : Fin 2) (v : Fin n) (labs : Fin n → Lab n wc)
-    (pinOf : Lab n wc → Lab n wc) : Prog (p3ChainModel n wc) (Lab n wc) :=
+    (pinOf : Lab n wc → Lab n wc) : OracleAlgorithm (p3ChainModel n wc) (Lab n wc) :=
   pbind (chainProg (iv (domP3 tag L v)) (fun _ => false) (rowBlocks labs G v)) fun r =>
     pFwd (tag, L, v) (pinOf ((codeEquiv n wc).symm r))
 
 /-- A layer, rows `k, k+1, …, n − 1` in order, accumulating the labels. -/
 def layerProg (tag : Bits 256) (G : TopoDAG n) (L : Fin 2) (pinOf : Fin n → Lab n wc → Lab n wc) :
-    (k : ℕ) → (Fin n → Lab n wc) → Prog (p3ChainModel n wc) (Fin n → Lab n wc)
+    (k : ℕ) → (Fin n → Lab n wc) → OracleAlgorithm (p3ChainModel n wc) (Fin n → Lab n wc)
   | k, acc =>
     if hk : k < n then
       pbind (rowProg tag G L ⟨k, hk⟩ acc (pinOf ⟨k, hk⟩)) fun c =>
@@ -7090,7 +7090,7 @@ theorem layerProg_eq (tag : Bits 256) (G : TopoDAG n) (L : Fin 2) (pinOf : Fin n
 
 
 /-- **The honest labeller**: the lower layer (`pin1 = W ⊕ key¹`), then the top layer (`pin2 = transpose(c¹) ⊕ key²`). -/
-def labProg (tag : Bits 256) (G : TopoDAG n) (W : Fin n → Lab n wc) : Prog (p3ChainModel n wc) Unit :=
+def labProg (tag : Bits 256) (G : TopoDAG n) (W : Fin n → Lab n wc) : OracleAlgorithm (p3ChainModel n wc) Unit :=
   pbind (layerProg tag G 0 (fun v key => labXor (W v) key) 0 fun _ _ _ => false) fun c1 =>
     pbind (layerProg tag G 1 (fun v key => labXor (transpose c1 v) key) 0 fun _ _ _ => false) fun _ => .ret ()
 
@@ -7136,16 +7136,16 @@ variable {N n wc : ℕ}
 
 /-- The labellers of the segments in `ss`, in order. -/
 def segsProg (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) :
-    List (Fin N) → Prog (p3ChainModel n wc) Unit
+    List (Fin N) → OracleAlgorithm (p3ChainModel n wc) Unit
   | [] => .ret ()
   | s :: ss => pbind (labProg (tags s) G (W s)) fun _ => segsProg tags G W ss
 
 /-- **All segments' honest labellers**, in segment order. -/
-def labProgJ (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) : Prog (p3ChainModel n wc) Unit :=
+def labProgJ (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) : OracleAlgorithm (p3ChainModel n wc) Unit :=
   segsProg tags G W (List.finRange N)
 
 /-- **A labeller tail for any program**: replay `p` against the history, and ask its first query the history lacks. -/
-def tailOf (p : Prog (p3ChainModel n wc) Unit) (h : LazyPerm.History (P3Alpha n wc)) :
+def tailOf (p : OracleAlgorithm (p3ChainModel n wc) Unit) (h : LazyPerm.History (P3Alpha n wc)) :
     Option (LazyPerm.Qry (P3Alpha n wc)) :=
   (((Tr.trace (ansOf h) p).map Prod.snd).find? fun q => (histAns h (enc n wc q)).isNone).map (enc n wc)
 
@@ -7160,7 +7160,7 @@ theorem mem_jointThreads (i : Fin N × Fin n) : i ∈ jointThreads N n :=
   List.mem_product.2 ⟨List.mem_finRange _, List.mem_finRange _⟩
 
 /-- **The 14 GB store's lazy strategy**: the `N·n` programs round by round for `D` rounds, then all `N` labellers. -/
-def jointStrategy (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
+def jointStrategy (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
     (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) (D : ℕ) : LazyPerm.Strategy (P3Alpha n wc) :=
   LazyPerm.Strategy.ofRounds (jointThreads N n) D (fun i => toRProg (A i.1 i.2)) (enc n wc) (dec n wc)
     (tailOf (labProgJ tags G W))
@@ -7229,7 +7229,7 @@ theorem step_lt_of_length_le (L : ℕ) (hL : ∀ j, (S.hist π j).length ≤ L) 
 end Steps
 
 
-theorem trace_pairwise {M : IdealModel} {X : Type} (f : M.Qry → M.Ans) (P : Prog M X) :
+theorem trace_pairwise {M : IdealModel} {X : Type} (f : M.Qry → M.Ans) (P : OracleAlgorithm M X) :
     (Tr.trace f P).Pairwise (fun a b => a.1 ≤ b.1) := by
   induction P with
   | ret a => simp [Tr.trace]
@@ -7291,7 +7291,7 @@ theorem ansOf_eq {π : Oracle (P3Alpha n wc)} (h : History (P3Alpha n wc)) (hcon
     rw [ha, Option.getD_some, this]
 
 /-- **The tail's query is a new query on `p`'s true trace.** -/
-theorem tailOf_some {π : Oracle (P3Alpha n wc)} (p : Prog (p3ChainModel n wc) Unit) (h : History (P3Alpha n wc))
+theorem tailOf_some {π : Oracle (P3Alpha n wc)} (p : OracleAlgorithm (p3ChainModel n wc) Unit) (h : History (P3Alpha n wc))
     (hcons : ∀ e ∈ h, e.2 = ans π e.1) {x : Qry (P3Alpha n wc)} (hx : tailOf p h = some x) :
     ∃ q, x = enc n wc q ∧ q ∈ (Tr.trace (trueAns π) p).map Prod.snd ∧ histAns h (enc n wc q) = none := by
   unfold tailOf at hx
@@ -7373,7 +7373,7 @@ section Labeller
 
 variable {n wc : ℕ}
 
-theorem work_pbind {M : IdealModel} {X Y : Type} (f : M.Qry → M.Ans) (p : Prog M X) (g : X → Prog M Y) :
+theorem work_pbind {M : IdealModel} {X Y : Type} (f : M.Qry → M.Ans) (p : OracleAlgorithm M X) (g : X → OracleAlgorithm M Y) :
     (pbind p g).work f = p.work f + (g (p.run f)).work f := by
   induction p with
   | ret x => show (g x).work f = 0 + (g x).work f; omega
@@ -7456,7 +7456,7 @@ theorem work_labProg (f : (p3ChainModel n wc).Qry → (p3ChainModel n wc).Ans) (
     (fun v key => labXor (transpose ((layerProg tag G 0 (fun v key => labXor (W v) key) 0 fun _ _ _ => false).run f)
       v) key) 0 fun _ _ _ => false
   have h3 := sum_Ico_two n
-  have h4 : (Prog.ret () : Prog (p3ChainModel n wc) Unit).work f = 0 := rfl
+  have h4 : (OracleAlgorithm.ret () : OracleAlgorithm (p3ChainModel n wc) Unit).work f = 0 := rfl
   rw [h4]
   omega
 
@@ -8162,13 +8162,13 @@ variable {N n wc : ℕ}
 
 /-- **The joint strategy truncated after `c` schedule steps**: the joint schedule's first `c` queries, then all `N`
 labellers (`stratC`'s joint counterpart). -/
-def jointStratC (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
+def jointStratC (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
     (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) (D c : ℕ) : Strategy (P3Alpha n wc) where
   next h := if h.length < c then (jointStrategy A tags G W D).next h else tailOf (labProgJ tags G W) h
 
 /-- **A strategy that switches to `tailOf p` at length `c`** holds at most `c + work(p)` entries: past `c`, each step
 adds a new query of `p`'s true trace. -/
-theorem tailOf_length_le (S : Strategy (P3Alpha n wc)) (p : Prog (p3ChainModel n wc) Unit) (c : ℕ)
+theorem tailOf_length_le (S : Strategy (P3Alpha n wc)) (p : OracleAlgorithm (p3ChainModel n wc) Unit) (c : ℕ)
     (hS : ∀ h : History (P3Alpha n wc), c ≤ h.length → S.next h = tailOf p h) (π : Oracle (P3Alpha n wc)) (j : ℕ) :
     (S.hist π j).length ≤ c + p.work (trueAns π) := by
   classical
@@ -8220,7 +8220,7 @@ theorem tailOf_length_le (S : Strategy (P3Alpha n wc)) (p : Prog (p3ChainModel n
     omega
 
 /-- **The truncated joint strategy holds at most `N·nPosC` entries** for `c ≤ N·n·Q`. -/
-theorem jointStratC_length_le (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
+theorem jointStratC_length_le (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
     (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) (D Q c : ℕ) (hc : c ≤ N * n * Q) (π : Oracle (P3Alpha n wc))
     (j : ℕ) : ((jointStratC A tags G W D c).hist π j).length ≤ N * nPosC n Q := by
   refine (tailOf_length_le _ (labProgJ tags G W) c (fun h hh => ?_) π j).trans ?_
@@ -8234,7 +8234,7 @@ theorem jointStratC_length_le (A : Fin N → Fin n → Prog (p3ChainModel n wc) 
     omega
 
 /-- **`h_lt` for the truncated joint strategy**: every step that asks a query is below `N·nPosC`. -/
-theorem jointStratC_step_lt (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
+theorem jointStratC_step_lt (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
     (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) (D Q c : ℕ) (hc : c ≤ N * n * Q) {π : Oracle (P3Alpha n wc)}
     {j : ℕ} {q : Qry (P3Alpha n wc)} (h : (jointStratC A tags G W D c).next ((jointStratC A tags G W D c).hist π j) = some q) :
     j < N * nPosC n Q :=
@@ -8244,7 +8244,7 @@ theorem jointStratC_step_lt (A : Fin N → Fin n → Prog (p3ChainModel n wc) (L
 /-- **The joint compression under (C1) and the multi (C2)**: `JointFreshTail` with `(2·N·nPosC)^40 ≤ 2^wc`. -/
 def JointFreshTail2 : Prop :=
   ∀ (N n wc D Q s : ℕ) (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc)
-    (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)),
+    (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)),
     0 < n → 0 < wc → n ≤ 2 ^ 255 → 2 * (N * nPosC n Q) ≤ 2 ^ wc → (2 * (N * nPosC n Q)) ^ 40 ≤ 2 ^ wc → 1 ≤ N →
     Function.Injective tags → (∀ t v, (A t v).Bounded D Q) → s ≤ n →
     pr (fun ω => (∀ t : Fin N, (s : ℚ) * n ≤ ((segReplay A tags G W D Q t).onlineH ω (D + 1)).size 512 wc) ∧
@@ -8273,7 +8273,7 @@ strategy `jointStratC A tags G W D c`:
 class union and the arithmetic are done here (`jointFreshTail2_of_segCharges`). -/
 def P3SegCharges : Prop :=
   ∀ (N n wc D Q s : ℕ) (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc)
-    (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)),
+    (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)),
     0 < n → 0 < wc → n ≤ 2 ^ 255 → 2 * (N * nPosC n Q) ≤ 2 ^ wc → (2 * (N * nPosC n Q)) ^ 40 ≤ 2 ^ wc → 1 ≤ N →
     Function.Injective tags → (∀ t v, (A t v).Bounded D Q) → s ≤ n →
     ∃ (Sig : Type) (_ : Fintype Sig) (whole : Sig → ℕ) (K : Type) (_ : Fintype K) (_ : DecidableEq K) (w : K → ℕ)
@@ -8693,7 +8693,7 @@ def P3ChainCountMulti2 : Prop :=
   ∀ (N n wc D Q k X : ℕ) (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc),
     0 < n → 0 < wc → n ≤ 2 ^ 255 → 2 * (N * nPosC n Q) ≤ 2 ^ wc → (2 * (N * nPosC n Q)) ^ 40 ≤ 2 ^ wc → 1 ≤ N →
     X + 1 ≤ k → Function.Injective tags → P3ChainHard G 512 wc D k X →
-    ∀ A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc), (∀ s v, (A s v).Bounded D Q) →
+    ∀ A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc), (∀ s v, (A s v).Bounded D Q) →
       (Finset.univ.filter fun ω => WinC k tags G W A ω ∧ ¬ JBad tags G W ω).card * 2 ^ (N * (k - X - 1) * (n * wc)) ≤
         N * (N * nPosC n Q) ^ (14 * n * N) * Fintype.card (P3COmega n wc)
 
@@ -8702,7 +8702,7 @@ def P3ChainEPFMulti2 : Prop :=
   ∀ (N n wc m D Q k X : ℕ) (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc),
     0 < n → 0 < wc → n ≤ 2 ^ 255 → 2 * (N * nPosC n Q) ≤ 2 ^ wc → (2 * (N * nPosC n Q)) ^ 40 ≤ 2 ^ wc → 1 ≤ N →
     X + 1 ≤ k → Function.Injective tags → P3ChainHard G 512 wc D k X →
-    ∀ (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)),
+    ∀ (A₁ : P3COmega n wc → Bits m) (A₂ : Bits m → Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)),
       (∀ σ s v, (A₂ σ s v).Bounded D Q) →
       pr (JointEventC G tags W A₁ A₂ k) ≤
         (N : ℝ≥0∞) * 2 ^ m * (((N * nPosC n Q) ^ (14 * n * N) : ℕ) : ℝ≥0∞) / 2 ^ (N * (k - X - 1) * (n * wc)) +
@@ -8832,13 +8832,13 @@ section Labeller
 
 variable {n wc : ℕ}
 
-theorem lab_run_pbind {M : IdealModel} {X Y : Type} (f : M.Qry → M.Ans) (p : Prog M X) (g : X → Prog M Y) :
+theorem lab_run_pbind {M : IdealModel} {X Y : Type} (f : M.Qry → M.Ans) (p : OracleAlgorithm M X) (g : X → OracleAlgorithm M Y) :
     (pbind p g).run f = (g (p.run f)).run f := by
   induction p with
   | ret x => rfl
   | round qs k ih => exact ih (qs.map f)
 
-theorem lab_trace_pbind {M : IdealModel} {X Y : Type} (f : M.Qry → M.Ans) (p : Prog M X) (g : X → Prog M Y) :
+theorem lab_trace_pbind {M : IdealModel} {X Y : Type} (f : M.Qry → M.Ans) (p : OracleAlgorithm M X) (g : X → OracleAlgorithm M Y) :
     (Tr.trace f (pbind p g)).map Prod.snd = (Tr.trace f p).map Prod.snd ++ (Tr.trace f (g (p.run f))).map Prod.snd := by
   induction p with
   | ret x => rfl
@@ -9249,13 +9249,13 @@ noncomputable def onlineHC (c : ℕ) : ℕ → P3ChainKnow n
 
 /-- A program has no queries at rounds past its depth. -/
 theorem roundQs_depth {M : IdealModel} {X : Type} (f : M.Qry → M.Ans) :
-    ∀ (P : Prog M X) (ρ : ℕ), P.depth f ≤ ρ → (toRProg P).roundQs f ρ = []
+    ∀ (P : OracleAlgorithm M X) (ρ : ℕ), P.depth f ≤ ρ → (toRProg P).roundQs f ρ = []
   | .ret x, ρ, _ => LazyPerm.RProg.roundQs_ret f x ρ
-  | .round qs k, 0, h => by simp [Prog.depth] at h
+  | .round qs k, 0, h => by simp [OracleAlgorithm.depth] at h
   | .round qs k, ρ + 1, h => by
     rw [LazyPerm.RProg.roundQs_succ]
     simp only [toRProg, LazyPerm.RProg.qs, LazyPerm.RProg.feed]
-    exact roundQs_depth f (k (qs.map f)) ρ (by simp [Prog.depth] at h; omega)
+    exact roundQs_depth f (k (qs.map f)) ρ (by simp [OracleAlgorithm.depth] at h; omega)
 
 /-- A thread's round-`τ` queries end by the end of round `τ`. -/
 theorem off_add_lt (τ : ℕ) (v : ι) {i : ℕ} (hi : i < (R.rq ω τ v).length) :
@@ -9410,7 +9410,7 @@ open Pous Pous.Labelling Pous.Invertible Pous.Sponge LazyPerm PousP3ConcreteMult
 queries as one block, `pre ++ labeller ++ post`. One segment's tail is its labeller (`pre = post = []`); a segment
 of the 14 GB run has all `N` labellers (`labProgJ`), with the other segments' queries in `pre` and `post`. -/
 structure P3SegT (n wc : ℕ) (ι : Type) extends P3Seg n wc ι where
-  tailP : Prog (p3ChainModel n wc) Unit
+  tailP : OracleAlgorithm (p3ChainModel n wc) Unit
   pre : P3COmega n wc → List (p3ChainModel n wc).Qry
   post : P3COmega n wc → List (p3ChainModel n wc).Qry
   hsplit : ∀ ω, (Tr.trace ((p3ChainModel n wc).answer ω) tailP).map Prod.snd =
@@ -10673,7 +10673,7 @@ theorem backing_prog (hA : ∀ v, (R.A v).Bounded R.D R.Q) {c j d : ℕ} (hc : c
 
 /-- **The tail asks the first unanswered labeller query**: the true trace splits as `l1 ++ q :: l2` around it,
 with every query of `l1` answered in the history. -/
-theorem tailOf_prefix (p : Prog (p3ChainModel n wc) Unit) (h : History (P3Alpha n wc))
+theorem tailOf_prefix (p : OracleAlgorithm (p3ChainModel n wc) Unit) (h : History (P3Alpha n wc))
     (hcons : ∀ e ∈ h, e.2 = ans π e.1) {x : Qry (P3Alpha n wc)} (hx : tailOf p h = some x) :
     ∃ q l1 l2, x = enc n wc q ∧ (Tr.trace (trueAns π) p).map Prod.snd = l1 ++ q :: l2 ∧
       ∀ q' ∈ l1, (histAns h (enc n wc q')).isNone = false := by
@@ -13384,7 +13384,7 @@ theorem segsProg_trace (tags : Fin N → Bits 256) (G : TopoDAG n) (W : Fin N �
 
 /-- **Segment `t` of the 14 GB run**: all `N·n` threads in joint order; the tail is all `N` labellers, with the other
 segments' queries before and after segment `t`'s. -/
-noncomputable def jointSeg (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
+noncomputable def jointSeg (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
     (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) (D Q : ℕ) (t : Fin N) : P3SegT n wc (Fin N × Fin n) where
   toP3Replay := segReplay A tags G W D Q t
   ths := jointThreads N n
@@ -13401,7 +13401,7 @@ noncomputable def jointSeg (A : Fin N → Fin n → Prog (p3ChainModel n wc) (La
     simp only [List.append_assoc]
     rfl
 
-variable (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256) (G : TopoDAG n)
+variable (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256) (G : TopoDAG n)
   (W : Fin N → Fin n → Lab n wc) (D Q : ℕ)
 
 
@@ -13409,7 +13409,7 @@ end Joint
 
 section Good
 
-variable {N n wc : ℕ} (A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
+variable {N n wc : ℕ} (A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)) (tags : Fin N → Bits 256)
   (G : TopoDAG n) (W : Fin N → Fin n → Lab n wc) (D Q : ℕ)
 
 include A D Q in
@@ -15207,7 +15207,7 @@ end P3SegT
 
 section Joint
 
-variable {N n wc : ℕ} {A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)} {tags : Fin N → Bits 256}
+variable {N n wc : ℕ} {A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)} {tags : Fin N → Bits 256}
   {G : TopoDAG n} {W : Fin N → Fin n → Lab n wc} {D Q : ℕ}
 
 /-- **Off `JBad`, two segments never name the same step.** -/
@@ -15237,7 +15237,7 @@ end Joint
 
 section Joint
 
-variable {N n wc : ℕ} {A : Fin N → Fin n → Prog (p3ChainModel n wc) (Lab n wc)} {tags : Fin N → Bits 256}
+variable {N n wc : ℕ} {A : Fin N → Fin n → OracleAlgorithm (p3ChainModel n wc) (Lab n wc)} {tags : Fin N → Bits 256}
   {G : TopoDAG n} {W : Fin N → Fin n → Lab n wc} {D Q : ℕ}
 
 /-- The joint schedule asks at most `N·n·Q` queries. -/
@@ -15667,7 +15667,7 @@ theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
 
 
 /-- Post-process a program's output; the queries are unchanged. -/
-def progMap {M : IdealModel} {α β : Type} (g : α → β) : Prog M α → Prog M β
+def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
@@ -15675,22 +15675,22 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
-theorem run_progMap (p : Prog M α) : (progMap g p).run f = g (p.run f) := by
+theorem run_progMap (p : OracleAlgorithm M α) : (progMap g p).run f = g (p.run f) := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact ih _
 
-theorem depth_progMap (p : Prog M α) : (progMap g p).depth f = p.depth f := by
+theorem depth_progMap (p : OracleAlgorithm M α) : (progMap g p).depth f = p.depth f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (· + 1) (ih _)
 
-theorem work_progMap (p : Prog M α) : (progMap g p).work f = p.work f := by
+theorem work_progMap (p : OracleAlgorithm M α) : (progMap g p).work f = p.work f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (qs.length + ·) (ih _)
 
-theorem bounded_progMap {D Q : ℕ} {p : Prog M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
+theorem bounded_progMap {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
   fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
@@ -15702,7 +15702,7 @@ predict each block from `(W, pp, state)` within `(D, Q)`. Then the wrong predict
 `S + B + #wrong·ℓ ≤ β`, with probability at most `π` under `TimedINC D Q β π`. -/
 theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π)
     (W : Bits sch.n) (st : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S)
-    (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ))
+    (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
     (hpred : ∀ W pp σ i, (pred W pp σ i).Bounded D Q) :
     pr (fun a : M.Ω × sch.Coins => S + sch.B + (Finset.univ.filter fun i =>
       ¬ (pred W (sch.enc W a.1 a.2).1 (st W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run
@@ -15710,8 +15710,8 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
   obtain ⟨c, d, hcd⟩ := exists_code (fits S sch.B sch.ℓ β) β (card_fits_le S sch.B sch.ℓ β)
   let cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β :=
     fun W pp C ω => c (st W pp C ω, patch (fun i => (pred W pp (st W pp C ω) i).run (M.answer ω)) C)
-  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ) :=
-    fun W pp w i => ((d w).2 i).elim (pred W pp (d w).1 i) Prog.ret
+  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
+    fun W pp w i => ((d w).2 i).elim (pred W pp (d w).1 i) OracleAlgorithm.ret
   have hexp : ∀ W pp w i, (exp W pp w i).Bounded D Q := by
     intro W pp w i
     cases h : (d w).2 i with
@@ -15732,14 +15732,14 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
 
 /-- The state a sequential responder reaches after answering the history `h` from round `j` in state `σ`. -/
 def seqState {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
   | _, [], σ => σ
   | j, i :: is, σ => seqState f step (j + 1) is ((step j σ i).run f).2
 
 /-- **Chain rule for sequential audits.** If after every history of fewer than `k` indices a uniform next index is
 answered correctly with probability at most `c`, all `k` rounds are with probability at most `c^k`. -/
 theorem pr_seq_le {M : IdealModel} {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
     ∀ (k j : ℕ) (σ : Bits S),
       (∀ h : List (Fin B), h.length < k →
         pr (fun i : Fin B => ((step (j + h.length) (seqState f step j h σ) i).run f).1 = C i) ≤ c) →
@@ -15775,7 +15775,7 @@ theorem theorem1_ii_seq {M : IdealModel} (sch : Scheme M) (D Q β S k : ℕ) (π
   -- the state after history `h`, and whether round `|h|` answers block `i` correctly from it
   let st : List (Fin sch.B) → Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S :=
     fun h W pp C ω => seqState (M.answer ω) (A₂.step W pp) 0 h (A₁ W pp C ω)
-  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ) :=
+  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
     fun h W pp σ i => progMap Prod.fst (A₂.step W pp h.length σ i)
   let good : List (Fin sch.B) → M.Ω × sch.Coins → Fin sch.B → Prop := fun h a i =>
     (pred h W (sch.enc W a.1 a.2).1 (st h W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run
@@ -15832,22 +15832,22 @@ section Trace
 variable {M : IdealModel} {α : Type}
 
 /-- The queries on the path taken when queries are answered by `f`, in order, each with its round (from 0). -/
-def trace (f : M.Qry → M.Ans) : Prog M α → List (ℕ × M.Qry)
+def trace (f : M.Qry → M.Ans) : OracleAlgorithm M α → List (ℕ × M.Qry)
   | .ret _ => []
   | .round qs k => qs.map (fun x => (0, x)) ++ (trace f (k (qs.map f))).map fun e => (e.1 + 1, e.2)
 
-theorem length_trace (f : M.Qry → M.Ans) (P : Prog M α) : (trace f P).length = P.work f := by
+theorem length_trace (f : M.Qry → M.Ans) (P : OracleAlgorithm M α) : (trace f P).length = P.work f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp [trace, Prog.work, ih]
+  | round qs k ih => simp [trace, OracleAlgorithm.work, ih]
 
-theorem round_lt_depth (f : M.Qry → M.Ans) (P : Prog M α) : ∀ e ∈ trace f P, e.1 < P.depth f := by
+theorem round_lt_depth (f : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ e ∈ trace f P, e.1 < P.depth f := by
   induction P with
   | ret a => simp [trace]
   | round qs k ih =>
     intro e he
     simp only [trace, List.mem_append, List.mem_map] at he
-    simp only [Prog.depth]
+    simp only [OracleAlgorithm.depth]
     rcases he with ⟨x, _, rfl⟩ | ⟨e', he', rfl⟩
     · simp
     · have := ih _ e' he'
@@ -15855,20 +15855,20 @@ theorem round_lt_depth (f : M.Qry → M.Ans) (P : Prog M α) : ∀ e ∈ trace f
       omega
 
 /-- `f` and `g` agree on every point that `P` asks, under `f`, before round `r`. -/
-def AgreeBefore (f g : M.Qry → M.Ans) (P : Prog M α) (r : ℕ) : Prop :=
+def AgreeBefore (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) (r : ℕ) : Prop :=
   ∀ e ∈ trace f P, e.1 < r → f e.2 = g e.2
 
-theorem mem_trace_round (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → Prog M α) (x : M.Qry)
+theorem mem_trace_round (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → OracleAlgorithm M α) (x : M.Qry)
     (hx : x ∈ qs) : (0, x) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inl ⟨x, hx, rfl⟩
 
-theorem mem_trace_round_succ (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → Prog M α)
+theorem mem_trace_round_succ (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → OracleAlgorithm M α)
     (e : ℕ × M.Qry) (he : e ∈ trace f (k (qs.map f))) : (e.1 + 1, e.2) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inr ⟨e, he, rfl⟩
 
-theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans → Prog M α} {r : ℕ}
+theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans → OracleAlgorithm M α} {r : ℕ}
     (h : AgreeBefore f g (.round qs k) (r + 1)) :
     qs.map f = qs.map g ∧ AgreeBefore f g (k (qs.map f)) r :=
   ⟨List.map_congr_left fun x hx => h (0, x) (mem_trace_round f qs k x hx) (Nat.succ_pos r),
@@ -15876,7 +15876,7 @@ theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans �
 
 /-- **Transcript locality.** If `f` and `g` agree on the points asked before round `r`, then the transcripts agree,
 entry by entry, up to round `r`; and every entry of `g`'s transcript up to round `r` is one of `f`'s. -/
-theorem trace_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, AgreeBefore f g P r →
+theorem trace_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r : ℕ, AgreeBefore f g P r →
     (∀ (n : ℕ) (e : ℕ × M.Qry), (trace f P)[n]? = some e → e.1 ≤ r → (trace g P)[n]? = some e) ∧
     (∀ e ∈ trace g P, e.1 ≤ r → e ∈ trace f P) := by
   induction P with
@@ -15932,19 +15932,19 @@ theorem trace_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, Agre
 
 /-- **Output locality.** A program that stops by round `r` returns the same output, at the same depth, under any
 oracle that agrees with `f` on the points asked before round `r`. -/
-theorem run_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
+theorem run_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
     P.run g = P.run f ∧ P.depth g = P.depth f := by
   induction P with
   | ret a => intro _ _ _; exact ⟨rfl, rfl⟩
   | round qs k ih =>
     intro r hag hd
     cases r with
-    | zero => simp [Prog.depth] at hd
+    | zero => simp [OracleAlgorithm.depth] at hd
     | succ r =>
       obtain ⟨hqs, hag'⟩ := agree_round hag
-      have hd' : (k (qs.map f)).depth f ≤ r := by simp only [Prog.depth] at hd; omega
+      have hd' : (k (qs.map f)).depth f ≤ r := by simp only [OracleAlgorithm.depth] at hd; omega
       obtain ⟨h1, h2⟩ := ih (qs.map f) r hag' hd'
-      simp only [Prog.run, Prog.depth, ← hqs]
+      simp only [OracleAlgorithm.run, OracleAlgorithm.depth, ← hqs]
       exact ⟨h1, by rw [h2]⟩
 
 
@@ -16016,7 +16016,7 @@ structure Replay (N w : ℕ) where
   VC : Finset (Fin N)
   D : ℕ
   Q : ℕ
-  P : Fin N → Prog (RO N w) (Bits w)
+  P : Fin N → OracleAlgorithm (RO N w) (Bits w)
 
 namespace Replay
 
@@ -17549,7 +17549,7 @@ structure ChainReplay (B ℓ c : ℕ) where
   Wb : Fin B → Bits ℓ
   D : ℕ
   Q : ℕ
-  P : Fin B → Prog (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)
+  P : Fin B → OracleAlgorithm (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)
 
 namespace ChainReplay
 
@@ -18573,11 +18573,11 @@ theorem bandAnswer_eq {n : ℕ} (σ : Equiv.Perm (Bits n)) : bandAnswer σ = (id
 
 
 /-- An `idealPerm` program as a round program over explicit `Bits` queries and answers. -/
-def toRProgI {n : ℕ} {X : Type} : Prog (idealPerm n) X → LazyPerm.RProg (Bits n ⊕ Bits n) (Bits n) X
+def toRProgI {n : ℕ} {X : Type} : OracleAlgorithm (idealPerm n) X → LazyPerm.RProg (Bits n ⊕ Bits n) (Bits n) X
   | .ret x => .ret x
   | .round qs k => .round qs (fun as => toRProgI (k as))
 
-theorem trace_toRProgI {n : ℕ} {X : Type} (f : Bits n ⊕ Bits n → Bits n) (P : Prog (idealPerm n) X) :
+theorem trace_toRProgI {n : ℕ} {X : Type} (f : Bits n ⊕ Bits n → Bits n) (P : OracleAlgorithm (idealPerm n) X) :
     (toRProgI P).trace f = PousB5Chain.trace f P := by
   induction P with
   | ret x => rfl
@@ -20011,27 +20011,27 @@ namespace BandTr
 
 /-
 theorem mem_trace_round {X : Type} (f : Bits n ⊕ Bits n → Bits n)
-    (qs : List (Bits n ⊕ Bits n)) (k : List (Bits n) → Prog (idealPerm n) X)
+    (qs : List (Bits n ⊕ Bits n)) (k : List (Bits n) → OracleAlgorithm (idealPerm n) X)
     (x : Bits n ⊕ Bits n) (hx : x ∈ qs) : (0, x) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inl ⟨x, hx, rfl⟩
 
 theorem mem_trace_round_succ {X : Type} (f : Bits n ⊕ Bits n → Bits n)
-    (qs : List (Bits n ⊕ Bits n)) (k : List (Bits n) → Prog (idealPerm n) X)
+    (qs : List (Bits n ⊕ Bits n)) (k : List (Bits n) → OracleAlgorithm (idealPerm n) X)
     (e : ℕ × (Bits n ⊕ Bits n)) (he : e ∈ trace f (k (qs.map f))) :
     (e.1 + 1, e.2) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inr ⟨e, he, rfl⟩
 
 theorem agree_round {X : Type} {f g : Bits n ⊕ Bits n → Bits n}
-    {qs : List (Bits n ⊕ Bits n)} {k : List (Bits n) → Prog (idealPerm n) X} {r : ℕ}
+    {qs : List (Bits n ⊕ Bits n)} {k : List (Bits n) → OracleAlgorithm (idealPerm n) X} {r : ℕ}
     (h : AgreeBefore f g (.round qs k) (r + 1)) :
     qs.map f = qs.map g ∧ AgreeBefore f g (k (qs.map f)) r :=
   ⟨List.map_congr_left fun x hx => h (0, x) (mem_trace_round f qs k x hx) (Nat.succ_pos r),
     fun e he hlt => h (e.1 + 1, e.2) (mem_trace_round_succ f qs k e he) (by omega)⟩
 
 theorem trace_stable {X : Type} (f g : Bits n ⊕ Bits n → Bits n)
-    (P : Prog (idealPerm n) X) : ∀ r, AgreeBefore f g P r →
+    (P : OracleAlgorithm (idealPerm n) X) : ∀ r, AgreeBefore f g P r →
     (∀ m e, (trace f P)[m]? = some e → e.1 ≤ r → (trace g P)[m]? = some e) ∧
     (∀ e ∈ trace g P, e.1 ≤ r → e ∈ trace f P) := by
   induction P with
@@ -20107,7 +20107,7 @@ theorem rtrace_pairwise {Q A X : Type} (f : Q → A) (P : RProg Q A X) :
 
 /-
 theorem bandChainProg_trace (f : Bits (ℓ + (ℓ + c)) ⊕ Bits (ℓ + (ℓ + c)) →
-    Bits (ℓ + (ℓ + c))) (k : Bits ℓ × Bits (ℓ + c) → Prog (idealPerm (ℓ + (ℓ + c))) Unit) :
+    Bits (ℓ + (ℓ + c))) (k : Bits ℓ × Bits (ℓ + c) → OracleAlgorithm (idealPerm (ℓ + (ℓ + c))) Unit) :
     ∀ (blks : List (Bits ℓ)) (p : Bits ℓ × Bits (ℓ + c)),
       (BandTr.trace f (bandChainProg p blks k)).map Prod.snd =
         (ovInputs (fun x => f (.inl x)) p blks).map Sum.inl ++
@@ -28908,7 +28908,7 @@ theorem sharedDom_label {N B d ℓ : ℕ} (f : Bits (ℓ + (ℓ + 512)) → Bits
 /-- A responder that returns `g σ i` without querying, and keeps its state, returns `g σ` of every index. -/
 theorem seqAnswers_ret {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans) (g : Bits S → Fin B → Bits ℓ)
     (σ : Bits S) : ∀ (j : ℕ) (is : List (Fin B)),
-    seqAnswers f (fun _ σ i => (Prog.ret (g σ i, σ) : Prog M (Bits ℓ × Bits S))) j is σ = is.map (g σ)
+    seqAnswers f (fun _ σ i => (OracleAlgorithm.ret (g σ i, σ) : OracleAlgorithm M (Bits ℓ × Bits S))) j is σ = is.map (g σ)
   | _, [] => rfl
   | j, i :: is => by
     show g σ i :: seqAnswers f _ (j + 1) is σ = g σ i :: is.map (g σ)
@@ -28916,7 +28916,7 @@ theorem seqAnswers_ret {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans) (g
 
 theorem seqAnswers_ret_ofFn {M : IdealModel} {ℓ S B k : ℕ} (f : M.Qry → M.Ans) (g : Bits S → Fin B → Bits ℓ)
     (σ : Bits S) (I : Fin k → Fin B) :
-    seqAnswers f (fun _ σ i => (Prog.ret (g σ i, σ) : Prog M (Bits ℓ × Bits S))) 0 (List.ofFn I) σ =
+    seqAnswers f (fun _ σ i => (OracleAlgorithm.ret (g σ i, σ) : OracleAlgorithm M (Bits ℓ × Bits S))) 0 (List.ofFn I) σ =
       List.ofFn fun t => g σ (I t) := by
   rw [seqAnswers_ret, List.map_ofFn]
   rfl
@@ -28961,7 +28961,7 @@ theorem shared_domain_breaks : SharedDomainBreaks := by
   let sch := chainBandSeg 448 (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))
   let A₁ : Preprocessor sch 113929658799 := fun _ _ C _ => enc0 fun i => C (gIdx s0 i)
   let A₂ : SeqResponder sch 113929658799 D Q :=
-    { step := fun _ _ _ σ i => Prog.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)
+    { step := fun _ _ _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)
       bounded := fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _⟩ }
   have hacc : ∀ x, seqAccepts sch k (fun _ => false) A₁ A₂ x := by
     intro x
@@ -28970,7 +28970,7 @@ theorem shared_domain_breaks : SharedDomainBreaks := by
     let C := labelG (bandSegDAG 448 (2 ^ 9) d) f (sharedDom salt (2 ^ 9))
       (Dense.blocks (448 * 2 ^ 9) 524288 (fun _ => false))
     show seqAnswers ((idealPerm (524288 + (524288 + 512))).answer x.1)
-        (fun _ σ i => Prog.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
+        (fun _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
         (enc0 fun i => C (gIdx s0 i)) = List.ofFn fun j => C (x.2.2 j)
     refine (seqAnswers_ret_ofFn _ _ _ x.2.2).trans ?_
     congr 1
@@ -29315,7 +29315,7 @@ theorem chainDense_encDec (B ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : (P
 
 /-- The first answers of a sequential audit do not depend on the later indices. -/
 theorem seqAnswers_take_append {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (l₁ l₂ : List (Fin B)) (σ : Bits S),
       (seqAnswers f step j (l₁ ++ l₂) σ).take l₁.length = seqAnswers f step j l₁ σ
   | _, [], _, _ => by simp [seqAnswers]

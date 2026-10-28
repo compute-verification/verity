@@ -34,7 +34,7 @@ def INC (sch : Scheme M) (β : ℕ) (π : ℝ≥0∞) : Prop :=
 `exp W pp w i`. -/
 def TimedINC (sch : Scheme M) (D Q β : ℕ) (π : ℝ≥0∞) : Prop :=
   ∀ (W : Bits sch.n) (cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β)
-    (exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ)),
+    (exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ)),
     (∀ W pp w i, (exp W pp w i).Bounded D Q) →
     pr (fun x : M.Ω × sch.Coins =>
         let pp := (sch.enc W x.1 x.2).1
@@ -47,7 +47,7 @@ abbrev ProdResponder (sch : Scheme M) (S : ℕ) : Type :=
 
 /-- A timed product-form responder: block `i` from `(W, pp, σ)` by a `(D, Q)`-bounded program. -/
 structure TimedProdResponder (sch : Scheme M) (S D Q : ℕ) : Type where
-  prog : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ)
+  prog : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ)
   bounded : ∀ W pp σ i, (prog W pp σ i).Bounded D Q
 
 /-- The `k`-challenge audit accepts an untimed product-form responder. -/
