@@ -8,8 +8,8 @@ import Proofs.Properties.RemoteAudit.Sort
 `Key.subset`'s loop is a partial Fisher–Yates over a `HashMap` of swaps: read through `t ↦ sw.getD t t` it is a
 function that keeps `[0, n)` and is injective there, and swap `i` composes it with the transposition of `i` and
 `i + r`, `r < n − i` (`loopSwK_perm`). So a subset that succeeds with `k ≤ n` is `k` distinct values below `n`
-(`subsetOn_spec`). `subsetExact` returns the subset at the first read length that succeeds (`subsetExact_some`), and
-`draws` maps each value to its receipt by the passes' running ends (`locate`).
+(`subsetOn_spec`). Core randomness's `subsetExact` returns the subset at the first read length that succeeds
+(`subsetExact_some`), and `draws` maps each value to its receipt by the passes' running ends (`locate`).
 -/
 
 open RemoteAudit
@@ -224,8 +224,8 @@ theorem forIn_exact (P : Nat → Option (Array Nat)) (F : Nat → StE → Id (Fo
       exact ih _ _ h
 
 theorem subsetExact_some (key : ByteArray) (k n : Nat) (index : List FlockSoundness.Randomness.Part) (us : Array Nat)
-    (h : subsetExact key k n index = some us) : ∃ L, FlockSoundness.Randomness.subset key k n index L = some us := by
-  unfold subsetExact at h
+    (h : FlockSoundness.Randomness.subsetExact key k n index = some us) : ∃ L, FlockSoundness.Randomness.subset key k n index L = some us := by
+  unfold FlockSoundness.Randomness.subsetExact at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   refine forIn_exact (fun L => FlockSoundness.Randomness.subset key k n index L) _ _ ?_ ?_ ?_ ?_ _ 64 us h
   · intro x s out hs; simp only [hs]
@@ -245,7 +245,7 @@ theorem drawIsSubset : DrawIsSubset := by
     at h hP
   have htotal := back_getD_of_prefix hP
   rw [htotal] at h
-  cases hu : subsetExact (openingsKey registration t coin) (min samples lengths.toList.sum) lengths.toList.sum
+  cases hu : FlockSoundness.Randomness.subsetExact (openingsKey registration t coin) (min samples lengths.toList.sum) lengths.toList.sum
     [.str "openings"] with
   | none =>
     simp only [openingsKey] at hu
