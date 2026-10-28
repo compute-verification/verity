@@ -100,7 +100,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": (f"{CORE}Netlist.lean::Verity.Netlist", "verity/ml/private_circuits/universal.py::Netlist"),
+    "Netlist": ("verity/ml/private_circuits/universal.py::Netlist",),
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
