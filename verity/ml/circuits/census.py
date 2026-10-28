@@ -697,7 +697,7 @@ class NoBooleanWork(ValueError):
 Work = dict[str, tuple[int, int]]
 
 
-class _Work:
+class BooleanWork:
     """Each Definition's Boolean work per instance, by `id(fn)`: its two-input gates and ANDs by facet, or the id of the first
     primitive it reaches that is not a Boolean gate, a constant bit or an input."""
 
@@ -774,7 +774,7 @@ def _work_json(work: Work | dict[str, list[int]]) -> dict[str, dict[str, int]]:
 def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
     """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
     refused (`NoBooleanWork`) for every root Call it cannot count."""
-    W = _Work()
+    W = BooleanWork()
     per: dict[str, Work] = {}
     for fn in post:
         if id(fn) in ids and not isinstance(got := W.of(fn), str):
@@ -1180,5 +1180,5 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "BooleanWork",
+           "NoBooleanWork", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
