@@ -28,7 +28,8 @@
     "Flock.WindowRecord",
     "PouwCheck.Json",
     "PouwCheck.Tile",
-    "PouwWindow.Length"
+    "PouwWindow.Length",
+    "Flock.Draw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
