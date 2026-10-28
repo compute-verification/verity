@@ -1631,8 +1631,8 @@ def main(argv=None) -> int:
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
-                   help="the class and the warden's schedule (default w63's, PARAMS; test: the certifier tests', a CPU "
-                        "window)")
+                   help="the class and the warden's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 and KI 32, "
+                        "its warden's at egress cells 5; test: the certifier tests', a CPU window)")
     p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
     p.add_argument("--warden-run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
