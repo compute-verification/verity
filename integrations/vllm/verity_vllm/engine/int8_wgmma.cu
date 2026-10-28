@@ -137,7 +137,9 @@ template <int WM, int BN, int CO> struct Tile {
   static constexpr int R = CO ? WM / 2 : WM;  // a consumer's rows
   static_assert(R * BN == 16384 && (R == 64 || R == 128), "a 64 x 256 or 128 x 128 tile a consumer");
   static constexpr int NH = R / 64, NA = BN / 2;  // m64 atoms a k32 step; accumulators a thread an atom
-  static constexpr uint32_t A_BYTES = WM * BK, STAGE = (WM + BN) * BK, Y_BYTES = R * BN * 2;
+  static constexpr uint32_t A_BYTES = WM * BK, STAGE = (WM + BN) * BK;
+  // y's boxes of R rows by 64 words (128 bytes), Y_BOXES of them in a consumer's 16 KiB buffer, Y_ROUNDS fills a tile
+  static constexpr int Y_BOX = R * 128, Y_BYTES = 16384, Y_BOXES = Y_BYTES / Y_BOX, Y_ROUNDS = BN / 64 / Y_BOXES;
   // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), each consumer's y tile, then full[s], empty[s] and
   // order[2]
   static constexpr int FIT = (SMEM_MAX - 1024 - 16 - 2 * Y_BYTES) / (STAGE + 16);
@@ -299,30 +301,34 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
     if (p.flags & 2) continue;
 
     if (p.flags & Y_TMA) {
-      // the consumer's R x BN words into its buffer as BN / 64 boxes of R rows by 128 bytes, SWIZZLE_128B (16-byte chunk
-      // c of row r at c ^ (r % 8)), then one TMA store a box, which writes rows < M and columns < N alone
+      // the consumer's R x BN words through its buffer, Y_BOXES boxes of R rows by 128 bytes a round, SWIZZLE_128B (16-byte
+      // chunk c of row r at c ^ (r % 8)), then one TMA store a box, which writes rows < M and columns < N alone
       const uint32_t buf = ybuf + wg * T::Y_BYTES;
-      if (x == 0) bulk_wait_read();  // the last tile's stores have read the buffer
-      bar_named(1 + wg);
       const int jm = lane / 8, rr = 16 * (x / 32) + 8 * (jm & 1) + lane % 8;
 #pragma unroll
-      for (int h = 0; h < NH; h++) {
+      for (int rd = 0; rd < T::Y_ROUNDS; rd++) {
+        if (x == 0) bulk_wait_read();  // the stores before have read the buffer
+        bar_named(1 + wg);
 #pragma unroll
-        for (int q = 0; q < NA / 4; q += 2) {
-          const int row = 64 * h + rr, chunk = q + (jm >> 1);
-          stsm4(buf + (chunk / 8) * (T::R * 128) + row * 128 + (((chunk % 8) ^ (row % 8)) << 4),
-                words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y),
-                words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y),
-                words(d[h][4 * q + 4], d[h][4 * q + 5], r[h][0], c[q + 1].x, c[q + 1].y),
-                words(d[h][4 * q + 6], d[h][4 * q + 7], r[h][1], c[q + 1].x, c[q + 1].y));
+        for (int h = 0; h < NH; h++) {
+#pragma unroll
+          for (int q = rd * T::Y_BOXES * 8; q < (rd + 1) * T::Y_BOXES * 8; q += 2) {
+            const int row = 64 * h + rr, chunk = q + (jm >> 1);
+            stsm4(buf + (chunk / 8 - rd * T::Y_BOXES) * T::Y_BOX + row * 128 + (((chunk % 8) ^ (row % 8)) << 4),
+                  words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y),
+                  words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y),
+                  words(d[h][4 * q + 4], d[h][4 * q + 5], r[h][0], c[q + 1].x, c[q + 1].y),
+                  words(d[h][4 * q + 6], d[h][4 * q + 7], r[h][1], c[q + 1].x, c[q + 1].y));
+          }
         }
-      }
-      fence_async_smem();
-      bar_named(1 + wg);
-      if (x == 0) {
+        fence_async_smem();
+        bar_named(1 + wg);
+        if (x == 0) {
 #pragma unroll
-        for (int b = 0; b < BN / 64; b++) tma_store(&p.c, buf + b * (T::R * 128), tn * BN + 64 * b, tm * WM + (CO ? wg * T::R : 0));
-        bulk_commit();
+          for (int b = 0; b < T::Y_BOXES; b++)
+            tma_store(&p.c, buf + b * T::Y_BOX, tn * BN + 64 * (rd * T::Y_BOXES + b), tm * WM + (CO ? wg * T::R : 0));
+          bulk_commit();
+        }
       }
       continue;
     }
