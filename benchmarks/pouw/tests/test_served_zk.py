@@ -719,7 +719,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     the salt its pass was checked against, and its sample is the live epoch's ``pouw/draw`` coin 0 opened after the
     registration, under the commitment the challenger read itself from its challenger's signed record, which the sample's
     check of record verifies again under the challenger key the deployment pins (`Deployment`), and refuses under any
-    other pin (``coin-key``).  Its sampled proof blocks are opened under that salt (`Challenger.check`, SALT-BIND-1),
+    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),
     where `check` alone passes none.  The certifier reveals window 0 once and within its reveal deadline on its own
     clock, so a second registration, or one past the deadline, is refused (``certifier``).  A second proxy of the same
     run (its key, run id and link) gives the same stream id, and the deployment's shared `Registrations` refuse its

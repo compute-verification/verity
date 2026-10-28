@@ -8,7 +8,7 @@ family, with every other resource converted at its price. Its parts:
 
 - the PoUW transform, γ − 1 (honest over plain int8, the machine model's γ on the family's measured kernel);
 - commitment hashing, receipts and the noise's draws (COMMIT-GPU r5's fractions of plain prefill time);
-- sampling, B_s: proving, staging and verifying the sampled proof blocks under proofs' fitted C-Flock cost model (cost-model/v1),
+- sampling, B_s: proving, staging and verifying the drawn units under proofs' fitted C-Flock cost model (cost-model/v1),
   as OPT2's planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least ε_sample at
   each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO 6000 workers,
   so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.

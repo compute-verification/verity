@@ -1055,7 +1055,7 @@ class Challenger:
 
     def _certified(self, name: str, rec: Mapping[str, Any], stream: str, replay: str | None, manifest: bytes | None,
                    recorded: bool) -> S.Registration:
-        """A certified window's registration (`register`).  First the window's sampled proof block must read its salt
+        """A certified window's registration (`register`).  First the window's drawn unit must read its salt
         (`salt.unit_reason`, ``unsalted``), which this window's `Pc8TileSide` doesn't, so today every certified window is
         refused here, before its stream receives it and before the certifier is asked for anything.  Past that, the
         stream receives it (R1-R7 and the receipt), then the certifier gives what the prover recorded for PoUW window p

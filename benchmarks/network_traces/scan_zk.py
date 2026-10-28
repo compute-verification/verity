@@ -862,11 +862,11 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     """One round registered (its members' ports, the scan's registrations' roots, and the warden's row registrations
     its warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified
     k` on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's
-    `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's sampled proof blocks proved --zk behind the
+    `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the
     firewall and held by Lean with the verifier's own registered reads; then each held unit's ``o0`` opened under the
     salt the prover sends. A member with no unit drawn runs no session. Writes what the verifier received under
-    ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per sampled
-    proof block; on the challenger's coins, the outcome of record is the stream's
+    ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn
+    unit; on the challenger's coins, the outcome of record is the stream's
     (`coins_outcome`)."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
