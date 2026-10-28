@@ -111,35 +111,18 @@ theorem pr_reindex {Ω C T I R : Type} [Fintype Ω] [Fintype C] [Fintype T] [Fin
   exact (PousThm1.pr_equiv f (fun y : (Ω × C × I) × R => F y.1.1 y.1.2.1 y.1.2.2)).trans
     (PousThm1.pr_fst (β := R) fun y : Ω × C × I => F y.1 y.2.1 y.2.2)
 
-theorem pr_false {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
-  classical
-  rw [pr_def]; simp
-
-/-- Slicing on the commitment's coins and indices: when the event needs a commitment and every commitment `v` bounds
-it by `c` over the rest, it is bounded by `c`. -/
-theorem pr_slice_le {Ω C I V : Type} [Fintype Ω] [Fintype C] [Fintype I] [Nonempty Ω] [Nonempty C] [Nonempty I]
-    (E : Ω → Option V → I → Prop) (com : C → I → Option V) (c : ℝ≥0∞) (hnone : ∀ ω I, ¬ E ω none I)
-    (hsome : ∀ v, pr (fun o : Ω × Unit × I => E o.1 (some v) o.2.2) ≤ c) :
-    pr (fun x : Ω × C × I × I => E x.1 (com x.2.1 x.2.2.2) x.2.2.1) ≤ c := by
-  have h : ∀ a : C × I, ¬ False → pr (fun o : Ω × Unit × I => E o.1 (com a.1 a.2) o.2.2) ≤ c := by
-    intro a _
-    rcases hw : com a.1 a.2 with _ | v
-    · have : (fun o : Ω × Unit × I => E o.1 none o.2.2) = fun _ => False :=
-        funext fun o => propext ⟨hnone _ _, False.elim⟩
-      rw [this, pr_false]
-      exact bot_le
-    · exact hsome v
-  have h₁ := PousThm1.pr_prod_le (α := C × I) (β := Ω × Unit × I) (fun a o => E o.1 (com a.1 a.2) o.2.2)
-    (fun _ => False) c h
-  rw [pr_false, zero_add] at h₁
-  let e : (C × I) × Ω × Unit × I ≃ Ω × C × I × I :=
-    { toFun := fun y => (y.2.1, y.1.1, y.2.2.2, y.1.2)
-      invFun := fun x => ((x.2.1, x.2.2.2), (x.1, (), x.2.2.1))
+/-- The coins drop out of an event that reads only `ω` and the indices. -/
+theorem pr_drop {Ω C I : Type} [Fintype Ω] [Fintype C] [Fintype I] [Nonempty C] (F : Ω → I → Prop) :
+    pr (fun x : Ω × C × I => F x.1 x.2.2) = pr (fun o : Ω × Unit × I => F o.1 o.2.2) := by
+  let e : ∀ D : Type, Ω × D × I ≃ (Ω × I) × D := fun D =>
+    { toFun := fun x => ((x.1, x.2.2), x.2.1)
+      invFun := fun y => (y.1.1, y.2, y.1.2)
       left_inv := fun _ => rfl
       right_inv := fun _ => rfl }
-  have h₂ := PousThm1.pr_equiv e fun x : Ω × C × I × I => E x.1 (com x.2.1 x.2.2.2) x.2.2.1
-  rw [← h₂]
-  exact h₁
+  exact ((PousThm1.pr_equiv (e C) fun y => F y.1.1 y.1.2).trans
+      (PousThm1.pr_fst (β := C) fun y : Ω × I => F y.1 y.2)).trans
+    ((PousThm1.pr_equiv (e Unit) fun y => F y.1.1 y.1.2).trans
+      (PousThm1.pr_fst (β := Unit) fun y : Ω × I => F y.1 y.2)).symm
 
 /-! ### From the streams to uniform indices -/
 
@@ -147,20 +130,21 @@ theorem pr_slice_le {Ω C I V : Type} [Fintype Ω] [Fintype C] [Fintype I] [None
 def splitAll : Streams ≃ (Fin 105 → Fin (2 ^ 19)) × (Fin 105 → Rest) :=
   (Equiv.piCongrRight fun _ => split).trans (Equiv.arrowProdEquivProdArrow _ _ _)
 
-/-- The server passes on the indices `I` and the coin view `v`. -/
-def Ev {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L)
-    (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (v : Option (ByteArray × ByteArray))
+/-- The server answers every one of the indices `I` with its block of `C`. -/
+def Acc {S D Q L : ℕ} (W : Bits sch.n) (A : Server S D Q L) (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
     (I : Fin 105 → Fin (2 ^ 19)) : Prop :=
-  ∃ v', v = some v' ∧
-    seqAnswers ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω)
-        (A.step (commitmentOf session binding v') W (sch.enc W ω ()).1) 0 (List.ofFn I)
-        (A.pre W (sch.enc W ω ()).1 (sch.enc W ω ()).2 ω) =
-      List.ofFn fun j => (sch.enc W ω ()).2 (I j)
+  seqAnswers ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) (A.step W (sch.enc W ω ()).1) 0 (List.ofFn I)
+      (A.pre W (sch.enc W ω ()).1 (sch.enc W ω ()).2 ω) =
+    List.ofFn fun j => (sch.enc W ω ()).2 (I j)
 
-theorem passes_iff {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L)
+/-- The server passes on the indices `I` once the coin tree `v` is built. -/
+def Ev {S D Q L : ℕ} (W : Bits sch.n) (A : Server S D Q L) (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
+    (v : Option (ByteArray × ByteArray)) (I : Fin 105 → Fin (2 ^ 19)) : Prop :=
+  ∃ v', v = some v' ∧ Acc W A ω I
+
+theorem passes_iff {S D Q L : ℕ} (session : ByteArray) (W : Bits sch.n) (A : Server S D Q L)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :
-    Passes session binding W A x ↔
-      Ev session binding W A x.1 (coinView session x.2.1 (splitAll x.2.2).1) (splitAll x.2.2).1 := by
+    Passes session W A x ↔ Ev W A x.1 (coinView session x.2.1 (splitAll x.2.2).1) (splitAll x.2.2).1 := by
   have hI : ∀ I : Fin 105 → Fin (2 ^ 19),
       (∀ j, FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf (x.2.2 j)) = some (I j).val) ↔
         I = (splitAll x.2.2).1 := by
@@ -177,61 +161,53 @@ theorem passes_iff {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n
     exact ⟨_, v, (hI _).2 rfl, hv, hs⟩
 
 /-- The streams' draw is the uniform indices' (`ε_rs = 0`). -/
-theorem pr_passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L) :
-    pr (Passes session binding W A) =
+theorem pr_passes {S D Q L : ℕ} (session : ByteArray) (W : Bits sch.n) (A : Server S D Q L) :
+    pr (Passes session W A) =
       pr fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × (Fin 105 → Fin (2 ^ 19)) =>
-        Ev session binding W A x.1 (coinView session x.2.1 x.2.2) x.2.2 := by
-  rw [show Passes session binding W A = fun x => Ev session binding W A x.1
+        Ev W A x.1 (coinView session x.2.1 x.2.2) x.2.2 := by
+  rw [show Passes session W A = fun x => Ev W A x.1
       (coinView session x.2.1 (splitAll x.2.2).1) (splitAll x.2.2).1 from
-    funext fun x => propext (passes_iff session binding W A x)]
-  exact pr_reindex splitAll fun ω hc I => Ev session binding W A ω (coinView session hc I) I
+    funext fun x => propext (passes_iff session W A x)]
+  exact pr_reindex splitAll fun ω hc I => Ev W A ω (coinView session hc I) I
 
 /-! ### The budget and the ring game -/
 
-theorem budget : (2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130 + (2⁻¹ : ℝ≥0∞) ^ 131 ≤ Params.εMax := by
+theorem budget : (2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130 ≤ Params.εMax := by
   have hk : ∀ n : ℕ, (2⁻¹ : ℝ≥0∞) ^ (n + 1) + (2⁻¹ : ℝ≥0∞) ^ (n + 1) = (2⁻¹ : ℝ≥0∞) ^ n := by
     intro n
     rw [← two_mul, pow_succ, mul_comm ((2⁻¹ : ℝ≥0∞) ^ n), ← mul_assoc,
       ENNReal.mul_inv_cancel (by norm_num) (by norm_num), one_mul]
-  have h31 : (2⁻¹ : ℝ≥0∞) ^ 131 ≤ (2⁻¹ : ℝ≥0∞) ^ 130 :=
-    pow_le_pow_of_le_one bot_le (ENNReal.inv_le_one.2 one_le_two) (by norm_num)
-  calc _ ≤ (2⁻¹ : ℝ≥0∞) ^ 129 + ((2⁻¹ : ℝ≥0∞) ^ 130 + (2⁻¹ : ℝ≥0∞) ^ 130) := by rw [add_assoc]; gcongr
+  calc _ ≤ (2⁻¹ : ℝ≥0∞) ^ 129 + ((2⁻¹ : ℝ≥0∞) ^ 130 + (2⁻¹ : ℝ≥0∞) ^ 130) := add_le_add le_rfl le_self_add
     _ = Params.εMax := by rw [hk 129, hk 128]; rfl
 
 set_option exponentiation.threshold 20000 in
-/-- Every session commitment `v` turns the server into a `SeqResponderOn` of `P2RingAuditSecure`'s game. -/
-def responder {S D Q L : ℕ} (session binding : ByteArray) (A : Server S D Q L) (v : ByteArray × ByteArray) :
-    SeqResponderOn sch S D Q L :=
-  ⟨A.step (commitmentOf session binding v), fun W pp j σ i => A.bounded _ W pp j σ i⟩
+/-- The server is a `SeqResponderOn` of `P2RingAuditSecure`'s game: it sees nothing of the coins but the indices. -/
+def responder {S D Q L : ℕ} (A : Server S D Q L) : SeqResponderOn sch S D Q L :=
+  ⟨A.step, A.bounded⟩
 
-theorem ev_some_le {S D Q L : ℕ} (hP : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hS : S = Pous.EndToEnd.S)
-    (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L) (v : ByteArray × ByteArray) :
+theorem acc_le {S D Q L : ℕ} (hP : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hS : S = Pous.EndToEnd.S)
+    (W : Bits sch.n) (A : Server S D Q L) :
     pr (fun o : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × Unit × (Fin 105 → Fin (2 ^ 19)) =>
-        Ev session binding W A o.1 (some v) o.2.2) ≤
+        Acc W A o.1 o.2.2) ≤
       ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) := by
   subst hS
-  have h := hP W A.pre (responder session binding A v)
-  refine le_trans (pr_mono ?_) h
-  rintro o ⟨v', hv, hs⟩
-  obtain rfl := Option.some.inj hv
-  exact hs
+  refine le_trans (pr_mono ?_) (hP W A.pre (responder A))
+  intro _ h
+  exact h
 
 set_option exponentiation.threshold 20000 in
 theorem endToEndRing : EndToEndRing := by
-  intro hH D Q L hP session binding W A
+  intro D Q L hP session W A
   rw [pr_passes]
-  have h₁ := hH session (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω (Ev session binding W A)
-  have h₂ := pr_slice_le (Ω := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) (C := HmCoins)
-    (I := Fin 105 → Fin (2 ^ 19)) (Ev session binding W A) (coinView session)
-    (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130))
-    (fun _ _ ⟨_, h, _⟩ => by cases h) (ev_some_le hP rfl session binding W A)
-  refine h₁.trans ((add_le_add h₂ le_rfl).trans ?_)
-  rw [add_assoc]
-  gcongr
-  exact budget
+  calc _ ≤ pr fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × (Fin 105 → Fin (2 ^ 19)) =>
+          Acc W A x.1 x.2.2 := pr_mono fun _ ⟨_, _, h⟩ => h
+    _ = pr fun o : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × Unit × (Fin 105 → Fin (2 ^ 19)) =>
+          Acc W A o.1 o.2.2 := pr_drop (Acc W A)
+    _ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) := acc_le hP rfl W A
+    _ ≤ ENNReal.ofReal Params.δ + Params.εMax := add_le_add le_rfl budget
 
 set_option exponentiation.threshold 20000 in
-theorem endToEndRingDeployed : EndToEndRingDeployed := fun hH hP => endToEndRing hH _ _ _ hP
+theorem endToEndRingDeployed : EndToEndRingDeployed := fun hP => endToEndRing _ _ _ hP
 
 /-! ### The code always builds the coin tree -/
 
@@ -277,17 +253,18 @@ theorem ofFn_getElem! {α : Type} [Inhabited α] {n : ℕ} (f : Fin n → α) (a
   rw [getElem!_pos (Array.ofFn f) a (by simpa using h)]
   simp [Array.getElem_ofFn]
 
-theorem make_ok_of (session key : ByteArray) (indices : Array ℕ) (salts : Array ByteArray) (hs : session.size = 32)
-    (hn : indices.size = 105) (hsalts : salts.size = indices.size) (hlt : ∀ j < indices.size, indices[j]! < 2 ^ 19)
-    (hsalt : ∀ j < indices.size, salts[j]!.size = 192) (hk : checkKey key = .ok ()) :
-    ∃ t, CoinTree.make session (2 ^ 19) indices key salts = .ok t := by
-  have hcond : (decide (2 ^ 19 < 1) || indices.isEmpty || salts.size != indices.size ||
-      indices.any fun x => decide (x ≥ 2 ^ 19)) = false := by
+theorem make_ok_of (N : ℕ) (session key : ByteArray) (indices : Array ℕ) (salts : Array ByteArray) (hN : 0 < N)
+    (hN64 : N ≤ 2 ^ 64) (hs : session.size = 32) (hn : indices.size = 105) (hsalts : salts.size = indices.size)
+    (hlt : ∀ j < indices.size, indices[j]! < N) (hsalt : ∀ j < indices.size, salts[j]!.size = 192)
+    (hk : checkKey key = .ok ()) :
+    ∃ t, CoinTree.make session N indices key salts = .ok t := by
+  have hcond : (decide (N < 1) || indices.isEmpty || salts.size != indices.size ||
+      indices.any fun x => decide (x ≥ N)) = false := by
     have he : indices.isEmpty = false := by
       rw [Array.isEmpty_eq_false_iff]; intro h; rw [h] at hn; simp at hn
     rw [hsalts, he, bne_self_eq_false]
     simp only [Bool.or_false, Bool.or_eq_false_iff]
-    refine ⟨by decide, Bool.eq_false_iff.2 fun h => ?_⟩
+    refine ⟨decide_eq_false (by omega), Bool.eq_false_iff.2 fun h => ?_⟩
     rw [Array.any_eq_true] at h
     obtain ⟨i, hi, hp⟩ := h
     have := hlt i hi
@@ -309,8 +286,9 @@ theorem make_ok_of (session key : ByteArray) (indices : Array ℕ) (salts : Arra
 
 theorem coinView_some (session : ByteArray) (hs : session.size = 32) (c : HmCoins) (I : Fin 105 → Fin (2 ^ 19)) :
     ∃ v, coinView session c I = some v := by
-  obtain ⟨t, ht⟩ := make_ok_of session (coinKey c.1) (Array.ofFn fun j => (I j).val)
-    (Array.ofFn fun j => bytesOf (c.2 j)) hs (Array.size_ofFn) (by rw [Array.size_ofFn, Array.size_ofFn])
+  obtain ⟨t, ht⟩ := make_ok_of (2 ^ 19) session (coinKey c.1) (Array.ofFn fun j => (I j).val)
+    (Array.ofFn fun j => bytesOf (c.2 j)) (by norm_num) (by norm_num) hs (Array.size_ofFn)
+    (by rw [Array.size_ofFn, Array.size_ofFn])
     (fun j hj => by
       rw [Array.size_ofFn] at hj
       rw [ofFn_getElem! _ j hj]; exact (I _).isLt)
@@ -334,9 +312,9 @@ noncomputable def honestOn : SeqResponderOn sch FULL 0 0 0 :=
   ⟨fun _ _ _ σ i => .ret ((codeEquiv sch.B sch.ℓ).symm σ i, σ), fun _ _ _ _ _ _ => ⟨le_rfl, le_rfl, le_rfl⟩⟩
 
 set_option exponentiation.threshold 20000 in
-/-- The honest full-state server, whatever the session commitment. -/
+/-- The honest full-state server. -/
 noncomputable def honest : Server FULL 0 0 0 :=
-  ⟨honestPre sch, fun _ => honestOn.step, fun _ => honestOn.bounded⟩
+  ⟨honestPre sch, honestOn.step, honestOn.bounded⟩
 
 set_option exponentiation.threshold 20000 in
 theorem honest_answers (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ans)
@@ -355,9 +333,47 @@ theorem honestPassesRing : HonestPassesRing :=
 
 set_option exponentiation.threshold 20000 in
 theorem honestPassesAccepts : HonestPassesAccepts := by
-  refine ⟨honest, fun session hs binding W => pr_eq_one fun x => ?_⟩
+  refine ⟨honest, fun session hs W => pr_eq_one fun x => ?_⟩
   obtain ⟨v, hv⟩ := coinView_some session hs x.2.1 (splitAll x.2.2).1
   exact ⟨(splitAll x.2.2).1, v, fun j => uniformOn_split (x.2.2 j), hv,
     honest_answers _ W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 105 (splitAll x.2.2).1⟩
+
+/-! ### The honest and nontrivial lemmas
+
+Each ring-game guarantee bounds a server's pass by `1% + 2^-128`. Its honest lemma: the honest full-state server of
+the deployed system passes the same event with probability 1, so the event is not one no server passes. Its nontrivial
+lemma: a verifier that accepts every session fails its conclusion, the event that always holds having probability 1. -/
+
+theorem bound_lt_one : ENNReal.ofReal Params.δ + Params.εMax < 1 := by
+  have hδ : ENNReal.ofReal (Params.δ : ℝ) < 2⁻¹ := by
+    rw [ENNReal.ofReal_lt_iff_lt_toReal (by norm_num [Params.δ]) (by simp)]
+    norm_num [Params.δ]
+  have hε : Params.εMax ≤ 2⁻¹ := by
+    unfold Params.εMax Params.secParam
+    exact pow_le_of_le_one (by norm_num) (by norm_num) (by norm_num)
+  calc ENNReal.ofReal (Params.δ : ℝ) + Params.εMax < 2⁻¹ + 2⁻¹ :=
+        ENNReal.add_lt_add_of_lt_of_le (ne_top_of_le_ne_top (by simp) hε) hδ hε
+    _ = 1 := ENNReal.inv_two_add_inv_two
+
+/-- **`endToEndRing` holds at the honest instance**: the honest full-state server passes its event with probability 1
+at every 32-byte session id and payload. -/
+theorem endToEndRing_honest : HonestPassesAccepts := honestPassesAccepts
+
+/-- **`endToEndRing` is nontrivial**: an event that holds on every coin, a verifier accepting everything, exceeds its
+bound `1% + 2^-128`. -/
+theorem endToEndRing_nontrivial :
+    ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      ENNReal.ofReal Params.δ + Params.εMax := by
+  rw [pr_eq_one fun _ => trivial]
+  exact not_le.2 bound_lt_one
+
+/-- **`endToEndRingDeployed` holds at the honest instance**: `endToEndRing_honest`, its event being `endToEndRing`'s. -/
+theorem endToEndRingDeployed_honest : HonestPassesAccepts := honestPassesAccepts
+
+/-- **`endToEndRingDeployed` is nontrivial**: `endToEndRing_nontrivial`, its bound being `endToEndRing`'s. -/
+theorem endToEndRingDeployed_nontrivial :
+    ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
+      ENNReal.ofReal Params.δ + Params.εMax :=
+  endToEndRing_nontrivial
 
 end Pous.EndToEnd.SecurityProofs
