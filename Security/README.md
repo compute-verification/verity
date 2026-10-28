@@ -78,11 +78,14 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
-  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
-  draws each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
-  `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
-  file defines either. Network certifiers and memory challengers are onsite's.
+  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger is the
+  one auditor-trusted device remote relies on (`trusted-host`); the verifier is the auditor's own check. Remote's coin
+  path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated once in Core
+  (`Definitions/Core/Assumptions/Challenger.lean`) and listed in the lock: the challenger logs every coin it releases
+  (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
+  reads coins only from that log, with no randomness of its own (`VerifierReadsLog`). Under them a sample drawn with a
+  logged coin misses a set fixed before that coin at most as often as the draw law allows
+  (`Verity.Guarantees.SampleAfterRecorded`, proved). Network certifiers and memory challengers are onsite's.
 - **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a component of onsite only.

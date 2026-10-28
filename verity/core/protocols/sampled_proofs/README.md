@@ -35,9 +35,10 @@ takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --
 composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
-which adds two premises about where it runs, `CoinsConfidential` and `OneClock` ("Where things are"). Both are prose
-only: no `.lean` file defines either.
+before any coin. In the remote protocol the coins come from the auditor's challenger (the verifier's own draw is still
+an option of the code, which proofs retires), and its coin path is three named premises in Lean, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog` ("Where things are"). Onsite's
+challenger adds two premises about where it runs beside the network certifier, `CoinsConfidential` and `OneClock`,
+prose only.
 
 ## Outline
 
@@ -140,9 +141,18 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
-  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
-  The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
-  name; both are prose only:
+  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
+  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, the log; its premises in
+    `Security/Definitions/Core/Assumptions/Challenger.lean`, each listed in the lock): the challenger logs every coin
+    it releases (`ChallengerLogsCoins`) and flips each only after what it samples is recorded (`FlipsAfterRecorded`),
+    and the verifier reads coins only from its log (`VerifierReadsLog`). Under them a sample drawn with a logged coin
+    misses a set fixed before that coin at most as often as the draw law allows
+    (`Verity.Guarantees.SampleAfterRecorded`, proved). Remote's challenger is an auditor host (`trusted-host`); none
+    of the three mentions a network certifier. Randomness derived from a coin by hashing has two named cases, PoUW's
+    per-matmul noise seeds and the remote bandwidth audit's pass seeds within a phase (the Lean module's docstring).
+
+  Onsite, the challenger rests on two more premises about where it runs beside the network certifier, which the network
+  certifier's spec and ACCEL's cite by name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not

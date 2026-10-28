@@ -11363,6 +11363,9 @@
    "assumptions": [],
    "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
   },
+  "Verity.SecurityProofs.SampleAfterRecorded": {
+   "owner": "@soundness"
+  },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ServingBlockSum : Verity.Guarantees.ServingBlockSum"],
@@ -12546,7 +12549,8 @@
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
-   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code."
+   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
