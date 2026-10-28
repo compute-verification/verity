@@ -2,7 +2,7 @@
 
     verity-vllm commit-replay BUNDLE --row-dir D --checkpoint-dir CK [--checkpoints-manifest M --model REPO --revision REV]
 
-The replay is the prover's pre-flight check (VLLM-17): it reads committed values, the requests and the weights in the clear on the
+The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier gets the drawn units proved (`sampled_proofs.one_stage`).
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
@@ -25,7 +25,7 @@ later replay of the same picks reads, so the bundle can go and the Commit can st
 serving again (the sample is seeded from the run root, so it draws the same picks).  Not under other Definition bodies: the replay is
 refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
 The keep stays on the node: it holds clear values (the opened committed values with their salts, the requests and served tokens, the
-opened tensors' salt keys and bundle bytes), so no stage publishes it (`research_outputs`, VLLM-148).
+opened tensors' salt keys and bundle bytes), so no stage publishes it (`research_outputs`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
                       linkage opened, folding to the run root
