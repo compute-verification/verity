@@ -76,6 +76,7 @@ paths = []
 
 [split]
 # `pouw/circuit/` moves whole but for `live_reads`, which stays in core; each reference to the directory follows the circuits
+"benchmarks/pouw/highutil/pyproject.toml: verity/core/protocols/pouw/circuit" = "its tests run accel_v31's prover, which imports pouw.circuit.dither, which moves; nothing they run reads live_reads"
 "benchmarks/property_redteam/pyproject.toml: verity/core/protocols/pouw/circuit" = "its tests import pouw.circuit.words, which moves; nothing they run reads live_reads"
 "tools/verity/circuit_check/pyproject.toml: verity/core/protocols/pouw/circuit" = "names the circuits circuit-check checks, which move; live_reads, which circuit.live imports, the suite lists beside them after the move"
 "verity/core/protocols/pouw/PROTOCOL.md: verity/core/protocols/pouw/circuit" = "names where PoUW's circuits are, which move"
