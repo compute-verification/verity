@@ -58,7 +58,8 @@
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.Idle"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -269,6 +270,9 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+  },
+  "Hash.Assumptions.LmsUnforgeable": {
+   "owner": "@soundness"
   }
  },
  "meaning": [
@@ -377,11 +381,12 @@
   "CoreComposition",
   "CoreProtocol.Blobs",
   "Properties.Verity",
-  "CoreOnsite"
+  "CoreOnsite",
+  "CoreRemote"
  ],
  "layers": {
   "Properties.Composition": {
-   "imports": ["CoreComposition.Product", "CoreComposition.Registered"],
+   "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -580,10 +585,16 @@
     "Definitions.Accounting.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
-    "Flock.Hash"
+    "Flock.Hash",
+    "CoreComposites",
+    "Definitions.Core.Blocks",
+    "Definitions.Core.Site",
+    "Definitions.Nci",
+    "Definitions.Hash.Assumptions",
+    "Lms.Verify"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -2665,6 +2676,39 @@
    "signature": ["Verity.soundness_of_legs : Verity.Soundness"],
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  },
+  "Verity.soundness_at_of_targets": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_at_of_targets_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_at_of_targets_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_of_legs_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.soundness_of_legs_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Verity.remote_soundness_of_legs_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.remote_soundness_of_legs_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Properties.Composition.acceptSame_honest": {
+   "owner": "@soundness"
+  },
+  "Properties.Composition.acceptSame_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Properties.Composition.acceptTied_honest": {
+   "owner": "@soundness"
+  },
+  "Properties.Composition.acceptTied_nontrivial": {
+   "owner": "@soundness"
   }
  },
  "shape": {
@@ -3860,7 +3904,7 @@
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes CoinCommitHides, the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
-   "Verity.soundness_of_legs": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent, the committed file the blob) and its seven subprotocols: sampled proofs v2 (SampledProofs.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the committed files read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Nci.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder only (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls): its delta at those calls plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked by soundness_of_legs_honest and soundness_of_legs_nontrivial, and soundness_of_legs_nontrivial_of transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.soundness_of_legs": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent, the committed file the blob) and its seven subprotocols: sampled proofs v2 (SampledProofs.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the committed files read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Nci.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder only (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable at the compiled LMS verifier): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_legs_honest and soundness_of_legs_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
    "Verity.remote_soundness_of_legs": "frozen (premise): Verity.soundness_of_legs's statement restricted to remote's subprotocols, a subset of onsite's: the union bound at remote's compiled verifier (Core.Remote.protocol, sameB over the blobs sent) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW's window (PouwCheck.protocol) and the inference-only policy, all three committed to one record (Properties.Composition.AcceptSame), with the same claims, errors and Vocab; it takes the three targets (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkPeriod's claims; RegisteredBeforeDraw, DrawIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
@@ -3885,7 +3929,18 @@
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
-   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0"
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
+   "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_legs states at onsite and Verity.remote_soundness_of_legs at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable at the compiled LMS verifier): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
+   "Verity.soundness_at_of_targets_honest": "completeness: SoundnessOf's honest lemma: at the idle deployment Verity.Idle.unbounded (a hand-built descriptor on a device with no resources, every error top) every subprotocol meets its target at onsite's and remote's compiled composites",
+   "Verity.soundness_at_of_targets_nontrivial": "lemma: SoundnessOf's nontrivial lemma: at the idle deployment Verity.Idle.exact (every error 0, a work certificate of one gate that no play computes) SoundnessFor fails at onsite for a verifier that accepts everything",
+   "Verity.soundness_of_legs_honest": "completeness: Soundness's honest lemma: its seven targets hold at onsite's compiled composite at the idle deployment Verity.Idle.unbounded",
+   "Verity.soundness_of_legs_nontrivial": "lemma: Soundness's nontrivial lemma: SoundnessFor fails at onsite for a verifier that accepts everything at the idle deployment Verity.Idle.exact",
+   "Verity.remote_soundness_of_legs_honest": "completeness: RemoteSoundness's honest lemma: its three targets hold at remote's compiled composite at the idle deployment Verity.Idle.unbounded",
+   "Verity.remote_soundness_of_legs_nontrivial": "lemma: RemoteSoundness's nontrivial lemma: SoundnessFor fails at remote for a verifier that accepts everything at the idle deployment Verity.Idle.exact",
+   "Properties.Composition.acceptSame_honest": "completeness: AcceptSame's honest lemma: remote's checkSame accepts a composition that fits, with no components, under the binding of no digests",
+   "Properties.Composition.acceptSame_nontrivial": "lemma: AcceptSame's nontrivial lemma: SameAccepted fails at parameters that name a component the composition doesn't have, which a verifier that accepts everything accepts",
+   "Properties.Composition.acceptTied_honest": "completeness: AcceptTied's honest lemma: holdTies accepts an accepted outcome whose ties hold",
+   "Properties.Composition.acceptTied_nontrivial": "lemma: AcceptTied's nontrivial lemma: TiedAccepted fails at an outcome that rejected, which a verifier that accepts everything accepts"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16240,5 +16295,27 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Verity.soundness_at_of_targets": {
+   "honest": ["Verity.soundness_at_of_targets_honest"],
+   "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
+  },
+  "Verity.soundness_of_legs": {
+   "honest": ["Verity.soundness_of_legs_honest"],
+   "nontrivial": "Verity.soundness_of_legs_nontrivial"
+  },
+  "Verity.remote_soundness_of_legs": {
+   "honest": ["Verity.remote_soundness_of_legs_honest"],
+   "nontrivial": "Verity.remote_soundness_of_legs_nontrivial"
+  },
+  "Properties.Composition.acceptSame": {
+   "honest": ["Properties.Composition.acceptSame_honest"],
+   "nontrivial": "Properties.Composition.acceptSame_nontrivial"
+  },
+  "Properties.Composition.acceptTied": {
+   "honest": ["Properties.Composition.acceptTied_honest"],
+   "nontrivial": "Properties.Composition.acceptTied_nontrivial"
+  }
  }
 }
