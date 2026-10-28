@@ -71,6 +71,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
                  module outside `meaning`, which the record therefore does not hold; a module of the proofs tree is
                  the trees check's
+    inline       a `Prop` a guarantee takes, its `Guarantees` definition unfolded once, past a leading `∀` over data and
+                 split at `∧`, is neither a named assumption the lock lists, another listed guarantee's statement nor a
+                 plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
+                 `shape.inline`, which only shrinks, lists it (`inline_failures`); its size is the AUDIT line's inline debt
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
@@ -1068,6 +1072,8 @@ def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
                                                 for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
         out["unwitnessed"] = {renamed(g, moved): h for g, h in allow.items()}
+    if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
+        out["shape"] = spec | {"inline": {renamed(g, moved): h for g, h in spec["inline"].items()}}
     return out
 
 
@@ -1389,11 +1395,15 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
               for a, es in facts.get("assumption_reads", {}).items() if es}
     records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds, walked)
     fails += why
+    ifails, inline, _ = inline_failures(policy, facts)
+    fails += ifails
     out = dict(policy)
     if kept:
         out["guarantees"], out["reads"] = kept, now_reads
     if update and isinstance(policy.get("unwitnessed"), dict):
         out["unwitnessed"] = unwitnessed_kept(policy, facts, kept)
+    if update and "inline" in (policy.get("shape") or {}):
+        out["shape"] = {k: v for k, v in policy["shape"].items() if k != "inline"} | ({"inline": inline} if inline else {})
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
     if update and policy.get("verifier") and facts.get("verifier") is not None:
@@ -1949,6 +1959,90 @@ def unwitnessed_entry(v) -> tuple[str, str | None] | None:
             and isinstance(v.get("why"), str) and v["why"] and set(v) == {"type_hash", "missing", "why"}:
         return v["type_hash"], v["missing"]
     return None
+
+
+#: what a guarantee's inline hypotheses may be instead (`inline_failures`), and what to do with any other
+INLINE_FIX = ("name it as a Prop in an Assumptions module and list it in the lock, or state it as a lock-listed guarantee's "
+              "conclusion")
+
+
+def printed(text: str) -> str:
+    """A premise as `shape.inline` keys it: its text with each run of whitespace one space."""
+    return " ".join(text.split())
+
+
+def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dict[str, list[str]]]:
+    """(failures, the `shape.inline` an `--update` writes, every offender: {guarantee: its inline hypotheses as
+    printed}, those `shape.inline` lists among them). Every `Prop` binder a lock-listed guarantee takes, its
+    `Guarantees` definition unfolded once, in each conjunct, past its leading `∀` over data and split at `∧`
+    (`Facts.lean`'s `inline`; instance binders aside) is one of:
+
+    - a named assumption: its head, as written or past reducible unfolding, is listed under `assumptions`, an alias of
+      listed ones (`unfolding`), or a premise the premise rule lists (one of an `Assumptions` module or this repository's,
+      which fails `assumptions.unlisted-premise` until `--update` lists it);
+    - another lock-listed guarantee's statement: its head is the `Guarantees` definition that guarantee is lifted into,
+      which the `reads` record holds;
+    - a plain range: `0 < x`, `0 ≤ x`, `x ≤ 1`, `x ≤ y` (`<` alike), each side a bound variable or a numeral, or
+      `∀ i, 0 ≤ f i`, a numeral against a bound variable applied to bound variables, under casts.
+
+    Anything else fails (`guarantees.inline-hypothesis`) unless `shape.inline` ({guarantee: {premise as printed: why}},
+    the offenders when the rule came) lists it. A property `shape.properties` holds (not under `shape.frozen`) is left to
+    the shape rule, which holds each hypothesis it takes to its acceptance, a premise or a shared field, and a witness
+    `claims.witnesses` or `witnesses` names (`claim_witnesses`) to that rule's form: what it takes is the deployment's
+    facts, not what a guarantee rests on, and `--update` drops its entries. A closed
+    hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
+    still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
+    the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
+    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
+    spec = policy.get("shape") or {}
+    allow = spec.get("inline", {})
+    if not isinstance(allow, dict) or not all(isinstance(v, dict) and v and all(isinstance(w, str) and w.strip()
+                                                                               for w in v.values()) for v in allow.values()):
+        return [Failure("shape.inline-form", None, "shape: shape.inline is {guarantee: {premise as printed: why it is "
+                        "inline}}, each reason one sentence")], {}, {}
+    guarantees, assumed = policy.get("guarantees") or {}, policy.get("assumptions") or {}
+    assumed = assumed if isinstance(assumed, dict) else {}
+    held = set(spec.get("properties") or {}) - set(spec.get("frozen") or {}) | claim_witnesses(policy)
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
+    lifts = {g: (facts["pins"].get(g) or {}).get("lift") or {} for g in guarantees}
+    statements = {v["head"]: g for g, v in lifts.items() if v.get("head") and spec_module(v.get("module") or "")}
+    fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
+    for g in sorted(guarantees):
+        pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}
+        if g in held:
+            continue
+        if pin.get("kind") != "theorem" or "inline" not in pin:
+            if old:
+                kept[g] = old
+            continue
+        if pin["inline"] is None:
+            fails.append(Failure("guarantees.inline-unread", g, f"guarantees: {g}'s inline hypotheses could not be read "
+                                 f"(`Facts.lean`'s `inlineOf` failed on its statement): make it read this statement's form"))
+            if old:
+                kept[g] = old
+            continue
+        unfolds = {k: v for p in pin.get("premises") or [] for k, v in (p.get("unfolds") or {}).items()}
+        premised = {p["head"] for p in pin.get("premises") or [] if p.get("head") and (
+            "Assumptions" in (m := p.get("module") or "").split(".") or m in own)}
+
+        def named(h: str | None) -> bool:
+            return bool(h) and (h in assumed or h in premised or bool((u := unfolding(h, unfolds, assumed)) and not u[1]))
+        bad = list(dict.fromkeys(
+            printed(p["type"]) for p in pin["inline"]
+            if not (p.get("closed") and p.get("outer")) and not p.get("range")
+            and not named(p.get("head")) and not named(p.get("unfolded"))
+            and statements.get(p.get("head"), g) == g))
+        if bad:
+            offenders[g] = bad
+        if still := {b: old[b] for b in bad if b in old}:
+            kept[g] = still
+        if new := [b for b in bad if b not in old]:
+            fails.append(Failure("guarantees.inline-hypothesis", g, f"guarantees: {g} takes "
+                                 f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
+                                 f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "
+                                 f"`0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals); "
+                                 f"{INLINE_FIX}"))
+    return fails, dict(sorted(kept.items())), offenders
 
 
 def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | None:
@@ -3379,6 +3473,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["failures"].append(Failure("lift", None, f"lift: {e}"))
         return reported(rep)
     fails, new = judge(current, facts, files, update, owner)
+    _, debt, rep["inline"] = inline_failures(current, facts)
+    rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
     roles = tree_roles(pkg, current)
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current), roles) + \
         tree_failures(current, facts, roles) + shape(current, facts)
@@ -3758,6 +3854,8 @@ def main(argv: list[str]) -> int:
                          (f"; peak GiB {rep['peak_gib']}" if rep.get("peak_gib") else ""))
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
+            if "inline_debt" in rep:
+                head += f"; inline debt {rep['inline_debt'][0]} ({rep['inline_debt'][1]} premises)"
             print(head, flush=True)
             if c := rep.get("replay", {}).get("closure"):
                 print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
