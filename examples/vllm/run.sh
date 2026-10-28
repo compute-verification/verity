@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
-# demo's row names (placement.toml's `row`, the integration's file integrations/vllm/workloads/<row>.json, fetched by its art id
-# and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
+# demo's workload names (placement.toml's `row`, the integration's file integrations/vllm/workloads/<row>.json, fetched by
+# its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
 #   window   the default: one sampling block of the served execution blocks through every subprotocol,
-#            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the row dir placement.toml's COMMIT_RUN
-#            names, its requests (serve_load.py --varied), every closed sampling block sealed, the sampling block's sampled
-#            proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict),
-#            PoUW, the bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict
-#   commit   once per row: its Build, Match and Commit with its sealed replay bundle (commit.sh), a row dir under LLAMA_ROOT
-#            (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
+#            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload dir placement.toml's
+#            COMMIT_RUN names, its requests (serve_load.py --varied), every closed sampling block sealed, the sampling
+#            block's sampled proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the
+#            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict
+#   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under
+#            LLAMA_ROOT (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
 # Further FLAGs go to `research run` (`--env WC_RECORD_TIMEOUT=3h`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
 # starts nothing. It returns once the run starts: `research status RUN` checks on it.
@@ -34,7 +34,7 @@ placement = tomllib.loads((here / "placement.toml").read_text())
 row, rows = placement["row"], here.parents[1] / "integrations" / "vllm" / "workloads"
 sums = {name.lstrip("*"): h for h, name in (line.split() for line in (rows / "SHA256SUMS").read_text().splitlines() if line.strip())}
 if (want := sums.get(f"{row}.json")) is None:
-    sys.exit(f"run.sh: placement.toml's row {row} is not one integrations/vllm/workloads/SHA256SUMS lists")
+    sys.exit(f"run.sh: placement.toml's row {row} is not a workload integrations/vllm/workloads/SHA256SUMS lists")
 f = rows / f"{row}.json"
 if not f.is_file():
     subprocess.run(["research", "data", "fetch-fixtures", str(f)], check=True, stdout=sys.stderr)

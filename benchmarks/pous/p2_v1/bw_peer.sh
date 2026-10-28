@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # bw_session.sh's two sessions at fixture scale with the verifier on a cluster peer, in the shape of a party of
-# vy-auditor-2's gate: each session starts `p2_party --listen` on PEER over ssh (`bandwidth.py session --party`; PEER's
-# line in /etc/vy/peers, the vy-cluster key) as the gate starts a party (the system python3 -s -E with a cleared
+# the auditor host's gate: each session starts `p2_party --listen` on PEER over ssh (`bandwidth.py session --party`; PEER's
+# line in the node's peers file, the cluster's ssh key) as the gate starts a party (the system python3 -s -E with a cleared
 # environment, from the tree, its `--device` directory), whose stdout says its port and then its own record of the
 # answer, and the prover reaches that port over TCP. The cluster's nodes pass only ssh to each other, so here the TCP goes through an
-# `ssh -L` forward of the same port (the card reaches vy-auditor-2's party port directly). The prover serves the toy's
+# `ssh -L` forward of the same port (the card reaches the auditor host's party port directly). The prover serves the toy's
 # C* (`bandwidth.py toy`) through kernels' staging decode with P2's reference decode on the CPU; the peer builds the
 # toy's registration itself and holds that, never the prover's. PEER is the lane's machine, not the auditor's, so the
 # run certifies nothing. cwd = a clone:
 #
-#   research run --on auto --project verity --campaign e2e-demo --source . --cwd clone --timeout 30m -- \
-#     bash benchmarks/pous/p2_v1/bw_peer.sh PEER [PEER ...]
+#   OUT=DIR bash benchmarks/pous/p2_v1/bw_peer.sh PEER [PEER ...]
 #
 # PEER is the first of those named that ssh reaches and that isn't this host. $OUT/<session>/session.json is each
 # session's record (the verifier's own answer in `verifier_record`), $OUT/verdicts.txt each verdict line, which passes

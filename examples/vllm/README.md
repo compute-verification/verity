@@ -16,18 +16,23 @@ PoUW's verdict on the served run credits nothing. The challenger's gate holds a 
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
-`example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level is
-none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved, but no theorem yet carries it to the
-audit-level claim `Claims.Sampling.KS`, which the audit's property `NetTiming.Guarantees.SampledAuditAccepted` takes
-(`benchmarks/prove_path/README.md`). PoUW's proof layer needs `AcceptedLive`, which no served path meets, and remote's
-composed soundness isn't in Lean (`verity/core/protocols/remote/README.md`).
+`example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
+is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
+session, the committed transcript is outside the sampling relation with probability at most δ plus the proof system's
+errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
+yet, and remote's verifier reads one-stage v1, which takes the sessions' verdicts as evidence
+(`verity/core/protocols/remote/README.md`, "The open gap"). PoUW's proof layer needs `AcceptedLive`, which no served path
+meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
+`Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the deployed record,
+`Claims.Sampling.sampling_assembled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
+(`benchmarks/prove_path/e2e_chains/README.md`).
 
 ## What runs
 
-Llama-3.2-1B INT8 (`verity-int8/Llama-3.2-1B-INT8` at `15b0976d400d796ee589e7737d03a919526bf800`, the row's `model` and
-`engine.revision`) with int8 linears (`--precision verity_int8`, the row's quantization), batch-invariant eager. vLLM
-serves it on vy-dc-h200's one H200 through `verity_vllm`'s committing OpenAI endpoint. Its values are committed as it
-serves (`--scheme rows-sha512`), and every closed sampling block is sealed. The chain is
+Llama-3.2-1B INT8 (`verity-int8/Llama-3.2-1B-INT8` at `15b0976d400d796ee589e7737d03a919526bf800`, the workload's `model`
+and `engine.revision`) with int8 linears (`--precision verity_int8`, the workload's quantization), batch-invariant eager.
+vLLM serves it on vy-dc-h200's one H200 through `verity_vllm`'s committing OpenAI endpoint. Its values are committed as
+it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. The chain is
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
@@ -59,17 +64,18 @@ names it. Otherwise the Lean verifier's own coins sample the proof blocks.
 
 ## Workload and placement
 
-- The row: `placement.toml`'s `row`, one of the integration's rows (`integrations/vllm/workloads/`), with its requests,
-  its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh` fetches and
-  checks against that directory's `SHA256SUMS`. The endpoint commits under the Build's manifest in the row dir that
-  `placement.toml`'s `COMMIT_RUN` names.
-- The load, `serve_load.py`: `served_verdicts.sh`'s one sampling block of varied requests (`--varied`), or `serve.sh`'s
-  `BURSTS` bursts of `PER_BURST` requests, each burst sealed on its own (8 and 4 by default), or with `VARIED=N` and
-  `ADMIT=release-order` the network certifier's varied traffic.
-- `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and row
-  dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from. `run.sh` hands a
-  run's script its node's paths as its environment, so no script names a node.
-- `workloads/` keeps a bf16 RTX PRO 6000 row, which the demo doesn't serve.
+- The workload: the integration's one (`integrations/vllm/workloads/`) that `placement.toml`'s `row` names, with its
+  requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh`
+  fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the Build's manifest in the
+  workload dir that `placement.toml`'s `COMMIT_RUN` names.
+- The load, `serve_load.py`: `served_verdicts.sh`'s one sampling block of varied requests (`--varied`, or with
+  `LOAD=fixed` one full sampling block of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
+  burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network certifier's
+  varied traffic.
+- `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
+  workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.
+  `run.sh` hands a run's script its node's paths as its environment, so no script names a node.
+- `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands
 
@@ -77,9 +83,10 @@ names it. Otherwise the Lean verifier's own coins sample the proof blocks.
 the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
 recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints the command.
 
-1. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
-2. `verity example vllm commit`, once per row: `commit.sh`, the row's Build, Match and a Commit that seals its replay
-   bundle, kept on the node and put in the evidence store.
+1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
+   that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
+   the Commit the endpoint commits under.
+2. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).

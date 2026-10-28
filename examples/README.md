@@ -20,10 +20,12 @@ establishes with no hardware of its own at the prover's site. It composes two pr
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
 other answers. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own
 guarantee assumes; each component states its guarantee in `Security/`, and the composite states none of its own in Lean
-yet, so no example's `proof` is past `none`. Its demo is the vLLM demo (`verity example vllm`): one served run of
-Llama-3.2-1B INT8 on one H200, sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that
-credits nothing. Not to be confused with PoUB (`Accounting.Remote`), `RemoteChallenger`,
-`RemoteCertifier` or `DampenerRemote`, which are other things.
+yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
+Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
+stand-in prover. Its demo is the vLLM demo (`verity example vllm`): one served run of Llama-3.2-1B INT8 on one H200,
+sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
+remote's sampled-proofs half. Five other things are called "remote" (PoUB among them);
+`verity/core/protocols/remote/README.md`, "Which remote", lists them.
 
 ## How far an example runs, and how far it's proved
 
@@ -62,23 +64,30 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
 
 ## The examples
 
+- `lifecycle/` (`run` `runs`, `proof` `none`): both composites, `onsite` and `remote`, stepped through one monitoring
+  period on CPU in about 2 s, from the hardware registration to the period's verdict and accounting. Every party is
+  simulated in one process, the prover is a labelled stand-in for C-Flock, and the verdict is the composition's Python
+  mirror (`verity/core/protocols/composition/tests/reference.py`), not `remote check`. It is the only example that steps
+  through the whole remote composite; its tests (`examples/lifecycle/tests/test_lifecycle.py`) run each composite honest
+  and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8
   served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity example vllm` serves one sampling block,
   commits its values, and audits it through `benchmarks/one_stage/served_verdicts.sh`: live coins sample proof blocks,
   C-Flock `--zk` proves them and the Lean verifier checks them, PoUW runs on the served model, and onsite's subprotocols
   run where each has its piece. Its run is `moved`: PoUW's verdict is a development run that credits nothing, so no run of
-  record of the remote verdict has passed. Its row and placement are `placement.toml`, which `run.sh` reads, and its
-  scripts reach the integration by `PYTHONPATH`; it is not a package. The auditor's devices (the verifier, the network
-  certifier and the memory challenger) are not placed: the Lean verifier runs on the GPU node with the endpoint and the
-  prover, and the other two may run there too.
-- `h200/` (`run` `runs`, `proof` `none`): the remote protocol's sampled-proofs half at a frozen shape on one H200. The
+  record of the remote verdict has passed. Its workload is the integration's one that `placement.toml`'s `row` names,
+  its placement is `placement.toml`, which `run.sh` reads, and its scripts reach the integration by `PYTHONPATH`; it is
+  not a package. The auditor's devices (the verifier, the network certifier and the memory challenger) are not placed:
+  the Lean verifier runs on the GPU node with the endpoint and the prover, and the other two may run there too.
+- `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
   frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity example h200
   --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a
   replay bundle and a block record; `phases.sh` runs the drawn-block proving, one phase a run, from the step's commit on
   the H200 to its drawn blocks proved. In its run of record, 8 proof blocks drawn by one live coin are each proved by
   C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
-  on a CPU node beside the prover. It claims only sampled proofs: PoUS, the bandwidth audit, network certification and the
-  memory wipe exist here as a skeleton on fixture coins, not as runs, and nothing claims them.
+  on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
+  subprotocols), and the bandwidth audit over PoUS's store and the memory wipe (neither composite's yet), exist here as
+  a skeleton on fixture coins, not as runs, and nothing claims them.
 - `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
   full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt. It has no runner and no run of
   record, so `verity example dither_full_util` runs nothing yet, and it is not a remote run.
