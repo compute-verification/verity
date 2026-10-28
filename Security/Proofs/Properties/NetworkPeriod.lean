@@ -38,9 +38,10 @@ theorem capsTerm_ofFn {m : ℕ} (caps : Fin m → ℕ) : capsTerm (Array.ofFn ca
   exact foldl_ofFn _
 
 theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
-    (w : Fin n → Facts) (tied : Fin n → ℕ) :
-    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) jitter windows).K =
-      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) + ∑ i, (scan.terms (w i) (tied i) jitter).bits := by
+    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
+    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows charged).K =
+      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) +
+        ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
   simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn]
   rw [foldl_ofFn]
   rfl
@@ -67,19 +68,20 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   refine Nat.mul_le_mul (le_two_pow_clog2 _) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
   refine Finset.prod_le_prod fun i _ => ?_
-  simp only [AuditTerms.bits, AuditTerms.of, pow_add]
+  simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
 theorem rowsKBoundsCount : RowsKBoundsCount := by
-  intro facts scan jitter windows m n caps w tied
+  intro facts scan jitter windows m n caps w tied faulty charged
   rw [K_ofFn, pow_add, pow_add, mul_assoc]
   refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
   refine Finset.prod_le_prod fun i _ => ?_
   simp only [AuditTerms.bits, Scan.terms, pow_add]
-  exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
+  exact Nat.mul_le_mul
+    (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)) le_rfl
 
-/-! ## A tied audit draws every unit -/
+/-! ## A tied audit draws its slot entries and scan slots whole -/
 
 theorem firstFinding_none {fs : List (Option (Core.Verdict × String))} (h : firstFinding fs = none) :
     ∀ f ∈ fs, f = none := by
@@ -121,9 +123,15 @@ theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Publi
     | error r => cases h0
     | ok f => exact ⟨f, rfl⟩
 
-/-- The refusal: an audit the check ties that it accepts drew every unit. -/
+theorem drawsWhole_spec {a : Audit} {prof : Core.Integrity} {f : Facts} (h : drawsWhole a prof f = true) :
+    f.drawn = f.units ∨
+      0 < a.entries.size ∧ ∀ key ∈ a.whole, ∃ st ∈ strataOf prof, st.name = key ∧ st.k = st.size := by
+  simpa [drawsWhole, Array.all_eq_true', Array.any_eq_true', -Array.any_eq_true, -Array.all_eq_true] using h
+
+/-- The refusal: an audit the check ties that it accepts drew every unit, or its slot entries' and scan slots'
+templates whole. -/
 theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Answer} {f : Facts}
-    (h : auditCheck i a reg x true = .ok f) : DrawnWhole i reg x := by
+    (h : auditCheck i a reg x true = .ok f) : StrataDrawnWhole i a reg x := by
   unfold auditCheck at h
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
@@ -138,10 +146,10 @@ theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Ans
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
         simp [c1, refuse] at h
     | ok g =>
-      refine ⟨prof, pub, g, ha, hf, ?_⟩
+      refine ⟨prof, pub, g, ha, hf, drawsWhole_spec ?_⟩
       simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        by_cases c2 : g.units = a.units <;> by_cases c3 : g.drawn = g.units <;>
+        by_cases c2 : g.units = a.units <;> by_cases c3 : drawsWhole a prof g = true <;>
           simp_all [refuse, pure, Except.pure]
 
 /-- The refusal refuses no audit drawn whole: one passes the tied check as it passes the untied one. -/
@@ -163,24 +171,11 @@ theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Co
     | ok g =>
       simp only [ha, hf, bind, Except.bind] at h ⊢
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
-
-theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
-    (h : check p c e = .accept pub prof) : c.audits.size = p.audits.size := by
-  unfold check at h
-  split at h
-  · cases h
-  split at h
-  · cases h
-  rename_i hs
-  by_contra hc
-  exact hs hc
+        by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure, drawsWhole]
 
 theorem rowsTiedDrawn : RowsTiedDrawn := by
-  intro p c e pub prof h s sd scan hform i reg x hreg hx htied
-  obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
-  have hi : i < p.audits.size := by rw [← check_sizes h]; exact hlt
-  have hget := auditChecks_getElem? (Array.getElem?_eq_getElem hi) hreg hx
+  intro p c e pub prof h s sd scan hform i a reg x ha hreg hx htied
+  have hget := auditChecks_getElem? ha hreg hx
   obtain ⟨f, hf⟩ := auditChecks_ok hform h _ (Array.mem_of_getElem? hget)
   have ht : tiedOf p.form c i = true := by rw [hform]; exact htied
   rw [ht] at hf
@@ -213,9 +208,10 @@ accepts a rows-form period whose audit 0 is tied and answered by another protoco
 theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
   intro h
   let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
-  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩
+  let a : Audit := ⟨0, 0, "", 0, 0, #[], #[]⟩
+  let p : Params := ⟨#[a], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   obtain ⟨prof, pub, f, ha, -, -⟩ := h p ⟨#[tiedAudit], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl s .empty
-    ⟨0, 0, 0, 0⟩ rfl 0 tiedAudit otherAnswer rfl rfl tiedWindow_ties
+    ⟨0, 0, 0, 0, 0⟩ rfl 0 a tiedAudit otherAnswer rfl rfl rfl tiedWindow_ties
   have := otherAnswer_refused
   rw [ha] at this
   simp [Except.toBool] at this
@@ -253,7 +249,7 @@ theorem rowsProgWired : RowsProgWired := by
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)], #[]⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 
@@ -268,6 +264,21 @@ theorem rowsProgWired_honest :
     wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true ∧ tiedIn #[slotReg] #[tiedWindow] 0 = true := by
   decide +kernel
 
+/-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
+digest `selectEntryPins`' first), and its registration, with that template's entries port at the root `r` and the
+domain `d`. -/
+def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)], #[]⟩
+
+def selectReg : Registration :=
+  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+
+/-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the audit is
+tied to it. -/
+theorem rowsProgWired_select :
+    wired #[selectAudit] slotSchedule #[selectReg] tiedWindow = true ∧ tiedIn #[selectReg] #[tiedWindow] 0 = true := by
+  decide +kernel
+
 theorem tiedWindow_unwired : wired #[] slotSchedule #[] tiedWindow = false := by
   decide +kernel
 
@@ -275,15 +286,16 @@ theorem tiedWindow_unwired : wired #[] slotSchedule #[] tiedWindow = false := by
 accepts a rows-form period of one link-window with no audit, whose scan's `prog` is no audit's slot entries. -/
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
-  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+  let p : Params :=
+    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[] slotSchedule #[] tiedWindow = true :=
-    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_unwired] at hw
   cases hw
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
-def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
+def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")], #[]⟩
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
@@ -296,9 +308,9 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
-    .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
-    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [renamedAudit_unwired] at hw
   cases hw
 
@@ -367,10 +379,10 @@ that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
-    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 stateWindow
-      rfl
+    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      stateWindow rfl
   rw [stateWindow_skipped] at hs
   cases hs
 
