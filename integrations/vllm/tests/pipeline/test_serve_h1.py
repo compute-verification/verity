@@ -500,7 +500,8 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
         monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
         k = 1
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
-                       closer=closer, draws=draws)
+                       closer=closer)
+    arm.drawing(draws)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     pending = arm.close(0)
@@ -562,17 +563,17 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
 
     srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
-    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
-                       draws=draws)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
+    arm.drawing(draws)
     assert arm.close(3) is None
     with pytest.raises(SL.DrawRefused, match="window 3's H1 window never opened"):
-        draws.wait(3)
+        draws.wait(window=3)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
     assert out["tied"] and "joined no period" in out["draw"]["refused"], out
     with pytest.raises(SL.DrawRefused, match="joined no period"):
-        draws.wait(0)
+        draws.wait(window=0)
     assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the draw-gated release"
     srv.src.uninstall()
 
