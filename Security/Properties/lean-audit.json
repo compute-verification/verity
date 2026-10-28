@@ -173,6 +173,10 @@
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
+  "Hash.Assumptions.Sha512Prf": {
+   "owner": "@memory-accounting",
+   "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
+  },
   "Nci.Assumptions.BaselineRegistered": {
    "owner": "@compute-accounting",
    "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
@@ -264,10 +268,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Hash.Assumptions.Sha512Prf": {
-   "owner": "@memory-accounting",
-   "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
   }
  },
  "meaning": [
