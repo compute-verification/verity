@@ -84,7 +84,7 @@ window's one-stage answer from the evidence the prover sends (`PeriodWindowProve
 verifier on it, so this needs Period to run `OneStageZk.checkBlobs` on each window's case, over the core interface's
 blobs and the blob product. -/
 def PeriodRunsV2 (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
-  ∀ ξ i, ComponentAccepts .network (s ξ) → W.v2 ξ i
+  ∀ ξ i, ComponentAccepts .onsite .network (s ξ) → W.v2 ξ i
 
 /-- **S3: v2's acceptance is flock-verify `--zk`'s on every session**, at window `i`'s case:
 `Properties.SampledProofs.OneStageZk.AcceptMeans`. -/
@@ -118,7 +118,7 @@ structure NetworkCouples (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S 
   stmt : ∀ ξ i x, R.stmt (Function.update ξ (r.own .network) x) i = R.stmt ξ i
   wit : ∀ ξ i, (∃ w, Rlt R (R.stmt ξ i) w) → Rlt R (R.stmt ξ i) (R.wit ξ i)
   obs : ∀ ξ, R.obs ξ = (R.run R.device (W.sched ξ, W.srv ξ)).2
-  windows : ∀ ξ p c e, NetworkPeriod (s ξ) p c e → n ≤ p.windows
+  windows : ∀ ξ p c e, NetworkPeriod .onsite (s ξ) p c e → n ≤ p.windows
 
 /-- **The ρ gap (open): the trace holds the registered values at the registered
 inputs.** Where onsite's network component accepts at `ξ` and the realization's witness is in the leak relation, the
@@ -126,7 +126,7 @@ trace it opens holds window `i`'s registered values `ρ i` at the registered inp
 which the registration's commitment binds (`Commitment.Binds`) once `ρ i` is what it committed. -/
 def WindowValuesRegistered (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n)
     (s : ((i : I) → Ω i) → Sent) : Prop :=
-  ∀ ξ i st, ComponentAccepts .network (s ξ) → D.parse (R.stmt ξ i) = some st → Rlt R (R.stmt ξ i) (R.wit ξ i) →
+  ∀ ξ i st, ComponentAccepts .onsite .network (s ξ) → D.parse (R.stmt ξ i) = some st → Rlt R (R.stmt ξ i) (R.wit ξ i) →
     ∀ g ∈ reg st, traceVal st.prog ((R.wit ξ i).val H D.commit st) g = R.ρ i g
 
 /-- **The ρ gap where the windows register no values.** Where every statement of a window that onsite's network
@@ -136,7 +136,7 @@ such a window: N2's one-stage parameters name no registered values (`registered`
 Program registers values (weights pinned before the period) needs the registration's openings instead, at the cost of
 `B_reg` (`regColl_of_disagree`). -/
 theorem windowValuesRegistered_of_empty {s : ((i : I) → Ω i) → Sent}
-    (h : ∀ ξ i st, ComponentAccepts .network (s ξ) → D.parse (R.stmt ξ i) = some st → reg st = ∅) :
+    (h : ∀ ξ i st, ComponentAccepts .onsite .network (s ξ) → D.parse (R.stmt ξ i) = some st → reg st = ∅) :
     WindowValuesRegistered R s := by
   intro ξ i st hca hst _ g hg
   simp [h ξ i st hca hst] at hg
@@ -147,7 +147,7 @@ registration naming the period's Program (the one field of it the period check r
 the window's statement is registered as `sw i`: the same program, design, layout, horizon, registered inputs and
 partition. -/
 def WindowRegistersAs (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
-  ∀ ξ (i : Fin n) p c e rg st, W.v2 ξ i → NetworkPeriod (s ξ) p c e → c.windows[i.val]? = some rg →
+  ∀ ξ (i : Fin n) p c e rg st, W.v2 ξ i → NetworkPeriod .onsite (s ξ) p c e → c.windows[i.val]? = some rg →
     PeriodWindowProgram p rg → D.parse (R.stmt ξ i) = some st → SameRegistration D lay k reg (R.sw i) st
 
 /-- **S8's coverage premise (open).** Where onsite's network component accepts at `ξ`, the network
@@ -156,7 +156,7 @@ complete and its jitter class below `Dj`. Today's period check reads neither sta
 it is two facts per bucket (`recordCovers_of_rows`); at one-stage v2's clock form, whose record is untimed and whose
 statuses N2's head check reads, it is the window's statuses alone (`recordCovers_of_clock`). -/
 def RecordCovers (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
-  ∀ ξ i, ComponentAccepts .network (s ξ) →
+  ∀ ξ i, ComponentAccepts .onsite .network (s ξ) →
     Covered (k (R.sw i)) (W.record ξ i) ∧ (W.record ξ i).length = k (R.sw i) ∧ ∀ y ∈ W.record ξ i, y.jitter < Dj
 
 /-! ## S8: `WindowGood` past the leak relation, on acceptance -/
@@ -184,9 +184,9 @@ theorem obs_eq_record (W : WindowRuns R) (h : ∀ ξ, R.obs ξ = (R.run R.device
 on acceptance, every bucket of the window has every status complete and its jitter class below `Dj`. -/
 theorem recordCovers_of_rows (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (F : RowsFormat R.Conn R.Cell L Kₒ)
     (hfmt : ∀ sc a v, R.fmt.record sc a v = F.record S n sc a v) (hT : ∀ i, F.T = k (R.sw i))
-    (hst : ∀ ξ (i : Fin n), ComponentAccepts .network (s ξ) → ∀ t < F.T, ∀ κ,
+    (hst : ∀ ξ (i : Fin n), ComponentAccepts .onsite .network (s ξ) → ∀ t < F.T, ∀ κ,
       F.status (W.sched ξ) (R.arr (W.srv ξ)) (i.val * F.T + t) κ = .complete)
-    (hj : ∀ ξ (i : Fin n), ComponentAccepts .network (s ξ) → ∀ t < F.T,
+    (hj : ∀ ξ (i : Fin n), ComponentAccepts .onsite .network (s ξ) → ∀ t < F.T,
       F.jitter (W.sched ξ) (R.arr (W.srv ξ)) (i.val * F.T + t) < Dj) :
     RecordCovers W s := by
   intro ξ i hca
@@ -253,7 +253,7 @@ device's key. Once the device refuses to certify an incomplete status (B), it ho
 (`recordCoversOff_of_certified`, `windowLeOff`). -/
 def ClockStatusComplete (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (F : ClockFormat R.Conn R.Cell L Kₒ S) :
     Prop :=
-  ∀ ξ (i : Fin n), ComponentAccepts .network (s ξ) → ∀ c, F.status (W.sched ξ) (R.arr (W.srv ξ)) i.val c = .complete
+  ∀ ξ (i : Fin n), ComponentAccepts .onsite .network (s ξ) → ∀ c, F.status (W.sched ξ) (R.arr (W.srv ξ)) i.val c = .complete
 
 /-- **The clock form's record covers the horizon** (S8's coverage premise at one-stage v2's record): each window is the
 horizon's steps with jitter class 0 below the bound (`RecordsClock`), so it covers the horizon wherever its statuses
@@ -285,7 +285,7 @@ structure CertRuns (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k 
 key's, name the link, their end and the window, and verify in the session). Where onsite's network component accepts
 at `ξ`, the period accepted a certificate of every boundary link of every window. -/
 def CertifiedOnAccept (s : ((i : I) → Ω i) → Sent) {Cert : Type} (C : CertRuns R Cert) : Prop :=
-  ∀ ξ (i : Fin n) c, ComponentAccepts .network (s ξ) → ∃ x, C.accepted ξ i c x
+  ∀ ξ (i : Fin n) c, ComponentAccepts .onsite .network (s ξ) → ∃ x, C.accepted ξ i c x
 
 /-- **B: the device certifies only a complete record, under `trusted-host`** (`Issuer.certify`
 lists an incomplete record's link-window in `refused` and signs nothing for it). Where the period accepted `x` as window
@@ -305,7 +305,7 @@ def CertForged {Cert : Type} (C : CertRuns R Cert) (ξ : (i : I) → Ω i) : Pro
 
 /-- **S8's coverage premise off an event `Brk`**: `RecordCovers` where `Brk` doesn't hold at `ξ`. -/
 def RecordCoversOff (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (Brk : ((i : I) → Ω i) → Prop) : Prop :=
-  ∀ ξ i, ComponentAccepts .network (s ξ) → ¬ Brk ξ →
+  ∀ ξ i, ComponentAccepts .onsite .network (s ξ) → ¬ Brk ξ →
     Covered (k (R.sw i)) (W.record ξ i) ∧ (W.record ξ i).length = k (R.sw i) ∧ ∀ y ∈ W.record ξ i, y.jitter < Dj
 
 /-- **Under B the clock form's record covers the horizon off the forger's event**: the format (`RecordsClock`), the
@@ -325,7 +325,7 @@ record covers the horizon, window `i` is good: in scope (`R.scope`), registered 
 record the device's code's under `trusted-host`. -/
 theorem windowGood_of_covers (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s)
     (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
-    {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .network (s ξ))
+    {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .onsite .network (s ξ))
     (hcov : Covered (k (R.sw i)) (W.record ξ i) ∧ (W.record ξ i).length = k (R.sw i) ∧
       ∀ y ∈ W.record ξ i, y.jitter < Dj)
     (hw : Rlt R (R.stmt ξ i) (R.wit ξ i)) :
@@ -345,7 +345,7 @@ theorem windowGood_of_covers (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent
 (`windowGood_of_covers`), its record covering the horizon (`RecordCovers`). -/
 theorem windowGood_of_accepts (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s)
     (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
-    (hcov : RecordCovers W s) {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .network (s ξ))
+    (hcov : RecordCovers W s) {ξ : (i : I) → Ω i} {i : Fin n} (hca : ComponentAccepts .onsite .network (s ξ))
     (hw : Rlt R (R.stmt ξ i) (R.wit ξ i)) :
     WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt ξ i) (R.wit ξ i) (R.obs ξ i) :=
   windowGood_of_covers W h2 h6 hρ hreg hca (hcov ξ i hca) hw
@@ -372,7 +372,7 @@ theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : Peri
     (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
     (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) (hcov : RecordCovers W s) :
     ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
-      ComponentAccepts .network (s (Function.update ξ (r.own .network) x)) ∧
+      ComponentAccepts .onsite .network (s (Function.update ξ (r.own .network) x)) ∧
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt (Function.update ξ (r.own .network) x) i)
           (R.wit (Function.update ξ (r.own .network) x) i) (R.obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V (Rlt R) (E D decode) (R.stmt ξ i) (R.prover ξ i) := by
@@ -390,7 +390,7 @@ theorem windowLeOff (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : P
     (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) {Brk : ((i : I) → Ω i) → Prop}
     (hcov : RecordCoversOff W s Brk) :
     ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
-      ComponentAccepts .network (s (Function.update ξ (r.own .network) x)) ∧
+      ComponentAccepts .onsite .network (s (Function.update ξ (r.own .network) x)) ∧
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt (Function.update ξ (r.own .network) x) i)
           (R.wit (Function.update ξ (r.own .network) x) i) (R.obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V (Rlt R) (E D decode) (R.stmt ξ i) (R.prover ξ i) +
