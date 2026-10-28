@@ -30,7 +30,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
   (`_hr := hr_inv_exp zr`).
 
 On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
-verifier of record's `--zk` identity with the OS's masks #1677 put in it, which the gate's sessions were proved with. So
+verifier of record's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
 the gate is witnessed under today's identity.
 -/
 
@@ -70,8 +70,9 @@ theorem acceptsZKR_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.P
   unfold Flock.Witness.acceptsZKRAt at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨_, h2, h⟩ := bind_ok h
+  obtain ⟨_, h2', h⟩ := bind_ok h
   obtain ⟨_, h3, h4⟩ := bind_ok h
-  exact ⟨spec, sts, (setupOf_eq I r).symm.trans h1, h2, h3, h4⟩
+  exact ⟨spec, sts, (setupOf_eq I r).symm.trans h1, h2, h2', h3, h4⟩
 
 /-- **The witness's V* check is `AcceptsZKV`**: the verdict, then `RecVStar.checkStmt` on each statement the session
 sets up, at the inner shape `i`, as V*'s statement `j` under the bindings `f` and the shared rows `rows`. -/

@@ -31,10 +31,12 @@ open FlockSoundness.Discharge.ZkExec (zkInputs)
 export Flock (checkRegistered)
 
 /-- **flock-verify `--zk --registered F` accepts the transcript**, `own` F's ports: the session's statements set up from
-`zkInputs I` and the record's draw, each passes the registered check against `own`, each passes `Zk.shapeOk`, and
-`Flock.Zk.verify` accepts the record and the proof files. -/
+`zkInputs I` and the record's draw, each passes the registered check against `own`, every port of each one's circuit is
+a port of `own` (`Registered.checkComplete`, which flock-verify runs whenever `--registered` is given), each passes
+`Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
 def AcceptsZKR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧ sts.forM (checkRegistered · (some own)) = .ok () ∧
+    sts.forM (fun (st : Stmt) => Registered.checkComplete st.c own) = .ok () ∧
     sts.forM Flock.Zk.shapeOk = .ok () ∧ Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
 
 variable {n : ℕ} {Reg : Type}

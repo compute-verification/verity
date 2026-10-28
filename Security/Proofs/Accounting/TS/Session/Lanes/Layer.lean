@@ -46,8 +46,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
   SHA-512 collision (`Accounting.TS.Held.OkColl` at that port's name and rows; `LeafKnownColl` at one of the 33);
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
-  known-content check (`known x w i k`, the session's registered file's known content), its complete check (the
-  file sets `complete`, `Registered.checkComplete`) and its check that each known port, and each port the file marks
+  known-content check (`known x w i k`, the session's registered file's known content), its complete check
+  (`Registered.checkComplete`, run whenever `--registered` is given) and its check that each known port, and each port the file marks
   `read_in_full` (`full x w i k`), is a row of its words whose every bit the circuit reads or returns
   (`KnownRead.check`) included, and the leaf verifier's checks of its registered file and of its session's draw
   (`pouw-leaf-own`: `PouwWindow.Lanes.checkOwn`, and `PouwWindow.Lanes.checkFull`, every unit drawn) pass, opens the
@@ -204,7 +204,8 @@ def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
 combine's), its known-content check at the session's known content `known x w i k` included
 (`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), its complete check
-(`Registered.checkComplete`, which it runs where `F` sets `complete`: every port of the circuit is a port of `own`) and
+(`Registered.checkComplete`, which it runs on every statement of `--registered F`: every port of the circuit is a port
+of `own`) and
 its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content, then at each port
 `full x w i k` names, the ports `F` marks `read_in_full`, as one row of its registered row's words
 (`KnownRead.fullRows`): each such port is a `sha512/row/v2` row of those words, and a computed row of the unit reads each

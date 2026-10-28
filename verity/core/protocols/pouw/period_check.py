@@ -2,9 +2,9 @@
 PoUW's verifier of record for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
 
 Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
-first-parent history and the period it credits; optionally ``capacity``, the period's monitored capacity in MACs
-(IDLE-COVERED, CMP-67). It carries no policy parameter: the period surfaces what its draw established, and whoever reads
-it decides whether it was idle. Its commitment is the auditor's ledger (the lines the challenger signed), its digest
+first-parent history and the period it credits; optionally ``capacity``, the period's monitored capacity in MACs.
+It carries no policy parameter: the period surfaces what its draw established, and whoever reads it decides whether it
+was idle. Its commitment is the auditor's ledger (the lines the challenger signed), its digest
 SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log and each
 window's evidence in the close's order (`credit.PROVED_KEYS`), or ``{fills, pins, windows}`` with the filler windows of
 the period's fill period too (`fill`, `fill.FILL_KEYS`). The check first refuses, by name (``form``), every served window
