@@ -714,3 +714,11 @@ def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_f
     assert rc == 0 and json.loads(out)["lines"] == [{"listening": 47611}, {"window": {"t0": "a", "t1": "b"}}]
     assert "party_log" in refused(call(svc, ["party_log", "wipe", "../../etc/passwd"], key="-"))
     assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))
+
+
+def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
+    (rc, _), ran = party(svc, ["bw_party", "--minutes", "10"])
+    assert rc == 0 and ran[0][-9:] == ["-m", "verity.core.protocols.remote_bandwidth.p2_party", "--device", str(svc.parties / "bw"),
+                                       "--listen", "0.0.0.0:47612", "--registration",
+                                       "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
+    assert "bw_party takes no flags" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
