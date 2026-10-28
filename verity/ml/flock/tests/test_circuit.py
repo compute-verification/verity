@@ -392,6 +392,20 @@ def test_the_zk_hooks_name_the_provers_randomness():
     assert want == {"pads": re.search(r'"pads": "([^"]*)"', rust)[1], "tables": re.sub(r"\\\n\s*", "", tables)}
 
 
+def test_the_zk_hooks_are_ascii():
+    """The statement digest binds ``canon(identity)``, and canonical JSON is ASCII without DEL, so a character from DEL up
+    in ``Flock.Zk.hooks`` or the prover's ``zk_identity`` fails every ``--zk`` statement at setup."""
+    import re
+    from pathlib import Path
+
+    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    lean = _body(service / "flock" / "Flock" / "Zk.lean", "def hooks")
+    rust = _body(flock / "live" / "src" / "bin" / "flock-circuit.rs", "fn zk_identity")
+    for name, body in (("Flock.Zk.hooks", lean), ("zk_identity", rust)):
+        bad = [s for s in re.findall(r'"((?:[^"\\]|\\.)*)"', body) if any(ord(c) >= 0x7F for c in s)]
+        assert not bad, f"{name}: write these strings in ASCII without DEL: {bad}"
+
+
 def test_returned_outputs_need_a_cut_tail():
     class U:
         cut, tail_rets = [], [0]

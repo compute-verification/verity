@@ -259,7 +259,7 @@ fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: usize, _: 
 /// - a zerocheck outer coin `r_j = 1`, as it opens ([`zkv::Masking`]). Completeness: under uniform coins the honest prover
 ///   refuses with probability at most `(#outer coins) · 2^-128` per rep, `m − 13` outer coins.
 fn zk_identity(c: &Composite) -> Value {
-    json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
+    json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 Sec. 4.1, Remark 4.4) over gf(2^128)",
            "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
                                       verifier's session key in its answer; every coin opened against them, or the prover stops",
                                      flock_live::coin_tree::SCHEME),

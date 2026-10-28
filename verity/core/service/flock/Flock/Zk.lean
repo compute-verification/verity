@@ -385,7 +385,7 @@ def hooks (maskLog : Nat) (tables : Bool) (os : Bool := false) : Json :=
   let pads := if os then "os bytes, getrandom" else "prover ChaCha20 stream 4"
   let draws := if os then "os bytes of its own (getrandom)" else "ChaCha20 streams at purpose | j << 32"
   let base := [("zk", Json.bool true), ("stage", s "m2-prototype (committed verifier coins, CPU)"),
-    ("compiler", s "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)"),
+    ("compiler", s "veil (ePrint 2026/683 Sec. 4.1, Remark 4.4) over gf(2^128)"),
     ("verifier_coins", s s!"committed before the prover's first message ({CoinTree.SCHEME}): the prover's fresh nonce in hello; the root and the verifier's session key in its answer; every coin opened against them, or the prover stops"),
     ("pads", s s!"zerocheck and lincheck: every sent value + a pad ({pads}); pads committed before the zerocheck's first coin"),
     ("pads_commitment", s s!"rs over gf(2^128), {K_PAD} padding symbols, rate 1/{2 ^ INNER_LOG_INV_RATE}, {Q} queries, hm96-sha512/v1 leaves, sha512 nodes"),
