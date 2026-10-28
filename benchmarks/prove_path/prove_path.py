@@ -137,7 +137,7 @@ the compiler listing none and under it less each one gate (`more_negatives`).
 **Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local|gate:USER@HOST --main
 FILE`` on the auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
-history; ``gate:USER@HOST`` is vy-challenger-1 through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
+history; ``gate:USER@HOST`` is the auditor host through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
 a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
 `advice_before_draw` holds the advice to the receipt of the stream that drew.
@@ -1314,7 +1314,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     requests = len(compile_advice(compiler, Path(a.advice).read_bytes()))
     probe, cls = window_class_of(a.probe), window_class_of(a.window_class)
     t0 = time.time()
-    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
+    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
     lowered = time.time() - t0
     try:
         one = CZ.project(seen, probe, cls)
@@ -1534,7 +1534,7 @@ def main(argv: list[str] | None = None) -> int:
                    "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
-                   "(vy-challenger-1 through its SSH gate, with --peer and --challenger-key)")
+                   "(the auditor host through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# β(C) (beta.py) on the exact-int8 Llama-3.1-8B request Program the census read (job.sh's Build in r20261018-045058-23f7 at
+# β(C) (beta.py) on the exact-int8 Llama-3.1-8B request Program the census read (job.sh's Build at
 # a4f5a429c5, LP=256, T=31, 724,643 root nodes), with the input term shared over the 8B row's KV pool (share.py's M_dyn for 8
 # engines). ART=art:... and ART_PATH read another Build, M_NODE=BYTES another pool, CHUNKS="N ..." the coarse bounds before the
 # fine one, PROBE=1 stops once the Program decodes. The Build binds its weights as run inputs, so a root input past

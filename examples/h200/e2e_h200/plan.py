@@ -23,7 +23,7 @@ again as the rows its readers read. With `shape.Forms`' chunk of C words (128 at
 A key's DOT is the step `replay` binds: the s8 coordinates' ``GEMM_SM90_S8`` and PV's ``GEMM_HOPPER``. At the frozen shape a
 slot commits 6,102,102 units in 6,102,832 rows, 5,970,688 of them s8 coordinates' 16-bit rows.
 
-``fused`` names the map's fusions (CIR-107; M1's map has none), each a proof block whose intermediate is never committed:
+``fused`` names the map's fusions (M1's map has none), each a proof block whose intermediate is never committed:
 
 * ``residual``: each residual add in its projection's W8A8 epilogue. ``wo``'s and ``wdown``'s coordinates are
   ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``, coordinate i adding the projection's word to the residual stream's
@@ -50,7 +50,7 @@ from ._replay import RP
 from .shape import PV_K, Shape, forms
 
 DEFINITION, PENDING = "definition", "pending-definition"
-#: the map's Definitions on main (#4517, `verity_vllm`'s registry, #4482); the rest are circuits' open PRs
+#: the map's Definitions on main (some in `verity_vllm`'s registry); the rest are pending
 ON_MAIN = frozenset({"ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1", "AllGather_v1",
                      "EmbeddingCoordinate_v1", "RmsNormAbsMax_v1", "RmsNormQuantCodes_v1", "QuantScaleS8_v1",
                      "QkSoftmaxPvPad_v1"})

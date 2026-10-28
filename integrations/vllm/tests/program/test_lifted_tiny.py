@@ -1,8 +1,7 @@
-"""Lane `pad` (R16) — stage TINY of the ⊥-lifted, fully padded baseline (**padded baseline (experimental)**; nothing here is
-a panel-row result).  Specification `out/gen/r15/LIFTING-SPEC.md` v0.4; agreed/proposal split `out/gen/r16/LIFTING-STATUS.md`;
-candidates PAD-01 (unused `1‖nonzero` words) and PAD-02 (widened VU outputs) in `out/gen/r16/DECISIONS-PENDING.md`.
+"""Stage TINY of the ⊥-lifted, fully padded baseline (**padded baseline (experimental)**; nothing here is a panel workload's
+result), against LIFTING-SPEC v0.4 and its candidates PAD-01 (unused `1‖nonzero` words) and PAD-02 (widened VU outputs).
 
-Every group has positive AND negative cases (BRIEF §7B):
+Every group has positive AND negative cases:
 
 * encoding / decoding of lifted values (§2; A3) and the observable-boundary check (PAD-01 rule 1);
 * arithmetic — the strict class generated mechanically from every registered scalar primitive (§3.1): payload agreement bit
@@ -162,7 +161,7 @@ def test_strict_payload_agreement_bot_and_inv(p):
 
 @pytest.mark.parametrize("p", STRICT_PRIMS, ids=lambda p: p.id)
 def test_enabled_lift_is_the_relation_at_enable_1_bot_at_enable_0_whatever_the_operands_inv_otherwise(p):
-    """R17-43 / LIFTING-SPEC v0.6 A9.3, B7 — the lift OF RECORD `Lifted[F]_v2(x…, enable)`: `enable = Active(1)` → the v1 total relation
+    """LIFTING-SPEC v0.6 A9.3, B7 — the lift OF RECORD `Lifted[F]_v2(x…, enable)`: `enable = Active(1)` → the v1 total relation
     (payload agreement / ⊥ / INV rows as facts); `enable = Active(0)` → exactly `⊥` WHATEVER the operands — Active, ⊥ or INV words alike
     (the value is produced inside a disabled computation; nothing about its operands is read); `enable ∈ {⊥, INV_1}` → `INV_w` (an enable
     is a Boolean word owned by the parent, A9.2).  The enable is the LAST operand and the only new one."""
@@ -271,16 +270,16 @@ def test_lgather_row_indexing():
     assert g.evaluate(BOT32, *rows) == BOT16 == lazy(BOT32, rows)  # an inactive index yields ⊥, whatever the rows hold
     # out-of-range Active index: payload agreement with the ORIGINAL's registered total extension — `GatherBf16x{V}` (prims.py):
     # "out-of-range or negative token -> 0x7FFF (a total, documented extension; production would fault)" — forced by A6/§3.3,
-    # nothing invented here (F-pad-05); never INV ([P3]: range is a boundary fact).  Measured against the original, both evaluators.
+    # nothing invented here; never INV ([P3]: range is a boundary fact).  Measured against the original, both evaluators.
     orig = P.gather_bf16(8)
     assert "out-of-range or negative" in orig.doc and "token -> 0x7FFF (a total, documented extension" in orig.doc
     for oor in (8, 9, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF):  # past the end, i32 max, i32 min (negative), -1
         assert g.evaluate(oor, *rows) == orig.evaluate(oor, *rows) == 0x7FFF == lazy(oor, rows), oor
     assert L.l_gather_row(16, 8).oor_payload == 0x7FFF == L.registered_oor_extension(orig) and g.lifted_from_id == "GatherBf16x8_v1"
     with pytest.raises(TypeError, match="no registered original gather family"):
-        L.l_gather_row(8, 4)  # a payload width with no registered original gets no invented constant (F-pad-05)
+        L.l_gather_row(8, 4)  # a payload width with no registered original gets no invented constant
     with pytest.raises(TypeError, match="no registered original gather family"):
-        L.l_gather_row(8, 4, oor_payload=0x12)  # …and none can be invented through the API either (F-pad-08)
+        L.l_gather_row(8, 4, oor_payload=0x12)  # …and none can be invented through the API either
     with pytest.raises(ValueError, match="!= the original GatherBf16x4_v1's 0x7fff"):
         L.l_gather_row(16, 4, oor_payload=0x1234)  # an explicit extension may only confirm the original's
     with pytest.raises(L.BoundaryFailure, match="out of range"):
@@ -300,7 +299,7 @@ def test_lgather_row_indexing():
 
 
 def test_every_registered_gather_family_is_specified_with_its_own_extension():
-    """F-pad-07: the specified class is keyed on the indexing FAMILY (the gather shape), not on the name `GatherBf16x` — the f32
+    """The specified class is keyed on the indexing FAMILY (the gather shape), not on the name `GatherBf16x` — the f32
     reference gather `GatherF32x{V}_v1` (ref_prims, OOR 0x7FC00000) lifts to `LGatherRow32x{V}` with ITS extension, read from
     the original; a strict lift would let an unselected ⊥ row poison an Active read (A5).  Two originals of one `(w, N)` with
     different extensions cannot share the id: refused by name."""
@@ -334,7 +333,7 @@ def test_every_registered_gather_family_is_specified_with_its_own_extension():
 
 
 def test_a_bot_or_inv_word_inside_the_served_prefix_is_refused_by_name():
-    """F-pad-09: a served token is a committed Active word; ⊥ / INV / over-width words inside the prefix are BoundaryFailures at
+    """A served token is a committed Active word; ⊥ / INV / over-width words inside the prefix are BoundaryFailures at
     the served-token boundary (named), even when an EOS follows so that the prefix rule alone would pass."""
     for bad in (BOT32, INV32, (1 << 32) | 17, 1 << 33):
         with pytest.raises(L.BoundaryFailure, match="served token 1"):
@@ -358,10 +357,10 @@ def test_lstep_live_continuation_relation():
 
 def _check_specified_list():
     """Only the specified families — the five of v0.4 (+ the labelled PAD-04 candidate `LSplitsForSMS`), the two Continuation_v1 members
-    (R17-32, SPEC B6) and `LFixedSelect<E>x<w>` (R17-42 §3, MOE-PAD-SPEC §2; STAGE1-GAPS G2) — are non-strict; everything registered as
+    (SPEC B6) and `LFixedSelect<E>x<w>` (MOE-PAD-SPEC §2) — are non-strict; everything registered as
     `Lifted[…]` is the strict wrapper.  The Continuation members and LFixedSelect are materialised here so the list is checked with them in it."""
     import re
-    L.l_is_eos(1), L.l_emit_next(1), L.l_emit_next(0), L.l_fixed_select(4, 16), L.l_enable()  # + LEnable_v1 (v0.6 B7; moe M-1226 one-liner)
+    L.l_is_eos(1), L.l_emit_next(1), L.l_emit_next(0), L.l_fixed_select(4, 16), L.l_enable()  # + LEnable_v1 (v0.6 B7)
     allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+(?:o[0-9a-f]+)?|LStepLive\d+|LSplitsForSMS\d+|LIsEOS\d+|LEmitNext\[H=\d+\]|LFixedSelect\d+x\d+|LEnable)_v1$")
     for fid in L.specified_ids():
         assert allowed.match(fid), fid
@@ -400,7 +399,7 @@ def _same_refs(a, b) -> bool:
 
 @pytest.mark.parametrize("sp", [GEMM, EMB, TSEL, STEP], ids=lambda s: s.base_id)
 def test_lift_def_address_stability(sp):
-    """global M-0472 R1: same node indices, same operand runs, same offsets, same return refs; only types and spec ids change."""
+    """Same node indices, same operand runs, same offsets, same return refs; only types and spec ids change."""
     lsp = L.lift_def(sp)
     # v0.6 B7: `_v2`, SAME gate count; v0.7 A11 (G1): the class vector `ORD` is the one extra static (0 here: every parameter offered lifted)
     assert lsp.id == f"Lifted[{sp.base_id}]_v2" + sp.id[len(sp.base_id):-1] + ",ORD=0}" and lsp.gates == sp.gates
@@ -564,7 +563,7 @@ def _is_const(prim) -> bool:
 @pytest.mark.slow
 @pytest.mark.parametrize("ell", [0, 3])
 def test_lserve_bot_steps_are_bot_at_every_gate_they_own_by_enablement(ell):
-    """R17-43 / LIFTING-SPEC v0.6 A9.3 + A13.1 (replaces the propagation reading of DP-pad-01 (a)): with the committed EOS at `out[ell]`,
+    """LIFTING-SPEC v0.6 A9.3 + A13.1: with the committed EOS at `out[ell]`,
     `a_r = ell + 1`.  For every step `s ≥ a_r` — **including `a_r` itself** — `live_s = Active(0)` is the step's ENABLE: every gate the
     step owns is ⊥ — the sampled `y_s`, every new K/V row leaf, every intermediate, **every constant produced inside the step and every
     weights-only subcomputation** (v0.5.2 left those Active; under enablement nothing a disabled call produces is Active).  Each such
@@ -621,7 +620,7 @@ def test_lserve_transition_and_prefix_theorem():
 
 
 def test_live_count_hook_reads_the_steps_input_activity_not_the_previous_output():
-    """F-pad-10 (padrev M-0102): the S-migration operand `n_live_t = Σ_r live_{r,t}` must count the rows the sampler actually runs.
+    """The S-migration operand `n_live_t = Σ_r live_{r,t}` must count the rows the sampler actually runs.
     On TINY with EOS at event 3 (`a_r = 4`): the Program's `live_s` (= `LIsActive(tok_in_s)` under GUARD=in) is `[1,1,1,0,0,0,0,0]`
     — the served rows; the retired hook `LIsActive(out[s−1])` over-counts by one at `a_r` (the committed EOS is Active)."""
     p3, t3, out = _lserve((17,))
@@ -636,9 +635,9 @@ def test_live_count_hook_reads_the_steps_input_activity_not_the_previous_output(
 
 
 def test_lsplits_for_candidate_pad04():
-    """CANDIDATE PAD-04 / F-pad-11: `LSplitsForSMS<SMS>_v1` — payload agreement with stoch's `SplitsFor_v1` (the verbatim vLLM
+    """CANDIDATE PAD-04: `LSplitsForSMS<SMS>_v1` — payload agreement with `SplitsFor_v1` (the verbatim vLLM
     doubling loop) for every `1 ≤ n ≤ 64` at 142 / 132 / 108 SMs; `Active(0)` → ⊥ (no live row, no event); ⊥ → ⊥; INV → INV_6;
-    `n > 64` refused by name (structural bound, asserted at build); the table flips stoch named (17, 34, 35, 67.. are beyond 64)."""
+    `n > 64` refused by name (structural bound, asserted at build); the table's named flip points are checked (17, 34, 35; 67.. are beyond 64)."""
     from verity.ml.definitions.registry import topp_geometry
     for sms in (142, 132, 108):
         lp, up = L.l_splits_for(sms), L.splits_for_prim(sms)
@@ -715,7 +714,7 @@ def test_lserve_structure_and_digests():
     sp1 = bind(b1.Serve, C=TINY, LP=LP, STEPS=D_MAX)
     for eos in ((15,), (17,), (63,), (17, 63)):
         sp = L.lserve(TINY, LP, D_MAX, eos, lag=0)
-        # the guard's gates + the Continuation_v1 controller's (R17-32: 3 per slot over cap = D_MAX + 1 slots) — PAD-03 (address stability across them)
+        # the guard's gates + the Continuation_v1 controller's (3 per slot over cap = D_MAX + 1 slots) — PAD-03 (address stability across them)
         assert sp.gates == sp1.gates + 2 * D_MAX + len(eos) + 2 + 3 * (D_MAX + 1) == sp1.gates + L.continuation_gate_count(D_MAX + 1, len(eos), 0)  # +2: bot32, enable/one
         prog = Program(sp)
         assert len(_steps(prog)) == D_MAX
@@ -744,7 +743,7 @@ def test_served_prefix_rule_reproduces_the_committed_array_and_names_failures():
     with pytest.raises(L.ServedPrefixFailure, match="execution past EOS"):
         L.assign_inactive("r1", Y_RAW[:6], (17,), N_EVENTS, lag=0)  # served 6 events but event 3 was the EOS
     with pytest.raises(L.ServedPrefixFailure, match="declared activity not executed"):
-        L.assign_inactive("r2", Y_RAW[:3], (17,), N_EVENTS, lag=0)  # stopped before the EOS and below the cap (F-pm-24's shape)
+        L.assign_inactive("r2", Y_RAW[:3], (17,), N_EVENTS, lag=0)  # stopped before the EOS and below the cap
     with pytest.raises(L.ServedPrefixFailure, match="declared activity not executed"):
         L.assign_inactive("r3", Y_RAW[:5], (63,), N_EVENTS, lag=0)  # no EOS ever: activity is the whole cap
     with pytest.raises(L.ServedPrefixFailure):
@@ -788,8 +787,8 @@ def test_malformed_word_reaches_the_boundary_as_inv_never_as_a_canonical_value()
 
 
 def test_lifted_width_summary_is_the_true_width_rule_r17_6b():
-    """R17-6(b) (SPEC v0.5 A4): the width of a lifted set is Σ (w+1), admissibility is the unlifted rule at the lifted parameter; the R16
-    PAD-02 candidate (payload rule + n_max) is WITHDRAWN and its API gone."""
+    """SPEC v0.5 A4: the width of a lifted set is Σ (w+1), admissibility is the unlifted rule at the lifted parameter; the PAD-02
+    candidate's payload rule and n_max are withdrawn and have no API."""
     assert not hasattr(L, "validate_width_lifted") and not hasattr(L, "N_MAX")
     r = L.lifted_width_summary([32])
     assert r["ok"] and r["w_out_lifted"] == 33 and r["w_out_payload"] == 32 and r["n_out"] == 1 and r["grown_by_bits"] == 1
@@ -826,7 +825,7 @@ def test_codec_round_trip_of_a_lifted_program():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# R17-42 §7 Stage 1 (revb PADDED-ACCEPTANCE S-r17b-S1): the named items whose test was implicit until now
+# Stage 1 of the padded acceptance: a test for each named item
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -847,7 +846,7 @@ def test_stage1_state_step_is_select_update_new_old_and_preserves_old_bit_identi
 
 
 def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
-    """Stage-1 item 5 'malformed encodings', revb's test: flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
+    """Stage-1 item 5 'malformed encodings': flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
     the lifted relation names it (INV out; the encoding predicates say neither Active nor bot); it is never rewritten (the operand the
     evaluator saw is the raw word; the caller still holds the raw bits to commit)."""
     for w in (1, 16, 32):
@@ -901,8 +900,8 @@ def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_w
 
 
 def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
-    """R17-42 §3 `FixedSelect(r_j, z_0..z_{E-1})` as the specified member `LFixedSelect<E>x<w>_v1` (MOE-PAD-SPEC §2; STAGE1-GAPS G2), against
-    revb PADDED-ACCEPTANCE Stage 1 item 3: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
+    """`FixedSelect(r_j, z_0..z_{E-1})` as the specified member `LFixedSelect<E>x<w>_v1` (MOE-PAD-SPEC §2), against
+    Stage 1 item 3 of the padded acceptance: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
     is; (b) output = `z_r` for every admitted `r`, INCLUDING an inactive slot (-> bot), an unselected bot slot never poisons the read;
     (c) `r` out of range (E, E+1, -1, i32 min/max) -> INV_w NAMED, never a wrap, never a default slot; `r` bot -> bot; INV anywhere -> INV."""
     E = 4
@@ -958,7 +957,7 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
 
 
 def test_stage1_cold_decode_resolves_the_continuation_members_by_id():
-    """`LIsEOS<E>_v1` / `LEmitNext[H=h]_v1` (R17-32) and `LFixedSelect<E>x<w>_v1` resolve through the codec's lazy family table -- a Program
+    """`LIsEOS<E>_v1` / `LEmitNext[H=h]_v1` and `LFixedSelect<E>x<w>_v1` resolve through the codec's lazy family table -- a Program
     decoded in a fresh registry state (no prior materialisation) finds them by id; the digest round-trips."""
     from verity.ml.circuits.codec import _lookup_primitive
     for fid, want in (("LIsEOS1_v1", L.l_is_eos(1)), ("LIsEOS3_v1", L.l_is_eos(3)), ("LEmitNext[H=1]_v1", L.l_emit_next(1)),
@@ -1017,7 +1016,7 @@ def test_b10_new_node_classes_of_the_padded_dense_request_are_named_with_counts(
 
 
 def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and_refuses_a_wrong_interface_by_name():
-    """moe M-1063 (MOE-PAD route A): a hand-authored padded lift stands in for `Lifted[twin]_v2` on BOTH paths.  Twin `HandTwin_v1{N}`:
+    """MOE-PAD route A: a hand-authored padded lift stands in for `Lifted[twin]_v2` on BOTH paths.  Twin `HandTwin_v1{N}`:
     `y[i] = x[i] + c` with a constant c inside (strict replay: all Active).  Hand lift `LHandTwin_v1{N}(x: Array<N, Value<33>>, enable) ->
     Array<N, Value<33>>`: y[i] = enabled lift of x[i] + c -- and, to show it is the HAND body that runs, it returns ⊥ for i = N-1 whatever
     the enable (the author's construction, not the replay's).  Checked: (1) `lift_def(bind(twin))` on the registry path IS the hand lift;

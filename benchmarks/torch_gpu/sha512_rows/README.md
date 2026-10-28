@@ -76,7 +76,7 @@ A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split can issue more than the ALU alone.
 The default is `0000`, plain funnel shifts; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
 
-Mode 3 is the balanced schedule: `0033` takes S0 and S1 off the ALU. Two of the schedule's forms don't survive ptxas: a
+Mode 3 is the balanced schedule: `0033` takes s0 and s1 off the ALU. Two of the schedule's forms don't survive ptxas: a
 mad.wide with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's
 addend costs two moves. `rotr3` uses neither.
 
@@ -109,9 +109,21 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
   compressions a second, with both sides' SASS pipe mix; `hashcat_forms` times our compression in hashcat's shapes
   (constant IV, zero words, only two digest words read) to attribute the difference, and at each CTA size in whole
   waves.
-- `tests/`: the host twin always, every variant on a CUDA device.
+- `lowreg.cuh`, `lowreg.cu`, `lowreg_check.py`: the compression's rounds split so that the chaining value or the schedule
+  can live in shared memory (`rounds`, and `rounds2`, two chains interleaved), for a hash warpgroup that shares its SM's
+  registers with MMA warpgroups; `lowreg rates` is SHA-512's rate against the register cap at 1, 2 and 4 warpgroups an
+  SM, gated by `lowreg_check.py` against hashlib.
+- `beside.cu`, `beside.sh`, `beside_check.py`, `beside_summary.py`: hash warpgroups beside the exact s8 linear's MMA
+  warpgroups in one CTA, rebalanced by setmaxnreg, hashing the finished O tiles from shared memory: the GEMM's span beside
+  a busy hash against alone, the hash's rate beside the GEMM against alone, the pipelined handoff against wgmma.linear's
+  shape, each role's registers, Nsight Compute's per-pipe shares and warp stalls, and the served commit's call modelled
+  from them. One lease, gates before timing.
+- `beside_probe.cu`, `beside_probe.sh`: which CTA shapes and register splits ptxas builds (C7602: m64n256k32 needs a
+  154-register launch).
+- `tests/`: the host twin always, every variant on a CUDA device; beside's gate and summary on synthetic outputs.
+
+From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:
 
 ```bash
-research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-  --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/gpu.sh
+OUT=DIR bash benchmarks/torch_gpu/sha512_rows/gpu.sh
 ```
