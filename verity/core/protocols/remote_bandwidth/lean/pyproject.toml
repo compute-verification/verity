@@ -35,7 +35,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # the committed C*, whose registration, openings and a session test_p2.py replays
           "verity/core/protocols/remote_bandwidth/p2.py", "verity/core/protocols/remote_bandwidth/p2_party.py",
           "verity/core/protocols/remote_bandwidth/p2_lean.py", "verity/core/protocols/remote_bandwidth/p2_case.py",
-          "verity/core/protocols/pous",
+          "verity/core/protocols/pous", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/primitives/identity/lakefile.toml",
           "verity/core/primitives/identity/lake-manifest.json", "verity/core/primitives/identity/lean-toolchain",
           "verity/core/devices/memory_challenger/lean/lakefile.toml",

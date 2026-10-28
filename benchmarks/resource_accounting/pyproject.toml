@@ -15,5 +15,6 @@ inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/pri
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw",
           "verity/core/protocols/pous", "verity/core/claims",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
-          "verity/ml/__init__.py", "verity/ml/circuits",
+          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
+          "verity/ml/protocols/pous",
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/randomness"]

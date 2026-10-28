@@ -62,6 +62,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/ml/protocols/pouw/circuit", "verity/ml/protocols/pouw/schemes",
+          "verity/core/protocols/pouw/live_reads.py", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw/__init__.py",
+          "verity/ml/protocols/pous/__init__.py", "verity/ml/protocols/certifier/__init__.py",
           "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pous/__init__.py", "verity/ml/protocols/pous/circuit.py",
           "verity/ml/protocols/pous/circuit.circuit-check.py", "verity/ml/protocols/pous/circuit.circuit-check.json",

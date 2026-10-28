@@ -17,4 +17,4 @@ inputs = ["benchmarks/network_traces/load_relay.py", "verity/core/protocols/cert
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/sampled_proofs/one_stage", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness", "verity/core/protocols/pouw",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]
+          "verity/ml/protocols", "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]
