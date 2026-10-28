@@ -210,6 +210,7 @@ theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     rw [← e]
     exact hz
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset

@@ -104,6 +104,7 @@ theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart 
   have h0 : 0 < sts.size := by subst hp; exact h0p
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hpar := FlockVBridge.params_of_check P.recNet ((htab 0 h0p).1.trans (FlockVBridge.name_recOpen l LANES HH m))
   rw [e0] at hpar
   have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hset) 0 h0
