@@ -22,7 +22,7 @@ NOROW = 1.0156
 LDSM_X4 = 0.5078
 
 [measured]
-cycles_per_mma = 21.0421        # the 40 s hold's steady half at 1320 MHz NVML (SW power cap); 79fe's 21.0382
+cycles_per_mma = 21.0421        # the 40 s hold's steady half at 1320 MHz NVML; 79fe's 21.0382
 source = "egemm80 e64's hold, 8192 x 8192 x 4096; the interleaved bench's median 21.02 at 1350 MHz; the 3-stage ring held 22.76"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none

@@ -39,8 +39,7 @@ credits = [
     ["LDSM_X2", 1024], ["LDSM_X4", 2048], ["ATOME32P", 1024],
 ]
 
-[published]  # as `machine-model solve VF3k-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as `machine-model solve VF3k-16` printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0603
-tau_600w = 0.0472
 uf_low = 1.1563
 margin = 2.0
