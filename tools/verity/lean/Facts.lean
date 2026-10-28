@@ -56,6 +56,14 @@ statement that is such a definition also with that definition unfolded (`liftOf`
 pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
 its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
 lemma) is no conflict.
+
+With `usage` (a list of further names), it writes only `graph` and `usage`, what `survey.py unused` reads: under `pins`,
+each pin's module, or null when no imported module declares it; under `modules`, for each module a package of this
+repository builds (as `built` above), how many constants it declares, how many of them the closure of the pins and the
+`usage` names holds (their `uses`, transitively), the first pin whose closure reaches one (`by`), and the other such
+modules its constants use (`refs`: what it needs to be rebuilt as it is). No other module imports one of these, so the
+walk stops at the first constant outside them. Notation, macros and attributes act at elaboration and leave no constant
+in a term, so the closure never holds them.
 -/
 
 open Lean Meta
@@ -851,6 +859,58 @@ def specDefinition (ci : ConstantInfo) : Bool :=
 def names (j : Json) (k : String) : Array Name :=
   ((j.getObjValD k).getArr?.toOption.getD #[]).filterMap fun v => v.getStr?.toOption.map String.toName
 
+/-- Each imported module's `.olean` file, looked up in tasks of 256 modules. -/
+def oleansOf (mnames : Array Name) : IO (Array String) := do
+  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
+    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
+  found.foldlM (init := #[]) fun acc t => return acc ++ (← IO.ofExcept t.get)
+
+/-- Whether an `.olean` is one a package of this repository builds (in its own `.lake/build`), as `check.py`'s
+`own_modules`: not the toolchain's or a fetched dependency's. -/
+def ownOLean (o : String) : Bool :=
+  (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1
+
+/-- `graph`: each imported module's `.olean` file and what it imports. -/
+def graphOf (env : Environment) (mnames : Array Name) (oleans : Array String) : Json :=
+  Json.mkObj <| (List.range mnames.size).map fun i => (mnames[i]!.toString, Json.mkObj [("olean", toJson oleans[i]!),
+    ("imports", toJson (env.header.moduleData[i]!.imports.map (·.module.toString)))])
+
+/-- The usage mode's `usage`: each pin's module (null when no imported module declares it), and for each module whose
+`own` flag is set its constants, how many of them the closure of `pins` and `extra` holds (`usesIn`, transitively), the
+first pin whose closure reaches one (`by`), and the other own modules its constants use (`refs`). `refs` reads the module's
+own `ConstantInfo`s, not `table`: a realized constant (an equation lemma) can be declared by several modules, and `table`
+holds one module's copy, whose proof can use that module's own auxiliaries. -/
+def usageInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (mnames : Array Name) (own : Array Bool)
+    (pins extra : Array Name) : Json := Id.run do
+  let ownOf (c : Name) : Option Nat := do
+    let i := (← env.getModuleIdxFor? c).toNat
+    if own[i]! then some i else none
+  let mut seen : NameSet := {}
+  let mut count : Std.HashMap Nat Nat := {}
+  let mut first : Std.HashMap Nat Name := {}
+  for p in pins ++ extra do
+    let mut stack := if env.contains p then #[p] else #[]
+    while !stack.isEmpty do
+      let c := stack.back!
+      stack := stack.pop
+      if seen.contains c then continue
+      seen := seen.insert c
+      let some i := ownOf c | continue
+      count := count.insert i (count.getD i 0 + 1)
+      unless first.contains i do first := first.insert i p
+      stack := stack ++ (usesIn env table c).filter (ownOf · |>.isSome)
+  let rows := ((List.range mnames.size).toArray.filter (own[·]!)).map fun i => Task.spawn fun _ => Id.run do
+    let data := env.header.moduleData[i]!
+    let mut refs : Std.HashSet Nat := {}
+    for ci in data.constants do
+      for d in uses ci do
+        if let some j := ownOf d then
+          if j != i then refs := refs.insert j
+    return (mnames[i]!.toString, Json.mkObj [("constants", toJson data.constants.size), ("used", toJson (count.getD i 0)),
+      ("by", toJson ((first.get? i).map toString)), ("refs", toJson ((refs.toArray.qsort (· < ·)).map (mnames[·]!.toString)))])
+  let pinned := pins.map fun p => (p.toString, toJson ((env.getModuleIdxFor? p).map (mnames[·.toNat]!.toString)))
+  return Json.mkObj [("pins", Json.mkObj pinned.toList), ("modules", Json.mkObj (rows.map Task.get).toList)]
+
 end LeanAudit
 
 open LeanAudit in
@@ -938,6 +998,13 @@ unsafe def main (args : List String) : IO UInt32 := do
   let env ← importModules (roots.map fun r => { module := r }) {} (loadExts := false)
   let mnames := env.header.moduleNames
   lap "import" mnames.size
+  if (cfg.getObjVal? "usage").toOption.isSome then
+    let oleans ← oleansOf mnames
+    let doc := Json.mkObj [("lean", toJson Lean.versionString), ("graph", graphOf env mnames oleans),
+      ("usage", usageInfo env (usesTable env) mnames (oleans.map ownOLean) pins (names cfg "usage"))]
+    IO.FS.writeFile out doc.compress
+    lap "usage" 0
+    return 0
   let mut modules := #[]
   let mut imports := #[]
   let mut spans := #[]
@@ -1009,15 +1076,9 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert pins[i] rs
     return acc
   lap "reads" readsOf.size
-  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
-    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
-  let mut oleans := #[]
-  for t in found do
-    oleans := oleans ++ (← IO.ofExcept t.get)
-  -- the modules a package of this repository builds (an `.olean` in its own `.lake/build`), as `check.py`'s `own_modules`
+  let oleans ← oleansOf mnames
   let built : NameSet := (List.range mnames.size).foldl (init := {}) fun s i =>
-    let o := oleans[i]!
-    if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then s.insert mnames[i]! else s
+    if ownOLean oleans[i]! then s.insert mnames[i]! else s
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
@@ -1095,13 +1156,8 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   lap "canon" conflicts.size
-  let mut graph := #[]
-  for h : i in [0:mnames.size] do
-    let olean := oleans[i]!
-    graph := graph.push (mnames[i].toString, Json.mkObj [("olean", toJson olean),
-      ("imports", toJson (env.header.moduleData[i]!.imports.map (·.module.toString)))])
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
-    ("spans", Json.mkObj spans.toList), ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
+    ("spans", Json.mkObj spans.toList), ("oleans", toJson oleans), ("graph", graphOf env mnames oleans),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
