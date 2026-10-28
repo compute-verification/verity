@@ -623,6 +623,25 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     assert kinds[-1] == "period-close" and json.loads((d / S.PERIOD).read_text())["close"]["body"]["windows"] == []
 
 
+def test_a_period_opens_before_serving_and_holds_the_served_program_to_it(tmp_path, monkeypatch, capsys):
+    """Before serve-openai starts (no serve.json; its startup reserves window 0's session, which joins only an open
+    period) the open goes out on the offline Program (`program`'s); ``period served`` then holds the Program
+    serve-openai declared to the period's, refusing another, whose windows credit nothing."""
+    d, c, _ = _declared(tmp_path)
+    served = (d / "serve.json").read_text()
+    (d / "serve.json").unlink()
+    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: json.dumps({"body": {"period": words[2]}}).encode())
+    assert S.main(["period", "open", str(d), "--gate", GATE, "--name", "p", "--circuits", str(c), "--slots", "4",
+                   "--max-tokens", "8"]) == 0
+    assert json.loads((d / S.PERIOD).read_text())["circuit"] == DIGEST
+    (d / "serve.json").write_text(served)
+    assert S.main(["period", "served", str(d)]) == 0
+    assert f"PERIOD served p: serve-openai declared its Program {DIGEST[:16]}" in capsys.readouterr().out
+    (d / "serve.json").write_text(json.dumps({"protocols": {"program": "6f" * 64}}))
+    assert S.main(["period", "served", str(d)]) == 1
+    assert "its windows credit nothing" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("case", ["other program", "other live T,S", "no live", "no meta", "no manifest"])
 def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_path, case):
     """Circuit files of another Program, a live file for another T or S, none for the live template, a serve dir with no
