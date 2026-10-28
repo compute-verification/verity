@@ -4,7 +4,7 @@
 own support: n = Σ_r (2E_r)(2F_r), F uniform over the 16 E2M1 codes, so its characteristic function is a product of
 powers of one draw's, per |E| magnitude.  It agrees with the reference to float rounding (about 1e-16; a test).
 
-`split_units_fast` is C (bc-f5bf55c8; the assessor's B, 16:10Z), which is
+`split_units_fast` is C (the assessor's B), which is
 now the rule itself (`pearl_c4.change_probabilities`, normative for prover and verifier): this is the same computation,
 vectorised, and agrees with the reference to float rounding (a test), inside R1's tolerance band.
 - The modal byte by a certified local search: from the product formula at the four edges around the realised byte r,

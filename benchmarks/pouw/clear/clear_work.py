@@ -1,6 +1,6 @@
 """Pearl-C's work law and its clear audit: what the verifier credits, draws and checks, all recomputed by the verifier
 (statement review item 5; red team F1, F2 and F5–F8).  It is a reference tool, not a verifier: PoUW's served path is the
-served-ZK window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`).  It runs the records
+served-ZK window, and its verifier is the Lean (`verity/core/protocols/pouw/lean/check`).  It runs the records
 core keeps (`verity.core.protocols.pouw.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
 Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory is not a package: callers put it on
 ``sys.path``.
@@ -14,7 +14,7 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   - A cell's draw weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
     filler earn nothing. `W_ref` is the one the draw's Lean statement weighs by (`draw_wref`): on sm_120 at its cap
     1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
-    step's mixed linears are drawn in proportion to it (red team #919 F1); elsewhere the scheme's own `wref`, Lean's
+    step's mixed linears are drawn in proportion to it; elsewhere the scheme's own `wref`, Lean's
     `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
   - An accepted unit is credited (1 − ρ)·`creditDevRev1` over its credited cells, at the scheme's cap ρ (`scheme.cap`:
     Pearl-C's is its device record's, 1/400 on the H100 and 1/1,000 on sm_120; Pearl-C4's is its own 1/400).
@@ -126,10 +126,10 @@ class DrawWref:
     statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GγSampled`,
     `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
     columns, so a draw by another price record's `wref` attains the statement's γ only on a layout of one (n, k): on a
-    served step's four linears the per-linear ratios differ (red team #919 F1).  `tile_weight` counts credited cells
+    served step's four linears the per-linear ratios differ.  `tile_weight` counts credited cells
     only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows
     gets less than its `Wref`'s ticket at the scale that fully credited tiles get theirs, so unless every tile's
-    credited share is the same, no Lean statement covers that draw yet (red team #1014)."""
+    credited share is the same, no Lean statement covers that draw yet."""
 
     statement: str
     device: str

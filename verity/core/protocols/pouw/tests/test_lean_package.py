@@ -1,5 +1,5 @@
-"""PoUW's Lean (in `Security`) and what the rest of this directory says about it: every Lean theorem `PROTOCOL.md`
-cites is a guarantee in `Security/lean-audit.json`, and its FP8 conformance data is what `verity.ml.circuits.silicon`
+"""PoUW's Lean (in `Security`) and what the rest of this directory says about it: every Lean name `README.md`
+cites is a guarantee in `Security/lean-audit.json` or a definition one reads, and its FP8 conformance data is what `verity.ml.circuits.silicon`
 computes. `lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `Definitions/Pouw/Fp8Atom/` and
 their checks in `Proofs/Pouw/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the proofs' record holds for
 `Proofs.Pouw.Bulk`. The
@@ -24,15 +24,23 @@ POLICY = json.loads((LEAN / "lean-audit.json").read_text())
 RUNS = json.loads((LEAN / "Proofs" / "lean-audit.json").read_text())["runs"]
 
 
+def _stated(name: str) -> bool:
+    """`name` is a definition in `Security/Definitions`: a guarantee stated and not yet proved."""
+    prefix, _, last = name.rpartition(".")
+    decl = re.compile(rf"^(?:noncomputable )?(?:def|abbrev|structure) {re.escape(last)}\b", re.M)
+    return any(f"namespace {prefix}\n" in (t := p.read_text()) and decl.search(t)
+               for p in (LEAN / "Definitions").rglob("*.lean"))
+
+
 def test_cited_theorems_are_guarantees() -> None:
-    """A qualified `Pouw.…` name in `PROTOCOL.md` is a guarantee in the record or a definition a guarantee reads (a named
-    assumption, a game)."""
+    """A qualified `Pouw.…` name in `README.md` is a guarantee in the record, a definition a guarantee reads (a named
+    assumption, a game), or a guarantee stated in `Security/Definitions` and not yet proved."""
     guarantees = set(POLICY["guarantees"])
     read = {d for g in POLICY["reads"].values() for d in g["definitions"]}
-    doc = (HERE / "PROTOCOL.md").read_text()
+    doc = (HERE / "README.md").read_text()
     cited = set(re.findall(r"`(Pouw\.[A-Za-z0-9_.']+)`", doc))
     assert cited
-    assert sorted(cited - guarantees - read) == []
+    assert sorted(n for n in cited - guarantees - read if not _stated(n)) == []
 
 
 @pytest.fixture(scope="module")

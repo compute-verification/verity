@@ -7,7 +7,7 @@ import PouwCommit.Frame
 /-!
 # The entry row (`window.py`, "The entry row")
 
-One entry of the window root as its committed 336-byte row holds it (PoUW's PROTOCOL.md, "The served audit window"):
+One entry of the sampling block's root as its committed 336-byte row holds it:
 six u64s little-endian (kind, lo, hi, n_a, n_b, a zero pad), the side roots A and B and the pass's -h3 root (64 bytes
 each), tile0, cols, m and a zero u64, then the call's record's SHA-512. An `Entry` here holds what a row can hold: u64s
 and 64-byte digests (`Entry.fromRow?`); Python's dataclass holds any values, and `Entry.row` refuses the rest, so the
