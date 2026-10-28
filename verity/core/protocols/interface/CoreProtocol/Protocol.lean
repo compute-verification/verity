@@ -75,9 +75,9 @@ structure Answer where
   published : Option Json
   profile : Option Json
 
-/-- Canonical JSON: ASCII without DEL (every byte below `0x7f`) that `Flock.canon` writes back byte for byte, so every
-string in it is ASCII without DEL too (`canon` refuses any other, an escaped one included). The parameters must be
-canonical, and a protocol whose commitment or evidence is JSON reads it with this too. -/
+/-- Canonical JSON: text that `Flock.canon` writes back byte for byte. `canon` escapes every character outside printable
+ASCII, so a canonical text has no byte at or above `0x7f`, and one holding one is refused before it is parsed. The
+parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. -/
 def canonicalJson (b : ByteArray) : V Json := do
   unless b.data.all (· < 0x7f) do throw "not ASCII without DEL (a byte at or above 0x7f)"
   let some s := String.fromUTF8? b | throw "not UTF-8"
@@ -116,10 +116,9 @@ def Answer.toJson (a : Answer) : Json :=
     ("commitment", opt (fun d => Json.str (Flock.hexOf d)) a.digest), ("public", opt id a.published),
     ("profile", opt id a.profile)]
 
-/-- The outcome's line in canonical JSON's form (`Flock.canonLine`, which prints a reason's free text whatever its
-characters), the only form a caller or a difftest reads. It fails only when a protocol's `publicJson` or `profileJson`
-writes a non-integer number, which the protocol's own tests must rule out. -/
-def Answer.canonical (a : Answer) : V String := Flock.canonLine a.toJson
+/-- The outcome's canonical JSON, the only form a caller or a difftest reads. It fails only when a protocol's
+`publicJson` or `profileJson` writes a non-integer number, which the protocol's own tests must rule out. -/
+def Answer.canonical (a : Answer) : V String := Flock.canon a.toJson
 
 def Verdict.ofName : String → Option Verdict
   | "accept" => some .accept
@@ -147,7 +146,7 @@ def Answer.ofJson (j : Json) (ctx : String := "answer") : V Answer := do
   | .accept, _, _, _ => throw s!"{ctx}: an accept has no reason, and both its public outputs and its profile"
   | _, some _, none, none => pure ()
   | v, _, _, _ => throw s!"{ctx}: a {v.name} has a reason, and neither public outputs nor a profile"
-  if (← Flock.canonLine a.toJson) != (← Flock.canonLine j) then throw s!"{ctx}: not in the form Answer.toJson writes"
+  if (← Flock.canon a.toJson) != (← Flock.canon j) then throw s!"{ctx}: not in the form Answer.toJson writes"
   pure a
 
 end Core
