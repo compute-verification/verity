@@ -56,7 +56,7 @@ PEAK_MACS = 989.4e12
 MACS_PER_SM_CLK = 4096
 PLAIN = ("lt", "int_mm", "wgmma", "cutlass_128x256", "cutlass_128x256_c2", "cutlass_128x128")
 ORBIT_ARMS = ("forms_a", "forms_b", "batched", "assemble", "fused", "unfused", "orbit", "corr", "corr_b", "corr_nostore",
-              "corr_b_nostore", "corr4", "rmw_o", "exact", "orbit_call")
+              "corr_b_nostore", "corr_b_nostore_r4", "corr4", "rmw_o", "exact", "orbit_call")
 RHO_A = "qkv=0.00026,o=0.00044,gate_up=0.00175,down=0.000056"
 SLOTS = len(OR.ORDER)
 COPY_BYTES = 256 << 20
@@ -230,13 +230,14 @@ class Orbit:
         self.lib.call("orbit_fused", self.a_wide.data_ptr(), self.b_wides[i].data_ptr(), o.data_ptr(), self.m, self.n, self.k,
                       group, 0)
 
-    def corr(self, o, i: int, store: bool = True, a_side: bool = True) -> None:
-        """O += the corrections; `a_side` False: B's carries' only; `store` False: computed, O untouched (timing)."""
+    def corr(self, o, i: int, store: bool = True, a_side: bool = True, r4: bool = False) -> None:
+        """O += the corrections; `a_side` False: B's carries' only; `store` False: computed, O untouched (timing); `r4`:
+        corr_kernel's 4 rows a thread rather than corr16's 16."""
         b = self.b_lists[i]
         cnt = self.a_count if a_side else self.no_count
         self.lib.call("orbit_corr", self.a_wide.data_ptr(), b["bptr"].data_ptr(), b["bmid"].data_ptr(), b["bidx"].data_ptr(),
                       self.a_list.data_ptr(), cnt.data_ptr(), b["ft"].data_ptr(), o.data_ptr(), self.flag.data_ptr(),
-                      self.m, self.n, self.k, int(store))
+                      self.m, self.n, self.k, int(store) | (2 if r4 else 0))
 
     def corr4(self, i: int) -> None:
         if self.c4 is None:
@@ -273,7 +274,7 @@ class Orbit:
 
 def gate(lib: Lib, m: int, n: int, k: int, x: torch.Tensor, w: torch.Tensor, corrected: bool) -> dict:
     """The orbit's O against torch._int_mm's on (x, w), bit for bit: fused and unfused, corrected by orbit_corr when
-    `corrected` (else the operands must not carry)."""
+    `corrected` (else the operands must not carry): the fused O by corr16 where it fits, the unfused by corr_kernel."""
     ref = torch._int_mm(x, w.t())
     orb = Orbit(lib, m, n, k)
     orb.load([w])
@@ -291,7 +292,7 @@ def gate(lib: Lib, m: int, n: int, k: int, x: torch.Tensor, w: torch.Tensor, cor
         if corrected:
             torch.cuda.synchronize()
             raw = o.clone()
-            orb.corr(o, 0)
+            orb.corr(o, 0, r4=arm == "unfused")
         torch.cuda.synchronize()
         bad = int((o != ref).sum())
         doc[arm] = {"mismatches": bad, "cells": m * n, "carries_a": orb.a_cnt.tolist(), "carries_b": orb.b_cnts[0].tolist(),
@@ -446,6 +447,7 @@ class Shape:
             "corr_b": lambda i: orb.corr(o, i, a_side=False),
             "corr_nostore": lambda i: orb.corr(o, i, store=False),
             "corr_b_nostore": lambda i: orb.corr(o, i, store=False, a_side=False),
+            "corr_b_nostore_r4": lambda i: orb.corr(o, i, store=False, a_side=False, r4=True),
             "corr4": lambda i: orb.corr4(i),
             "rmw_o": lambda i: o.add_(1),
             "exact": lambda i: orb.exact(x, o, i),
@@ -562,7 +564,8 @@ def kappa(row: dict, cm: dict, rho_a: float | None) -> dict:
     if best is None:
         return {}
     t_mac = arms[best]["us"] / (row["m"] * row["n"] * row["k"])
-    us = {a: arms[a]["us"] for a in ("corr", "corr_b", "corr_nostore", "corr_b_nostore", "corr4", "rmw_o") if a in arms}
+    us = {a: arms[a]["us"] for a in ("corr", "corr_b", "corr_nostore", "corr_b_nostore", "corr_b_nostore_r4", "corr4", "rmw_o")
+          if a in arms}
     b, a = cm["b_macs"], cm["a_macs"]
     out: dict = {"corr_macs": cm, "per_mac_us_plain": t_mac}
     if "corr" in us:
@@ -573,6 +576,8 @@ def kappa(row: dict, cm: dict, rho_a: float | None) -> dict:
         out["honest_b"] = us["corr_b_nostore"] / b / t_mac
         if "corr_nostore" in us and a:
             out["honest_a"] = (us["corr_nostore"] - us["corr_b_nostore"]) / a / t_mac
+    if "corr_b_nostore_r4" in us and b:
+        out["honest_b_r4"] = us["corr_b_nostore_r4"] / b / t_mac
     if "corr4" in us and b:
         out["mod4_b"] = us["corr4"] / b / t_mac
         if "honest_b" in out:
