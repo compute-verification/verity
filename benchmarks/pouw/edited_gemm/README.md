@@ -1,7 +1,6 @@
-# FOLD's served-GEMM scalar-only dial
+# The served GEMM's scalar-only fold dial
 
-The served edited GEMM (`egemm.cu`) carries FOLD's cost dial for the prefill regime
-(note:20261017T0320Z-draft-eps1-fold). In the served GEMM the tensor pipe is already busy with the useful IMMA, so the
+The served edited GEMM (`egemm.cu`) carries the fold's cost dial for the prefill regime. In the served GEMM the tensor pipe is already busy with the useful IMMA, so the
 mandatory per-word fold must ride the **idle scalar issue, not filler MMAs** (a filler MMA would spend tensor time = γ,
 not saturation).
 
@@ -14,8 +13,8 @@ not saturation).
 - **`egemm_dial_probe.sh`** measures the dial once (correctness + cost a round), not PROFILE's sweep. It builds `egemm`
   with `-DEG_ROUNDS=R` for R in `EG_R_LIST`, gates each build (the product Y against cuBLASLt and the poisoned control
   rejected), and times `x13_l2o` against `e_plain` at the prefill shape with ncu issue/tensor, in one `gpu-lease`.
-  Measured (run r20261017-040517-d4cd, 8192³): device-correct at R = 1, 2, 4 (`device_ok` + `control_rejected`); cost
-  1.22× / 2.07× / 3.29× over the no-fold GEMM, the R = 1 floor +22 %, latency-bound at the current occupancy (note §7).
+  Measured (8192³): device-correct at R = 1, 2, 4 (`device_ok` + `control_rejected`); cost
+  1.22× / 2.07× / 3.29× over the no-fold GEMM, the R = 1 floor +22 %, latency-bound at the current occupancy.
 
 - **Binding.** The same-word R-round fold binds every committed word for every R under `key_ok_r11`, proved exhaustively
   in FOLD's depth-R check (`egemm_depthr_check.py`). Even depth (R ≥ 2) and the fractional round need the KJ19 clause
