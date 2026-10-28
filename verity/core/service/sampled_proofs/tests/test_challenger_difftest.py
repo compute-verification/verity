@@ -655,7 +655,7 @@ CIRCUITS = ["ab" * 64, "0" * 128, "c" * 128]
 #: a reserve's start: across a day, a leap day, a century's non-leap February, a year, and at either end of `datetime`'s
 STARTS = ["2026-10-20T12:00:00Z", "2024-02-28T23:59:59Z", "2100-02-28T12:00:00Z", "2026-12-31T23:30:00Z",
           "0001-01-01T00:00:00Z", "9999-12-31T11:00:00Z"]
-PEERS = ["10.0.0.7", "peer-b", "::1"]
+PEERS = ["10.0.0.7", "vy-nebius-1", "::1"]
 #: a body's note, each written as `ledger_text` escapes it (none past the Basic Multilingual Plane, which it writes as a
 #: surrogate pair)
 NOTES = ["\u00e9", "a\"b\\c\n", "\x7f\x01", "\u2026"]
