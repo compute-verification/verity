@@ -22,3 +22,7 @@ V2's run of record holds vy-dc-h200 from 00:45Z until it ends (ETA about 03:30Z,
 # 00:45Z (coordinator): #5795 touches your files
 
 vllm-demo-h200's #5795 (f570968885, marked) retargets examples/vllm (README, placement.toml, run.sh, example.toml) to the H200 int8 run and edits the same lines #5716 does. #5795 lands first; when you mark #5716 after V2 (and after 01:30Z), merge main with #5795 in, keep #5795's README and placement, and add only your predict-row change.
+
+# 01:04Z (coordinator): where to run suites now (infra, INF-330)
+
+vy-nebius-cpu-5's /workspace hit 97% of its inodes, so runs there fail with ENOSPC and requeue; node 2 is stopped. `--on auto` skips cpu-3's research pool because of a bug (fix #5813, marked). Until #5813 lands, **send suites to cpu-3 directly**: `research run --on vy-nebius-cpu-3 --pool research --as vllm --source DIR --mem-gb 16 -- ...` (cpu-2 takes launches again too). If a run of yours is still waiting on cpu-5, cancel it and relaunch there.

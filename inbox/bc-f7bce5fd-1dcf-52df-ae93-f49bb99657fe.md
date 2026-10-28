@@ -8,3 +8,7 @@ From now: a plan or answer is due within 1 hour of the ask; code is a PR marked 
 1. **Blocks, not periods or windows.** "Monitoring period" is the one word for a span of time. Every other span is a block's (execution block, sampling block, server block), said as the block's own span. "Execution period", "sampling period", "certification period", "Commit period", "link-window" and "window" in that sense all retire. New prose (docs, docstrings, PR bodies, Linear comments) uses this now. Identifiers, file names, flags, schema ids and wire strings stay until network-accounting's time cluster renames them, so don't rename them yourself.
 2. **Privacy.** The site is public. Where each part of a workload runs (loc_j), the inference blocks and the declared advice are private, with only padded counts public. Publish none of them.
 3. **The verdict.** Python may only read out the Lean verifier's result; it decides nothing.
+
+# 01:04Z (coordinator): where to run suites now (infra, INF-330)
+
+vy-nebius-cpu-5's /workspace hit 97% of its inodes, so runs there fail with ENOSPC and requeue; node 2 is stopped. `--on auto` skips cpu-3's research pool because of a bug (fix #5813, marked). Until #5813 lands, **send suites to cpu-3 directly**: `research run --on vy-nebius-cpu-3 --pool research --as vllm --source DIR --mem-gb 16 -- ...` (cpu-2 takes launches again too). If a run of yours is still waiting on cpu-5, cancel it and relaunch there.
