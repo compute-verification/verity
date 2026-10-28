@@ -20,12 +20,12 @@
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
 #           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
-#           row, as graphs: not the served stack either (the Commit and H1 refuse async scheduling), so util.json's
-#           served_stack is false for both
+#           row, as graphs: not the served stack either, so util.json's served_stack is false for both
 # ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
-# Commit on (its `serve_row` module). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
-# the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
-# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/1024, as for async.
+# Commit on (its `serve_row` module), as <arm>-async; SEQS defaults to 2·T/1024, as for async. With a ROW whose Build
+# declares async scheduling (LAG 1), serve-openai's row check (`serve_row.of`) holds the engine to it and the arm is the
+# served stack. With a row that declares sync (B4's), the check is bypassed, as `tests/pipeline/serve_async_commit_gpu.py`
+# does: its records attest the row's LAG 0 Programs, so the arm is not the served stack.
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
@@ -132,11 +132,15 @@ if [ "${ASYNC:-0}" = 1 ]; then
   serve=("$PY" -c 'import json, sys
 from pathlib import Path
 from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+checked = RW.of
 def of(opts):
     if not opts.required_manifest:
         return None
     path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
     got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
+    if got is True:
+        print(f"UTIL the row declares async_scheduling true: serve_row checks it ({path})", flush=True)
+        return checked(opts)
     print(f"UTIL row scheduler check bypassed (not the served stack): the row declares async_scheduling {got}", flush=True)
     return {"async_scheduling": got, "source": str(path)}
 RW.of = of
