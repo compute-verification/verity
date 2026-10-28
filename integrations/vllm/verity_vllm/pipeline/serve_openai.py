@@ -697,7 +697,7 @@ def main(opts: Options) -> int:
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
-    mirror = records_mirror(out, opts.copy_records_to)
+    mirror = records_mirror(out, opts.copy_records_to, before=trace.drain)
     windows = sealer = warmed = arm = None
     draws, draws_dir = RL.release_of(opts, out)
     if com is not None:
