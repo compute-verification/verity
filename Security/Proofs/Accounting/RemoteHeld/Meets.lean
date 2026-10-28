@@ -22,14 +22,14 @@ namespace Accounting.SecurityProofs.Remote.Meets
 open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Pouw
 
 /-- `B` blocks at tick `t₁` and none at any other. -/
-def pulse (t₁ B : ℕ) : Unit → ℕ → ℕ := fun _ t => if t = t₁ then B else 0
+def pulse {Ω : Type} (t₁ B : ℕ) : Ω → ℕ → ℕ := fun _ t => if t = t₁ then B else 0
 
-theorem over_pulse (t₁ B : ℕ) (ω : Unit) (u v : ℕ) : over (pulse t₁ B) ω u v ≤ B := by
+theorem over_pulse {Ω : Type} (t₁ B : ℕ) (ω : Ω) (u v : ℕ) : over (pulse t₁ B) ω u v ≤ B := by
   simp only [over, pulse, sum_ite_eq']
   split_ifs <;> omega
 
 /-- A pulse meets the token bucket at any rate with itself for the burst. -/
-theorem bucket_pulse {r : ℝ} (hr : 0 ≤ r) (t₁ B : ℕ) (ω : Unit) {u v : ℕ} :
+theorem bucket_pulse {Ω : Type} {r : ℝ} (hr : 0 ≤ r) (t₁ B : ℕ) (ω : Ω) {u v : ℕ} :
     (over (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + B := by
   have h : (over (pulse t₁ B) ω u v : ℝ) ≤ B := by exact_mod_cast over_pulse t₁ B ω u v
   have h0 : 0 ≤ r * ((v - u : ℕ) : ℝ) := mul_nonneg hr (Nat.cast_nonneg _)
@@ -37,7 +37,7 @@ theorem bucket_pulse {r : ℝ} (hr : 0 ≤ r) (t₁ B : ℕ) (ω : Unit) {u v : 
 
 /-- A pulse of `B` meets no ceiling of rate below `B` with burst 0: over its one tick, it brings in `B`. -/
 theorem not_bucket_pulse {r : ℝ} {t₁ B : ℕ} (hr : r < B) :
-    ¬ ∀ ω u v, u ≤ v → (over (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + 0 := fun h => by
+    ¬ ∀ (ω : Unit) u v, u ≤ v → (over (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + 0 := fun h => by
   have h1 := h () t₁ (t₁ + 1) (Nat.le_succ t₁)
   have h2 : over (pulse t₁ B) () t₁ (t₁ + 1) = B := by simp [over, pulse]
   have h3 : t₁ + 1 - t₁ = 1 := by omega
@@ -51,7 +51,7 @@ def burstMem (N t₁ k t : ℕ) : Finset (Fin N) :=
 /-- Two passes of `D` ticks, each reading every registered block correctly, on a node whose first `Br + Bd + Bl`
 registered blocks are absent until tick `t₁` and all come back at `t₁`: `Br` rebuilt, `Bd` read from its disks and `Bl`
 carried over its links. -/
-def burst (N D t₁ Br Bd Bl : ℕ) : Trace Unit where
+def burst {Ω : Type} (N D t₁ Br Bd Bl : ℕ) : Trace Ω where
   blocks := N
   passes := 2
   accepts := fun _ => True
@@ -66,20 +66,20 @@ def burst (N D t₁ Br Bd Bl : ℕ) : Trace Unit where
 
 /-- Its groups: each pass its own, the first credited and the second closing, each coin released as the group before
 ends. -/
-def burstPace (D : ℕ) : Pace Unit where
+def burstPace {Ω : Type} (D : ℕ) : Pace Ω where
   credited := 1
   first := fun _ g => g
   released := fun _ g => g * D
   ended := fun _ g => (g + 1) * D
 
-variable {N D t₁ Br Bd Bl : ℕ}
+variable {N D t₁ Br Bd Bl : ℕ} {Ω : Type}
 
-theorem holds_of_all {T : Trace Unit} {P : Unit → Prop} (h : ∀ ω, P ω) : T.Holds 0 P :=
+theorem holds_of_all [Fintype Ω] {T : Trace Ω} {P : Ω → Prop} (h : ∀ ω, P ω) : T.Holds 0 P :=
   (pr_eq_zero (P := fun ω => T.accepts ω ∧ ¬ P ω) fun ω hω => hω.2 (h ω)).le
 
 /-- Its first `Br + Bd + Bl` registered blocks are absent at `t₁` and back at `t₁ + 1`. -/
-theorem burst_back (j : Fin N) (hj : (j : ℕ) < Br + Bd + Bl) (ω : Unit) :
-    j ∉ (burst N D t₁ Br Bd Bl).present ω t₁ ∧ j ∈ (burst N D t₁ Br Bd Bl).present ω (t₁ + 1) := by
+theorem burst_back (j : Fin N) (hj : (j : ℕ) < Br + Bd + Bl) (ω : Ω) :
+    j ∉ (burst (Ω := Ω) N D t₁ Br Bd Bl).present ω t₁ ∧ j ∈ (burst (Ω := Ω) N D t₁ Br Bd Bl).present ω (t₁ + 1) := by
   refine ⟨fun h => ?_, ?_⟩
   · have h' : j ∈ burstMem N t₁ (Br + Bd + Bl) t₁ ∪ ∅ := h
     rw [union_empty, burstMem, if_pos (Nat.le_refl t₁), mem_filter] at h'
@@ -88,7 +88,7 @@ theorem burst_back (j : Fin N) (hj : (j : ℕ) < Br + Bd + Bl) (ω : Unit) :
     rw [union_empty, burstMem, if_neg (by omega : ¬ t₁ + 1 ≤ t₁)]
     exact mem_univ j
 
-theorem burst_routed : Routed (burst N D t₁ Br Bd Bl) := by
+theorem burst_routed : Routed (burst (Ω := Ω) N D t₁ Br Bd Bl) := by
   intro ω t
   show ((burstMem N t₁ (Br + Bd + Bl) (t + 1) ∪ ∅) \ (burstMem N t₁ (Br + Bd + Bl) t ∪ ∅)).card ≤
     pulse t₁ Br ω t + pulse t₁ Bd ω t + pulse t₁ Bl ω t
@@ -105,22 +105,22 @@ theorem burst_routed : Routed (burst N D t₁ Br Bd Bl) := by
   · rw [if_neg (by omega : ¬ t + 1 ≤ t₁), if_neg (by omega : ¬ t ≤ t₁), Finset.sdiff_self, card_empty]
     exact Nat.zero_le _
 
-theorem burst_chip (S : ℕ) : ChipCeiling (burst N D t₁ Br Bd Bl) S := fun _ _ => by
+theorem burst_chip (S : ℕ) : ChipCeiling (burst (Ω := Ω) N D t₁ Br Bd Bl) S := fun _ _ => by
   show (∅ : Finset (Fin N)).card ≤ S
   rw [card_empty]
   exact Nat.zero_le S
 
-theorem burst_causal : Causal (burst N D t₁ Br Bd Bl) 0 (2 * D) := fun _ _ =>
+theorem burst_causal : Causal (burst (Ω := Ω) N D t₁ Br Bd Bl) 0 (2 * D) := fun _ _ =>
   ⟨fun _ _ h => Nat.mul_le_mul_right D h, Nat.zero_le _, Nat.le_refl _⟩
 
-theorem burst_paced : Paced (burst N D t₁ Br Bd Bl) (burstPace D) := fun _ _ =>
+theorem burst_paced : Paced (burst (Ω := Ω) N D t₁ Br Bd Bl) (burstPace D) := fun _ _ =>
   ⟨fun _ _ h => Nat.mul_le_mul_right D h, rfl, Nat.le_refl _, fun g _ => Nat.lt_succ_self g,
     fun _ _ h => Nat.mul_le_mul_right D h, fun _ _ => Nat.le_refl _,
     fun _ _ _ h₁ h₂ => ⟨Nat.mul_le_mul_right D h₁, Nat.mul_le_mul_right D h₂⟩⟩
 
-theorem burst_covers : Covers (burst N D t₁ Br Bd Bl) := fun _ _ _ _ => rfl
+theorem burst_covers : Covers (burst (Ω := Ω) N D t₁ Br Bd Bl) := fun _ _ _ _ => rfl
 
-theorem burst_sketch (ht : t₁ + 1 < D) : SketchBound (burst N D t₁ Br Bd Bl) 0 := by
+theorem burst_sketch [Fintype Ω] (ht : t₁ + 1 < D) : SketchBound (burst (Ω := Ω) N D t₁ Br Bd Bl) 0 := by
   apply holds_of_all
   intro ω p _ j _
   refine ⟨p * D + (t₁ + 1), Nat.le_add_right _ _, ?_, ?_⟩
@@ -131,39 +131,40 @@ theorem burst_sketch (ht : t₁ + 1 < D) : SketchBound (burst N D t₁ Br Bd Bl)
     rw [union_empty, burstMem, if_neg (by omega : ¬ p * D + (t₁ + 1) ≤ t₁)]
     exact mem_univ j
 
-theorem burst_coins : LiveCoins (burst N D t₁ Br Bd Bl) 0 0 := by
+theorem burst_coins [Fintype Ω] : LiveCoins (burst (Ω := Ω) N D t₁ Br Bd Bl) 0 0 := by
   apply holds_of_all
   intro _
   show ((∑ p ∈ range 2, ((univ : Finset (Fin N)) \ univ).card : ℕ) : ℝ) ≤ 0
   simp
 
-theorem burst_identity : Identity (burst N D t₁ Br Bd 0) := fun _ t =>
+theorem burst_identity : Identity (burst (Ω := Ω) N D t₁ Br Bd 0) := fun _ t =>
   show (if t = t₁ then 0 else 0) = 0 from ite_self 0
 
 /-- **The premises meet with every route used.** At any rates, the session is accepted and meets every premise of
 `HeldOverTimeLinks` (`HeldOverTime`'s and `Held`'s but Identity, with `Causal` over `[0, 2·D]`), its node bringing
 `Br + Bd + Bl` absent blocks back at once by rebuilds, disk reads and links. -/
-theorem burst_meets {s E β βl : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E) (hβ : 0 ≤ β) (hβl : 0 ≤ βl) (S : ℕ)
+theorem burst_meets [Fintype Ω] {s E β βl : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E) (hβ : 0 ≤ β) (hβl : 0 ≤ βl) (S : ℕ)
     (ht : t₁ + 1 < D) :
-    (burst N D t₁ Br Bd Bl).accepts () ∧ Links (burst N D t₁ Br Bd Bl) βl Bl ∧
-      SquaringCeiling (burst N D t₁ Br Bd Bl) s E Br ∧ Disks (burst N D t₁ Br Bd Bl) β Bd ∧
-      ChipCeiling (burst N D t₁ Br Bd Bl) S ∧ Routed (burst N D t₁ Br Bd Bl) ∧
-      Causal (burst N D t₁ Br Bd Bl) 0 (2 * D) ∧ Paced (burst N D t₁ Br Bd Bl) (burstPace D) ∧
-      Covers (burst N D t₁ Br Bd Bl) ∧ SketchBound (burst N D t₁ Br Bd Bl) 0 ∧
-      LiveCoins (burst N D t₁ Br Bd Bl) 0 0 :=
-  ⟨trivial, fun ω _ _ _ => bucket_pulse hβl t₁ Bl ω, fun ω _ _ _ => bucket_pulse (div_nonneg hs hE) t₁ Br ω,
+    (∀ ω, (burst (Ω := Ω) N D t₁ Br Bd Bl).accepts ω) ∧ Links (burst (Ω := Ω) N D t₁ Br Bd Bl) βl Bl ∧
+      SquaringCeiling (burst (Ω := Ω) N D t₁ Br Bd Bl) s E Br ∧ Disks (burst (Ω := Ω) N D t₁ Br Bd Bl) β Bd ∧
+      ChipCeiling (burst (Ω := Ω) N D t₁ Br Bd Bl) S ∧ Routed (burst (Ω := Ω) N D t₁ Br Bd Bl) ∧
+      Causal (burst (Ω := Ω) N D t₁ Br Bd Bl) 0 (2 * D) ∧ Paced (burst (Ω := Ω) N D t₁ Br Bd Bl) (burstPace D) ∧
+      Covers (burst (Ω := Ω) N D t₁ Br Bd Bl) ∧ SketchBound (burst (Ω := Ω) N D t₁ Br Bd Bl) 0 ∧
+      LiveCoins (burst (Ω := Ω) N D t₁ Br Bd Bl) 0 0 :=
+  ⟨fun _ => trivial, fun ω _ _ _ => bucket_pulse hβl t₁ Bl ω, fun ω _ _ _ => bucket_pulse (div_nonneg hs hE) t₁ Br ω,
     fun ω _ _ _ => bucket_pulse hβ t₁ Bd ω, burst_chip S, burst_routed, burst_causal, burst_paced, burst_covers,
     burst_sketch ht, burst_coins⟩
 
 /-- **`Held`'s premises meet with rebuilds and disk reads used**: the same session with no link block meets Identity
 too. -/
-theorem burst_meets_held {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E) (hβ : 0 ≤ β) (S : ℕ) (ht : t₁ + 1 < D) :
-    Identity (burst N D t₁ Br Bd 0) ∧ SquaringCeiling (burst N D t₁ Br Bd 0) s E Br ∧
-      Disks (burst N D t₁ Br Bd 0) β Bd ∧ ChipCeiling (burst N D t₁ Br Bd 0) S ∧ Routed (burst N D t₁ Br Bd 0) ∧
-      Causal (burst N D t₁ Br Bd 0) 0 (2 * D) ∧ SketchBound (burst N D t₁ Br Bd 0) 0 ∧
-      LiveCoins (burst N D t₁ Br Bd 0) 0 0 := by
+theorem burst_meets_held [Fintype Ω] {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E) (hβ : 0 ≤ β) (S : ℕ) (ht : t₁ + 1 < D) :
+    Identity (burst (Ω := Ω) N D t₁ Br Bd 0) ∧ SquaringCeiling (burst (Ω := Ω) N D t₁ Br Bd 0) s E Br ∧
+      Disks (burst (Ω := Ω) N D t₁ Br Bd 0) β Bd ∧ ChipCeiling (burst (Ω := Ω) N D t₁ Br Bd 0) S ∧
+      Routed (burst (Ω := Ω) N D t₁ Br Bd 0) ∧
+      Causal (burst (Ω := Ω) N D t₁ Br Bd 0) 0 (2 * D) ∧ SketchBound (burst (Ω := Ω) N D t₁ Br Bd 0) 0 ∧
+      LiveCoins (burst (Ω := Ω) N D t₁ Br Bd 0) 0 0 := by
   obtain ⟨-, -, hsq, hd, hS, hr, hc, -, -, hk, hw⟩ :=
-    burst_meets (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := 0) (βl := 0) hs hE hβ le_rfl S ht
+    burst_meets (Ω := Ω) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := 0) (βl := 0) hs hE hβ le_rfl S ht
   exact ⟨burst_identity, hsq, hd, hS, hr, hc, hk, hw⟩
 
 /-- W2's session in this form, at the nanosecond tick: `N = 130,023,424` registered blocks, passes of 85 ms, and one
@@ -190,10 +191,10 @@ theorem w2_meets :
       ¬ Links w2 (50e9 / 4096 / 1e9) 0 ∧ ¬ SquaringCeiling w2 191.5 98016 0 ∧
       ¬ Disks w2 (4.32e9 / 4096 / 1e9) 0 := by
   obtain ⟨ha, hl, hsq, hd, hS, hr, hc, hp, hcov, hk, hw⟩ :=
-    burst_meets (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590) (Bd := 1054688) (Bl := 1536)
+    burst_meets (Ω := Unit) (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590) (Bd := 1054688) (Bl := 1536)
       (s := 191.5) (E := 98016) (β := 4.32e9 / 4096 / 1e9) (βl := 50e9 / 4096 / 1e9)
       (by norm_num) (by norm_num) (by norm_num) (by norm_num) 743590 (by norm_num)
-  exact ⟨ha, hl, hsq, hd, hS, hr, hc, hp, hcov, hk, hw, fun j hj => burst_back j hj (),
+  exact ⟨ha (), hl, hsq, hd, hS, hr, hc, hp, hcov, hk, hw, fun j hj => burst_back j hj (),
     not_bucket_pulse (by norm_num), not_bucket_pulse (by norm_num), not_bucket_pulse (by norm_num)⟩
 
 /-- **`Held`'s premises meet at W2's instance**, with its rebuild batch and disk read brought back at once and no link
@@ -202,7 +203,7 @@ theorem w2_meets_held :
     Identity w2Held ∧ SquaringCeiling w2Held 191.5 98016 (743590 : ℕ) ∧
       Disks w2Held (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧ ChipCeiling w2Held 743590 ∧ Routed w2Held ∧
       Causal w2Held 0 (2 * 85000000) ∧ SketchBound w2Held 0 ∧ LiveCoins w2Held 0 0 :=
-  burst_meets_held (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590) (Bd := 1054688)
+  burst_meets_held (Ω := Unit) (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590) (Bd := 1054688)
     (s := 191.5) (E := 98016) (β := 4.32e9 / 4096 / 1e9) (by norm_num) (by norm_num) (by norm_num) 743590
     (by norm_num)
 
