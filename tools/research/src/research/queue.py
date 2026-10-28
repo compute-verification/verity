@@ -136,18 +136,21 @@ PR whose head contains another open PR's head, or by ancestry an older one (a he
 `Queue.entries`; never by PR number, and never for commits the two merely share), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
 mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked PR waits for, once per pair of heads
-(`Driver.tell_unmarked`).  What a sync merges on top goes non-Lean first
+(`Driver.tell_unmarked`).  What a sync adds on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
-Members the sync keeps never move for it, but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
+Members on `next` never move for it, merged again or not: those above a moved or dropped member are merged again in their order,
+and only a `--first` PR placed again, or a `next` rebuilt on a `main` that moved off it, sorts what is above it.  Nor do they
+move but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
 or passed, the members with a land verdict go below those waiting for one (drive.toml's `reviewed_first`), those that change no
 Lean first, each after the PRs it contains and none past a held member, and land at once.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
-dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.  A PR
+dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`; a merge
+with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A PR
 that contains one left out waits, recorded (the state's `waiting`) and told as a conflict is; `status` shows it waiting and
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
@@ -394,7 +397,7 @@ class DriveFlags:
     landing_gates: tuple[str, ...] = ()
     #: the most Lean checks of the review landing running at once: a lower one and those stacked above it (`drive.lean_stack`)
     max_lean_checks: int = 2
-    #: what a sync merges onto `next` anyway goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
+    #: what a sync adds onto `next` goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
     #: Lean change for its Lean check
     nonlean_first: bool = True
     #: while no Lean check of `next` runs, members with a land verdict go below those waiting for one (`Driver._lift`), so a
@@ -408,17 +411,24 @@ class DriveFlags:
     stale_keep: tuple[int, ...] = ()
 
     @classmethod
-    def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
+    def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
+        """``text``'s flags. ``strict`` (drive loading its own flags): any key this code doesn't read refuses, so a drive that
+        lags `main` stops rather than run without a guard `main` added. Otherwise (a client reading `main`'s flags) such a
+        key is ignored with a note, so a client older than `main` keeps working; `tests/test_drive_toml.py` holds `main`'s
+        drive.toml to the strict parse, which is where a typo is caught."""
         try:
             doc = tomllib.loads(text)
         except tomllib.TOMLDecodeError as e:
             raise QueueError(f"{source}: not TOML: {e}") from None
         keys = [f.name for f in dataclasses.fields(cls)]
-        for k in doc:
+        for k in list(doc):
             if k not in keys:
                 near = difflib.get_close_matches(k, keys, n=1)
-                raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive reads "
-                                 f"only {', '.join(keys)}; rename or remove it")
+                if strict:
+                    raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive "
+                                     f"reads only {', '.join(keys)}; rename or remove it, or update this research")
+                print(f"{source}: ignoring key {k!r}, which this research doesn't read (a newer one may)", file=sys.stderr)
+                del doc[k]
 
         def bad(k: str, want: str) -> QueueError:
             return QueueError(f"{source}: {k} = {doc[k]!r}: {want}")
@@ -506,7 +516,7 @@ def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
     (`--config-from-tree`); with where they came from."""
     if clone is None:
         try:
-            return DriveFlags.parse(Path(path).read_text(), path), path
+            return DriveFlags.parse(Path(path).read_text(), path, strict=True), path
         except OSError as e:
             raise QueueError(f"--config {path}: {e.strerror}") from None
     if Path(path).is_absolute() or path.startswith(".."):
@@ -516,13 +526,15 @@ def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
     if r.returncode:
         raise QueueError(f"--config {path}: `main` ({sha[:12]}) has no such file: land it first, or pass --config-from-tree")
     where = f"{path} at main {sha[:12]}"
-    return DriveFlags.parse(r.stdout, where), where
+    return DriveFlags.parse(r.stdout, where, strict=True), where
 
 
 #: how long a landing gate may run before it counts as unable to judge (`run_gate`)
 GATE_TIMEOUT_S = 600
 #: the fix items of a gate's failure a refusal quotes
 GATE_FIX_LINES = 15
+#: the most landing-gate verdicts the queue's state keeps for one `main` (`Queue._gated`), the newest
+GATE_VERDICTS = 1000
 
 
 def flags_at(repo: Path, ref: str) -> DriveFlags:
@@ -1180,7 +1192,8 @@ class Queue:
         return r.returncode == 0 and forces_cold(r.stdout.split())
 
     def _nonlean_order(self, tail: list[int], heads: dict[int, str], entries: dict[int, Entry]) -> list[int]:
-        """``tail``, the PRs a sync merges onto `next` anyway, at ``heads``: those whose own change is no Lean change (`_own_lean`)
+        """``tail``, the PRs a sync adds onto `next` (all it merges after a `--first` PR placed again, or on a `main` that moved off
+        `next`), at ``heads``: those whose own change is no Lean change (`_own_lean`)
         and that contain no Lean change of ``tail`` first, then the rest, each part in ``tail``'s order (`first`'s, then
         admission's).  A Lean change waits for a Lean check (`drive`'s review landing), and what sits above it waits with it.
         Only the tail moves: a rebuild of what the sync keeps would take a running Lean check's commit off `next`."""
@@ -1234,6 +1247,23 @@ class Queue:
             tree = r.stdout.split()[0]
         commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", pr.head, "-m", _message(pr), env=IDENTITY).stdout.strip()
         return commit, ""
+
+    def _gated(self, main: str, gates: tuple[str, ...], tip: str, commit: str, pr: PR, before: dict[str, list[str]],
+               verdicts: dict[str, list[str]]) -> tuple[list[str], list[str]]:
+        """`gate_refusal` of ``commit``, ``pr``'s merge onto ``tip``, or the refusals ``before`` (the last syncs' verdicts under
+        this `main` and these gates) holds for a merge with the same message, tree and parent tree: a lift or a moved member
+        merges every member above it again, and those whose members below are the same set have the same trees, each ~15 s of
+        gates.  The gates read only `main`, the merge's trees and message, and the members below, each judged at its own merge.
+        What the gates say goes into ``verdicts``; a gate that couldn't judge is never kept."""
+        trees = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
+        key = hashlib.sha256("\0".join([*trees, _message(pr)]).encode()).hexdigest()
+        if key in before:
+            verdicts[key] = before[key]
+            return list(before[key]), []
+        refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch)
+        if not unjudged:
+            verdicts[key] = refused
+        return refused, unjudged
 
     def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
@@ -1325,9 +1355,11 @@ class Queue:
         if lifted := k < len(self._lifted):
             self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed) go to the bottom of `{self.branch}`, "
                      "below what waits for a review or a Lean check")
-        # a lift merges the members above it again in their order: only what comes new goes non-Lean first, so an unreviewed
-        # member doesn't go below the Lean change and keep it from its Lean check
-        j = max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0)) if lifted else k
+        # members `next` holds are merged again in their order above a moved or dropped member, and only what comes new goes
+        # non-Lean first: a re-sort of the whole tail would undo the lift's order, and the next lift would merge it all again.
+        # A `--first` PR placed again reorders from it; a `next` rebuilt on a moved `main` holds no member, so all of it is sorted
+        refirst = not lifted and set(self.first) & set(order[k:])
+        j = k if refirst else max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0))
         if len(order) - j > 1 and nonlean():
             order = last(order[:j] + self._nonlean_order(order[j:], heads, entries))
             k = kept(order)
@@ -1337,6 +1369,9 @@ class Queue:
         conflicts: dict[str, dict] = {}
         waits: dict[str, dict] = {}
         gates = gates_at(self.workdir, main) if order[k:] else ()
+        cache = state.get("gate_verdicts") or {}
+        before = (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
+        verdicts: dict[str, list[str]] = {}
         merged = False
         for n in order[k:]:
             e = entries[n]
@@ -1348,8 +1383,8 @@ class Queue:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
             (commit, why), merged = self._merge(tip, e.pr, members), True
-            if commit is not None:
-                refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch)
+            if commit is not None and gates:
+                refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
                 if refused or unjudged:
                     commit, why = None, " | ".join(refused + unjudged)
             if commit is None:
@@ -1368,9 +1403,14 @@ class Queue:
             self._remote(self.workdir, "push", "-q", f"--force-with-lease=refs/heads/{self.branch}:{old}", "origin",
                          f"{tip}:refs/heads/{self.branch}")
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
-                 + (f", kept {k}, merged {len(members) - k}" if members else "") + (" (dry run: not pushed)" if dry_run else ""))
+                 + (f", kept {k}, merged {len(members) - k}" if members else "")
+                 + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())) else "")
+                 + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
             state["conflicts"], state["waiting"] = conflicts, waits
+            if gates:
+                newest = {**{h: v for h, v in before.items() if h not in verdicts}, **verdicts}
+                state["gate_verdicts"] = {"main": main, "gates": list(gates), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
             self.save_state(state)
         return members, entries
 

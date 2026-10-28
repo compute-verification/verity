@@ -30,7 +30,7 @@ own.  While one runs, a Lean change above it, reviewed or not, gets a check stac
 its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
-`nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway), and while no Lean check of `next` runs or passed, the
+`nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and while no Lean check of `next` runs or passed, the
 sync moves the members with a land verdict below those waiting for one (`reviewed_first`), those that change no Lean first
 (`_lift`; never past a held member), where they land that tick, so a reviewed member seldom waits above an unreviewed member,
 or above a Lean change for its check.  A Lean check lost or failed by its
