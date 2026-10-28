@@ -31,7 +31,7 @@ PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, q
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
-#: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
+#: what a window's commit takes of its process's time: the trace corpus's small-KV run measured 378-392 ms
 SLOW_COMMIT_S = 0.4
 
 
@@ -137,8 +137,8 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
 def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_least_minutes_cover_its_traffic(
         tmp_path, capsys):
     """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
-    --warden-run` refuses any other of), which the scan's class serves: ASK-122's EVERY 16 buckets, 4 Program slots a
-    boundary, 8 a link-window and D 2.7 s, the schedule of NET-83's sessions. Its id traffic's prompts and outputs are
+    --warden-run` refuses any other of), which the scan's class serves: EVERY 16 buckets, 4 Program slots a
+    boundary, 8 a link-window and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
     within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""

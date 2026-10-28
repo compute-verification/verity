@@ -132,7 +132,7 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
-#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): `research run`
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): a remote run
 #: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
 _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
