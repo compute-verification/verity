@@ -173,7 +173,7 @@ def PeakRate.rate (p : PeakRate) : OperandClass → Nat
   | .uniformU4 => p.uniformU4
   | .zero => p.zero
 
-instance : CoeFun PeakRate (fun _ => OperandClass → Nat) := ⟨PeakRate.rate⟩
+instance instCoeFunPeakRate : CoeFun PeakRate (fun _ => OperandClass → Nat) := ⟨PeakRate.rate⟩
 
 /-- A device's card, its registered figures: `DeviceFigures`' SKU, tensor clock in Hz (`clock`) and peak rates in
 multiply-adds a second (`peakRate`), and its memory figures: bits from device memory to the chip a tick (`bw`), bits of
