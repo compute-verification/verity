@@ -502,7 +502,7 @@ theorem frameBytes_inj (tag tag' : String) (parts parts' : List ByteArray) (ht :
   exact ⟨htag, framed_inj parts parts' hb hb' h⟩
 
 /-- A frame `frameHash?` accepts has its tag's and parts' lengths in their fields, and its digest is `frameHash`'s. -/
-theorem frameHash?_ok {h : PouwCommit.Hash} {tag : String} {parts : List ByteArray} {d : ByteArray}
+theorem frameHash?_ok {h : PouwCommit.HashKind} {tag : String} {parts : List ByteArray} {d : ByteArray}
     (hok : frameHash? h tag parts = .ok d) :
     tag.toUTF8.size < 2 ^ 32 ∧ (∀ p ∈ parts, p.size < 2 ^ 64) ∧ frameHash h tag parts = d := by
   unfold frameHash? at hok

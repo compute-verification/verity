@@ -9,7 +9,7 @@
 [words]
 
 [keep]
-patterns = ['\b(?:Definitions|Proofs|Properties|Models)\.[\w.]+', '\b(?:Verity\.)?Accel\.Machine\b',
+patterns = ['(?m)^import .*$', '\b(?:Definitions|Proofs|Properties|Models)\.[\w.]+', '\b(?:Verity\.)?Accel\.Machine\b',
             '(?:\bC|toCircuit|Circuit)\.Transcript\b', '(?m)^[ \t]+Prog :=', '\b(?:CM[₀-₉]?|M|m|Pous|Mc|toyMc|tm)\.Prog\b',
             '\b(?:Served|Discharge|Slots)\.Layout\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
 strings = []
@@ -24,7 +24,7 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
 # Each Lean name where it stands qualified, in Security, the code's Lean and the locks.
 [[words_in]]
 files = ["Security/**", "verity/core/protocols/pouw/**"]
-words = { "CoinFlow.Program" = "CoinFlow.Dataflow", "PouwWork.Verdict" = "PouwWork.Verifier", "J10R.Layout" = "J10R.TileShape", "TS.Machine" = "TS.FacetCosts", "Dimension.Assumptions.Machine" = "Dimension.Assumptions.WordCostModel", "Embed.Op" = "Embed.Insn", "Dither.Period" = "Dither.PeriodDevices", "Dither.Verdict" = "Dither.Acceptance", "Dither.Layout" = "Dither.MemMap", "Eps1.Prog" = "Eps1.M3Words", "Pouw.Layout" = "Pouw.UnitLayout", "Pouw.Transcript" = "Pouw.CommitLog", "PearlC.Layout" = "PearlC.UnitLayout", "PearlC.Transcript" = "PearlC.CommitLog", "TileCircuit.Gate" = "TileCircuit.Cell", "W1.Prog" = "W1.Listing", "WholeCircuit.Block" = "WholeCircuit.UnitKind", "RelativeSecurity.Machine" = "RelativeSecurity.AlgModel", "TileBound.Gate" = "TileBound.Firing", "ModelB.Gate" = "ModelB.Step", "ModelB.Prog" = "ModelB.Steps" }
+words = { "CoinFlow.Program" = "CoinFlow.Dataflow", "PouwWork.Verdict" = "PouwWork.Verifier", "J10R.Layout" = "J10R.TileShape", "TS.Machine" = "TS.FacetCosts", "Dimension.Assumptions.Machine" = "Dimension.Assumptions.WordCostModel", "Embed.Op" = "Embed.Insn", "Dither.Period" = "Dither.PeriodDevices", "Dither.Verdict" = "Dither.Acceptance", "Dither.Layout" = "Dither.MemMap", "Eps1.Prog" = "Eps1.M3Words", "Pouw.Layout" = "Pouw.UnitLayout", "Pouw.Transcript" = "Pouw.CommitLog", "PearlC.Layout" = "PearlC.UnitLayout", "PearlC.Transcript" = "PearlC.CommitLog", "TileCircuit.Gate" = "TileCircuit.Cell", "W1.Prog" = "W1.Listing", "WholeCircuit.Block" = "WholeCircuit.UnitKind", "RelativeSecurity.Machine" = "RelativeSecurity.AlgModel", "TileBound.Gate" = "TileBound.Firing", "ModelB.Gate" = "ModelB.Step", "ModelB.Prog" = "ModelB.Steps", "PouwCheck.Window" = "PouwCheck.WindowFields", "PouwCheck.Law" = "PouwCheck.DrawRule", "PouwCheck.Coins" = "PouwCheck.CoinBinding", "PouwCommit.Hash" = "PouwCommit.HashKind" }
 
 [[words_in]]
 files = ["Security/Definitions/Accounting/Assumptions/PouwFloor.lean", "Security/Definitions/Accounting/Assumptions/PouwWork.lean", "Security/Definitions/Accounting/Guarantees/PouwWork.lean", "Security/Definitions/Accounting/PouwWork.lean", "Security/Proofs/Accounting/PouwWork.lean"]
@@ -97,6 +97,18 @@ words = { "Gate" = "Firing" }
 [[words_in]]
 files = ["Security/Definitions/Accounting/Assumptions/TS.lean", "Security/Definitions/Accounting/Guarantees/TS.lean", "Security/Definitions/Accounting/Headline/Encoding.lean", "Security/Definitions/Accounting/Headline/Sm120Measured.lean", "Security/Definitions/Accounting/HeadlineDc/Encoding.lean", "Security/Definitions/Accounting/HeadlineDc/Sm100Measured.lean", "Security/Definitions/Accounting/HeadlineDc/Sm90Measured.lean", "Security/Definitions/Accounting/TS/Routes.lean", "Security/Definitions/Accounting/TS/Sheet.lean", "Security/Proofs/Accounting/Headline/Encoding.lean", "Security/Proofs/Accounting/Headline/FpG1.lean", "Security/Proofs/Accounting/Headline/Sm120.lean", "Security/Proofs/Accounting/Headline/Sm120Measured.lean", "Security/Proofs/Accounting/HeadlineDc/Branches.lean", "Security/Proofs/Accounting/HeadlineDc/Meets.lean", "Security/Proofs/Accounting/TS.lean", "Security/Proofs/Accounting/TS/Facets.lean", "Security/Proofs/Accounting/TS/FanIn.lean", "Security/Proofs/Accounting/TS/Price.lean", "Security/Proofs/Accounting/TS/Sheet.lean"]
 words = { "Machine" = "FacetCosts" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean"]
+words = { "Window" = "WindowFields", "Law" = "DrawRule" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/lean/check/PouwCheck/Pass.lean"]
+words = { "Coins" = "CoinBinding" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean", "verity/core/protocols/pouw/lean/commit/PouwCommit/Difftest.lean"]
+words = { "Hash" = "HashKind" }
 
 [[words_in]]
 files = ["Security/Definitions/Accounting/CoinFlow.lean", "Security/Definitions/Accounting/Guarantees/CoinFlow.lean", "Security/Proofs/Accounting/CoinFlow/Flow.lean"]

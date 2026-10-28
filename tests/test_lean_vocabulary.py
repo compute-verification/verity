@@ -372,7 +372,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 364
+KNOWN_MAX = 360
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -884,14 +884,6 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/core/protocols/pouw/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
-    "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
-        "duplicate of `Flock.Draw.Law`: becomes it (deleted) (compute-accounting)",
-    "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a reading of it: the execution block's record (compute-accounting)",
-    "verity/core/protocols/pouw/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (compute-accounting)",
-    "verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
-        "homonym, a frame's hash kind: rename (compute-accounting)",
     "verity/core/protocols/pouw/protocol.py::Certificate":
         "homonym, what a scheme's guarantee rests on: rename (compute-accounting)",
     "verity/core/protocols/pouw/schemes/pearl_c_device.py::Device":

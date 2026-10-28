@@ -87,8 +87,8 @@ def outcome (kind : String) (i : Json) : E Json := do
       ("weights_root", hexJ wr), ("transcript", hexJ (transcriptBinding salt wr))]
   | "domain" =>
     let h ← match ← str i "hash" with
-      | "sha256" => pure Hash.sha256
-      | "sha512" => pure Hash.sha512
+      | "sha256" => pure HashKind.sha256
+      | "sha512" => pure HashKind.sha512
       | h => throw s!"no frame hash {h}"
     return hexJ (← Domain.mk? h (← unhexField i "binding") (← int i "owner") (← nat i "count")).id
   | "commit_rows" =>
