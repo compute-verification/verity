@@ -45,21 +45,29 @@ def index (u r PB : Nat) : Nat := u * 2 ^ PB + r
 /-- `rec_link.leaf`: a row's leaf from its commit string. -/
 def leaf (bc : ByteArray) : ByteArray := Hm96.Default512.treeLeaf bc
 
-/-- One level up, on a layer's present nodes in increasing index order: a pair of siblings hashes together, a lone node with
-`e`, the level's empty node, on its other side. -/
-def up (e : ByteArray) : List (Nat × ByteArray) → List (Nat × ByteArray)
-  | (i, a) :: tl@((j, b) :: rest) =>
-    if i % 2 = 0 ∧ j = i + 1 then (i / 2, node a b) :: up e rest
-    else (i / 2, if i % 2 = 0 then node a e else node e a) :: up e tl
-  | [(i, a)] => [(i / 2, if i % 2 = 0 then node a e else node e a)]
-  | [] => []
+/-- The empty subtrees' roots, heights `0 .. D`, each computed once. -/
+def empties (D : Nat) : Array ByteArray := ((List.range (D + 1)).map empty).toArray
 
-/-- Layers `0 .. D` of the tree over `leaves` (present nodes only). -/
-def layers (leaves : List (Nat × ByteArray)) : Nat → List (List (Nat × ByteArray))
-  | 0 => [leaves]
-  | D + 1 =>
-    let ls := layers leaves D
-    ls ++ [up (empty D) (ls.getLastD [])]
+/-- A leaf's index relative to the upper half of a subtree of height `h + 1`. -/
+def shift (h : Nat) (x : Nat × ByteArray) : Nat × ByteArray := (x.1 - 2 ^ h, x.2)
+
+/-- **A subtree's root**, height `h`, over `leaves` (indices relative to it, each below `2^h`, in increasing order), `e k`
+the root of an empty subtree of height `k`: `e h` with no leaves, the leaf at height 0, else the node over its two halves,
+the leaves below `2^(h-1)` and the rest. Each leaf is in one half a level, so the work is the leaves times `h`. -/
+def sub (e : Nat → ByteArray) : Nat → List (Nat × ByteArray) → ByteArray
+  | h, [] => e h
+  | 0, (_, v) :: _ => v
+  | h + 1, leaves@(_ :: _) =>
+    let p := leaves.partition (·.1 < 2 ^ h)
+    node (sub e h p.1) (sub e h (p.2.map (shift h)))
+
+/-- Leaf `idx`'s siblings in that subtree, bottom up. -/
+def subPath (e : Nat → ByteArray) : Nat → List (Nat × ByteArray) → Nat → List ByteArray
+  | 0, _, _ => []
+  | h + 1, leaves, idx =>
+    let p := leaves.partition (·.1 < 2 ^ h)
+    if idx < 2 ^ h then subPath e h p.1 idx ++ [sub e h (p.2.map (shift h))]
+    else subPath e h (p.2.map (shift h)) (idx - 2 ^ h) ++ [sub e h p.1]
 
 def increasing : List Nat → Bool
   | a :: tl@(b :: _) => a < b && increasing tl
@@ -73,15 +81,14 @@ def checkLeaves (D : Nat) (leaves : List (Nat × ByteArray)) : Except String Uni
 /-- `rec_link.Tree(leaves, D).root`. -/
 def root (D : Nat) (leaves : List (Nat × ByteArray)) : Except String ByteArray := do
   checkLeaves D leaves
-  pure (match (layers leaves D).getLastD [] with
-    | [(_, r)] => r
-    | _ => empty D)
+  let es := empties D
+  pure (sub (fun h => es.getD h EMPTY) D leaves)
 
-/-- `rec_link.Tree(leaves, D).path(pos)`: leaf `pos`'s siblings, bottom up. -/
+/-- `rec_link.Tree(leaves, D).path(pos)`: leaf `pos`'s siblings, bottom up, `pos` below `2^D`. -/
 def path (D : Nat) (leaves : List (Nat × ByteArray)) (pos : Nat) : Except String (List ByteArray) := do
   checkLeaves D leaves
-  let ls := layers leaves D
-  pure ((List.range D).map fun h => (((ls.getD h []).lookup ((pos >>> h) ^^^ 1)).getD (empty h)))
+  let es := empties D
+  pure (subPath (fun h => es.getD h EMPTY) D leaves pos)
 
 /-- A rows tree's leaves from each row's `((unit, row), b ‖ c)`, in increasing `(unit, row)` order: the leaf `index u r PB`
 of the row's `leaf`. A unit past `UB` bits or a row past `PB` bits is refused. -/
