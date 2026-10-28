@@ -14,8 +14,8 @@ product, and each layer's int8 attention as two, its batch's KV quantization and
 
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
-On CUDA each of the two is one kernel (`engine.int8_fused`: Triton, or on sm_90 at a `WGMMA` row `engine.int8_wgmma`'s) with
-int8_exact's values bit for bit; the torch bodies serve every other device and stay the reference.
+On CUDA each of the two is one Triton kernel (`engine.int8_fused`) with int8_exact's values bit for bit; the torch bodies
+serve every other device and stay the reference.
     verity_int8::kv_quant_batch(Tensor key_cache, Tensor value_cache, Tensor block_table, int[] lens, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         every request r's first lens[r] tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row, with

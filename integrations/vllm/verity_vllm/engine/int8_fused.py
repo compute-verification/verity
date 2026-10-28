@@ -26,14 +26,13 @@ refuses M <= 16).  Non-finite activations are outside the statement and not gate
 
 On sm_90, `product` takes `int8_gemm_configs.WGMMA`'s plan where it has a row for the call's (N, K) and M: `int8_wgmma`, a
 persistent warp-specialized wgmma kernel in CUDA with the same s32 product and this epilogue in this order, so the
-same y bit for bit (`pick_wgmma`; where its library doesn't build or load, the Triton plan runs).
+same y bit for bit (`pick_wgmma`; where its library doesn't build or load, the Triton plan runs).  `product_zy` takes
+`int8_gemm_configs.WGMMA_ZY`'s row the same way (`int8_wgmma.scaled_mm_zy`, the same y and records byte for byte).
 
 `scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
 record's, and its grid covers the call's T slots, a row tile at or past M multiplying nothing and writing only its empty
-slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.  `product_zy` takes
-its own wgmma row the same way (`int8_gemm_configs.WGMMA_ZY`; `int8_wgmma.scaled_mm_zy`, the same y and records byte for
-byte).
+slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.
 """
 from __future__ import annotations
 
