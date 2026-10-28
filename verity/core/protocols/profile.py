@@ -644,5 +644,4 @@ class Work:
 SamplingDesign = Bernoulli | Subset | Stratified | Work
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "IntegrityProfile", "Stratified", "Stratum", "SamplingDesign", "Subset",
-           "Work", "WorkStratum", "work_k"]
+__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified", "Stratum", "Subset"]
