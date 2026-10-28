@@ -7,7 +7,7 @@ concatenated; a block whose calls are not adjacent is rejected (`GapError`), nev
 `parse(text)` turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
 `members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
-`root()`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
+`root()`, `table(".", "owners")`, `table(path, name, of="gates")`, `group(F, "name")`, `group(F, ["base", "static:K"])`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
 `//A ! groups(F, k)` -> `members("//A", "@fn:F", k)` (k adjacent members of one node per set; the legacy `query()`
 below is untouched and keeps its exact block semantics).
 """
@@ -18,8 +18,8 @@ import re
 from typing import Iterator
 
 from .query_ast import (Default, Each, Instances, Members, Nodes, NodeSel, Path, Query, QueryError, Rest, Root, Zip,
-                      concat as _concat, inter as _inter, minus as _minus, override as _override, union as _union,
-                      where as _where)
+                      concat as _concat, group as _group, inter as _inter, minus as _minus, override as _override,
+                      table as _table, union as _union, where as _where)
 from .layout import FunctionCall, Circuit, Region
 
 
@@ -310,6 +310,16 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         return _inter(_q(args[0]), _q(args[1]))
     if name == "root":
         return Root()
+    if name == "table":
+        need(2)
+        if not isinstance(args[1], str):
+            raise QueryError(f"table(path, name): the name is a string, got {args[1]!r}")
+        return _table(Path.parse(args[0]), args[1], args[2] if len(args) > 2 else kw.get("of", "nodes"))
+    if name == "group":
+        need(2)
+        if not isinstance(args[1], (str, list)):
+            raise QueryError(f"group(F, key): the key is a key part or a list of them, got {args[1]!r}")
+        return _group(_q(args[0]), args[1])
     raise QueryError(f"unknown query constructor {name!r}")
 
 
