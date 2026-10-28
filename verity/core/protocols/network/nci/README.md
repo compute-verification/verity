@@ -41,7 +41,7 @@ scenarios register a policy as if it were a subprotocol.
 ## The check
 
 `lean/` is the Lake package `nci_check`, code that reads Programs with C-Flock's decoder (`Flock.Program`) and imports
-nothing else but Lean core.
+nothing else but Lean core and the core interface (`core_protocol`).
 
 - `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.Complies Γ α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
