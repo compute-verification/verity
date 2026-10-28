@@ -85,8 +85,8 @@ A session's coins are an epoch of the proof service's one challenger (`coins.Coi
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
 machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
-window root (`--challenger gate`, `challengers.GateClient`). Each coin is asked for after the root it follows, the Lean
-takes it with the event that released it, and once the session ends what the challenger signed holds the session's coins
+window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
+it with the event that released it, and once the session ends what the challenger signed holds the session's coins
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
 session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
@@ -939,7 +939,7 @@ class Verifier:
                  ingress_bytes_per_s: float = 0.0, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
-                 challenger: challengers.Local | challengers.Serve | challengers.GateClient | None = None,
+                 challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None,
                  binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
         coins.openings_coins(1, groups_per_coin)
