@@ -17,7 +17,10 @@
 # core interface's form (`served_bandwidth.py answer`): the credited reads q_bytes at eps and δ, and γ against
 # BW_R_BYTES_PER_S (default an H200's specified 4.8 TB/s). The session runs after the window was served, beside it, and
 # is not interleaved with the engine's reads, since serving is not hooked: the answer says so (an accept in its profile,
-# which has no reason), and DIR/served.json names the window, the session's times and its card.
+# which has no reason), and DIR/served.json names the window, the session's times and its card. The session's core case
+# (PoUB-P2's, `p2_case`), the composite's bandwidth piece, and its answer go to SERVE_DIR/private/bandwidth (0700, its
+# files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's when
+# BW_CASE_EXE names `remote-audit-p2-protocol`, else `p2_case.answer`'s; DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_v1/store.py layout`), held to the store's setup.json; the lib is kernels' build
 # (`benchmarks/torch_gpu/p2_stage/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
@@ -68,7 +71,9 @@ grep -qE " rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; tail -20 "$O/layout.log" 
 
 args=(session --store "$STORE" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --registration "$REG"
       --party "$PARTY" --party-host "$PARTY_HOST" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES"
-      --window-s "$WINDOW_S" --deadline-s "$DEADLINE_S" --device "$DEVICE" --out "$O/session" --expect accept)
+      --window-s "$WINDOW_S" --deadline-s "$DEADLINE_S" --device "$DEVICE" --out "$O/session" --expect accept
+      --case-dir "$SERVE/private/bandwidth")
+[ -n "${BW_CASE_EXE:-}" ] && args+=(--case-exe "$BW_CASE_EXE")
 [ "${BW_REF_DECODE:-0}" = 1 ] && args+=(--ref-decode)
 [ -n "${BW_WORKERS:-}" ] && args+=(--workers "$BW_WORKERS")
 [ "${BW_CHEAT:-}" = cache ] && args+=(--cache)
