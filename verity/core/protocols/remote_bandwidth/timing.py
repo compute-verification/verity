@@ -6,7 +6,7 @@ and window t's boundary message at `(t + 1)·T`; each reaches the prover `down_n
 to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU, which
 the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root reaches
 the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a fixed
-pseudorandom pattern.  The tests replay the schedule against `audit.Session` (`tests/test_remote_bandwidth.py`).
+pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_remote_bandwidth.py`).
 
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
@@ -316,7 +316,7 @@ def spanning(gpu_bytes: int) -> int:
 
 def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = audit.DELTA,
            gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
-           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.Ledger:
+           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.GammaTerms:
     """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`
     (R measured; `SPEC_BYTES_PER_S`, the headline): a pass is the store's read at `read_bytes_per_s`, `samples`
     openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold `CHIP_BYTES`, and
