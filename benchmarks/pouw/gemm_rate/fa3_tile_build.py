@@ -64,9 +64,10 @@ __forceinline__ __device__ float exp2_fma(float x) {{
 
 
 def emulate_exp2(softmax_h: Path, num: int, den: int, deg: int) -> None:
+    """Every copy of the pinned exp2f line is split, so the tap's `scale_apply_exp2_ms` keeps scale_apply_exp2's arithmetic."""
     s = softmax_h.read_text()
-    if s.count(EXP_ANCHOR) != 1 or s.count(EXP_LINE) != 1:
-        raise SystemExit(f"{softmax_h}: scale_apply_exp2's pinned exp2f line is not there exactly once")
+    if s.count(EXP_ANCHOR) != 1 or s.find(EXP_LINE) < s.find(EXP_ANCHOR):
+        raise SystemExit(f"{softmax_h}: scale_apply_exp2's anchor is not there once, or no pinned exp2f line follows it")
     if not 0 < num <= den or deg not in COEFFS:
         raise SystemExit(f"--exp2-emu {num}/{den} --exp2-deg {deg}: need 0 < NUM <= DEN and a degree in {sorted(COEFFS)}")
     split = ("            float const x = tensor(mi, ni) * scale - max_scaled;\n"
