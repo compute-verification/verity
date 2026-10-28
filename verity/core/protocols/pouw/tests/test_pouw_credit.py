@@ -242,6 +242,22 @@ def test_each_pinned_model_is_its_files_digest():
     assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 
+def test_llama32_1b_int8_and_its_k2048_role_pin_one_checkpoint():
+    """LLAMA32_1B_INT8 is vllm's int8 checkpoint of unsloth/Llama-3.2-1B (`verity-int8-channel127/v1`, snapshot 15b0976d):
+    the 6 files its `checkpoints-int8.json` entry lists by size and sha256, each by SHA-512, and its checkpoint_sha512
+    their canonical JSON's digest. LLAMA32_1B_INT8_K2048 is the same checkpoint under the role whose manifest entry
+    declares its K = 2048 linears (a J10-R period's at one K), so both pin one digest."""
+    doc = json.loads(Cr.MODELS.read_text())
+    e = doc["LLAMA32_1B_INT8"]
+    assert (e["repo"], e["revision"], e["recipe"]) == (
+        "verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800", "verity-int8-channel127/v1")
+    assert set(e["files"]) == {"config.json", "generation_config.json", "model.safetensors", "special_tokens_map.json",
+                               "tokenizer.json", "tokenizer_config.json"}
+    assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
+    assert doc["LLAMA32_1B_INT8_K2048"] == e
+    assert Cr.PINNED_MODELS["LLAMA32_1B_INT8_K2048"] == e["checkpoint_sha512"]
+
+
 def test_glm53_int8_pins_the_v3_checkpoint():
     """GLM53_INT8 is vllm's v3 int8 checkpoint of zai-org/GLM-5.3 (`verity-int8-channel127/v3`, snapshot 7065fe60): the
     146 files its `checkpoints-int8.json` entry lists by size and sha256 (141 shards, their index, the config, the
