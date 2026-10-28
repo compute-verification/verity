@@ -1,0 +1,4 @@
+order = 255
+path = "`accel_v31/`"
+runs_on = "RTX PRO 6000, H200"
+what = "Dither's no-fold call on the GPU: the prover (`v31.cu`, its H200 GEMM `wg_proto.cuh`), its per-call binding (`v31lib.py`), and the reference and verifier checks that judge it bit for bit (`v31.py`, a client of `dither.py`)"
