@@ -26,7 +26,7 @@ def clocks(smi: Path) -> list[tuple[float, float]]:
         for row in csv.reader(f):
             if len(row) < 2 or not row[1].strip().split(" ")[0].isdigit():
                 continue
-            t = dt.datetime.strptime(row[0].strip(), "%Y/%m/%d %H:%M:%S.%f").replace(tzinfo=dt.timezone.utc).timestamp()
+            t = dt.datetime.strptime(row[0].strip(), "%Y/%m/%d %H:%M:%S.%f").replace(tzinfo=dt.UTC).timestamp()
             out.append((t, float(row[1].strip().split(" ")[0])))
     return out
 
