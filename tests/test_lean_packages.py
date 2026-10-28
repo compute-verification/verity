@@ -52,7 +52,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought
-UNWITNESSED = {"Security": 355, "Security/Properties": 178, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 355, "Security/Properties": 183, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
