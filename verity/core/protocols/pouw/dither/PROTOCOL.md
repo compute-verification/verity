@@ -6,9 +6,9 @@ accepted monitoring period is credited at the public best price of that noised w
 work the developer could have done instead is bounded by ε_skip·W_reg. This is v3.2: v3.1 with the pooling fixes,
 written in the shared notation.
 
-Its credit at pub(μ°) against W_reg is superseded, tentatively: credit is a sampling block's size in AND gates, a
-statement about values, and 𝓜's resources appear only inside the exclusion argument (`GLOSSARY.md`, "Size, credit and
-exclusion"). This document still states the protocol at pub(μ°) until it is restated in sizes.
+This document credits at pub(μ°) against W_reg. The Glossary's credit is a sampling block's size in AND gates
+(tentative), a statement about values, with 𝓜's resources only inside the overhead lower bound, and Dither is not yet
+restated in it (`GLOSSARY.md`, "Size, credit and the overhead lower bound").
 
 The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
