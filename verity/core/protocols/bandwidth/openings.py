@@ -85,8 +85,8 @@ def draw(key: Key, counts: Sequence[int], s: int) -> tuple[tuple[int, int], ...]
 
 def samples_for(epsilon: Fraction, error_log2: int, receipts: int | None = None) -> int:
     """The fewest openings with sampling error at most `2^error_log2` at deficit `ε`: `audit.samples_for` over the
-    window's `M` receipts, and at `M = ∞` when `receipts` is None, where the error is `(1 − ε)^s` and the count at most
-    one more opening."""
+    window's `M` receipts, and at `M = ∞` when `receipts` is None, where the error is `(1 − ε)^s` and the count is at
+    least any window's."""
     if receipts is not None:
         return audit.samples_for(receipts, error_log2, epsilon)
     return math.ceil(error_log2 * math.log(2) / math.log(1 - epsilon))
