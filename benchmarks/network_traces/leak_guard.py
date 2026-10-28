@@ -40,7 +40,8 @@ job that keeps its outputs there leaks none of them however it ends, a SIGKILL i
 **Cost.** Linear in the bytes read: the witness once, the run dir's and HOLD's files less the public ones, then the
 public files for the pieces those held alone. Each 8-byte word, at every alignment, is looked up in a table of the
 needles' low bits sized to be at most 1/8 full, and each hit is compared whole, in numpy (without numpy, in pure Python,
-far slower). --budget-s (`BUDGET_S` by default) bounds it: past it the guard stops.
+far slower). Its memory is linear in the witness: the needles are one matrix of 32-byte rows. --budget-s (`BUDGET_S`
+by default) bounds the time: past it the guard stops.
 
 Exit 0 when nothing was found (with --hold, everything released), 3 when something was (the finds moved to the
 quarantine, the rest released), 2 when the guard refuses to run or stops past its budget, 143 on SIGTERM.
