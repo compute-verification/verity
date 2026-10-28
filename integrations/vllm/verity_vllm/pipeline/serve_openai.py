@@ -67,7 +67,8 @@ recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--se
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
-blocks open (`serve_release`; the draws come in through ``--draws-dir``). Each
+blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
+`serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -712,6 +713,8 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws)
+        if arm is not None:
+            arm.drawing(draws)
     if draws_dir is not None:
         draws_dir.start()
     if session is not None:
