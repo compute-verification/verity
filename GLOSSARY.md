@@ -192,7 +192,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 | ρ and "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `benchmarks/rho` (its `Overhead.rho`, the `rho` command), until renamed | the slowdown lower bound; slowdown(𝒢, 𝒜, η). ρ is 𝓜's resource rate |
-| "overhead" for the training-cost ratio: overhead(𝒢, 𝒜, η), "the overhead lower bound"; `benchmarks/rho`'s `Overhead` and `theorem.overhead`, until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound ("prover overhead" γ keeps its name) |
+| "overhead", "rho" and ρ for the training-cost ratio: overhead(𝒢, 𝒜, η), "the overhead lower bound"; `benchmarks/rho`'s `Overhead` and `theorem.overhead`, until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (prover overhead γ stays) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕), which the reference training algorithm bounds; the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, the slowdown lower bound |

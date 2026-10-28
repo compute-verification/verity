@@ -1,9 +1,9 @@
-"""Kimi K2's slowdown rho under the covering bound's forms, at bf16, FP8 and FP4, with a price per weight.
+"""Kimi K2's slowdown under the covering bound's forms, at bf16, FP8 and FP4, with a price per weight.
 
     python benchmarks/nci/covering_priced.py [--prices FILE.json] [--json OUT.json]
     python benchmarks/nci/covering_priced.py --baselines [--prices FILE.json ...] [--json OUT.json]
 
-The forms, each a lower bound rho >= (chained charge per gate) * s / (charge one inference block can cover):
+The forms, each a lower bound on the slowdown, at least (chained charge per gate) * s / (charge one inference block can cover):
 
 * ``one c`` (``Nci.Guarantees.CoveringBound``, on main): one cost ``c = r b`` for a weight and an activation, per block
   ``(k/c)^2 + k``. ``c`` is at most the cheapest updated weight's cost, since parameter-hardness holds for every block.
@@ -279,7 +279,7 @@ def mass(s: dict, p: dict[str, float]) -> float:
 def rho(form: str, st: list[dict], p: dict[str, float], b: int, k: float, cw: float, gates: float,
         chain: str = "A") -> dict:
     """One form's bound at one precision and k: the chained share of the counted products, the first chained stage,
-    the numerator (products, or their price sum, per token) and rho."""
+    the numerator (products, or their price sum, per token) and the slowdown."""
     ca, pmax = float(b), float(b)
     if form == "one c":
         c = min(cw, ca)
@@ -370,7 +370,7 @@ BASELINES = (
 
 def source_rows(label: str, pts_w: dict, pts_o: dict | None, cheapest: dict, st: list[dict], gates: float,
                 k: float) -> list[dict]:
-    """Per point and format: the priced rho under each registration's prices, and the uniform two-cost rho and the
+    """Per point and format: the priced slowdown under each registration's prices, and the uniform two-cost slowdown and the
     priced form's gain over it under each baseline the source measured."""
     rows = []
     for pt in pts_w:
@@ -392,7 +392,7 @@ def source_rows(label: str, pts_w: dict, pts_o: dict | None, cheapest: dict, st:
 
 
 def baselines_report(sources: list[tuple[str, dict, dict | None, dict]], k: float = KS["1 MB"]) -> dict:
-    """K2's priced rho at ``k`` per price source, and its gain over the uniform two-cost form under each baseline."""
+    """K2's priced slowdown at ``k`` per price source, and its gain over the uniform two-cost form under each baseline."""
     m = k2()
     gates = K.schedule(m)[1]
     st = counted(stages(m), head=False)

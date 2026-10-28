@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--calibration", help="a calibrations.json id (default: every calibration)")
     ap.add_argument("--row", action="append", help="a rows.json id (repeatable; default: every row)")
     ap.add_argument("--sweep", action="store_true", help="the proven bounds over a grid of b_w and b_a, per row")
-    ap.add_argument("--efficiency", action="store_true", help="m / rho for each training recipe, per row")
+    ap.add_argument("--efficiency", action="store_true", help="m over the slowdown for each training recipe, per row")
     args = ap.parse_args(argv)
     parameters, rows = catalog.load("parameters"), catalog.load("rows")
     cals = [c for c in catalog.load("calibrations") if args.calibration in (None, c["id"])]
