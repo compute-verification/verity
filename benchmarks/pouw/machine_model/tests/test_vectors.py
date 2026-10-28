@@ -26,8 +26,8 @@ def test_every_named_vector_is_here():
             "VF3j-16", "VF3k-16"} < set(NAMES)
 
 
-# τ, U/F_low and margin as published, pinned here through VF3s-16. A later vector is held to its own file's
-# [published] (test_reproduces_its_published_numbers), so a new vector touches no test.
+# τ, U/F_low and margin as the round notes published them, through VF3s-16. A later vector is held to its
+# own file's [published] (test_reproduces_its_published_numbers), so a new vector touches no test.
 PUBLISHED = {
     "VF3h": (0.1246, 1.0938, 1.935),
     "VF3i-strict": (0.0698, 1.0938, 1.935),   # on valid rows
@@ -46,7 +46,7 @@ PUBLISHED = {
 
 
 @pytest.mark.parametrize("name", sorted(PUBLISHED))
-def test_reproduces_the_pinned_numbers(name):
+def test_reproduces_the_round_notes(name):
     r = solved(name)
     assert (round(r.tau, 4), round(r.uf_low, 4), round(r.margin, 3)) == PUBLISHED[name]
 
@@ -59,8 +59,8 @@ def test_reproduces_its_published_numbers(name):
 
 
 @pytest.mark.parametrize("name", [n for n in NAMES if solved(n).vector.legacy])
-def test_matches_its_full_precision_values(name):
-    """A vector's `[legacy]` values in full: a re-solve on the same data and solver lands on the same vertex."""
+def test_matches_the_legacy_scripts(name):
+    """The legacy scripts' values in full: a re-solve on the same data and solver lands on the same vertex."""
     r, legacy = solved(name), solved(name).vector.legacy
     assert r.tau == pytest.approx(legacy["tau"], rel=1e-12)
     assert r.solution.infl == pytest.approx(legacy["infl"], rel=1e-12)
@@ -109,7 +109,7 @@ def test_margin_is_the_adopted_designs_cheapest():
                                 if a.design == r.model.adopted and a.family.startswith("(iv)"))
 
 
-# What each claim of data/floors.csv finds below its floor, by vector: (π₃₂) and the load floor
+# What each claim of data/floors.csv finds below its floor, by vector: (π₃₂) and PRICES-32's load half
 CLAIMED = {
     "VF3j": ([], ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16", "LDC64 0.00 a word < 16"]),
     "VF3j-16": ([], []),
