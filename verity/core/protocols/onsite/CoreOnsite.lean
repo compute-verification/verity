@@ -11,8 +11,8 @@ v2 on the same blobs, and the bound `K` on what left the site), and the wipe by 
 wipe of the period (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). Composed on the caller's blobs, every
 component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before
 composing, in its commit phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`,
-`verity/nci/v1`, a registration check and not a component): a registration it refuses refuses onsite, and so does one
-other than the registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
+`verity/inference-only/v0`, a registration check and not a component): a registration it refuses refuses onsite, and so
+does one other than the registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
@@ -73,7 +73,7 @@ private def unregistered (blobs : Array ByteArray := #[]) : Answer :=
   Cases.answerRegistered (protocol.on blobs) (refused NciCheck.Protocol.protocol) (components.map refused)
     ⟨(List.replicate 128 0).toArray⟩
 #guard (unregistered).verdict == .reject && (unregistered).published.isNone
-#guard (unregistered).reason.map (·.startsWith "registration: verity/nci/v1 reject: params: ") == some true
+#guard (unregistered).reason.map (·.startsWith "registration: verity/inference-only/v0 reject: params: ") == some true
 #guard !components.any fun P => ((unregistered).reason.map (contains · s!"{P.id} reject")).getD false
 #guard (unregistered #["not a circuit file".toUTF8]).reason == (unregistered).reason
 #guard (Cases.answerCases (protocol.on #[]) (components.map refused) ⟨(List.replicate 128 0).toArray⟩).reason ==

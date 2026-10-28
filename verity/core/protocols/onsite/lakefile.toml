@@ -1,8 +1,8 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW's
 # period credit, `verity/pouw/period/v1`), space (PoUS's run check), bandwidth (the remote bandwidth session),
 # communication (the network certifier over the period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`), after
-# NCI's registration check (`verity/nci/v1`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
-# drives. Code: no Mathlib.
+# NCI's registration check (`verity/inference-only/v0`). Its executable is the core CLI (`onsite id | check | serve`),
+# which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
@@ -38,7 +38,8 @@ path = "../pouw/lean/check"
 name = "network_check"
 path = "../network/lean"
 
-# The registration check onsite runs before composing: NCI's check of record (`NciCheck.Protocol`, `verity/nci/v1`).
+# The registration check onsite runs before composing: NCI's check of record (`NciCheck.Protocol`,
+# `verity/inference-only/v0`).
 [[require]]
 name = "nci_check"
 path = "../network/nci/lean"
