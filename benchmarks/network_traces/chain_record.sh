@@ -30,7 +30,8 @@
 #      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
-#      an art: id, or a directory)
+#      an art: id, or a directory; on the warden path it may be the served node's endpoint report instead, a
+#      report.json beside no advice_trace.jsonl, which the endpoint step then reads rather than runs)
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
 #      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
 #      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
@@ -130,9 +131,6 @@ if [ "${CR_PATH:-}" = warden ]; then
   if [ -n "${CR_WARDEN_RUN:-}" ]; then WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
   else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
   [ -n "$WARDEN" ] || { log "chain: the warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
-  [ -z "${CR_ENDPOINT:-}" ] || [ -n "${CR_EOS_IDS:-}" ] || {
-    log "chain: the warden path's endpoint step needs CR_EOS_IDS, the model's EOS token ids" \
-      "(128001 for Llama-3.2-1B)"; exit 3; }
   HONEST= CLIENT= PROFILE=
   log "chain: the warden path, warden run ${WARDEN#$G/}"
 else
@@ -162,12 +160,20 @@ E2E=$W/e2e
 if [ -n "${CR_ENDPOINT:-}" ] && [ "${CR_PATH:-}" = warden ]; then
   unpack "$CR_ENDPOINT" "$W/endpoint"
   EP=$(find "$W/endpoint" -name advice_trace.jsonl -printf '%h\n' -quit)
-  log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to the certified I/O off ${WARDEN#$G/}'s cells"
+  REP=$(find "$W/endpoint" -name report.json -print -quit)
   mkdir -p "$OUT/endpoint"
-  "$PY" "$CR" endpoint --warden-run "$WARDEN" --endpoint "${EP:-$W/endpoint}" --eos "$CR_EOS_IDS" \
-    --out "$OUT/endpoint/report.json" > "$OUT/endpoint.log" 2>&1
-  log "chain: endpoint done, rc $?"
-  cp "${EP:-$W/endpoint}/advice.log" "$OUT/endpoint/" 2>/dev/null
+  if [ -z "$EP" ] && [ -n "$REP" ]; then
+    log "chain: endpoint report ${REP#$W/endpoint/} ($CR_ENDPOINT), the served node's (served_session.py endpoint)"
+    cp "$REP" "$OUT/endpoint/report.json"
+  else
+    [ -n "${CR_EOS_IDS:-}" ] || { log "chain: the warden path's endpoint step needs CR_EOS_IDS, the model's EOS" \
+      "token ids (128001 for Llama-3.2-1B)"; exit 3; }
+    log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to the certified I/O off ${WARDEN#$G/}'s cells"
+    "$PY" "$CR" endpoint --warden-run "$WARDEN" --endpoint "${EP:-$W/endpoint}" --eos "$CR_EOS_IDS" \
+      --out "$OUT/endpoint/report.json" > "$OUT/endpoint.log" 2>&1
+    log "chain: endpoint done, rc $?"
+    cp "${EP:-$W/endpoint}/advice.log" "$OUT/endpoint/" 2>/dev/null
+  fi
 elif [ -n "${CR_ENDPOINT:-}" ]; then
   unpack "$CR_ENDPOINT" "$W/endpoint"
   EP=$(find "$W/endpoint" -name advice_trace.jsonl -printf '%h\n' -quit)
