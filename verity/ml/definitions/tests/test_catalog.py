@@ -4,16 +4,47 @@ Each scope of `load` registers the Definitions of the walk it replaced (`REPLACE
 holds: a module only `load`'s walk reaches, a registry subpackage's, can't register on import or move one unnoticed.
 
 The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
-registers) is not in it."""
+registers) is not in it.
+
+Each check reads `catalog.load()` in an interpreter of its own (`fresh`): the registry and `sys.modules` are the process's, and
+both grow as code runs (a constant or input gate registers the first time a body uses it, `prims.const` and
+`program.input_prim`), so counted in this process they would hold whatever any test before evaluated or imported."""
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+from functools import cache
 from pathlib import Path
 
-from verity.ml.definitions.registry import catalog
-
 REPO = Path(__file__).resolve().parents[4]
+
+#: run in a fresh interpreter: what importing every registry module registers and imports, as JSON on its last line
+_LOAD = """
+import json, sys
+from pathlib import Path
+from verity.ml.definitions.registry import catalog
+registry, errors = catalog.load()
+repo = Path(sys.argv[1])
+print(json.dumps({
+    "count": len(registry.defs),
+    "ids": sorted(registry.defs),
+    "errors": errors,
+    "core": sorted(m for m in sys.modules if m.startswith("verity.core")),
+    "integration": sorted(m for m, mod in list(sys.modules.items())
+                          if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(repo / "integrations")),
+    "in_verity": Path(catalog.__file__).resolve().is_relative_to(repo / "verity"),
+}))
+"""
+
+
+@cache
+def fresh() -> dict:
+    """`catalog.load()`'s registry (its count and ids), import errors and the modules it imports, in an interpreter that ran
+    nothing before."""
+    p = subprocess.run([sys.executable, "-c", _LOAD, str(REPO)], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-4000:]
+    return json.loads(p.stdout.splitlines()[-1])
 
 COUNT = 1261
 
@@ -29,6 +60,8 @@ COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once
 COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
+
+COUNT += 2  # `b1`'s RMSNormFusedCudaAdd_v1 and RMSNormFusedCudaTail_v1, a line of its own so it merges with any other change to the count
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
@@ -51,9 +84,9 @@ COUNT += 4  # `cublas_bf16`'s `HOPPER_STEP_V3`, the four `HopperBf16Dot16Step*_v
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
-    registry, errors = catalog.load()
-    assert not errors, errors
-    assert len(registry.defs) == COUNT, f"catalog.load() registers {len(registry.defs)} Definitions, not {COUNT}"
+    got = fresh()
+    assert not got["errors"], got["errors"]
+    assert got["count"] == COUNT, f"catalog.load() registers {got['count']} Definitions, not {COUNT}"
 
 
 #: by scope of `catalog.load`, the walk it replaced: the registry's own modules alone, none of a subpackage's, and replay's and
@@ -112,15 +145,11 @@ def test_the_ops_scope_imports_every_module_of_ops():
 
 
 def test_the_catalog_reads_no_protocol():
-    catalog.load()
-    assert not [m for m in sys.modules if m.startswith("verity.core")], "a registry module imports verity.core"
+    assert not fresh()["core"], f"a registry module imports verity.core: {fresh()['core']}"
 
 
 def test_the_catalog_in_verity_loads_nothing_of_the_integration():
     """Holds once the catalog sits in `verity` (the move); before it, the catalog is the integration's own."""
-    catalog.load()
-    if not Path(catalog.__file__).resolve().is_relative_to(REPO / "verity"):
+    if not fresh()["in_verity"]:
         return
-    loaded = sorted(m for m, mod in list(sys.modules.items())
-                    if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(REPO / "integrations"))
-    assert not loaded, f"loading the catalog imports the integration: {loaded}"
+    assert not fresh()["integration"], f"loading the catalog imports the integration: {fresh()['integration']}"
