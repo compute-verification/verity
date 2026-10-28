@@ -1,5 +1,4 @@
 import Definitions.Nci.Capability
-import Definitions.Accounting.Overhead
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Basic.Real.ENatENNReal
 
@@ -16,7 +15,7 @@ can import information or reconstruct it; an argument needs three things, each w
 * **structure**: how much counted computation the held values support. Definitions checkable on a named circuit
   (`Nci.Capability.Incidence`, `Nci.Capability.Upstream`, `Nci.Capability.OverlapWeights`), no premise.
 * **coverage**: why every sufficiently cheap successful method contains enough of that computation:
-  `CoversEfficientMethods`.
+  `CoversEfficientMethods`, stated over tasks and runs in `Definitions.Accounting.Assumptions.Coverage`.
 
 The rates and deficits belong to the decoder budget, the registration, the arithmetic and the computation evaluated;
 none is a universal bits-per-value constant. The smallest sufficient premise comes first: update hardness with a
@@ -79,25 +78,5 @@ def Recovers (R : Registration) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ)
     (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.B → ℕ) : Prop :=
   ∀ a, R.Honest a → ∀ u, ∃ s : List Bool, (s.length : ℝ) ≤ ℓz - βv * J u + amb ∧
     M.run r (blockProgram R e (R.d.D.eval a) u ++ s) τ = some (z (R.d.D.eval a))
-
-/-- NEW PREMISE. **Coverage of efficient methods** ([COVERAGE]) for the task `G` in the class `𝒜`, at the cost range
-`Tmax`, with error `η`: for every computation and output positions, the probability that its run lies in `𝒜`, reaches
-the target, costs below `Tmax`, and has none of the analysed structures `Core` is at most `η`:
-`Pr[(C, x) ∈ 𝒜 ∧ C(x) ∈ 𝒴 ∧ cost < Tmax ∧ ¬ Core(C, x)] ≤ η`.
-
-`Core C x` says that the run's computation meets some local argument's premises at the block budgets and carries at
-least its minimum weighted total `Ω_*` (the counted products weighted as that argument weights them, not their raw
-number). Each method may have its own covered structure; none has to reproduce a reference circuit.
-
-It doesn't say that every successful method, however slow, has such a structure: only that methods cheap enough to
-matter do. A method that reduces the restricted state or dependence and reaches the target within the range refutes it
-at that target and operating point. Full-parameter training being the unrestricted optimum is not enough: a
-compact-state method at twice the cost bounds the slowdown by two. It is the largest scientific conjecture here; a first
-result states it for an explicit implementation family. -/
-def CoversEfficientMethods {In L : Type} {m : ℕ} (G : Accounting.Overhead.Task In (Fin m → List Bool))
-    (𝒜 : Accounting.Overhead.Class In L) (Core : (In → Accounting.Actual.Run L) → In → Prop)
-    (cost : Accounting.Actual.Run L → ℕ) (Tmax : ℕ) (η : ℝ≥0∞) : Prop :=
-  ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
-    G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Overhead.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
 
 end Nci.Assumptions

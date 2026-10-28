@@ -19,7 +19,8 @@ Lemma 1's bound (`Verity.Guarantees.BlockDescription`).
      price-weighted products.
 3. **Counting.** Theorem 3 (`Verity.Guarantees.Counting`, `Verity.Guarantees.CountingSum`) turns a per-block cap on
    weighted products into `|C| ≥ c Ω / q`.
-4. **Coverage.** `CapabilityFloor`: below the resulting floor, success is rare.
+4. **Coverage.** `CapabilityFloor` (`Definitions.Accounting.Guarantees.Coverage`): below the resulting floor, success
+   is rare.
 
 Improving the structure (a finer incidence graph, better weights) never strengthens an information premise; a stronger
 premise is a new hypothesis, named as one.
@@ -128,17 +129,11 @@ def WeightedProductCap : Prop :=
     SlotsRead B W → (∀ j, 0 ≤ ω j) → HeldPriceAtMost R W h →
     ∀ u, ∑ q ∈ completedIn B (R.P.gates u), W.price q.1 * ω q.2 ≤ h * ∑ j ∈ served B (R.P.gates u), ω j
 
-/-- **Covered success below the floor is rare.** Under coverage of efficient methods at cost range `Tmax` and error `η`,
-if every covered computation in the class `𝒜` costs at least `Lc` (the smallest floor over the local arguments whose
-premises hold, each from its cap and Theorem 3), then for every computation the probability of lying in `𝒜`, reaching
-the target, and costing below `min Lc Tmax` is at most `η`. -/
-def CapabilityFloor : Prop :=
-  ∀ {In L : Type} {m : ℕ} (G : Accounting.Overhead.Task In (Fin m → List Bool)) (𝒜 : Accounting.Overhead.Class In L)
-    (Core : (In → Accounting.Actual.Run L) → In → Prop) (cost : Accounting.Actual.Run L → ℕ) (Tmax Lc : ℕ)
-    (η : ℝ≥0∞),
-    Assumptions.CoversEfficientMethods G 𝒜 Core cost Tmax η →
-    (∀ C x, (C, x) ∈ 𝒜 → Core C x → Lc ≤ cost (C x)) →
-    ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
-      G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Overhead.Succeeds (C x) pos 𝒴 ∧ cost (C x) < min Lc Tmax) ≤ η
+/-- **The local bounds are stated**: each of them, equal to itself, so the lock records their text and every definition
+they read until they are proved. -/
+def LocalBoundsStated : Prop :=
+  let s := HeldBudget ∧ RecoveredBudget ∧ IncidenceCap ∧ OperandCapSeparate ∧ OperandCapJoint ∧ ImportOrRecompute ∧
+    RecomputeByGates ∧ RecomputeByState ∧ WeightedProductCap
+  s = s
 
 end Nci.Guarantees
