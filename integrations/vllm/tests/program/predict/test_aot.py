@@ -85,7 +85,10 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
 @pytest.mark.slow
 def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path, monkeypatch):
     d = tmp_path / "row"
-    (d / "build" / "rank0" / "build_step").mkdir(parents=True)
+    for r in range(2):
+        (d / "build" / f"rank{r}" / "build_step").mkdir(parents=True)
+        (d / "build" / f"rank{r}" / "build_request_LP9_T2").mkdir()
+        (d / "build" / f"rank{r}" / "build_request_LP9_T2" / "result.json").write_text(json.dumps({"LP": 9, "T": 2}))
     (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "ranks": {
         f"rank{r}": {"build_step": {"program_digest": f"s{r}"}, "build_request_LP9_T2": {"program_digest": f"q{r}"},
                      "workload": {"workload_digest": f"w{r}"}} for r in range(2)}}))
