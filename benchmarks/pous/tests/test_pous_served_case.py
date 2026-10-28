@@ -99,6 +99,15 @@ def test_pous_case_is_the_composites_piece_and_its_answer_the_runs(served, tmp_p
         assert secret not in "".join(p.decode() for p in public.values())
 
 
+def test_after_the_run_the_builder_writes_the_piece_the_run_wrote(served, tmp_path, monkeypatch):
+    """The served piece writes its case through this builder; built again after the run, from the kept outputs and
+    ``C*`` encoded again, it is the same bytes."""
+    SPT._run(served, tmp_path, monkeypatch)
+    kept = {f: (served.private / f).read_bytes() for f in ("case.json", "answer.json")}
+    _pous(served)
+    assert {f: (served.private / f).read_bytes() for f in kept} == kept
+
+
 def test_a_tampered_pous_case_is_answered_otherwise(served, tmp_path, monkeypatch):
     """The component answers the case from its own bytes: another commitment is another digest, a session without one of
     its coin openings is rejected, and a case not in canonical form is refused before it is read."""
@@ -132,6 +141,7 @@ def test_a_pous_window_changed_after_the_run_is_refused(served, tmp_path, monkey
     A refusal writes nothing."""
     SPT._run(served, tmp_path, monkeypatch)
     p = served.private
+    kept = {f: (p / f).read_bytes() for f in ("case.json", "answer.json")}
     if tamper == "public commitment":
         _edit(served.out / "answer.json", lambda d: d.update(commitment="11" * 64))
     elif tamper == "published":
@@ -146,7 +156,7 @@ def test_a_pous_window_changed_after_the_run_is_refused(served, tmp_path, monkey
         _edit(served.out / "answer.json", lambda d: d.update(verdict="reject"))
     with pytest.raises(SC.Refused, match=reason):
         _pous(served)
-    assert not (p / "case.json").exists() and not (p / "answer.json").exists()
+    assert {f: (p / f).read_bytes() for f in kept} == kept
 
 
 def test_weights_that_are_not_the_pins_make_no_pous_case(served, tmp_path, monkeypatch):
