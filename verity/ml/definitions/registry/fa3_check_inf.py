@@ -178,11 +178,12 @@ def AttentionV20(B, S, q, kc, vc):
     return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV20, ())
 
 
-@composite("AttnBlockSoftmax", 2, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK"], F2._softmax_type,
+@composite("AttnBlockSoftmax", 2, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK", "LAST"], F2._softmax_type,
            conformance="not-yet-established: AttnBlock_v4's steps up to P", refuse=F2._softmax_refuse)
 def AttnBlockSoftmaxV2(B, S, q, k, *state):
     """`AttnBlockSoftmax_v1` under `AttnBlock_v4`'s guard: FA3's `Check_inf`, CHECK guarding the running max before both the
-    rescale and `max * scale`.  Its P groups are `AttnBlockPv_v1`'s, as v4's P·V is v5's."""
+    rescale and `max * scale`, LAST likewise returning no running max.  Its P groups are `AttnBlockPv_v1`'s, as v4's P·V is
+    v5's."""
     return F2.softmax_steps(B, S, q, k, state, guard_max_scaled_only=False)
 
 
