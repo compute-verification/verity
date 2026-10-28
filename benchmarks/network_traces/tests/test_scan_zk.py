@@ -13,8 +13,8 @@ registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root 
 ``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
 challenger's coins (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the
 warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
-its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's warden at egress_cells 5
-and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
+its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
+egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 from __future__ import annotations
 
 import hashlib
@@ -681,10 +681,10 @@ def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name
                                                   for k, v in asdict(sz.SETUPS[name].params).items()}
 
 
-def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_warden_w63s_at_egress_cells_ko_plus_1():
+def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_at_egress_cells_ko_plus_1():
     """w63k4 is w63's class at KO 4 and KI 32 (a window circuit's of 8 slots, 32 prompt ids and 4 outputs a request),
-    its warden w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic fills
-    the class (a prompt of KI ids, a response of KO), and its egress is 4 request slots of KO ids."""
+    its certifier w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic
+    fills the class (a prompt of KI ids, a response of KO), and its egress is 4 request slots of KO ids."""
     s = sz.SETUPS["w63k4"]
     assert s.cls == replace(sz.CLASS, KO=4, KI=32) and (s.cls.SLOTS, s.params.window_programs) == (4, 8)
     assert {k: v for k, v in asdict(s.params).items() if asdict(sz.PARAMS)[k] != v} == {"egress_cells": 5}
