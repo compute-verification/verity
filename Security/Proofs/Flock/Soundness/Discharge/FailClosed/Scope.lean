@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
 import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 import Proofs.Flock.Soundness.ExecSetup
 import Flock.ProvedScope
 
@@ -44,9 +45,8 @@ without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` 
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only at hidden outputs and `hm96-sha512/v1` leaves, where `VerifiesR` and `VerifiesZKR` model the
 registered check), a coin-tree
-key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
-one's canonical form is verified against that earlier setup; `canon` takes integers only, so the two draws hold the same
-content.
+key an earlier session of the run used, and a session file it cannot read. Each drawn session of a run is set up at its own draw,
+and the draw-less setup, one statement, once.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
@@ -55,52 +55,26 @@ open Flock Exec ZkExec
 
 /-! ## The executable's `scopeOk` is `Layout.scopeOk` -/
 
-private theorem foldl_mask (x : ℕ) : ∀ (l : List ℕ) (m : Array Bool), x < m.size →
-    (l.foldl (fun m y => m.setIfInBounds y true) m).getD x false = (m.getD x false || decide (x ∈ l)) := by
-  intro l
-  induction l with
-  | nil => intro m _; simp
-  | cons y l ih =>
-    intro m hm
-    rw [List.foldl_cons, ih _ (by simpa using hm)]
-    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds, List.mem_cons]
-    by_cases hxy : y = x
-    · subst hxy; simp [hm]
-    · simp [hxy, Ne.symm hxy]
-
-/-- **The port mask is `portBits`'s membership** below its size. -/
-theorem portMask_getD (gs : Array Group) {n x : ℕ} (hx : x < n) :
-    (ProvedScope.portMask gs n).getD x false = decide (x ∈ portBits gs) := by
-  unfold ProvedScope.portMask
-  rw [foldl_mask x _ _ (by simpa using hx)]
-  have h0 : (Array.replicate n false).getD x false = false := by simp [Array.getD_eq_getD_getElem?, hx]
-  rw [h0, Bool.false_or]
-  exact decide_eq_decide.2 Iff.rfl
-
-theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portReadsB net := by
-  simp only [ProvedScope.portReadsB, Layout.portReadsB]
-  congr 1; funext i; congr 1; funext x
-  apply decide_eq_decide.2
-  refine imp_congr_right fun hx => ?_
-  rw [portMask_getD _ hx, decide_eq_true_iff]
-
 /-- **The executable's `scopeOk` is `Layout.scopeOk`.** -/
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
-  simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports]
+  simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned]
 
 /-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
 theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.bitRows, Layout.bitRows, e, e']
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
+    ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
 /-- **The executable's `scopeOkI` is `Layout.scopeOkI`.** -/
 theorem scopeOkI_eq (c : Circuit) : ProvedScope.scopeOkI c = Layout.scopeOkI c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkI, Layout.scopeOkI, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.bitRows, Layout.bitRows, e, e']
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
+    ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
 /-! ## The check, and what it gives -/
 
@@ -110,11 +84,16 @@ when `reg`. -/
 def Checks (t : Tags) (zk : Bool) (I : Inputs) (reg : Bool) : Prop :=
   ProvedScope.check t zk I.circuitFile I.publicFile I.tables I.count false reg = .ok ()
 
-/-- The circuit as the check parses it (`default` when it does not parse, and then the check fails). -/
-def circ (t : Tags) (I : Inputs) : Circuit :=
+/-- The circuit as the check parses it (`ProvedScope.circuitOf`'s: at hidden outputs the one the session commits, a
+templated statement's carrying its template), `default` when it does not parse, and then the check fails. -/
+def circC (t : Tags) (I : Inputs) : Circuit :=
   match ProvedScope.circuitOf t I.circuitFile I.tables with
   | .ok c => c
   | .error _ => default
+
+/-- **The statement circuit** (ASK-112 option A): the circuit the check parses, a templated statement's unrolled to the
+flat circuit its template unrolls to (`HmOut.unrolled`); a flat statement's is its own. -/
+def circ (t : Tags) (I : Inputs) : Circuit := HmOut.unrolled (circC t I)
 
 /-- The public file as the check loads it (`default` when it does not load, and then the check fails). -/
 def pubOf (t : Tags) (I : Inputs) : Public :=
@@ -130,8 +109,9 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
       (zk = true ∨ count ≤ 1)) ∧
     ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧
       (pub.tables = none ∨ ProvedScope.sharedRowsOk t zk reg = true) ∧
-      (if t.hiddenOutputs then Layout.scopeOkI c else ProvedScope.scopeOk c) = true ∧
-      (ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true) := by
+      ((c.tmpl = none ∧ (if t.hiddenOutputs then Layout.scopeOkI c else ProvedScope.scopeOk c) = true ∧
+          (ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true)) ∨
+        ∃ tu, c.tmpl = some tu ∧ ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = true) := by
   unfold ProvedScope.check at h
   split at h
   · cases h
@@ -156,6 +136,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   split at h
   · cases h
   rename_i pub hp
+  unfold ProvedScope.circuitRules at h
   split at h
   · cases h
   rename_i ht
@@ -168,24 +149,51 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
       revert ht
       generalize ProvedScope.sharedRowsOk t zk reg = b
       cases b <;> simp
-  have hw : ¬ (ProvedScope.wiresFeed c && !ProvedScope.wiresAcyclic c) = true := by
-    intro hx
-    simp only [hx, ↓reduceIte] at h
-    cases h
-  refine ⟨c, pub, hc, hp, htab, ?_, fun hf => ?_⟩
-  · simp only [hw] at h
-    have hs : (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true := by
-      generalize (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = b at h
-      cases b
-      · cases h
+  refine ⟨c, pub, hc, hp, htab, ?_⟩
+  cases hct : c.tmpl with
+  | some tu =>
+    simp only [hct] at h
+    refine .inr ⟨tu, rfl, ?_⟩
+    revert h
+    generalize ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = b
+    cases b <;> simp
+  | none =>
+    simp only [hct] at h
+    have hw : ¬ (ProvedScope.wiresFeed c && !ProvedScope.wiresAcyclic c) = true := by
+      intro hx
+      simp only [hx, ↓reduceIte] at h
+      cases h
+    refine .inl ⟨rfl, ?_, fun hf => ?_⟩
+    · simp only [hw] at h
+      have hs : (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true := by
+        generalize (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = b at h
+        cases b
+        · cases h
+        · rfl
+      cases hh : t.hiddenOutputs
+      · simpa [hh] using hs
+      · simp only [hh, ↓reduceIte] at hs ⊢
+        rw [← scopeOkI_eq, hs]
+    · cases ha : ProvedScope.wiresAcyclic c
+      · simp [hf, ha] at hw
       · rfl
-    cases hh : t.hiddenOutputs
-    · simpa [hh] using hs
-    · simp only [hh, ↓reduceIte] at hs ⊢
-      rw [← scopeOkI_eq, hs]
-  · cases ha : ProvedScope.wiresAcyclic c
-    · simp [hf, ha] at hw
-    · rfl
+
+/-- At public outputs the circuit rules are the same with the verifier's own registered reads and without them:
+`sharedRowsOk` and `scopeOkT` both need hidden outputs. -/
+theorem circuitRules_reg {t : Tags} {zk : Bool} {count : ℕ} {c : Circuit} {pub : Public}
+    (hh : t.hiddenOutputs = false) :
+    ProvedScope.circuitRules t zk count true c pub = ProvedScope.circuitRules t zk count false c pub := by
+  simp [ProvedScope.circuitRules, ProvedScope.sharedRowsOk, ProvedScope.scopeOkT, ProvedScope.scopeWhyT, hh]
+
+theorem circC_of {t : Tags} {I : Inputs} {c : Circuit}
+    (hc : ProvedScope.circuitOf t I.circuitFile I.tables = .ok c) : circC t I = c := by
+  unfold circC
+  rw [hc]
+
+theorem circ_of {t : Tags} {I : Inputs} {c : Circuit}
+    (hc : ProvedScope.circuitOf t I.circuitFile I.tables = .ok c) : circ t I = HmOut.unrolled c := by
+  unfold circ
+  rw [circC_of hc]
 
 namespace Checks
 
@@ -207,24 +215,78 @@ theorem merkleLeaf : t.merkleLeaf = "hm96-sha512/v1" ∨
 theorem merkleLeaf_hm96 (hz : zk = true ∨ t.hiddenOutputs = false) : t.merkleLeaf = "hm96-sha512/v1" :=
   h.merkleLeaf.resolve_right fun ⟨h1, h2, _⟩ => by rcases hz with hz | hz <;> simp_all
 
-theorem circuit_ok : ProvedScope.circuitOf t I.circuitFile I.tables = .ok (circ t I) := by
+theorem circuit_ok : ProvedScope.circuitOf t I.circuitFile I.tables = .ok (circC t I) := by
   obtain ⟨c, -, hc, -⟩ := (check_ok h).2
-  unfold circ
-  rw [hc]
+  rw [circC_of hc, hc]
+
+/-- **The circuit the check parses is flat, or templated in the form `ProvedScope.scopeOkT` passes.** -/
+theorem form : ((circC t I).tmpl = none ∧
+      (if t.hiddenOutputs then Layout.scopeOkI (circC t I) else ProvedScope.scopeOk (circC t I)) = true ∧
+      (ProvedScope.wiresFeed (circC t I) = true → ProvedScope.wiresAcyclic (circC t I) = true)) ∨
+    ∃ tu, (circC t I).tmpl = some tu ∧ ProvedScope.scopeOkT t.hiddenOutputs zk I.count (circC t I) tu = true := by
+  obtain ⟨c, -, hc, -, -, hs⟩ := (check_ok h).2
+  rw [circC_of hc]
+  exact hs
+
+/-- A flat statement's circuit is the one the check parses. -/
+theorem circ_flat (hf : (circC t I).tmpl = none) : circ t I = circC t I := unrolled_flat hf
+
+/-- **A templated statement the check passes**: hidden outputs, `--zk`, at most one table and a templated statement's tags; `HmOut.parseStmt` reads its statement circuit, which carries no
+template, has a `Built` unit, is in `Layout.scopeOkI`, and whose wires feed neither the unit nor the outputs
+(`unrolled_scope`). -/
+theorem templated {tu : TmplUnit} (ht : (circC t I).tmpl = some tu) :
+    t.hiddenOutputs = true ∧ zk = true ∧ I.count ≤ 1 ∧ t.isTmpl = true ∧
+      HmOut.parseStmt t I.circuitFile I.tables = .ok (circ t I) ∧ (circ t I).tmpl = none ∧
+      Built (circ t I).unit ∧ Layout.scopeOkI (circ t I) = true ∧ ProvedScope.wiresFeed (circ t I) = false := by
+  rcases h.form with ⟨hf, -⟩ | ⟨tu', ht', hs⟩
+  · rw [hf] at ht
+    cases ht
+  · rw [ht] at ht'
+    cases ht'
+    exact unrolled_scope h.typed h.circuit_ok ht hs
+
+/-- **Outside the templated form the check parses a flat circuit**: at public outputs, without `--zk`, or at more than
+one table. -/
+theorem flat (hn : t.hiddenOutputs = false ∨ zk = false ∨ 1 < I.count) : (circC t I).tmpl = none := by
+  cases ht : (circC t I).tmpl with
+  | none => rfl
+  | some tu =>
+    exfalso
+    obtain ⟨hh, hz, hc, -⟩ := h.templated ht
+    rcases hn with e | e | e
+    · rw [hh] at e; cases e
+    · rw [hz] at e; cases e
+    · omega
+
+/-- **A statement whose tags are not a templated statement's is flat** (`Tags.isTmpl`): the check passes a templated
+circuit only at a templated statement's tags. -/
+theorem flat_of_isTmpl (hi : t.isTmpl = false) : (circC t I).tmpl = none := by
+  cases ht : (circC t I).tmpl with
+  | none => rfl
+  | some tu =>
+    obtain ⟨-, -, -, hi', -⟩ := h.templated ht
+    rw [hi] at hi'
+    cases hi'
+
+/-- The statement circuit carries no template. -/
+theorem circ_tmpl : (circ t I).tmpl = none := by
+  cases ht : (circC t I).tmpl with
+  | none => rw [h.circ_flat ht]; exact ht
+  | some tu =>
+    obtain ⟨-, -, -, -, -, hn, -⟩ := h.templated ht
+    exact hn
 
 theorem public_ok : ProvedScope.publicOf t (circ t I) I.publicFile = .ok (pubOf t I) := by
   obtain ⟨c, pub, hc, hp, -⟩ := (check_ok h).2
-  have : circ t I = c := by unfold circ; rw [hc]
   unfold pubOf
-  rw [this, hp]
+  rw [circ_of hc, publicOf_unrolled, hp]
 
 /-- No shared-row public file, or one where the check covers it: a statement with hidden outputs and `hm96-sha512/v1`
 leaves whose verifier holds its own registered reads, with or without `--zk`. -/
 theorem tables : (pubOf t I).tables = none ∨
     (t.hiddenOutputs = true ∧ reg = true ∧ t.merkleLeaf = "hm96-sha512/v1") := by
   obtain ⟨c, pub, hc, hp, ht, -⟩ := (check_ok h).2
-  have : circ t I = c := by unfold circ; rw [hc]
-  have hpub : pubOf t I = pub := by unfold pubOf; rw [this, hp]
+  have hpub : pubOf t I = pub := by unfold pubOf; rw [circ_of hc, publicOf_unrolled, hp]
   rw [hpub]
   refine ht.imp id fun hs => ?_
   simp only [ProvedScope.sharedRowsOk, Bool.and_eq_true, beq_iff_eq] at hs
@@ -235,24 +297,29 @@ theorem tables_none (hr : reg = false) : (pubOf t I).tables = none :=
   h.tables.resolve_right fun ⟨_, h', _⟩ => by rw [hr] at h'; cases h'
 
 theorem scope (hh : t.hiddenOutputs = false) : Layout.scopeOk (circ t I) = true := by
-  obtain ⟨c, -, hc, -, -, hs, -⟩ := (check_ok h).2
-  have : circ t I = c := by unfold circ; rw [hc]
-  simp only [hh, Bool.false_eq_true, ↓reduceIte] at hs
-  rw [this, ← scopeOk_eq, hs]
+  have hf := h.flat (.inl hh)
+  rcases h.form with ⟨-, hs, -⟩ | ⟨tu, ht, -⟩
+  · simp only [hh, Bool.false_eq_true, ↓reduceIte] at hs
+    rw [h.circ_flat hf, ← scopeOk_eq, hs]
+  · rw [hf] at ht
+    cases ht
 
 /-- **`Layout.scopeOkI`** under hidden outputs. -/
 theorem scopeI (hh : t.hiddenOutputs = true) : Layout.scopeOkI (circ t I) = true := by
-  obtain ⟨c, -, hc, -, -, hs, -⟩ := (check_ok h).2
-  have : circ t I = c := by unfold circ; rw [hc]
-  simp only [hh, ↓reduceIte] at hs
-  rw [this, hs]
+  rcases h.form with ⟨hf, hs, -⟩ | ⟨tu, ht, -⟩
+  · simp only [hh, ↓reduceIte] at hs
+    rw [h.circ_flat hf, hs]
+  · obtain ⟨-, -, -, -, -, -, -, hs, -⟩ := h.templated ht
+    exact hs
 
 /-- **The wires compute in some order** wherever they feed the unit or the outputs. -/
 theorem wiresAcyclic (hf : ProvedScope.wiresFeed (circ t I) = true) : ProvedScope.wiresAcyclic (circ t I) = true := by
-  obtain ⟨c, -, hc, -, -, -, hw⟩ := (check_ok h).2
-  have : circ t I = c := by unfold circ; rw [hc]
-  rw [this] at hf ⊢
-  exact hw hf
+  rcases h.form with ⟨hfl, -, hw⟩ | ⟨tu, ht, -⟩
+  · rw [h.circ_flat hfl] at hf ⊢
+    exact hw hf
+  · obtain ⟨-, -, -, -, -, -, -, -, hw⟩ := h.templated ht
+    rw [hw] at hf
+    cases hf
 
 /-- **`Layout.scopeOkH`** where the wires feed neither the unit nor the outputs, with or without hidden outputs
 (`scopeOk` gives it). -/
@@ -268,11 +335,29 @@ theorem scopeGen (hh : t.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circ
 
 theorem parse (hh : t.hiddenOutputs = false) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   have := h.circuit_ok
+  rw [h.circ_flat (h.flat (.inl hh))]
   simpa [ProvedScope.circuitOf, hh] using this
 
-theorem parseH (hh : t.hiddenOutputs = true) : HmOut.parse t I.circuitFile I.tables = .ok (circ t I) := by
-  have := h.circuit_ok
-  simpa [ProvedScope.circuitOf, hh] using this
+/-- **The statement circuit is the one `HmOut.parseStmt` reads**, at hidden outputs: a flat statement's `HmOut.parse`'s,
+a templated statement's committed circuit unrolled. -/
+theorem parseStmt (hh : t.hiddenOutputs = true) :
+    HmOut.parseStmt t I.circuitFile I.tables = .ok (circ t I) := by
+  have hc := h.circuit_ok
+  rw [ProvedScope.circuitOf_hidden hh] at hc
+  exact parseStmt_of_commit h.typed hc
+
+/-- At hidden outputs, a flat statement's circuit is the one `HmOut.parse` reads. -/
+theorem parseH (hh : t.hiddenOutputs = true) (hf : (circC t I).tmpl = none) :
+    HmOut.parse t I.circuitFile I.tables = .ok (circ t I) := by
+  rw [h.circ_flat hf]
+  refine ProvedScope.parse_of_circuitOf hh ?_ h.circuit_ok
+  cases hi : t.isTmpl
+  · rfl
+  · have hc := h.circuit_ok
+    rw [ProvedScope.circuitOf_hidden hh, parseCommit_tmpl hi] at hc
+    obtain ⟨tu, -, ht, -⟩ := unrolled_of_parseTmpl hc
+    rw [hf] at ht
+    cases ht
 
 theorem load (hh : t.hiddenOutputs = false) : HmRow.loadPublic t (circ t I) I.publicFile = .ok (pubOf t I) := by
   have := h.public_ok
@@ -282,17 +367,35 @@ theorem loadH (hh : t.hiddenOutputs = true) : HmOut.loadPublic t (circ t I) I.pu
   have := h.public_ok
   simpa [ProvedScope.publicOf, hh] using this
 
-/-- The circuit parses as `HmRow.parse` reads it, with or without hidden outputs (`HmOut.parse` of an untyped statement is
-`HmRow.parse`'s, then its rows' check). -/
-theorem parseRow : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
+/-- At hidden outputs, the circuit the check parses is the one the session commits (`HmOut.parseCommit`). -/
+theorem parseC (hh : t.hiddenOutputs = true) : HmOut.parseCommit t I.circuitFile I.tables = .ok (circC t I) := by
+  have hc := h.circuit_ok
+  rwa [ProvedScope.circuitOf_hidden hh] at hc
+
+theorem loadHC (hh : t.hiddenOutputs = true) :
+    HmOut.loadPublic t (circC t I) I.publicFile = .ok (pubOf t I) := by
+  have := h.public_ok
+  rw [show circ t I = HmOut.unrolled (circC t I) from rfl, publicOf_unrolled] at this
+  simpa [ProvedScope.publicOf, hh] using this
+
+/-- A flat statement's circuit parses as `HmRow.parse` reads it, with or without hidden outputs (`HmOut.parse` of an
+untyped statement is `HmRow.parse`'s, then its rows' check). -/
+theorem parseRow (hf : (circC t I).tmpl = none) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   cases hh : t.hiddenOutputs
   · exact h.parse hh
-  · exact (Hidden.parse_untyped h.typed (h.parseH hh)).1
+  · exact (Hidden.parse_untyped h.typed (h.parseH hh hf)).1
 
+/-- The statement circuit's unit is `Built`: a flat statement's as `HmRow.parse` builds it, a templated statement's
+`Tmpl.unroll`'s net (`unrolled_built`). -/
 theorem built : Built (circ t I).unit := by
-  have P := parse_facts h.parseRow
-  obtain ⟨ls, hls⟩ := P.check
-  exact unit_built P (check_facts P.typed hls)
+  cases hf : (circC t I).tmpl with
+  | none =>
+    have P := parse_facts (h.parseRow hf)
+    obtain ⟨ls, hls⟩ := P.check
+    exact unit_built P (check_facts P.typed hls)
+  | some tu =>
+    obtain ⟨-, -, -, -, -, -, hb, -⟩ := h.templated hf
+    exact hb
 
 /-- **The unit returns the outputs** under public outputs (`scopeOk`); under hidden outputs, wherever the wires feed
 neither the unit nor the outputs (`Layout.outNet_of_wiresFeed`). -/
@@ -357,9 +460,16 @@ theorem ScopeZ.parse {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = fa
     HmRow.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
   Checks.parse h (by rw [zkTags_hiddenOutputs]; exact hh)
 
+/-- **The session's statement circuit under `--zk`**, at hidden outputs: the one `HmOut.parseStmt` reads, a templated
+statement's committed circuit unrolled (ASK-112 option A). -/
 theorem ScopeZ.parseH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = true) :
-    HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
-  Checks.parseH h (by rw [zkTags_hiddenOutputs]; exact hh)
+    HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
+  Checks.parseStmt h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+/-- At public outputs the circuit parses as `HmRow.parse` reads it. -/
+theorem ScopeZ.parseRow {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
+    HmRow.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
+  Checks.parseRow h (Checks.flat h (.inl (by rw [zkTags_hiddenOutputs]; exact hh)))
 
 theorem ScopeZ.load {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.loadPublic (zkTags I) (circZ I) I.publicFile = .ok (pubZ I) :=
@@ -395,9 +505,18 @@ theorem ScopeZR.retainRounds {I : Inputs} (h : ScopeZR I) : I.tags.retainRounds 
 theorem ScopeZR.merkleLeaf {I : Inputs} (h : ScopeZR I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
   rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf_hm96 h (Or.inl rfl)
 
+/-- **The session's statement circuit under `--zk --registered`**, at hidden outputs: the one `HmOut.parseStmt` reads,
+a templated statement's committed circuit unrolled. -/
 theorem ScopeZR.parseH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
+    HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
+  Checks.parseStmt h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+/-- **At tags that are not a templated statement's, `HmOut.parse` reads the session's circuit** under
+`--zk --registered`, at hidden outputs (`Checks.flat_of_isTmpl`). -/
+theorem ScopeZR.parseHF {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true)
+    (hi : I.tags.isTmpl = false) :
     HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
-  Checks.parseH h (by rw [zkTags_hiddenOutputs]; exact hh)
+  Checks.parseH h (by rw [zkTags_hiddenOutputs]; exact hh) (Checks.flat_of_isTmpl h (by rw [zkTags_eq]; exact hi))
 
 theorem ScopeZR.loadH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
     HmOut.loadPublic (zkTags I) (circZ I) I.publicFile = .ok (pubZ I) :=
@@ -418,12 +537,10 @@ theorem ScopeZR.scopeGen {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs
 /-- **The check with the verifier's registered reads is the check without them at public outputs**: `sharedRowsOk`
 needs hidden outputs. -/
 theorem ScopeZR.scopeZ {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = false) : ScopeZ I := by
-  have hs : ProvedScope.sharedRowsOk (zkTags I) true true = ProvedScope.sharedRowsOk (zkTags I) true false := by
-    simp [ProvedScope.sharedRowsOk, zkTags_hiddenOutputs, hh]
   unfold ScopeZ
   unfold ScopeZR Checks ProvedScope.check at h
   unfold Checks ProvedScope.check
-  rw [← hs]
+  simp only [circuitRules_reg (by rw [zkTags_hiddenOutputs]; exact hh)] at h
   exact h
 
 theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.typed h
@@ -444,7 +561,8 @@ theorem Scope.parse {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = fals
     HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse h hh
 
 theorem Scope.parseH {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = true) :
-    HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parseH h hh
+    HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) :=
+  Checks.parseH h hh (Checks.flat h (.inr (.inl rfl)))
 
 theorem Scope.load {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.load h hh
@@ -530,7 +648,7 @@ theorem parse (hh : I.tags.hiddenOutputs = false) : HmRow.parse I.tags I.circuit
   Checks.parse (I := { I with count := 1 }) h.checks hh
 
 theorem parseH (hh : I.tags.hiddenOutputs = true) : HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) :=
-  Checks.parseH (I := { I with count := 1 }) h.checks hh
+  Checks.parseH (I := { I with count := 1 }) h.checks hh (Checks.flat h.checks (.inr (.inl rfl)))
 
 theorem load (hh : I.tags.hiddenOutputs = false) : HmRow.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) :=
   Checks.load (I := { I with count := 1 }) h.checks hh
@@ -556,8 +674,11 @@ theorem scopeGen (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed 
 theorem program : ProgramOfCircuit I := by
   obtain ⟨-, -, hp⟩ := ProvedScope.checkP_ok h
   obtain ⟨c, hc, hw⟩ := ProvedScope.programP_ok hp
-  have hpc : ProvedScope.circuitOf I.tags I.circuitFile I.tables = .ok (circS I) :=
-    Checks.circuit_ok (I := { I with count := 1 }) h.checks
+  have hpc : ProvedScope.circuitOf I.tags I.circuitFile I.tables = .ok (circS I) := by
+    show ProvedScope.circuitOf I.tags ({ I with count := 1 } : Inputs).circuitFile ({ I with count := 1 } : Inputs).tables
+      = .ok (circ I.tags { I with count := 1 })
+    rw [Checks.circ_flat (I := { I with count := 1 }) h.checks (Checks.flat h.checks (.inr (.inl rfl)))]
+    exact Checks.circuit_ok (I := { I with count := 1 }) h.checks
   rw [hpc] at hc
   injection hc with hc
   subst hc
@@ -580,7 +701,8 @@ theorem ScopeR.leaf {I : Inputs} (h : ScopeR I) :
   (Checks.merkleLeaf h).imp id fun h' => h'.2.2
 
 theorem ScopeR.parseH {I : Inputs} (h : ScopeR I) (hh : I.tags.hiddenOutputs = true) :
-    HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parseH h hh
+    HmOut.parse I.tags I.circuitFile I.tables = .ok (circS I) :=
+  Checks.parseH h hh (Checks.flat h (.inr (.inl rfl)))
 
 theorem ScopeR.loadH {I : Inputs} (h : ScopeR I) (hh : I.tags.hiddenOutputs = true) :
     HmOut.loadPublic I.tags (circS I) I.publicFile = .ok (pubS I) := Checks.loadH h hh
@@ -601,12 +723,10 @@ theorem ScopeR.count {I : Inputs} (h : ScopeR I) : I.count ≤ 1 := by
 /-- **The check with the verifier's registered reads is the check without them at public outputs**: `sharedRowsOk`
 needs hidden outputs. -/
 theorem ScopeR.scope {I : Inputs} (h : ScopeR I) (hh : I.tags.hiddenOutputs = false) : Scope I := by
-  have hs : ProvedScope.sharedRowsOk I.tags false true = ProvedScope.sharedRowsOk I.tags false false := by
-    simp [ProvedScope.sharedRowsOk, hh]
   unfold Scope
   unfold ScopeR Checks ProvedScope.check at h
   unfold Checks ProvedScope.check
-  rw [← hs]
+  simp only [circuitRules_reg hh] at h
   exact h
 
 /-! ## A bound under the statement check -/

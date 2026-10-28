@@ -22,12 +22,12 @@ namespace FlockSoundness.TmplValue
 
 /-- **A templated file's circuit** is `HmRow.parse`'s with the read unit's committed net first, named `unit`, passing
 `HmOut.checkRows`, with no net named `unit` or `root` after it, and the unit carried on it. -/
-theorem parseTmpl_cases {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) :
     ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) = .ok c₀ ∧
       HmOut.checkRows c₀ = .ok () ∧
       (c₀.nets.extract 1 c₀.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") = false ∧
-      c = { c₀ with tmpl := some tu } := by
+      c = { c₀ with tmpl := some tu } ∧ HmOut.recUnit tu.net.name = false := by
   unfold HmOut.parseTmpl at h
   dsimp only at h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
@@ -41,10 +41,22 @@ theorem parseTmpl_cases {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
     split at h
     · cases h
     · rename_i hb
-      obtain ⟨_, hu, h⟩ := Flock.TmplOrder.bind_ok h
-      simp only [pure, Except.pure, Except.ok.injEq] at h
-      exact ⟨tu, c₀, hc₀, hu, Bool.eq_false_iff.mpr hb, h.symm⟩
+      split at h
+      · cases h
+      · rename_i hr
+        obtain ⟨_, hu, h⟩ := Flock.TmplOrder.bind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        exact ⟨tu, c₀, hc₀, hu, Bool.eq_false_iff.mpr hb, h.symm, Bool.eq_false_iff.mpr hr⟩
   · cases h
+
+theorem parseTmpl_cases {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmOut.parseTmpl tags bytes tables = .ok c) :
+    ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) = .ok c₀ ∧
+      HmOut.checkRows c₀ = .ok () ∧
+      (c₀.nets.extract 1 c₀.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") = false ∧
+      c = { c₀ with tmpl := some tu } :=
+  let ⟨tu, c₀, hp, hc, hn, he, _⟩ := parseTmpl_cases' h
+  ⟨tu, c₀, hp, hc, hn, he⟩
 
 /-- **What a templated file's parse accepted**: `ParseFactsPre` at the read unit's committed net, which is the circuit's
 first net, its unit: every other net is `Built` or a lookup slot, as a flat file's are. -/
@@ -61,6 +73,21 @@ theorem parseTmpl_facts {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
   refine ⟨tu, c₀, P, hck, he, (Option.some.inj (hu.symm.trans h0)), ?_⟩
   rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hm']
   rfl
+
+/-- **A templated file's unit is no recursion unit** (`HmOut.recUnit`, which `parseTmpl` refuses). -/
+theorem parseTmpl_notRec {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmOut.parseTmpl tags bytes tables = .ok c) : HmOut.recUnit c.unit.name = false := by
+  obtain ⟨tu, c₀, -, -, he, hu, hn⟩ := parseTmpl_facts h
+  obtain ⟨tu', c₀', -, -, -, he', hr⟩ := parseTmpl_cases' h
+  have h1 : c.tmpl = some tu := by rw [he]
+  have h2 : c.tmpl = some tu' := by rw [he']
+  obtain rfl : tu' = tu := Option.some.inj (h2.symm.trans h1)
+  have hcu : c.unit = tu'.net := by
+    rw [he]
+    show (c₀.nets.getD c₀.unitNet default).2 = tu'.net
+    rw [hu, hn]
+  rw [hcu]
+  exact hr
 
 /-- **The committed net is the logical net moved**: `Tmpl.unrollAt` and `Tmpl.unroll` read the same rows, and
 `Net.ofRowsAt`'s net is at `posMap` the net `Net.ofRows` builds from them, `Tmpl.unroll`'s. -/

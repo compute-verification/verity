@@ -1,4 +1,0 @@
-order = 190
-path = "`pouw_hash/`"
-runs_on = "RTX PRO 6000"
-what = "The PoUW hash kernels' bench and check (`run.sh`, `check.py`)"
