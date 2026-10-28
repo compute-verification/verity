@@ -3,21 +3,22 @@ import Definitions.Pouw.Dither
 /-!
 # SAK at the served words: the work premise of `Properties.Pouw.Served.ServedWork` (trusted)
 
-`Pouw.SakLb.SAKResidual` states symmetric algorithmic knowledge for exact matrix products as one
+`Pouw.SakLb.SAKResidual` (`Proofs.Pouw.SakLb`) states symmetric algorithmic knowledge for exact matrix products as one
 pointwise premise on the no-fold round's cells: outside a set of the round's dithers of probability at most `κdeg B`, a
 program that exchanges no bits and reads at most `B` bits of advice costs at least the fraction of the words it gets
 right times `pub`, less a luck allowance `lam`. It is a proof-only definition over `noFoldRound`'s types.
 
-`SAKServed` is the same claim at the served protocol's types (`PouwCheck.Period`): a window's words are
+`SAKServed` is the same claim at the served protocol's types (`PouwCheck.Period`, H1's design): a window's words are
 its tiles' (`Fin Np → W`), the dither is the window's round-0 coin (its salt, `Properties.Pouw.Period.SaltIsLiveCoin`),
 and a tile counts as right only when all of its words are the honest ones (`rightWords`), each weighted by its
 credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is at most the right fraction by words, so
 `SakLb.SAKResidual` at the same `μ`, `lam` and `κdeg`, on a round whose cells are the tiles' credited words, gives
 `SAKServed` pointwise: it asks no more of 𝓜.
 
-**Non-vacuity rests on the fixed model.** 𝓜 as `Definitions.Core.Accel` writes it makes `SAKMatmul` and
-`SAKResidual` false: free register reductions run the four Russians' method below the public best's cost. `SAKServed`
-is false there too. A guarantee that takes it says something only on a model that charges those reductions.
+**Non-vacuity rests on a model that prices register reductions.** 𝓜 as `Definitions.Core.Accel` writes it makes
+`SAKMatmul` and `SAKResidual` false: free register reductions run the four Russians' method below the public best's cost.
+`SAKServed` is false there too. A guarantee that takes it says something only on a model where a register word that an
+atomic or a reduction writes costs an `alu` lane, L2 writes are priced, and an MMA pays at least one product an output.
 -/
 
 namespace Pouw.Assumptions
@@ -46,8 +47,8 @@ words at `p` each, no less. The advice is anything computed before the salt with
 the product's structure.
 
 It is falsified by any program on the card, with any advice, that gets a share of a window's tiles right on most
-salts at a measured priced cost below `p` a credited word of them, less `lam`. It is false of 𝓜 as written (module
-doc). -/
+salts at a measured priced cost below `p` a credited word of them, less `lam`. It is false of 𝓜 as written, which
+leaves register reductions free (module doc). -/
 def SAKServed (G : Accel) (μ : G.Res → ℝ) {I D W : Type} [Fintype D] {Np : ℕ} (Reg : Set I)
     (hon : I → D → Fin Np → W) (wt : Fin Np → ℝ) (p : ℝ) (lam : I → ℝ) (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
