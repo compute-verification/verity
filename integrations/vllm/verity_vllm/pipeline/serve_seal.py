@@ -53,7 +53,6 @@ import copy
 import functools
 import gc
 import json
-import os
 import shutil
 import threading
 import time
@@ -740,8 +739,9 @@ class Sealer:
         self._seals: deque = deque()                     # (seal or None, the bytes its window holds, whether it is the last)
         self.gate = threading.Event()                    # set: the engine loop needs no GIL now (its step's forward is launched, or it waits)
         self.gate.set()
-        self.gate_mode = os.environ.get("VERITY_SEAL_GATE", "off")
-        self.pace_s = float(os.environ.get("VERITY_SEAL_PACE_S", "0.5"))
+        from verity_vllm import settings
+        self.gate_mode = settings.VERITY_SEAL_GATE
+        self.pace_s = float(settings.VERITY_SEAL_PACE_S)
         self.paced = [0, 0.0, 0]                         # paces that waited, their seconds, paces that ran out
         self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
         self.seal_thread = threading.Thread(target=self._run_seals, name="serve-seal-2", daemon=True)
