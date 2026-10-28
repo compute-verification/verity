@@ -291,8 +291,9 @@ class Served:
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
     #: with the tap, the live proof block's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
     live: dict[str, G.Registered] = field(default_factory=dict)
-    #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
-    _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
+    #: each open step A table's words, each call's block written at its place in call order as it's recorded, and the calls
+    #: recorded so far (they may come out of call order)
+    _a: dict[str, tuple[np.ndarray, set[int]]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -387,12 +388,26 @@ class Served:
             reg = self.registered[value] = self.registered[value].result()
             out[value] = reg.root.hex()
 
-    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
         """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
-        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves)."""
-        full, sc = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
-        full[:len(codes)], sc[:len(codes)] = codes, scales
-        return chunk_words(full, sc, Wt.chunks(call.k))
+        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves), written into
+        ``out`` when given."""
+        return chunk_words(codes, scales, Wt.chunks(call.k), self.m, out)
+
+    def _a_rows(self, call: Any, value: str, mine: Sequence[int], codes: np.ndarray, scales: np.ndarray
+                ) -> np.ndarray | None:
+        """Write call ``call``'s `a_words` into its step's A table of K ``value`` at its place among ``mine``, the step's
+        calls of K in call order: the whole table once they are all in, else None."""
+        n = Wt.chunks(call.k)
+        block = n * self.m
+        table, done = self._a.setdefault(value, (np.empty((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
+        j = mine.index(call.index)
+        self.a_words(call, codes, scales, table[j * block:(j + 1) * block])
+        done.add(call.index)
+        if len(done) < len(mine):
+            return None
+        del self._a[value]
+        return table
 
     @property
     def steps(self) -> int:
@@ -535,11 +550,8 @@ class Served:
         else:
             zy_rows = self._empty_zy(call.n)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
-        rows = self._a.setdefault(value, {})
-        rows[call.index] = self.a_words(call, codes, scales)
-        whole = None
-        if len(rows) == len(mine):
-            whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
+        whole = self._a_rows(call, value, mine, codes, scales)
+        if whole is not None:
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
         self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out)
         if self.tap is not None:

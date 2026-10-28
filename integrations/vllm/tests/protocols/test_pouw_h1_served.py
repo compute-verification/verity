@@ -1016,6 +1016,38 @@ def test_chunk_words_are_the_specs_leaf_bytes(k, n):
         SV.chunk_words(codes, scales, 3 if k % 3 else 7)
 
 
+@pytest.mark.parametrize("k", [64, 5120, 16384])
+def test_a_step_tables_words_are_each_calls_rows_padded_to_m_in_call_order(k):
+    """`chunk_words` over ``slots`` is `row_words` of the rows padded with zero codes of scale 0, and into ``out`` it writes
+    exactly those words, every byte of ``out`` and nothing beside it; `Served`'s step table of K (`_a_rows`), its calls
+    recorded out of call order, is their `a_words` in call order, taken once the last call is in."""
+    rng = np.random.default_rng(k)
+    n, m, k2 = Wt.chunks(k), 5, k // (2 * Wt.chunks(k)) + 2
+    rows = [(rng.integers(-128, 128, (r, k), dtype=np.int8), (rng.random(r) + 0.5).astype("<f4")) for r in (3, 0, 5)]
+
+    def padded(codes, scales):
+        full, sc = np.zeros((m, k), np.int8), np.zeros(m, "<f4")
+        full[:len(codes)], sc[:len(codes)] = codes, scales
+        return SV.row_words(full.reshape(n * m, k // n), np.repeat(sc, n))
+
+    want = [padded(*r) for r in rows]
+    got = SV.chunk_words(*rows[0], n, m)
+    assert got.dtype == np.uint16 and np.array_equal(got, want[0])
+    out = np.full((3 * n * m, k2), 0xABCD, np.uint16)
+    SV.chunk_words(*rows[0], n, m, out[n * m:2 * n * m])
+    assert np.array_equal(out[n * m:2 * n * m], want[0]) and (out[:n * m] == 0xABCD).all() and (out[2 * n * m:] == 0xABCD).all()
+    with pytest.raises(ValueError, match="over 2 slots"):
+        SV.chunk_words(*rows[0], n, 2)
+    with pytest.raises(ValueError, match="contiguous u16 array"):
+        SV.chunk_words(*rows[0], n, m, out[:n * m - 1])
+    served, call = SV.Served(), lambda c: SimpleNamespace(index=c, k=k)
+    served.m = m
+    mine = [4, 7, 9]
+    assert served._a_rows(call(9), "a", mine, *rows[2]) is None and served._a_rows(call(4), "a", mine, *rows[0]) is None
+    table = served._a_rows(call(7), "a", mine, *rows[1])
+    assert table.dtype == np.uint16 and np.array_equal(table, np.concatenate(want)) and not served._a
+
+
 def test_k_up_to_4096_roots_are_unchanged():
     """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
     from a seeded torch, have the roots they had before chunk rows. Every root is registered under the declared Program's
