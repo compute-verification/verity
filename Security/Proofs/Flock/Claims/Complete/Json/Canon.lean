@@ -39,6 +39,17 @@ theorem canon_same (a b : Json) (h : Same a b) : canon a = canon b :=
 theorem ascii_iff (s : String) : Flock.ascii s = true ↔ ∀ c ∈ s.toList, c.toNat < 0x7f := by
   simp [Flock.ascii, List.all_eq_true]
 
+/-- **An object whose every entry has an ASCII key and an ASCII value** is ASCII. -/
+theorem ascii_obj {m : Std.TreeMap.Raw String Json compare}
+    (h : ∀ p ∈ m.toList, (∀ c ∈ p.1.toList, c.toNat < 0x7f) ∧ Ascii p.2) : Ascii (.obj m) :=
+  .obj (fun p hp => (h p hp).1) (fun p hp => (h p hp).2)
+
+/-- **Every entry of an ASCII object** has an ASCII key and an ASCII value. -/
+theorem ascii_obj_mem {m : Std.TreeMap.Raw String Json compare} (ha : Ascii (.obj m)) :
+    ∀ p ∈ m.toList, (∀ c ∈ p.1.toList, c.toNat < 0x7f) ∧ Ascii p.2 := by
+  cases ha with
+  | obj hk hv => exact fun p hp => ⟨hk p hp, hv p hp⟩
+
 /-- **`canon` returns on printable ASCII values** (`JsonSpec.canon_ok`). -/
 theorem canon_ok : ∀ j : Json, Good j → Ascii j → ∃ s, canon j = .ok s
   | _, .null, _ => ⟨_, by rw [canon]; rfl⟩
@@ -49,7 +60,7 @@ theorem canon_ok : ∀ j : Json, Good j → Ascii j → ∃ s, canon j = .ok s
     obtain ⟨r, hr⟩ := FlockDeploy.array_mapM_ok (f := fun x : {x // x ∈ a} => canon x.1) (a := a.attach)
       fun x _ => canon_ok x.1 (h x.1 x.2) (ha x.1 x.2)
     exact ⟨_, by rw [canon, hr]; rfl⟩
-  | .obj m, .obj hm h, .obj ha => by
+  | .obj m, .obj hm h, .obj hak hav => by
     obtain ⟨r, hr⟩ := FlockDeploy.array_mapM_ok
       (f := fun p : {p // p ∈ m.toArray} =>
         if ascii p.1.1 then do pure (p.1.1, ← canon p.1.2) else throw notAscii) (a := m.toArray.attach)
@@ -58,9 +69,8 @@ theorem canon_ok : ∀ j : Json, Good j → Ascii j → ∃ s, canon j = .ok s
           rw [← Std.TreeMap.Raw.toList_toArray]
           exact Array.mem_toList_iff.2 p.2
         have hg := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
-        obtain ⟨hk, hv⟩ := ha _ hp
-        obtain ⟨s, hs⟩ := canon_ok p.1.2 (h _ _ (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact hg)) hv
-        exact ⟨_, by rw [if_pos ((ascii_iff p.1.1).2 hk), hs]; rfl⟩
+        obtain ⟨s, hs⟩ := canon_ok p.1.2 (h _ _ (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact hg)) (hav _ hp)
+        exact ⟨_, by rw [if_pos ((ascii_iff p.1.1).2 (hak _ hp)), hs]; rfl⟩
     exact ⟨_, by rw [canon, hr]; rfl⟩
 
 private theorem bind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
@@ -110,7 +120,7 @@ private theorem ascii_of_canon_lt : ∀ (k : Nat) (j : Json) {s : String}, sizeO
     | .obj m =>
       rw [canon] at h
       obtain ⟨_, hv, -⟩ := bind_ok' h
-      refine .obj fun p hp => ?_
+      refine ascii_obj fun p hp => ?_
       have hp' : p ∈ m.toArray := by
         rw [← Array.mem_toList_iff, Std.TreeMap.Raw.toList_toArray]
         exact hp
@@ -140,9 +150,8 @@ theorem ascii_of_same : ∀ {a b : Json}, Same a b → Ascii a → Ascii b
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
     exact ascii_of_same (he i (hs ▸ hi) hi) (ha _ (Array.getElem_mem _))
   | _, _, .obj hm hn hk hv, h => by
-    cases h with
-    | obj ha =>
-    refine .obj fun ⟨k, v⟩ hp => ?_
+    have ha := ascii_obj_mem h
+    refine ascii_obj fun ⟨k, v⟩ hp => ?_
     have hb := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hn).1 hp
     rw [← Std.TreeMap.Raw.get?_eq_getElem?] at hb
     have hs := hk k
@@ -166,9 +175,8 @@ theorem ascii_of_same_rev : ∀ {a b : Json}, Same a b → Ascii b → Ascii a
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
     exact ascii_of_same_rev (he i hi (hs ▸ hi)) (ha _ (Array.getElem_mem _))
   | _, _, .obj hm hn hk hv, h => by
-    cases h with
-    | obj ha =>
-    refine .obj fun ⟨k, v⟩ hp => ?_
+    have ha := ascii_obj_mem h
+    refine ascii_obj fun ⟨k, v⟩ hp => ?_
     have hb := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
     rw [← Std.TreeMap.Raw.get?_eq_getElem?] at hb
     have hs := hk k
@@ -182,17 +190,13 @@ theorem ascii_of_same_rev : ∀ {a b : Json}, Same a b → Ascii b → Ascii a
 /-- **An entry of an ASCII object** is ASCII. -/
 theorem ascii_get {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String} {v : Json}
     (hv : m.get? k = some v) : Ascii v := by
-  cases ha with
-  | obj ha =>
-  exact (ha (k, v) ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
+  exact (ascii_obj_mem ha (k, v) ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
     (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hv))).2
 
 /-- **A key of an ASCII object** is ASCII. -/
 theorem ascii_key {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String} {v : Json}
     (hv : m.get? k = some v) : ∀ c ∈ k.toList, c.toNat < 0x7f := by
-  cases ha with
-  | obj ha =>
-  exact (ha (k, v) ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
+  exact (ascii_obj_mem ha (k, v) ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
     (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hv))).1
 
 /-- **A value an ASCII object reads at a key** is ASCII. -/
@@ -207,9 +211,8 @@ theorem ascii_getObjVal {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (h
 /-- **An ASCII object with an ASCII entry put in** is ASCII. -/
 theorem ascii_insert {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String}
     {v : Json} (hk : ∀ c ∈ k.toList, c.toNat < 0x7f) (hv : Ascii v) : Ascii (.obj (m.insert k v)) := by
-  cases ha with
-  | obj ha =>
-  refine .obj fun ⟨k', v'⟩ hp => ?_
+  replace ha := ascii_obj_mem ha
+  refine ascii_obj fun ⟨k', v'⟩ hp => ?_
   have h := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm.insert).1 hp
   rw [Std.TreeMap.Raw.getElem?_insert hm] at h
   split at h
@@ -222,9 +225,8 @@ theorem ascii_insert {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha :
 /-- **An object is ASCII where it is with a new entry put in.** -/
 theorem ascii_of_insert {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
     (hn : m.get? k = none) (ha : Ascii (.obj (m.insert k v))) : Ascii (.obj m) := by
-  cases ha with
-  | obj ha =>
-  refine .obj fun ⟨k', v'⟩ hp => ha _ ?_
+  replace ha := ascii_obj_mem ha
+  refine ascii_obj fun ⟨k', v'⟩ hp => ha _ ?_
   have h := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
   refine (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm.insert).2 ?_
   rw [Std.TreeMap.Raw.getElem?_insert hm]

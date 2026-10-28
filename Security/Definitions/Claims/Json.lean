@@ -58,8 +58,8 @@ inductive Ascii : Json → Prop
   | num (n : JsonNumber) : Ascii (.num n)
   | str {s : String} (h : ∀ c ∈ s.toList, c.toNat < 0x7f) : Ascii (.str s)
   | arr {a : Array Json} (h : ∀ x ∈ a, Ascii x) : Ascii (.arr a)
-  | obj {m : Std.TreeMap.Raw String Json} (h : ∀ p ∈ m.toList, (∀ c ∈ p.1.toList, c.toNat < 0x7f) ∧ Ascii p.2) :
-      Ascii (.obj m)
+  | obj {m : Std.TreeMap.Raw String Json} (hk : ∀ p ∈ m.toList, ∀ c ∈ p.1.toList, c.toNat < 0x7f)
+      (hv : ∀ p ∈ m.toList, Ascii p.2) : Ascii (.obj m)
 
 /-- **A well-formed JSON value**: every object a well-formed tree. -/
 inductive Wf : Json → Prop

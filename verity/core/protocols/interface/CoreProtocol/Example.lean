@@ -90,8 +90,9 @@ private def rootHex : String := Flock.hexOf root
   some "params: not ASCII without DEL (a byte at or above 0x7f)"
 #guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"d~\"}".toUTF8).verdict == .accept
 -- an outcome's reason is free text, and its line prints it whatever its characters
-#guard (Answer.canonical { protocol := "p", verdict := .reject, reason := some "Δ ≥ 1", digest := none,
-  published := none, profile := none }).toOption == some ("{\"commitment\":null,\"profile\":null,\"protocol\":\"p\"," ++
+private def freeReason : Answer :=
+  { protocol := "p", verdict := .reject, reason := some "Δ ≥ 1", digest := none, published := none, profile := none }
+#guard freeReason.canonical.toOption == some ("{\"commitment\":null,\"profile\":null,\"protocol\":\"p\"," ++
   "\"public\":null,\"reason\":\"Δ ≥ 1\",\"verdict\":\"reject\"}")
 
 private def reread (params evidence : String) : String :=

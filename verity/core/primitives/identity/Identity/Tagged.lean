@@ -41,11 +41,12 @@ def identityDigestSha512 (tag : String) (manifest : Json) : Flock.V ByteArray :=
   taggedSha512 tag (← Flock.canon manifest).toUTF8
 
 #guard (taggedSha512 "" .empty).toOption.isNone
--- Python's `tagged_sha512("t", b"x")` and `identity_digest_sha512("verity/x", {"b": [1, "é"], "a": None})`
+-- Python's `tagged_sha512("t", b"x")` and `identity_digest_sha512("verity/x", {"b": [1, "e"], "a": None})`
 #guard (taggedSha512 "t" "x".toUTF8).toOption.map Flock.hexOf == some
   "92796af09f80b798f659913c883d82ba24d9829b8eb441b7e3fdd5d3b0b0862d87dd5f55932bf52c3fd4afb87e80271f15227594ae6fbd0e20e25ffbf31bb30b"
-#guard (identityDigestSha512 "verity/x" (Json.mkObj [("b", Json.arr #[1, "é"]), ("a", .null)])).toOption.map Flock.hexOf
+#guard (identityDigestSha512 "verity/x" (Json.mkObj [("b", Json.arr #[1, "e"]), ("a", .null)])).toOption.map Flock.hexOf
   == some
-  "2c80a026ed11d96f4ede3b80f60fafd3d610371faca1f7e012ca42bb51a41dc2d4bf0b94f5c777dac8fc969e5f4b813026a1a17d84f7a200e8317c98d43d48f4"
+  "9127438f07ef66e4eecd035c5a9151304e65e9ec873af140fa2d2bc1e39b9e569d229274ea66b941b44ad9214e1ad710888eee8bf73372917a9238319bee16aa"
+#guard (identityDigestSha512 "verity/x" (Json.mkObj [("b", Json.arr #[1, "é"]), ("a", .null)])).toOption.isNone
 
 end Identity
