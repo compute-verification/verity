@@ -30,6 +30,7 @@
   "Properties.SampledProofs.Halt",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
+  "Properties.Pous.Wipe",
   "Properties.Pous.EndToEnd",
   "Properties.Pous.Period",
   "Properties.Pous.EndToEndAt",
@@ -439,7 +440,7 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity"
    ],
-   "except": ["Properties.Pous.Period"],
+   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe"],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Identity": {
@@ -642,6 +643,11 @@
    ],
    "except": [],
    "why": "a party's signed periods are stated over the code that checks them (MemoryChallenger.Attest, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+  },
+  "Properties.Pous.Wipe": {
+   "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
+   "except": [],
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Accounting.Wipe`), never a proof"
   }
  },
  "reads_exempt": {
@@ -749,6 +755,31 @@
    "signature": ["MemoryChallenger.Properties.SecurityProofs.verdictSigned : MemoryChallenger.Properties.VerdictSigned"],
    "assumptions": [],
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound : MemoryChallenger.Properties.WipeSurvivorBound"
+   ],
+   "assumptions": [],
+   "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest : MemoryChallenger.Properties.WipeSurvivorBoundHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "6e7f62e7652bb05c61db13e09925415d923545127b95457c132bc684b258d33d"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial :",
+    "  MemoryChallenger.Properties.WipeSurvivorBoundNontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "8d0b448abde901064dda70888c88d1278a6a0f7dbb97f185c72975842f07783a"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -3732,6 +3763,10 @@
    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
     "function": "MemoryChallenger.Attest.Properties.code",
     "outcome": "none"
+   },
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
+    "function": ["MemoryChallenger.WipeProtocol.check", "MemoryChallenger.WipeProtocol.decodeCommitment"],
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3769,7 +3804,9 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
-   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest)."
+   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4516,6 +4553,7 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -4582,6 +4620,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
     "Properties.NetworkPeriod.clockKBoundsCount",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.Pouw.Check.acceptMeans",
@@ -5051,6 +5092,9 @@
     "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -5894,6 +5938,29 @@
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
+  "Definitions.Accounting.Wipe": {
+   "digest": "737a16aa155b8b9d018068552fee2103c1189583fabf62ec81ab02aedcb2e5dd",
+   "definitions": {
+    "Accounting.Wipe.Labels": "475499605b58191e662e6c3e75a8bb34c3aa264a2e87f3214571ac6841b921e9",
+    "Accounting.Wipe.Reads": "6c5eb38a0b87b4b857abe73037071ee313f47b8818552c381f9272e824bcba90",
+    "Accounting.Wipe.Strategy": "e56b88f839f9777ed4b1c9c00211b212b984b4e60759eec18e2b174c9fe760a4",
+    "Accounting.Wipe.Strategy.Observed": "f60fc27cee0d0f18e48657b2082f3fcabf094c364c956cc78fd14a531a6ec620",
+    "Accounting.Wipe.Strategy.after": "7d900b83684394105c38fae02f6599a9f5c06d31cd3c480a53693f9b45504387",
+    "Accounting.Wipe.Strategy.answer": "c0dfd9b525332a0de6188e6a4bdb7df12a9bfba41ff8fda8e3ee7574d39e322c",
+    "Accounting.Wipe.Strategy.carry": "352b9bd87a727c50363dbcd063ebc5d7a3ddccbf02b0981f6a581ba05b99ad46",
+    "Accounting.Wipe.Strategy.deltaNet": "c8e5ce7327f152ab11edeb1ed1060638c94ba8f5e951acc7303f14661e478d3e",
+    "Accounting.Wipe.Strategy.distinguisher": "57eb83c56f70ebc2721061f825d6f04d96e229b3bec6de899f6e82098e66eb06",
+    "Accounting.Wipe.Strategy.egress": "2af30843f82683f36d3a56ea58516e55146aba5f07c04e4b674310789d4e34c2",
+    "Accounting.Wipe.Strategy.fill": "e2780b7c76e314436ce8a04d3bae50f70435cd87f2eaaefc46967149b74cee2f",
+    "Accounting.Wipe.Strategy.filled": "a00fb1227a2e1c6a8e5675e34e1b01f19d5ed079efedfcb8d5d694d8177a39ff",
+    "Accounting.Wipe.Strategy.wipe": "a325b788108fae99d194a8ece5cc8e5ac607aea67587bb567e1e5154219ecab4"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial"
+   ]
+  },
   "Definitions.Claims": {
    "digest": "733c38e527b96695ed8a5af8ea41fc057a22771d8a7a39fbbb414a3bd51c2268",
    "definitions": {
@@ -5954,6 +6021,35 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
   },
+  "Definitions.Core.Blocks": {
+   "digest": "1297d797f1c1e2c422c9a9f419475f46896acff1874c155f56fc6c62c1b49652",
+   "definitions": {
+    "Verity.Block": "ac647c1b42deae35468cb0531bc2925fe228eb55c6a306078eaf695ede59f223",
+    "Verity.Block.gates": "69e3f9952544c184ee133a01985437ca45d8beb2c9ced5ee4cda402f0cc3e544",
+    "Verity.Block.win": "9778cf375c6d50856a9f3b4fa65aea57d26abdda51428d0ccfe91b7a0212200c",
+    "Verity.Blocks": "848f740a9b048237b545e275a6d372be1a8e59a1f643ef8f34b9e20ea515116f",
+    "Verity.Blocks.Carried": "dea6174829f1a6c9b36b0eb6ae568b5e68bdc13f4fbe7b9fa73c9ef79a4fca18",
+    "Verity.Blocks.before": "1f3f531b13ac0825b543b639b49061ff010ea9acd39d07328268c09c09255493",
+    "Verity.Blocks.block": "fa378c491e99bf60bc42dfb1dffe930214afd532ae672a5634f692511ac473b1",
+    "Verity.Blocks.carried": "1bd248ec320f7aa1c8902398b64ea1f0cd8e135b88887614302a34afba90cc24",
+    "Verity.Blocks.since": "0f5dc1f0e458820235d86229818f1e1b5ed18d0b956777173b0c882cb74a75bf",
+    "Verity.Device.State": "e8389d84bac78baa6d5ad2ea9a9e4666273452967a5aca4b40a11231b4ef2a52",
+    "Verity.Device.State.chip": "cf82a603de19e5919b9e77afa7f68d5e6c64bd1cbea36e72dd7e351403817681",
+    "Verity.Device.State.store": "c21160a9dd8df20bdca34fe021cfd0b62802b5fe8fa97753fca0f8caf3af119c",
+    "Verity.Wipe": "cb9fe1d306caeda4371e7748356746baa950d3d298fcecea07855c145b674168",
+    "Verity.Wipe.SurvivorBound": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9",
+    "Verity.Wipe.accepts": "74d2f856513d0d753a9ae10e6589d7661a626348c5da50492f34e095892f592d",
+    "Verity.Wipe.egress": "ea0eedb7acd6f3fc2018bdeaec78608e8a7941a78d0095390dab2a5b79cac11d",
+    "Verity.Wipe.fill": "bb267893444f6332582b7b3f7e414967d6dd1929531511d38486a56228ab20fc",
+    "Verity.Wipe.filled": "a99766eb0f9a91f5e5febb78a02eab7eb0e4e6b7068a9c3b576877fe74054011",
+    "Verity.Wipe.unfilled": "daf71a907f36e462fa995de1414218f10027a151dd1294656b1389304a9e8ae7"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial"
+   ]
+  },
   "Definitions.Core.Boolean": {
    "digest": "5d3ca0cddea27ca021c5e2c4a001bf8302322b55f50719c8adb0067cc26da00c",
    "definitions": {
@@ -6003,6 +6099,9 @@
     "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
     "NciCheck.Properties.SecurityProofs.CheckedCoverTraining",
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.DescReports",
@@ -6161,23 +6260,30 @@
    ]
   },
   "Definitions.Core.Game": {
-   "digest": "50158720c4357cdb0307891578170b19564f8bcddad2ad8614503350c4aa6dee",
+   "digest": "48e1ba6ff09a432bba38dedd9feff27a13c1558cdb8a77e43d2543785b8f68c2",
    "definitions": {
     "Verity.Game": "dbf3d91129d029b645b41c73b9f2a122f0c318d56e8a77991cca09d48a3fe45b",
     "Verity.Game.Strategy": "adbb9d9cc6b114fa6a9ebfb3c8d43406b9c2272e136d74953736875e7054817b",
+    "Verity.Game.Strategy.match_1": "9ea6ffb37eaa47c603e7c09054af31e4c5edf402cec2c9c48052197adae2fb22",
     "Verity.Game.below": "b69be1f43330c2b3f20caf271a83fd61dd7e3fb4b75025e13a728dc61c1fa9b3",
     "Verity.Game.bind": "57f9bfd5a89f6841f4aa91aa534c194d08183e997fc3cf6e41d2459a37c717ce",
     "Verity.Game.brecOn": "213ab974ac514d2ce97dd72d54b09b17eaba49ec501736308a264f30943df0e5",
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
     "Verity.Game.casesOn": "d1338feec6ad7d2d0c77fc3d6cc4842abdd9db79d5d8d8e624582571b2b793ff",
     "Verity.Game.coin": "4540142afd525a891bba84d91a6d1f5f4bc0b78456e7cb7e5220db9c18febdaa",
+    "Verity.Game.draw": "2c73f92b3862e836756fb55a8f32bff15bf37734e51c53db599f1fb6a7671628",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
     "Verity.Game.prob": "123c931b895fd86ca8afa118e08bd86e8000707f80332932138acb82d630574c",
     "Verity.Game.rec": "0cb221ec988a54d4397bcfb92c3aaf689be66166dcdadd9bc4d5801dca0d7365",
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
-    "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc"
+    "Verity.Game.send": "8d24c747132730510c15eb71bd4e887838687cee9b7d9e59f46a29a712c01efc",
+    "Verity.Game.value": "2b85019b6d4066405668df2c794c89d1fb80e777c12864c3e6cc71a57de83258"
    },
-   "guarantees": ["Verity.soundness_of_subprotocols"]
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
+    "Verity.soundness_of_subprotocols"
+   ]
   },
   "Definitions.Core.Partition": {
    "digest": "7bcfeda592ba95dd56c3433693a8c15b1455d632ba046561fe90d2d6844d9b0f",
@@ -6867,6 +6973,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -7014,11 +7123,15 @@
    ]
   },
   "Definitions.Pous.Model.StreamedWipe": {
-   "digest": "2ff54dfa0d796c5ec2e58b96c15ca10cc455b5f5fbace670ccb3c4de72f01daa",
+   "digest": "8dca8fdd23ee1cb89be3449f541c0fe72892948427a589a3338f5b6d9a0ad67c",
    "definitions": {
-    "Pous.StreamedWipe.prfAdvantage": "5b873d7283308dd0f21716d00f9da70aba099053846bda69f50ed9690e50924c"
+    "Pous.StreamedWipe.prfAdvantage": "5b873d7283308dd0f21716d00f9da70aba099053846bda69f50ed9690e50924c",
+    "Pous.StreamedWipe.revealed": "ffc4256d9422da0050a4d5eef39015a9a90ad157591aac8756428c5bb4d5432c"
    },
    "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
@@ -7605,6 +7718,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -7758,6 +7872,7 @@
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -8446,6 +8561,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -9834,6 +9950,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -11937,6 +12054,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -12044,6 +12162,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDemo",
@@ -12105,6 +12224,7 @@
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Verity.soundness_of_subprotocols"
    ]
   },
@@ -12182,6 +12302,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -12217,6 +12338,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -12296,7 +12418,12 @@
     "MemoryChallenger.StreamedWipe.verdict": "3b29d81a36d99642e4476a2d3ac3aa087b5433bb50877ad5d8301095993d39bf",
     "_private.MemoryChallenger.StreamedWipe.0.MemoryChallenger.StreamedWipe.tiersJson": "c49a13e43342b426ef848318c4864e6d6195f068dc7010a8784907dae2daf9a9"
    },
-   "guarantees": ["Verity.soundness_of_subprotocols"]
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
+    "Verity.soundness_of_subprotocols"
+   ]
   },
   "MemoryChallenger.Verdict": {
    "digest": "31e763500bf324942f8d5579e4ba37a5aa2b1b703a0c2a229c0deb82428ce411",
@@ -12328,6 +12455,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -12355,7 +12483,7 @@
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.intJ": "83089091dfa1e2ec4c839299fa798acf5057ae5648cfda7f318bf7bc40d0f888",
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.natJ": "aae9e67ce6fad22524532dee9f859a6fb9b2f4935cf892a569e7769c81bbf1d6"
    },
-   "guarantees": ["Verity.soundness_of_subprotocols"]
+   "guarantees": ["MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound", "Verity.soundness_of_subprotocols"]
   },
   "MemoryChallenger.WipeProtocol": {
    "digest": "5b7a293c18d51c3d52439568286f9261be47a8004d05e9252780a942a4bd0e63",
@@ -12404,7 +12532,12 @@
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.hexJ": "d1ca30893491681448632d04d8023bdb929531cf409e6162a2124e8a2d1deb9f",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.natJ": "e8727017f342ed9865812bb9541059197bd40dd29953092439507393e12349aa"
    },
-   "guarantees": ["Verity.soundness_of_subprotocols"]
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial",
+    "Verity.soundness_of_subprotocols"
+   ]
   },
   "NciCheck.Baseline": {
    "digest": "30bc1ef63a8e7d5ae617549e8bd32be19679108362bd051bc170aa5b3f351079",
@@ -16165,6 +16298,25 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
+   ]
+  },
+  "Properties.Pous.Wipe": {
+   "digest": "99860529101aba5409c9bdb5a1a8133c3769f1d3c5c3a075fa05541e04f85a88",
+   "definitions": {
+    "MemoryChallenger.Properties.WipeSurvivorBound": "023c3f96c30e8f5bc7a8f43219b03a87f08c74cec8839a2cfcda88e451d320be",
+    "MemoryChallenger.Properties.WipeSurvivorBoundHonest": "b4ee7d08abfe1c1ae23740573ac5fd95988a24c5556f28a35b0821b8dfa7bbb6",
+    "MemoryChallenger.Properties.WipeSurvivorBoundNontrivial": "e9a539290c7c26f336dd7ee8a806fdb1b6907ce0778143d542a3c5fe3e67369a",
+    "MemoryChallenger.Properties.cheat": "77cd207d90f2c3d500f09453fd9d826e7f93ad5350447327f1fa9e9d1be1c569",
+    "MemoryChallenger.Properties.honest": "f1a0aa2ef440014fa97d0ce75b546bc090bd811a57e65d9030b4d94006b497b4",
+    "MemoryChallenger.Properties.honestFill": "2ab1010cc6cba22ceb9f4ac15cd6b4db5eeaed27fd6c4666b07cd9bc7cf805ab",
+    "MemoryChallenger.Properties.honestRead": "a080cc7bcd8e3fec1a194c4cfdad7a1969e09065ab3784c252d2ee865fdca1c1",
+    "MemoryChallenger.Properties.segmentDevice": "458f7f321269403473d693b03c2cf80e9f2bf82ff856470689d1c2be8c1e67ad",
+    "MemoryChallenger.Properties.segmentParams": "076d7292bf2140a9d7f55ad495342af07974a29a49713b8096f8ecf9b11464cb"
+   },
+   "guarantees": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial"
    ]
   },
   "Properties.Pouw": {
