@@ -6,8 +6,8 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
 the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
-period the check rejects are rejects; with no kept run the piece refuses to run, which leaves the certifier missing, and
-no report is undecided. The leak guard reads the piece's DIR against the run's witness."""
+period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
+which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
 from __future__ import annotations
 
 import importlib.util
@@ -99,12 +99,13 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
     return d
 
 
-def _piece_cmd(tmp_path: Path, chain: Path, answer: dict) -> str:
-    lean = tmp_path / "network-period"
-    (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
-    lean.write_text(f"#!/bin/sh\ncat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
-    lean.chmod(0o755)
-    cmd = f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
+def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
+    if lean is None:
+        lean = tmp_path / "network-period"
+        (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
+        lean.write_text(f"#!/bin/sh\ncat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
+        lean.chmod(0o755)
+    cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
 
@@ -190,6 +191,11 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
 
 
 def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_period_are_rejects(tmp_path, warden):
+    d = _serve_dir(tmp_path / "serve", warden)
+    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, _chain_out(tmp_path / "chain", "refused", warden["w"]), {}))
+    got = S.pieces(d, K, tmp_path / "pieces", env=env)
+    assert got["certifier"]["verdict"] == "reject" and got["certifier"]["reason"].startswith("the chain refused")
+    assert not (tmp_path / "pieces" / "certifier" / CP.REFUSED).exists()
     a = _decide(tmp_path / "refused", warden, "refused")
     assert a["verdict"] == "reject" and a["reason"].startswith("the chain refused: {\"n2\": \"a window refused\"}")
     assert a == CP.answer("reject", a["reason"]) and S.check_answer(a) == a
@@ -200,25 +206,34 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
         assert a["verdict"] == "reject" and "spans link-windows" in a["reason"]
     rejected = CP.answer("reject", "window 0: certificates")
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
-    a = _decide(tmp_path / "foreign", warden, check=lambda c, p: {"verdict": "accept", "protocol": "other"})
-    assert a["verdict"] == "undecided" and "no verity/certifier/v0 verdict" in a["reason"]
 
 
-def test_no_kept_run_refuses_and_leaves_the_certifier_missing_and_no_report_is_undecided(tmp_path, warden, capsys,
-                                                                                         monkeypatch):
-    d = _serve_dir(tmp_path / "serve", warden, kept=False)
-    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}))
+@pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "time limit",
+                                  "foreign answer"])
+def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, warden, capsys, monkeypatch):
+    """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
+    ends without a report, a missing Lean build, SIGTERM from the piece's time limit and a check that answers no
+    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing."""
+    d = _serve_dir(tmp_path / "serve", warden, kept=case != "no kept run")
+    if case == "corrupt fetch":
+        (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
+    chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
+    cmd = {"no report": "exit 7", "time limit": 'kill -TERM "$PPID"; while :; do :; done'}.get(case)
+    lean = tmp_path / "no-such-network-period" if case == "no build" else None
+    answer = {"verdict": "accept", "protocol": "other"} if case == "foreign answer" else {}
+    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean))
     S.pieces(d, K, tmp_path / "pieces", env=env)
     piece = tmp_path / "pieces" / "certifier"
-    assert not (piece / "answer.json").exists() and "no warden run kept" in (piece / CP.REFUSED).read_text()
+    why = (piece / CP.REFUSED).read_text()
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    assert {"no kept run": "no warden run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
+            "no build": "network-period check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
+            "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
+    if case != "no kept run":
+        assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
-    a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
-    assert (a["verdict"], unpacked) == ("undecided", None) and "0 warden runs kept" in a["reason"]
-    d = _serve_dir(tmp_path / "silent", warden)
-    a, _ = CP.decide(d, K, tmp_path / "dir2", chain=lambda *x: 7, check=lambda *x: {})
-    assert a["verdict"] == "undecided" and a["reason"].startswith("the chain wrote no report (exit 7)")
 
 
 def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():

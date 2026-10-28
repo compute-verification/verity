@@ -1,4 +1,4 @@
-"""K and V read across steps at the H200 step (CMP-161): a lockstep run committed again under the prover's salt secret (or a
+"""K and V read across steps at the H200 step: a lockstep run committed again under the prover's salt secret (or a
 fixture's), its roots held to the registered ones, and drawn attention blocks of its last step s opened as M3 proper's bundle
 carries them. A ``QkSoftmaxRowPad_v1`` block reads the slot's key rows of steps 0 .. s and a ``PvRow_v1`` block its value
 rows: each is the committed row of that step's ``l<i>.wk.gather`` (``l<i>.wv.gather``) unit, opened against that step's root

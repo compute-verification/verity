@@ -22,22 +22,24 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
   1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`. With none the run's load didn't go through the
-     front, and the piece refuses to run: it writes DIR/`REFUSED` naming why and no answer, which leaves the certifier
-     missing. More than one is undecided.
+     front (it wasn't set, or the gate, its tunnel or ssh failed).
   2. The window's requests are certified ones: each window request's user names one of the warden's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
      kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why, and no report an undecided.
+     reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
   DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period,
   the case's only copy (its params alone run to tens of megabytes on a served window); the record's leak guard
-  (`leak_guard.py`) then reads DIR against the warden run's witness. ``--draw K`` is the scan's K drawn units (every
+  (`leak_guard.py`) then reads DIR against the warden run's witness. Only the protocol rejects: a step that can't run
+  (no kept run, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
+  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
@@ -49,12 +51,14 @@ import json
 import os
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tarfile
 import tempfile
 import threading
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 
@@ -147,8 +151,8 @@ def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> 
 
 # ---------------------------------------------------------------------------------------------------------------- piece
 
-class Undecided(Exception):
-    """The piece couldn't reach a verdict: a tool failed or an input is missing."""
+class NotRun(Exception):
+    """The piece couldn't run to a verdict for a reason outside the protocol: a build, a tool or an input failed."""
 
 
 class Rejected(Exception):
@@ -158,7 +162,7 @@ class Rejected(Exception):
 def kept_run(serve_dir: Path) -> str:
     runs = sorted(p.parent.name for p in (serve_dir / PRIVATE).glob("*/fetch.tar.gz"))
     if len(runs) != 1:
-        raise Undecided(f"{len(runs)} warden runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
+        raise NotRun(f"{len(runs)} warden runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
                         "load goes through the warden only with CERTIFIER_FRONT")
     return runs[0]
 
@@ -166,19 +170,24 @@ def kept_run(serve_dir: Path) -> str:
 def window_requests(serve_dir: Path, window: int) -> list[dict]:
     reqs = [r for r in _lines(serve_dir / "requests.jsonl") if window in (r.get("windows") or ())]
     if not reqs:
-        raise Undecided(f"window {window} has no request in {serve_dir / 'requests.jsonl'}")
+        raise NotRun(f"window {window} has no request in {serve_dir / 'requests.jsonl'}")
     return reqs
 
 
 def unpack(fetch: Path) -> tuple[Path, Path]:
     """The kept fetch unpacked in a 0700 scratch directory beside it, and its warden run."""
     d = Path(tempfile.mkdtemp(dir=fetch.parent, prefix="unpacked-"))
-    with tarfile.open(fetch, "r:gz") as tar:
-        tar.extractall(d, filter="data")
+    try:
+        with tarfile.open(fetch, "r:gz") as tar:
+            tar.extractall(d, filter="data")
+    except (OSError, tarfile.TarError) as e:
+        rm(d)
+        raise NotRun(f"{fetch}: {type(e).__name__}: {e}") from None
     run = next((p.parent.parent if p.parent.name == SS.A.WITNESS else p.parent for p in d.rglob("certified.jsonl")),
                None)
     if run is None:
-        raise Undecided(f"{fetch}: no warden run (a certified.jsonl) in the fetch")
+        rm(d)
+        raise NotRun(f"{fetch}: no warden run (a certified.jsonl) in the fetch")
     return d, run
 
 
@@ -211,7 +220,7 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
     dest.mkdir(mode=0o700, parents=True, exist_ok=True)
     for f in ENDPOINT:
         if not (serve_dir / f).is_file():
-            raise Undecided(f"the serve dir has no {f}, which the chain's endpoint step reads")
+            raise NotRun(f"the serve dir has no {f}, which the chain's endpoint step reads")
         shutil.copyfile(serve_dir / f, dest / f)
         (dest / f).chmod(0o600)
     return dest
@@ -247,7 +256,7 @@ def period_exe(lean: str | None) -> str:
     got = subprocess.run(["lake", "build", "network-period"], cwd=LEAN_DIR, capture_output=True, text=True)
     exe = LEAN_DIR / ".lake" / "build" / "bin" / "network-period"
     if got.returncode or not exe.is_file():
-        raise Undecided(f"lake build network-period (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
+        raise NotRun(f"lake build network-period (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
     return str(exe)
 
 
@@ -255,8 +264,8 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
     import scan_period as SP
     try:
         return SP.lean_check(exe, case, d)
-    except SystemExit as e:
-        raise Undecided(str(e)) from None
+    except (SystemExit, OSError, ValueError) as e:
+        raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
 
 def case_of(warden: Path, scan: Path) -> dict:
@@ -264,7 +273,7 @@ def case_of(warden: Path, scan: Path) -> dict:
     try:
         return SP.rows_case(warden, scan)
     except (SystemExit, OSError, KeyError, ValueError) as e:
-        raise Undecided(f"the period's rows case: {type(e).__name__}: {e}") from None
+        raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
 
 def publish(chain_out: Path, d: Path) -> None:
@@ -278,14 +287,11 @@ def publish(chain_out: Path, d: Path) -> None:
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
            check: Callable[[dict, Path], dict], case: Callable[[Path, Path], dict] = case_of) -> tuple[dict, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
-    ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows."""
+    ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows. `NotRun` when a step can't run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
-    try:
-        run = kept_run(serve_dir)
-        reqs = window_requests(serve_dir, window)
-    except Undecided as e:
-        return answer("undecided", str(e)), None
+    run = kept_run(serve_dir)
+    reqs = window_requests(serve_dir, window)
     unpacked = None
     try:
         unpacked, warden = unpack(keep / run / "fetch.tar.gz")
@@ -301,23 +307,25 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         publish(out, d)
         report = out / "report" / "report.json"
         if not report.is_file():
-            raise Undecided(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
+            raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
         if doc.get("verdict") != "accepted":
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         try:
             (w,) = [x["window"] for x in json.loads((out / "scan" / "answers.json").read_text())["windows"]]
         except (OSError, ValueError, KeyError) as e:
-            raise Undecided(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
+            raise NotRun(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
         in_link_window(certified, T, w)
         got = check(case(warden, out / "scan"), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
-            raise Undecided(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
+            raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked
-    except Undecided as e:
-        return answer("undecided", str(e)), unpacked
     except Rejected as e:
         return answer("reject", str(e)), unpacked
+    except BaseException:
+        if unpacked is not None:
+            rm(unpacked)
+        raise
 
 
 def guard(d: Path, unpacked: Path | None, quarantine: Path) -> int:
@@ -332,6 +340,25 @@ def guard(d: Path, unpacked: Path | None, quarantine: Path) -> int:
     return got.returncode
 
 
+def rm(*paths: Path) -> None:
+    """``rm -rf`` as a child process: the suites' read guard misreads `shutil.rmtree`'s fd-relative walk."""
+    if paths:
+        subprocess.run(["rm", "-rf", "--", *map(str, paths)], check=False)
+
+
+def refuse(d: Path, why: str) -> int:
+    """DIR emptied but for its log, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing."""
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    rm(*(p for p in d.iterdir() if p.name != "piece.log"))
+    (d / REFUSED).write_text(why + "\n")
+    print(f"CERTIFIER refused: {why}", flush=True)
+    return 3
+
+
+def ended(signum: int, _frame) -> None:
+    raise NotRun(f"{signal.Signals(signum).name}: the piece's time limit (CERTIFIER_TIMEOUT) ended it before a verdict")
+
+
 def piece(a: argparse.Namespace) -> int:
     serve_dir, d = a.serve_dir.resolve(), a.dir.resolve()
     d.mkdir(parents=True, exist_ok=True)
@@ -339,31 +366,28 @@ def piece(a: argparse.Namespace) -> int:
         if not kv.startswith("CR_") or "=" not in kv:
             print(f"refused: {kv!r}: CR_K=V, a chain_record.sh variable", file=sys.stderr)
             return 2
-    if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
-        why = (f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the certifier's front "
-               "(CERTIFIER_FRONT)")
-        (d / REFUSED).write_text(why + "\n")
-        print(f"CERTIFIER refused: {why}", flush=True)
-        return 3
+    was, unpacked = signal.signal(signal.SIGTERM, ended), None
     try:
+        if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
+            raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
+                         "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
         exe = period_exe(a.lean)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
                                                    a.chain_cmd)
         got, unpacked = decide(serve_dir, a.window, d, chain=chain, check=lambda c, p: period_check(exe, c, p))
-    except Undecided as e:
-        got, unpacked = answer("undecided", str(e)), None
-    try:
         (d / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         g = guard(d, unpacked, serve_dir / PRIVATE / "quarantine")
+        if g not in (0, 3) or not (d / "answer.json").is_file():
+            raise NotRun(f"the leak guard failed (exit {g}): DIR withheld")
+    except NotRun as e:
+        return refuse(d, str(e))
+    except (OSError, ValueError, tarfile.TarError) as e:
+        traceback.print_exc()
+        return refuse(d, f"the piece failed on a file: {type(e).__name__}: {e}")
     finally:
         if unpacked is not None:
-            shutil.rmtree(unpacked, ignore_errors=True)
-    if g not in (0, 3) or not (d / "answer.json").is_file():
-        for p in d.iterdir():
-            if p.name != "piece.log":
-                shutil.rmtree(p) if p.is_dir() else p.unlink()
-        (d / "answer.json").write_text(json.dumps(answer("undecided", f"the leak guard failed (exit {g}): DIR "
-                                                         "withheld"), indent=1, sort_keys=True) + "\n")
+            rm(unpacked)
+        signal.signal(signal.SIGTERM, was)
     print(f"CERTIFIER {json.dumps({k: got.get(k) for k in ('verdict', 'reason', 'public')}, sort_keys=True)}",
           flush=True)
     return 0 if got.get("verdict") == "accept" else 1
