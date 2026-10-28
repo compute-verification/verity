@@ -6,7 +6,7 @@
     bandwidth.py session --store ENC --layout F --lib DIR --node NODE --out DIR
                  (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
                  [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
-                 [--skip-layer L] [--expect accept|reject] [--device cuda] [--ref-decode]
+                 [--skip-layer L | --cache] [--expect accept|reject] [--device cuda] [--ref-decode]
 
 **The plan.** A pass reads the units of the registration's plan (`p2_party.plan_of`), which the verifier holds and sends
 with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (it is
@@ -31,8 +31,10 @@ whose stdout says the port, reached at `--party-host`, and then the verifier's o
 the one the session ended with), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
-the line `BW VERDICT ...`. `--skip-layer L` is the cheat: it neither reads nor decodes layer L's tensors, and the
-receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`).
+the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor decodes layer L's tensors, and the
+receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`). `--cache`
+is another: every pass after the session's first reads nothing of the store and replays the first pass's σ from its
+cache under the pass's seed, so a draw of a later pass is rejected (`receipt`).
 
 `--ref-decode` swaps the library for P2's reference decode on the CPU (`RefDecode`), for the toy.
 """
@@ -530,22 +532,28 @@ class Prover:
     """The prover's side of `p2_party.prove` over an encoded store served by `Engine`."""
 
     def __init__(self, engine: Engine, vk: VkPaths, pool: ProcessPoolExecutor | None, log=print,
-                 spot: int = 16) -> None:
+                 spot: int = 16, cache: bool = False) -> None:
         self.engine, self.vk, self.pool, self.log, self.spot = engine, vk, pool, log, spot
         self.registration = engine.registration
+        self.cache, self.cached = cache, None
         self.passes: dict[tuple[int, int], tuple[np.ndarray, bytes, ReceiptTree]] = {}
         self.steps: list[dict] = []
         self.opened: list[dict] = []
+        self.received: dict[int, coins.Released] = {}
 
-    def hold(self, registration: dict, commitment: coins.LiveCommitment) -> None:
+    def hold(self, registration: dict) -> None:
         if p2_party.registration_of(registration) != self.registration:
             raise ValueError("the verifier's registration is not this store's")
         self.engine.serve(p2_party.plan_of(registration, self.registration))
-        self.commitment = commitment
 
-    def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray) -> int:
-        """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store and their y to hashlib: the
-        plan's first, its last and `spot` drawn from the seed."""
+    def end(self, commitment: coins.LiveCommitment, openings: list[coins.LiveOpening]) -> None:
+        why = coins.received_reason(commitment, [self.received[t] for t in sorted(self.received)], openings)
+        if why is not None:
+            raise ValueError(f"the session's coins are not the ones this prover was sent: {why}")
+
+    def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray, cheat: bool) -> int:
+        """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store (not on a pass that `cheat`s)
+        and their y to hashlib: the plan's first, its last and `spot` drawn from the seed."""
         plan, rows = self.engine.plan, self.registration.rows
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))
         positions = sorted({0, plan.length - 1, *rng.integers(0, plan.length, self.spot).tolist()})
@@ -554,7 +562,7 @@ class Prover:
         for p in positions:
             g = plan.block(p)
             got = bytes(sigma[g].cpu().numpy().astype("<i4").tobytes())
-            if self.engine.skip_layer is None and got != sk.sketch(self.engine.unit_bytes(g)):
+            if not cheat and got != sk.sketch(self.engine.unit_bytes(g)):
                 bad += 1
             if bytes(ys[p]) != sk.receipt(g, got):
                 bad += 1
@@ -562,17 +570,25 @@ class Prover:
             raise RuntimeError(f"{bad} of {len(positions)} spot units' σ or y are not the reference's")
         return len(positions)
 
-    def run(self, challenge: coins.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: coins.Released, t: int, i: int, previous: bytes) -> bytes:
+        if challenge.label != coins.CHALLENGE or self.received.setdefault(challenge.index, challenge) != challenge:
+            raise ValueError(f"not window {challenge.index}'s one challenge")
         seed = receipts.seed(coins.coin(challenge), i, previous)
         plan = self.engine.plan
         t0 = time.perf_counter()
-        sigma, times = self.engine.step(seed)
+        cached = self.cached is not None
+        if cached:
+            sigma, times = self.cached, {"cached": True, "step_s": 0.0}
+        else:
+            sigma, times = self.engine.step(seed)
+            if self.cache:
+                self.cached = sigma
         a = time.perf_counter()
         parts = [receipts_of(self.engine.torch, seed, sigma[f:f + c], first=f) for f, c in plan.runs]
         ys = parts[0] if len(parts) == 1 else np.concatenate(parts)
         del parts
         b = time.perf_counter()
-        spotted = self._spot(seed, sigma, ys)
+        spotted = self._spot(seed, sigma, ys, cheat=cached or self.engine.skip_layer is not None)
         del sigma
         c = time.perf_counter()
         salts = os.urandom(SALT * receipts.leaves(plan.length))
@@ -719,13 +735,13 @@ def session(a: argparse.Namespace) -> int:
         vk = VkPaths(a.store, reg.params, reg.salt, reg.root, pool)
         engine = Engine(a.store, a.layout, a.lib, reg, device=a.device, chunk=a.chunk, readers=a.readers,
                         skip_layer=a.skip_layer, ref_decode=a.ref_decode)
-        prover = Prover(engine, vk, pool, log)
+        prover = Prover(engine, vk, pool, log, cache=a.cache)
         setup_s = time.perf_counter() - t0
         request = p2_party.request_of(node, windows=a.windows, passes=a.passes, samples=a.samples,
                                       window_ns=int(a.window_s * 1e9), deadline_ns=int(a.deadline_s * 1e9))
         log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
                                   "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
-                                  "skip_layer": a.skip_layer}}))
+                                  "skip_layer": a.skip_layer, "cache": a.cache}}))
         rc = record = None
         t1 = time.perf_counter()
         try:
@@ -759,7 +775,7 @@ def session(a: argparse.Namespace) -> int:
            "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
            "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
-           "skip_layer": a.skip_layer, "store": str(a.store), "device": a.device, "verdict_line": line}
+           "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(line, flush=True)
     return 0 if line.endswith("PASS") else 1
@@ -792,7 +808,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--samples", type=int, default=1024)
     s.add_argument("--window-s", type=float, default=1.0)
     s.add_argument("--deadline-s", type=float, default=1.0)
-    s.add_argument("--skip-layer", type=int)
+    cheat = s.add_mutually_exclusive_group()
+    cheat.add_argument("--skip-layer", type=int, help="the cheat that neither reads nor decodes layer L's tensors")
+    cheat.add_argument("--cache", action="store_true", help="the cheat that replays the first pass's σ every later pass")
     s.add_argument("--expect", choices=("accept", "reject"))
     s.add_argument("--device", default="cuda")
     s.add_argument("--ref-decode", action="store_true")
