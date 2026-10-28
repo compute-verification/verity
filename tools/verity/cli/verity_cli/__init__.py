@@ -85,10 +85,8 @@ def _checkout(file: str) -> tuple[Path, str]:
     (another `git worktree` of it included, so its edits are the ones tried), else this one, FILE from its root."""
     path = Path(file).resolve()
     if path.is_file():
-        try:
-            top = Path(_git("rev-parse", "--show-toplevel", cwd=path.parent))
-        except subprocess.CalledProcessError:
-            top = None
+        git = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=path.parent, capture_output=True, text=True)
+        top = Path(git.stdout.strip()) if git.returncode == 0 else None
         if top is not None and (top / "tools/verity/lean/lean_changed.py").is_file():
             return top, os.path.relpath(path, top)
     return ROOT, file if (ROOT / file).is_file() else os.path.relpath(path, ROOT)
