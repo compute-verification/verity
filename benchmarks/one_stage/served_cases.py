@@ -36,11 +36,11 @@ Each case goes to its own directory under ``--private`` (``sampled-proofs-v2/``,
 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and v2's ``blobs``) and
 ``answer.json``, its Lean answer line, the directory `composite.py --cases` reads (and, given ``--from-division``, the
 inference-only case's ``policy.json``). The Lean runs on files in a 0700 scratch directory under ``--private``. This
-prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (the inference-only one's, given
-``--from-division``, with ``alpha_gamma``, ``[[num, den], Γ]``) and a ``NOT_WRITTEN {"protocol", "reason"}``
-line per case refused, and nothing of a case's params or evidence; the lines go to a private log (a reason may quote
-a5's ``case-v2-error.txt``), of which only a line's ``protocol``, ``verdict`` and ``alpha_gamma`` are public. Exit 0
-when every case is written, 1 when one is refused, 64 on a usage error.
+prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and a ``NOT_WRITTEN {"protocol", "reason"}``
+line per case refused, and nothing of a case's params or evidence: not α and Γ either, which ``--from-division``
+reads off the division, so on a one-block window they'd publish its block's gates and fresh-input bits. The lines go
+to a private log (a reason may quote a5's ``case-v2-error.txt``), of which only a line's ``protocol`` and
+``verdict`` are public. Exit 0 when every case is written, 1 when one is refused, 64 on a usage error.
 """
 from __future__ import annotations
 
@@ -282,7 +282,6 @@ def produce(a: argparse.Namespace) -> int:
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
 
-    said: dict[str, dict[str, Any]] = {}
     kept: dict[str, dict[str, Any]] = {}
 
     def one(id: str, make, exe) -> None:
@@ -296,8 +295,8 @@ def produce(a: argparse.Namespace) -> int:
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
             return
         write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")}
-                                   | said.get(id, {}), sort_keys=True), flush=True)
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")},
+                                   sort_keys=True), flush=True)
 
     one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
     inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*INFERENCE_ONLY_LEAN))
@@ -310,7 +309,6 @@ def produce(a: argparse.Namespace) -> int:
                   "and --gamma, or --from-division")
             return inference_only_case(v1, a.alpha, a.gamma, log)
         alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch")
-        said[INFERENCE_ONLY] = {"alpha_gamma": [_ratio(alpha), gamma]}
         kept[INFERENCE_ONLY] = {"policy.json": {"alpha": _ratio(alpha), "gamma": gamma, "read": FROM_DIVISION}}
         return inference_only_case(v1, alpha, gamma, log)
 
