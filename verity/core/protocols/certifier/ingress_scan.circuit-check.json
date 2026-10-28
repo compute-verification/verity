@@ -1,10 +1,10 @@
 {
  "digests": {
-  "IngressScanBucket_v2{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
-   "sha512": "b9a234b05afe377470ce285195823138eb112f07353d7bfe99486a48e7cbed58fe01713cb2dfbf83e069958639c535c1b67f9f99a8bbea8ecaf531aeb968689f"
+  "IngressScanBucket_v3{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
+   "sha512": "8a674fa2e9e7634420d8bffb5087afa658d32b9c04804ee7327e85bf26afa15959aacc5fde4eff6fd215eba3474c3ebbc73347050b0a33140ecdffd6c5c045f1"
   },
-  "IngressScanFirst_v2{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
-   "sha512": "741a0fd905be71e1b9fc3b7d56b5560f24329a05e27d6f73f96a8c9de8dc497c9b0bd7ccd3d8f63fe156850d2babbb6d0bfbd1550e01ea532305ba0e72416066"
+  "IngressScanFirst_v3{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
+   "sha512": "c0526f0ab7831b75df0ea46ff830af32caa134cb88330f3cb7cc179d4cfbe02f79354c883d1a0f5d0f9c59ab449f45f366bca63f82261e76ab0e936ebf85bf4f"
   }
  }
 }
