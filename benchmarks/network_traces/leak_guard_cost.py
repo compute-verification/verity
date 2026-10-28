@@ -94,6 +94,10 @@ def build(bundle: Path, scale: int, w: Path) -> dict:
             "run_bytes": sum(p.stat().st_size for p in run.rglob("*") if p.is_file())}
 
 
+def _line(f: Path, i: int) -> str:
+    return (f.read_text().strip().splitlines() or [""])[i][:300]
+
+
 def timed(argv: list[str], logs: Path, cap: float | None = None) -> dict:
     """`argv`'s seconds, exit and peak RSS, killed past `cap` seconds; its first stdout line and last stderr line."""
     with open(logs.with_suffix(".out"), "w") as o, open(logs.with_suffix(".err"), "w") as e:
@@ -106,10 +110,9 @@ def timed(argv: list[str], logs: Path, cap: float | None = None) -> dict:
         s = time.monotonic() - t0
         if timer:
             timer.cancel()
-    line = lambda f, i: (f.read_text().strip().splitlines() or [""])[i][:300]
     return {"s": round(s, 1), "rc": os.waitstatus_to_exitcode(status),
             "unfinished_at_cap": cap if cap and s >= cap else None, "maxrss_mb": usage.ru_maxrss // 1024,
-            "said": line(logs.with_suffix(".out"), 0), "err": line(logs.with_suffix(".err"), -1)}
+            "said": _line(logs.with_suffix(".out"), 0), "err": _line(logs.with_suffix(".err"), -1)}
 
 
 def main() -> int:
