@@ -161,10 +161,13 @@ changes here and the older name gets a row under Older names, in the same change
   every registered model's (a registered model is read freely, so reproducing one isn't training), from a random
   initialization and θ with no other carried state, and the monitoring period covers the whole run. The reference
   training algorithm is the frontier recipe, with full-parameter updates.
-- **Full updates** (`FullUpdates λ`, a named task assumption): on 𝒢, every run whose update steps each change only
-  state held in one server block needs at least λ times the reference's compute. So the fastest run updates all the
-  parameters, which crosses servers and meets the cut bound, while a partial-update run gets all the free compute at λ
-  times the cost: slowdown ≥ min(cut bound, λ/(α(U + ν))). λ is stated, not yet measured.
+- **The task assumptions**, two, neither naming the protocol. **Active parameters** (N*): any model reaching 𝒢's
+  loss uses at least N* parameters per token, with N* above what one server block carries from one block to the next.
+  **Incompressible intermediate state** (β): each intermediate value a token's computation passes on, activation or
+  gradient alike, carries at least β bits. Together they rule out runs built from pieces that each fit one server
+  block (independently trained small experts): every token's computation must cross servers, and each crossing is
+  priced through the certified channels, which gives the cut bound. With the near-optimal reference (α) these are all
+  the bound assumes about training.
 - **Bounding strategy**: a necessary subcomputation (N counted objects every successful run computes) and a pricing
   argument for it, giving the yields. Each server block yields at most min(q_S, its inference-block yields plus its
   free compute), unregistered hardware works at its rate, and the straddle term covers objects split between verified
