@@ -337,7 +337,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` takes all but `SaltIsLiveCoin` and
 `StagedPins`):
 
-- `Properties.Pouw.Period.ServiceSound`: the proof service is sound at δ_ks against PoUW's check, which is C-Flock's
+- `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is C-Flock's
   soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
 - `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the period's live
