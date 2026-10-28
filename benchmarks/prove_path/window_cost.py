@@ -179,12 +179,12 @@ def key_bytes(D: int) -> int:
 class Heads:
     """The class circuit's attention as `window_circuit` cuts it (`class_size.head`): S slots of P positions, H heads a
     position (over the layers), head dim D, key blocks of BN keys, each its softmax step (``later`` below a head's first
-    visited block) and its P·V groups of PK keys, a key's value as rows of VS words. ``soft``, ``pv`` and ``end`` are a
-    first visited block's softmax step, its first group and a head's end (`Unit`s of n = 1), a step's and a group's rows
-    those beside its keys': a step reads ``Rk`` wired rows a key of its keys (`key_bytes` a key) and writes its m and l and
-    a P row of its keys a group (a bf16 a key); a group reads its P row and ``Rv`` wired rows a key of its values. Below a
-    head's first block a step reads the last step's m and l and the last group's O and writes its O too, and every group
-    but the head's first reads the O before it."""
+    visited block) and its P·V groups of PK keys, a key's value as rows of VS words. ``soft``, ``pv`` and ``end`` are the
+    softmax step of a head of one key block (FIRST and LAST), its first group and a head's end (`Unit`s of n = 1), a step's
+    and a group's rows those beside its keys': a step reads ``Rk`` wired rows a key of its keys (`key_bytes` a key) and
+    writes its l, its m unless LAST (block 0, whose m nothing reads) and a P row of its keys a group (a bf16 a key); a group
+    reads its P row and ``Rv`` wired rows a key of its values. Below a head's first block a step reads the last step's m and
+    l and the last group's O and writes its O too, and every group but the head's first reads the O before it."""
     S: int
     P: int
     H: int
@@ -219,12 +219,12 @@ class Heads:
             u, n, more = self.pv, s["N"], int(not s["FIRST"])
             return replace(u, label=lab, wired=u.wired + self.Rv * n + more,
                            wired_bytes=u.wired_bytes + (key_bytes(self.D) + 2) * n + more * o)
-        u, n, below = self.soft, s["NVIS"], int(not s["FIRST"])
+        u, n, below, m = self.soft, s["NVIS"], int(not s["FIRST"]), int(not s["LAST"])
         groups = [hi - lo for lo, hi in pv_groups(n, s["PK"])]
-        state, state_bytes = u.out + below, u.out_bytes + below * o
-        x = CR.blocks(128 + state_bytes) if packed else u.x + below * CR.blocks(128 + o)
-        return replace(u, label=lab, wired=u.wired + self.Rk * n + below * (2 if packed else u.out + 1),
-                       wired_bytes=u.wired_bytes + key_bytes(self.D) * n + below * (u.out_bytes + o),
+        state, state_bytes = u.out + m + below, u.out_bytes + 4 * m + below * o
+        x = CR.blocks(128 + state_bytes) if packed else u.x + m * CR.blocks(128 + 4) + below * CR.blocks(128 + o)
+        return replace(u, label=lab, wired=u.wired + self.Rk * n + below * (2 if packed else u.out + 2),
+                       wired_bytes=u.wired_bytes + key_bytes(self.D) * n + below * (u.out_bytes + 4 + o),
                        out=(1 if packed else state) + len(groups), out_bytes=state_bytes + 2 * n,
                        x=x + sum(CR.blocks(128 + 2 * g) for g in groups))
 
@@ -257,9 +257,10 @@ def split(units: list[Unit], cls: dict, blocks: dict) -> tuple[list[Unit], Heads
     (end,) = [u for u in att if u.label.startswith(END + "{")]
 
     def firsts(fam: str, keys: str) -> tuple[int, Unit, int]:
-        """(the fewest keys, its unit, rows a key) of the census's first visited blocks' ``fam`` units."""
+        """(the fewest keys, its unit, rows a key) of the census's first visited blocks' ``fam`` units, a softmax step's of
+        a head of one block."""
         us = [(CS.statics(u.label)[1], u) for u in att if u.label.split("{")[0] == fam]
-        by = {s[keys]: u for s, u in us if s["FIRST"]}
+        by = {s[keys]: u for s, u in us if s["FIRST"] and s.get("LAST", True)}
         if len(by) < 2:
             raise ValueError(f"the census's first {fam} units are at {sorted(by)} keys: its rows a key need two key counts")
         a, b = sorted(by)[:2]

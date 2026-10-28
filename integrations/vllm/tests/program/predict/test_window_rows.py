@@ -190,7 +190,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             (st, su), (pt, pu), (et, eu) = calls
             assert (soft.name, pv.name, end.name) == ("AttnBlockSoftmax", "AttnBlockPv", "AttnHeadEnd")
             assert rows.source[st][su] == rows.source[pt][pu] == WR.EVALUATED
-            l, o = (np.ascontiguousarray(rows.outs[t][k][u:u + 4]).view("<u4") for t, k, u in ((st, 1, su), (pt, 0, pu)))
+            l, o = (np.ascontiguousarray(rows.outs[t][k][u:u + 4]).view("<u4") for t, k, u in ((st, 0, su), (pt, 0, pu)))
             node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()

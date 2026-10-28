@@ -91,28 +91,31 @@ def test_a_probe_unit_its_definition_doesnt_give_is_refused():
 
 
 def _heads() -> W.Heads:
-    """D 8: a step's q row (16 bytes) beside its keys, its m and l (20 bytes); a group's P row beside its values, its O (32);
-    the end's l and O (48 bytes), its output (16)."""
-    soft = W.Unit("", 1, wired=1, out=2, out_bytes=20, x=4, wired_bytes=16)
+    """D 8: a step's q row (16 bytes) beside its keys, its l (16 bytes) at LAST; a group's P row beside its values, its O
+    (32); the end's l and O (48 bytes), its output (16)."""
+    soft = W.Unit("", 1, wired=1, out=1, out_bytes=16, x=2, wired_bytes=16)
     pv = W.Unit("", 1, wired=1, out=1, out_bytes=32, x=2)
     end = W.Unit("AttnHeadEnd_v1{D=8}", 1, wired=2, out=1, out_bytes=16, x=2, wired_bytes=48)
     return W.Heads(S=1, P=6, H=1, D=8, BN=4, PK=2, VS=4, later="AttnBlockSoftmax_v1", Rk=1, Rv=2, soft=soft, pv=pv, end=end)
 
 
 def test_the_attention_at_blocks_of_4_and_groups_of_2_over_6_positions_is_the_hand_count():
-    """Positions 1 to 4 a block of T keys and ceil(T / 2) groups; 5 and 6 a first visited block of T - 4 and one of 4 below
-    it, its step reading the m, l and O before it (52 bytes) and writing an O, its 2 groups each reading the O before it."""
-    soft = "AttnBlockSoftmax_v1{D=8,NVIS=%d,FIRST=true,CHECK=true,PK=2}"
-    below = "AttnBlockSoftmax_v1{D=8,NVIS=4,FIRST=false,CHECK=false,PK=2}"
+    """Positions 1 to 4 a block of T keys and ceil(T / 2) groups, its step LAST (an l row, no m); 5 and 6 a first visited
+    block of T - 4 (its m and l, 20 bytes) and one of 4 below it, LAST, its step reading the m, l and O before it (52 bytes)
+    and writing its l and an O, its 2 groups each reading the O before it."""
+    soft = "AttnBlockSoftmax_v1{D=8,NVIS=%d,FIRST=true,CHECK=true,PK=2,LAST=%s}"
+    below = "AttnBlockSoftmax_v1{D=8,NVIS=4,FIRST=false,CHECK=false,PK=2,LAST=true}"
     pv = "AttnBlockPv_v1{D=8,N=%d,VS=4,FIRST=%s}"
     got = {u.label: (u.n, u.wired, u.wired_bytes, u.out, u.out_bytes, u.x) for u in _heads().units()}
     assert got == {"AttnHeadEnd_v1{D=8}": (6, 2, 48, 1, 16, 2),
-                   soft % 1: (2, 2, 32, 3, 22, 6), soft % 2: (2, 3, 48, 3, 24, 6), soft % 3: (1, 4, 64, 4, 26, 8),
-                   soft % 4: (1, 5, 80, 4, 28, 8), below: (2, 8, 132, 5, 60, 10),
+                   soft % (1, "true"): (1, 2, 32, 2, 18, 4), soft % (2, "true"): (1, 3, 48, 2, 20, 4),
+                   soft % (3, "true"): (1, 4, 64, 3, 22, 6), soft % (4, "true"): (1, 5, 80, 3, 24, 6),
+                   soft % (1, "false"): (1, 2, 32, 3, 22, 6), soft % (2, "false"): (1, 3, 48, 3, 24, 6),
+                   below: (2, 8, 132, 4, 56, 8),
                    pv % (1, "true"): (2, 3, 18, 1, 32, 2), pv % (2, "true"): (4, 5, 36, 1, 32, 2),
                    pv % (1, "false"): (1, 4, 50, 1, 32, 2), pv % (2, "false"): (5, 6, 68, 1, 32, 2)}
     packed = {u.label: (u.out, u.wired, u.x) for u in _heads().units(packed=True)}
-    assert (packed[soft % 4], packed[below], packed["AttnHeadEnd_v1{D=8}"]) == ((3, 5, 6), (3, 7, 6), (1, 2, 2))
+    assert (packed[soft % (4, "true")], packed[below], packed["AttnHeadEnd_v1{D=8}"]) == ((3, 5, 6), (3, 7, 6), (1, 2, 2))
 
 
 @pytest.mark.parametrize("levers", [(), ("L3b",), ("W", "R"), ("L3b", "W", "R")])

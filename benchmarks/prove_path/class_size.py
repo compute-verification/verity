@@ -14,8 +14,9 @@ tests hold to the exact lowering at larger classes:
   ceil(T / BN) key blocks each its softmax step and its P·V groups of PK keys: the first visited block's
   `AttnBlockSoftmax_v1{NVIS, FIRST=true}` (its NVIS = T - (nb - 1)·BN keys), each block below it the cut's softmax step
   (`key_blocks`' ``later``) at BN keys, its CHECK whether the kernel guards it (``MASKED_FROM``,
-  `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only), each block's
-  `AttnBlockPv_v1{N, VS}` groups (`fa2_check_inf.pv_groups`), and `AttnHeadEnd_v1`. The probe's heads are held to it.
+  `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only), block 0's softmax
+  LAST, each block's `AttnBlockPv_v1{N, VS}` groups (`fa2_check_inf.pv_groups`), and `AttnHeadEnd_v1`. The probe's heads
+  are held to it.
 
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
 bounded where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log), refusing a unit
@@ -133,7 +134,7 @@ def head(T: int, D: int, BN: int, PK: int, VS: int, later: str = SOFTMAX) -> Cou
         first = b == nb - 1
         nvis = T - b * BN if first else BN
         out[f"{SOFTMAX if first else later}{{D={D},NVIS={nvis},FIRST={json.dumps(first)},"
-            f"CHECK={json.dumps(first or b >= mf)},PK={PK}}}"] += 1
+            f"CHECK={json.dumps(first or b >= mf)},PK={PK},LAST={json.dumps(b == 0)}}}"] += 1
         for g, (lo, hi) in enumerate(pv_groups(nvis, PK)):
             out[f"{PV}{{D={D},N={hi - lo},VS={VS},FIRST={json.dumps(first and g == 0)}}}"] += 1
     out[f"{END}{{D={D}}}"] += 1

@@ -79,7 +79,7 @@ def test_an_fa3_head_is_v22s_calls_reading_a_key_and_a_value_row_a_position():
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
             n[fn.id] += k
-    soft = f"AttnBlockSoftmax_v1{{{{D=16,NVIS={{}},FIRST=True,{DOT},CHECK=True,PK=128}}}}"
+    soft = f"AttnBlockSoftmax_v1{{{{D=16,NVIS={{}},FIRST=True,{DOT},CHECK=True,PK=128,LAST=True}}}}"
     pv = f"AttnBlockPv_v1{{{{D=16,N={{}},VS=16,{DOT},FIRST=True}}}}"
     assert n == {**{soft.format(t): 16 for t in range(1, 6)}, **{pv.format(t): 16 for t in range(1, 6)},
                  f"AttnHeadEnd_v1{{D=16,{INV}}}": 80}
@@ -88,8 +88,8 @@ def test_an_fa3_head_is_v22s_calls_reading_a_key_and_a_value_row_a_position():
     _reads_its_keys_and_values(circuit, soft, pv)
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     soft, pv, end = ids[soft], ids[pv], ids["AttnHeadEnd_v1{D=16}"]
-    assert [_source(circuit, pv, "p", u) for u in range(8)] == [(soft, u, "o2") for u in range(8)]
-    assert [_source(circuit, end, p, 64 + 5) for p in ("l", "o")] == [(soft, 5, "o1"), (pv, 5, "o0")]
+    assert [_source(circuit, pv, "p", u) for u in range(8)] == [(soft, u, "o1") for u in range(8)]
+    assert [_source(circuit, end, p, 64 + 5) for p in ("l", "o")] == [(soft, 5, "o0"), (pv, 5, "o0")]
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
     _wired_in_slot_and_step(circuit)
 
@@ -97,13 +97,14 @@ def test_an_fa3_head_is_v22s_calls_reading_a_key_and_a_value_row_a_position():
 def test_an_fa3_key_block_is_units_within_the_grains_rows_at_every_key_count():
     """At T 128 and 129 (one Program of 129 positions at TINY of 2,048 positions) a head's first block's softmax reads 127
     or 128 keys' rows and its group as many values', and the full block below key 128 (`AttnBlockSoftmax_v2{CHECK=false}`:
-    FA3's one-row decode guards only the first block it visits) 128 of each besides its running state, its largest unit 136
-    rows, where a unit a block held 263."""
+    FA3's one-row decode guards only the first block it visits; LAST, its m not out) 128 of each besides its running state,
+    its largest unit 135 rows, where a unit a block held 263."""
     reg = _registered(config={**S.TINY, "max_position_embeddings": 2048})
     circuit = class_circuit(reg, WindowClass(1, 128, 2), 1, GRAIN, provable=False)
     rows = {_label(fn): sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates}
-    assert max(rows.items(), key=lambda kv: kv[1]) == ("AttnBlockSoftmax_v2{D=16,NVIS=128,FIRST=false,CHECK=false,PK=128}", 136)
-    assert (rows[SOFTMAX.format(128)], rows["AttnBlockPv_v1{D=16,N=128,VS=16,FIRST=false}"]) == (132, 131)
+    assert max(rows.items(), key=lambda kv: kv[1]) == (
+        "AttnBlockSoftmax_v2{D=16,NVIS=128,FIRST=false,CHECK=false,PK=128,LAST=true}", 135)
+    assert (rows[SOFTMAX.format(128)], rows["AttnBlockPv_v1{D=16,N=128,VS=16,FIRST=false}"]) == (131, 131)
 
 
 #: FA3 declared to guard every block: `Attention_v2`, which has no per-key-block cut

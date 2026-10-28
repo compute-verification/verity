@@ -61,7 +61,8 @@ FEED = "TokenFeed_v1{NP=4,FIRST=false}"
 SCAN, ENTRY = "ScanSlots_v2{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SlotEntry_v1{KO=2,IDB=17,NP=4}"
 COLLECT0, COLLECT = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=false}"
 #: a head's first key block of T keys: its softmax and its one P·V group (PK 128, TINY's BN; VS 16, a value one GEMM row)
-SOFTMAX, PV = "AttnBlockSoftmax_v1{{D=16,NVIS={},FIRST=true,CHECK=true,PK=128}}", "AttnBlockPv_v1{{D=16,N={},VS=16,FIRST=true}}"
+SOFTMAX, PV = ("AttnBlockSoftmax_v1{{D=16,NVIS={},FIRST=true,CHECK=true,PK=128,LAST=true}}",
+               "AttnBlockPv_v1{{D=16,N={},VS=16,FIRST=true}}")
 
 
 def held(circuit) -> dict[str, dict[str, str]]:
@@ -214,8 +215,8 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     family = {tid: name.split("{")[0] for name, tid in ids.items()}
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
         ("AttnBlockSoftmax_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockSoftmax_v1", "q", "RoPEHead_v1", "o0"): 5,
-        ("AttnBlockPv_v1", "p", "AttnBlockSoftmax_v1", "o2"): 5, ("AttnBlockPv_v1", "v", "Gemm_v2", "o0"): 5,
-        ("AttnHeadEnd_v1", "l", "AttnBlockSoftmax_v1", "o1"): 5,
+        ("AttnBlockPv_v1", "p", "AttnBlockSoftmax_v1", "o1"): 5, ("AttnBlockPv_v1", "v", "Gemm_v2", "o0"): 5,
+        ("AttnHeadEnd_v1", "l", "AttnBlockSoftmax_v1", "o0"): 5,
         ("AttnHeadEnd_v1", "o", "AttnBlockPv_v1", "o0"): 5, ("EmbeddingRead_v1", "tok", "ScanSlots_v2", "o0"): 1,
         ("EmbeddingRead_v1", "tok", "ScanSlots_v2", "o4"): 1, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 1,
         ("EmbeddingRead_v1", "tok", "TokenSelectCombine_v2", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
@@ -420,20 +421,20 @@ def test_a_head_is_its_key_blocks_calls_reading_a_key_and_a_value_row_a_position
     for u, k, v, q in ((0, 8, 6, 96), (1, 8, 6, 97), (2, 9, 7, 98), (4, 10, 14, 100)):
         assert [_source(circuit, soft, "k", u, r) for r in range(5)] == [(rope, 24 * p + k, "o0") for p in range(5)]
         assert [_source(circuit, pv, "v", u, r) for r in range(5)] == [(gemm, 128 * p + v, "o0") for p in range(5)]
-        assert (_source(circuit, soft, "q", u), _source(circuit, pv, "p", u)) == ((rope, q, "o0"), (soft, u, "o2"))
-    assert [_source(circuit, end, p, 64 + 0) for p in ("l", "o")] == [(soft, 0, "o1"), (pv, 0, "o0")]
-    assert [_source(circuit, end, p, 64 + 5) for p in ("l", "o")] == [(soft, 5, "o1"), (pv, 5, "o0")]
+        assert (_source(circuit, soft, "q", u), _source(circuit, pv, "p", u)) == ((rope, q, "o0"), (soft, u, "o1"))
+    assert [_source(circuit, end, p, 64 + 0) for p in ("l", "o")] == [(soft, 0, "o0"), (pv, 0, "o0")]
+    assert [_source(circuit, end, p, 64 + 5) for p in ("l", "o")] == [(soft, 5, "o0"), (pv, 5, "o0")]
 
 
 def test_a_key_block_is_units_within_the_grains_rows_at_every_key_count():
     """A key block's softmax reads its keys' rows and its P·V groups its values', so a unit's rows are bounded by the block's
     keys, not the head's: one Program of 126 positions at TINY of 2,048 positions lowers, its largest unit the first block's
-    softmax at 126 keys (130 rows: q, its keys, m, l and P), and at 129 (position 128 the first past one key block of 128)
-    the full block's softmax at 136 (its running state in and out besides), where a unit a block held 263. A grain whose
-    rows hold no group of whole k-steps is refused by name."""
+    softmax at 126 keys (129 rows: q, its keys, l and P, LAST its m not out), and at 129 (position 128 the first past one
+    key block of 128) the full block's softmax at 135 (its running state in, its l and O out besides), where a unit a block
+    held 263. A grain whose rows hold no group of whole k-steps is refused by name."""
     reg, grain = S._registered({**S.TINY, "max_position_embeddings": 2048}), Grain(gemm_words=1024, rows=256, select=64)
-    for prompt, (label, rows) in ((125, (SOFTMAX.format(126), 130)),
-                                  (128, ("AttnBlockSoftmax_v1{D=16,NVIS=128,FIRST=false,CHECK=false,PK=128}", 136))):
+    for prompt, (label, rows) in ((125, (SOFTMAX.format(126), 129)),
+                                  (128, ("AttnBlockSoftmax_v1{D=16,NVIS=128,FIRST=false,CHECK=false,PK=128,LAST=true}", 135))):
         units = _unit_rows(class_circuit(reg, WindowClass(1, prompt, 2), 1, grain, provable=False))
         assert max(units.items(), key=lambda kv: kv[1]) == (label, rows)
     with pytest.raises(Unexpressible, match=re.escape("a key block of 128 keys has no P·V group of whole k-steps of 16 keys "
@@ -763,8 +764,8 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
 
 def test_what_the_class_doesnt_take_is_refused_by_name():
     """A window past its class (three requests in two slots, a prompt past the cap, more outputs than the cap), a stochastic
-    request (its Program would read a seed) and a unit past the grain's rows (at 19, PK 16, a first block's softmax at 16
-    and 17 keys: 20 and 22) are refused, and so is a Program count the class has no slots for."""
+    request (its Program would read a seed) and a unit past the grain's rows (at 19, PK 16, a one-block head's softmax at 17
+    and 18 keys: 21 and 22) are refused, and so is a Program count the class has no slots for."""
     reg = S._registered()
 
     def refused(window, cls=CLASS, grain=GRAIN):
@@ -778,11 +779,12 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
                           (many, "2 prompt ids and 3 outputs, past its class's 4 and 2"), (stoch, "a stochastic request")):
         with pytest.raises(Unexpressible, match=match):
             refused(window)()
-    soft = "AttnBlockSoftmax_v1{{D=16,NVIS={},FIRST=True,DOT=HopperBF16WgmmaDot16_v1,CHECK=True,PK=16}}: {} rows in and out"
+    soft = ("AttnBlockSoftmax_v1{{D=16,NVIS={},FIRST=True,DOT=HopperBF16WgmmaDot16_v1,CHECK=True,PK=16,LAST=True}}: {} rows in "
+            "and out")
     with pytest.raises(Unexpressible, match=re.escape(
-            f"2 templates the window can't hold, each port cut once a writer row: {soft.format(16, 20)}, past a unit's 19; "
-            f"{soft.format(17, 22)}, past a unit's 19")):
-        class_circuit(reg, WindowClass(1, 16, 2), 1, Grain(gemm_words=1024, rows=19, select=64), provable=False)
+            f"2 templates the window can't hold, each port cut once a writer row: {soft.format(17, 21)}, past a unit's 19; "
+            f"{soft.format(18, 22)}, past a unit's 19")):
+        class_circuit(reg, WindowClass(1, 17, 2), 1, Grain(gemm_words=1024, rows=19, select=64), provable=False)
     for n in (0, 3):
         with pytest.raises(Unexpressible, match=f"{n} Programs in a window of a class of 2 slots"):
             class_circuit(reg, CLASS, n, GRAIN)
@@ -825,14 +827,15 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
     2^27-bit block with at most 256 rows in and out. A port is cut once a writer row, so a unit's rows are its writers' rows,
     its registered reads and its outputs: at the test grain the largest are SiluMul's (its 16 gate/up slices and its output,
     17), the fused norm's (8 down or o_proj slices, its residual, its weight and two outputs, 12), position 4's key block's
-    softmax (5 key rows, its query and three outputs, m, l and P, 9) and P·V group (5 value rows, its P and its O, 7) and the
-    scan's (its state row and two lanes' four outputs, 9). At `SPLIT`'s MLP (32 gate/up slices, 33 rows) and 24 rows
+    softmax (5 key rows, its query and two outputs, l and P, 8: its head's last block, LAST, writes no m) and P·V group (5
+    value rows, its P and its O, 7) and the scan's (its state row and two lanes' four outputs, 9). At `SPLIT`'s MLP (32
+    gate/up slices, 33 rows) and 24 rows
     SiluMul is its body's halves instead, `SiluMul_v2{I=128}` of 16 gate/up slices each (a grain under 19 rows holds no
     P·V group of a k-step, `window_circuit.group_keys`). No unit holds more than the grain's rows."""
     circuit, _ = window
     rows = _unit_rows(circuit)
     assert (rows["SiluMul_v2{I=128}"], rows["RMSNormFusedCuda_v2{N=64}"], rows[SOFTMAX.format(5)], rows[PV.format(5)],
-            rows[SCAN]) == (17, 12, 9, 7, 9)
+            rows[SCAN]) == (17, 12, 8, 7, 9)
     assert max(rows.values()) == 17 <= GRAIN.rows
     small = class_circuit(S._registered(SPLIT), CLASS, None, Grain(gemm_words=1024, rows=24, select=64), provable=False)
     n, rows = {_label(fn): k for fn, k in small.templates if fn.name == "SiluMul"}, _unit_rows(small)

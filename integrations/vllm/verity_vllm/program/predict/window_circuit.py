@@ -45,8 +45,9 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   body, read once a T) are its units, each key block its softmax step and its P·V groups of PK keys: the first visited
   block (keys (nb - 1)·BN ... T - 1, nb = ⌈T / BN⌉) `AttnBlockSoftmax_v1{D, NVIS, FIRST=True, CHECK=True, PK}` and its
   groups `AttnBlockPv_v1{D, N, VS}` (the first from +0), each full block below it `AttnBlockSoftmax_v1{FIRST=False,
-  CHECK = b >= MASKED_FROM}` and its BN / PK groups, and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each step's
-  running state its predecessors' rows. VS is the columns of the value GEMM's slices (a key's value its D / VS rows), PK
+  CHECK = b >= MASKED_FROM}` and its BN / PK groups, block 0's softmax LAST (its running max, which nothing reads, not out),
+  and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each step's running state its predecessors' rows. VS is the
+  columns of the value GEMM's slices (a key's value its D / VS rows), PK
   the most keys of whole k-steps of 16 that divide BN with a group within a proof block's rows (`group_keys`: 96 at D 64,
   BN 192 and VS 32). A step's keys and values a KV group are its keys' rows as their writers hold them (a key's RoPE head's
   row, a value's GEMM slices), key by key, which its group's heads read. A layer's cache is refused unless it is the keys
