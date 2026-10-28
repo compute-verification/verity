@@ -50,6 +50,8 @@ COUNT = 1261
 
 COUNT -= 3  # `GeluTanhMulBf16_v2`, `GeluTanhMul_v2` and `GeluTanhMul_v3`, retired once `GeluTanhMul_v4` superseded them
 
+COUNT += 1  # `dead_free`'s AttnBlockFirst_v2, a line of its own so it merges with any other change to the count
+
 COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
 COUNT += 6  # the step's blocks: `torch_attention`'s 2, `torch_loss`'s 2 rows, `torch_embedding`'s entry and tied
 
@@ -59,13 +61,21 @@ COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once
 
 COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
+COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges with any other change to the count
+
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
 
 COUNT += 2  # `b1`'s RMSNormFusedCudaAdd_v1 and RMSNormFusedCudaTail_v1, a line of its own so it merges with any other change to the count
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
-COUNT += 3  # io_shell's `ScanSlots_v1`, `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
+COUNT += 3  # io_shell's `ScanSlots_v2` (boolean_io_shell's), `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
+
+COUNT -= 1  # io_shell's `SlotRow_v1`, which `ScanSlots_v2` gives the first position's slot in place of
+
+COUNT -= 1  # io_shell's `SlotMask_v1`, since a slot's entry is all zero when it is empty
+
+COUNT += 2  # `int8_exact`'s Int8RowQuant_v3 and `boolean_int8`'s Int8RowQuant_v4, its σ, a line of its own
 
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
 

@@ -1,10 +1,6 @@
 {
   "rule": "P1 (use core's abstractions; never copy or patch them)",
   "entries": [
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._decode_refs"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._lookup_primitive"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._statics_order"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.ml.circuits.codec._as_specialized"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.ml.circuits.codec._static_functions"},
     {"file": "verity_vllm/program/frontend/correspond.py", "kind": "core-private", "symbol": "_statics_diff", "detail": "verity.ml.circuits.defs._plain_static"},
