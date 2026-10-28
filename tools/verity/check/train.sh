@@ -54,8 +54,8 @@ done
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
 # From here a launch that registers no run says so in the merge thread, with the reason and the log's last lines, as well as
-# exiting nonzero: two launches of 9-10 Oct registered nothing and told nobody for hours. Quiet, ringing only the poster's own
-# handle: three refused resends of one commit rang every addressee of the merge thread (16 Oct, 14:02Z).
+# exiting nonzero, so a launch that registers nothing never goes unnoticed. Quiet, ringing only the poster's own handle, so
+# refused resends of one commit don't ring every addressee of the merge thread.
 why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log=
 die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
@@ -71,7 +71,7 @@ tell() {
 trap tell EXIT
 root=$(git rev-parse --show-toplevel)
 sha=$(git -C "$root" rev-parse --verify "$commit^{commit}" 2>>"$why") || die "$commit: no such commit"
-# one fetch and worktree at a time per checkout: two launches racing on the fetch both failed (22:51Z, 9 Oct)
+# one fetch and worktree at a time per checkout: two launches racing on the fetch both fail
 exec 9> "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train.lock"
 flock 9
 # a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
@@ -102,7 +102,7 @@ setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machin
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
 # 30 min: drive launches several runs at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
-# volume (21 Oct 14:11-14:25Z: three such launches gathered past a 10 min wait and were stopped)
+# volume, which can take past 10 min
 launch_wait_s=1800
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
@@ -116,8 +116,7 @@ for _ in $(seq $((launch_wait_s / 5))); do
 done
 ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
 # a launcher still running with no run after the wait is stopped, its whole session (setsid): left, it launched runs nobody
-# followed, which held check slots for hours on trees no longer on `next` (18 Oct: r20261018-173205-b114, 3 h, launched past
-# the wait while check.py gathered verdicts)
+# followed, which held check slots for hours on trees no longer on `next`
 if [ -z "${ids// /}" ] && kill -0 "$pid" 2>/dev/null; then
   kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
