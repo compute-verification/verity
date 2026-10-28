@@ -76,15 +76,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
-- every `Prop` a guarantee takes is named (`inline_failures`): its statement, its `Guarantees` definition unfolded once,
-  is read in each conjunct past its `∀` telescope, a leading `∀` over data stripped and `∧` split, instance and data
-  binders aside, and each `Prop` there is headed by a named assumption the lock lists (or a premise `--update` lists),
-  by another listed guarantee's statement (its `X.Guarantees.G₂`, which `reads` records), or is a plain range (`0 < x`,
-  `0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, each side a bound variable or a numeral, under casts). Anything else fails
-  `guarantees.inline-hypothesis`: name it as a `Prop` in an `Assumptions` module and list it, or state it as a listed
-  guarantee's conclusion. `shape.inline` (below) holds the ones that were inline when the rule came. A property
-  `shape.properties` holds is the shape rule's, which is stricter, and a witness `claims.witnesses` or `witnesses` names
-  is that rule's;
+- every `Prop` a guarantee takes is named or a plain range (`inline_failures`; `shape.inline` excepts some);
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -274,10 +266,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   proof; an input with a `Prop` field never moves. A hypothesis equating one field of two inputs its acceptance reads
   (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
   (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
-  exempt, and fails once it fits, so the list only shrinks. `"inline": {G: {premise as printed: why}}` lists the
-  inline hypotheses (above) each guarantee took when that rule came, keyed by their text with each run of whitespace
-  one space: they pass, `--update` drops each that no longer offends and adds none, `--moved` carries an entry to its
-  guarantee's new name, and the AUDIT line prints the map's size as `inline debt N`. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
+  exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
   `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
