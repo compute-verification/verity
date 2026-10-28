@@ -69,7 +69,7 @@ against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 -
 times; the harness records clocks and the UUID itself:
 
 ```bash
-R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
+R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<you>
    --send BUILD/libpouw_harness.so --send BUILD/libpouw_lt2.so --send BUILD/build.json --send GPUS.md'  # GPUS.md: server.md's table
 H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/bench.py --gpu lease
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline

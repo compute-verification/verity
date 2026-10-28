@@ -10,7 +10,7 @@
 # 46; TILE_R as row/v2, TILESEG_R as row-seg/v1), beside the chunk's GEMM. Every latency is measured from the end of a
 # stand-in producer kernel, the operand's last write. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=COMMIT-GPU \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/commit_gpu/gpu.sh
 # CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask][merged][quad], l for
 # SHA_ROLL=1);
