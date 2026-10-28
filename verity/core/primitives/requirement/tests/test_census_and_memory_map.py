@@ -252,7 +252,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}
     tables = first_need(rows, arrive)
-    head, steps = MM.record(rows, arrive, _payload, bytes(range(64)), MM.Layout(block_size=BLOCK_SIZE), tables)
+    head, steps = MM.record(rows, arrive, _payload, bytes(range(64)), MM.KvPool(block_size=BLOCK_SIZE), tables)
     end = max(arrive[r] + rs.steps for r, rs in rows.items())
     assert all(s.step < end for s in steps)
     (sb,) = {rs.row_bytes for rs in rows.values()}

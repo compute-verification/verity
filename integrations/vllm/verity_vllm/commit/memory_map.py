@@ -112,7 +112,7 @@ class Rows:
 
 
 @dataclass(frozen=True)
-class Layout:
+class KvPool:
     """The engine's KV pool: `pages` pages of `block_size` slots in each layer's region, layer l's from store index
     `firsts[l]`, in a registered store of `blocks` blocks.  Unset, the pool is the whole store, its regions layer by layer,
     with the pages the session takes."""
@@ -383,7 +383,7 @@ class _Pool:
         return self.firsts[layer] + int(self.ids[page, c])
 
 
-def _pool(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Sequence[int]]) -> _Pool:
+def _pool(requests: Mapping[str, Rows], layout: KvPool, tables: Mapping[str, Sequence[int]]) -> _Pool:
     shapes = {(len(rs.layers), len(rs.layers[0]), rs.row_bytes) for rs in requests.values()}
     if len(shapes) != 1:
         raise ValueError(f"the requests' KV differs in (layers, planes, row bytes): {sorted(shapes)}")
@@ -398,7 +398,7 @@ def _pool(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Seq
 
 
 def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Callable[[str, Row], bytes], registration: bytes,
-           layout: Layout, tables: Mapping[str, Sequence[int]], deferral: Deferral | None = None,
+           layout: KvPool, tables: Mapping[str, Sequence[int]], deferral: Deferral | None = None,
            producers: Mapping[str, Sequence[str]] | None = None) -> tuple[Header, list[Step]]:
     """The session's memory map beside the registered store `registration` digests: each request's rows from its arrival step,
     a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`), its writes where `deferral` has
@@ -538,7 +538,7 @@ def _lines(filler: Mapping[int, list[int]], appends: list[_Append]) -> list[Step
     return out
 
 
-def engine_agrees(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Sequence[int]], steps: Sequence[Step],
+def engine_agrees(requests: Mapping[str, Rows], layout: KvPool, tables: Mapping[str, Sequence[int]], steps: Sequence[Step],
                   block: Callable[[int, int, int], bytes]) -> dict[str, int]:
     """How many of the session's pages' blocks the engine's KV holds as the map's last write of each left them: `block(layer,
     page, c)` the bytes the engine's cache of layer `layer` holds at page `page`'s c-th 4 KiB (a page's planes in order).  A
