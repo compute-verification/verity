@@ -141,7 +141,8 @@ theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val 
     T.block z o (a.col hg x) = 0 := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
-  exact stack_zero_blockH L (h.flatLayout ht) regs (h.unitFacts ht) hR hg x hx hz hsat o
+  exact stack_zero_blockH L (h.flatLayout ht : Layout (Hidden.flatTwin st)) regs
+    (h.unitFacts ht : Aliased.UnitFacts tags (Hidden.flatTwin st)) hR hg x hx hz hsat o
 
 end AcceptedH
 

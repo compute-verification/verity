@@ -1,4 +1,4 @@
-"""Binding tests for the hidden-stream commitment (R9 cmt-hidden): openings against the prechallenge root, negatives.
+"""Binding tests for the hidden-stream commitment: openings against the prechallenge root, negatives.
 
 CPU only: the streams are synthetic (random words in the M1 layout) -- the *acquisition* correctness (bit-identity,
 oracle x-check, in-kernel SHA-256 == hashlib) is tested on the GPU by `out/gen/r9/cmt-hidden/src/hidden_tap.py xcheck`.
