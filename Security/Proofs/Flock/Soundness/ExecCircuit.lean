@@ -255,6 +255,8 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   recOpening : RecOpening.check c = .ok ()
   /-- not a typed template: `parse`'s `tmpl` is `none` -/
   typed : c.typed = none
+  /-- no templated unit: only `HmOut.parseTmpl` carries one -/
+  tmpl : c.tmpl = none
 
 /-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind**: `ParseFacts` but with each net one of `pre`'s,
 `Built` or a lookup slot (a templated file's unit net, `Tmpl.unitNet`, is not `Built`). -/
@@ -275,6 +277,7 @@ structure ParseFactsPre (tags : Tags) (pre : Array (String × Net)) (c : Circuit
   recSparse : RecSparse.check c = .ok ()
   recOpening : RecOpening.check c = .ok ()
   typed : c.typed = none
+  tmpl : c.tmpl = none
 
 /-- `ParseFactsPre` with `pre`'s nets `Built` is `ParseFacts`. -/
 theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsPre tags pre c)
@@ -282,7 +285,7 @@ theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Cir
   { nets := fun x hx => (P.nets x hx).elim (fun h => .inl (hpre x h)) id, portWords := P.portWords,
     v1Segs := P.v1Segs, rowWires := P.rowWires, unitNet := P.unitNet, shaNet := P.shaNet, hmNet := P.hmNet,
     kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
-    recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed }
+    recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed, tmpl := P.tmpl }
 
 set_option maxHeartbeats 4000000 in
 /-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, or a
@@ -579,7 +582,7 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩,
           rowNets := by cases w'; exact hrows, recNet := by cases w''; exact hrec,
           recResiduals := by cases w'''; exact hres, recSparse := by cases w''''; exact hsparse,
-          recOpening := by cases w5; exact hopening, typed := rfl }
+          recOpening := by cases w5; exact hopening, typed := rfl, tmpl := rfl }
 
 /-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net): its nets are `pre`'s,
 then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/

@@ -878,6 +878,10 @@
    "owner": "@proofs",
    "digest": "87e26bc2f159fcfce66f129803f44e25fe5ec95bfe6dd950af54960ba43b28ad"
   },
+  "Flock.Bridge.Assumptions.ServedFilesParse": {
+   "owner": "@proofs",
+   "digest": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
+  },
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
@@ -949,6 +953,10 @@
   "FlockSoundness.Accounting.Stmt.InRange": {
    "owner": "@proofs",
    "digest": "14f41f745abc478968ebae692fbb51b813f932a65294c6279434928b7d158968"
+  },
+  "FlockSoundness.Assumptions.Flock.DeployedFilesHJ": {
+   "owner": "@proofs",
+   "digest": "6bf6045dbc288fb1c1ace37f475bfc13bfea6e82cdc75009871ccf4b7c0cbf93"
   },
   "FlockSoundness.Assumptions.HmRowComputes": {
    "owner": "@proofs",
@@ -1078,6 +1086,10 @@
    "owner": "@proofs",
    "digest": "693df68f8eefe5547fe3465d17dcc6a2169a5a6ab947fe0a67c867708ead03ac"
   },
+  "FlockSoundness.Audit.Partition.ReadsOwn": {
+   "owner": "@proofs",
+   "digest": "6529c6e870b90c86fd5f72d71b83fd0dd41f0a2370994883c8a2145e3438be9e"
+  },
   "FlockSoundness.Audit.Partition.Separates": {
    "owner": "@proofs",
    "digest": "9d269cea0ddce0da684a660ab77be893348a96e8aacfb4d574b46a46b91fb1f5"
@@ -1150,6 +1162,10 @@
    "owner": "@proofs",
    "digest": "53137b003de91081ca7cc4de88ee4dd541309df80380fd581caa72169165a282"
   },
+  "FlockSoundness.Discharge.ZkLink.OpeningsCanon": {
+   "owner": "@proofs",
+   "digest": "81821838ff099ce1a248266ef7d98d80d4202c5e1fa6a93e4bd6d5a31ccf199a"
+  },
   "FlockSoundness.Discharge.ZkLink.RowsCRZC": {
    "owner": "@proofs",
    "digest": "22696db5558b06a10e5b01f4000c513f44417476b09c218fa7ae484dd1ae4f7a"
@@ -1161,6 +1177,10 @@
   "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
    "owner": "@proofs",
    "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
+  },
+  "FlockSoundness.Discharge.ZkSession.LoweringSoundZK": {
+   "owner": "@proofs",
+   "digest": "792b9d7c0b6346fd00397b7033282561db2d6020f24170bcc5e0116ec31454ee"
   },
   "FlockSoundness.Model.Arith.Correct": {
    "owner": "@proofs",
@@ -2065,26 +2085,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Flock.Bridge.Assumptions.ServedFilesParse": {
-   "owner": "@proofs",
-   "digest": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
-  },
-  "FlockSoundness.Assumptions.Flock.DeployedFilesHJ": {
-   "owner": "@proofs",
-   "digest": "6bf6045dbc288fb1c1ace37f475bfc13bfea6e82cdc75009871ccf4b7c0cbf93"
-  },
-  "FlockSoundness.Audit.Partition.ReadsOwn": {
-   "owner": "@proofs",
-   "digest": "6529c6e870b90c86fd5f72d71b83fd0dd41f0a2370994883c8a2145e3438be9e"
-  },
-  "FlockSoundness.Discharge.ZkLink.OpeningsCanon": {
-   "owner": "@proofs",
-   "digest": "81821838ff099ce1a248266ef7d98d80d4202c5e1fa6a93e4bd6d5a31ccf199a"
-  },
-  "FlockSoundness.Discharge.ZkSession.LoweringSoundZK": {
-   "owner": "@proofs",
-   "digest": "792b9d7c0b6346fd00397b7033282561db2d6020f24170bcc5e0116ec31454ee"
   }
  },
  "meaning": [
@@ -5954,6 +5954,12 @@
    "assumptions": [],
    "type_hash": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007"
   },
+  "Flock.SecurityProofs.DeltaPubDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed"],
+   "assumptions": [],
+   "type_hash": "a813a423e9fcecd92d7162f686abe1533dde2a5b1b1e1a17c659b78b3a361e5c"
+  },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
@@ -5989,6 +5995,12 @@
    "signature": ["Flock.SecurityProofs.EndToEndHiddenFlat : Flock.Guarantees.EndToEndHiddenFlat"],
    "assumptions": [],
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b"
+  },
+  "Flock.SecurityProofs.EndToEndHiddenModel": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel"],
+   "assumptions": [],
+   "type_hash": "bf693cd3c412d14a2708bb6fe93619d59fc54acf34de04d4ff44dc89a02f063c"
   },
   "Flock.SecurityProofs.EndToEndHidden_refSetup": {
    "owner": "@proofs",
@@ -6201,6 +6213,12 @@
    "signature": ["Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK"],
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
+  },
+  "Flock.SecurityProofs.SampledKSLiveHonest": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest"],
+   "assumptions": [],
+   "type_hash": "fdf9776391fc68898ff4a46a061525b81c502e54db3384f10cb2287de0633554"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "owner": "@proofs",
@@ -11424,24 +11442,6 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
-  },
-  "Flock.SecurityProofs.DeltaPubDeployed": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed"],
-   "assumptions": [],
-   "type_hash": "a813a423e9fcecd92d7162f686abe1533dde2a5b1b1e1a17c659b78b3a361e5c"
-  },
-  "Flock.SecurityProofs.EndToEndHiddenModel": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel"],
-   "assumptions": [],
-   "type_hash": "bf693cd3c412d14a2708bb6fe93619d59fc54acf34de04d4ff44dc89a02f063c"
-  },
-  "Flock.SecurityProofs.SampledKSLiveHonest": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest"],
-   "assumptions": [],
-   "type_hash": "fdf9776391fc68898ff4a46a061525b81c502e54db3384f10cb2287de0633554"
   }
  },
  "shape": {
@@ -20301,6 +20301,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -20355,8 +20356,7 @@
     "FlockSoundness.table_sound_fast100_34_35",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.Accounting.Fast100": {
@@ -20381,6 +20381,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -20430,8 +20431,7 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.Accounting.Padded": {
@@ -20497,6 +20497,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -20547,8 +20548,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.Accounting.Schedule": {
@@ -20622,6 +20622,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -20676,8 +20677,7 @@
     "FlockSoundness.table_sound_fast100_34_35",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.Arith": {
@@ -20745,6 +20745,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -20778,8 +20779,7 @@
     "FlockSoundness.table_sound_fast100_34_35",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.Audit.Harm": {
@@ -20812,6 +20812,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -20868,8 +20869,7 @@
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Circuit": {
@@ -20919,6 +20919,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -20948,8 +20949,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockVBridge.unit_recOpen"
    ]
   },
   "Definitions.Flock.Compiled": {
@@ -21007,6 +21007,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21030,8 +21031,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Defs": {
@@ -21093,6 +21093,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -21147,8 +21148,7 @@
     "FlockSoundness.table_sound_fast100_34_35",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.Extract": {
@@ -21165,6 +21165,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21188,8 +21189,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Game": {
@@ -21222,6 +21222,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21258,8 +21259,7 @@
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
-    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
    ]
   },
   "Definitions.Flock.Game.Batch": {
@@ -21283,6 +21283,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21306,8 +21307,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Game.Expect": {
@@ -21326,6 +21326,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21349,8 +21350,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Game.Interleave": {
@@ -21368,6 +21368,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21394,8 +21395,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
   "Definitions.Flock.Game.Lock": {
@@ -21434,6 +21434,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21457,8 +21458,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Game.Prob": {
@@ -21476,6 +21476,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21507,8 +21508,7 @@
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Game.Seq": {
@@ -21529,6 +21529,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21552,8 +21553,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Guarantees.Audit": {
@@ -21670,6 +21670,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21696,8 +21697,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
   "Definitions.Flock.LigeritoPad": {
@@ -21719,6 +21719,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21741,8 +21742,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Definitions.Flock.Lowering": {
@@ -21868,6 +21868,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21892,8 +21893,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Piop": {
@@ -21933,6 +21933,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -21961,8 +21962,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
   "Definitions.Flock.Recursive.Holo": {
@@ -22011,6 +22011,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -22034,8 +22035,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Flock.Session": {
@@ -22057,6 +22057,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -22083,8 +22084,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
   "Definitions.Flock.Sparse": {
@@ -22200,6 +22200,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -22233,8 +22234,7 @@
     "FlockSoundness.table_sound_fast100_34_35",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Flock.ZK.Cut": {
@@ -32216,6 +32216,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -32243,6 +32244,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32276,9 +32278,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Canon": {
@@ -32346,6 +32346,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -32369,6 +32370,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32399,9 +32401,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Circuit": {
@@ -32551,6 +32551,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -32574,6 +32575,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32605,9 +32607,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CircuitType": {
@@ -32719,6 +32719,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -32742,6 +32743,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32773,9 +32775,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CoinTree": {
@@ -32846,6 +32846,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -32869,6 +32870,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32898,9 +32900,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Comp": {
@@ -32984,6 +32984,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33007,6 +33008,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33039,9 +33041,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Derive": {
@@ -33096,6 +33096,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33119,6 +33120,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33150,9 +33152,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveAll": {
@@ -33282,6 +33282,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33305,6 +33306,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33336,9 +33338,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveCheck": {
@@ -33435,6 +33435,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33458,6 +33459,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33489,9 +33491,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Desc": {
@@ -33525,11 +33525,11 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Flock.Draw": {
@@ -33663,6 +33663,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33715,8 +33716,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Extract": {
@@ -33793,6 +33793,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33845,8 +33846,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Field": {
@@ -33960,6 +33960,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -33983,6 +33984,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34025,9 +34027,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Firewall": {
@@ -34272,6 +34272,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -34300,6 +34301,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34341,9 +34343,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Hm96": {
@@ -34425,6 +34425,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -34452,6 +34453,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34483,9 +34485,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.HmNets": {
@@ -34642,6 +34642,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -34665,6 +34666,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34708,9 +34710,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.HmRow": {
@@ -34911,6 +34911,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -34934,6 +34935,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34964,9 +34966,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Keccak": {
@@ -35176,6 +35176,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -35199,6 +35200,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35230,9 +35232,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Library": {
@@ -35295,6 +35295,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -35318,6 +35319,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35349,9 +35351,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Ligerito": {
@@ -35453,6 +35453,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -35476,6 +35477,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35506,9 +35508,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Lookup": {
@@ -35587,6 +35587,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -35610,6 +35611,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35640,9 +35642,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Merkle": {
@@ -35716,6 +35716,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -35777,8 +35778,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Net": {
@@ -35880,6 +35880,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -35903,6 +35904,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35940,9 +35942,7 @@
     "FlockVBridge.unit_recOpen",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.NetAt": {
@@ -36013,6 +36013,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -36036,6 +36037,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36067,9 +36069,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Norm": {
@@ -36245,6 +36245,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -36268,6 +36269,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36298,9 +36300,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Partition": {
@@ -36398,6 +36398,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -36450,8 +36451,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Piop": {
@@ -36546,6 +36546,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -36569,6 +36570,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36600,9 +36602,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.PortRoots": {
@@ -36859,6 +36859,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -36911,8 +36912,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Proof": {
@@ -37051,6 +37051,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -37074,6 +37075,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37104,9 +37106,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.ProvedScope": {
@@ -37275,6 +37275,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -37298,6 +37299,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37327,9 +37329,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Qcall": {
@@ -37452,6 +37452,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -37504,8 +37505,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Qword": {
@@ -37581,6 +37581,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -37633,8 +37634,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.RecAlgebra": {
@@ -37930,6 +37930,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -37953,6 +37954,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37983,9 +37985,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.RecCoins": {
@@ -38274,6 +38274,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -38297,6 +38298,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38330,9 +38332,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.RecOpening": {
@@ -38421,6 +38421,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -38444,6 +38445,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38474,9 +38476,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.RecRecord": {
@@ -38663,6 +38663,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -38686,6 +38687,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38716,9 +38718,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.RecSetup": {
@@ -38894,6 +38894,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -38917,6 +38918,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38947,9 +38949,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.RecVStar": {
@@ -39590,6 +39590,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -39644,8 +39645,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Schedule": {
@@ -39720,6 +39720,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -39743,6 +39744,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -39773,9 +39775,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Statement": {
@@ -39893,6 +39893,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -39916,6 +39917,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -39945,9 +39947,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Steps": {
@@ -40003,6 +40003,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -40055,8 +40056,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Tags": {
@@ -40193,6 +40193,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -40216,6 +40217,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40246,9 +40248,7 @@
     "FlockVBridge.keyProg_parse",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TemplateQuery": {
@@ -40337,6 +40337,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -40389,12 +40390,11 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Tmpl": {
-   "digest": "ce03687ae285af9a480a005d108aeef1ed40f70bc0c627f65f2828537322805e",
+   "digest": "5ff4685f29cb62994ed663d89d1ff8ec53d89ede8b29d2c441b7033d59fac4cb",
    "definitions": {
     "Flock.Tmpl.Acc": "977dadb7026ef0ee9fecd23490ee0ab6dfcf4eff4aa0d4b49c4de239f97821f2",
     "Flock.Tmpl.Acc.empty": "f5793cac95dca49d796fcccae6a8a9edb614b41112b0485384b68ae4894f3be2",
@@ -40449,6 +40449,7 @@
     "Flock.Tmpl.parse._sparseCasesOn_3": "b637662f24e53b2d5717d95ac3e3c781b170b925d9e02e9ddcf23ce643efef4e",
     "Flock.Tmpl.parse.match_3": "7d381262edca2d1b0b707ceebefe187f31fbea53d7d954523602fe8acc0a0391",
     "Flock.Tmpl.place": "ac4b23f4e42fcfda2da4976d04cc28d67d5a041e10719ed5fe167b1bccfb1d4d",
+    "Flock.Tmpl.unroll": "b5e60733061ccc0a0a99ba4b28fec528e52516d67a7b5a37c6fd6f61570d0982",
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd"
    },
    "guarantees": [
@@ -40498,6 +40499,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -40521,6 +40523,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40552,9 +40555,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TmplApart": {
@@ -40613,6 +40614,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -40636,6 +40638,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40667,9 +40670,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TmplAt": {
@@ -40733,6 +40734,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -40756,6 +40758,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40787,9 +40790,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TmplFold": {
@@ -40996,6 +40997,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -41019,6 +41021,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41050,9 +41053,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TmplReads": {
@@ -41132,6 +41133,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -41155,6 +41157,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41186,9 +41189,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TmplSplit": {
@@ -41376,6 +41377,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -41399,6 +41401,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41430,9 +41433,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Transcript": {
@@ -41660,6 +41661,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -41683,6 +41685,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41714,9 +41717,7 @@
     "FlockVBridge.unit_check",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Verify": {
@@ -42357,6 +42358,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -42380,6 +42382,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -42409,9 +42412,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.ZkLigerito": {
@@ -42481,6 +42482,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -42528,8 +42530,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.ZkProof": {
@@ -43014,6 +43015,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
+  "Proofs.Flock.Bridge.Assumptions.Served": {
+   "digest": "b09a381f9f9ff31506ad28a9f07a85eacb3385b5ba84aba9f3c8d53e5f191ca5",
+   "definitions": {
+    "Flock.Bridge.Assumptions.ServedFilesParse": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
   "Proofs.Flock.Bridge.Defs": {
    "digest": "4a746e71b37bf5d5303aa13e8ef6f274c23d501e534e50f69defaa45064fcac6",
    "definitions": {
@@ -43073,6 +43081,13 @@
     "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
+  "Proofs.Flock.Bridge.Honest": {
+   "digest": "0b798ba5631315260eae644e8baef5564c4225ea63f1b48a210f046e45d85bd8",
+   "definitions": {
+    "Flock.Guarantees.SampledKSLiveHonest": "441d88d32209934ccf332d6ba598fd870a07e73c4ed5ec47a3059af6ba8dd6b1"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
   "Proofs.Flock.Bridge.PopMatches": {
    "digest": "49a2b0b289df53170e9bb92599ea422908b51c5d7777b63ec40d86fabf6b8273",
    "definitions": {
@@ -43093,17 +43108,51 @@
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
   },
+  "Proofs.Flock.Bridge.PubFinder": {
+   "digest": "12d45e8992230c8b805679c99fc3aff11da4febd52269e1e15a619355c1f0f82",
+   "definitions": {
+    "Flock.Bridge.LinkPos": "c377577cfb6797a15c0ad4cdce065066f81141898f657e74fc5b653af23d1338",
+    "Flock.Bridge.TabIx": "46dac560009271cb7c280241daafa63e9235ca020cdc4389545feb92642c8eed",
+    "Flock.Bridge.linkComp": "ebd885ae149f39cdbe89bb967b1fb803c680936c220a3eea5a54666f9b199f2d",
+    "Flock.Bridge.slotAt": "b43f6e9338ebc194d072959374f915641dd5d94b633c05e91a2f3921d665ca09",
+    "Flock.Bridge.strictComp": "1ab520c2e63821af8668a75dac5bd6221ba8dfd97676d34923423709c0417277",
+    "Flock.Bridge.tabAt": "4d65c3366d966727423943e2e8bc8beea196fba31ec28aea6963f2cb4fe3888e",
+    "Flock.Bridge.tabComp": "963d940008e3d09e8ec1a74d4ab29928145c9455d4a74857488044eab50551a8",
+    "Flock.Bridge.tabMix": "f2b3a4560212529ae7c2b4389dd28c126bc6de0146f76453422bd5876633c22d",
+    "Flock.Bridge.tabOf": "0147657fbfd8dd5310a727272534ef04f620d9e34ffac12afc47506acecf8dca"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+  },
+  "Proofs.Flock.Bridge.PubFinderRows": {
+   "digest": "86634acaabbf8f4d1e570ac2801f5c5b278a6bf979684021588e8a5d8c0e1f89",
+   "definitions": {
+    "Flock.Bridge.PubIxR": "ee553cd7735558dd0acafca1fb71ff69c231ca30126428725d7fb3104f572682",
+    "Flock.Bridge.instFintypePubIxR": "ca0bff147ba1e5db2dddb2a1cb15cb518154ff8327ceff86e8d00898c1d41f31",
+    "Flock.Bridge.pubFamR": "9c2cf0d6d17fefa1252ac932efb2ba8d8e9d0bf18e93ffc8b627fc442ba0261e",
+    "Flock.Bridge.pubFinderR": "d77729c5d2074712f69be799f774fc1015729ab8f7685d5aad7c1b630e4d45fe",
+    "Flock.Bridge.rowsComp": "7aa027a823b4341ce31a38487465c6012975c7ec224ebf62e6f5af3599b25a62"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+  },
   "Proofs.Flock.Bridge.Public": {
    "digest": "26996113cebf02e271e492ec7777333db97ac31bad2fb2957e05800ed6346327",
    "definitions": {
     "Flock.Bridge.deltaPub": "eeeaa328ea97f2cd745fb6d351ed9ee007080dde442725aa4bc065bf656fa033",
-    "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
-    "Flock.Guarantees.SampledKSLivePub": "19d98f6013fd5bbd461cc9b8f990e26cfbc87c7f767f3589ad193e0abbe58d24",
     "Flock.Bridge.deltaPubR": "38745d318f7828bca8aa9acf31f4ad65c9743c0343b94ab813300957cdf13d0a",
+    "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
     "Flock.Bridge.lossPub": "26f25d99c596b9772489b2ed131f79c48dedb9df3d30ce68af2342f33f91a877",
-    "Flock.Bridge.lossPubR": "f20b73834f264dd325ee0a9adac6703f150e6b0093a30726f3112705993c7e76"
+    "Flock.Bridge.lossPubR": "f20b73834f264dd325ee0a9adac6703f150e6b0093a30726f3112705993c7e76",
+    "Flock.Guarantees.SampledKSLivePub": "19d98f6013fd5bbd461cc9b8f990e26cfbc87c7f767f3589ad193e0abbe58d24"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.DeltaPubDeployed"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
+  },
+  "Proofs.Flock.Bridge.PublicDeployed": {
+   "digest": "2c8ea2acf4c5e647697be7e7d448e809f10fd2db25df76850c5d82dc1fd77af5",
+   "definitions": {
+    "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
+    "Flock.Guarantees.DeltaPubDeployed": "3f9f4304c822d00dbacbaec511d48808bea91b9d28e71c87bbb7a5bf8f3f87ee"
+   },
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
   "Proofs.Flock.Bridge.Refused": {
    "digest": "0a72b99520186417d3d594f3fda6043c7979580ed689af25460568e3431f3e13",
@@ -43113,6 +43162,22 @@
     "Flock.Guarantees.SampledKSLiveV3": "d00ba15214326b8fb4e621be7c5e554b5ab39bba0080ea4141b70acc29c03153"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV3"]
+  },
+  "Proofs.Flock.Bridge.RightRegZc": {
+   "digest": "eb8495800fd996086ec014de1ab50180aae841fedf1b7d49fc56866543636e1f",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.OpeningsCanon": "81821838ff099ce1a248266ef7d98d80d4202c5e1fa6a93e4bd6d5a31ccf199a",
+    "FlockSoundness.Discharge.ZkLink.RightRegZc": "79c5624417d002617cd89e78dc1ca9987e489e4b0f4e19a773336d3f981753d1",
+    "FlockSoundness.Discharge.ZkLink.wrongRegZc": "f8e0d67b6fbd0e862780a5313cb825b00629f6b45da6e8011ebf79e7b58f753b"
+   },
+   "guarantees": ["Flock.SecurityProofs.EndToEndHiddenModel"]
+  },
+  "Proofs.Flock.Bridge.Rows": {
+   "digest": "c02b319a702d22cd4e533aa09d1a13c936ffd19846eaa720c8153a74f2844cd4",
+   "definitions": {
+    "Flock.Guarantees.SampledKSLiveV2": "70231cd1aacd5d4fdd34dbb88d3a515af23bb61a55c6c648409d7b2fd62294e8"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
   "Proofs.Flock.Bridge.Statement": {
    "digest": "74b1572c444cf5c675b4ede7ba2dffff9fb9fbf164f41ab6ce37ba3043045507",
@@ -48148,6 +48213,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -48199,8 +48265,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.Bits": {
@@ -48254,6 +48319,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48286,8 +48352,7 @@
     "FlockVBridge.chainAcc_sum",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.FoldStmt": {
@@ -48342,6 +48407,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48372,8 +48438,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF128": {
@@ -48429,6 +48494,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48464,8 +48530,7 @@
     "FlockVBridge.sound_residualForms",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF128Field": {
@@ -48521,6 +48586,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -48574,8 +48640,7 @@
     "FlockVBridge.chainAcc_sum",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF128Ring": {
@@ -48629,6 +48694,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48661,8 +48727,7 @@
     "FlockVBridge.chainAcc_sum",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF256": {
@@ -48722,6 +48787,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48752,8 +48818,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.Nodes": {
@@ -48808,6 +48873,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48838,8 +48904,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.NovelBasis": {
@@ -48894,6 +48959,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -48924,8 +48990,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.Placed": {
@@ -49086,6 +49151,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -49137,8 +49203,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Masked.Statement": {
@@ -50078,6 +50143,13 @@
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK"
    ]
   },
+  "Proofs.Flock.Soundness.Assumptions.Files": {
+   "digest": "c509a316e7b3b13c2cdcc6f86e16b152f5bf4bca80ee66eae52cbef669239e90",
+   "definitions": {
+    "FlockSoundness.Assumptions.Flock.DeployedFilesHJ": "6bf6045dbc288fb1c1ace37f475bfc13bfea6e82cdc75009871ccf4b7c0cbf93"
+   },
+   "guarantees": ["Flock.SecurityProofs.EndToEndHidden"]
+  },
   "Proofs.Flock.Soundness.Assumptions.Finders": {
    "digest": "79d069c3d25dedd1e28979f6494d94dd9bcf41791e7bbcbc961d6de555dd73c4",
    "definitions": {
@@ -50396,6 +50468,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -50426,8 +50499,7 @@
     "FlockSoundness.Audit.audit_work_floor",
     "FlockSoundness.Audit.audit_work_whole_stratum",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Partitioning.Guarantees": {
@@ -50896,6 +50968,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -50919,8 +50992,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.CompiledSound": {
@@ -50940,6 +51012,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -50965,8 +51038,7 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Soundness.Compose": {
@@ -51249,6 +51321,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -51289,8 +51362,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.Inner": {
@@ -51679,6 +51751,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -51716,8 +51789,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.CompiledL": {
@@ -51742,6 +51814,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -51765,8 +51838,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Decode": {
@@ -51893,6 +51965,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -51916,6 +51989,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -51945,9 +52019,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL": {
@@ -52165,6 +52237,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -52202,8 +52275,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Shape": {
@@ -52384,12 +52456,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1": {
-   "digest": "597848cd20f5ca2456df5bbabd077bb95df70acd40914df6ef75d0fa4635899d",
+   "digest": "1841e07c5822bac7c49ae4bc3a664411160be17c47ae760e79462774bef410f4",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.ksClosedM1": "7c15d0f99d5d1410d07f04db7c4641abfb062e0106f6de11c87d5538801dc20a",
     "FlockSoundness.Discharge.ZkLink.rateM1": "f5dd0e040b4db220db97929c7a4504a5573b97c7335d216000a0212eea49f545"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.DeltaPubDeployed"]
+   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered": {
    "digest": "5f05d9c0d438af3248be184b3f3c16ff38a4f45bf9e78cdbbd38ee44776978d8",
@@ -52873,12 +52945,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.Placed": {
-   "digest": "cd35a0e205516a7a5a7466760b5e3396cc3ba3d71296c05dd94acfccbd14ea7c",
+   "digest": "13019b36af95184ec0887a97a9414eb9ac373c6df709bbe94375328ff8564cdb",
    "definitions": {
     "FlockSoundness.Discharge.HiddenExec.AcceptedH": "708d9bb28a49f5df8c5f5a8e3ff2a02cef3c0bb0b1c30ec8593223763668ecfc",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.cf": "fe69793d68143abc67b0213e7caa599225c5b463bddf62469103f070f9900d46",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.coins": "0d7c65d5fdb7d00082c524297b7ef88a8b3809d24e838044671581d330876e59",
-    "FlockSoundness.Discharge.HiddenExec.AcceptedH.col": "c18bc219b8b92b3376f58e93e5209a6b3d3a704073eecc861e55275e2fbdc0d9",
+    "FlockSoundness.Discharge.HiddenExec.AcceptedH.col": "a9c2033e713d10120527fc61c56098d98dcad5694887d9413ef37d1644f68e15",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.draw": "7bcfd696dfbc00ca065e8d26c257fcb93b32aeb83dc9efafee5cd7cab50f9b8e",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.partition": "499da0c48819b186fd32e80712b11b871b4ea05aaa70ed0a4206081cbfe7832b",
     "FlockSoundness.Discharge.HiddenExec.AcceptedH.pf": "9fc11ecd13a67b0870d9fde23b854ab7f0c6ddd8e77337d432f130a51750c91a",
@@ -53101,6 +53173,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -53137,8 +53210,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Gadget": {
@@ -53396,6 +53468,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -53429,8 +53502,7 @@
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.HmRegion": {
@@ -53988,6 +54060,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -54001,8 +54074,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Site": {
@@ -54065,12 +54137,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Setup": {
-   "digest": "91365c05697986b186ccf42f1de3ee1802f8b5997732ae85676d0533f3f06072",
+   "digest": "d90ffd07639ad3b5d26dc576bf76dd0c4d705d6aaca9b08ab4ff3b313f80c825",
    "definitions": {
     "FlockSoundness.Discharge.Placed.Accepted": "ec16515e7909d5871eb920dc707b2336094f628e52f5bac7f135561a8f7def23",
     "FlockSoundness.Discharge.Placed.Accepted.cf": "39c9f0d6aee5c8f9bc645eb4a22a9724dfaeef7706914bb73687fe9962dc3e3e",
     "FlockSoundness.Discharge.Placed.Accepted.coins": "71c0e9375ca77e8c73ea5c934a39d5e3a1ddda25518e91fc983b4c117d2df97b",
-    "FlockSoundness.Discharge.Placed.Accepted.col": "f3d0c59993a57edca1a2951d7b38b55c336dcafff8e1a6f67471e9fec8deb5d8",
+    "FlockSoundness.Discharge.Placed.Accepted.col": "47c98fe3a151eb1bc75ac100fed72f886caea3d4f52c5c43da84885de14f2161",
     "FlockSoundness.Discharge.Placed.Accepted.draw": "cd2bed415394a3e462b4f1a31662a078cc473bbdccf18fdb60d8b0421542f807",
     "FlockSoundness.Discharge.Placed.Accepted.partition": "2af7219ebbe877db44ac4eb214c80519c632d8f682960f6dbf71a05c5c5ef565",
     "FlockSoundness.Discharge.Placed.Accepted.pf": "acd93b2f9e6f278bc9e35a81c560622e1fdd1fd4b611e399ed9e664224b05573",
@@ -54372,6 +54444,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -54409,8 +54482,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Tables.Steps": {
@@ -54741,6 +54813,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -54764,6 +54837,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -54793,9 +54867,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkExec.Live": {
@@ -54887,6 +54959,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -54932,8 +55005,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements": {
@@ -54956,6 +55028,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -54979,8 +55052,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst": {
@@ -55066,6 +55138,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -55083,6 +55156,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -55097,9 +55171,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind": {
@@ -55170,6 +55242,22 @@
    },
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden", "FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
+  "Proofs.Flock.Soundness.Discharge.ZkLink.Analysis": {
+   "digest": "b83f9da2784012b744146f7aab606ba85fb501127f3ff1ac739333bda0ee8a50",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.ksAvgZC": "a8e22b0b7ac0cfa4fceb86601d57c50a0f5a0c4dbba70e8b3c03db83f7501a58"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
+   ]
+  },
   "Proofs.Flock.Soundness.Discharge.ZkLink.BadZ": {
    "digest": "29c85b71657c8bec05235283661b3c4a61cdf142e17c50f790bf89a7f9810277",
    "definitions": {
@@ -55191,6 +55279,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55213,8 +55302,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.Compiled": {
@@ -55286,6 +55374,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55308,12 +55397,11 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink": {
-   "digest": "49e5ffae019aefebd9dce32e7a2f4cb890f5ee513236fe481ae39d4a9df017aa",
+   "digest": "41a863dc6259cb8fca8a8a10de1e30f45bb7bec9a30746f3179325ac95718581",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.LinkCRZC": "53137b003de91081ca7cc4de88ee4dd541309df80380fd581caa72169165a282",
     "FlockSoundness.Discharge.ZkLink.OpensAtZC": "0bc61a3dee720a4417bba4572989627357ca79b76048316bc225695f3c03b881",
@@ -55325,6 +55413,8 @@
     "FlockSoundness.Discharge.ZkLink.candZC": "714cc968cfe9daa20302895cef468e27e2de779cb2bdf40cb898357c1a27ee85",
     "FlockSoundness.Discharge.ZkLink.gameωZC": "a64454317c3807e2916e0d567aa87d4df838701431885cab34c670ebd72dfa90",
     "FlockSoundness.Discharge.ZkLink.linkBoundZC": "dbd52d4d81e0e5866a94d312f16fbd0bef1c0be04230f8e921eb44c6e762cde5",
+    "FlockSoundness.Discharge.ZkLink.linkFinderPrZC": "098d0c058eac580eb3775626ccb66dfc1a8d03d534aa38981bb63c9080333a3c",
+    "FlockSoundness.Discharge.ZkLink.linkPrZC": "ac4cf090bfc9b8067f37114c7f8958df1c1d8fb9926104fe0a3f6c87fa37891a",
     "FlockSoundness.Discharge.ZkLink.opOfVZC": "a4bc74de6dd0d01b0971a6f90802c5df5ab23486d6a00a7078b202822ff70268",
     "FlockSoundness.Discharge.ZkLink.outCZC": "0c75c0949731325b0cee519a17b9ddbd77135110a9a5135ae68ece89a13a71b0",
     "FlockSoundness.Discharge.ZkLink.rdTZC": "ce0d7091c33319e1ab2d7e1ee4bd770009ece7fcbd94cd90a50a2a03c62ab835",
@@ -55332,9 +55422,7 @@
     "FlockSoundness.Discharge.ZkLink.stratωZC": "ce905563719f10ede76bc2a304cea0e62b02cea371295f6bc3052843d21e5b8d",
     "FlockSoundness.Discharge.ZkLink.tabExtZC": "389b1342c9781fbaf20b8c104f2fd1f9f5cd858ab5ebea47a0fe26496c967336",
     "FlockSoundness.Discharge.ZkLink.trialGZC": "6e666825d2e46d051d9d4e6db54047817a8ecfb7c29c459af090af97f10ca967",
-    "FlockSoundness.Discharge.ZkLink.trialStratZC": "a26119e4b13cb20dab16c87d8c00a500359f7b7cd0d8e9194be7f21dc2bdf7ce",
-    "FlockSoundness.Discharge.ZkLink.linkFinderPrZC": "098d0c058eac580eb3775626ccb66dfc1a8d03d534aa38981bb63c9080333a3c",
-    "FlockSoundness.Discharge.ZkLink.linkPrZC": "ac4cf090bfc9b8067f37114c7f8958df1c1d8fb9926104fe0a3f6c87fa37891a"
+    "FlockSoundness.Discharge.ZkLink.trialStratZC": "a26119e4b13cb20dab16c87d8c00a500359f7b7cd0d8e9194be7f21dc2bdf7ce"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -55345,6 +55433,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55367,8 +55456,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk": {
@@ -55464,6 +55552,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55486,8 +55575,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.LockLevel": {
@@ -55515,6 +55603,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55537,8 +55626,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.LockRep": {
@@ -55576,6 +55664,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55598,8 +55687,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.OracleP": {
@@ -55622,6 +55710,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55644,8 +55733,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.Public": {
@@ -55664,6 +55752,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55677,8 +55766,7 @@
     "Flock.SecurityProofs.JointStratified",
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
-    "Flock.SecurityProofs.JointStratifiedMT",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "Flock.SecurityProofs.JointStratifiedMT"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.Push": {
@@ -55707,6 +55795,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55729,8 +55818,38 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+   ]
+  },
+  "Proofs.Flock.Soundness.Discharge.ZkLink.Rows": {
+   "digest": "00d265be38826bf05f0fbb6e02bdcf844c16e883eb00198cb27cc8378ac163ff",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.rowsOutZC": "0f3ffc6c6350e1ac8775e285a48d9fcf69ae6dab29d590774bcdb2efb211eb7e"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+  },
+  "Proofs.Flock.Soundness.Discharge.ZkLink.RowsPr": {
+   "digest": "2588a3fd9701a31e85b4526c473403d0eef00abad595284800176fe57fa73fe0",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.rowsMassZC": "6cc729fa46b27981075f57b90179489e5ca076db3afac592dd82a862f761e74b",
+    "FlockSoundness.Discharge.ZkLink.rowsPrZC": "8e3454a96bb913d1fe8673cbccb5a004db948dbea0a6b16ba442194cb38a8e05"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEndHiddenModel",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
+   ]
+  },
+  "Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound": {
+   "digest": "660e0e75f75aeff2ab578826253625def6dd1fc0bbc06063fe3b6e394e2c20b8",
+   "definitions": {
+    "FlockSoundness.Discharge.ZkLink.psiRowsZC": "7a60c7f2549d17ae3bc39dc43af1bc45df0a498c77a75c4d1fcb755989133428",
+    "FlockSoundness.Discharge.ZkLink.rowsWrongZ": "54f9b5cb85ae629bc3d9d1cb88e38095c3fc5002e379d762713c2081bc5d3e4e"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEndHiddenModel",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ": {
@@ -55748,6 +55867,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55770,12 +55890,11 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ": {
-   "digest": "ffde46ecbcff7a18c8022ce0b57f277d104a85287710556f62eb17c6466d3600",
+   "digest": "057b4dee9dd4fb2d9551762865dac8c4412a75bf21424e5c9b9ad2c35c186c7b",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.SessCRZ": "6632288d79c2f0850f4647b8d0dc88eccf99768f84bcc3a79803f6e1f3ad3735",
     "FlockSoundness.Discharge.ZkLink.TableCRZ": "e5f2291c34444fa014570add8f5f2afc1a8fe92ada470fa2b7b9069ac6b36f59",
@@ -55783,12 +55902,12 @@
     "FlockSoundness.Discharge.ZkLink.advRSFinderZ": "7b3801c02594ee1702f22277e1f36d5e153fa4399691a107d9fde90cedd67c93",
     "FlockSoundness.Discharge.ZkLink.advTauSFinderZ": "6d6e170c893d1c271bda4bd4b80e1fcbd79eda8747419d837f9fd728e9186b4a",
     "FlockSoundness.Discharge.ZkLink.adv₀SFinderZ": "d052023ac83d4cb1abf306ced0afecd10c669a6fc761cb29eafc07a263be2107",
-    "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ": "5fd649359c081cd1a87c239c4721b32625872cffea6e6372a2543e2ff6b873f6",
-    "FlockSoundness.Discharge.ZkLink.ksStrictZ": "875299f6ad5df96cb7cc6475f2ce81bac98933c8ffef69fa4d70c940f29f70f9",
-    "FlockSoundness.Discharge.ZkLink.selfSFinderZ": "3c0c30563915e225be0419fc9644c75484928d10e5d28b2dfe70e8987962103c",
     "FlockSoundness.Discharge.ZkLink.epsPrZ": "419371481ad70be9085db693b79d29218bc3e649003aa97daded2b8d19ec1021",
     "FlockSoundness.Discharge.ZkLink.ksAvgPrZ": "aba52e65377c92e70aa1f3c1923ef094af5c028c1ef3d4ebd383278622e8aa8c",
-    "FlockSoundness.Discharge.ZkLink.ksPrZ": "398387fdc1deaf84b4f30cde32dca72d955fc4fc8f1e65181bda3a5c373bf141"
+    "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ": "5fd649359c081cd1a87c239c4721b32625872cffea6e6372a2543e2ff6b873f6",
+    "FlockSoundness.Discharge.ZkLink.ksPrZ": "398387fdc1deaf84b4f30cde32dca72d955fc4fc8f1e65181bda3a5c373bf141",
+    "FlockSoundness.Discharge.ZkLink.ksStrictZ": "875299f6ad5df96cb7cc6475f2ce81bac98933c8ffef69fa4d70c940f29f70f9",
+    "FlockSoundness.Discharge.ZkLink.selfSFinderZ": "3c0c30563915e225be0419fc9644c75484928d10e5d28b2dfe70e8987962103c"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -55799,6 +55918,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -55821,8 +55941,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt": {
@@ -55861,6 +55980,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -55906,8 +56026,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ": {
@@ -56042,6 +56161,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56066,8 +56186,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkSession.Inner": {
@@ -56105,6 +56224,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56129,8 +56249,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkSession.Level0": {
@@ -56167,6 +56286,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56191,14 +56311,14 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkSession.Session": {
-   "digest": "ca348b9dade9f0e60b551b8cc656e4ecdc0bb3ea0dfa3214bbbcb6ecb9dc3f4e",
+   "digest": "bb2ab406e1085151448bc93f5b1e3ef729a57b172c2074d0d7acf446deb0fee5",
    "definitions": {
     "FlockSoundness.Discharge.ZkSession.DecoderZK": "dd606422f45f59b18a18a3a4dba9768a8c124d636e854e8e227eaab9f1f78419",
+    "FlockSoundness.Discharge.ZkSession.LoweringSoundZK": "792b9d7c0b6346fd00397b7033282561db2d6020f24170bcc5e0116ec31454ee",
     "FlockSoundness.Discharge.ZkSession.TabZK": "58b592757048b5db7f6583a95b8acde25109429fd1632de62349899060c68690",
     "FlockSoundness.Discharge.ZkSession.TabZK.Committed": "8c9d61da1b66952aea9c52ae0c5b58546f113b41e9fb122b2a5bba4b1ba8f3f6",
     "FlockSoundness.Discharge.ZkSession.TabZK.N": "296ed36ba8d286930f4cc1e514376158526855177731c703a4f8c7037737107a",
@@ -56219,8 +56339,7 @@
     "FlockSoundness.Discharge.ZkSession.TabZK.tr": "5dcb99340637f48094a4c975606cd732d5885287b85033a2264f7e26b46c7c52",
     "FlockSoundness.Discharge.ZkSession.TabZK.δ": "33df0e498e5910cb997d44416d9165719fec6fc7b6fd5fe8eed5ffb00294903a",
     "FlockSoundness.Discharge.ZkSession.decodeOfPlace": "582d27df7d971d2eda605ecb416cc15fbc83c2803885b1dc4627ccfb153bbf3e",
-    "FlockSoundness.Discharge.ZkSession.tabOfZ": "b2cc9bdecb30731b31adddcff020a63a34ada3667a459161c08491e6d2d5548b",
-    "FlockSoundness.Discharge.ZkSession.LoweringSoundZK": "792b9d7c0b6346fd00397b7033282561db2d6020f24170bcc5e0116ec31454ee"
+    "FlockSoundness.Discharge.ZkSession.tabOfZ": "b2cc9bdecb30731b31adddcff020a63a34ada3667a459161c08491e6d2d5548b"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -56235,6 +56354,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56259,8 +56379,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkView.Defs": {
@@ -56580,6 +56699,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -56594,24 +56714,27 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "FlockVBridge.keyProg_parse",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.ExecPlacement": {
-   "digest": "64555ca2f1fa201f48b0234ce2e982dc5874f51a77f1be712779ecc2dc379dfd",
+   "digest": "6a2a1033ce53c40ee2859ab333569a597936e6bee15ae6f047ce27b2e70279a3",
    "definitions": {
     "FlockSoundness.Apart": "48636400e28a2b03c7bd2e730ee9f7fae8aa40074c8c6a8eab33d425c0a5e61a",
     "FlockSoundness.ConstRow": "32cad996044af6bf1e264d89ac116d4f284eb761f98526fe598a453f7591d642",
     "FlockSoundness.InBit": "f7b869ddd210f64dee905097aa578e391cb77f6fe67addfbed6c880ecd5f43d3",
-    "FlockSoundness.Layout": "e47fb7b45ccf2adbb288bf03f0337cefcd0c1fdc086d8277ab75e32a0b324d0c",
-    "FlockSoundness.Layout.Aliased": "accb6e154c457d7060646bcfd13299d68d1cc515f10251e06625ad34350dfab7",
+    "FlockSoundness.Layout": "85cc2f11c998865ce3714e97cad07d64216befbe1c291fe0299fc025345435cf",
+    "FlockSoundness.Layout.Aliased": "feab46a22b3de95acc37eb6f8819146139b79d1def9bc554fa30ad3a6cdea733",
+    "FlockSoundness.Layout.col": "1d5aba202473fc7c6b61654da6b08cb389716288d5bb538a024043c6f534eefa",
     "FlockSoundness.Layout.model": "ba173c215de31837380bc1124d7eb5ac5f007c33b4164fe094815d7246937d38",
+    "FlockSoundness.UnitAt": "830a8822c338936fe0f22ec8c863129bdbd78a681b13ac7fd18835f1d261b4ab",
     "FlockSoundness.constPairs": "fcbad518052d5114c317349c285eeee245cc21b55646913674d70facfd84a1b2",
+    "FlockSoundness.lunit": "7b4810fa951402e2a6b8382fa923f7ca3ed0953b0bcde9cb98cb5df3903a5089",
     "FlockSoundness.slotPairs": "dd9b15e576661e87b297c2d9db848223c443fda31d5edf1b7272da9080c75786",
     "FlockSoundness.slotPairs._sparseCasesOn_1": "cd7eb9656a8a2f29fccab2de4070bc7449c56919afe36912013c4382dc852aff",
     "FlockSoundness.spanH": "063a48b2b5c72812e6ae42549ad2ed731550d4d151f88c343169f71aaefc0b8e",
-    "FlockSoundness.unitRows": "8fe7519ba88614a977ae11626ef0073862723ee564ecb3017e7216b60f3af0cf"
+    "FlockSoundness.unitRows": "f85d1a1654158c402e6c8c9d1e2cfa703829c57cea3f696cd6fdae30c279ac27",
+    "FlockSoundness.upos": "52d71aef541e0e5d2ea5ae0aaad936db12f513ec924d7fa726513d7781b1346f"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -56654,7 +56777,7 @@
    ]
   },
   "Proofs.Flock.Soundness.ExecRows": {
-   "digest": "af6eba9ce8fdf85ececaa87ba464f9db1fc85449e9d86db90e1f6403dc8ab3f0",
+   "digest": "545d7c069d32d83a66671f3cf5a0a0649b5300724784df7cc90de3b1524236de",
    "definitions": {
     "FlockSoundness.Built": "548f5cb7cc68be48e8bf183062c88ea8d4c8d1f5b00cc16dcf13911c3165b96f",
     "FlockSoundness.InputPadding": "90655896e0b69c43ed0b240ddf87726523d615239c50df90dd5355555681b779",
@@ -56665,7 +56788,11 @@
     "FlockSoundness.Rows.stackCol": "b8aea9d80292b824538cbc964879ce32882843ba4ce943d7c9387ec9f68eadd5",
     "FlockSoundness.Rows.stackRow": "fc1783c15783f9c1a33c229e2544a586e0db1c77252b0a8e3faae9f2588caf02",
     "FlockSoundness.Rows.stackW": "24e2cb50ee34d50023bf5eaa7eabb3717d42ac4e0e7bce52d5485eba4127b4df",
-    "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b"
+    "FlockSoundness.posInAt": "d2c0c12a0c86e10bbd7cd97347786b1ad595f7458a87105caf054e0091996cd3",
+    "FlockSoundness.stackCopy": "9a0808e97ccd920bab4fd0b27bcabb71af821add25fafad4f885e6b9e2f95a37",
+    "FlockSoundness.stackLocal": "80c84caa2ad2bf933038fcceaf7a19bdcd52df479ca3a6283a464a531dfb03fe",
+    "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b",
+    "FlockSoundness.stackPlaceAt": "0cb1b45b996faa565031d6498408b260e62206ad73af37905cde9d4bbc3f91f4"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -56700,6 +56827,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -56716,8 +56844,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen",
-    "Flock.SecurityProofs.SampledKSLiveHonest"
+    "FlockVBridge.unit_recOpen"
    ]
   },
   "Proofs.Flock.Soundness.ExecStratified": {
@@ -56780,6 +56907,17 @@
     "FlockVBridge.keyProg_parse"
    ]
   },
+  "Proofs.Flock.Soundness.ExtractAcc": {
+   "digest": "e4b0a5ebdfb590dae363cc311c0e813ed8fa9a8b3ecb25c8a4606e781114a211",
+   "definitions": {
+    "FlockSoundness.Extract.expectAcc": "95924df98516fb329019297a7092e2fdcad582d67e6a3a11dcbbe94530463c68"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEndHiddenModel",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
+   ]
+  },
   "Proofs.Flock.Soundness.ExtractWait": {
    "digest": "49c968e4ef1428b987e268b5990485a4528d4f68bc15db7d94f41edaa36f3417",
    "definitions": {
@@ -56795,6 +56933,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56818,8 +56957,18 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Proofs.Flock.Soundness.Game.Runs": {
+   "digest": "437b58e28bc8d69422360d094248dbd93382f9202d47f65f74751c838f9cda7b",
+   "definitions": {
+    "FlockSoundness.Game.expectN": "57e30c9aa90a0382a232bae58cac3709bb78b0e6a78cb4ac0531d8a2f609c73d"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEndHiddenModel",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.Soundness.Instance": {
@@ -56872,6 +57021,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56902,8 +57052,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Soundness.LigeritoPadLevel0": {
@@ -56924,6 +57073,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -56946,8 +57096,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.LigeritoPhase": {
@@ -56969,6 +57118,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -57014,8 +57164,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.LincheckPhase": {
@@ -57050,6 +57199,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -57073,8 +57223,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.LinkSound": {
@@ -57095,6 +57244,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -57123,8 +57273,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
   "Proofs.Flock.Soundness.ListSize": {
@@ -57189,6 +57338,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -57211,8 +57361,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.PadCode": {
@@ -57253,6 +57402,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -57279,8 +57429,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "RecDeploy.HonestHalfFixture.honest_half_fixture",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
   "Proofs.Flock.Soundness.Refine.ArithK": {
@@ -57596,6 +57745,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -57622,8 +57772,7 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "RecDeploy.HonestHalfFixture.honest_half_fixture",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Regions": {
@@ -57649,6 +57798,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -57689,8 +57839,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.HonestHalfFixture.honest_half_fixture",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Rep": {
@@ -57770,6 +57919,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -57793,8 +57943,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Schedule": {
@@ -57817,6 +57966,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -57864,8 +58014,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "RecDeploy.lamLin2_deployed_ge_dep",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Soundness.Refine.StmtOf": {
@@ -57897,6 +58046,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndHidden_refSetup",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
@@ -57934,8 +58084,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Table": {
@@ -57999,6 +58148,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -58026,8 +58176,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
-    "FlockVBridge.chainAcc_sum",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockVBridge.chainAcc_sum"
    ]
   },
   "Proofs.Flock.Soundness.Registered.Defs": {
@@ -58167,6 +58316,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -58189,15 +58339,15 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Proofs.Flock.Soundness.StrictCR": {
-   "digest": "f4b7a456d1648e10451f36333afb8ba4bee8fbae191b1c57ab6dc23f6df5283e",
+   "digest": "b8778131faa5ea18d05df890c653c7675e1fdcbccf2f27c14e114672a9cc73a4",
    "definitions": {
     "FlockSoundness.StrictCR.Finder": "2ae5aa43452c0e60294f73e3787f01338ba538aae220986fdbbb959056cdaa98",
     "FlockSoundness.StrictCR.Finder.CR": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6",
+    "FlockSoundness.StrictCR.Finder.ev": "3ba82c29f1a46cd507aa69dbc8e3e3aa51c8f729425fcbf8caeb2048fabd691d",
     "FlockSoundness.StrictCR.Finder.g": "14e35e57676a02cbc1ed03d5ffcca3cc9096ef3346339b45bcbfd827a7db0f28",
     "FlockSoundness.StrictCR.Finder.s": "4e156ba0a881674f0bbea2dc072119df1dedadf9a66a9a2544b550caff427890",
     "FlockSoundness.StrictCR.IsColl": "0f71431d502dcff2f7ffed767ae024ec65cce509776cfb0c708222bd851badab",
@@ -58209,8 +58359,7 @@
     "FlockSoundness.StrictCR.ksStrict": "fbb4da803df5003ec49719e083c8b605e68e056f75f95a0c4627a5e9c45b7c6b",
     "FlockSoundness.StrictCR.onePick": "39024482f7777282ca9c10ea04bbe2b32a0751b70e7e4db7f9997b3eaca61b26",
     "FlockSoundness.StrictCR.oneRun": "e56de11d048916bfb353b5e60efe9b1c1f86e1e1e96c9e24a0dd245facaa5ae5",
-    "FlockSoundness.StrictCR.twoRuns": "ac1f6d0c3231bdd7b8f27b5914ec697b054a7b805d780058840462d0d81d9d91",
-    "FlockSoundness.StrictCR.Finder.ev": "3ba82c29f1a46cd507aa69dbc8e3e3aa51c8f729425fcbf8caeb2048fabd691d"
+    "FlockSoundness.StrictCR.twoRuns": "ac1f6d0c3231bdd7b8f27b5914ec697b054a7b805d780058840462d0d81d9d91"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -58221,6 +58370,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
     "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndHiddenModel",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -58244,8 +58394,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
-    "Flock.SecurityProofs.EndToEndHiddenModel"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Proofs.Flock.Soundness.ZK.Abort": {
@@ -59812,146 +59961,6 @@
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
-   ]
-  },
-  "Proofs.Flock.Bridge.Assumptions.Served": {
-   "digest": "b09a381f9f9ff31506ad28a9f07a85eacb3385b5ba84aba9f3c8d53e5f191ca5",
-   "definitions": {
-    "Flock.Bridge.Assumptions.ServedFilesParse": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
-  },
-  "Proofs.Flock.Bridge.Honest": {
-   "digest": "0b798ba5631315260eae644e8baef5564c4225ea63f1b48a210f046e45d85bd8",
-   "definitions": {
-    "Flock.Guarantees.SampledKSLiveHonest": "441d88d32209934ccf332d6ba598fd870a07e73c4ed5ec47a3059af6ba8dd6b1"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
-  },
-  "Proofs.Flock.Bridge.PubFinder": {
-   "digest": "12d45e8992230c8b805679c99fc3aff11da4febd52269e1e15a619355c1f0f82",
-   "definitions": {
-    "Flock.Bridge.LinkPos": "c377577cfb6797a15c0ad4cdce065066f81141898f657e74fc5b653af23d1338",
-    "Flock.Bridge.TabIx": "46dac560009271cb7c280241daafa63e9235ca020cdc4389545feb92642c8eed",
-    "Flock.Bridge.linkComp": "ebd885ae149f39cdbe89bb967b1fb803c680936c220a3eea5a54666f9b199f2d",
-    "Flock.Bridge.slotAt": "b43f6e9338ebc194d072959374f915641dd5d94b633c05e91a2f3921d665ca09",
-    "Flock.Bridge.strictComp": "1ab520c2e63821af8668a75dac5bd6221ba8dfd97676d34923423709c0417277",
-    "Flock.Bridge.tabAt": "4d65c3366d966727423943e2e8bc8beea196fba31ec28aea6963f2cb4fe3888e",
-    "Flock.Bridge.tabComp": "963d940008e3d09e8ec1a74d4ab29928145c9455d4a74857488044eab50551a8",
-    "Flock.Bridge.tabMix": "f2b3a4560212529ae7c2b4389dd28c126bc6de0146f76453422bd5876633c22d",
-    "Flock.Bridge.tabOf": "0147657fbfd8dd5310a727272534ef04f620d9e34ffac12afc47506acecf8dca"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
-  },
-  "Proofs.Flock.Bridge.PubFinderRows": {
-   "digest": "86634acaabbf8f4d1e570ac2801f5c5b278a6bf979684021588e8a5d8c0e1f89",
-   "definitions": {
-    "Flock.Bridge.PubIxR": "ee553cd7735558dd0acafca1fb71ff69c231ca30126428725d7fb3104f572682",
-    "Flock.Bridge.instFintypePubIxR": "ca0bff147ba1e5db2dddb2a1cb15cb518154ff8327ceff86e8d00898c1d41f31",
-    "Flock.Bridge.pubFamR": "9c2cf0d6d17fefa1252ac932efb2ba8d8e9d0bf18e93ffc8b627fc442ba0261e",
-    "Flock.Bridge.pubFinderR": "d77729c5d2074712f69be799f774fc1015729ab8f7685d5aad7c1b630e4d45fe",
-    "Flock.Bridge.rowsComp": "7aa027a823b4341ce31a38487465c6012975c7ec224ebf62e6f5af3599b25a62"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
-  },
-  "Proofs.Flock.Bridge.PublicDeployed": {
-   "digest": "2c8ea2acf4c5e647697be7e7d448e809f10fd2db25df76850c5d82dc1fd77af5",
-   "definitions": {
-    "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
-    "Flock.Guarantees.DeltaPubDeployed": "3f9f4304c822d00dbacbaec511d48808bea91b9d28e71c87bbb7a5bf8f3f87ee"
-   },
-   "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
-  },
-  "Proofs.Flock.Bridge.RightRegZc": {
-   "digest": "eb8495800fd996086ec014de1ab50180aae841fedf1b7d49fc56866543636e1f",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.OpeningsCanon": "81821838ff099ce1a248266ef7d98d80d4202c5e1fa6a93e4bd6d5a31ccf199a",
-    "FlockSoundness.Discharge.ZkLink.RightRegZc": "79c5624417d002617cd89e78dc1ca9987e489e4b0f4e19a773336d3f981753d1",
-    "FlockSoundness.Discharge.ZkLink.wrongRegZc": "f8e0d67b6fbd0e862780a5313cb825b00629f6b45da6e8011ebf79e7b58f753b"
-   },
-   "guarantees": ["Flock.SecurityProofs.EndToEndHiddenModel"]
-  },
-  "Proofs.Flock.Bridge.Rows": {
-   "digest": "c02b319a702d22cd4e533aa09d1a13c936ffd19846eaa720c8153a74f2844cd4",
-   "definitions": {
-    "Flock.Guarantees.SampledKSLiveV2": "70231cd1aacd5d4fdd34dbb88d3a515af23bb61a55c6c648409d7b2fd62294e8"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
-  },
-  "Proofs.Flock.Soundness.Assumptions.Files": {
-   "digest": "c509a316e7b3b13c2cdcc6f86e16b152f5bf4bca80ee66eae52cbef669239e90",
-   "definitions": {
-    "FlockSoundness.Assumptions.Flock.DeployedFilesHJ": "6bf6045dbc288fb1c1ace37f475bfc13bfea6e82cdc75009871ccf4b7c0cbf93"
-   },
-   "guarantees": ["Flock.SecurityProofs.EndToEndHidden"]
-  },
-  "Proofs.Flock.Soundness.Discharge.ZkLink.Analysis": {
-   "digest": "b83f9da2784012b744146f7aab606ba85fb501127f3ff1ac739333bda0ee8a50",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.ksAvgZC": "a8e22b0b7ac0cfa4fceb86601d57c50a0f5a0c4dbba70e8b3c03db83f7501a58"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEndHidden",
-    "Flock.SecurityProofs.EndToEndHiddenDrawn",
-    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
-    "Flock.SecurityProofs.EndToEndHiddenFlat",
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveStated",
-    "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
-   ]
-  },
-  "Proofs.Flock.Soundness.Discharge.ZkLink.Rows": {
-   "digest": "00d265be38826bf05f0fbb6e02bdcf844c16e883eb00198cb27cc8378ac163ff",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.rowsOutZC": "0f3ffc6c6350e1ac8775e285a48d9fcf69ae6dab29d590774bcdb2efb211eb7e"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
-  },
-  "Proofs.Flock.Soundness.Discharge.ZkLink.RowsPr": {
-   "digest": "2588a3fd9701a31e85b4526c473403d0eef00abad595284800176fe57fa73fe0",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.rowsMassZC": "6cc729fa46b27981075f57b90179489e5ca076db3afac592dd82a862f761e74b",
-    "FlockSoundness.Discharge.ZkLink.rowsPrZC": "8e3454a96bb913d1fe8673cbccb5a004db948dbea0a6b16ba442194cb38a8e05"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
-   ]
-  },
-  "Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound": {
-   "digest": "660e0e75f75aeff2ab578826253625def6dd1fc0bbc06063fe3b6e394e2c20b8",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.psiRowsZC": "7a60c7f2549d17ae3bc39dc43af1bc45df0a498c77a75c4d1fcb755989133428",
-    "FlockSoundness.Discharge.ZkLink.rowsWrongZ": "54f9b5cb85ae629bc3d9d1cb88e38095c3fc5002e379d762713c2081bc5d3e4e"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
-   ]
-  },
-  "Proofs.Flock.Soundness.ExtractAcc": {
-   "digest": "e4b0a5ebdfb590dae363cc311c0e813ed8fa9a8b3ecb25c8a4606e781114a211",
-   "definitions": {
-    "FlockSoundness.Extract.expectAcc": "95924df98516fb329019297a7092e2fdcad582d67e6a3a11dcbbe94530463c68"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
-   ]
-  },
-  "Proofs.Flock.Soundness.Game.Runs": {
-   "digest": "437b58e28bc8d69422360d094248dbd93382f9202d47f65f74751c838f9cda7b",
-   "definitions": {
-    "FlockSoundness.Game.expectN": "57e30c9aa90a0382a232bae58cac3709bb78b0e6a78cb4ac0531d8a2f609c73d"
-   },
-   "guarantees": [
-    "Flock.SecurityProofs.EndToEndHiddenModel",
-    "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   }
  },
