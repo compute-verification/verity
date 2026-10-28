@@ -19,7 +19,10 @@
 //          epi: at each tile's end (K / 128 k-tiles), wgmma.wait_group 0 and gemm_r5's direct O stores (s32, int2 a
 //          pair) into an M x N buffer;
 //          ns (resident only): the operands as the co-issue probe's unswizzled 8 x 16-byte core matrices in place of
-//          TMA's SWIZZLE_128B rows; kg2 (resident only): two k-tiles a wgmma commit group in place of one
+//          TMA's SWIZZLE_128B rows; kg2 (resident only): two k-tiles a wgmma commit group in place of one;
+//          mc2, mc4 (with load): clusters of 2 or 4 CTAs on tiles one above the other, each loading its part of B's box
+//          into all of them (TMA multicast), so L2 serves B once a cluster; a stage is free once every CTA's consumers
+//          release it, and the grid is the CTAs whose clusters fit on the SMs at once
 // NWG = NM: the consumers alone (the co-issue probe's 128-thread CTA), at the launch's registers, with no setmaxnreg.
 // A launch's arm: hash warps 0 (the GEMM alone) or NHW of the CTA's free warps (the producer's warpgroup's other three,
 // then the next warpgroups'): 7, 11 and the most it has; and with resident operands, the hash alone at each (no
@@ -29,6 +32,7 @@
 // compression counts: the SM clock (clock64 over %globaltimer); theta, the INT8 MACs a second over 989.4 T (4,096 a
 // SM-clock at 1,830 MHz on 132 SMs), and theta_clk, a SM-clock over 4,096 (so theta_clk / theta is the clock's share of
 // the loss); the hash's compressions a second over the bar (sx's 4.355 G/s), and hash_bar_clk, a SM-clock over 0.018029.
+// Each counts every SM, an SM without a CTA as zero.
 // The arms are medians of REPS launches. Then an energy item: the arm's launches back to back for ITEM_MS or longer, the
 // board's energy over it (NVML's counter): mean watts, pJ a MAC and nJ a compression, and the most of its power sampled
 // every 20 ms after its first second. The operands are bytes of one kind (OPS): s8, random int8, or u2, the 2-bit values 0..3 stored as int8,
@@ -52,6 +56,8 @@
 #include <string>
 #include <vector>
 
+#include <unistd.h>
+
 #include "../../torch_gpu/sha512_rows/sha512x.cuh"
 #include "../gpu_kit/bench.cuh"
 #include "wg_proto.cuh"
@@ -70,7 +76,8 @@ using u32 = uint32_t;
 using wgp::BK;
 
 enum Form { N128 = 0, ALT = 1, CHAIN = 2 };
-enum Flag { BAR = 1, LOAD = 2, EPI = 4, NOSW = 8, KG2 = 16 };
+enum Flag { BAR = 1, LOAD = 2, EPI = 4, NOSW = 8, KG2 = 16, MC2 = 32, MC4 = 64 };
+constexpr int cluster_of(int fl) { return fl & MC4 ? 4 : fl & MC2 ? 2 : 1; }
 constexpr int STAGES = 4;
 constexpr double BAR_RATE = 0.018029;   // compressions a SM-clock: 4.355e9 / (132 x 1830e6)
 constexpr double PEAK_MHZ = 1830;       // the clock of int8 wgmma's peak, 989.4 T MACs a second
@@ -89,7 +96,7 @@ struct Stamp {
 };
 
 struct alignas(128) Prm {
-  CUtensorMap a, b;
+  CUtensorMap a, b, bp;   // bp: B's box in a cluster's parts, a CTA's part multicast to all of them
   int* O;
   Stamp* st;
   int M, N, K, groups, nhw, hreps;
@@ -100,6 +107,34 @@ __device__ __forceinline__ u64 gtimer() {
   u64 t;
   asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
   return t;
+}
+__device__ __forceinline__ int cta_rank() {
+  u32 r;
+  asm volatile("mov.u32 %0, %%cluster_ctarank;" : "=r"(r));
+  return (int)r;
+}
+__device__ __forceinline__ void cluster_sync() {
+  asm volatile("barrier.cluster.arrive.release.aligned;\n barrier.cluster.wait.acquire.aligned;" ::: "memory");
+}
+// a box into the same offset of every CTA in `mask`, counted on each one's barrier at `bar`
+__device__ __forceinline__ void tma_load_mc(uint32_t dst, const void* map, uint32_t bar, int c0, int c1, uint16_t mask) {
+  asm volatile("cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes.multicast::cluster"
+               " [%0], [%1, {%3, %4}], [%2], %5;" ::"r"(dst), "l"(map), "r"(bar), "r"(c0), "r"(c1), "h"(mask)
+               : "memory");
+}
+// a consumer warp's release of a stage to every CTA of the cluster, whose parts of B it read. CTA scope, as CUTLASS's
+// ClusterBarrier: a cluster-scope release puts a GPU-wide fence before each arrive.
+template <int CL> __device__ __forceinline__ void release(uint32_t bar) {
+  if constexpr (CL == 1) {
+    wgp::mbar_arrive(bar);
+  } else {
+#pragma unroll
+    for (int r = 0; r < CL; r++) {
+      u32 a;
+      asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(a) : "r"(bar), "r"(r));
+      asm volatile("mbarrier.arrive.shared::cluster.b64 _, [%0];" ::"r"(a) : "memory");
+    }
+  }
 }
 
 template <int NM, int FORM> struct Shape {
@@ -122,18 +157,27 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
   static_assert(!(FL & (NOSW | KG2)) || !(FL & (BAR | LOAD | EPI)), "ns and kg2 are resident operands' forms");
   constexpr bool bar = FL & (BAR | LOAD);
   constexpr int KG = FL & KG2 ? 2 : 1;   // k-tiles a commit group
+  constexpr int CL = cluster_of(FL);      // the cluster's CTAs: M-neighbours on one column of tiles, sharing B's box
+  static_assert(CL == 1 || (FL & LOAD), "multicast is a loaded form");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (wgp::smem_at(smem) + 1023) & ~1023u;
   const uint32_t bars = base + (FL & LOAD ? STAGES : 1) * S::STAGE;   // full 0..3, empty 0..3, then done
   u32* const done = reinterpret_cast<u32*>(smem + (bars - wgp::smem_at(smem)) + 16 * STAGES);
   const int tid = threadIdx.x, wg = tid / 128, warp = tid / 32, lane = tid % 32;
-  const int tiles_m = p.M / S::TMC, tiles_n = p.N / S::BN, tiles = tiles_m * tiles_n, TK = p.K / BK;
-  const int my_tiles = (int)blockIdx.x < tiles ? (tiles - 1 - (int)blockIdx.x) / (int)gridDim.x + 1 : 0;
+  const int tiles_m = p.M / S::TMC, tiles_n = p.N / S::BN, TK = p.K / BK, rank = CL == 1 ? 0 : cta_rank();
+  // the unit of work: CL tiles one above the other, CTA r of the cluster the r-th
+  const int units = tiles_m / CL * tiles_n, u0 = (int)blockIdx.x / CL, ustep = (int)gridDim.x / CL;
+  const int my_tiles = u0 < units ? (units - 1 - u0) / ustep + 1 : 0;
   const int groups = FL & LOAD ? my_tiles * TK : p.groups;
+  auto tile = [&](int g, int& tm, int& tn) {
+    const int u = (u0 + (g / TK) * ustep) % units;
+    tm = u / tiles_n * CL + rank;
+    tn = u % tiles_n;
+  };
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) {
       wgp::mbar_init(bars + 8 * s, 1);
-      wgp::mbar_init(bars + 8 * (STAGES + s), NM * 4);
+      wgp::mbar_init(bars + 8 * (STAGES + s), CL * NM * 4);
     }
     *done = 0;
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
@@ -143,6 +187,7 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
   __syncthreads();
   asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
   __syncthreads();
+  if constexpr (CL > 1) cluster_sync();   // no multicast or remote arrive reaches a CTA before its barriers are set
   Stamp* const out = p.st + blockIdx.x;
 
   if constexpr (NWG > NM) if (wg >= NM) {
@@ -156,16 +201,28 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
         for (int g = 0; g < groups; g++) {
           wgp::mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           if constexpr (FL & LOAD) {
-            const int t = (int)blockIdx.x + (g / TK) * (int)gridDim.x, kt = g % TK, tm = t / tiles_n, tn = t % tiles_n;
+            int tm, tn;
+            tile(g, tm, tn);
+            const int kt = g % TK;
             const uint32_t st = base + s * S::STAGE, full = bars + 8 * s;
             wgp::mbar_expect_tx(full, S::STAGE);
             wgp::tma_load(st, &p.a, full, kt * BK, tm * S::TMC);
-            wgp::tma_load(st + S::A_BYTES, &p.b, full, kt * BK, tn * S::BN);
+            if constexpr (CL == 1)
+              wgp::tma_load(st + S::A_BYTES, &p.b, full, kt * BK, tn * S::BN);
+            else
+              tma_load_mc(st + S::A_BYTES + rank * (S::BN / CL) * BK, &p.bp, full, kt * BK, tn * S::BN + rank * (S::BN / CL),
+                          (1 << CL) - 1);
           } else {
             wgp::mbar_arrive(bars + 8 * s);
           }
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
+        // the other CTAs' consumers arrive on this one's barriers: it stays until all of them released every stage
+        if constexpr (CL > 1)
+          for (int i = 0; i < STAGES; i++) {
+            wgp::mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
+            if (++s == STAGES) { s = 0; ph ^= 1; }
+          }
       }
       asm volatile("exit;");
     }
@@ -238,16 +295,17 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     }
     WGP_COMMIT;
     WGP_WAIT(1);
-    if (bar && pend >= 0 && lane == 0) wgp::mbar_arrive(bars + 8 * (STAGES + pend));
+    if (bar && pend >= 0 && lane == 0) release<CL>(bars + 8 * (STAGES + pend));
     pend = s;
     if (++s == STAGES) { s = 0; ph ^= 1; }
     if constexpr (FL & EPI) {
       if (g % TK == TK - 1) {
         WGP_WAIT(0);
         wgp::acc_fence<S::NA>(d);
-        if (bar && lane == 0) wgp::mbar_arrive(bars + 8 * (STAGES + pend));
+        if (bar && lane == 0) release<CL>(bars + 8 * (STAGES + pend));
         pend = -1;
-        const int t = ((int)blockIdx.x + (g / TK) * (int)gridDim.x) % tiles, tm = t / tiles_n, tn = t % tiles_n;
+        int tm, tn;
+        tile(g, tm, tn);
         const int rloc = wg * 64 + 16 * (x / 32) + (x % 32) / 4, cq = 2 * (x % 4);
         int* const o0 = p.O + (size_t)(tm * S::TMC + rloc) * p.N + tn * S::BN + cq;
         int* const o1 = o0 + (size_t)8 * p.N;
@@ -262,7 +320,7 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
   }
   WGP_WAIT(0);
   wgp::acc_fence<S::NA>(d);
-  if (bar && pend >= 0 && lane == 0) wgp::mbar_arrive(bars + 8 * (STAGES + pend));
+  if (bar && pend >= 0 && lane == 0) release<CL>(bars + 8 * (STAGES + pend));
   if (tid == 0 && groups > 0) { out->t0 = t0; out->c0 = c0; out->t1 = gtimer(); out->c1 = clock64(); }
   u32 xr = 0;
 #pragma unroll
@@ -300,6 +358,12 @@ static const Cfg CFGS[] = {
     ONE("y200_m1_alt_w5", ALT, 200, 64),          ONE("y176_m1_alt_w5", ALT, 176, 72),
     ONE("y160_m1_n128_w5", N128, 160, 80),
     CFG("y176_m1_chain_w5_res", 1, CHAIN, 0, 176, 72, 5), CFG("y176_m1_chain_w5_l", 1, CHAIN, LOAD, 176, 72, 5),
+    // TMA loads with B's box multicast over a cluster of 2 or 4 (lmc2, lmc4; each CTA loads its part of B to all), and
+    // with the epilogue (lemc2); gemm_r5's two consumers on the loads alone (l), as the streamed GEMMs' 128 x 256 tile
+    CFG("y176_m1_alt_w5_lmc2", 1, ALT, LOAD | MC2, 176, 72, 5), CFG("y176_m1_alt_w5_lmc4", 1, ALT, LOAD | MC4, 176, 72, 5),
+    CFG("y176_m1_alt_w5_lemc2", 1, ALT, LOAD | EPI | MC2, 176, 72, 5),
+    CFG("y200_m1_alt_w5_lmc2", 1, ALT, LOAD | MC2, 200, 64, 5), CFG("y160_m1_n128_w5_lmc2", 1, N128, LOAD | MC2, 160, 80, 5),
+    CFG("y160_m2_alt_w4_l", 2, ALT, LOAD, 160, 96, 4),     CFG("y160_m2_alt_w4_lmc2", 2, ALT, LOAD | MC2, 160, 96, 4),
     // the consumers alone, as the co-issue probe's CTA (Y: the launch's registers)
     CFG("y255_m1_n128_w1_res", 1, N128, 0, 255, 0, 1), CFG("y255_m1_n128_w1_ns", 1, N128, NOSW, 255, 0, 1),
     CFG("y255_m1_alt_w1_res", 1, ALT, 0, 255, 0, 1),   CFG("y255_m1_alt_w1_ns", 1, ALT, NOSW, 255, 0, 1),
@@ -376,15 +440,44 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&B, (size_t)N * K));
   CK(cudaMalloc(&O, (size_t)M * N * 4));
   CK(cudaMalloc(&st, nsm * sizeof(Stamp)));
+  // a launch: one CTA an SM, in clusters of cluster_of(fl); its grid, the CTAs whose clusters can all be resident at once
+  cudaLaunchAttribute at{};   // the cluster's shape, which every config below points to
+  auto config = [&](const Cfg& c, int gx) {
+    const int cl = cluster_of(c.fl);
+    at.id = cudaLaunchAttributeClusterDimension;
+    at.val.clusterDim.x = cl;
+    at.val.clusterDim.y = 1;
+    at.val.clusterDim.z = 1;
+    cudaLaunchConfig_t lc{};
+    lc.gridDim = dim3(gx);
+    lc.blockDim = dim3(128 * c.nwg);
+    lc.dynamicSmemBytes = c.smem;
+    lc.attrs = &at;
+    lc.numAttrs = cl > 1;
+    return lc;
+  };
+  std::vector<int> grid(sizeof CFGS / sizeof CFGS[0], nsm);
   for (const Cfg& c : CFGS) {
     if (!chosen(c)) continue;
     CK(cudaFuncSetAttribute(c.k, cudaFuncAttributeMaxDynamicSharedMemorySize, c.smem));
     cudaFuncAttributes fa;
     CK(cudaFuncGetAttributes(&fa, c.k));
+    const int cl = cluster_of(c.fl);
+    if (cl > 1) {
+      const cudaLaunchConfig_t lc = config(c, nsm);
+      int nc = 0;
+      CK(cudaOccupancyMaxActiveClusters(&nc, c.k, &lc));
+      grid[&c - CFGS] = std::min(nsm / cl, nc) * cl;
+    }
     printf("{\"cfg\": \"%s\", \"nm\": %d, \"bn\": %d, \"y\": %d, \"hr\": %d, \"threads\": %d, \"regs\": %d, \"local\": %zu, "
-           "\"smem\": %d, \"fl\": %d}\n",
-           c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem, c.fl);
+           "\"smem\": %d, \"fl\": %d, \"cluster\": %d, \"ctas\": %d}\n",
+           c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem, c.fl, cl,
+           grid[&c - CFGS]);
   }
+  auto go = [&](const Cfg& c, const Prm& p) {
+    const cudaLaunchConfig_t lc = config(c, grid[&c - CFGS]);
+    CK(cudaLaunchKernelEx(&lc, c.k, p));
+  };
   std::string ops;
   u32 mask = 0xFF;
   auto prm = [&](const Cfg& c, int g, int nhw) {
@@ -392,6 +485,7 @@ int main(int argc, char** argv) {
     const int bn = c.form == N128 ? 128 : 256;
     p.a = tmap(A, K, M, 64 * c.nm);
     p.b = tmap(B, K, N, bn);
+    p.bp = tmap(B, K, N, bn / cluster_of(c.fl));
     p.O = O;
     p.st = st;
     p.M = M; p.N = N; p.K = K; p.groups = g; p.nhw = nhw; p.hreps = hreps; p.mask = mask;
@@ -400,8 +494,7 @@ int main(int argc, char** argv) {
   auto launch = [&](const Cfg& c, int g, int nhw) {
     const Prm p = prm(c, g, nhw);
     CK(cudaMemset(st, 0, nsm * sizeof(Stamp)));
-    c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
-    CK(cudaGetLastError());
+    go(c, p);
     CK(cudaDeviceSynchronize());
     std::vector<Stamp> s(nsm);
     CK(cudaMemcpy(s.data(), st, nsm * sizeof(Stamp), cudaMemcpyDeviceToHost));
@@ -413,27 +506,31 @@ int main(int argc, char** argv) {
   // one arm: first the energy item (so the stamped launches after it run at the board's steady power), then REPS
   // launches: theta and the hash's rate, over the CTAs' own windows, a second and a SM-clock; the SM clock; the wall
   auto arm = [&](const Cfg& c, int g, int nhw, const char* what) {
+    // an arm takes its item and a few launches: one that hangs ends the process, the arms printed so far kept
+    alarm(60 + (unsigned)(3 * item_ms / 1000));
     std::vector<double> th, thc, hb, hbc, mhz, ms, mc, cm;
     launch(c, g, nhw);
     auto stamped = [&] {
       auto s = launch(c, g, nhw);
-      const int bn = c.form == N128 ? 128 : 256, tiles = (M / (64 * c.nm)) * (N / bn), TK = K / BK;
+      const int bn = c.form == N128 ? 128 : 256, cl = cluster_of(c.fl), gx = grid[&c - CFGS], TK = K / BK;
+      const int units = M / (64 * c.nm) / cl * (N / bn);
       double cyc = 0, ns = 0, macs = 0, comps = 0;
       u64 a = ~0ull, b = 0;
-      for (int i = 0; i < nsm; i++) {
+      for (int i = 0; i < gx; i++) {
         cyc += (double)(s[i].c1 - s[i].c0);
         ns += (double)(s[i].t1 - s[i].t0);
         a = std::min(a, s[i].t0);
         b = std::max(b, s[i].t1);
         comps += (double)s[i].comps;
-        const int myt = i < tiles ? (tiles - 1 - i) / nsm + 1 : 0;
+        const int myt = i / cl < units ? (units - 1 - i / cl) / (gx / cl) + 1 : 0;
         macs += g == 0 ? 0 : c.macs * ((c.fl & LOAD) ? (double)myt * TK : (double)g);
       }
-      const double f = cyc / ns * 1e3;
-      thc.push_back(macs / cyc / 4096);
-      th.push_back(macs / cyc / 4096 * f / PEAK_MHZ);
-      hbc.push_back(comps / cyc / BAR_RATE);
-      hb.push_back(comps / cyc / BAR_RATE * f / PEAK_MHZ);
+      // a CTA's MACs a clock, over every SM (gx of them busy)
+      const double f = cyc / ns * 1e3, sms = (double)gx / nsm;
+      thc.push_back(macs / cyc / 4096 * sms);
+      th.push_back(macs / cyc / 4096 * sms * f / PEAK_MHZ);
+      hbc.push_back(comps / cyc / BAR_RATE * sms);
+      hb.push_back(comps / cyc / BAR_RATE * sms * f / PEAK_MHZ);
       mhz.push_back(f);
       ms.push_back((double)(b - a) * 1e-6);
       mc.push_back(macs);
@@ -448,7 +545,7 @@ int main(int argc, char** argv) {
     int n = 0;
     float ims = 0;
     while (ims < item_ms) {
-      for (int i = 0; i < chunk; i++) c.k<<<nsm, 128 * c.nwg, c.smem>>>(p);
+      for (int i = 0; i < chunk; i++) go(c, p);
       n += chunk;
       CK(cudaEventRecord(e1));
       CK(cudaEventSynchronize(e1));
@@ -468,6 +565,7 @@ int main(int argc, char** argv) {
            pt.mean_mw() / 1e3, jnum(macs > 0 ? mj * 1e9 / (n * macs) : NAN, 3).c_str(),
            jnum(comps > 0 ? mj * 1e6 / (n * comps) : NAN, 3).c_str());
     fflush(stdout);
+    alarm(0);
   };
   // the hash alone reads no operands: once, with the first kind
   for (size_t ki = 0; ki < kinds.size(); ki++) {

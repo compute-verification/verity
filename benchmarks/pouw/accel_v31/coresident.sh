@@ -48,13 +48,13 @@ print("theta: of 989.4 T MACs a second; a clock: of 4,096 MACs a SM-clock (clock
       "second; a clock: of 0.018029 a SM-clock. Watts: the board's energy over the item (mean) and the most of its power "
       "sampled every 20 ms after the item's first second (max). Operands: s8, random int8; u2, the 2-bit values 0..3 stored as int8 (the hash alone "
       "reads none).\n")
-print("| configuration | Y | tile | threads | HR | spill B | operands | arm | hash warps | theta | theta a clock | clock64 MHz "
-      "| hash / bar | hash / bar a clock | W mean | W max | pJ / MAC | nJ / compression | item s |")
-print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+print("| configuration | Y | tile | threads | CTAs | HR | spill B | operands | arm | hash warps | theta | theta a clock "
+      "| clock64 MHz | hash / bar | hash / bar a clock | W mean | W max | pJ / MAC | nJ / compression | item s |")
+print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 for r in arms:
     c = cfg.get(r["cfg"], {})
     print(f'| {r["cfg"]} | {c.get("y", "")} | {64 * c.get("nm", 0)} x {c.get("bn", "")} | {c.get("threads", "")} | '
-          f'{c.get("hr", "")} | {c.get("local", "")} | {r.get("ops", "s8") if r["arm"] != "hash" else "-"} | '
+          f'{c.get("ctas", "")} | {c.get("hr", "")} | {c.get("local", "")} | {r.get("ops", "s8") if r["arm"] != "hash" else "-"} | '
           f'{r["arm"]} | {r["nhw"]} | {f(r["theta"])} | {f(r["theta_clk"])} | '
           f'{r["mhz"]:.0f} | {f(r["hash_bar"])} | {f(r["hash_bar_clk"])} | {f(r.get("w"), 0)} | {f(r.get("wmax"), 0)} | '
           f'{f(r.get("pj_mac"))} | {f(r.get("nj_comp"), 2)} | {r["item_ms"] / 1e3:.1f} |')
