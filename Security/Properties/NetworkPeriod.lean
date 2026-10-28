@@ -62,26 +62,26 @@ def RowsKBoundsCount : Prop :=
         2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps)) ≤
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) jitter windows).K
 
-/-- Audit `i`'s answer drew every unit: one-stage accepted its registration with a profile of one level, drawn
+/-- Audit `i`'s answer drew every unit: one-stage accepted its window record with a profile of one level, drawn
 `subset:k` or stratified, whose `Σ k` is the level's size (`factsOf`'s `drawn` and `units`). -/
-def DrawnWhole (i : ℕ) (reg : Registration) (x : Core.Answer) : Prop :=
+def DrawnWhole (i : ℕ) (reg : Lean.Json) (x : Core.Answer) : Prop :=
   ∃ (prof : Core.Integrity) (pub : Lean.Json) (f : Facts),
     answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" prof pub = .ok f ∧ f.drawn = f.units
 
 /-- **The rows form accepts no tied audit with a unit undrawn.** If the check accepts a period in the rows form, every
-audit some link-window's scan's `prog` is an output of (`tiedIn` over the commitment's registrations) drew every unit
+audit some link-window's scan's `prog` is an output of (`tiedIn` over the commitment's window records) drew every unit
 (`DrawnWhole`): `rowsTerms` charges such an audit's free inputs to its link-window and no faulty term for it. -/
 def RowsTiedDrawn : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
+      ∀ (i : ℕ) (reg : Lean.Json) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
         tiedIn c.audits c.windows i = true → DrawnWhole i reg x
 
 /-- `RowsTiedDrawn` of any period check. -/
 def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
+      ∀ (i : ℕ) (reg : Lean.Json) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
         tiedIn c.audits c.windows i = true → DrawnWhole i reg x
 
 /-- **The rows form accepts no period of a link-window.** If the check accepts a period in the rows form, the period
