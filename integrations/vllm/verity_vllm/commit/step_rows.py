@@ -4,9 +4,9 @@ stream, on the windowed worker (``NativeCollectCommitter``, whose unset scheme i
 (``pipeline.commit``'s ``--commit-scheme``, on the windowed ``native_collect_v2b``) and every rank of a TP Commit (``pipeline.tp.commit``,
 under the SHA-512 TP run root ``pipeline.tp.run_root``); ``vllm-v1`` is by name (any other collector, an old record's configuration),
 and a single-GPU Commit takes it only to commit again the recorded vllm-v1 Commit ``--of-record`` names (`pipeline.commit.scheme_refusal`).
-Every leaf and tree rule is core's (``hm96.SHA512``, ``rowleaf``, ``merkle``); this module names the step's pieces and binds its
-roots, and ``native_rows.cu`` hashes the same bytes (``tests/commit/test_step_rows.py`` pins this module to core's conformance vectors
-and its roots to pinned ones, ``tests/commit/test_rows_cuda.py`` the kernels to this module).
+Every leaf and tree rule is core's (``hm96.SHA512``, ``rowleaf``, ``merkle``); this module names the step's pieces and restates
+vllm-v1's root bindings under SHA-512, and ``native_rows.cu`` hashes the same bytes (``tests/commit/test_step_rows.py`` pins this
+module to core's conformance vectors and its roots to pinned ones, ``tests/commit/test_rows_cuda.py`` the kernels to this module).
 
 Each ``ROW_BYTES``-byte chunk of a step's zero-padded stream is a row of ``8 ROW_BYTES`` bits, committed as a hiding leaf at its
 chunk index ``pos`` (rank = position):
@@ -21,18 +21,17 @@ chunk index ``pos`` (rank = position):
 logged; a leaf's salt ``y`` is derived from it by SHA-512 alone, as COMMIT-GPU derives it.  The step's ``N`` leaves are one tree under
 ``CommitmentDomain(binding, -1, RangeIndexedDomain(0, N), "sha512")`` with ``binding = identity_digest_sha512(DOMAIN_TAG, {program,
 ctx, geo, row_bits})`` over the step's vllm-v1 identity digests, so the domain is known when the step's length is (a hit plan's, or
-the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root (:func:`step_root`) binds
-the tree root and the run root (:func:`run_root`) the step roots, vllm-v1's root bindings through SHA-512: 64-byte roots over 32-byte
-identity digests.  An opening carries the row, its salt and the frame path; :func:`fold_path` recomputes ``h`` and folds the path
-as core's ``verify_opening`` does.  A range opening of leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's
-boundary siblings (:func:`range_shape`); :func:`fold_range` folds them as core's ``verify_multiproof`` folds those leaves' multiproof,
-which is the path's siblings in order.
+the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root is ``vllm_v1.step_root``
+over the tree root and the run root ``vllm_v1.run_root``, both under SHA-512: 64-byte roots.  An opening carries the row, its salt
+and the frame path; :func:`fold_path` recomputes ``h`` and folds the path as core's ``verify_opening`` does.  A range opening of
+leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`); :func:`fold_range`
+folds them as core's ``verify_multiproof`` folds those leaves' multiproof, which is the path's siblings in order.
 
 The registered weights are committed the same way (``NativeHostCommitter.register_weights``, which `pipeline.cpu_replay` opens
 against): registered tensor ``t``'s bytes are its rows (the last zero-padded), salted from ``Ks_t = SHA-512(WEIGHTS_TAG || Kw ||
 u64be t)`` under the registration's fresh key ``Kw``, in a tree under ``CommitmentDomain(binding_t, -1, RangeIndexedDomain(0, N_t),
 "sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG, {geo, tensor: t, entry, row_bits})`` over its names entry
-``[name, dtype, shape, bytes]``; the weights root binds the tensor roots the same way (:func:`weights_root`).
+``[name, dtype, shape, bytes]``; the weights root is ``vllm_v1.weights_root`` over the tensor roots under SHA-512 (:func:`weights_root`).
 The tree (:func:`weights_tree`) keeps ``Kw`` beside the roots, so a replay of the registration reproduces them.  ``Kw`` stays in the
 private bundle: a published slim keep carries ``Ks_t`` of the tensors its replay opened instead (`pipeline.cpu_replay.slim_tree`).
 """
