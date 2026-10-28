@@ -7,13 +7,13 @@ link-window: the period mirror's certifier/v0 accept (`period_case`), its profil
 the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
 is the three files `network-period` read, as `composite.py` reads a piece's case; the chain's endpoint report, with
-each Commit window's counts, stays in the kept run. A window request the warden didn't certify is rejected before any
-chain runs; a chain that refused, requests outside the scan's link-window and a period the check rejects are rejects;
-a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no report, no build,
-the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR against the run's
-witness, and the case is written only from the period files it left. The front's warm-ups go straight to the
-endpoint, one at a time, each recorded in a closed window of its own before the gate is asked, and the pick passes
-over those windows for the group's."""
+each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
+rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
+rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
+report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR
+against the run's witness, and the case is written only from the period files it left. The front's
+warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
+asked, and the pick passes over those windows for the group's."""
 from __future__ import annotations
 
 import argparse
