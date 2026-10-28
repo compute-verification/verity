@@ -135,7 +135,7 @@ def test_part_3s_h_and_b_are_one_recorded_run_of_proofs_planner() -> None:
 
 def test_a_report_with_an_unfilled_number_is_refused() -> None:
     """A rendered report never carries a placeholder: only a draft shows ⟨NAME⟩, and `main` renders no draft."""
-    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "LEAN-56"}) | _noise()}
+    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "the lock"}) | _noise()}
     doc["sections"][0]["serve_noise"] = True
     out = D.render([], doc)
     assert out.splitlines()[0] == D.M3_STATUS and not re.search(r"⟨[A-Z][A-Z0-9_]*⟩", out.split("## Sources")[0])
@@ -153,7 +153,7 @@ def test_a_report_with_an_unfilled_number_is_refused() -> None:
 
 
 def test_part_1_states_the_guarantee_the_draw_certifies() -> None:
-    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "LEAN-56"})}
+    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "the lock"})}
     doc["proved"]["rows"] = [{"what": "the guarantee at δ = 1%: wrong proof blocks at most", "value": 1_367_366_590,
                               "unit": "of 3,124,276,224 proof blocks (43.77%)", "run": "r20261027-013000-abcd",
                               "verdict": "W at δ = 10⁻²: 1,367,366,590 of 3,124,276,224 proof blocks (43.77%)",
@@ -181,29 +181,35 @@ def test_part_3_is_circuit_size_in_gates_with_no_flop_or_price() -> None:
     assert "FLOP" not in out and "| H faulty AND gates | share of the world's AND gates |" in out
 
 
+#: a phrase from each of three stub caveats (`report.STUBS`)
+LIVE_SALT = "PoUW's salt isn't yet the live coin read in its answer"
+OUTPUT_TIE = "The network certifier's output tie isn't proved yet"
+SALT_ORDER = "so a prover could choose x after seeing it"
+
+
 def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
     rec = _load("block-record-r2-period0")
     out = _draft([rec])
-    assert "(#4405, #4426)" in out and "(NET-80)" in out and "ReLU and per-row quantize are not proved units" in out
-    assert "This block drew k = 2, not M3's handful of 8 (PRF-171)." in out
+    assert LIVE_SALT in out and OUTPUT_TIE in out and "ReLU and per-row quantize are not proved units" in out
+    assert "This block drew k = 2, not M3's handful of 8." in out
     assert "run on the prover's node for the demo" in out
-    assert "(RT-LEAN L22)" in out
+    assert SALT_ORDER in out
     fixed = _draft([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1", "torch-loop-wiring": "run r2"}})
-    assert "(#4405, #4426)" not in fixed and "(NET-80)" in fixed and "ReLU and per-row" not in fixed
-    assert "(RT-LEAN L22)" in fixed
-    assert "(RT-LEAN L22)" not in _draft([rec], {**_m(), "fixed": {"pouw-salt-order": "run r3"}})
+    assert LIVE_SALT not in fixed and OUTPUT_TIE in fixed and "ReLU and per-row" not in fixed
+    assert SALT_ORDER in fixed
+    assert SALT_ORDER not in _draft([rec], {**_m(), "fixed": {"pouw-salt-order": "run r3"}})
     with pytest.raises(ValueError, match="fixed 'salt'"):
         _draft([rec], {**_m(), "fixed": {"salt": "run r1"}})
 
 
 def test_the_three_landed_fixes_drop_their_caveats_cleanly() -> None:
     rec = _load("block-record-r2-period0")
-    landed = {"certifier-output-tie": "#4575, e2e r20261026-063606-3381",
-              "torch-loop-wiring": "#4558 (25e140abcd), e2e r20261026-070934-56b3",
-              "pouw-salt-order": "#4573, carried by #4594"}
+    landed = {"certifier-output-tie": "e2e r20261026-063606-3381",
+              "torch-loop-wiring": "25e140abcd, e2e r20261026-070934-56b3",
+              "pouw-salt-order": "the salt-after-anchors change"}
     caveats = _draft([rec], {**_m(), "fixed": landed}).split("## What the demo didn't show")[1].split("## Sources")[0]
-    assert "(NET-80)" not in caveats and "ReLU and per-row" not in caveats and "(RT-LEAN L22)" not in caveats
-    assert "(#4405, #4426)" in caveats and "\n\n\n" not in caveats
+    assert OUTPUT_TIE not in caveats and "ReLU and per-row" not in caveats and SALT_ORDER not in caveats
+    assert LIVE_SALT in caveats and "\n\n\n" not in caveats
     assert all(line.startswith(("- ", "  ")) for line in caveats.strip().splitlines())
 
 
@@ -239,11 +245,11 @@ def test_a_gather_is_no_subcircuit(name: str) -> None:
 def test_the_bound_cites_the_joint_statement_only_when_locked() -> None:
     rec = _load("block-record-r2-period0")
     locked = _draft([rec], _m(JOINT_LOCKED=True)).split("## Sources")[0]
-    assert "By LEAN-56's `Flock.Guarantees.JointStratified` (locked):" in locked
-    assert "by LEAN-56's `JointStratifiedHorizon` (locked)" in locked and "unlocked" not in locked
+    assert "By `Flock.Guarantees.JointStratified` (locked):" in locked
+    assert "by `JointStratifiedHorizon` (locked)" in locked and "unlocked" not in locked
     unlocked = _draft([rec], _m(JOINT_LOCKED=False))
-    assert "By #4358's per-subcircuit bound, the joint figure unlocked:" in unlocked
-    assert "by #4358's `Flock.Guarantees.IntegrityHorizon` per subcircuit, the joint figure unlocked" in unlocked
+    assert "By the per-subcircuit bound, the joint figure unlocked:" in unlocked
+    assert "by `Flock.Guarantees.IntegrityHorizon` per subcircuit, the joint figure unlocked" in unlocked
     assert "By ⟨BOUND_CITATION⟩:" in _draft([rec])
 
 
@@ -270,7 +276,7 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
         "\n", " ")
     assert "53 sessions (r20261025-230005-b71a)" in out
-    assert "This block drew k = 64, not M3's handful of 8 (PRF-171)." in out
+    assert "This block drew k = 64, not M3's handful of 8." in out
     assert "at most 68 of its" in out and "at most K = 1,449 bits leaked" in out
     assert "Commit on the H200: 225 *(H200 bench HASH-7, not the demo block)* GB/s" in out
     assert "(15.7% *(HASH-20 bench, not the demo block)*)" in out
@@ -312,7 +318,7 @@ def test_a_row_without_its_run_verdict_or_target_is_refused(field: str) -> None:
     with pytest.raises(ValueError, match=f"names no {field}"):
         _draft([], _fallback(**{field: ""}))
     with pytest.raises(ValueError, match="has no run id"):
-        _draft([], _fallback(run="PR #4768"))
+        _draft([], _fallback(run="the commit-overhead bench"))
 
 
 def test_old_names_inside_a_quoted_verdict_line_are_kept() -> None:
@@ -363,20 +369,20 @@ def test_proved_refuses_another_status_and_an_undrawn_block() -> None:
     with pytest.raises(ValueError, match="block 999, which the coin didn't draw"):
         _draft([], doc)
     with pytest.raises(ValueError, match="needs its run id"):
-        _draft([], {**_proved(), "proved": {"run": "DRAWPROVE", "drawn": [1], "lines": []}})
+        _draft([], {**_proved(), "proved": {"run": "the proving run", "drawn": [1], "lines": []}})
 
 
 NOISE = {"SERVE_NOISE_S": (8.5, "kraqwxsc r20261026-113133-5cb4 against r20261026-120015-3773"),
          "SERVE_NOISE_BATCH": (4096, "r20261026-113133-5cb4"), "SERVE_NOISE_UNITS_S": (5.59, "r20261026-113133-5cb4"),
-         "SERVE_NOISE_COMMIT_S": (2.8, "r20261026-113133-5cb4"), "SERVE_NOISE_GAMMA_STEP": (1.115, "CMP-126"),
-         "SERVE_NOISE_BASE_S": (74.4, "r20261026-120015-3773"), "SERVE_STEP_4562_S": (3.78, "#4562"),
-         "SERVE_NOISE_UNITS_PEAK": (0.10, "RHO-H200 r20261027-022021-3a48"),
-         "SERVE_COMMIT_OVERHEAD_S": (0.42, "CMP-149 r20261027-004614-d98c")}
+         "SERVE_NOISE_COMMIT_S": (2.8, "r20261026-113133-5cb4"), "SERVE_NOISE_GAMMA_STEP": (1.115, "the noise run"),
+         "SERVE_NOISE_BASE_S": (74.4, "r20261026-120015-3773"), "SERVE_STEP_4562_S": (3.78, "the kraq build"),
+         "SERVE_NOISE_UNITS_PEAK": (0.10, "tensor peak r20261027-022021-3a48"),
+         "SERVE_COMMIT_OVERHEAD_S": (0.42, "commit overhead r20261027-004614-d98c")}
 NOISE_LINE = ("Per-call noise adds **+8.5 s a step at batch 4,096** (5.59 s of units plus 2.8 s of commit, "
               "r20261026-113133-5cb4 against r20261026-120015-3773): 1.115× against that commit-bound 74.4 s served "
-              "step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about 3.2× against #4562's 3.78 s served "
-              "step. The units are ALU-bound at about 10% of the tensor peak (RHO-H200, r20261027-022021-3a48). The "
-              "commit's own overhead is a separate line (CMP-149): +0.42 s at 1 KiB rows after #4915 "
+              "step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about 3.2× against the earlier per-call "
+              "build's 3.78 s served step. The units are ALU-bound at about 10% of the tensor peak "
+              "(r20261027-022021-3a48). The commit's own overhead is a separate line: +0.42 s at 1 KiB rows "
               "(r20261027-004614-d98c).")
 
 
@@ -395,7 +401,8 @@ def test_per_call_noise_is_seconds_a_step_with_both_ratios_never_gamma_step_alon
     assert f"- {NOISE_LINE}" in part2 and "| ⟨SERVE_NOISE_RATIO_4562⟩ | 3.2 |" in out
     demo = _draft([_load("block-record-r2-period0")], {"format": D.MEASUREMENTS, "values": _noise()})
     assert " ".join(NOISE_LINE.split()) in " ".join(demo.split())
-    assert "⟨SERVE_NOISE_RATIO_4562⟩× against #4562's ⟨SERVE_STEP_4562_S⟩ s" in _draft([_load("block-record-r2-period0")])
+    assert ("⟨SERVE_NOISE_RATIO_4562⟩× against the earlier per-call build's ⟨SERVE_STEP_4562_S⟩ s"
+            in " ".join(_draft([_load("block-record-r2-period0")]).split()))
 
 
 def test_a_row_stating_per_call_noise_alone_is_refused() -> None:

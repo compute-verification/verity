@@ -1,4 +1,4 @@
-"""The block's draw sized to a CPU proving budget (PRF-171): `h200.py`'s windows, one a template, each drawing a uniform
+"""The block's draw sized to a CPU proving budget: `h200.py`'s windows, one a template, each drawing a uniform
 `subset:k` of its n units, priced by C-Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
 each template's units the budget certifies.
 
