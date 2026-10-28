@@ -157,6 +157,14 @@ changes here and the older name gets a row under Older names, in the same change
   ρ_G/(α R_free)) for a run G needing rate ρ_G: tiny runs aren't slowed, frontier runs are slowed by about
   1/(α(U + ν)), and the result is a curve over run size. **Prover overhead** γ is the honest developer's cost, not a
   slowdown.
+- **The training task of record**: retrain the latest frontier model from scratch. Formally 𝒢 asks for a loss below
+  every registered model's (a registered model is read freely, so reproducing one isn't training), from a random
+  initialization and θ with no other carried state, and the monitoring period covers the whole run. The reference
+  training algorithm is the frontier recipe, with full-parameter updates.
+- **Full updates** (`FullUpdates λ`, a named task assumption): on 𝒢, every run whose update steps each change only
+  state held in one server block needs at least λ times the reference's compute. So the fastest run updates all the
+  parameters, which crosses servers and meets the cut bound, while a partial-update run gets all the free compute at λ
+  times the cost: slowdown ≥ min(cut bound, λ/(α(U + ν))). λ is stated, not yet measured.
 - **Bounding strategy**: a necessary subcomputation (N counted objects every successful run computes) and a pricing
   argument for it, giving the yields. Each server block yields at most min(q_S, its inference-block yields plus its
   free compute), unregistered hardware works at its rate, and the straddle term covers objects split between verified
