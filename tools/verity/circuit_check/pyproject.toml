@@ -52,7 +52,7 @@ worker_gb = 8
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
 # the package's names.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/definitions", "verity/ml/flock/python/verity_flock", "verity/ml/windows",
