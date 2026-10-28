@@ -88,7 +88,6 @@
     {"file": "benchmarks/pous/erase_calib/driver.py", "count": 10},
     {"file": "benchmarks/pous/hbm_audit/driver.py", "count": 2},
     {"file": "benchmarks/pous/lateness/cpusample.py", "count": 2},
-    {"file": "benchmarks/pous/memory_challenger/live.py", "count": 3},
     {"file": "benchmarks/pous/p2_v1/bandwidth.py", "count": 1},
     {"file": "benchmarks/pous/p2_v1/decode_bench.py", "count": 1},
     {"file": "benchmarks/pous/p2_v1/scale.py", "count": 1},

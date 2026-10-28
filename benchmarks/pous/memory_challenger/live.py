@@ -67,6 +67,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import select
 import socket
 import struct
 import sys
@@ -143,14 +144,16 @@ def scheme_of(name: str, params: Any) -> Any:
 
     if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
+    refused = []
     for cls in (schemes.Band, schemes.P2, schemes.P2ChaCha):
         try:
             scheme = cls(params)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            refused.append(f"{cls.__name__} refuses them: {e}")
             continue
         if scheme.name == name:
             return scheme
-    raise KeyError(f"no POUS scheme {name!r} at {params!r}")
+    raise KeyError(f"no POUS scheme {name!r} at {params!r}" + (f" ({'; '.join(refused)})" if refused else ""))
 
 
 class LiveResponder:
@@ -162,6 +165,8 @@ class LiveResponder:
         self.sock = socket.create_connection((host, port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.setblocking(False)
+        self.readable = select.poll()
+        self.readable.register(self.sock, select.POLLIN)
         self.buf = bytearray(HEADER + block_bytes)
         self.view = memoryview(self.buf)
         self.device_ns = self.server_ns = 0
@@ -173,10 +178,9 @@ class LiveResponder:
         self.sock.send(struct.pack("<QQ", op, arg))
         got = 0
         while got < want:
-            try:
-                n = self.sock.recv_into(self.view[got:], want - got)
-            except BlockingIOError:
+            if not self.readable.poll(0):
                 continue
+            n = self.sock.recv_into(self.view[got:], want - got)
             if n == 0:
                 raise ConnectionError("the responder closed the connection")
             got += n
@@ -196,11 +200,10 @@ class LiveResponder:
 def cgroup_cpu() -> dict[str, int]:
     """The container's CPU throttling counters (cgroup v2 `cpu.stat`): a throttled period stalls the responder and the
     memory challenger."""
-    try:
-        with open("/sys/fs/cgroup/cpu.stat") as f:
-            stat = dict(line.split() for line in f if line.strip())
-    except OSError:
+    path = Path("/sys/fs/cgroup/cpu.stat")
+    if not path.exists():
         return {}
+    stat = dict(line.split() for line in path.read_text().splitlines() if line.strip())
     return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
 
 
