@@ -54,8 +54,9 @@ link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.program
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
-its root batches one instance of a template whose parameters are `row` and `prog` (`IngressScanFirst`, bucket 0), T − 1
-of one whose are `row`, `sin` and `prog` (`IngressScanBucket`; none when T = 1), each `row` the schedule's (S · B
+its root batches one instance of a template whose parameters are `row` and a `prog<j>` a lane (`IngressScanFirst`,
+bucket 0), T − 1 of one whose are `row`, `sin` and the `prog<j>` (`IngressScanBucket`; none when T = 1), lane j's
+`prog<j>` rows of an input node of its own (`scanOf`), each `row` the schedule's (S · B
 bytes) and both returning the same, then T of one whose parameter is `state` and which returns a u16 and the
 schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 8 bits, a u16 16), and its every input gate is
 a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
