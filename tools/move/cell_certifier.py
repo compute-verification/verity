@@ -239,12 +239,10 @@ def main(argv: list[str] | None = None) -> int:
     for p in files:
         if excluded(p) or not (root / p).is_file() or (root / p).is_symlink():
             continue
-        try:
-            old = (root / p).read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        data = (root / p).read_bytes()
+        if b"arden" not in data:
             continue
-        if "arden" not in old:
-            continue
+        old = data.decode("utf-8")
         new = _BOUND[p](old, counts) if p in _BOUND else old
         new = _HELD.get(p, _NAMES)(new, counts)
         if p.endswith(".py"):
