@@ -3,7 +3,8 @@ receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to th
 worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
 layout's tensors' units (the tracked registration's, the real layout's), and the toy's store served through
 kernels' staging decode (P2's reference on the CPU) to `p2_party`'s verifier in its own process: accepted honest, under
-the toy's plan or one of fewer units, and rejected when the prover skips a layer's reads."""
+the toy's plan or one of fewer units, and rejected when the prover skips a layer's reads, each session's core case kept
+private."""
 from __future__ import annotations
 
 import hashlib
@@ -26,9 +27,15 @@ from p2_v1 import bandwidth as B
 
 from verity.core.protocols.pous import verifier as V
 from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import p2, p2_party, receipts
+from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_party, receipts
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
+
+
+def held_to(windows: int = 2, passes: int = 2, samples: int = 64) -> str:
+    """`p2_party`'s flags holding its sessions to the toy's parameters, as `bandwidth.py session` requests them with
+    these values and `--window-s 0.001 --deadline-s 0.001`."""
+    return f"--windows {windows} --passes {passes} --samples {samples} --window-ns 1000000 --deadline-ns 1000000"
 
 
 def test_the_midstate_and_one_block_are_sha512() -> None:
@@ -130,7 +137,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     reg = B.toy(tmp_path / "toy")
     assert B.registration_of_store(tmp_path / "toy" / "store", reg.node) == reg
     verifier = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party "
-                f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio")
+                f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio {held_to()}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--registration", str(tmp_path / "toy" / "registration.json"),
             "--verifier", verifier, "--device", "cpu", "--ref-decode", "--samples", "64", "--window-s", "0.001",
@@ -142,8 +149,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     assert a["q_bytes"] == (a["receipts"] - a["wrong_at_most"]) * p2.UNIT_BYTES
     assert [s["covered_units"] for s in doc["steps"]] == [reg.blocks] * 4
     assert doc["verdict_line"].startswith("BW VERDICT accept") and doc["verdict_line"].endswith("PASS")
-    assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--windows", "1", "--passes", "1",
-                          "--expect", "reject"]) == 0
+    assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--expect", "reject"]) == 0
     a = json.loads((tmp_path / "cheat" / "session.json").read_text())["answer"]
     assert a["verdict"] == "reject" and a["failure"] == "receipt"
 
@@ -156,7 +162,8 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
     assert doc["plan"] == [[0, reg.blocks]]
     path = tmp_path / "fewer.json"
     path.write_text(json.dumps(doc | {"plan": [[0, 2], [4, 3]]}))
-    verifier = f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party --registration {path} --stdio"
+    verifier = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party --registration {path} --stdio "
+                f"{held_to()}")
     assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
                    "--node", reg.node.decode(), "--registration", str(path), "--verifier", verifier, "--device", "cpu",
                    "--ref-decode", "--samples", "64", "--window-s", "0.001", "--deadline-s", "0.001", "--workers", "2",
@@ -173,7 +180,8 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
     reg = B.toy(tmp_path / "toy")
     verifier = subprocess.Popen([sys.executable, "-m", "verity.core.protocols.remote_bandwidth.p2_party",
                                  "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
-                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl")],
+                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl"),
+                                 *held_to(1, 1, 8).split()],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
     port = json.loads(verifier.stdout.readline())["listening"]
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
@@ -193,24 +201,67 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
     site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
     directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
-    to the session's, and which the device's answers.jsonl keeps."""
+    to the session's, and which the device's answers.jsonl keeps. Each session's core case, the one the device's
+    private cases.jsonl keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the toy's store,
+    and `session.json` holds only its digest, store and verdict."""
     reg = B.toy(tmp_path / "toy")
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
-             f"--registration {tmp_path / 'toy' / 'registration.json'}")
+             f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--party", party, "--party-host", "127.0.0.1", "--device", "cpu",
             "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",
             "--deadline-s", "0.001", "--workers", "1"]
+    cases = []
     for name, more, expect in (("honest", [], "accept"), ("cheat", ["--skip-layer", "1"], "reject")):
-        assert B.main(base + more + ["--out", str(tmp_path / name), "--expect", expect]) == 0
+        private = tmp_path / "private" / name
+        assert B.main(base + more + ["--out", str(tmp_path / name), "--expect", expect,
+                                     "--case-dir", str(private)]) == 0
         doc = json.loads((tmp_path / name / "session.json").read_text())
         assert doc["verifier_record"] == doc["answer"] and doc["answer"]["verdict"] == expect
         assert "verifier_record_agrees=True" in doc["verdict_line"]
+        case, answer = (json.loads((private / f).read_text()) for f in (p2_case.CASE, p2_case.ANSWER))
+        assert [(private / f).stat().st_mode & 0o777 for f in ("", p2_case.CASE, p2_case.ANSWER)] == [0o700, 0o600, 0o600]
+        assert answer == p2_case.answer(case, doc["answer"]) and answer["verdict"] == expect
+        assert p2_case.store_root(case) == reg.root
+        assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "python",
+                               "store_root": reg.root.hex(), "verdict": expect}
+        assert case["evidence"] not in (tmp_path / name / "session.json").read_text()
+        cases.append(case)
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
     assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
+    assert [json.loads(x) for x in (tmp_path / "party" / "private" / "cases.jsonl").read_text().splitlines()] == cases
     record = {"verdict": "accept"}
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
+    with pytest.raises(SystemExit, match="can't be under --out"):
+        B.main(base + ["--out", str(tmp_path / "x"), "--case-dir", str(tmp_path / "x" / "private")])
+
+
+KILLED = """
+import json, socket
+with socket.create_server(("127.0.0.1", 0)) as srv:
+    print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+    conn, _ = srv.accept()
+    conn.makefile("rb").readline()
+    conn.close()
+print(json.dumps({"killed": "the session's 1 min ran out"}), flush=True)
+"""
+
+
+def test_a_party_the_gate_kills_fails_the_session_naming_the_kill(tmp_path) -> None:
+    """A party whose minutes ran out: the gate closes its session and says so on its stdout (`{"killed"}`), and the
+    session fails with that reason, not a bare closed connection."""
+    reg = B.toy(tmp_path / "toy")
+    (tmp_path / "killed.py").write_text(KILLED)
+    out = tmp_path / "killed"
+    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+                   "--node", reg.node.decode(), "--party", f"{sys.executable} {tmp_path / 'killed.py'}",
+                   "--party-host", "127.0.0.1", "--device", "cpu", "--ref-decode", "--workers", "1", "--out", str(out),
+                   "--expect", "accept"]) == 1
+    doc = json.loads((out / "session.json").read_text())
+    assert doc["answer"]["verdict"] == "prover-error", doc["answer"]
+    assert doc["answer"]["reason"] == ("ConnectionError: the auditor's gate killed the party: the session's 1 min ran "
+                                       "out")
 
 
 def test_the_cli_runs_as_a_script(tmp_path) -> None:
