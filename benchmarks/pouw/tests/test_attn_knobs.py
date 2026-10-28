@@ -121,6 +121,21 @@ def test_held_lazy_max_moves_k_s_release_after_the_redo_test(tmp_path, redo):
     assert ml.index("softmax.lazy_redo(") < ml.index("pipeline_k.consumer_release(") < ml.index("VERITY_FA3_O")
 
 
+@pytest.mark.parametrize("probe", tb.HELD_PROBES)
+def test_held_probes_each_undo_one_of_helds_costs(tmp_path, probe):
+    made = {new for _, new in tb.LAZY_PATCHES}
+    own = [old for old, _ in tb.HELD_PATCHES if not any(old in new for new in made)]
+    h = tmp_path / "softmax.h"
+    h.write_text("".join(old for old, _ in tb.LAZY_PATCHES) + "".join(own))
+    m = tmp_path / "mainloop_fwd_sm90_tma_gmma_ws.hpp"
+    m.write_text("".join(old for old, _ in tb.HELD_MAINLOOP))
+    tb.lazy_max(h, held=True, probe=probe)
+    s, ml = h.read_text(), m.read_text()
+    assert ml.count(tb.K_RELEASE) == 1 and ("bar.red.or.pred" in s) == (probe != "held-warp")
+    early = ml.index(tb.K_RELEASE) < ml.index("softmax.lazy_redo(")
+    assert early == (probe == "held-early-k")
+
+
 def test_thresh_keeps_the_max_only_within_tau(tmp_path):
     h = tmp_path / "softmax.h"
     h.write_text("".join(old for old, _ in tb.THRESH_PATCHES))

@@ -2,7 +2,7 @@
 causal tile optionally changed, so attn_knobs.py can time it beside the served wheel's `_vllm_fa3_C`.
 
     python fa3_tile_build.py --tree TREE --name NS --build-dir DIR [--tile-m 128] [--exp2-emu NUM/DEN --exp2-deg 3]
-                              [--lazy-max [checked]]
+                              [--lazy-max [MODE]]
 
 TREE is a copy of the pinned tree with `integrations/vllm/verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py` applied (its
 `fa3_torch_lib_verity.cpp`), built here with VERITY_TAP=0, which is the pinned kernel. The flags are that builder's
@@ -33,7 +33,8 @@ kept block's exp2 unchecked, tests each row's block sum after it (below 2^16, so
 reduces that over the warpgroup with one bar.red.or where its warps meet anyway; on a failure the warpgroup recomputes
 S from K, which the mainloop then releases only after that test, and redoes the block exactly from the state saved
 before it (`redo_softmax`). `held-redo` fails every kept block's test, so its bytes must equal FA3's: the check of the
-redo path, which random inputs never take. Without either flag softmax.h is untouched.
+redo path, which random inputs never take. `held-early-k` and `held-warp` are timing probes of held's costs, wrong
+whenever a redo runs (`lazy_max`). Without either flag softmax.h is untouched.
 """
 from __future__ import annotations
 
@@ -273,16 +274,31 @@ def patch_once(path: Path, s: str, patches) -> str:
     return s
 
 
-def lazy_max(softmax_h: Path, checked: bool = False, thresh: bool = False, held: bool = False, redo: bool = False) -> None:
-    """`redo` (with `held`) fails every kept block's test, so each is recomputed and redone exactly: FA3's bytes."""
+K_RELEASE = "pipeline_k.consumer_release(smem_pipe_read);  // release K\n"
+HELD_PROBES = ("held-early-k", "held-warp")
+
+
+def lazy_max(softmax_h: Path, checked: bool = False, thresh: bool = False, held: bool = False, redo: bool = False,
+             probe: str = "") -> None:
+    """`redo` (with `held`) fails every kept block's test, so each is recomputed and redone exactly: FA3's bytes.
+
+    `probe` (with `held`) times one of held's costs away, and is wrong whenever a redo runs: `held-early-k` releases K
+    where FA3 does, so a redo may read a stage the producer refilled; `held-warp` votes in each warp instead of the
+    warpgroup's bar.red, so a redo's wgmma needs every warp of the warpgroup to fail together."""
     if thresh:
         softmax_h.write_text(patch_once(softmax_h, softmax_h.read_text(), THRESH_PATCHES))
         return
     s = patch_once(softmax_h, softmax_h.read_text(), LAZY_PATCHES)
     if held:
         mainloop_h = softmax_h.parent / "mainloop_fwd_sm90_tma_gmma_ws.hpp"
-        mainloop_h.write_text(patch_once(mainloop_h, mainloop_h.read_text(), HELD_MAINLOOP))
+        loop = HELD_MAINLOOP
+        if probe == "held-early-k":
+            (old, new), = HELD_MAINLOOP[1:]
+            loop = ((old, new.replace("                " + K_RELEASE, "")),)
+        mainloop_h.write_text(patch_once(mainloop_h, mainloop_h.read_text(), loop))
         s = patch_once(softmax_h, s, HELD_PATCHES)
+        if probe == "held-warp":
+            s = patch_once(softmax_h, s, (("bar.red.or.pred q, %2, 128, p;", "vote.sync.any.pred q, p, 0xffffffff;"),))
         softmax_h.write_text(s.replace(f"< {HELD_LIMIT}.f", "< -1.f") if redo else s)
         return
     if checked:
@@ -307,10 +323,12 @@ def main() -> None:
     ap.add_argument("--tile-m", type=int)
     ap.add_argument("--exp2-emu", help="NUM/DEN: that share of each thread's score columns' exp2 on the FMA pipe")
     ap.add_argument("--exp2-deg", type=int, default=3, help="the FMA exp2's polynomial degree (3 or 4)")
-    ap.add_argument("--lazy-max", nargs="?", const="screen", choices=("screen", "checked", "thresh", "held", "held-redo"),
+    ap.add_argument("--lazy-max", nargs="?", const="screen",
+                    choices=("screen", "checked", "thresh", "held", "held-redo") + HELD_PROBES,
                     help="keep a warp's running max after the first key block (checked: biased exp2, sign-tested; "
                          "thresh: the max computed, kept while it rises by at most 8 in log2 units; held: block sums "
-                         "tested after exp2, K held for a recompute; held-redo: every kept block recomputed, a test)")
+                         "tested after exp2, K held for a recompute; held-redo: every kept block recomputed, a test; "
+                         "held-early-k, held-warp: timing probes of held's costs, wrong when a redo runs)")
     ap.add_argument("--jobs", default="8")
     ap.add_argument("--cuda", type=Path, default=Path("/usr/local/cuda"), help="the CUDA toolkit whose libcuda stub links")
     args = ap.parse_args()
@@ -324,7 +342,8 @@ def main() -> None:
         emu = {"num": num, "den": den, "deg": args.exp2_deg, "max_rel": {3: 4.6e-4, 4: 1.2e-5}[args.exp2_deg]}
     if args.lazy_max:
         lazy_max(hop / "softmax.h", checked=args.lazy_max == "checked", thresh=args.lazy_max == "thresh",
-                 held=args.lazy_max.startswith("held"), redo=args.lazy_max == "held-redo")
+                 held=args.lazy_max.startswith("held"), redo=args.lazy_max == "held-redo",
+                 probe=args.lazy_max if args.lazy_max in HELD_PROBES else "")
     os.environ["TORCH_CUDA_ARCH_LIST"] = "9.0a"
     os.environ["MAX_JOBS"] = args.jobs
     from torch.utils.cpp_extension import load
