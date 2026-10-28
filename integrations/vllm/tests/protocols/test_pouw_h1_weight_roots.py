@@ -56,7 +56,8 @@ def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_key():
     assert PH.weight_root(3, second) != root
     for other in (bytes(32), b"\xff" * 32, key[:-1] + bytes([key[-1] ^ 1]), bytes(range(32))):
         assert PH.weight_root(3, first, other) != root
-    assert commit_rows(weight_binding(3), -2, [r.tobytes() for r in first], hash="sha512").commitment.root != root
+    assert commit_rows(weight_binding(3), -2, [r.tobytes() for r in first], hash="sha512",
+                       public=True).commitment.root != root
 
 
 def test_a_reused_root_is_the_fresh_one_and_is_computed_once(computed):
