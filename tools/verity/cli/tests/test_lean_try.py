@@ -43,3 +43,22 @@ def test_try_refuses_a_file_in_no_package_and_remote_options_without_on(tmp_path
         verity_cli.main(["lean", "try", str(loose), "--pool", "P"])
     assert "--pool and --as go with --on" in capsys.readouterr().err
     assert not called.exists()
+
+
+def test_on_ships_the_checkout_that_holds_the_file(tmp_path):
+    """`--on` tries the edits of the checkout FILE is in (another `git worktree`, say), not the one whose `verity` runs."""
+    other = tmp_path / "other"
+    (other / "tools" / "verity" / "lean").mkdir(parents=True)
+    (other / "tools" / "verity" / "lean" / "lean_changed.py").write_text("")
+    (other / "Pkg").mkdir()
+    file = other / "Pkg" / "File.lean"
+    file.write_text("")
+    verity_cli._git("init", "-q", cwd=other)
+    assert verity_cli._checkout(str(file)) == (other.resolve(), "Pkg/File.lean")
+
+
+def test_on_falls_back_to_this_checkout_outside_one(tmp_path):
+    loose = tmp_path / "Loose.lean"
+    loose.write_text("")
+    root, rel = verity_cli._checkout(str(loose))
+    assert root == verity_cli.ROOT and Path(root, rel).resolve() == loose.resolve()
