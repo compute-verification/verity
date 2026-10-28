@@ -15,7 +15,7 @@ side a machine: `ROLE=verifier` on a machine the prover doesn't control and `ROL
 default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing).
 
 - `verifier.py`: the verifier's process. It runs the Lean verifier of record, `remote-audit-verifier` (`lean_verifier.py`),
-  beside `audit.Session`, and refuses a run where the two differ.
+  beside `audit.AuditRun`, and refuses a run where the two differ.
 - `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
   `benchmarks/codec_tensor/reader.cu`), `inplace.py` reads vLLM's tensors in place, and `serve.py` serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.
