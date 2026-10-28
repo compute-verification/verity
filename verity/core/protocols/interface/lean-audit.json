@@ -35,9 +35,9 @@
    "why": "the interface is spec: a protocol's live coins (`Live`, `answerAt`) are stated over `Protocol` alone"
   },
   "CoreProtocol.Site": {
-   "imports": ["Lean.Data.Json", "Flock.Canon", "Flock.Hash"],
+   "imports": ["Lean.Data.Json", "Flock.Canon", "Flock.Hash", "CoreProtocol.Ratio"],
    "except": [],
-   "why": "the Site in code is spec: its properties (`Properties.Core.Site`) are stated over its fold, check and types, so it imports only Lean's JSON and C-Flock's canonical JSON and SHA-512, for its digests and decoders"
+   "why": "the Site in code is spec: its properties (`Properties.Core.Site`) are stated over its fold, check and types, so it imports only Lean's JSON, C-Flock's canonical JSON and SHA-512, for its digests and decoders, and the interface's `Ratio`, which reads its figures"
   }
  },
  "dependencies": {
