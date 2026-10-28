@@ -155,8 +155,8 @@ class TensorLib:
         so.wt_set_key.argtypes = [v, i, v, v]
         so.wt_encode.argtypes = [v, v, q, q, i, i, v]
         so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
-        cs = (ctypes.c_int * 15)()
+        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v, v]
+        cs = (ctypes.c_int * 18)()
         so.wt_constants(cs)
         self.constants = list(cs)
         (self.bits, self.limbs, self.word_bytes, self.payload_bytes, self.task_words, self.kmax, self.sb,
@@ -198,8 +198,8 @@ class TensorLib:
 
     def fused(self, k: int, w, x, y, m: int, n: int, kd: int, base: int, partials: int, cfg: Config, groups: int,
               tsteps, launched=None) -> None:
-        self.call("wt_fused", k, w, x, y, m, n, kd, base, partials, cfg.consumers, cfg.stages, groups, 0, tsteps, None,
-                  0, launched, stream())
+        self.call("wt_fused", k, w, x, y, m, n, kd, base, partials, cfg.consumers, cfg.stages, groups, tsteps, launched,
+                  stream())
 
     def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
         """The launch's CTA groups (as many as fill the device) and its tweak steps on the device (`bench.tsteps`): a

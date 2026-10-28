@@ -20,11 +20,10 @@ Nothing is timed before its gate passed, in this order:
   WT_RECEIPT build at full slot), the fused decode also runs with two sketch warps of its own (T = -2) that sketch
   each of the store's 4 KiB blocks at k_s = 16 or 64 and hash the sketch into its sketch-sha512 receipt
   (`sketch_receipt`), gated on every vector's sketch (a float32 GPU reference with TF32 off, exact), every receipt,
-  and the commit's leaves and root (reader.cu against the driver's tree). A diagnostic build (`WT_SK_DIAG`, named
-  `<field>-diag<bits>`) drops parts of the sketch to time them: its partial sums are gated, its sketches and receipts
-  are not. Before its GEMMs, `gate_pass` checks the per-pass key (red team F29: `wt_pass` derives pass j's seed, signs
-  and receipt midstate on the device from root_(j−1)), and once a linear one such launch runs under a pass's key and
-  is gated at that pass's seed (`pass_keyed`).
+  and the commit's leaves and root (reader.cu against the driver's tree). Before its GEMMs, `gate_pass` checks the
+  per-pass key (red team F29: `wt_pass` derives pass j's seed, signs and receipt midstate on the device from
+  root_(j−1)), and once a linear one such launch runs under a pass's key and is gated at that pass's seed
+  (`pass_keyed`).
 """
 from __future__ import annotations
 
@@ -90,8 +89,8 @@ class Lib:
         so.wt_chain.argtypes = [i, i, i, q, v, i, v]
         so.wt_mix.argtypes = [q, q, i, v, i, v]
         so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
-        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
+        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v, v]
+        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
         if hasattr(so, "wt_fused_sketch_bf"):   # builds from before it
             so.wt_fused_sketch_bf.argtypes = so.wt_fused_sketch.argtypes
         so.wt_set_pass.argtypes = [v, i, i]
@@ -101,15 +100,14 @@ class Lib:
         so.wt_pass_ptrs.argtypes = [v]
         so.wt_sketch_vectors.argtypes = [i, i, i, i]
         so.wt_sketch_vectors.restype = q
-        so.wt_set_tag.argtypes = [v, v]
+        so.wt_set_receipt.argtypes = [v]
         so.wt_set_dbg.argtypes = [v]
         so.wt_spin.argtypes = [ctypes.c_longlong, v]
         so.wt_empty.argtypes = [i, v]
-        cs = (ctypes.c_int * 20)()
+        cs = (ctypes.c_int * 18)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
-         self.sb, self.fused_warps, self.fused_span, self.tag_block, self.diag, self.fused_most, self.receipt, mask,
-         fold6) = list(cs)
+         self.sb, self.fused_warps, self.fused_span, self.fused_most, self.receipt, mask, fold6) = list(cs)
         self.mask, self.fold6 = bool(mask), fold6   # fold6: 0 the column square, 1 FOLD 6, 2 FOLD 6 folded as made
         self.field = next(f for f in W.FIELDS.values() if f.n == self.n)
         f = self.field
@@ -117,7 +115,7 @@ class Lib:
                                                              W.TASK_WORDS[f.name] * f.word_bytes):
             raise RuntimeError(f"{path}: constants {list(cs)} are not wide.py's {f}")
         self.name = (f.name + ("-masked" if self.mask else "") + (f"-fold6{'' if self.fold6 == 1 else 'lean'}" if self.fold6 else "")
-                     + (f"-diag{self.diag}" if self.diag else "") + ("-sha512" if self.receipt else ""))
+                     + ("-sha512" if self.receipt else ""))
         self.tc = self.tc_mmas > 0
         self.tag_bytes = 64                                   # a sketch vector's receipt
         self.jbase = 0                                        # sketch-sha512: vector v of a launch is the store's block v
@@ -527,7 +525,7 @@ def fused_fits(lib: Lib, k: int, mb: int, n: int, kd: int, cfg, sketch_t: int) -
     """wt_fused_sketch takes cfg at M = mb (two sketch warps beside D decoders need D + 4 warps, and D + 5 past
     M = 16 at k <= 2)."""
     launched = ctypes.c_int(0)
-    return lib.so.wt_fused_sketch(k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None,
+    return lib.so.wt_fused_sketch(k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, None, None,
                                   0, cfg[3], None, None, sketch_t, sketch_warps(cfg), ctypes.byref(launched),
                                   None) == 0
 
@@ -564,10 +562,10 @@ def set_pass(lib: Lib, sketch_t: int, sigma: bytes = TAG_SEED, rows: int = SR.RO
 
 def pass_state(lib: Lib) -> dict:
     """The last pass's seed (64 bytes), K_S and receipt midstate."""
-    out = ctypes.create_string_buffer(192)
+    out = ctypes.create_string_buffer(160)
     lib.call("wt_pass_state", ctypes.addressof(out))
     b = out.raw
-    return {"seed": b[:64], "k_s": b[64:96], "mid": b[128:192]}
+    return {"seed": b[:64], "k_s": b[64:96], "mid": b[96:160]}
 
 
 def window_seed(lib: Lib) -> bytes:
@@ -591,12 +589,11 @@ def sketch_derive(lib: Lib, seed: bytes, n: int, rows: int = SR.ROWS) -> bytes:
 
 
 def receipt_mid(lib: Lib, seed: bytes) -> bytes:
-    """sketch-sha512's prefix midstate at `seed` as the host computes it (wt_set_tag); leaves set_sketch_tag's."""
-    k = ctypes.create_string_buffer(bytes(32))
+    """sketch-sha512's prefix midstate at `seed` as the host computes it (wt_set_receipt); leaves set_receipt_prefix's."""
     pre = ctypes.create_string_buffer(SR.prefix(seed))
-    lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
+    lib.call("wt_set_receipt", ctypes.addressof(pre))
     mid = pass_state(lib)["mid"]
-    set_sketch_tag(lib)
+    set_receipt_prefix(lib)
     return mid
 
 
@@ -733,13 +730,12 @@ def dump_words(lib: Lib, dbg, plain, store, key, gq: int, stages: int) -> dict:
     return out
 
 
-def set_sketch_tag(lib: Lib) -> None:
-    """sketch-sha512's receipt prefix at RECEIPT_SEED into a WT_RECEIPT build (its key words are read by no receipt)."""
+def set_receipt_prefix(lib: Lib) -> None:
+    """sketch-sha512's receipt prefix at RECEIPT_SEED into a WT_RECEIPT build."""
     if not lib.receipt:
         raise ValueError(f"{lib.name}: the sketch warps' receipts are a WT_RECEIPT build's")
-    k = ctypes.create_string_buffer(bytes(32))
     pre = ctypes.create_string_buffer(SR.prefix(RECEIPT_SEED))
-    lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
+    lib.call("wt_set_receipt", ctypes.addressof(pre))
 
 
 def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: int, log, cfgs, fused_cfgs,
@@ -819,7 +815,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
         out.update(leaves=c["leaves_ok"], root=c["root_ok"])
         out["ok"] = all(v for a, v in out.items() if a not in ("cfg", "j"))
         sk_refs.pop((k, s, gr, seed))
-        set_sketch_tag(lib)
+        set_receipt_prefix(lib)
         return out
 
     def sketch_tags_ok(tb: bytes, r: dict) -> bool:
@@ -828,7 +824,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
     def groups_for(mode, k, mb, cfg):
         launched = ctypes.c_int(0)
         if mode == 3:
-            lib.call("wt_fused_sketch", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
+            lib.call("wt_fused_sketch", k, None, None, None, mb, n, kd, 0, 0, cfg[0], cfg[1], 0, None,
                      None, 0, cfg[3], None, None, sketch_t, sketch_warps(cfg), ctypes.byref(launched), st)
         else:
             lib.call("wt_gemm", mode, None, None, None, mb, n, kd, 0, cfg[0], cfg[1], 0, 0, None,
@@ -840,7 +836,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
             tp = ptr(sk_tags_for(groups)[0]) if cfg[3] else None
             sg = signs if signs is not None else (sk[cfg[3]]["frags"] if cfg[3] else None)
             lib.call("wt_fused_sketch", k, ptr(wbuf), ptr(x.view(torch.uint8)), ptr(y), x.shape[0], n, kd, 0,
-                     int(partials), cfg[0], cfg[1], groups, 0, ptr(steps), tp, lib.jbase, cfg[3],
+                     int(partials), cfg[0], cfg[1], groups, ptr(steps), tp, lib.jbase, cfg[3],
                      ptr(sg) if sg is not None else None, ptr(skout) if skout is not None else None, sketch_t,
                      sketch_warps(cfg), None, st)
         else:
@@ -876,9 +872,9 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 gr, sp = steps_for(k, mb, cfg)
                 bad, sk_bad = [], []
                 if cfg[3]:
-                    set_sketch_tag(lib)
+                    set_receipt_prefix(lib)
                     tb_dev, nvec = sk_tags_for(gr)
-                    skr = sketch_ref(k, cfg[3], gr) if not lib.diag else None
+                    skr = sketch_ref(k, cfg[3], gr)
                 for _ in range(gate_reps):
                     pf = torch.zeros_like(pp)
                     skb = None
@@ -888,7 +884,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                     call(3, k, stores[k], x, pf, True, cfg, groups=gr, steps=sp, skout=skb)
                     if not torch.equal(pf, pp):
                         bad.append(mismatch(pf, pp, nch, mb, n, gr))
-                    if cfg[3] and not lib.diag:
+                    if cfg[3]:
                         torch.cuda.synchronize()
                         sk_eq = torch.equal(skb.view(nvec, cfg[3]), skr["sk"])
                         tg_eq = sketch_tags_ok(host_bytes(tb_dev), skr)
@@ -897,17 +893,14 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                                            "vectors_unequal": int((skb.view(nvec, cfg[3]) != skr["sk"]).any(1).sum())})
                 if cfg[3]:
                     entry.setdefault("sketch", {})[fused_name(k, cfg)] = {"vectors": nvec, "bad": sk_bad[:3],
-                                                                          "ok": not sk_bad,
-                                                                          "diagnostic": bool(lib.diag)}
+                                                                          "ok": not sk_bad}
                     entry["tags"][fused_name(k, cfg)] = not sk_bad
                     if sk_bad:
                         log(f"sketch mismatch {lib.name} {name} M={mb} {fused_name(k, cfg)}: {sk_bad[0]}")
-                    if lib.diag:
-                        res["sketch_commit"] = {"leaves_ok": True, "root_ok": True, "diagnostic": True}
                     if "sketch_commit" not in res and not sk_bad:
                         res["sketch_commit"] = receipt_commit_gate(torch, tb_dev, nvec, RECEIPT_SEED)
                         log(f"sketch commit gate {lib.name} {name}: {nvec} vectors, {res['sketch_commit']}")
-                    if not lib.diag and not sk_bad and "pass_keyed" not in res:
+                    if not sk_bad and "pass_keyed" not in res:
                         res["pass_keyed"] = pass_keyed(k, mb, x, pp, cfg, gr, sp)
                         entry["tags"][fused_name(k, cfg) + "_pass"] = res["pass_keyed"]["ok"]
                         log(f"pass-keyed gate {lib.name} {name} M={mb}: {res['pass_keyed']}")
@@ -998,7 +991,7 @@ def gemm_case(lib: Lib, torch, name: str, n: int, kd: int, batches, ks, reps: in
                 rc = 0
                 if mode == 3:
                     for p in ps:
-                        rc |= so.wt_fused_sketch(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, 0, spp, tp,
+                        rc |= so.wt_fused_sketch(k, p, xp, yp, mb, n, kd, 0, 0, cfg[0], cfg[1], gr, spp, tp,
                                                  lib.jbase, sks, sgp, None, sketch_t, skw, None, st)
                 else:
                     for p in ps:
@@ -1226,7 +1219,7 @@ def main() -> int:
         for lib in [l for l in libs if l.name in names]:
             e = res["libs"][lib.name]
             e["gemm"] = {}
-            if any(sketch_warps(c) for c in fused_cfgs(lib, a.fused, a.sketch, a.sketch_t)) and not lib.diag:
+            if any(sketch_warps(c) for c in fused_cfgs(lib, a.fused, a.sketch, a.sketch_t)):
                 e["gate_pass"] = gate_pass(lib, torch, a.sketch_t, log)
                 res["ok"] &= e["gate_pass"]["ok"]
                 if not e["gate_pass"]["ok"]:

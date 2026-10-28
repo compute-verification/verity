@@ -77,7 +77,7 @@ def launches(a) -> list[dict]:
             for var in ("sketch", "untagged"):
                 cfg = tuple(step["picks"][name]["k"][str(k)][var])
                 launched = ctypes.c_int(0)
-                lib.call("wt_fused_sketch", k, None, None, None, m, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None, 0,
+                lib.call("wt_fused_sketch", k, None, None, None, m, n, kd, 0, 0, cfg[0], cfg[1], 0, None, None, 0,
                          cfg[3], None, None, t, BW.sketch_warps(cfg), ctypes.byref(launched), st)
                 gr = launched.value // (kd // 512)
                 steps = BW.tsteps(lib, torch, key, cfg[0], gr, kd // 512)
@@ -85,7 +85,7 @@ def launches(a) -> list[dict]:
                 tags = torch.empty(max(nvec, 1) * lib.tag_bytes, dtype=torch.uint8, device="cuda")
                 sg = (frags if BW.sketch_warps(cfg) else signs) if cfg[3] else None
                 lib.call("wt_fused_sketch", k, BW.ptr(store), BW.ptr(x.view(torch.uint8)), BW.ptr(y), m, n, kd, 0, 0,
-                         cfg[0], cfg[1], gr, 0, BW.ptr(steps), BW.ptr(tags) if cfg[3] else None, lib.jbase, cfg[3],
+                         cfg[0], cfg[1], gr, BW.ptr(steps), BW.ptr(tags) if cfg[3] else None, lib.jbase, cfg[3],
                          BW.ptr(sg) if sg is not None else None, None, t, BW.sketch_warps(cfg), None, st)
                 torch.cuda.synchronize()
                 out.append({"kernel": "fused", "linear": name, "k": k, "variant": var, "cfg": list(cfg), "groups": gr,

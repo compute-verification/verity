@@ -445,7 +445,7 @@ class Step:
                 for var in ("sketch", "untagged"):
                     cfg = tuple(self.picks[name]["k"][k][var])
                     launched = ctypes.c_int(0)
-                    wt.call("wt_fused_sketch", k, None, None, None, self.m, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
+                    wt.call("wt_fused_sketch", k, None, None, None, self.m, n, kd, 0, 0, cfg[0], cfg[1], 0, None,
                             None, 0, cfg[3], None, None, self.T, BW.sketch_warps(cfg), ctypes.byref(launched), st)
                     gr = launched.value // (kd // 512)
                     steps = BW.tsteps(wt, torch, self.keys[k], cfg[0], gr, kd // 512)
@@ -510,7 +510,7 @@ class Step:
         sg = (self.frags if BW.sketch_warps(cfg) else self.signs).data_ptr() if sketch else None
         rc = self.wt.so.wt_fused_sketch(
             k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
-            cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + self.wt.tag_bytes * to if sketch else None,
+            cfg[1], gr, steps.data_ptr(), self.tags.data_ptr() + self.wt.tag_bytes * to if sketch else None,
             self.wt.jbase + to, self.rows if sketch else 0, sg, None, self.T,
             BW.sketch_warps(cfg), None, BW.stream(self.torch))
         if rc:
@@ -912,7 +912,7 @@ def main() -> int:
         raise SystemExit("the step sketches with a WT_RECEIPT build and sketches 4 KiB vectors (T 8)")
     import reader as RD
     BW.READER = RD.Reader(a.reader_lib, torch)
-    BW.set_sketch_tag(wt)
+    BW.set_receipt_prefix(wt)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     layers, shapes, lm = model_shapes(a.model)
@@ -941,7 +941,7 @@ def main() -> int:
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
     res["gate"]["append"] = gate_append(kv, torch, ks, log)
     res["gate"]["pass"] = BW.gate_pass(wt, torch, a.sketch_t, log, rows=a.rows)
-    BW.set_sketch_tag(wt)
+    BW.set_receipt_prefix(wt)
     res["ok"] = (res["gate"]["layout"]["ok"] and res["gate"]["wt_prims"]["ok"]
                  and all(g["ok"] for g in res["gate"]["wt_codec"].values())
                  and all(g["ok"] for g in res["gate"]["kv_codec"].values()) and res["gate"]["append"]["ok"]
@@ -1015,7 +1015,7 @@ def main() -> int:
     grid = sms * best[0]
     log(f"pass: {res['stored_bytes'] / best[1] / 1e9:.0f} GB/s at {best[0]} CTAs an SM ({best[1] * 1e3:.2f} ms)")
 
-    BW.set_sketch_tag(wt)
+    BW.set_receipt_prefix(wt)
     S.set_keys(ks[0])
     res["splits"] = choose_splits(S, torch, 2, 40_000_000, log)
     save()
