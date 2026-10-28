@@ -26,10 +26,10 @@ cryptography's advantage:
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
   set. Its δ is 0: the certifier is the auditor's device (`trusted-host`), and the side channels an assumed cap.
-* The NCI check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
+* The inference-only check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
-A **regime** is the envelopes that run: `Remote` (PoUW, detection and the NCI check; no wipe or certifier, so its
+A **regime** is the envelopes that run: `Remote` (PoUW, detection and the inference-only check; no wipe or certifier, so its
 serving block is a server over the horizon and only the inference cut bounds it) and `Onsite` (with the wipe and the
 certifier, whose serving block between two wipes gets the serving cut too). `Regime.partition` gives the serving blocks
 (`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and serving
@@ -58,7 +58,7 @@ ROUTES = ("undecl", "skip", "break", "exfil")
 
 @dataclass(frozen=True)
 class Policy:
-    """The NCI check's registration: inference blocks of `gamma` FLOPs (`c` gates through `Units`), each reading at most
+    """The inference-only check's registration: inference blocks of `gamma` FLOPs (`c` gates through `Units`), each reading at most
     `k` unregistered bits."""
 
     name: str
@@ -467,7 +467,7 @@ class Unmonitored:
 
 @dataclass(frozen=True)
 class Remote:
-    """The remote audit: PoUW, detection, and the NCI check's registration. No certifier sees a server's links, so its
+    """The remote audit: PoUW, detection, and the inference-only check's registration. No certifier sees a server's links, so its
     serving block is a server over the horizon, and the inference cut is the only one."""
 
     name: str

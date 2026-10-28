@@ -19,7 +19,7 @@ The trial's rule, onsite's and remote's over their components' statements:
 
 Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
 reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
-every component's reasons fail the product. Of the components' statements the trial's NCI fails the epoch on work's
+every component's reasons fail the product. Of the components' statements the trial's inference-only check fails the epoch on work's
 reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
 in the balance. The port follows the composition's rule, `verdict`, which changes the reduction in one place more:
 

@@ -1,4 +1,4 @@
-"""Figures for the compute dampener D, the hardware multiple at MFU_0 (``statement.dampener``: the overhead calculator's
+"""Figures for the slowdown D, the hardware multiple at MFU_0 (``statement.dampener``: the slowdown calculator's
 ``rho.theorem.multiple_bound`` on ``tiers.evaluate``'s terms, the residual at MFU_0), with the
 ladder, its scenarios and its numbers from ``statement.py``: D per rung by status, the (r̂, R_wipe) phase diagram,
 exposure tornados at the best PoUW design and at 6 GB streamed-label wipes, the memory cap by the fit bound and the

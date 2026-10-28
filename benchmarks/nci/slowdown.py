@@ -1,4 +1,4 @@
-"""The NCI slowdown bracket for a board row: a proven lower bound and the cost of an explicit compliant construction.
+"""The inference-only policy's slowdown bracket for a board row: a proven lower bound and the cost of an explicit compliant construction.
 
 A policy is a calibration: blocks of at most ``Gamma`` gates, each reading at most ``K`` bits besides the committed
 parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method in one configuration) gives the inputs

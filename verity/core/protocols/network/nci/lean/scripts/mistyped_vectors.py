@@ -1,5 +1,5 @@
 """Declarations whose references name leaves of other widths than their types give them (`E_REINTERPRET`,
-`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests.
+`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the inference-only check's difftests.
 
 The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), which Flock's decoder doesn't look
 for, so `NciCheck` checks it after decoding (`NciCheck.Widths`). The descriptors here are written as JSON, since the

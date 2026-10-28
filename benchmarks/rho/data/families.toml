@@ -57,7 +57,7 @@ sft = { value = 1.0, low = 1.0, high = 1.75, source = "A1's follow-up, measured:
 rl-elicit = { value = 1.75, low = 1.0, high = 3.0, source = "no NVFP4 RL run: between FP8 GRPO's 1/0.6 (A1) and NVFP4 SFT's 1.75 (A1 follow-up); high assumed", status = "conjecture" }
 rl-agentic = { value = 1.75, low = 1.0, high = 3.0, source = "as rl-elicit", status = "conjecture" }
 
-# The NCI library's attacker convention, for families of kind nci and nci:<id>; the carried state as family.full's.
+# The `benchmarks/nci` library's attacker convention, for families of kind nci and nci:<id>; the carried state as family.full's.
 [nci]
 state_bits_cap = { value = 16, unit = "bit/param", source = "as family.full.state_bits_per_param: an exact run carries FP8 weights and one 8-bit moment", status = "assumed" }
 rate_cap = { value = 2.5, unit = "bit/param", source = "benchmarks/nci/library.py ATTACKER_RATES: b_w.pretrained/frontier-lossy central", status = "declared" }

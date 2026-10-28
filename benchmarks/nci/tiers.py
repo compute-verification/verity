@@ -22,7 +22,7 @@ proved.
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
   delta = 1/100) plus the certificate's floor, the share of the store rebuildable from public data within the deadline.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
-  computation's novel intake, alpha F under NCI once the count check is in the ZK flow.
+  computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
   counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
@@ -42,7 +42,7 @@ proved.
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
-only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D, the
+only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
 mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
 (``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.

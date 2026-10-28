@@ -1,6 +1,6 @@
 """A scenario: one choice from every layer, and what overhead it gives.
 
-A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
+A scenario names a fleet (with its location and dark share), a regime, the inference-only policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
 lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 

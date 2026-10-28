@@ -1,4 +1,4 @@
-"""The registration log NCI's full check reads (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), for a Program whose θ is
+"""The registration log the inference-only policy's full check reads (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), for a Program whose θ is
 registered (`RegisteredInput<w>_v1`, `WorkloadProgram(theta_registered=True)`).
 
     write(program_digest, params, theta, values, window) -> {"record", "digest", "trusted", "provenance", "salts"}
@@ -11,7 +11,7 @@ process per rank of a node Program: `predict.node_registration`), and `write` co
   that holds a θ node, named as the parameter, its rows committed under hiding leaves (`commit.registered_rows`, R7's
   format). One log is one deployment and θ is what its first record registers, so this record opens the log and is the
   run's own: the deployment's first run. Its keys are the ones nci-check reads (`program`, `registered`, `previous`) with
-  `protocol`, `window` and `roots`, as NCI's difftest vectors write them. It carries none of the one-stage draw's fields
+  `protocol`, `window` and `roots`, as the inference-only check's difftest vectors write them. It carries none of the one-stage draw's fields
   (query, partition, population, law, scheme, leaf layer, anchors): it registers θ, and no sample follows it.
 * **`provenance`**: the instance's, one `{"kind": "registered", "registration", "value", "root"}` per θ node, in θ's order.
 * **`trusted`**: `{"log": [record], "run": digest, "params": [[name, type], ...]}`, the types as the descriptor writes them.

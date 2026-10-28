@@ -1,4 +1,4 @@
-"""Kimi K2's compute dampener rho under the covering bound's forms, at bf16, FP8 and FP4, with a price per weight.
+"""Kimi K2's slowdown rho under the covering bound's forms, at bf16, FP8 and FP4, with a price per weight.
 
     python benchmarks/nci/covering_priced.py [--prices FILE.json] [--json OUT.json]
     python benchmarks/nci/covering_priced.py --baselines [--prices FILE.json ...] [--json OUT.json]
@@ -627,7 +627,7 @@ def sensitivity(pts: dict, cheapest: dict) -> dict:
 
 
 def check_daniel() -> dict:
-    """The covering bound write-up's marginal-dampener table: Kimi K2 at k = 2e7, w = 2.5, raw: the base tier
+    """The covering bound write-up's marginal-slowdown table: Kimi K2 at k = 2e7, w = 2.5, raw: the base tier
     k^2/w + k gives 41, the additive charge 166, a-bit activations (a = 4) 660."""
     m = k2()
     gates = K.schedule(m)[1]
