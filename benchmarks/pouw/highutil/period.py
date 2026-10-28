@@ -671,7 +671,7 @@ class RefDriver:
 
 # --------------------------------------------------------------------------------------------------------- the period
 class Coins:
-    """One challenger session a period: a5_coins' Local (development, not of record) or Gate (the challenger host)."""
+    """One challenger session a period: a5_coins' Local (development, not of record) or Gate (vy-challenger-1)."""
 
     def __init__(self, how: str, main: Path, peer: str | None, key_record: str | None, gate_key: str | None) -> None:
         import a5_coins as A5
