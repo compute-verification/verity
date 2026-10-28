@@ -18,8 +18,9 @@ the predictor (`program.frontend.inputs_trace`).
 
 A single-GPU row's Build of record needs no trace at all (`write_row`, `predict row`): from the row's declared inputs, each request
 Program with the names its trace gives it (`naming.write_build`, `build_request_<shape>/`), GP-01's workload over them
-(`build_workload/workload_program.json`: its digest, and the `lag` and `applicability.engine.async_scheduling` the declared target
-resolves), the row's required-value manifest over them (`manifest.json`, the row's own query and policies, `row_build`) and
+(`write_workload`, `build_workload/`: its artifact `workload_program.json`, with the `lag` and `applicability.engine.async_scheduling`
+the declared target resolves, and its `descriptor.json.gz`, which GM-01 holds the digest and the lag to), the row's required-value
+manifest over them (`manifest.json`, the row's own query and policies, `row_build`) and
 `predicted.json` (`records.predicted_row`), what predicted it and the manifest's sha256. That is the row's Build of record, the
 ahead-of-time compiler's, which a traced Build only cross-checks. `compare --predicted DIR` holds it to
 a traced Build of the same row: every Program digest, and the manifest's digest, Program digest and identities.
@@ -246,28 +247,43 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         requests[name], comps[(LP, T)] = r.digest, S.request_component(r, canon)
         if log:
             log(f"[predict] {name}: {r.digest[:16]}… ({r.n_root_nodes} nodes)")
-    wp = S.predict_workload(phi, comps, canon)
-    lag = phi.target_profile().async_scheduling_declaration()
-    os.makedirs(os.path.join(out, "build_workload"), exist_ok=True)
-    Path(out, "build_workload", "workload_program.json").write_text(json.dumps(
-        {"ok": True, "workload_digest": wp["digest"], "function": wp["function"], "lag": lag, "built_by": ROW_BUILT_BY,
-         "applicability": {"engine": {"async_scheduling": bool(lag["async_scheduling"])}}}, indent=1) + "\n")
+    wl = write_workload(phi, comps, canon, os.path.join(out, "build_workload"))
     policy = dict(word="16/32", norm_scales=True, guarded_max=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
                   jobs=jobs or MN.cpus(), log=log)
     if len(phi.requests) > 1:
-        man = MN.build_global(w, out, workload_digest=wp["digest"], **policy)
+        man = MN.build_global(w, out, workload_digest=wl.digest, **policy)
     else:
         man = MN.build(os.path.join(out, next(iter(requests))), workload=w, **policy)
     raw = json.dumps(man, separators=(",", ":")).encode()
     Path(out, "manifest.json").write_bytes(raw)
     if MN.incomplete_rc(man):
         raise UsageError(f"{row}: the predicted Build's manifest is incomplete (named above), so it has no {FILE}")
-    rec = PredictedRow(row=row, config=str(config), code_version=S.code_version(), requests=requests, workload_digest=wp["digest"],
-                       lag=wp["lag"], manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
+    rec = PredictedRow(row=row, config=str(config), code_version=S.code_version(), requests=requests, workload_digest=wl.digest,
+                       lag=wl.lag, manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
                        program_digest=man["program_digest"], identities=man["populations"]["identities"],
                        secs=round(time.time() - t0, 1))
     Path(out, FILE).write_text(json.dumps(rec.dump(), indent=1) + "\n")
     return rec
+
+
+def write_workload(phi: Phi, comps: dict, canon: dict, out: str):
+    """GP-01's workload Program over the predicted request components (`score.workload_program`) at `out`, as GP-01 writes its
+    own: `workload_program.json`, the Program's artifact (`WorkloadProgram.artifact`) with the `lag` block and
+    `applicability.engine.async_scheduling` the declared target resolves, and `descriptor.json.gz`, from which GM-01's
+    `check.match.declaration.from_gprog` recomputes the workload digest and the `lag` static the block claims."""
+    from verity.ml.circuits.codec import canonical_json, descriptor_size
+    wl = S.workload_program(phi, comps, canon)
+    lag = phi.target_profile().async_scheduling_declaration()
+    desc = wl.descriptor
+    os.makedirs(out, exist_ok=True)
+    with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
+        f.write(cj := canonical_json(desc))
+    Path(out, "workload_program.json").write_text(json.dumps(
+        {**wl.artifact(), "ok": True, "function": wl.fn.id[:300], "lag": {**lag, "value": wl.lag}, "built_by": ROW_BUILT_BY,
+         "applicability": {"engine": {"async_scheduling": bool(lag["async_scheduling"])}},
+         "descriptor": {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha256": hashlib.sha256(cj).hexdigest(),
+                        "n_definitions": len(desc["definitions"])}}, indent=1) + "\n")
+    return wl
 
 
 @dataclass(frozen=True, kw_only=True)
