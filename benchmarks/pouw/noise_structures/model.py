@@ -48,9 +48,12 @@ AND_MAC_32 = 271342 / 2048  # ScaledMmS8_v1's K-2048 coordinate, measured loweri
 OPEN_B = 454  # ANDs a byte of an operand row opened in the block (TOP-138; an estimate)
 ROW1 = 0.167e6  # ANDs a one-block row opened (GD-MODEL: three of them are 17% of the 3.0 M s8 coordinate block)
 FOLD_WORD_ANDS = 32  # ANDs to fold one word in-circuit (an 8-bit ARX step: add, multiply by a constant, rotate; an estimate)
-K_CAP = 27  # compose's K_MAX, live/src/circuit.rs IN_RANGE_K_LOG, Stmt.InRange
+K_CAP = 27  # bits a block, log2: compose's K_MAX, live/src/circuit.rs IN_RANGE_K_LOG, Stmt.InRange
+K_FLOOR = 22  # a block is at least 2^22 bits (GD-PROVER)
+BITS_AND = 2.0  # bits a block AND (GD-PROVER: SHA-512 1.50, hm96 2.26, s8 blocks 1.87–3.27 after padding; an estimate)
 DRAWS = 2773  # blocks a population draws a window at δ 2^-40, ε 0.01 (GD-MODEL, Λ/ε)
 O_AND, F0, F1, M_MAX = 1.087e-8, 3.03, 3.51e-6, 35  # GD-MODEL's costfit over r20261018-060433-b55e (sm_120; E for the H200)
+SESSION = (2.05, 1.14e-6, 1.20e-8)  # a + b·s + c·s·P GPU-s a session: GD-PROVER's warm refit of r20261018-060433-b55e (RTX PRO 6000)
 
 CALLS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192), "lm_head": (128256, 2048)}
 MS = (4, 64, 512, 8192)
@@ -397,10 +400,23 @@ def block(name: str, k: int, r: int, c: int, p: dict, row_bytes: int | None = No
 
 
 def prove(b: dict) -> dict:
-    """GPU-s a window for one population: DRAWS draws, statements of 2^(35 − k_log) blocks (GD-MODEL's `proving`)."""
-    k_log = max(1, math.ceil(math.log2(b["largest"])))
-    stmts = math.ceil(DRAWS * b["blocks"] / 2 ** max(0, M_MAX - k_log))
-    return {"k_log": k_log, "statements": stmts, "gpu_s": DRAWS * O_AND * b["draw"] + stmts * (F0 + F1 * b["largest"])}
+    """GPU-s a window for one population's DRAWS draws, as C-Flock proves them (GD-PROVER): sessions of k blocks padded to
+    P = max(8, 2^⌈log2 k⌉), k ≤ 2^(35 − k_log), each a + b·s + c·s·P for blocks of s ANDs, s floored at 2^22 bits; the
+    session count that minimizes the total. `gpu_s_gdmodel` is GD-MODEL's costfit, draws·o·ANDs + statements·(f0 + f1·s)."""
+    k_log = max(K_FLOOR, math.ceil(math.log2(b["largest"] * BITS_AND)))
+    blocks = DRAWS * b["blocks"]
+    s = max(b["draw"] / b["blocks"], 2 ** K_FLOOR / BITS_AND)
+    a_, b_, c_ = SESSION
+    kmax = 2 ** max(0, M_MAX - k_log)
+    best_cost = math.inf
+    for kk in (2 ** i for i in range(0, int(math.log2(kmax)) + 1)):
+        n = math.ceil(blocks / kk)
+        per = math.ceil(blocks / n)
+        cost = n * (a_ + b_ * s + c_ * s * max(8, 2 ** math.ceil(math.log2(per))))
+        best_cost = min(best_cost, cost)
+    stmts = math.ceil(blocks / kmax)
+    return {"k_log": k_log, "statements": stmts, "gpu_s": best_cost,
+            "gpu_s_gdmodel": DRAWS * O_AND * b["draw"] + stmts * (F0 + F1 * b["largest"])}
 
 
 def tiles(rows: list[dict], row_bytes: int | None = None) -> dict:
@@ -431,7 +447,9 @@ def tiles(rows: list[dict], row_bytes: int | None = None) -> dict:
                     serve[t] = {"bytes": by, "gpu_s": by / HASH_BPS + fold, "gpu_s_corun": by / HASH_CORUN_BPS + fold}
                 sweep.append({"r": r, "c": c, "k_log": max(v["k_log"] for v in pv.values()),
                               "ands_draw": {k: parts[k]["draw"] for k in parts}, "ands_largest": {k: parts[k]["largest"] for k in parts},
-                              "prove_gpu_s": sum(v["gpu_s"] for v in pv.values()), "statements": {k: pv[k]["statements"] for k in pv},
+                              "prove_gpu_s": sum(v["gpu_s"] for v in pv.values()),
+                              "prove_gpu_s_gdmodel": sum(v["gpu_s_gdmodel"] for v in pv.values()),
+                              "statements": {k: pv[k]["statements"] for k in pv},
                               "serve": serve})
         opt = {}
         for t in (512, 8192):
@@ -516,7 +534,9 @@ def main() -> int:
            "hi_limb": {f"{k[0]} t{k[1]} a{k[2]}": v for k, v in _HI.items()},
            "min_credit": a.min_credit, "wrap_cost": a.wrap_cost, "rows": out, "steps": steps}
     rep["blocks"] = {"and_mac": {b: mac_and(b) for b in (8, 16, 32)}, "open_b": OPEN_B, "row1": ROW1, "k_cap": K_CAP,
-                     "draws": DRAWS, "costfit": {"o": O_AND, "f0": F0, "f1": F1, "m_max": M_MAX},
+                     "k_floor": K_FLOOR, "bits_per_and": BITS_AND, "draws": DRAWS,
+                     "session_gd_prover": dict(zip("abc", SESSION)),
+                     "costfit_gd_model": {"o": O_AND, "f0": F0, "f1": F1, "m_max": M_MAX},
                      "fold_word_ands": FOLD_WORD_ANDS, "step_cells_token": STEP_CELLS}
     rep["tiles"] = {"exact rows": tiles(out), "16 KiB value rows": tiles(out, 16384)}
     rep["j_pouw_8192"] = {rb: j_pouw(steps, tl) for rb, tl in rep["tiles"].items()}
@@ -556,15 +576,16 @@ def render(rep: dict) -> str:
                          f"{v['prove_gpu_s']:.0f} | {v['J S 1']:.0f} | {v['J S 1000']:.2f} | {v['J S 100000']:.3f} |")
     shown = {(1, 1), (1, 8), (1, 32), (4, 8), (8, 8), (16, 16), (32, 32)}
     for rb, tl in rep.get("tiles", {}).items():
-        lines += ["", f"## Proof blocks by tile ({rb}; K 2048 and K 8192 populations, {DRAWS} draws each a window)", "",
-                  "| structure | tile | M ANDs a draw K2048 / K8192 | largest block k_log | proving GPU-s a window | words hashed a T 8192 step, ms (card / co-run) |",
+        lines += ["", f"## Proof blocks by tile ({rb}; K 2048 and K 8192 populations, {DRAWS} draws each a window; "
+                  f"k_log of bits at {BITS_AND} a block AND, floor 2^{K_FLOOR}; GD-PROVER's session fit, RTX PRO 6000)", "",
+                  "| structure | tile | M ANDs a draw K2048 / K8192 | largest block k_log | proving GPU-s a window (GD-MODEL's costfit) | words hashed a T 8192 step, ms (card / co-run) |",
                   "|---|---|---|---|---|---|"]
         for name, d in tl.items():
             for e in d["sweep"]:
                 if (e["r"], e["c"]) in shown:
                     sv = e["serve"][8192]
                     lines.append(f"| {name} | {e['r']}×{e['c']} | {e['ands_draw'][2048] / 1e6:.2f} / {e['ands_draw'][8192] / 1e6:.2f} | "
-                                 f"{e['k_log']}{' (over 2^27)' if e['k_log'] > K_CAP else ''} | {e['prove_gpu_s']:.0f} | "
+                                 f"{e['k_log']}{' (over 2^27)' if e['k_log'] > K_CAP else ''} | {e['prove_gpu_s']:.0f} ({e['prove_gpu_s_gdmodel']:.0f}) | "
                                  f"{sv['gpu_s'] * 1e3:.2f} / {sv['gpu_s_corun'] * 1e3:.2f} |")
         lines += ["", f"### Optimum tile r×c (k_log) for a window of S steps at T 8,192 ({rb})", "",
                   "| structure | hash | S 1 | S 1e3 | S 1e4 | S 1e5 | S 1e6 | cap binds at any S shown |", "|---|---|---|---|---|---|---|---|"]
