@@ -17,13 +17,14 @@ import hashlib
 from typing import Any
 
 from verity.ml.circuits.codec import canonical_json, jcs_domain_error
+from verity.ml.commitments import domains
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .audit import Epoch
 from .protocol import DomainError, PoUWScheme
 from .schemes import SCHEMES
 
-FORMAT = "verity/pouw/identifier/v1"
+FORMAT = domains.POUW_IDENTIFIER
 SALT_BYTES = 32
 #: a certified epoch's salt (`audit.Epoch.certified`)
 CERTIFIED_SALT_BYTES = DIGEST_BYTES["sha512"]
