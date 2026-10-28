@@ -19,7 +19,7 @@ Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick to
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
-serving again (the sample is seeded from the run root, so it draws the same picks).  Not under other Definition bodies: the replay is
+serving again (the sample is seeded from the run root, so it makes the same picks).  Not under other Definition bodies: the replay is
 refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
@@ -34,8 +34,8 @@ refused unless the Definitions its tree evaluates the picks by are the ones the 
 
 BUNDLE may be that keep (`open_keep`): its files are checked against `slim.json`, and the record beside it, decided by a replay of the
 bundle the keep was cut from (the verdict's `replayed` names that bundle's manifest sha256), is read back in its deferred state
-(`undecided`), so the replay decides the run again from its own draw.  It is refused before anything is evaluated unless this code's
-draw is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
+(`undecided`), so the replay decides the run again from its own sample.  It is refused before anything is evaluated unless this code's
+sample is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ class Options:
                                            help="the Commit's required manifest (default: its recorded path, else <row-dir>/manifest.json)")
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     replay_workers: int | None = option("--replay-workers", type=int, default=None,
-                                        help="the forked pool's workers (default: the Commit's own; the draw does not depend on it)")
+                                        help="the forked pool's workers (default: the Commit's own; the sample does not depend on it)")
     worker_peak_gb: float | None = option("--worker-peak-gb", type=float, default=None,
                                           help="a forked worker's measured peak memory beyond what the row evaluator states for its pick, "
                                                "GiB (default: the word replay's, admission commit.c2.replay_workers.small_vu): after the "
@@ -425,7 +425,7 @@ def manifest_of(o: Options, ctx: dict[str, Any], args: SimpleNamespace) -> tuple
 
 def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     """The Commit's replay arguments, with its Programs read from this row dir (their digests are checked against the record).  No
-    serving rows: a Commit's window is committed at its C2 site (`c2_replay.serving_rows`), before any draw, never by its replay."""
+    serving rows: a Commit's window is committed at its C2 site (`c2_replay.serving_rows`), before sampling, never by its replay."""
     a = dict(ctx["args"])
     a["programs_root"] = o.row_dir if a.get("programs_root") else None
     a["program_dir"] = os.path.join(o.row_dir, "build_request") if a.get("program_dir") else None
@@ -510,7 +510,7 @@ def slim_path(out: str | os.PathLike, pair: int) -> Path:
 
 def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched, plan: dict[str, Any], c: dict[str, Any], *,
          opened: Iterable[str]) -> dict[str, Any] | None:
-    """Writes the decided replay's slim keep (module docstring) and returns its `slim.json`; None, with nothing written, when the draw's
+    """Writes the decided replay's slim keep (module docstring) and returns its `slim.json`; None, with nothing written, when the sample's
     reads were not all made in this process (`plan` is not a plan of as many picks as the replay picked).  ``opened``: the registered
     tensors the replay consumed and opened, the only ones whose salt keys and bundle bytes the keep's weights tree carries (`slim_tree`)."""
     ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])

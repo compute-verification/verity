@@ -509,7 +509,7 @@ class H1Windows:
 
     def _release(self, window: int, comp: Any, run: Any, held: dict[str, Any] | None, seconds: dict[str, float],
                  error: str | None, queued: float, off: bool = False) -> dict[str, Any]:
-        """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
+        """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the sampling coin
         opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
         one of the windows ``releasing``."""

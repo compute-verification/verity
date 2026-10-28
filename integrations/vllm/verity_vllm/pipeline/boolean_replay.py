@@ -8,15 +8,15 @@ one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.b
 BUNDLE is the Commit's sealed replay bundle, or KEEP the slim keep its decided replay left (`commit/replay_slim_p<pair>`, the kept
 leaves; `cpu_replay.open_keep`).  The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied
 into ``OUT/boolean`` beside a link to it, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the
-copies and the bundle against each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the
+copies and the bundle against each other (manifest sha256, run root, binding map), the sample is the replay's own (seeded from the
 run root), and the Program is the
 Build's of record (`row_dir/build_request`, its digest checked against the Commit's).  A row whose Definition has no Boolean version,
 or whose Boolean version does not keep the Call's boundary (the word view of its signature is not the Call's), is not evaluated, by
-name.  ``--word`` replays the same draw with the word evaluators into ``OUT/word``, the baseline.  After the prewarm the forked pool
+name.  ``--word`` replays the same sample with the word evaluators into ``OUT/word``, the baseline.  After the prewarm the forked pool
 is fitted to the cgroup's memory from each pick's bound (`BooleanRows.peak_bytes`, `driver.fit_pool`); a pick that cannot fit is
 refused (exit 2).
 
-``OUT/boolean_replay.json`` cites the Commit (Program digest, run root, binding map sha256, bundle manifest sha256, the draw's seed),
+``OUT/boolean_replay.json`` cites the Commit (Program digest, run root, binding map sha256, bundle manifest sha256, the sample's seed),
 holds σ over the Program's row Definitions (word id -> Boolean id, or why not), and per replay the picks by family: picked,
 evaluated, mismatched.  ``OUT/boolean/rows.jsonl`` is one line per row the Boolean evaluator was asked for (interior rows included).
 """
@@ -52,7 +52,7 @@ _UINT = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
 @dataclass(frozen=True, kw_only=True)
 class Options(CR.Options):
     out: str = option("--out", help="the directory the copies of the Commit's records, the replays and boolean_replay.json go to")
-    word: bool = option("--word", action="store_true", default=False, help="also replay the same draw with the word evaluators")
+    word: bool = option("--word", action="store_true", default=False, help="also replay the same sample with the word evaluators")
     seconds_per_vu: float = option("--seconds-per-vu", type=float, default=60.0,
                                    help="the forked pool's time per picked VU (the replay's default is 3 s, for the word kernels)")
 
@@ -219,7 +219,7 @@ def scratch(bundle: Path, out: Path) -> Path:
 
 
 def outcome(art: dict[str, Any]) -> dict[str, Any]:
-    """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record.  The uniform draw's
+    """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record.  The uniform sample's
     one stratum names no family: a family's evaluated count is then its picks less its not-evaluated ones, known only while the record
     lists every not-evaluated pick (it lists at most 12; None past that), and its mismatches are `mismatch_by`'s, which counts them all."""
     sr = art["sampled_replay"]
