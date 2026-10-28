@@ -326,8 +326,8 @@ def reference(product: R.Product | R.Registered, seen: collections.Counter):
         if isinstance(product, R.Same) and (got := product.committed(case)) and None not in got:
             seen["two records" if len(set(got)) > 1 else "one record"] += 1
         if isinstance(product, R.Registered):
-            for what, one in product.tied(case):
-                seen[f"one {what}" if one else f"two {what}s"] += 1
+            for what, how in product.tied(case):
+                seen[f"{what} {how}"] += 1
         return out
     return answer
 
@@ -431,17 +431,18 @@ def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
 
 @pytest.mark.slow
 def test_onsite_agrees(onsite_server, recorded):
-    """Onsite's verdicts, and PoUS and the bandwidth audit on one store (left to the components) and on two (refused),
-    each often."""
-    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, R.UNDECIDED, "reject, a component undecided",
-                                                       "reject, no component rejected", "one store", "two stores"))
+    """Onsite's verdicts, and its store tie refused by the generic bandwidth audit, often. Onsite is never undecided:
+    where PoUS's and the bandwidth audit's commitments decode, the tie refuses, and where one doesn't, it rejects."""
+    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided",
+                                                       "reject, no component rejected", "store refused"))
+    assert SEEN["onsite"][R.UNDECIDED] == 0, dict(SEEN["onsite"])
 
 
 @pytest.mark.slow
-def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
-    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS and
-    the bandwidth audit committed to two stores, which it refuses: the tie changes no other verdict. Python only: the
-    difftest holds the Lean to it."""
+def test_onsite_refuses_the_generic_store_and_else_keeps_its_verdict(recorded):
+    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS's and
+    the generic bandwidth audit's commitments decode, which the tie refuses, even on PoUS's own root (`OnStore`): the
+    tie changes no other verdict. Python only: the difftest holds the Lean to it."""
     untied = dataclasses.replace(R.ONSITE, ties=())
     seen = collections.Counter()
 
@@ -449,14 +450,14 @@ def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
     @given(composite(R.ONSITE))
     def check(case):
         got, was = R.ONSITE.answer(case), untied.answer(case)
-        two = (R.STORE.what, False) in R.ONSITE.tied(case)
-        if two:
+        refused = (R.STORE.what, "refused") in R.ONSITE.tied(case)
+        if refused:
             assert got["verdict"] == R.REJECT, got
         else:
             assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in was.items() if k != "reason"}
-        seen[f"was {was['verdict']}, two" if two else "same"] += 1
+        seen[f"was {was['verdict']}, refused" if refused else "same"] += 1
     check()
-    assert seen["same"] > 20 and seen["was undecided, two"] > 0, dict(seen)
+    assert sum(v for k, v in seen.items() if k != "same") > 20 and seen["was undecided, refused"] > 0, dict(seen)
 
 
 class Trial(R.Product):

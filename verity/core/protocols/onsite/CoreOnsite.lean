@@ -14,7 +14,7 @@ commit phase, onsite checks the registration by NCI's check of record (`NciCheck
 registration check and not a component): a registration it refuses refuses onsite, and so does one other than the
 registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`). Once the cases fit, PoUS and
 the remote bandwidth audit must also have committed to one store (`store`), else onsite rejects whatever the components
-answer.
+answer; and only the audit's P2 variant registers PoUS's store, so onsite's generic audit refuses it.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
@@ -36,13 +36,16 @@ def components : List BlobProtocol :=
     SampledProofs.OneStageZk.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- PoUS and the remote bandwidth audit on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
-and the payload root the bandwidth audit's registration names (its commitment's `payload_root`), each read by its own
-decoder. -/
+against the bandwidth audit's. Only the audit's P2 variant registers PoUS's store, and onsite's component is the generic
+audit, whose registered payload root is the root of its own salted tree over its payload blocks, so a commitment of it
+that decodes refuses the tie, saying why. -/
 def store : Tie :=
   ⟨"store",
-    [(PousCheck.RunProtocol.protocol.id, fun b => (PousCheck.RunProtocol.decodeCommitment b).toOption.map (·.root)),
-      (RemoteAudit.Protocol.protocol.id,
-        fun b => (RemoteAudit.Protocol.decodeCommitment b).toOption.map (·.payloadRoot))]⟩
+    [(PousCheck.RunProtocol.protocol.id,
+        fun b => (PousCheck.RunProtocol.decodeCommitment b).toOption.map fun c => Except.ok c.root),
+      (RemoteAudit.Protocol.protocol.id, fun b => (RemoteAudit.Protocol.decodeCommitment b).toOption.map fun _ =>
+        Except.error "is the generic audit, whose payload root is its own tree's and not PoUS's store: only \
+          verity/remote-bandwidth/p2/v0 registers PoUS's setup root")]⟩
 
 def protocol : BlobProtocol :=
   registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components [store]

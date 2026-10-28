@@ -114,11 +114,14 @@ commitment, so they join the check when each window's record names the registrat
 
 A tie (`Tie`, `Registered.lean`) generalizes this: a value each named subprotocol reads off its own commitment's bytes
 with its own decoder, which must be one value once the cases fit (`Tie.strays`: `what: s committed D, t committed D'`),
-else the composition rejects whatever the subprotocols answer; a subprotocol whose commitment doesn't decode rejects as
-itself. `same`'s check is the tie `records` of its subprotocols' digests, and `registered id R s components ties` checks
-its ties after the registration. Onsite has one, `Core.Onsite.store`: PoUS and the remote bandwidth audit on one store,
-the root of `C*` PoUS's setup published (its commitment's `root`) and the payload root the bandwidth audit's
-registration names (its commitment's `payload_root`). Once the log exists, both read the store's hardware entry.
+else the composition rejects whatever the subprotocols answer; a decoder may instead say why its commitment names no
+value the tie can hold (`what: s WHY`), which refuses the tie too; a subprotocol whose commitment doesn't decode rejects
+as itself. `same`'s check is the tie `records` of its subprotocols' digests, and `registered id R s components ties`
+checks its ties after the registration. Onsite has one, `Core.Onsite.store`: PoUS and the remote bandwidth audit on one
+store, the root of `C*` PoUS's setup published (its commitment's `root`) against the bandwidth audit's. Only the audit's
+P2 variant (`verity/remote-bandwidth/p2/v0`) registers PoUS's store; onsite's component is the generic audit, whose
+payload root is its own salted tree's, so the tie refuses it, and onsite answers no case undecided or accepted until P2
+is its component. Once the log exists, both read the store's hardware entry.
 
 ## The difftest
 
@@ -150,8 +153,8 @@ mirror), and the rest mostly on two records, which remote refuses;
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that refusal changes no other verdict of
 the product's. Onsite's bandwidth cases aimed at acceptance or undecided are, three times in four, its session on PoUS's
 store (`periods.OnStore`: it registers the root of PoUS's honest setup and stops before any window is verified), and the
-rest are on its own store, which onsite refuses beside an honest PoUS run;
-`test_onsite_refuses_two_stores_and_else_keeps_its_verdict` shows that refusal changes no other verdict.
+rest are on its own store; onsite refuses both, as the generic audit's;
+`test_onsite_refuses_the_generic_store_and_else_keeps_its_verdict` shows that refusal changes no other verdict.
 `test_a_reference_without_reject_dominance_is_caught`
 shows the difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a
 case where one subprotocol rejects and another is undecided.

@@ -58,21 +58,28 @@ def committedBy (s : String) (cs : List Protocol) (ev : List Case) : Option Byte
   ((cs.zip ev).find? fun x => x.1.id == s).bind fun x => (x.1.commitment x.2.commitment).toOption.map x.1.digest
 
 /-- A tie between components: the value `what` that each component `s` of `names` reads off its commitment's bytes with
-its function, by its own decoder (`none` when they don't decode), must be one value. -/
+its function, by its own decoder (`none` when they don't decode), must be one value. A function's error says why the
+component's commitment names no value the tie can hold, and refuses the tie. -/
 structure Tie where
   what : String
-  names : List (String × (ByteArray → Option ByteArray))
+  names : List (String × (ByteArray → Option (Except String ByteArray)))
 
-/-- Why the components of the tie `t` didn't all name one value on the cases `ev`: the first whose value isn't the first
-one's, with both; `none` when they all named it, or when one of them has no case or names nothing, its commitment not
-decoding, so that it rejects as a component. -/
+/-- Why the components of the tie `t` didn't all name one value on the cases `ev`: the first whose commitment names no
+value the tie can hold, with why, else the first whose value isn't the first one's, with both; `none` when they all
+named it, or when one of them has no case or names nothing, its commitment not decoding, so that it rejects as a
+component. -/
 def Tie.strays (t : Tie) (ev : List Case) : Option String :=
-  let named (n : String × (ByteArray → Option ByteArray)) : Option (String × ByteArray) :=
+  let named (n : String × (ByteArray → Option (Except String ByteArray))) : Option (String × Except String ByteArray) :=
     ((ev.find? fun (k : Case) => k.id == n.1).bind fun k => n.2 k.commitment).map (n.1, ·)
   match t.names.mapM named with
-  | some ((s, d) :: rest) => (rest.find? fun (x : String × ByteArray) => x.2 != d).map fun x =>
-    s!"{t.what}: {s} committed {Flock.hexOf d}, {x.1} committed {Flock.hexOf x.2}"
-  | _ => none
+  | some xs =>
+    match xs.findSome? fun x => match x.2 with | .error r => some s!"{t.what}: {x.1} {r}" | .ok _ => none with
+    | some r => some r
+    | none => match xs.filterMap fun x => x.2.toOption.map (x.1, ·) with
+      | (s, d) :: rest => (rest.find? fun (x : String × ByteArray) => x.2 != d).map fun x =>
+        s!"{t.what}: {s} committed {Flock.hexOf d}, {x.1} committed {Flock.hexOf x.2}"
+      | [] => none
+  | none => none
 
 /-- Why a registered composition refuses when the registration check `r` checked the registration digest `d` and the
 component `s` committed to `d'`. -/
@@ -125,7 +132,7 @@ def registered (id : String) (R : Protocol) (s : String) (cs : List Protocol) (t
 /-- The tie of the components `ss` of `cs` on one record: each one's commitment's digest, as it decodes it. -/
 def records (ss : List String) (cs : List Protocol) : Tie :=
   ⟨"record", ss.map fun s =>
-    (s, fun b => (cs.find? (·.id == s)).bind fun P => (P.commitment b).toOption.map P.digest)⟩
+    (s, fun b => (cs.find? (·.id == s)).bind fun P => (P.commitment b).toOption.map (.ok ∘ P.digest))⟩
 
 /-- Why the components `ss` of `cs` didn't all commit to one record on the cases `ev` (`records`' strays). -/
 def strays (ss : List String) (cs : List Protocol) (ev : List Case) : Option String := (records ss cs).strays ev
