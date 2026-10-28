@@ -11,8 +11,9 @@ The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, eac
   registered block or a receipt, is `NoOutsideCompute` (`Definitions.Accounting.Assumptions.RemoteOutside`), with which the
   memory line of record splits `SketchBound`.
 * `SquaringCeiling s E B`: the node's compute re-encodes at most `s / E` blocks a tick and a burst of `B`: `s` squarings
-  a tick at the codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`,
-  `timing.SQUARINGS_PER_S`), a block costing at least `E` of them (`Codec.encode_squarings`, `WorkHardness(p, k)`), and
+  a tick at the codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`: the GPU cards'
+  ceilings over the Site's node h, each with its share of the host's, `RemoteAudit.Line.ofSite`), a block costing at
+  least `E` of them (`Codec.encode_squarings`, `WorkHardness(p, k)`), and
   `B` one maximal rebuild batch, the blocks whose re-encodes can finish together.
 * `Disks β B`: the node's disks bring back at most `β` blocks a tick, their measured read ceiling, and a burst of `B`,
   one maximal disk read.
