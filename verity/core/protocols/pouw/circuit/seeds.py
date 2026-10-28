@@ -50,6 +50,7 @@ from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
 from verity.ml.circuits.types import Array
+from verity.ml.commitments import domains
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail, words_be
 
 from . import hashes as H
@@ -60,11 +61,11 @@ try:
 except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
     _ports = None
 
-SEED_TAG = b"verity/pouw/seed/v2".ljust(24, b"\0")
-RECEIPT_TAG = b"verity/pouw/receipt/v1".ljust(24, b"\0")
-NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0")
+SEED_TAG = domains.POUW_SEED.encode().ljust(24, b"\0")
+RECEIPT_TAG = domains.POUW_RECEIPT.encode().ljust(24, b"\0")
+NOISE_TAG = domains.POUW_NOISE.encode().ljust(24, b"\0")
 #: J10-R's call seed (`call_seed`)
-CALL_SEED_TAG = b"verity/pouw/call-seed/v1".ljust(24, b"\0")
+CALL_SEED_TAG = domains.POUW_CALL_SEED.encode().ljust(24, b"\0")
 M32 = W.M32
 #: a digest (the salt, a root, a seed, a noise block) as 16 big-endian halves; a position or a block counter as 2
 DIGEST = Array(16, W.U32)
