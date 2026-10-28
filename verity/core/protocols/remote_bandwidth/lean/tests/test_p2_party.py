@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core import site
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_lean, p2_party, receipts
@@ -33,6 +34,15 @@ NODE = b"p2-node-under-test"
 STEP_NS = 400
 TOY = {"windows": 2, "passes": 2, "samples": 4, "window_ns": 2 * STEP_NS, "deadline_ns": STEP_NS}
 """The auditor's session parameters these sessions are held to (`p2_party.session`'s `auditor`)."""
+
+
+def hosts(*ids: str) -> site.Site:
+    """A remote Site of one site holding the hosts `ids`, and a device on the first."""
+    log = site.Registration("remote")
+    locs = [site.Loc("site0", "site"), *(site.Loc(h, "host", "site0") for h in ids)]
+    sheet = site.Sheet("gpu", 1, 1, 1, 1)
+    log = log.append(log.entry((sheet,), (*locs, site.Loc("gpu0", "device", ids[0], sheet=sheet.digest()))))
+    return site.check(log, site.Auditor((sheet,)))
 
 
 class Clock:
@@ -70,7 +80,7 @@ def store() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, NODE, commitment, vk), blocks)
+    return p2.Store(p2.register(SOURCE, NODE, commitment, vk, site=hosts(NODE.decode())), blocks)
 
 
 @pytest.fixture(scope="module")

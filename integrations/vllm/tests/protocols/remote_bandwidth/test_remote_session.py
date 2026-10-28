@@ -405,8 +405,8 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
-    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None,
-                              step_ms=step_ms)
+    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, node="test-node", codec=P512,
+                              log=lambda m: None, step_ms=step_ms)
     cs.store, cs.binder = served_store() if served else store(), Stats()
     seen: list = []
 
