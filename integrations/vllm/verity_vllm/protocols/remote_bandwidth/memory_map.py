@@ -1,31 +1,30 @@
-"""`MemoryMap`: a `Store`'s KV events as memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's
-record of the blocks each serving step wrote and freed beside its registered store.
+"""memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's record of the blocks each serving step
+wrote and freed beside its registered store, as `Lines` builds it: the integration's one builder, which the Commit's map
+(`verity_vllm.commit.memory_map.record`, from the circuit) and a `Store`'s (`MemoryMap`, from its KV events) both drive.
 
 ~~~text
-slot      the block's store index in the registry's numbering: region ``first`` plus its region block, a KV block of
-          page p, column c in layer l at ``first_l + ids[p, c]``; every region's blocks are 4,096 bytes
-j         the store's next fresh index: N, the store's blocks when the map began, plus every block appended before
-          it, in append order (a step's completed blocks by slot); the record writes the blocks in that order
-d_j       `codec.digest` of the block's payload, its region codec's decoding of the bytes it holds once written
-          (`Store.payload`)
+slot      a block's store index, a `Store`'s in the registry's numbering: region ``first`` plus its region block, a KV
+          block of page p, column c in layer l at ``first_l + ids[p, c]``; every region's blocks are 4,096 bytes
+j         an appended block's index: N, the store's blocks when the map began, plus every block appended before it
+d_j       `codec.digest` of the block's payload (a `Store`'s: its region codec's decoding of its bytes, `Store.payload`)
 appended  a block `kv_append` completes, once its step's forward and frees are done (`complete`) if a free has not
-          taken it back by then, and a block re-keyed: written again in its slot, the same payload at a fresh j, once
-          its j is as old as the lifetime cap.  Each step's go out as one append (``on_append``), which the session
-          sends and the device encodes in place once its coin arrives (`encoded`)
-written   an appended block, once its encode has landed (deferred residency, remote_bandwidth's ``PROTOCOL.md`` §4):
-          at the step whose line is open when the encode lands, the step before the first whose reads see the block
-          encoded.  Until then it is plaintext, in no record and uncredited, as a dirty block is
-freed     an appended block (written since the map began, j >= N) of a page `kv_free` returns, though its bytes stay
-          as filler: the audit credits only the blocks the circuit keeps live, so the store releases it (dirty, out of
-          every plan) until a write completes it again under a new j.  A page's untouched blocks, registered before
-          the seed and never written since, stay resident (`kv_free` leaves them in the filler).  And a live block a
-          step's write reaches, completed or not: its bytes are no registered block until the block's write is
-          recorded (`Store`'s dirty), unless that step's record writes the slot (a write releases the slot's previous
-          block).  A block re-keyed: its old j at once, so it leaves the plans by the cap, its new j's write waiting
-          for its encode.  And a block appended whose page `kv_free` returns before its write is recorded: its write
-          is recorded all the same (its j is the session's), and its free in the next line, a step later, past its last
-          structural reader (memory-map/v1 withdraws such a block, which this map doesn't emit yet).  A block is
-          freed once; `kv_alloc` emits nothing
+          taken it back by then, a step's as one append by slot (``on_append``), which the session sends and the device
+          encodes in place once its coin arrives (`encoded`); and a block re-keyed once its j is as old as the lifetime cap
+written   an appended block, in the line open when its append lands (`Lines.land`, in append order: its encode, the step
+          before the first whose reads see it; deferred residency, remote_bandwidth's ``PROTOCOL.md`` §4), uncredited
+          until then.  An append that would write a slot its line writes already waits a line, with every append after it
+freed     a slot's block, registered or written, in the line its caller frees it (`Lines.free`), and a written block in
+          the line of its last structural reader (`Append.lasts`), or the line after its write if that is no earlier: one
+          read last before its write is recorded (a `Store`'s whose page `kv_free` returns first: at the open line's
+          step) is written all the same (its j is the session's) and freed a line later (memory-map/v1 withdraws it,
+          which `Lines` doesn't emit yet).  A line frees no slot it writes (a write releases the slot's previous block).
+          A `Store` frees an appended block (j >= N) of a page `kv_free` returns, though its bytes stay as filler: the
+          audit credits only the blocks the circuit keeps live, so the store releases it (dirty, out of every plan) until
+          a write completes it again.  A page's untouched blocks, registered before the seed and unwritten since, stay
+          resident (`kv_free` leaves them in the filler).  And a live block a step's write reaches, completed or not: its
+          bytes are no registered block until the block's write is recorded (`Store`'s dirty); `kv_alloc` emits nothing
+re-key    a live written block appended again with its d_j at a fresh j (`Lines.rekey`): its old j freed in the open
+          line, its new one written where that append lands
 ~~~
 
 Steps.  `Store.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
@@ -42,13 +41,12 @@ digests of the step's completed blocks from the bytes in place, and `complete` (
 has returned, its finished requests' pages freed) appends those still held; a line not completed by then is at its
 close.  The line closes (`flush`) when the next step opens, at the next `kv_append` or `kv_write_reference`, before the
 store changes: after the preemptions of that step's `schedule`, and before its pass, whose plan is the blocks resident
-at its step (`Replay.take`).  It writes the blocks whose encodes landed while it was open, in append order (one that
-would write a slot the line writes already waits for the next line, and every block after it).  Pages freed after the
-last line closed go in the next line.
+at its step (`Replay.take`).  It writes the blocks whose encodes landed while it was open.  Pages freed after the last
+line closed go in the next line.
 
 Lifetime.  No plan holds a block written after the codec seed L windows or more after the window its append joined
 (`audit.Params.lifetime`, ``lifetime`` here, the session's, or `LIFETIME`).  The map keeps the window each live written
-block's j joined (`joined`): the window open when its append is made, that of the first pass after it.  The verifier's is the
+block's j joined (`Live.window`): the window open when its append is made, that of the first pass after it.  The verifier's is the
 window of the first root it receives after the append, which is that pass's or, if the pass is discarded at a window
 boundary, a later one, so the map's is never later.  Closing a line in window w re-keys every live written block that
 joined at w − L or before and is neither freed nor written in the line: the line frees its old j, which so leaves the
@@ -64,11 +62,12 @@ The map is a witness (``d_j`` hashes user data): it goes to ``path``, the prover
 """
 from __future__ import annotations
 
+import heapq
 from collections import deque
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -105,22 +104,110 @@ def end(store: Any) -> None:
         store.memory_map = None
 
 
+class Live(NamedTuple):
+    """A written block live as of the last line: its index, its digest, its last structural reader (None: until a free)
+    and its append's window."""
+
+    index: int
+    digest: bytes
+    last: int | None
+    window: int
+
+
 @dataclass(slots=True)
-class Appended:
-    """One append, made when its blocks completed (or were re-keyed): its first index, its blocks' slots and digests in
-    index order, the window open when it was made (`MemoryMap.joined`'s), and those of its slots `kv_free` returned
-    before its write was recorded (``dead``)."""
+class Append:
+    """One append: its first index, its blocks' slots, digests and last structural readers (None: until a free; a caller
+    may set one until its write is taken) in index order, and the window open when it was made."""
 
     first: int
     slots: tuple[int, ...]
     digests: tuple[bytes, ...]
-    window: int
-    dead: set[int] = field(default_factory=set)
+    lasts: list[int | None]
+    window: int = 0
+
+
+class Lines:
+    """memory-map/v1's lines beside a registered store of ``blocks`` blocks, from a session's appends and frees in its
+    caller's slots, one line a step (the rules above).  ``live`` is each slot's written block as of the last line."""
+
+    def __init__(self, blocks: int) -> None:
+        self.next = blocks
+        self.live: dict[int, Live] = {}
+        self._pending: deque[Append] = deque()
+        self._landed: deque[Append] = deque()
+        self._freed: set[int] = set()
+        self._due: list[tuple[int, int, int]] = []
+
+    @property
+    def waiting(self) -> int:
+        """Blocks appended whose writes no line has taken: their appends still to land, or landed since the last line."""
+        return sum(len(a.slots) for a in (*self._pending, *self._landed))
+
+    @property
+    def busy(self) -> bool:
+        """Whether a later line has anything to record yet: a landed append, or a free."""
+        return bool(self._landed or self._freed or self._due)
+
+    def unwritten(self) -> dict[int, tuple[Append, int]]:
+        """Each slot of an append whose write no line has taken: the newest such append, and the block's place in it."""
+        return {x: (a, u) for a in (*self._landed, *self._pending) for u, x in enumerate(a.slots)}
+
+    def append(self, slots: Sequence[int], digests: Sequence[bytes], lasts: Sequence[int | None] | None = None,
+               window: int = 0) -> Append:
+        """Append the blocks ``slots`` at the next indices, each read last at ``lasts`` (None: until a free)."""
+        a = Append(self.next, tuple(slots), tuple(digests), [None] * len(slots) if lasts is None else list(lasts), window)
+        self.next += len(a.slots)
+        self._pending.append(a)
+        return a
+
+    def land(self, first: int) -> None:
+        """The append from ``first`` has landed: the next line writes it."""
+        if not self._pending or self._pending[0].first != first:
+            raise RuntimeError(f"the append from block {first} is not the oldest awaiting its encode "
+                               f"({self._pending[0].first if self._pending else 'none awaits'}): appends are encoded "
+                               "in their order")
+        self._landed.append(self._pending.popleft())
+
+    def free(self, slots: Iterable[int]) -> None:
+        """The next line frees the blocks ``slots`` hold, registered or written."""
+        self._freed.update(slots)
+
+    def held(self, step: int) -> dict[int, Live]:
+        """The written blocks line ``step`` keeps: freed by no `free` and read past it."""
+        return {x: b for x, b in self.live.items() if x not in self._freed and (b.last is None or b.last > step)}
+
+    def rekey(self, slots: Sequence[int], window: int = 0) -> Append:
+        """Free the live blocks ``slots`` in the next line, and append them again with their digests and readers."""
+        bs = [self.live[x] for x in slots]
+        self.free(slots)
+        return self.append(slots, [b.digest for b in bs], [b.last for b in bs], window)
+
+    def close(self, step: int) -> Step | None:
+        """Line ``step``: its frees and the landed appends it writes, or None if it records nothing."""
+        freed, self._freed = self._freed, set()
+        while self._due and self._due[0][0] <= step:
+            _, x, j = heapq.heappop(self._due)
+            if x in self.live and self.live[x].index == j:
+                freed.add(x)
+        for x in freed:
+            self.live.pop(x, None)
+        seen: set[int] = set()
+        written = []
+        while self._landed and not seen & set(self._landed[0].slots):
+            a = self._landed.popleft()
+            for u, (x, d, last) in enumerate(zip(a.slots, a.digests, a.lasts)):
+                self.live[x] = Live(a.first + u, d, last, a.window)
+                if last is not None:
+                    heapq.heappush(self._due, (max(last, step + 1), x, a.first + u))
+                written.append(Written(x, a.first + u, d))
+            seen.update(a.slots)
+        freed -= seen
+        return Step(step, tuple(sorted(freed)), tuple(written)) if freed or written else None
 
 
 class MemoryMap:
-    """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, its lines in ``path`` (appended as each closes)
-    or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
+    """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, built by ``lines``, its lines in ``path`` (appended
+    as each closes) or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
     memory-map/v1 before it is written.  ``on_append(first, slots, digests, payloads)`` gets each append as it is made (the
     remote session's, `verity_vllm.protocols.remote_bandwidth.remote`, which sends it and calls `encoded` once the device has encoded it
     under its coin); without it, each append's encode lands at once, as when the coin is back before the next step's
@@ -134,19 +221,14 @@ class MemoryMap:
         if type(lifetime) is not int or lifetime < 1:
             raise ValueError("the lifetime cap is a positive number of windows")
         self.store, self.header, self.path = store, header, None if path is None else Path(path)
-        self.lifetime, self.replay = lifetime, Replay(header)
+        self.lifetime, self.replay, self.lines = lifetime, Replay(header), Lines(header.blocks)
         self.ahead = 0
         self.last = -1
-        self.joined: dict[int, int] = {}
         self.rekeyed = 0
-        self.next = header.blocks
         self.on_line, self.on_append = on_line, on_append
         self._head = dumps(header, ())
-        self._open: tuple[int, set[int], set[int], set[int]] | None = None
+        self._open: tuple[int, set[int], set[int]] | None = None
         self._digests: dict[int, bytes] | None = None
-        self._later: set[int] = set()
-        self._pending: deque[Appended] = deque()
-        self._landed: list[Appended] = []
         self._kept: list[str] = []
         if self.path is not None:
             self.path.write_text(self._head)
@@ -154,12 +236,6 @@ class MemoryMap:
     @property
     def extent(self) -> int:
         return self.replay.extent
-
-    @property
-    def waiting(self) -> int:
-        """Blocks appended whose writes the record has not taken yet: their encodes still to land, or landed in the
-        open line."""
-        return sum(len(a.slots) for a in (*self._pending, *self._landed))
 
     def slots(self, keys: np.ndarray) -> tuple[int, ...]:
         """The store indices of the pool's blocks ``page * per_page + column``, in every layer region, ascending."""
@@ -172,23 +248,24 @@ class MemoryMap:
     def free(self, keys: np.ndarray) -> np.ndarray:
         """`kv_free` returned the pool's live blocks ``keys``: those appended (held at a j of the map's, or completed in
         the open line) are freed in the open line, the step whose forward ran last, which bounds their last structural
-        reader from above (after the last line closed, in the next); those appended whose writes the record has not taken yet are freed in the line after the one
-        that takes them; the rest, registered blocks no write has reached, stay resident.  The mask of those freed."""
-        p, n = self.store.pool, self.header.blocks
+        reader from above (after the last line closed, in the next); those whose writes no line has taken yet are read
+        last there; the rest, registered blocks no write has reached, stay resident.  The mask of those freed."""
+        p, lines = self.store.pool, self.lines
         first = self.store.region(p.regions[0]).first
-        completed = self._open[2] if self._open is not None else set()
-        waiting = {x: a for a in (*self._landed, *self._pending) for x in a.slots}
+        completed = self._open[1] if self._open is not None else set()
+        waiting = lines.unwritten()
         keys = np.asarray(keys)
         now, taken, dead = (np.zeros(len(keys), bool) for _ in range(3))
         for u, k in enumerate(keys.tolist()):
             x = first + int(p.ids[k // p.per_page, k % p.per_page])
             dead[u], taken[u] = x in waiting, x in completed
-            now[u] = not dead[u] and not taken[u] and (self.replay.holds(x) or 0) >= n
-        (self._open[1] if self._open is not None else self._later).update(self.slots(keys[now]))
+            now[u] = not dead[u] and not taken[u] and x in lines.live
+        lines.free(self.slots(keys[now]))
         if self._open is not None:
-            self._open[3].update(self.slots(keys[taken]))
+            self._open[2].update(self.slots(keys[taken]))
         for x in self.slots(keys[dead]):
-            waiting[x].dead.add(x)
+            a, u = waiting[x]
+            a.lasts[u] = self.last
         return now | taken | dead
 
     def check(self, step: int) -> None:
@@ -201,32 +278,30 @@ class MemoryMap:
         completed ``completed`` (keys ``page * per_page + column``)."""
         self.flush(step)
         self.last = step
-        self._open = (step, set(self.slots(reached)) | self._later, set(self.slots(completed)), set())
-        self._later, self._digests = set(), None
+        self.lines.free(self.slots(reached))
+        self._open, self._digests = (step, set(self.slots(completed)), set()), None
 
     def end_step(self) -> None:
         """The open step's forward has written its KV: take its completed blocks' digests from the bytes in place."""
         if self._open is not None:
-            self._digests = {x: codec.digest(self.store.payload(x)) for x in self._open[2]}
+            self._digests = {x: codec.digest(self.store.payload(x)) for x in self._open[1]}
 
     def complete(self) -> None:
         """The open step's forward and its frees are done: its completed blocks a free has not taken back go out as
         one append (a block completed and freed in the step is never read while resident, so it is no write; the
         block its slot held was freed when the write reached it).  Called again, or with nothing completed, it appends
         nothing."""
-        if self._open is None or not self._open[2]:
+        if self._open is None or not self._open[1]:
             return
-        _, _, completed, taken = self._open
+        _, completed, taken = self._open
         digests = self._digests or {}
         got = sorted(completed - taken)
         completed.clear()
         if got:
-            self._append(got, [digests.get(x) or codec.digest(self.store.payload(x)) for x in got])
+            self._send(self.lines.append(got, [digests.get(x) or codec.digest(self.store.payload(x)) for x in got],
+                                         window=self.window()))
 
-    def _append(self, slots: Sequence[int], digests: Sequence[bytes]) -> None:
-        a = Appended(self.next, tuple(slots), tuple(digests), self.window())
-        self.next += len(a.slots)
-        self._pending.append(a)
+    def _send(self, a: Append) -> None:
         if self.on_append is None:
             self.encoded(a.first)
         else:
@@ -235,11 +310,7 @@ class MemoryMap:
     def encoded(self, first: int) -> None:
         """The device has encoded the append from ``first`` under its coin: the open line writes its blocks (they are
         resident from the next step on, the first whose reads see them encoded)."""
-        if not self._pending or self._pending[0].first != first:
-            raise RuntimeError(f"the append from block {first} is not the oldest awaiting its encode "
-                               f"({self._pending[0].first if self._pending else 'none awaits'}): appends are encoded "
-                               "in their order")
-        self._landed.append(self._pending.popleft())
+        self.lines.land(first)
 
     def window(self) -> int:
         """The window of the store's next pass: the open one, else the next to open."""
@@ -254,39 +325,25 @@ class MemoryMap:
         if self._open is None:
             return []
         self.complete()
-        s, freed, _, _ = self._open
-        self._open = None
+        s, self._open = self._open[0], None
         w = self.window() + self.ahead
-        rekey = sorted({x for x, a in self.joined.items() if a <= w - self.lifetime} - freed)
+        rekey = sorted(x for x, b in self.lines.held(s).items() if b.window <= w - self.lifetime)
         if rekey:
-            freed.update(rekey)
             self.rekeyed += len(rekey)
-            self._append(rekey, [codec.digest(self.store.payload(x)) for x in rekey])
-        got, seen = [], set()
-        while self._landed and not seen & set(self._landed[0].slots):
-            a = self._landed.pop(0)
-            got.append(a)
-            seen.update(a.slots)
-        written = tuple(Written(x, a.first + u, d) for a in got for u, (x, d) in enumerate(zip(a.slots, a.digests)))
-        freed -= seen
-        out = []
-        if freed or written:
-            out = [Step(s, tuple(sorted(freed)), written)]
-            change = self.replay.apply(out[0])
-            for x in freed:
-                self.joined.pop(x, None)
-            for a in got:
-                self.joined.update(dict.fromkeys(a.slots, a.window))
-                self._later |= a.dead
-            if self.on_line is not None:
-                self.on_line(change)
-            lines = dumps(self.header, out)[len(self._head):]
-            if self.path is None:
-                self._kept.append(lines)
-            else:
-                with self.path.open("a") as f:
-                    f.write(lines)
-        return out
+            self._send(self.lines.rekey(rekey, self.window()))
+        line = self.lines.close(s)
+        if line is None:
+            return []
+        change = self.replay.apply(line)
+        if self.on_line is not None:
+            self.on_line(change)
+        text = dumps(self.header, [line])[len(self._head):]
+        if self.path is None:
+            self._kept.append(text)
+        else:
+            with self.path.open("a") as f:
+                f.write(text)
+        return [line]
 
     def text(self) -> str:
         """The map's lines so far, header first (`memory_map.parse` reads them)."""

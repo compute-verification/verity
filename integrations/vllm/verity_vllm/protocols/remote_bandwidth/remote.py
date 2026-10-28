@@ -239,7 +239,7 @@ class Serving:
             late[w - m] = late.get(w - m, 0) + 1
         landed = self.landed + [None] * (len(self.made) - len(self.landed))
         return {"appends": len(self.made), "encoded": len(self.landed), "steps_late": dict(sorted(late.items())),
-                "waiting": self.map.waiting if self.store.memory_map is self.map else None,
+                "waiting": self.map.lines.waiting if self.store.memory_map is self.map else None,
                 "encodes": [[m, w, a.first, a.count] for m, w, a in zip(self.made, landed, self.appends)]}
 
     def plan(self) -> rb.Plan:
