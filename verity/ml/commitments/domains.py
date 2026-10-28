@@ -217,8 +217,6 @@ LMS_I = "verity/lms/v0/I"
 # Not yet read from here: sampled proofs and the proof service's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
-IR_OBLIGATION = "verity-ir/obligation/v0"
-SAMPLED_PROOFS_VERIFICATION_PLAN = "verity-sampled-proofs/verification-plan/v3"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"
 CHALLENGER_AUDITOR_ENTRY_V1 = "verity/challenger-auditor/entry/v1"
 CHALLENGER_AUDITOR_ENTRY_V2 = "verity/challenger-auditor/entry/v2"
