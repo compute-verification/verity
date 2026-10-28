@@ -2060,6 +2060,9 @@
    "assumptions": [],
    "type_hash": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad"
   },
+  "Properties.NetworkPeriod.rowsProgWired_honest": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsProgWired_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
@@ -2074,6 +2077,9 @@
    "signature": ["Properties.NetworkPeriod.rowsStateTied : Properties.NetworkPeriod.RowsStateTied"],
    "assumptions": [],
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b"
+  },
+  "Properties.NetworkPeriod.rowsStateTied_honest": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateTied_nontrivial": {
    "owner": "@network-accounting",
@@ -16485,6 +16491,17 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsProgWired": {
+   "honest": ["Properties.NetworkPeriod.rowsProgWired_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsProgWired_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsStateTied": {
+   "honest": ["Properties.NetworkPeriod.rowsStateTied_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStateTied_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsTiedDrawn": {
+   "nontrivial": "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial"
   }
  },
  "unwitnessed": {
@@ -16560,12 +16577,11 @@
   "Properties.NetworkCertifier.malformedEvidenceRejects": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953",
   "Properties.NetworkCertifier.undecidedPending": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
   "Properties.NetworkCertifier.undigestedParamsReject": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5",
-  "Properties.NetworkPeriod.rowsProgWired": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
-  "Properties.NetworkPeriod.rowsProgWired_nontrivial": "4bddc27479aba4a1049243d85d661eb3081f1922e067d71e8783a5cdd77c6d1c",
-  "Properties.NetworkPeriod.rowsStateTied": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
-  "Properties.NetworkPeriod.rowsStateTied_nontrivial": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70",
-  "Properties.NetworkPeriod.rowsTiedDrawn": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
-  "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
+  "Properties.NetworkPeriod.rowsTiedDrawn": {
+   "type_hash": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
+   "missing": "honest",
+   "why": "no accepting rows-form period with a tied audit is built yet: its link-window carries three certificates and two rows heads signed under Lms.deployed over domains Flock.canon computes, which the kernel doesn't evaluate; RowsTiedDrawn's restatement over partial draws brings the honest lemma"
+  },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
   "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
