@@ -73,10 +73,10 @@ end NoHash
 /-! ## The toy statement -/
 
 /-- A commitment whose every opening passes, with no call. -/
-def accCm : Commitment Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
+def accCm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
 
 /-- A commitment whose every opening fails, with no call. -/
-def rejCm : Commitment Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
+def rejCm : CommitmentScheme Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
 
 /-- One input gate, returned. -/
 def toyProg : Prog := ⟨[.input], [0]⟩
@@ -94,7 +94,7 @@ theorem toyPart_blocks : toyPart.blocks = [[0]] := rfl
 
 theorem toy_boundary : toyProg.Boundary [0] 0 = true := by decide
 
-theorem toy_ref (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) (ι : ℕ → Bool) :
+theorem toy_ref (H : Msg → Msg) (Cm : CommitmentScheme Bool) (w : Wit) (ι : ℕ → Bool) :
     toyProg.refIn [0] (w.val H Cm toyStmt) ι 0 = w.val H Cm toyStmt 0 := by
   simp [Prog.refIn, toy_boundary]
 
@@ -103,7 +103,7 @@ theorem toy_runIn (ref : ℕ → Option Bool) : toyProg.runIn ref [0] 0 = ref 0 
   rfl
 
 /-- The unit is correct exactly when the input's value is opened. -/
-theorem toy_correct_iff (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) (ι : ℕ → Bool) :
+theorem toy_correct_iff (H : Msg → Msg) (Cm : CommitmentScheme Bool) (w : Wit) (ι : ℕ → Bool) :
     toyProg.Correct (toyProg.refIn [0] (w.val H Cm toyStmt) ι) [0] ↔ ∃ b, w.val H Cm toyStmt 0 = some b := by
   constructor
   · intro h
@@ -118,7 +118,7 @@ theorem toy_correct_iff (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) (ι :
     · rw [toy_ref, hb]
     · rw [toy_runIn, toy_ref, hb]
 
-theorem toy_faulty_iff (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) :
+theorem toy_faulty_iff (H : Msg → Msg) (Cm : CommitmentScheme Bool) (w : Wit) :
     Faulty H Cm toyStmt toyPart w 0 ↔ w.val H Cm toyStmt 0 = none := by
   unfold Faulty
   rw [toyPart_blocks]
@@ -128,7 +128,7 @@ theorem toy_faulty_iff (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) :
   generalize w.val H Cm toyStmt 0 = o
   cases o <;> simp
 
-theorem toy_faulty (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) :
+theorem toy_faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (w : Wit) :
     faulty H Cm toyStmt toyPart w = if w.val H Cm toyStmt 0 = none then {0} else ∅ := by
   ext v
   simp only [faulty, Finset.mem_filter, Finset.mem_range, toyPart_blocks, List.length_singleton]
@@ -146,10 +146,10 @@ theorem toy_Pa (B : Finset ℕ) : toyStmt.design.Pa toyPart B = if window 0 1 B 
   simp [Design.Pa, toyStmt, toyPart, classesPa, OneStage.Pa]
 
 theorem toyWit_val (H : Msg → Msg) : toyWit.val H accCm toyStmt 0 = some true := by
-  simp [Wit.val, toyWit, Commitment.Opens, accCm, OC.eval]
+  simp [Wit.val, toyWit, CommitmentScheme.Opens, accCm, OC.eval]
 
 theorem rejCm_val (H : Msg → Msg) (w : Wit) : w.val H rejCm toyStmt 0 = none := by
-  simp [Wit.val, Commitment.Opens, rejCm, OC.eval]
+  simp [Wit.val, CommitmentScheme.Opens, rejCm, OC.eval]
 
 theorem rejCm_faulty (H : Msg → Msg) (w : Wit) : faulty H rejCm toyStmt toyPart w = {0} := by
   rw [toy_faulty, rejCm_val]; rfl
@@ -533,7 +533,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The sampling `Universal` fails** at `compSD`, whose universal unit returns nothing, at the class `(0, 0, 1)`. -/
 theorem Universal_fails : ¬ Universal (compSD Coin) := fun h => by
   have := h ⟨0, 0, 1⟩ ⟨0, [], [0]⟩ [] ⟨rfl, rfl, rfl, by simp, by simp [SizeClass.indexBits]⟩ rfl
-  simp [compSD, Prog.eval, Netlist.eval] at this
+  simp [compSD, Prog.eval, PrivateCircuit.eval] at this
 
 omit [Nonempty Coin] in
 /-- **The sampling `Complete` fails** at `compSD`, whose reference prover is silent, at its error `δ_c = 0`. -/

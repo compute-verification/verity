@@ -115,7 +115,7 @@ theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n
       · exact hin (mem_unitGates.2 ⟨g, hu, 0, by omega, by rw [Nat.add_zero]⟩)
       · exact hin (mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩)
 
-theorem witDep_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_mem {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {xv : Fin C.N → Bool} {o : Opening Bool} (h : o ∈ (witDep C Cm H roots xv).vals) :
     ∃ g, o.pos = posOf C g ∧ o.val = C.eval xv g := by
   simp only [witDep, List.mem_map, List.mem_finRange, true_and] at h
@@ -125,7 +125,7 @@ theorem witDep_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
   split <;> exact ⟨rfl, rfl⟩
 
 /-- **`witDep` opens a wire's position at its value** wherever some datum passes there. -/
-theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {xv : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
     (witDep C Cm H roots xv).val H Cm s (posOf C a) = some (C.eval xv a) := by
@@ -150,7 +150,7 @@ theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
 other wire it reads is transported. -/
 theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
+    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hright : ∃ op : Pos → Opn, ∀ g ∈ P.io u,

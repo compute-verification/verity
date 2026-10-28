@@ -18,7 +18,7 @@ advice. At a registered input that is a free input:
 So when the trace agrees with the registration at the registered inputs it opens, the accepted advice can be moved to
 the inputs pinned at the registration's values (`rLeak_reg_of_rAcc`), a set the statement and the registration fix. An
 extracted trace that disagrees opens a registered position to a value the registration doesn't. The extractor checked
-that opening with its own calls (`Passes.found`, `ownLog_E`), so under `Commitment.Binds` its calls and those that check
+that opening with its own calls (`Passes.found`, `ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check
 the registration's opening collide, and `B_reg` finds the collision (`regColl_of_disagree`, `Pr_regColl_le_Breg`).
 `sampledLeak_registered` is the bound: `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the
 registration's values, and the count `2^#(freeInputs \ reg) · #faultySets · 2^β · Dj^k` there.
@@ -30,7 +30,7 @@ open Claims Claims.Sampling NetTiming.SampledAuditProof
 
 /-! ### A registered input of a correct unit is opened at the trace's value -/
 
-theorem val_some_of_input {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit}
+theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit}
     (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
     (hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) g) : ∃ b, w.val H Cm s g = some b := by
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H Cm s P w
@@ -48,9 +48,9 @@ theorem traceVal_of_val {C : Prog} {ref : ℕ → Option Bool} {g : ℕ} {b : Bo
 
 /-! ### Moving the advice to the registration's values -/
 
-theorem inputOf_congr_at {L S : ℕ} (lay : Layout L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool} {g : ℕ}
+theorem inputOf_congr_at {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool} {g : ℕ}
     (h : a g = a' g) : lay.inputOf k ins a g = lay.inputOf k ins a' g := by
-  unfold Layout.inputOf
+  unfold BoundaryGates.inputOf
   split
   · rfl
   · rw [h]
@@ -76,8 +76,8 @@ theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → 
 
 /-- **At the registration's values**: on a partitioned program, `RAcc δ` at a trace that opens each registered input,
 where it opens one, to the registration's value `ρ` there gives the leak relation at the inputs pinned at `ρ`. -/
-theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → Option AuditStatement}
-    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → Layout L S} {k : AuditStatement → ℕ} {δ : ℝ} {Dj : ℕ}
+theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
+    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {Dj : ℕ}
     (reg : AuditStatement → Finset ℕ) (ρ : AuditStatement → ℕ → Bool) {x : Msg} {w : Wit}
     (hpart : ∀ s P, parse x = some s → partition s = some P → P.Partitions s.prog)
     (hagree : ∀ s, parse x = some s → ∀ g ∈ reg s, ∀ b, w.val H Cm s g = some b → b = ρ s g)
@@ -120,7 +120,7 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg 
 
 /-! ### A disagreement with the registration is a collision -/
 
-theorem mem_assemble_of_val {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
+theorem mem_assemble_of_val {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
     {g : ℕ} {b : Bool} (h : (assemble s found).val H Cm s g = some b) :
     ∃ q ∈ found, q.1 = s.roots ∧ q.2.pos = g ∧ q.2.val = b := by
   unfold Wit.val at h
@@ -141,7 +141,7 @@ theorem regVal_mem {ops : List (Opening Bool)} {g : ℕ} (h : ∃ o ∈ ops, o.p
   refine ⟨o, List.mem_of_find?_eq_some ho, by simpa using List.find?_some ho, ?_⟩
   simp [regVal, ho]
 
-theorem regLog_valid (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (ops : List (Opening Bool)) :
+theorem regLog_valid (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : List Msg) (ops : List (Opening Bool)) :
     ∀ p ∈ regLog H Cm roots ops, H p.1 = p.2 := by
   intro p hp
   obtain ⟨o, -, hpo⟩ := List.mem_flatMap.1 hp
@@ -235,7 +235,7 @@ openings `ops` of them. On the statements in scope whose registration opens thei
 `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the inputs pinned at the registration's
 values (`AsReg` at `regVal`), a set the statement and the registration fix. -/
 theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T)
-    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ)
+    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc D lay k x)

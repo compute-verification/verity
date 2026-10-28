@@ -93,7 +93,7 @@ open Classical in
 /-- **The registration's commitment**: an opening at wire `g`'s position passes when some opening `op` of the
 registered commit string at `g`'s position carries its value on `g`. -/
 noncomputable def commitOf {C : Circuit} {Pos Val Opn Com : Type} (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool)
-    (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) : Claims.Sampling.Commitment Bool where
+    (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) : Claims.Sampling.CommitmentScheme Bool where
   opens _ o := .ret (decide (∃ g : Fin C.N, posOf C g = o.pos ∧ ∃ op : Opn, com op = cs (pos g) ∧ bit (val op) g = o.val))
   layer _ _ _ := []
 

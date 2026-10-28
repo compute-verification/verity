@@ -137,7 +137,7 @@ end Honest
 /-! ## At the accepting verifier -/
 
 /-- A layout of one link of one slot, with no gate. -/
-def trivLay : Layout 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
+def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 
 /-- One input gate and its negation, the negation returned. -/
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
@@ -149,7 +149,7 @@ def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩,
 def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : Layout 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
+def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
@@ -179,7 +179,7 @@ theorem notLay_fits : notLay.Fits notProg 1 := by
 
 theorem rejCm_val_none (H : Msg → Msg) (s : Claims.Sampling.AuditStatement) (w : Claims.Sampling.Wit) (g : ℕ) :
     w.val H rejCm s g = none := by
-  simp [Wit.val, Commitment.Opens, rejCm, OC.eval]
+  simp [Wit.val, CommitmentScheme.Opens, rejCm, OC.eval]
 
 /-- With nothing held and the input `false`, the circuit computes the negation `true`. -/
 theorem notProg_val (inp : ℕ → Bool) (h0 : inp 0 = false) : valOver notProg inp (fun _ => none) 1 = true := by

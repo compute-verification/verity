@@ -24,8 +24,8 @@ record, the sampling record's `flock`, and their antecedents are of that record 
 * `Sampling.scope_meets`: the sampling scope's readable form (`Sampling.InScope`) holds a program, partition and
   design; it reads no field of the record, of which the tree has no concrete one. It is the readable part of the
   sampling `Complete`'s antecedent, of what its `ScopeMatches` equates, and of `Nontrivial`'s runs.
-* `Sampling.universal_meets`: some netlist fits its size class, on inputs of the class's width, the antecedent of
-  `Universal`, which reads no field of the record either.
+* `Sampling.universal_meets`: some private circuit fits its size class, on inputs of the class's width, the antecedent
+  of `Universal`, which reads no field of the record either.
 -/
 
 open FlockDeploy
@@ -99,11 +99,11 @@ theorem Sampling.scope_meets :
     exact ho
   · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.OneStage.WellFormed]
 
-/-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and its netlist, the
-AND of the two inputs, on inputs of its width. -/
+/-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and a private circuit
+of it, the AND of the two inputs, on inputs of its width. -/
 theorem Sampling.universal_meets :
-    ∃ (c : Claims.Sampling.SizeClass) (n : Claims.Sampling.Netlist) (x : List Bool), n.Fits c ∧ x.length = c.nIn :=
-  ⟨⟨1, 2, 1⟩, ⟨2, [(1, 0, 1)], [2]⟩, [true, false], by unfold Claims.Sampling.Netlist.Fits; decide, rfl⟩
+    ∃ (c : Claims.Sampling.SizeClass) (n : Claims.Sampling.PrivateCircuit) (x : List Bool), n.Fits c ∧ x.length = c.nIn :=
+  ⟨⟨1, 2, 1⟩, ⟨2, [(1, 0, 1)], [2]⟩, [true, false], by unfold Claims.Sampling.PrivateCircuit.Fits; decide, rfl⟩
 
 /-- **At a sampling record over the plain record**, its Flock record's decoder meets the list-decoding spec. -/
 theorem Sampling.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
