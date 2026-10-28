@@ -39,7 +39,7 @@ PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16"
 
 def with_geometry(config: dict[str, Any]) -> dict[str, Any]:
     """`C` plus the derived FA2 static: `BN = b1.fa2_kblock_n(D)` (128 at head dim 64 — SmolLM2; 64 at head dim 128 —
-    Qwen2.5-1.5B; D54/D57)."""
+    Qwen2.5-1.5B)."""
     C = dict(config)
     C["BN"] = b1.fa2_kblock_n(C["D"])
     return C
@@ -125,7 +125,7 @@ def make_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
     not); `lm_head` only when `C["tie_word_embeddings"]` is False."""
     bias = bool(C.get("BIAS", False))
     tied = bool(C.get("tie_word_embeddings", True))
-    # [R15 fp8] family / quantization facts of the configuration (analytic.dense_layer_weights_type): the per-head q/k norm weights
+    # family / quantization facts of the configuration (analytic.dense_layer_weights_type): the per-head q/k norm weights
     # (Qwen3) and the f32 block scales of the FP8 linears exist as fields only when C says so; on any other configuration the same
     # parameter names stay unknown roots (never silently mapped)
     layer_fields = dict(_LAYER_FIELDS)
@@ -207,7 +207,7 @@ def make_check_header(C: dict[str, Any]) -> Callable[[RunHeader], list[str]]:
             out.append(f"head_dim={cfg['head_dim']!r} != C[D]={C['D']!r}")
         if "attention_bias" in cfg and bool(cfg["attention_bias"]) != bool(C.get("BIAS", False)):
             out.append(f"attention_bias={cfg['attention_bias']!r} != C[BIAS]={C.get('BIAS', False)!r}")
-        # [X-07] a fact compared to C (make_weight_field maps lm_head.weight onto embed iff tied, onto its own field iff untied)
+        # a fact compared to C (make_weight_field maps lm_head.weight onto embed iff tied, onto its own field iff untied)
         if "tie_word_embeddings" in cfg and bool(cfg["tie_word_embeddings"]) != bool(C.get("tie_word_embeddings", True)):
             out.append(f"tie_word_embeddings={cfg['tie_word_embeddings']!r} != C[tie_word_embeddings]={C.get('tie_word_embeddings', True)!r}")
         return out
@@ -228,7 +228,7 @@ def make_patterns(C: dict[str, Any]) -> list:
     enters only through `EPS` (norm epsilons), `V` (the sampler's logits width) and `BN` (FA2 kBlockN at `D`)."""
     fp8: list = []
     if C.get("FP8_BLOCK"):
-        # [R15 fp8] the block-scaled FP8 linear (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0): the
+        # the block-scaled FP8 linear (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0): the
         # dynamic per-token-group activation quant and the blockwise CUTLASS scaled GEMM, each ONE registered family (registry.fp8)
         from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
         fp8 = [PerTokenGroupFp8Quant(group=int(C["FP8_BLOCK"])), CutlassScaledMmFp8Block(group=int(C["FP8_BLOCK"]))]
@@ -247,7 +247,7 @@ def make_patterns(C: dict[str, Any]) -> list:
         AttentionScope(bn=C["BN"], num_splits=ATTN_NUM_SPLITS),
         SiluAndMul(),
         Embedding(),
-        # [R15 stoch] the seeded temperature + top-p chain (returns None under a greedy header; first in line so the greedy
+        # the seeded temperature + top-p chain (returns None under a greedy header; first in line so the greedy
         # recognizer's `outside greedy sampling` refusal is not what a stochastic row sees)
         TokenSelectGumbelTopP(vocab=C["V"], block_size=SAMPLER_BLOCK_SIZE),
         TokenSelectGumbelTwoStage(vocab=C["V"], block_size=SAMPLER_BLOCK_SIZE),

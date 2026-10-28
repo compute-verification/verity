@@ -105,7 +105,7 @@ def test_a_fold_is_put_in_the_form_only_when_every_component_counts_no_dead_gate
 def test_a_component_naming_only_the_dead_free_versions_is_in_the_form_whatever_dead_gates_it_counts(tmp_path, programs):
     """An int8 request Program in the compiler's form counts dead gates no rule of the form removes (its unnarrowed `ScaledMmS8_v1`
     qkv on the prompt rows), so its derive report alone keeps the fold as it ran and every request compares unequal (Llama-3.2-1B
-    int8 B4 on an H200, r20261027-015609-d874: RMSNormTriton_v5 against the fold's v1 at each request's first norm).  Its Program
+    int8 B4 on an H200: RMSNormTriton_v5 against the fold's v1 at each request's first norm).  Its Program
     names the dead-free versions and none of the v1s they replace, as the Build's histogram of TINY's request Program does; the
     unpruned request, a row of record's, and one naming both or neither are not in the form."""
     from verity_vllm.pipeline.build import _spec_histogram

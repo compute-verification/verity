@@ -1,10 +1,10 @@
 """The ingress-ids tie (`io_ids`, a prototype on a fake upstream Commit and the warden's own ingress): `IoTieRequest`
 with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the prompt the user
-sent (REDTEAM phase 9 #1: IoTieRequest counts each request's prompt fields and checks each is a u32, and the ids'
-values were tied to nothing). Like IoTieRequest it is one unit a bucket row of the warden's registered ingress
+sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids' values to
+nothing). Like IoTieRequest it is one unit a bucket row of the warden's registered ingress
 (`warden_rows.bucket_port`).
 
-**The Commit side** (the fake upstream's layout, what PROVE-PATH's Commit exposes): one `hm96-sha512/row/v2` row a
+**The Commit side** (the fake upstream's layout, what the served path's Commit exposes): one `hm96-sha512/row/v2` row a
 step under a fresh salt, the step's input ids u32be in the forward's token order (its batch rows in order, row r's n_r
 tokens at offset Σ_{r' < r} n_{r'}), zero past to P, in a dense `frame-v3-sha512` tree of the session's steps whose
 root and domain the Commit registers before the draw. A bucket reads its S rows at the map's steps as registered

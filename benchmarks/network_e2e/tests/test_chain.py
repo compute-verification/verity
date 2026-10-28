@@ -3,9 +3,9 @@ stand-in's from before v0, upgraded with each kept output released in its step's
 summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
 whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
 advice, with a forged arm that passes only when Lean refused its unit; and the report on certifier-serve's virtual runs with
-every stage (NEG's registry among them, with the I/O tie's verdict given the sampled ids), then on a varied rehearsal's
-advice profile, where N2 gives no verdict and the rehearsal's own check is the verdict, and the I/O tie on each run,
-required there, decides token and holds the honest run."""
+every stage (the negatives registry among them, with the I/O tie's verdict given the sampled ids), then on a varied
+rehearsal's advice profile, where N2 gives no verdict and the rehearsal's own check is the verdict, and the I/O tie on
+each run, required there, decides token and holds the honest run."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def _io(users=("q0", "q1")) -> list[dict]:
 
 
 def _standin() -> dict:
-    """A prove-path stand-in's advice as PROVE-PATH's first runs wrote it: no schema, no sources, no release."""
+    """A prove-path stand-in's advice as the prove path's first runs wrote it: no schema, no sources, no release."""
     return {"requests": [{"id": "r0", "prompt_len": 4, "output_len": 3, "finish": "length"}], "release": [],
             "steps": [{"rows": [{"request": 0, "kind": "prefill", "start": 0, "n": 4, "cache_hit": 0,
                                  "preempted": False}]}]
@@ -213,8 +213,8 @@ def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None
 
 
 def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_it_proves(tmp_path):
-    """PROVE-PATH's `--serve-run` audits of the endpoint's own Commit windows (as r20261024-154338-7679's of 8eb1's
-    w212, one of the honest run's, registered apart by the lane, and r20261024-143655-ccc8's of its w5): bound to these
+    """The prove path's `--serve-run` audits of the endpoint's own Commit windows (one of them a window of the honest
+    run whose advice was registered apart): bound to these
     runs when every arm's Commit is the endpoint's (its windows.jsonl's run id and root) and sealed while serving, every
     arm's advice is held by content to the report's advice of its window (its root registered under that Commit, in the
     report's own advice or apart, and the registration's opening opening it to the report's advice), and an honest arm
@@ -318,7 +318,7 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
 def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close(tmp_path):
     """A Commit window's advice was registered at serve time when it was registered before its draw (every rank's
     `advice_before_draw`, the verifier's receipt of the registration before any coin) and no later than the next
-    window's close in the endpoint's trace (the lead's ruling, 24 Oct); after serving when either fails, and unknown
+    window's close in the endpoint's trace; after serving when either fails, and unknown
     while either is. Its lag after its own window's close is always printed, in seconds."""
     ep = _endpoint(tmp_path)
     io = json.loads((ep / "io.json").read_text())["requests"]
@@ -428,7 +428,7 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
 
 
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
-    """vllm's own-advice endpoint's first three Commit windows (r20261024-094558-6d6a's records, trimmed: its scheduler
+    """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
     mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
     not bound when a window falls outside the run's link-windows, holds a request the run didn't certify, opens another
@@ -498,7 +498,7 @@ def _reregister(d: Path, data: bytes) -> None:
 
 def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advice_that_charges_the_carry_once(
         tmp_path):
-    """The gate endpoint's (r20261025-060356-5c72, serve 9ff3's) Commit windows 113 to 116, trimmed: 114 ends three
+    """The gate endpoint's Commit windows 113 to 116, trimmed: 114 ends three
     requests with outputs still to keep and 115 carries them in (window advice v1). Bound and rebuilt from the certified
     I/O of their nine requests, 114 and 115 joined into one advice (`window_chain.join`), which holds each carried
     request's record and state once where 115's string repeats them; the windows that carry nothing are charged their
@@ -589,12 +589,12 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
     rows = c["negatives"]["rows"]
     assert c["negatives"]["ok"] and all(rows[k]["ok"] is True for k in ("late", "extra", "head"))
-    # the stand-in releases its first output in its request's own bucket, which N2-ADVICE's floor accepts at δ = 0
+    # the stand-in releases its first output in its request's own bucket: the advised counts' floor accepts it at δ = 0
     assert all(rows[k]["ran"] and rows[k]["ok"] for k in ("advice-length", "advice-missing", "advice-release"))
     assert rows["advice-length"]["codes"] == ["NetworkAdvisedCounts_v1"] and rows["wrong-token"]["ran"] is False
     md = (out / "report.md").read_text()
-    for section in ("## Advice", "## Advice bits per link-window", "## Prove path", "## Negatives (NEG's registry)",
-                    "## What's still stubbed"):
+    for section in ("## Advice", "## Advice bits per link-window", "## Prove path",
+                    "## Negatives (the negatives registry)", "## What's still stubbed"):
         assert section in md, section
     assert "| glm-forged | True | 0 | False | 10 | 2 | — | True | True | 1.5 | — | — | — | stand-in |" in md
     assert any(x.startswith("Advice form: the stand-in's pre-v0 JSON") for x in r["stubbed"])
@@ -610,7 +610,7 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
 def test_given_the_sampled_ids_each_negative_the_tie_reads_carries_its_verdict(virtual, tmp_path):
     """With --advice and --ids, every negative the I/O tie reads carries the tie's verdict, in the report's table and
     in `stubbed`; a row the tie ran on passes only when the tie refuses it by its part. Without --ids no row has one,
-    and `stubbed` says so. Until IO-TIE lands, each such row says why it didn't run."""
+    and `stubbed` says so. Without `io_tie`, each such row says why it didn't run."""
     NG = chain.NG
     (tmp_path / "a.json").write_text(json.dumps(I1.to_json(_advice())))
     (tmp_path / "ids.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": x}) + "\n"
@@ -623,13 +623,13 @@ def test_given_the_sampled_ids_each_negative_the_tie_reads_carries_its_verdict(v
     md = (tmp_path / "out" / "report.md").read_text()
     assert "| I/O tie |" in md
     if NG.io_tie_module() is None:
-        assert all(not t["ran"] and "IO-TIE" in t["why"] for t in tied.values())
+        assert all(not t["ran"] and "io_tie" in t["why"] for t in tied.values())
         assert any(x.startswith("I/O tie: no I/O tie yet") for x in r["stubbed"])
     else:
         ran = {k: t for k, t in tied.items() if t["ran"]}
         assert {"frame", "token", "drop", "wrong-token"} <= set(ran) and all(t["ok"] for t in ran.values()), tied
         assert all(rows[k]["ok"] is True for k in ran)
-        assert f"`{NG.TIE}.content`" in md and any(x.startswith("I/O tie: IO-TIE's reference") for x in r["stubbed"])
+        assert f"`{NG.TIE}.content`" in md and any(x.startswith("I/O tie: `io_tie`'s reference") for x in r["stubbed"])
     r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "a.json")), [], clock=lambda: 0.0)
     assert all("tie" not in x for x in r["chain"]["negatives"]["rows"].values())
     assert any(x.startswith("I/O tie: no sampled ids given") for x in r["stubbed"])
@@ -682,7 +682,7 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     assert r["chain"]["tie"]["ran"] is False and r["pending"] == {}
     assert r["negatives"]["token"]["refused"] is False and r["negatives"]["token"]["by"] == []
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
-    assert "N2-ADVICE" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
+    assert "N2's advised counts" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
     assert sorted(r["negatives"]) == ["drop", "extra", "late", "token"]
     assert r["negatives"]["late"]["by"] == ["the rehearsal's own check (audit.status:coverage-never-established)"]
     assert r["negatives"]["drop"]["by"] == ["the rehearsal's own check (io:short of max_tokens without EOS)"]
@@ -843,7 +843,7 @@ TOKEN = HERE / "tests" / "data" / "token"
 
 
 def test_a_token_runs_changed_ids_fall_in_the_link_windows_its_certified_egress_carries_them(tmp_path):
-    """r20261024-111424-88c9's token run (its ingress and egress records, plan, calibration and the shim's server.json,
+    """A token run (its ingress and egress records, plan, calibration and the shim's server.json,
     not its certified heads): the shim changed varied.00000's first three outputs and varied.00001's first twenty, which
     its certified egress carries in link-windows 0 and 1, each output placed as the tie places it (its stream's next id
     event). An output the egress doesn't carry falls in none, and a run whose shim logged no change has none."""
@@ -876,11 +876,11 @@ def _ties(**edits) -> dict:
 
 def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_ids_and_holds_the_honest_run(
         virtual, tmp_path, monkeypatch):
-    """With IO-TIE in the tree and each request's sampled ids (here --ids), the I/O tie runs on every run of the
+    """With `io_tie` in the tree and each request's sampled ids (here --ids), the I/O tie runs on every run of the
     advice profile: token is a negative it alone refuses, by content at exactly the link-windows its changed ids fall
     in (refused elsewhere, it isn't); drop's refusal by content is listed beside its own code; the honest run must be
-    accepted for the report to be OK. Without IO-TIE the report isn't OK and says why, and token isn't refused.
-    `negatives.tie_run` is stubbed: NEG's suite runs it on certifier-serve's varied runs."""
+    accepted for the report to be OK. Without `io_tie` the report isn't OK and says why, and token isn't refused.
+    `negatives.tie_run` is stubbed: `negatives.suite` runs it on certifier-serve's varied runs."""
     NG = chain.NG
     runs = _varied(tmp_path / "varied", virtual, {"honest": "accepted", "late": "refused", "extra": "refused",
                                                   "drop": "refused", "token": "accepted"})
@@ -893,7 +893,7 @@ def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_i
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
     assert r["ok"] is True, r["why_not"]
     assert seen == [{"q0": [5, 6], "q1": [9]}] * 5 and r["pending"] == {}
-    assert "the I/O tie (IO-TIE's reference in the clear, on stand-ins)" in r["ran"]
+    assert "the I/O tie (`io_tie`'s reference in the clear, on stand-ins)" in r["ran"]
     token, drop = r["negatives"]["token"], r["negatives"]["drop"]
     assert token["refused"] is True and token["by"] == [
         "the I/O tie (IoTieWindow.content at link-windows [1], the link-windows its changed ids fall in)"]
@@ -905,8 +905,8 @@ def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_i
     assert "## I/O tie" in md and "| token | refused | True | `IoTieWindow.content` | 1: content | [1] | 2 |" in md
     assert "| honest | accepted | True | — | — | — | 2 | 3 | 3 | 0 | 3/3 | — |" in md
     assert "- **token**: refused by the I/O tie (IoTieWindow.content at link-windows [1]" in md
-    assert any(x.startswith("I/O tie: IO-TIE's reference in the clear on NEG's stand-ins") and str(tmp_path) in x
-               for x in r["stubbed"])
+    assert any(x.startswith("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins")
+               and str(tmp_path) in x for x in r["stubbed"])
 
     ties.update(_ties(token={"failing": {0: ["content"]}}))
     r = e2e.run(_args(runs, tmp_path / "out2", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)

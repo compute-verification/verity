@@ -11,7 +11,7 @@ first differ.  A chunk is its own window: an earlier chunk's rows read V scaled 
 whole prompt, so the two serves are equal only where that changes no greedy token.
 
     cd integrations/vllm; . ../../benchmarks/harness/env.sh
-    $VENV/bin/python -m tests.engine.int8_chunked_gpu --mnbt 64 --out DIR --at 2026-10-17T00:00:00Z --by LANE
+    $VENV/bin/python -m tests.engine.int8_chunked_gpu --mnbt 64 --out DIR --at ISO_TIME --by LANE
     $VENV/bin/python -m tests.engine.int8_chunked_gpu --compare DIR/int8_chunked_64.json DIR/int8_chunked_2048.json --out DIR
 """
 from __future__ import annotations

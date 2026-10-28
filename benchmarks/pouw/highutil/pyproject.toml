@@ -1,4 +1,4 @@
-# HIGHUTIL's period (period.py) over V31-GPU's prover (benchmarks/pouw/accel_v31). Not a package: the tests run here as a
+# HIGHUTIL's period (period.py) over accel_v31's prover (benchmarks/pouw/accel_v31). Not a package: the tests run here as a
 # suite (`uv run tools/verity/check/suites.py benchmarks/pouw/highutil`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]

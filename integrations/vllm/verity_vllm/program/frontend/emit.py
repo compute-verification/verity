@@ -8,7 +8,7 @@ sequences -- nothing is asserted by rule name, and no model or family name appea
 through `Ctx.call` is covered by the explicit fx node it passes; a rule that emits through the Builder directly is covered by the
 node the translation loop was at when the Builder grew (`Ctx.note_emitted`).
 
-What the frontend can NOT populate here (and where it would come from) is stated in the lane report, not guessed at: kernel
+What the frontend can NOT populate here (and where it would come from) is not guessed at: kernel
 launch identity / grid (the runtime observation), physical addresses (the acquisition), the peer rank's own Call ids (the peer
 Program's correspondence).
 """
