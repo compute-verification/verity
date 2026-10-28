@@ -64,7 +64,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    (k the certifier's `pouw_window`; any other run of windows is refused), registered under a stream (its 64-byte
    digest) and a prover (its 64-byte registered id), and its salt is `pouw_salt(reveal, p, stream, prover)`, 64 bytes,
    from the certifier's 512-bit salt for p. The verifier reads that salt with `salt.revealed`: the certifier's
-   `reveal(p, registration)`, which fails closed unless the proof system registered p (PoUW's reader, `salt.registered`,
+   `reveal(p, registration)`, which fails closed unless the proof service registered p (PoUW's reader, `salt.registered`,
    reads p off the served window's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
    published. `pouw_salt` is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part
    fixed-width, the tag keeping its input apart from `window_salt`'s: two registrations of p under another stream or
@@ -129,7 +129,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    window states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
    parameters without it, and refuses as `late-registration` a window received after the epoch's draw coin was released
    (each root's receipt comes before the coin's release). The deadline is in seconds on the
-   challenger's clock, and the proof system refuses a later registration, or one before the salt, as
+   challenger's clock, and the proof service refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
 5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
@@ -221,7 +221,7 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
 
-**Live coins** come from the proof system's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
+**Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
 record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
 uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
 family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole
@@ -873,7 +873,7 @@ useful    U/(α_A·α_B), glue
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
 - **Hashing format -h3** (`pearl-c-sm120-v1-h3`, `serving.HASH_FORMATS["h3"]`: tree hash `audit.HM96`, `seed_a="row"`,
   `row_cap=True`, `row_digest="sha512/row-seg/v1"`) is SHA-512 throughout, with E_A seeded per row. It is the one hash
-  format besides h0 (Daniel, 2026-10-06: one hash, SHA-512, as the proof system's row commitments; its cost accepted), so
+  format besides h0 (Daniel, 2026-10-06: one hash, SHA-512, as the proof service's row commitments; its cost accepted), so
   the scheme assumes SHA-512's collision resistance (`cr/sha-512`). The BLAKE3 formats -h1, -h2 and BLAKE3 -h3, with
   their vectors and kernels, were deleted with the archive in `2091252fe3`.
   - Labels: H_ℓ(x) = `pearl_c.s512`(ℓ, x), the first 32 bytes of SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to 128 bytes ‖

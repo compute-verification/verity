@@ -92,7 +92,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`).
-- `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`sampled_proofs.challenger`, in
+- `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
   process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`).

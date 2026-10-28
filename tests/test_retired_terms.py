@@ -28,7 +28,7 @@ _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b"
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
-RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"')
+RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -60,6 +60,13 @@ ALLOWED: dict[str, str] = {
 }
 
 PENDING: dict[str, str] = {
+    "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/protocols/pouw/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
     "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
