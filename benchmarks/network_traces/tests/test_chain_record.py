@@ -431,7 +431,9 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
 
 
 def test_the_draws_bound_is_the_profiles_count_bound():
-    bound = lambda n, k: cr.eps_at_delta(n, k, "subset")["wrong_units_at_delta"]
+    def bound(n, k):
+        return cr.eps_at_delta(n, k, "subset")["wrong_units_at_delta"]
+
     assert bound(26, 26) == {"0.5": 0, "9.54e-07": 0}
     assert bound(256, 64)["0.5"] == 2 and bound(256, 2)["0.5"] == 74
     # miss(1) = C(3, 2) / C(4, 2) is δ exactly: one wrong unit is counted, as Lean's countBound counts it
