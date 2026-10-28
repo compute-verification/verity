@@ -4,7 +4,7 @@ An unsalted leaf digest such as vllm-v1's position leaf or frame-v3's `sha256/ro
 holding the digest can search a low-entropy value, for example a token id, however zero-knowledge the proof over it is. The hm96 leaf
 rules wrap a SHA-256 or SHA-512 leaf digest so that the published data hides the value, statistically given uniform salts (section 3;
 with the pinned key the bound holds except for a 2^-64 fraction of keys). Binding rests on the collision resistance of the one hash
-alone. `hm96-sha512/v1` is the rule for SHA-512 data commitments (Daniel, 2026-09-26: SHA-512 on every commitment path); both
+alone. `hm96-sha512/v1` is the rule for SHA-512 data commitments (SHA-512 on every commitment path); both
 instances have the same hiding bound.
 
 - **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `HidingLayout`, one leaf
@@ -64,7 +64,7 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
   `(M·y)_i = ⊕_j k_{i+j} y_j`.
 - **The family is universal.** For a nonzero d, the map `key ↦ M·d` is linear, with rows `d ≪ i` for `i < n`. Those rows are
   independent, so `M·d` is uniform over n bits when the key is. For `y ≠ y'`, `Pr[M·y = M·y'] = 2^-n`.
-- **The key is fixed and public** (Daniel, 2026-09-26). Each instance's configured key is its pinned key (section 2a), a circuit
+- **The key is fixed and public.** Each instance's configured key is its pinned key (section 2a), a circuit
   constant that fixes a gadget's XOR network. `fresh_key` draws a uniform key, which is the theorem's setting; it exists for tests.
 - **The key is bound.** Every leaf binds `H(key)` through its prefix, and `scheme_digest(key)` names the configured rule for a root
   binding or statement. The verifier takes the key from its own statement, never from an opening. A key chosen after commitment
@@ -175,7 +175,7 @@ leaf with the key the circuit used.
 
 ## 6. Cost per row
 
-These are analytic, one row of R bytes per leaf, against today's keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`):
+These are analytic, one row of R bytes per leaf, against the archived keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`), for comparison:
 - *stored* is the salt bytes kept beside the row;
 - the *ANDs* are in-circuit, over the block-aligned row digest (`sha256/row/v1` or `sha512/row/v1`; a bit row of R bytes costs the
   same).
@@ -207,7 +207,7 @@ A proof's own Merkle trees, such as Flock's Ligerito column trees, hide their un
 - the key is the instance's pinned key, fixed before the root;
 - the leaf is `tree_leaf`.
 
-Opening a column reveals the column and its salt. Lane flock-circuit's `flock-leaf/hm96-sha256` reserves exactly `hm96-sha256/v1`'s
+Opening a column reveals the column and its salt. `flock-leaf/hm96-sha256` reserves exactly `hm96-sha256/v1`'s
 sizes: a 128-byte salt and a 160-byte key. `hm96-sha512/v1` needs 192 and 256. Salts from the prover's seeded stream, like the
 operating system's, are modelled as uniform, so the leaves hide statistically given uniform salts (section 3). The key is fixed
 before the root and is never a witness (section 5).
