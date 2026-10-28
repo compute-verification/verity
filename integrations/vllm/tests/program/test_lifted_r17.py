@@ -272,13 +272,13 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
     from verity.ml.circuits import partition as PT
     TSEL = bind(b1.TokenSelect, V=64)  # 32-bit token / index arithmetic: lifted leaves are 33 bits
     P0, P1 = Program(TSEL), Program(L.lift_def(TSEL))
-    v0 = PT.validate_vu_partition(P0, f"default({L.W_MAX})", L.W_MAX)
+    v0 = PT.validate_block_partition(P0, f"default({L.W_MAX})", L.W_MAX)
     assert v0.status == "ok" and v0.width.max_seen <= 32
     # the lifted Program at the ACTIVE-REFERENCE parameter: 33-bit gates -> not ready / width violated, BY DESIGN (A4.2: nothing is split)
-    v_ref = PT.validate_vu_partition(P1, f"default({L.W_MAX})", L.W_MAX)
+    v_ref = PT.validate_block_partition(P1, f"default({L.W_MAX})", L.W_MAX)
     assert v_ref.status in ("fail", "not-ready") and not v_ref.readiness_32.ok and any(x.w == 33 for x in v_ref.readiness_32.violators)
     # the lifted Program at the LIFTED parameter with the lifted query: the same validator, admissible, real widths reported
-    v1 = PT.validate_vu_partition(P1, f"default({L.W_MAX_LIFTED})", L.W_MAX_LIFTED)
+    v1 = PT.validate_block_partition(P1, f"default({L.W_MAX_LIFTED})", L.W_MAX_LIFTED)
     assert v1.status == "ok" and v1.width.status == "ok" and v1.width.w_max == 64 and v1.readiness_32.ok
     assert v1.width.max_seen is not None and v1.width.max_seen > 32  # a true lifted width above 32 was ADMITTED, not hidden
     assert v1.width.max_seen == v0.width.max_seen + (v1.width.max_seen - v0.width.max_seen) and v1.width.max_seen <= 2 * v0.width.max_seen
@@ -333,7 +333,7 @@ def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_
     TSEL = bind(b1.TokenSelect, V=64)
     P1 = Program(L.lift_def(TSEL))
     q = f"default({L.W_MAX_LIFTED})"
-    v1 = PT.validate_vu_partition(P1, q, L.W_MAX_LIFTED)
+    v1 = PT.validate_block_partition(P1, q, L.W_MAX_LIFTED)
     qdoc, use = lifted_records.lifted_vu_use_document(q, P1, v1)
     assert use["schema"] == "verity-ir/query-use/v1" and use["use"]["kind"] == L.USE_KIND_LIFTED == "vu-partition-lifted"
     assert use["use"]["w_max"] == 64 and use["use"]["rules_version"] == "lifted-v1" and use["use"]["w_max_active_reference"] == 32
