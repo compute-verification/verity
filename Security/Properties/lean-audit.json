@@ -13948,13 +13948,13 @@
    ]
   },
   "PouwWindow.Public": {
-   "digest": "ea7e313373c42013b12e9788e9500f0c3939278c940e697d93098b04b565c04a",
+   "digest": "07e222c7b1c8fd6731d63341281169c5e55f9bca2926843ea4da844894f4e509",
    "definitions": {
     "PouwWindow.PublicItem": "69e07e7940f3c15848721f22dd6c73ec562657c37f8528bbd80fc0d80eb318a1",
     "PouwWindow.PublicItem.item": "46dc234e6fc0f30b3cf4cafc12b26947ed8de5c0cf3440ae8a652441031c2e23",
     "PouwWindow.PublicItem.kind": "8c89285f8e1e4767f57fa6b6b8c299712d5a31b34d06f6e657036fa04c924af6",
     "PouwWindow.PublicItem.source": "f4d4ccf1e7df54b028aa9d10d7cadd796e6773be6bcf16aa8ae64862ad504e7f",
-    "PouwWindow.legacyRegistered": "27e6f0ad6e4f7449aa6744f466eb0889e37e7df6c0eabfa93bca8cd3df37d792",
+    "PouwWindow.legacyRegistered": "283147c1c56c6d9d1ad24674e32b1b74d987e8059db10e46bfe6ee934604794a",
     "PouwWindow.publicItems": "2309b1552496e952eddf49c80bbe8c9da0b5f36695788c649b53484c7524589e",
     "PouwWindow.registered": "679c6eb48d59b5fe15606c0ea0e2df4b0585d157d32baecc61cd8c08d63172bf"
    },
