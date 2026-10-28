@@ -41,7 +41,7 @@ RULE = "stratified:1"
 OF = {"fixture": "integrations/vllm/tests/pipeline/test_serving_rows_splits.py", "row": TS.row()}
 
 
-def commit(out: Path) -> CS.Window:
+def commit(out: Path) -> CS.Binding:
     """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
     s = TS.Served()
     w = replace(TS.window(s, law=D.parse_law(RULE)), run=f"{ROOT}/rank0")
