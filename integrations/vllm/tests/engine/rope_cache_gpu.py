@@ -22,6 +22,7 @@ TB/s, and the saving per forward.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import math
 import os
@@ -39,14 +40,18 @@ STOCK_BYTES = {"rope": 2 * (H + KVH) * D * 2, "cache": 2 * 2 * KVH * D * 2}
 
 
 def nvml():
+    """The leased GPU's SM clock in MHz, read through NVML, or None for every reading when NVML isn't there."""
     try:
         import pynvml
+    except ImportError:
+        return lambda: None
+    try:
         pynvml.nvmlInit()
         uuid = os.environ.get("GPU_LEASE_UUID")
         h = pynvml.nvmlDeviceGetHandleByUUID(uuid) if uuid else pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
-        return lambda: pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)
-    except Exception:  # noqa: BLE001
+    except pynvml.NVMLError:
         return lambda: None
+    return lambda: pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)
 
 
 def bits(t: torch.Tensor) -> torch.Tensor:
@@ -175,7 +180,7 @@ def main() -> int:
     ap.add_argument("--sweep-seconds", type=float, default=0.3)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
-    import vllm._custom_ops  # noqa: F401  (registers torch.ops._C and torch.ops._C_cache_ops)
+    importlib.import_module("vllm._custom_ops")  # registers torch.ops._C and torch.ops._C_cache_ops
     from verity_vllm.engine import rope_cache as R
     clock = nvml()
     dev = torch.cuda.get_device_properties(0)
