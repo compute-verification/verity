@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from math import ceil, log2
 
 from verity.core.protocols.sampled_proofs.costfit import Observation
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ I = {
 #: ANDs of the pieces (their pins and hm96 PROTOCOL §5)
 S8_STEP = 4_190
 EPILOGUE = 5_000
-SHA512 = 58_120
+SHA512 = SHA512_ANDS
 HM96 = 116_240
 
 
