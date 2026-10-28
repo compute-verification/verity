@@ -697,14 +697,14 @@ def test_arms():
     v1, idle = A.load("fill-v1"), A.load("idle")
     assert A.placed(idle, "decode", 32, 2048) == A.NONE
     assert A.placed(v1, "prefill", 8192, 0) == A.NONE
-    assert A.placed(v1, "decode", 1, 2048) == A.Placement("split", 108)
+    assert A.placed(v1, "decode", 1, 2048) == A.Colocation("split", 108)
     assert A.placed(v1, "decode", 32, 2048).fill_sms == 92  # FILL's rule: (32, 1K), the longest L ≤ 2K at B 32
     assert A.placed(v1, "decode", 144, 5120).fill_sms == 60
     assert A.placed(v1, "decode", 8, 16384).fill_sms == 124  # B 32's longest L ≤ 16K: (32, 8K)
     assert S.honesty(v1, all_points(), S.points())["ok"]
     assert not S.honesty(v1, all_points(), S.points(), has_filler=True)["ok"]  # no positive control
     with pytest.raises(A.ArmError):
-        A.Placement("split", 0)
+        A.Colocation("split", 0)
     with pytest.raises(A.ArmError):
         A.load("no-such-arm")
 
