@@ -8,7 +8,7 @@ compare digests (`verity_vllm.query.manifest.verify.verify`); write the `verity-
     verity-vllm manifest-verify --manifest D/manifest.json --out D/commit/manifest_verify.json \\
         --fixture workloads/<row>.json --programs-root D [--workload-digest WD]                     # B>=2
 
-Exit 0 iff the record's `ok`.  A verify FAIL is a Commit FAIL (EXEC-05: `required_value_coverage/manifest_of_record_verified` in
+Exit 0 iff the record's `ok`.  A verify FAIL is a Commit FAIL (`required_value_coverage/manifest_of_record_verified` in
 verdict.json), never a footnote.
 """
 from __future__ import annotations

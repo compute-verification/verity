@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.KernelWrefGamma
 import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 
 /-!
-# γ under the chain-only reading, against the honest kernel's `W_ref` (the price-twins lane's file; staged)
+# γ under the chain-only reading, against the honest kernel's `W_ref` (staged)
 
 * **The chain-only TT_OUT is weaker** (`ttOutPearlCDevChainOnly_of_ttOut`, `ttOutPearlCDevRev1ChainOnly_of_ttOut`, and
   per tile `ttOutTilePearlCDevChainOnly_of_ttOut`, `ttOutTilePearlCDevRev1ChainOnly_of_ttOut`): its credit is the

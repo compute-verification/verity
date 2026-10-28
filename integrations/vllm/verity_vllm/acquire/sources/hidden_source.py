@@ -29,7 +29,7 @@ from verity_vllm.engine import hooks
 KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
 CHUNK_WORDS = 64
-LEGACY_TILE = (128, 64)   # (kBlockN, head_dim) of the R9 hd-64 tap: same stream layout, names and roots as before R13
+LEGACY_TILE = (128, 64)   # (kBlockN, head_dim) of the v7 hd-64 tap: v8 keeps its stream layout, names and roots
 
 
 def fa2_kblock_n(head_dim: int, num_splits: int) -> int:
@@ -140,8 +140,8 @@ class HiddenM1Source:
         if self.mode != 3:
             raise RuntimeError(f"{ns}: compiled tap mode {self.mode} != 3 (M1)")
         self.tapped_op = self.ns.varlen_fwd
-        # R13 fa2 v8: head-dim-portable build exposes verity_set_tap_v8 (declares (kBlockN, head_dim)) and verity_tap_hdims (compiled hd mask);
-        # the R9 build has neither and covers hd 64 only.
+        # the head-dim-portable v8 build exposes verity_set_tap_v8 (declares (kBlockN, head_dim)) and verity_tap_hdims (compiled hd mask);
+        # the v7 build has neither and covers hd 64 only.
         self.v8 = hasattr(self.ns, "verity_set_tap_v8")
         self.hdims = int(self.ns.verity_tap_hdims()) if self.v8 else (1 << 2)
         self.installed_ns = getattr(torch.ops, self.INSTALLED_NS)
@@ -187,7 +187,7 @@ class HiddenM1Source:
             raise RuntimeError(f"fa2 tap {self.ns_name}: head_dim {head_dim} not compiled (hdims {self.stats['hdims']}); rebuild with pod_fa2_tap.sh")
         BN = fa2_kblock_n(head_dim, num_splits)
         if not self.v8 and (BN, head_dim) != LEGACY_TILE:
-            raise RuntimeError(f"fa2 tap {self.ns_name}: R9 (v7) build declares the hd-64 layout only; tile ({BN}, {head_dim}) needs the v8 build")
+            raise RuntimeError(f"fa2 tap {self.ns_name}: the v7 build declares the hd-64 layout only; tile ({BN}, {head_dim}) needs the v8 build")
         return BN, head_dim
 
     def arm(self, buf, HB: int, M: int, NB: int, BN: int, D: int, tag: int) -> None:
@@ -508,7 +508,7 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
                        manifest=None):
     """The M1 source matching the tap build at `so_path` (an FA3 v9 build exposes `verity_set_tap_v9`; FA2 v7/v8 builds `verity_set_tap`).
     Refuses a tap of the other attention implementation than the engine's `flash_attn_version` (when given): the FA2 tap loaded under
-    FA3 never fires (F-hw-08) -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
+    FA3 never fires -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
     required-value `manifest`, also refuses a build whose ROW word 3 or MS class is not the manifest's (`require_row3`)."""
     import torch
 

@@ -37,7 +37,7 @@ finder's declared cost, so no choice of finder lowers it. The constant forms sta
 because the floors of `Definitions.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover beside
 them are proved from these.
 
-**At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
+**At call scope under J10-R**. J10-R draws H1's noise once a call, so a call's rows and
 columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
 (`Definitions.Pouw.RelativeSecurityJ10R`). Each premise above has a mirror on that call design, where a stage is a
 call and its run one straight-line program over the call's bits: `ServiceSoundStagedJ10R` and its per-prover form,

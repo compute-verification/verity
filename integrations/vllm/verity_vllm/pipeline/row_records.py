@@ -157,9 +157,9 @@ def manifest_timeout(components: int) -> int:
 
 
 def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes: int | None = None, folds: int = 0) -> dict[str, Any]:
-    """The fold Match's sizing for ranks of request `shapes` in `mem_bytes` (default the headroom): a GM-01 leg's and a fold's planned
-    peak, as many ranks' compare and GM-01 legs at once as hold beside `folds` folds (at least one), then as many folds as the rest
-    holds unless `folds` is given (each 1..`world`), whether one of each fits at all, and one leg's limit in seconds."""
+    """The fold Match's sizing for ranks of request `shapes` in `mem_bytes` (default the headroom): a GM-01 stage's and a fold's planned
+    peak, as many ranks' compare and GM-01 stages at once as hold beside `folds` folds (at least one), then as many folds as the rest
+    holds unless `folds` is given (each 1..`world`), whether one of each fits at all, and one stage's limit in seconds."""
     mem = _memory_headroom() if mem_bytes is None else mem_bytes
     s = sum(derive_bytes(sh[0], sh[1], layers) for sh in shapes)
     gm, fold = int(FOLD_GM_SUM_RATIO * s), int(FOLD_SUM_RATIO * s)
@@ -170,8 +170,8 @@ def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes:
 
 
 def fold_phase_s(leg_s: int, world: int, rank_workers: int, fold_workers: int) -> int:
-    """`tp-fold-match`'s limit: every rank's fold in rounds of `fold_workers`, then its compare and GM-01 legs in rounds of
-    `rank_workers`, then the cross-rank leg (four legs when every rank runs at once)."""
+    """`tp-fold-match`'s limit: every rank's fold in rounds of `fold_workers`, then its compare and GM-01 stages in rounds of
+    `rank_workers`, then the cross-rank check (four stages when every rank runs at once)."""
     return leg_s * (-(-world // fold_workers) + 2 * -(-world // rank_workers) + 1)
 
 
@@ -762,7 +762,7 @@ def tp_fold_line(m: str) -> str:
 
 
 def tp_match_summary(m: str, rc_cap: int, rc_ctl: int, rc_chk: int, rc_fold: int, ok: str, prof: str) -> None:
-    """``match_summary.json`` beside ``m``: the collective-level check and the fold Match's legs."""
+    """``match_summary.json`` beside ``m``: the collective-level check and the fold Match's stages."""
     tm = json.load(open(f"{m}/tp2_match.json")) if os.path.exists(f"{m}/tp2_match.json") else {}
     fm = json.load(open(f"{m}/fold_match/tp2_fold_match.json")) if os.path.exists(f"{m}/fold_match/tp2_fold_match.json") else None
     json.dump({"pass": ok == "PASS", "level": "fold (D90 per-rank fold Match + collective-level)" if prof else "collective-level (tp.match check; no TP rank profile)",
