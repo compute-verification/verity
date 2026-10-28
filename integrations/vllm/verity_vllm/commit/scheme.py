@@ -1,6 +1,10 @@
-"""The commitment scheme of the Commit path: ``vllm-v1`` (:mod:`verity.ml.commitments.vllm_v1`, spec ``PROTOCOL.md`` beside it).
+"""The ``vllm-v1`` commitment scheme (:mod:`verity.ml.commitments.vllm_v1`, spec ``PROTOCOL.md`` beside it), by name.
 
-Every leaf and root rule the integration hashes comes from here.  Headers, root bindings, tags and the tree walk are core's.
+The Commit commits under ``rows-sha512`` (`commit.step_rows`: hiding hm96-sha512 rows in frame-v3-sha512 trees), which
+restates vllm-v1's root bindings under SHA-512 and reads nothing here.  ``vllm-v1`` is SHA-256, and its leaves hash a value's
+bytes with no salt, so they don't hide it; it is the scheme of a collector other than the windowed one and of an old record
+a Commit commits again (`pipeline.commit.scheme_refusal`).  Every vllm-v1 leaf and root rule the integration hashes comes
+from here.  Headers, root bindings, tags and the tree walk are core's.
 The two rules that run once per leaf keep a prefix-once form over core's tags -- the position leaf (one hash per
 ``chunk``-byte piece) and the level fold -- and take a hashlib-shaped ``new`` so a benchmark can swap the hash; under
 SHA-256 they are core's bytes.  ``tests/commit/test_production_vectors.py`` pins this module to core's conformance vectors
