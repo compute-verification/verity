@@ -213,7 +213,7 @@ REFERENCE_CPU_F32 = Vocabulary(
 from verity.ml.definitions.registry import b1_tp2 as TP2
 from verity.ml.definitions.registry import pad_prims as PP
 from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import sampling as _sampling  # [R15 stoch]
+from verity.ml.definitions.registry import sampling as _sampling
 from verity.ml.definitions.registry import sampling_vocab
 from verity.ml.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
 from verity.ml.definitions.registry import layer_norm as _LN
@@ -255,7 +255,7 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
     })
 
 
-# -- the generic elementwise / activation / softcap kinds [R13 dense2 head-to-head; R15 dense F-dense-05]: the operations vLLM runs
+# -- the generic elementwise / activation / softcap kinds: the operations vLLM runs
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
@@ -356,8 +356,8 @@ def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
 # -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
-# TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
-# this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
+# the v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
+# this head dim). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
 
@@ -368,7 +368,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # `_C.silu_and_mul` as `SiluMul_v2` (registry.act): `SiluMul_v1` on every word but the red-team's edge words (expf's overflow,
            # up = -0, gate -inf / -0, NaN 0x7FFF); the older vocabularies keep `SiluMul_v1`
            "silu_mul": lambda I: ir_bind(_act.SiluMul, I=I),
-           # [R13 hopper] the target-keyed variants (`verity_vllm.program.frontend.targets`): the same bodies with the k16 tensor-core step and (for
+           # the target-keyed variants (`verity_vllm.program.frontend.targets`): the same bodies with the k16 tensor-core step and (for
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
@@ -386,9 +386,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                if FA2_MASKED_FROM is not None
                else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
-           # [R13 X-08] `scale_tensor` (generic bf16 row x 0-d bf16 tensor) and [R15 dense] the other op-shaped elementwise / activation /
+           # `scale_tensor` (generic bf16 row x 0-d bf16 tensor) and the other op-shaped elementwise / activation /
            # softcap kinds come from `_dense_kinds()` above (promoted from quarantine.dense; Gemma-2's ops were the first instances)
-           # [R13 MOE-01] the vLLM fused-MoE block as four kinds (`registry.moe`, promoted from quarantine.ov_moe): the router's f32 softmax +
+           # the vLLM fused-MoE block as four kinds (`registry.moe`, promoted from quarantine.ov_moe): the router's f32 softmax +
            # TOPK-round argmax per token row; the pair-major expert GEMMs with the expert index as an I32 VALUE operand (up: plain; down: the
            # routed weight multiplied into the f32 accumulator); the routed sum over a token's TOPK slots. `rules/vllm_moe.py` asks for them.
            "moe_router_topk": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=VPT),
@@ -409,17 +409,17 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # and w2-input quant (`_C.silu_and_mul_per_block_quant`): `rules/vllm_moe_router.py`, `rules/vllm_moe_fp8.py`
            "moe_router_sigmoid_bias": lambda E, TOPK, RSF, KERNEL: ir_bind(_moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL=KERNEL),
            "silu_mul_fp8_block_quant": lambda I, G: _silu_mul_fp8_block_quant(I, G),
-           # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
+           # the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
            # outputs selected by the router ids, `MoeSum_v1`); its lift of record is the hand-authored `LMoeFfnL_v1` (unselected slots DISABLED).
            # `rules/vllm_moe.py`'s padded rules ask for it at `_moe_C.moe_sum` (the block's last kernel); the registry is imported lazily.
            "moe_ffn_fixed": lambda E, TOPK, VPT, H, I: _moe_ffn_fixed(E, TOPK, VPT, H, I),
-           # [R13 tp, P4] tensor-parallel collectives (registry.b1_tp2; exact-model-tested B1 TP2, re-confirmed on Llama TP2 by the step-1 probe):
+           # tensor-parallel collectives (registry.b1_tp2; exact-model-tested B1 TP2, re-confirmed on Llama TP2 by the step-1 probe):
            # world size 2 — `AllReduce2` is one Bf16Add per element (order-free for two ranks), `AllGather2` a concatenation, `EmbeddingShard` one
            # rank's masked vocab-shard gather.  A TP>2 world needs an `AllReduceN` whose NCCL tree order is part of the Definition.
            "all_reduce2": lambda N: ir_bind(TP2.AllReduce2, N=N),
            "all_gather2": lambda N: ir_bind(TP2.AllGather2, N=N),
-           # [lane vllm-tp-n] the WORLD-parametric families for a world > 2 (identities `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`; world 2
+           # the WORLD-parametric families for a world > 2 (identities `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`; world 2
            # keeps the `*2` identities above -- `b1_tp2.all_reduce(world, N)` is the selector)
            "all_reduce": lambda WORLD, N: ir_bind(TP2.AllReduce, WORLD=WORLD, N=N),
            "all_reduce_mnnvl": lambda WORLD, N, SHOT: ir_bind(_tp_allreduce.AllReduceMnnvl, WORLD=WORLD, N=N, SHOT=SHOT),
@@ -433,16 +433,16 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
            "embedding_shard": lambda VS, H, START: ir_bind(TP2.EmbeddingShard, VS=VS, H=H, START=START),
-           # [R15 stoch] the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
+           # the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
            # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
-           # temperature, top_p and [R16, coord M-0169] the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
+           # temperature, top_p and the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
            # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
            # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
            "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
            # the same select at a constant split count S (the registered S): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
-           # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
+           # the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
@@ -696,7 +696,7 @@ def profile_records(vocab: Vocabulary) -> dict | None:
 
 # -- profile "dense2-eager-v1" (Gemma-2 head-to-head): b1-eager-v3 + the generic elementwise / activation / softcap
 # kinds the eager `gen_dense2_gemma2_2b` profile binds. Those kinds are now part of `b1-eager-v3` itself (`_dense_kinds`):
-# this name is kept for the R13 head-to-head artifacts and binds exactly the same kinds. --------------------------------------------
+# this name is kept for the head-to-head artifacts and binds exactly the same kinds. --------------------------------------------
 PROFILE_DENSE2_EAGER_V1 = Vocabulary("dense2-eager-v1", "profile", "dense2-eager-v1",
                                      kinds=dict(PROFILE_B1_EAGER_V3.kinds), notes=dict(PROFILE_B1_EAGER_V3.notes))
 

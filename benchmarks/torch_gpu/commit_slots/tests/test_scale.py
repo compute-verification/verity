@@ -95,7 +95,7 @@ def test_planning_is_linear_in_the_units() -> None:
 @pytest.mark.slow
 def test_a_host_plan_of_over_six_million_units() -> None:
     """A host Plan at the families map's size: 52 layers of 117,400 units (117,000 one-row, 400 two-row), 6,104,800 units and
-    6,125,600 rows a slot. Takes about 20 s and 2.3 GB on vy-nebius-cpu-4 (the leaf tables are 224 bytes a row); before the
+    6,125,600 rows a slot. Takes about 20 s and 2.3 GB on a CPU node (the leaf tables are 224 bytes a row); before the
     layout digest was cached, planning was quadratic in the units and this never finished. What it catches that
     test_planning_is_linear_in_the_units can't: a linear but slow step a unit (a Python object or call a row) at full size."""
     layout = families_like(52, coords=117_000, chunks=400)
