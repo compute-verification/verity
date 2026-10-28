@@ -1116,8 +1116,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         raise SystemExit(3) from None
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
-    if _sid_out is not None:   # native_host._gpu_ext_load writes its import-site document beside this one
-        settings.put("VERITY_SOURCE_IDENTITY_DIR", str(Path(args.out)))
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     if _HOT is not None:
         _unsafe = hot_unsafe_reasons(args)
