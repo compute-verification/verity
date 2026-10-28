@@ -784,6 +784,22 @@ def test_a_pr_holding_an_older_head_of_a_pr_not_admitted_at_its_current_head_wai
     assert [m.pr for m in q.sync()[0]] == [5, 7]
 
 
+def test_an_older_head_two_prs_were_seen_at_is_carried_by_the_marked_one(world):
+    """#6 was opened on #5's branch at its head `old`; both move on, #5 marked and #6 not.  #7, branched at `old`, holds
+    commits #5's marked head covers, so it goes after #5 and waits for nothing of #6's."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(6, old, ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
+    q = world.queue()
+    q.sync()                                                                    # the queue sees #5 and #6 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old))               # #5 moves on from `old`, marked
+    world.gh.put(6, world.change({"s.txt": "soundness\n"}, base=old), ready=False)
+    members, entries = q.sync()
+    assert entries[7].after == entries[7].older == (5,), entries[7].why
+    assert [m.pr for m in members] == [5, 7]
+
+
 def _merge(world: World, into: str, other: str) -> str:
     """A merge commit of ``other`` into ``into`` (first parent ``into``)."""
     _git(world.dev, "checkout", "-q", "--detach", into)
