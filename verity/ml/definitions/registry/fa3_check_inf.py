@@ -19,6 +19,11 @@ units of their own (Llama-3.2-1B's head on sm_90 is a 64-dim row over kBlockN 19
 record's 1,087 keys).  v4's first iteration, `AttnBlock_v4{FIRST=True, CHECK=True}`, is FA2's word for word (both guard the running max
 before `max * scale`, and a first block has no rescale), so it is `AttnBlockFirst_v1`, which pads only what it reads; v4's epilogue is
 `AttnHeadEnd_v1`'s.
+
+`AttnBlockSoftmax_v2` is `fa2_check_inf.AttnBlockSoftmax_v1` under v4's guard: a key block below the first cut into its softmax step
+and its P·V groups (`AttnBlockPv_v1`, v4's P·V being v5's), word for word `AttnBlock_v4{FIRST=False}`.  `AttentionHead_v22{..., VS, PK}`
+and `Attention_v22` are v4 with each key block so cut, a Call a step (`dead_free.cut_head`, as `dead_free`'s v21 is FA2's v18): with
+its Calls written in place v22 is v20's circuit node for node.
 """
 from __future__ import annotations
 
@@ -29,7 +34,7 @@ from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.definitions.registry import fa2_check_inf as F2, prims as P
 from verity.ml.definitions.registry.b1 import ZERO16, _lane, scale_log2_bits
-from verity.ml.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
+from verity.ml.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1, cut_head, cut_refuse
 from verity.ml.definitions.registry.prims import A16, BF16, F32
 
 
@@ -175,6 +180,38 @@ def AttentionV20(B, S, q, kc, vc):
     return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV20, ())
 
 
+@composite("AttnBlockSoftmax", 2, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK", "LAST"], F2._softmax_type,
+           conformance="not-yet-established: AttnBlock_v4's steps up to P", refuse=F2._softmax_refuse)
+def AttnBlockSoftmaxV2(B, S, q, k, *state):
+    """`AttnBlockSoftmax_v1` under `AttnBlock_v4`'s guard: FA3's `Check_inf`, CHECK guarding the running max before both the
+    rescale and `max * scale`, LAST likewise returning no running max.  Its P groups are `AttnBlockPv_v1`'s, as v4's P·V is
+    v5's."""
+    return F2.softmax_steps(B, S, q, k, state, guard_max_scaled_only=False)
+
+
+@composite("AttentionHead", 22, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM", "VS", "PK"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
+                      Array(S.D, BF16)),
+           conformance="not-yet-established: AttentionHead_v4's function", refuse=cut_refuse)
+def AttentionHeadV22(B, S, q, k, v):
+    """`AttentionHead_v4{T, D, BN, DOT, INV, MASKED_FROM}` with each key block a Call of its softmax step and Calls of its
+    `AttnBlockPv_v1` groups (`dead_free.cut_head`): the first visited block `AttnBlockSoftmax_v1{FIRST, CHECK}` (v4's first
+    iteration is FA2's word for word), each block below it `AttnBlockSoftmax_v2{FIRST=False, CHECK = b >= MASKED_FROM}`."""
+    return cut_head(B, S, q, k, v, AttnBlockSoftmaxV2, "AttentionHead_v22")
+
+
+@composite("Attention", 22, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM", "VS", "PK"],
+           lambda S: ((("q", Array(S.NH, Array(S.D, BF16))),
+                       ("kc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))),
+                       ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
+                      Array(S.NH, Array(S.D, BF16))),
+           conformance="not-yet-established: Attention_v4's function", refuse=cut_refuse)
+def AttentionV22(B, S, q, kc, vc):
+    """`Attention_v4{T, NH, KVH, D, BN, DOT, INV, MASKED_FROM}` over `AttentionHead_v22{..., VS, PK}`."""
+    return F2._check_inf_attention(B, S, q, kc, vc, bind(AttentionHeadV22, VS=S.VS, PK=S.PK), ())
+
+
 FA3_CHECK_INF_COMPOSITES = [AttnBlockV4, AttentionHeadV4, AttentionV4, AttentionHeadV20, AttentionV20]
 
-__all__ = ["AttnBlockV4", "AttentionHeadV4", "AttentionV4", "AttentionHeadV20", "AttentionV20", "FA3_CHECK_INF_COMPOSITES"]
+__all__ = ["AttnBlockSoftmaxV2", "AttnBlockV4", "AttentionHeadV4", "AttentionHeadV22", "AttentionV4", "AttentionHeadV20", "AttentionV20",
+           "AttentionV22", "FA3_CHECK_INF_COMPOSITES"]

@@ -2,14 +2,16 @@
 
 * TINY's census rebuilt through `split` and `window_units` is class_rows' total in the census model, and its private bodies
   are the census's bytes and a salt a row;
-* a probe of one Program projected to a class is that class's own census, unit for unit and byte for byte, at more outputs
-  and fewer lanes too (a slot's units at their Definitions' rows there), and a probe's slot unit its Definition doesn't
-  give is refused;
-* the attention at key blocks of 4 over 6 positions is the hand count, each block reading its keys' and values' rows, and
-  with a block's state in one row (`L3b`) too;
+* a probe of one Program projected to a class is that class's own census, unit for unit and byte for byte, at more outputs,
+  fewer lanes and a head's second key block too (a slot's units at their Definitions' rows there), and a probe's slot unit
+  its Definition doesn't give is refused;
+* the attention at key blocks of 4 and groups of 2 over 6 positions is the hand count, each softmax step reading its keys'
+  rows and each P·V group its values', and with a step's state in one row (`L3b`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
-  and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once Llama-3.2-1B's class circuit lowers (until its
-  readers' Definitions land, the window refuses its key blocks' values, o_proj's quantizer and a norm by name);
+  and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once every template of Llama-3.2-1B's probe has a
+  measured price: its probe lowers and quantizers `Int8RowQuant_v3` are priced as v1, but the cut's softmax steps and
+  P·V groups at a first block of fewer than 192 keys, the scan off the class of record's lanes, `SiluMul_v2` at I 2,048
+  and the norm's add parts and tail have none yet (a full key block's steps and groups are priced, `unit_ands`);
 * serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
   and ``F`` leaves out exactly those;
 * the H200's AND tables are `BS.compile`'s counts.
@@ -22,7 +24,6 @@ from pathlib import Path
 
 import pytest
 from verity_vllm.program.model import INT8_EXACT_QUANT
-from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
@@ -31,6 +32,7 @@ from verity.ml.windows import interface as IF
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import class_rows as CR
+import class_size as CS
 import window_cost as W
 
 #: integrations/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit (test_class_rows')
@@ -43,10 +45,12 @@ LLAMA_1B = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/progra
 SIZING = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/pipeline/fixtures/admission/b16.json"
 
 
-def _census(cls: WindowClass, probe: int | None = None) -> dict:
-    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
-    doc = CR.census(class_circuit(Registered.of(phi, default_seed=7), cls, probe, GRAIN, provable=False), IF)
+def _census(cls: WindowClass, probe: int | None = None, config: dict = TINY) -> dict:
+    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": config}, target={"compute_capability": [12, 0], "num_sms": 188})
+    reg = Registered.of(phi, default_seed=7)
+    doc = CR.census(class_circuit(reg, cls, probe, GRAIN, provable=False), IF)
     doc["class"] = {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions}
+    doc["key_blocks"] = CS.key_blocks(reg, cls)
     return doc
 
 
@@ -57,7 +61,7 @@ def _shapes(units):
 
 def test_tinys_census_rebuilt_is_class_rows_total_and_its_private_bodies_its_bytes_and_salts():
     doc = _census(WindowClass(2, 4, 2))
-    rest, heads = W.split(W.units_of(doc), doc["class"], "sm120")
+    rest, heads = W.split(W.units_of(doc), doc["class"], doc["key_blocks"])
     us = W.window_units(rest, heads, frozenset())
     assert sum(u.compressions(W.CENSUS) for u in us) == doc["total"]["compressions"]
     t = doc["total"]
@@ -67,11 +71,14 @@ def test_tinys_census_rebuilt_is_class_rows_total_and_its_private_bodies_its_byt
     assert sum(u.n * (u.ins + u.out) for u in us) == rows
 
 
-@pytest.mark.parametrize("to", [WindowClass(2, 4, 2), WindowClass(2, 4, 3), WindowClass(2, 4, 2, 1, 4)])
+@pytest.mark.parametrize("to", [WindowClass(2, 4, 2), WindowClass(2, 4, 3), WindowClass(2, 4, 2, 1, 4), WindowClass(1, 2, 128)])
 def test_a_probe_of_one_program_projected_to_a_class_is_that_class_census(to):
-    probe, exact = _census(WindowClass(1, 2, 2), 1), _census(to)
-    rest, heads, cls = W.project(probe, to.slots, to.prompt, to.outputs, "sm120", to.lanes, to.every)
-    rest2, heads2 = W.split(W.units_of(exact), exact["class"], "sm120")
+    """At 129 positions (TINY's rotary table lengthened to hold them) position 129's heads are two key blocks of 128, the
+    one below its first a step reading the state before it and a group reading the O before it."""
+    config = TINY | {"max_position_embeddings": 256}
+    probe, exact = _census(WindowClass(1, 2, 2), 1, config), _census(to, None, config)
+    rest, heads, cls = W.project(probe, to.slots, to.prompt, to.outputs, to.lanes, to.every)
+    rest2, heads2 = W.split(W.units_of(exact), exact["class"], exact["key_blocks"])
     assert cls == exact["class"] and heads == heads2 and _shapes(rest) == _shapes(rest2)
 
 
@@ -80,31 +87,51 @@ def test_a_probe_unit_its_definition_doesnt_give_is_refused():
     scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v2{"))
     probe["templates"][scan]["bytes"]["value"] += 2
     with pytest.raises(ValueError, match=r"ScanSlots_v2\{.*\} is not its Definition's rows at the probe's class"):
-        W.project(probe, 2, 4, 2, "sm120")
+        W.project(probe, 2, 4, 2)
+
+
+def test_a_full_key_blocks_steps_are_priced_and_a_shorter_first_blocks_refused():
+    """`unit_ands` prices a full key block's softmax step and P·V group at Llama-3.2-1B, on the H200 and sm_120 alike,
+    from `class_size.MEASURED`, and refuses a first visited block of 127 keys by name."""
+    full = "AttnBlockSoftmax_v2{D=64,NVIS=192,FIRST=false,CHECK=false,PK=96,LAST=true}"
+    group = "AttnBlockPv_v1{D=64,N=96,VS=32,FIRST=false}"
+    assert [W.unit_ands(lab, t) for lab in (full, group) for t in ("h200", "sm120")] == [7_507_753] * 2 + [3_161_472] * 2
+    with pytest.raises(ValueError, match=r"no measured ANDs or k_log for AttnBlockSoftmax_v1\{D=64,NVIS=127,FIRST=true,"):
+        W.unit_ands("AttnBlockSoftmax_v1{D=64,NVIS=127,FIRST=true,CHECK=true,PK=96,LAST=false}")
 
 
 def _heads() -> W.Heads:
-    first = W.Unit("", 1, wired=3, out=3, out_bytes=276, x=8, wired_bytes=128)
-    full = W.Unit("", 1, wired=6, out=3, out_bytes=276, x=8, wired_bytes=404)
-    end = W.Unit("AttnHeadEnd_v1{D=8}", 1, wired=2, out=1, out_bytes=128, x=3, wired_bytes=272)
-    return W.Heads(S=1, P=6, H=1, R=2, D=8, BN=4, block="AttnBlock_v5", first=first, full=full, end=end)
+    """D 8: a step's q row (16 bytes) beside its keys, its l (16 bytes) at LAST; a group's P row beside its values, its O
+    (32); the end's l and O (48 bytes), its output (16)."""
+    soft = W.Unit("", 1, wired=1, out=1, out_bytes=16, x=2, wired_bytes=16)
+    pv = W.Unit("", 1, wired=1, out=1, out_bytes=32, x=2)
+    end = W.Unit("AttnHeadEnd_v1{D=8}", 1, wired=2, out=1, out_bytes=16, x=2, wired_bytes=48)
+    return W.Heads(S=1, P=6, H=1, D=8, BN=4, PK=2, VS=4, later="AttnBlockSoftmax_v1", Rk=1, Rv=2, soft=soft, pv=pv, end=end)
 
 
-def test_the_attention_at_blocks_of_4_over_6_positions_is_the_hand_count():
-    got = {u.label: (u.n, u.wired, u.wired_bytes) for u in _heads().units()}
-    first = "AttnBlockFirst_v1{D=8,NVIS=%d,BN=4}"
-    full = "AttnBlock_v5{D=8,NVIS=4,FIRST=false,BN=4,CHECK=false}"
-    assert got == {"AttnHeadEnd_v1{D=8}": (6, 2, 272),
-                   first % 1: (2, 5, 160), first % 2: (2, 7, 192), first % 3: (1, 9, 224), first % 4: (1, 11, 256),
-                   full: (2, 14, 532)}
-    packed = {u.label: (u.out, u.wired) for u in _heads().units(packed=True)}
-    assert (packed[first % 4], packed[full], packed["AttnHeadEnd_v1{D=8}"]) == ((1, 11), (1, 12), (1, 1))
+def test_the_attention_at_blocks_of_4_and_groups_of_2_over_6_positions_is_the_hand_count():
+    """Positions 1 to 4 a block of T keys and ceil(T / 2) groups, its step LAST (an l row, no m); 5 and 6 a first visited
+    block of T - 4 (its m and l, 20 bytes) and one of 4 below it, LAST, its step reading the m, l and O before it (52 bytes)
+    and writing its l and an O, its 2 groups each reading the O before it."""
+    soft = "AttnBlockSoftmax_v1{D=8,NVIS=%d,FIRST=true,CHECK=true,PK=2,LAST=%s}"
+    below = "AttnBlockSoftmax_v1{D=8,NVIS=4,FIRST=false,CHECK=false,PK=2,LAST=true}"
+    pv = "AttnBlockPv_v1{D=8,N=%d,VS=4,FIRST=%s}"
+    got = {u.label: (u.n, u.wired, u.wired_bytes, u.out, u.out_bytes, u.x) for u in _heads().units()}
+    assert got == {"AttnHeadEnd_v1{D=8}": (6, 2, 48, 1, 16, 2),
+                   soft % (1, "true"): (1, 2, 32, 2, 18, 4), soft % (2, "true"): (1, 3, 48, 2, 20, 4),
+                   soft % (3, "true"): (1, 4, 64, 3, 22, 6), soft % (4, "true"): (1, 5, 80, 3, 24, 6),
+                   soft % (1, "false"): (1, 2, 32, 3, 22, 6), soft % (2, "false"): (1, 3, 48, 3, 24, 6),
+                   below: (2, 8, 132, 4, 56, 8),
+                   pv % (1, "true"): (2, 3, 18, 1, 32, 2), pv % (2, "true"): (4, 5, 36, 1, 32, 2),
+                   pv % (1, "false"): (1, 4, 50, 1, 32, 2), pv % (2, "false"): (5, 6, 68, 1, 32, 2)}
+    packed = {u.label: (u.out, u.wired, u.x) for u in _heads().units(packed=True)}
+    assert (packed[soft % (4, "true")], packed[below], packed["AttnHeadEnd_v1{D=8}"]) == ((3, 5, 6), (3, 7, 6), (1, 2, 2))
 
 
 @pytest.mark.parametrize("levers", [(), ("L3b",), ("W", "R"), ("L3b", "W", "R")])
 def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
     doc = _census(WindowClass(2, 4, 2))
-    rest, heads = W.split(W.units_of(doc), doc["class"], "sm120")
+    rest, heads = W.split(W.units_of(doc), doc["class"], doc["key_blocks"])
     us = W.window_units(rest, heads, frozenset(levers))
     rows = nbytes = 0
     for T in range(1, heads.P + 1):
@@ -115,14 +142,17 @@ def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(raises=Unexpressible, strict=True, reason="Llama-3.2-1B's class circuit waits on its readers' Definitions")
+@pytest.mark.xfail(raises=ValueError, strict=True, reason="Llama-3.2-1B's probe lowers, and some of its templates have no "
+                   "measured price on the H200")
 def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leaves_no_pad_pass():
     """Lowers int8 Llama-3.2-1B's probe for the H200 (about 5 s), as `class_rows.py --llama1b --int8 --probe 1,2,2`."""
     cfg = json.loads(LLAMA_1B.read_text()) | {"quantization_config": dict(INT8_EXACT_QUANT)}
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
               target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
-    probe = CR.census(class_circuit(Registered.of(phi, default_seed=7), WindowClass(1, 2, 2), 1, provable=False), IF)
+    reg = Registered.of(phi, default_seed=7)
+    probe = CR.census(class_circuit(reg, WindowClass(1, 2, 2), 1, provable=False), IF)
     probe["class"] = {"slots": 1, "prompt": 2, "outputs": 2, "positions": 3}
+    probe["key_blocks"] = CS.key_blocks(reg, WindowClass(1, 2, 2))
     doc = W.price(probe, "h200", to=(8, 1024, 64), sizing=json.loads(SIZING.read_text())["sizing"])
     assert all(0 < r["F"]["ands"] < r["all"]["ands"] for r in doc["stream"].values())
     assert "the plan + F" in W.report(doc)
@@ -164,26 +194,14 @@ def _ands(t) -> int:
 def test_the_h200s_small_and_counts_are_bs_compiles():
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.ml.definitions.registry import boolean_attention as BA
     assert _ands(bind(BG.ScaledMmS8Coordinate, K=2048, **BG.GEMM_SM90_S8)) == W.S8_COORD[2048]
     assert _ands(bind(BG.GemmCoordinate, K=2048, DOT=BG.HopperBF16WgmmaDot16)) == W.BF16_COORD[2048]
-    for nvis in (1, 17):
-        assert _ands(bind(BA.AttnBlockV9, D=64, NVIS=nvis, FIRST=True, BN=192, DOT=BG.HopperBF16WgmmaDot16,
-                          CHECK=True)) == W.FA3_FIRST[nvis - 1]
 
 
 @pytest.mark.slow
 def test_the_h200s_large_and_counts_are_bs_compiles():
-    """The quantizer at K 2,048, FA3's full blocks at 128 and 192 keys and its last first block: each 8 to 12 million ANDs,
-    tens of seconds and a few GB a compile, and their counts move apart from the small blocks' (the online softmax over a
-    block, the quantizer's row max), which the quick test can't see."""
+    """The quantizer at K 2,048: 8 million ANDs, tens of seconds and a few GB a compile, and its count moves apart from the
+    small units' (the quantizer's row max), which the quick test can't see."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.ml.definitions.registry import boolean_attention as BA
     from verity.ml.definitions.registry import boolean_int8 as X
     assert _ands(bind(X.Int8RowQuantV2, K=2048)) == W.ROW_QUANT[2048]
-    for bn, check in ((128, False), (192, True)):
-        assert _ands(bind(BA.AttnBlockV9, D=64, NVIS=bn, FIRST=False, BN=bn, DOT=BG.HopperBF16WgmmaDot16,
-                          CHECK=check)) == W.FA3_FULL[(bn, check)]
-    assert _ands(bind(BA.AttnBlockV9, D=64, NVIS=192, FIRST=True, BN=192, DOT=BG.HopperBF16WgmmaDot16,
-                      CHECK=True)) == W.FA3_FIRST[191]

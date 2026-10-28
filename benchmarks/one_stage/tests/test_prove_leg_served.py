@@ -49,6 +49,15 @@ def test_units_for_is_the_fewest_units_stage_admits(k_log, per_block):
     ("attention-v20:1b:384:block", f"AttnBlock_v4{{D=64,NVIS=192,FIRST=false,BN=192,{DOT},CHECK=false}}"),
     ("attention-v20:8b:256:block", f"AttnBlock_v4{{D=128,NVIS=128,FIRST=false,BN=128,{DOT},CHECK=false}}"),
     ("attention-v20:1b:384:end", 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}'),
+    ("attention-v21:1b:256:first", f"AttnBlockSoftmax_v1{{D=64,NVIS=128,FIRST=true,{DOT},CHECK=true,PK=64,LAST=false}}"),
+    ("attention-v21:1b:256:block", f"AttnBlockSoftmax_v1{{D=64,NVIS=128,FIRST=false,{DOT},CHECK=false,PK=64,LAST=true}}"),
+    ("attention-v21:1b:256:pv", f"AttnBlockPv_v1{{D=64,N=64,VS=32,{DOT},FIRST=false}}"),
+    ("attention-v21:1b:256:pv:16", f"AttnBlockPv_v1{{D=64,N=32,VS=16,{DOT},FIRST=false}}"),
+    ("attention-v22:1b:1087:first", f"AttnBlockSoftmax_v1{{D=64,NVIS=127,FIRST=true,{DOT},CHECK=true,PK=96,LAST=false}}"),
+    ("attention-v22:1b:1087:block", f"AttnBlockSoftmax_v2{{D=64,NVIS=192,FIRST=false,{DOT},CHECK=false,PK=96,LAST=false}}"),
+    ("attention-v22:1b:384:block", f"AttnBlockSoftmax_v2{{D=64,NVIS=192,FIRST=false,{DOT},CHECK=false,PK=96,LAST=true}}"),
+    ("attention-v22:1b:384:pv", f"AttnBlockPv_v1{{D=64,N=96,VS=32,{DOT},FIRST=false}}"),
+    ("attention-v22:1b:384:end", 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}'),
 ])
 def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(shape, want):
     from verity.ml.circuits.codec import descriptor_id
@@ -82,8 +91,9 @@ def test_an_unknown_family_is_refused_by_name():
 
 
 def test_a_full_block_needs_more_keys_than_one_block():
-    with pytest.raises(SystemExit, match="has no 'block' Call"):
-        L.served("attention-v19:1b:128:block")
+    for shape in ("attention-v19:1b:128:block", "attention-v22:1b:192:block"):
+        with pytest.raises(SystemExit, match="has no 'block' Call"):
+            L.served(shape)
 
 
 def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabulary():
@@ -117,7 +127,8 @@ def test_an_unstaged_unit_is_sized_and_recorded_blocked_never_staged(monkeypatch
 
 
 @pytest.mark.parametrize("shape,want", [("rope:1b:8", "inline"), ("attention-v19:1b:256:block", "slots"),
-                                        ("attention-v20:8b:256:end", "slots")])
+                                        ("attention-v20:8b:256:end", "slots"), ("attention-v22:1b:384:block", "slots"),
+                                        ("attention-v21:1b:256:pv", "inline")])
 def test_a_served_member_reads_its_tables_as_its_template_does_unless_told(shape, want):
     """With no ``--reads``, a member's table reads are its template's own (`chunk_rows.reads`): an attention Call's in lookup
     slots, RoPE's inline."""

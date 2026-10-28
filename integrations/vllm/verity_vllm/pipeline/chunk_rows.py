@@ -28,10 +28,11 @@ def fields(tp: Any) -> list[Any]:
 
 
 #: the whole-row templates whose MUFU table reads `reads` lays out in lookup slots: the attention rows (in neither ``CUT`` nor
-#: ``SPLITS``, so the whole row is the unit), and the per-key-block Calls the window circuit cuts their heads into
-#: (`window_circuit.CUTS`: FA2's v18 by `AttentionHead_v19`, FA3's v4 by `AttentionHead_v20`), each reading EX2 a score or
-#: RCP once
-SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5", "AttnBlock_v4", "AttnHeadEnd_v1")
+#: ``SPLITS``, so the whole row is the unit), the per-key-block Calls of v19's and v20's heads, and the softmax steps and
+#: ends the window circuit cuts their heads into (`window_circuit.CUTS`: FA2's v18 by `AttentionHead_v21`, FA3's v4 by
+#: `AttentionHead_v22`), each reading EX2 a score or RCP once (a P·V group, `AttnBlockPv_v1`, reads no table)
+SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5", "AttnBlock_v4", "AttnBlockSoftmax_v1",
+             "AttnBlockSoftmax_v2", "AttnHeadEnd_v1")
 
 
 def reads(tp: Any) -> str:
