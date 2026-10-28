@@ -987,11 +987,8 @@ def _ledger_entry(line: Any) -> dict | None:
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
         canonical_json_text(e).encode()
-    except (ValueError, TypeError, RecursionError):
-        return None
-    try:
         core_record.of_json(e)
-    except ValueError:
+    except (ValueError, TypeError, RecursionError):
         return None
     if e["schema"] not in LEDGER_TAGS or len(e["sig"]) < 8:
         return None
