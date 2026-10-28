@@ -1054,6 +1054,23 @@ def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(
     assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
+def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path):
+    """A test that failed only because the machine's disk was full (ENOSPC) failed for the machine, not its inputs: its run
+    keeps no failure, so the pass beside it isn't flagged nondeterministic."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text(
+        "import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n"
+        "        raise OSError(errno.ENOSPC, 'No space left on device')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    out = tmp_path / "suites.json"
+    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "NONDETERMINISTIC" not in p.stdout, p.stdout
+    assert not json.loads(out.read_text())[0].get("nondeterministic")
+
+
 def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     """The nightly cold check's signal: a key that misses an input shows as a fresh failure a cached pass contradicts."""
     import json
