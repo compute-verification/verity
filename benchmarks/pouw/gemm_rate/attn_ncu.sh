@@ -7,7 +7,7 @@
 #     -- bash benchmarks/pouw/gemm_rate/attn_ncu.sh
 #
 # VENV is attn_knobs.sh's (the served vLLM wheel). Under one gpu-lease (MAX_MIN, default 15): for each arm and prompt,
-# ncu --set full on the KERNEL-matching launch after WARM calls. $OUT gets ARM-PROMPT.ncu-rep, its details page as
+# ncu --set full on the launch after WARM calls of KERNEL (a base function name: FA3's is cutlass's device_kernel). $OUT gets ARM-PROMPT.ncu-rep, its details page as
 # ARM-PROMPT.csv, and rc.txt.
 set -uo pipefail
 export O=${OUT:?}
@@ -17,7 +17,7 @@ NCU=${NCU:-$CUDA/bin/ncu}
 VENV=${VENV:?}
 ARMS=${ARMS:-served}
 PROMPTS=${PROMPTS:-"16x1024 16384"}
-KERNEL=${KERNEL:-regex:FlashAttnFwdSm90}
+KERNEL=${KERNEL:-device_kernel}
 WARM=${WARM:-3}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 : > "$O/rc.txt"
