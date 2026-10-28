@@ -97,13 +97,18 @@ def verdict(verdicts: list[str]) -> str:
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
-def fitted_verdicts(answers: Callable[[], Any]) -> list[str]:
-    """The components' verdicts in ``answers()``, else none when the case doesn't fit the composition."""
+def fitted_answers(answers: Callable[[], Any]) -> list[tuple[str, dict]]:
+    """The components' answers in ``answers()``, else none when the case doesn't fit the composition."""
     try:
         out = answers()
     except (Reject, KeyError, TypeError):
         return []
-    return [] if isinstance(out, str) else [a["verdict"] for _, a in out]
+    return [] if isinstance(out, str) else out
+
+
+def fitted_verdicts(answers: Callable[[], Any]) -> list[str]:
+    """The components' verdicts in ``answers()``, else none when the case doesn't fit the composition."""
+    return [a["verdict"] for _, a in fitted_answers(answers)]
 
 
 @dataclass(frozen=True)
@@ -379,12 +384,10 @@ class Same(Product):
 
     def committed(self, case: Any) -> list[str | None]:
         """The digests the components ``same`` committed to on a case that fits the composition, else none."""
-        try:
+        def answers():
             c, blobs = self.split(case)
-            out = self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(out, str) else [a["commitment"] for i, a in out if i in self.same]
+            return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
+        return [a["commitment"] for i, a in fitted_answers(answers) if i in self.same]
 
 
 @dataclass(frozen=True)
