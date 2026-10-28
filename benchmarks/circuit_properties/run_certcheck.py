@@ -1,13 +1,14 @@
 """The upstream certificate on a training step: every consumer's region, required gates and verdict, the regions' overlap
 weights, where the step's counted products are, and the explicit cross-checks (`circuit_properties.certcheck`).
 
-    uv run benchmarks/circuit_properties/run_certcheck.py [--shape scaled|real] [--tokens all|T,..] [--layers all|L,..]
-        [--designs layer,gemm] [--outputs default|none|W:ROW:COORD,..] [--bits all|B,..] [--explicit default|none|D:K:L:T,..]
-        [--out DIR]
+    uv run benchmarks/circuit_properties/run_certcheck.py [--shape scaled|real] [--step L,B,S] [--tokens all|T,..]
+        [--layers all|L,..] [--designs layer,gemm] [--outputs default|none|W:ROW:COORD,..] [--bits all|B,..]
+        [--explicit default|none|D:K:L:T,..] [--out DIR]
 
 ``scaled`` is `TrainStep_v1{L=2,B=1,S=16}` at `training.SCALED` (the refusals `training.scaled` lifts), every consumer of
 it by default; ``real`` is `TrainStep_v1{L=30,B=8,S=512}` at smollm2-135m's shape as the registry builds it, on the tokens
-and layers given. An explicit cross-check lists the region gate by gate, reruns `upstream.required` on that wiring and
+and layers given. `--step` takes another L, B, S at the same shape: the registry builds smollm2-135m's at B·S = 256 or
+4096, with S = 256 or 512. An explicit cross-check lists the region gate by gate, reruns `upstream.required` on that wiring and
 checks `upstream.holds` (the Lean `Upstream`, mirrored) with the G found. Writes DIR/certcheck.json (DIR defaults to $OUT),
 rewritten after every consumer, and prints one line each.
 """
@@ -33,7 +34,8 @@ from circuit_properties import training as TR
 from circuit_properties import upstream as U
 
 REAL = {"L": 30, "B": 8, "S": 512}
-#: the explicit cross-checks: a certified and a failing use of the GEMM design, a layer use, and an output
+#: the explicit cross-checks: a certified and a failing use of the GEMM design, a layer use, and an output (scaled only: a
+#: real-shape region is 10^8 gates and more, too many to list one by one)
 EXPLICIT = ("gemm:y2:1:5", "gemm:dup:0:5", "layer:fwd:1:5")
 
 
@@ -91,6 +93,7 @@ def summary(verdicts: list[dict]) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--shape", choices=("scaled", "real"), default="scaled")
+    ap.add_argument("--step", default=None)
     ap.add_argument("--tokens", default=None)
     ap.add_argument("--layers", default=None)
     ap.add_argument("--designs", default="layer,gemm")
@@ -105,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     shape = dict(TR.STEP) if a.shape == "scaled" else dict(REAL)
+    if a.step:
+        shape = dict(zip(("L", "B", "S"), (int(x) for x in a.step.split(","))))
     doc: dict = {"shape": a.shape, "step": shape, "model": TR.SCALED if a.shape == "scaled" else "smollm2-135m",
                  "argv": sys.argv[1:], "verdicts": [], "outputs": [], "explicit": []}
 
@@ -120,8 +125,9 @@ def main(argv: list[str] | None = None) -> int:
               flush=True)
         doc["products"] = CC.coverage(S)
         print("products", doc["products"], flush=True)
-        tokens = _ints(a.tokens or ("all" if a.shape == "scaled" else "1,4095"), range(S.M))
-        layers = _ints(a.layers or ("all" if a.shape == "scaled" else f"0,1,{S.L - 2},{S.L - 1}"), range(S.L))
+        tokens = _ints(a.tokens or ("all" if a.shape == "scaled" else f"1,{S.M - 1}"), range(S.M))
+        ends = ",".join(str(i) for i in sorted({0, 1, S.L - 2, S.L - 1} & set(range(S.L))))
+        layers = _ints(a.layers or ("all" if a.shape == "scaled" else ends), range(S.L))
         doc["tokens"], doc["layers"] = tokens, layers
         designs = [d for d in a.designs.split(",") if d]
         weights = {}
@@ -158,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
                 doc["outputs"].append(o)
                 print(json.dumps(o), flush=True)
             save()
+        if a.explicit == "default" and a.shape == "real":
+            a.explicit = "none"
         ex = EXPLICIT if a.explicit == "default" else () if a.explicit == "none" else a.explicit.split(",")
         for spec in ex:
             d, name, i, t = spec.split(":")
