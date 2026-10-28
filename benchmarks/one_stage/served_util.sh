@@ -27,8 +27,9 @@
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
-# harness draws each window for each with no reads once its windows.jsonl line is out, so its release keeps only the other
-# protocols' leaves; standin_draws.txt counts them).
+# harness draws each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
+# positions at each of its steps, 16T bytes a step, which the seal's positions check reads and the release keeps only when a
+# draw names them; standin_draws.txt counts them).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -137,13 +138,15 @@ while True:
     except FileNotFoundError:
         lines = []
     for x in lines:
-        k = json.loads(x).get("window")
+        row = json.loads(x)
+        k = row.get("window")
+        port = [[s, n, 0, 1 << 40] for s in range(int(row.get("steps") or 0)) for n in ("step.input/ids", "step.input/positions")]
         for p in protos if k is not None else ():
             if (k, p) not in done:
                 os.makedirs(f"{d}/draws", exist_ok=True)
                 tmp = f"{d}/draws/.w{k}.{p}.tmp"
                 with open(tmp, "w") as f:
-                    json.dump({"window": k, "protocol": p, "reads": []}, f)
+                    json.dump({"window": k, "protocol": p, "reads": port}, f)
                 os.rename(tmp, f"{d}/draws/w{k}.{p}.json")
                 done.add((k, p))
                 print(f"w{k} {p}", flush=True)
@@ -177,7 +180,7 @@ say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
 say "CAPTURE stop (exit $?)"
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
-[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_draws.txt") ($STANDIN_DRAWS, no reads)"; }
+[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_draws.txt") ($STANDIN_DRAWS, the step-input port only)"; }
 trap - TERM INT
 log
 "$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1
