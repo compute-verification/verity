@@ -924,12 +924,12 @@ MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 #: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
 MANIFEST_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
-#: the e2e-service passes' coin commitment (r20261006-19… to -22…), whose binding and weights' root are the first 32 bytes
+#: the e2e-service passes' coin commitment, whose binding and weights' root are the first 32 bytes
 #: of `tagged`: only a replay of a recorded pass reads it
 COINS_RECORDED = "verity/pouw/epoch-coins/v2"
 #: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
 COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
-#: the e2e-service's first coin commitments (r20261006-08…, -19… to -21…), named `coins.SCHEME` but on SHA-256 as core
+#: the e2e-service's first coin commitments, named `coins.SCHEME` but on SHA-256 as core
 #: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
