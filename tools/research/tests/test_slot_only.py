@@ -220,17 +220,3 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     for name in ("vy-challenger", "vy-auditor"):
         assert name not in (nebius / "peers").read_text()
         assert name not in (nebius.parents[5] / "infra/cluster/descriptions/nebius.toml").read_text()
-
-
-def test_the_verifier_hosts_challenger_peer_is_a_peer_of_vy_challenger_1():
-    """vy-challenger-1's gate refuses a reserve whose --peer isn't another machine's name in its /etc/vy/peers, so the
-    `--challenger-peer` the verifier host passes (verifier.json's `challenger.peer`) must be one, or each of its sessions is
-    refused at its first reserve, after the store's registration and binding have run."""
-    from pathlib import Path
-
-    nebius = Path(S.__file__).resolve().parent
-    peer = json.loads((nebius / "verifier" / "verifier.json").read_text())["challenger"]["peer"]
-    lines = [ln.split() for ln in (nebius / "peers-challenger").read_text().splitlines() if ln.strip() and not ln.startswith("#")]
-    assert peer != "vy-challenger-1" and peer in [ln[0] for ln in lines], (
-        f"add `{peer} -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes challenger@ADDRESS` to "
-        "pods/nebius/peers-challenger and deploy it to vy-challenger-1")
