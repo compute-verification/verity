@@ -29,6 +29,7 @@ reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the un
 smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Combined L1 Cache / Shared Memory 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
 l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'L2 Cache Size 50 MB', taken as 50 MiB" }
 dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data sheet, 'GPU Memory 141GB', taken as 141 GiB, above the 143,771 MiB the driver reports" }
+chip = { value = 0, unit = "B", mark = "placeholder", source = "not enumerated: the RTX card's store.chip is chip.cu's over sm_120 (ra-pcie-exhaust #1852); open until one over sm_90 replaces it" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
@@ -46,6 +47,16 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 bus = { value = 6144, unit = "bit", mark = "ceiling", source = "six HBM3e stacks of 1024 bits; no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3201 MHz nvidia-smi reports" }
 bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, r20261018-085249-443d)" }
+read = { value = 0, unit = "B/s", mark = "placeholder", source = "not measured: no encoded store's read has run on the H200 nodes (the 4.26e12 under memory.bandwidth is a bandwidth probe's, not a remote session's read); open until measured" }
+
+# The card's SHA-512 compressions a second.
+[hash]
+sha512 = { value = 0, unit = "compression/s", mark = "placeholder", source = "not measured: block-sha512 has not run on the H200; open until measured" }
+
+# The squaring ceiling at each codec width (the remote audit's Assumption 5).
+[squaring]
+p1024 = { value = 0, unit = "squaring/s", mark = "placeholder", source = "not stated: no squaring form has been measured on sm_90; open until a ceiling with its argument replaces it" }
+p512 = { value = 0, unit = "squaring/s", mark = "placeholder", source = "not stated, as p1024" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]
@@ -67,7 +78,8 @@ f64 = { value = 32, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 w
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma and wgmma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.HOPPER_SM90_S8_K32, r20261026-010336-7755, 0 mismatches)" }
 instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
 
-# The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
+# The node's host: its CPUs (benchmarks/rho's host_ops), and its DRAM, caches and boundary link (the remote bandwidth
+# audit's node, verity/hardware/node.py). The server's, not the card's.
 [host]
 cpu = "Intel Xeon Platinum 8468 (Sapphire Rapids)"
 source = "lscpu on vy-dc-h200 and vy-dc-h200-2: each VM sees 1 x 8 cores of the server's"
@@ -78,3 +90,7 @@ turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 23173
 priority_turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo: as turbo" }
 priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo" }
 ops = { value = 7.471104e14, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 7.471e14" }
+dram_read = { value = 0, unit = "B/s", mark = "placeholder", source = "not measured: no reader mix has run on the H200 nodes' hosts; open until measured" }
+dram_bandwidth = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "Intel ARK 231735 (Xeon Platinum 8468: 8 channels, up to DDR5-4800 at one DIMM a channel): 2 sockets x 8 channels x 4800 MT/s x 8 B" }
+chip = { value = 0, unit = "B", mark = "placeholder", source = "not enumerated: the VMs see 8 cores of the server's; open until an enumeration of both sockets' caches and buffers replaces it, as the RTX card's host.chip does" }
+link_window = { value = 0, unit = "B", mark = "placeholder", source = "not read on vy-dc-h200 or vy-dc-h200-2; open until their receive buffer's ceiling is read" }
