@@ -549,7 +549,6 @@
     {"file": "tools/verity/circuit_check/src/circuit_check/checks.py", "rule": "B008", "count": 3},
     {"file": "tools/verity/circuit_check/src/circuit_check/units.py", "rule": "RUF100", "count": 2},
     {"file": "tools/verity/circuit_check/tests/fixtures/ambient_builders.py", "rule": "RUF100", "count": 1},
-    {"file": "tools/verity/circuit_check/tests/test_annotation_files.py", "rule": "F401", "count": 1},
     {"file": "tools/verity/circuit_check/tests/test_declared_tables.py", "rule": "BLE001", "count": 1},
     {"file": "tools/verity/lean/cache.py", "rule": "S310", "count": 3},
     {"file": "tools/verity/lean/cache.py", "rule": "UP017", "count": 2},
@@ -732,6 +731,7 @@
     {"file": "examples/h200/e2e_h200/store.py", "rule": "F811", "count": 1},
     {"file": "examples/h200/run.py", "rule": "RUF100", "count": 11},
     {"file": "examples/h200/tests/test_rows.py", "rule": "E731", "count": 1},
-    {"file": "examples/h200/interfaces/verity_e2e_demo/report.py", "rule": "E731", "count": 1}
+    {"file": "examples/h200/interfaces/verity_e2e_demo/report.py", "rule": "E731", "count": 1},
+    {"file": "tools/verity/circuit_check/tests/test_metadata_files.py", "rule": "F401", "count": 1}
   ]
 }

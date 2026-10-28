@@ -436,8 +436,8 @@ are refused (`ValueError`).
 **Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least
 significant first), or a `Value<1>` that is not inside one. `elements(T)` lists the element widths in leaf order;
 `word_type(T)` replaces every element by `Value<w>`. The *word view* of a Boolean Definition is its signature under
-`word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
-the word view does not read it.
+`word_type`: the signature of the word Definition it computes. A port's number format is metadata
+(`verity/metadata/v0`), outside every digest; the word view does not read it.
 
 Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
