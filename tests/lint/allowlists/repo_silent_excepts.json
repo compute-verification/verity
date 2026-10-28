@@ -125,8 +125,6 @@
     {"file": "benchmarks/pouw/run_result.py", "count": 1},
     {"file": "benchmarks/pouw/served_h1/coins.py", "count": 1},
     {"file": "benchmarks/pouw/served_zk/served_commit.py", "count": 4},
-    {"file": "benchmarks/pouw/stage_cost/report.py", "count": 1},
-    {"file": "benchmarks/pouw/stage_ovl/report.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_harness.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_native_route_u.py", "count": 1},
     {"file": "benchmarks/pouw/theory/fold_proof.py", "count": 1},
