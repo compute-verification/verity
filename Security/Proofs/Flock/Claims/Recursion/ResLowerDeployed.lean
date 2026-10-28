@@ -1254,10 +1254,10 @@ theorem slotOut_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
   obtain ⟨S', ns', nv', -, hn⟩ := FlockVBridge.OfVStar.check_part_at P.recResiduals hres hshp hholo
   have hin : ∀ j < (p.sts[0].c.unit.outGroups.getD 0 default).bits.size, ∀ t < 16,
       (p.sts[0].c.unit.outGroups.getD 0 default).col * Flock.WORD + 16 * j + t < 2 ^ p.sts[0].c.unit.unitLog := by
-    obtain ⟨hcol, hsz', -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hn
-    have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
-        p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
-    have hfit := (FlockSoundness.built_fit L.unit_built).1
+    obtain ⟨hcol, hsz', -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid (L.built_flat P.tmpl) hn
+    have hcp : (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nIn + (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nComp =
+        p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one (L.built_flat P.tmpl)
+    have hfit := (FlockSoundness.built_fit (L.built_flat P.tmpl)).1
     intro j hj t ht
     rw [hsz'] at hj
     have := hlt (16 * j + t) (by omega)
@@ -1329,9 +1329,10 @@ theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hpart] at hpart'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
   obtain ⟨rfl, rfl, rfl⟩ := hpart'
-  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hnet
-  have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
-      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
+  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid (L.built_flat P.tmpl) hnet
+  have hcp : (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nIn +
+      (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nComp =
+      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one (L.built_flat P.tmpl)
   have hsm := FlockVBridge.OfVStar.part_small hpart
   have hR : RecResiduals.RES_OUT_WORDS = 128 := rfl
   obtain ⟨hqv', hsize⟩ := v_idx hu hrows hqv
