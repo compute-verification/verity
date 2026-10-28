@@ -1,4 +1,4 @@
-"""The remote audit's coins on the proof service's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), and each opened once, after the root the verifier recorded.
 
@@ -43,6 +43,7 @@ from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
                                                              order_reason, pinned_session, record_many)
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -71,7 +72,7 @@ def families(windows: int, appends: int = APPENDS, per_coin: int = 1) -> tuple[t
 
 def window_root(registration: bytes, session: int) -> bytes:
     """R, session `session`'s window over the registration whose digest is `registration`."""
-    if type(registration) is not bytes or len(registration) != 64:
+    if type(registration) is not bytes or len(registration) != DIGEST_BYTES["sha512"]:
         raise ValueError("a registration digest is 64 bytes")
     if type(session) is not int or not 0 <= session < 1 << 64:
         raise ValueError("a session is a u64")

@@ -4,14 +4,14 @@
 # engines). ART=art:... and ART_PATH read another Build, M_NODE=BYTES another pool, CHUNKS="N ..." the coarse bounds before the
 # fine one, PROBE=1 stops once the Program decodes. The Build binds its weights as run inputs, so a root input past
 # REGISTERED_ABOVE bits (default 32768: the prompt is 8,192, the smallest weight, a norm's, 65,536) is taken as registered. Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace
-# with CPU torch into scratch. A node with no store remote takes the descriptor sent along (`research data fetch ART --path
-# out/descriptor.json.gz`, then --send it). A descriptor whose primitives' signatures have since changed under the same id
+# with CPU torch into scratch. A node with no store remote takes the descriptor from the run's inputs/ (ART's
+# out/descriptor.json.gz, fetched from the store). A descriptor whose primitives' signatures have since changed under the same id
 # decodes only against its own registry: send that commit's packages, `git archive C verity integrations/vllm/verity_vllm |
 # gzip > tree.tar.gz`, and they go ahead on PYTHONPATH (this Build decodes at a4f5a429c5: LutIndex_v1 has returned 8 bits
 # since, not 32).
 #
-#   research run --on vy-nebius-cpu-5 --timeout 5h --source . --project verity --send DIR/descriptor.json.gz \
-#     --send DIR/tree.tar.gz --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/beta_job.sh
+#   (cd integrations/vllm && RESEARCH_RUN_DIR=RUN OUT=RUN/out bash ../../benchmarks/stacked_share/beta_job.sh)
+#   # on a CPU node, from a clone's root, RUN/inputs/ holding descriptor.json.gz and tree.tar.gz
 set -euo pipefail
 export HF_HUB_OFFLINE=1
 ROOT=$(cd ../.. && pwd)

@@ -10,15 +10,11 @@
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
-# the wide codec's fused GEMM as wide:BITS:K, wide:BITS:K:tag or wide:BITS:K:sk16 (BITS 127, 255, 521, 256 or 512, then
-# wide_run.sh's LIBSET suffix such as rcuem; K = 0 its plain payloads; tag: the ro-blake3/v1 tag of every block read, as
-# decode runs; sk16: the sketch-then-hash tag, and sk16c each decode step committed as it goes), the tensor-core codec's as
-# tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
+# the wide codec's fused GEMM as wide:BITS:K (BITS 127, 255, 521, 256 or 512, then a suffix of wide.cu's build flags
+# as the build loop below reads it, such as rcm; K = 0 its plain payloads), the tensor-core codec's as tensor:FIELD:K
+# (FIELD
 # 255, 511, 512, 521, 767, 768, 1023, 1279, 1536 or 2048, codec_tensor/wt.cu built for each the arms name; K >= 1, 512,
-# 768, 1536 and 2048 being full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS or
-# skKStT, K = 1: its decoders sketch the words they decode under ro-sketch-blake3/v0 at k_s = KS, 16 or 64, over vectors
-# of T tasks, default 8, and its MMA warp tags the sketches; a last c
-# commits each decode step's tags, serve.py --commit), any arm with +c compiled as vLLM serves by default (serve.py
+# 768, 1536 and 2048 being full-slot fields at K = 1), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the carry-chain squaring); +s (before any /g) registers the node's store
 # through `verity_vllm.protocols.remote_bandwidth`'s binder (serve.py --store, in windows of STORE_WINDOW=${STORE_WINDOW:-50} passes, 0 none);
@@ -134,22 +130,8 @@ fi
     IFS=: read -r name k lib <<< "$arm"
     case $name in
       enc) A=(--arm enc --k "$k" --lib "$B/ve-${lib:-pb56}.so"); tag=enc$k${lib:+-$lib} ;;
-      wide) A=(--arm wide --k "${lib%%:*}" --lib "$B/ve-pb56.so" --wide-lib "$B/ww-p$k.so"); tag=w$k-${lib%%:*}
-            case $lib in
-              *:tag) A+=(--tag); tag+=t ;;
-              *:sk*) s=${lib##*:sk}; tag+=s$s
-                     case $s in *c) A+=(--commit); s=${s%c} ;; esac
-                     A+=(--sketch "$s") ;;
-            esac ;;
-      tensor) A=(--arm tensor --k "${lib%%:*}" --lib "$B/ve-pb56.so" --tensor-lib "$B/wt-$k.so" --gate-reps 3)
-              tag=t$k-${lib%%:*}
-              case $lib in
-                *:tag) A+=(--tag); tag+=t ;;
-                *:sk*) s=${lib##*:sk}; tag+=s$s
-                       case $s in *c) A+=(--commit); s=${s%c} ;; esac
-                       A+=(--sketch "${s%%t*}")
-                       case $s in *t*) A+=(--sketch-t "${s##*t}") ;; esac ;;
-              esac ;;
+      wide) A=(--arm wide --k "$lib" --lib "$B/ve-pb56.so" --wide-lib "$B/ww-p$k.so"); tag=w$k-$lib ;;
+      tensor) A=(--arm tensor --k "$lib" --lib "$B/ve-pb56.so" --tensor-lib "$B/wt-$k.so" --gate-reps 3); tag=t$k-$lib ;;
       plain) A=(--arm plain --lib "$B/ve-${k:-pb56}.so"); tag=plain${k:+-$k} ;;
       *) A=(--arm "$name"); tag=$name ;;
     esac

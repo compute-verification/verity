@@ -1,4 +1,4 @@
-"""The proof service's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
 `SampledProofs.Challenger`, `verity/core/service/sampled_proofs`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
@@ -18,8 +18,8 @@ a client derives what it draws from the opened coin (`verity.ml.randomness.deriv
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
 **Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier of
-record's `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
+`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+`coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
 
@@ -82,7 +82,9 @@ more entries, its `period-open` and `period-close`:
               null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
+each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
+(`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
+(`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -130,7 +132,7 @@ through `pinned_session`: `credited_session` (the pin first, then the circuit) a
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
+`verity.ml.commitments`, `verity.core.claims` and `verity.core.protocols.record`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -149,10 +151,11 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.core import claims
+from verity.core.protocols import record as core_record
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512
+from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
 
 BINDING = "verity/challenger/coins/v1"
 COIN_BYTES = 64
@@ -211,7 +214,7 @@ RECORD_FILE, CLOSE_FILE, HELLOS_FILE = "record.json", "challenger.json", "hellos
 SEALED_FILES = (RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE)
 #: an auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits
 MAX_LEDGER_LINE = 1 << 18
-_ZERO = "0" * 128
+_ZERO = core_record.ZERO
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _LEDGER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
@@ -248,7 +251,7 @@ NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only a
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
             "assumption of verity.core.claims), so no assumption covers its coins: a served challenger draws from a named "
-            "source, the Lean verifier of record's `coins` (uniform/io-getrandombytes)")
+            "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
 class CoinError(ValueError):
@@ -721,17 +724,30 @@ def _window(doc: Any) -> bool:
     return isinstance(doc, dict) and sorted(doc) == ["root"] and _digest_hex(doc["root"])
 
 
+def _hexed(v: Any) -> Any:
+    """`v` with every string, keys included, as its UTF-8 in hex: what `canonical_json_text` takes to check `v`'s numbers
+    and keys alone, since a string past ASCII is canonical as the ledger writes it, escaped."""
+    if isinstance(v, str):
+        return v.encode().hex()
+    if isinstance(v, dict):
+        return {_hexed(k): _hexed(x) for k, x in v.items()}
+    return [_hexed(x) for x in v] if isinstance(v, (list, tuple)) else v
+
+
 def ledger_message(I: bytes, entry: dict) -> bytes:
     """What an entry's `sig` signs: SHA-512([ROLE] || I || [identity_digest_sha512(TAG, entry without sig)]), each [x] x
     prefixed with its length (u64), as `challenger.record_message` frames the challenger's record under its own role; TAG is
-    the entry's schema's (`TAGS`)."""
+    the entry's schema's (`TAGS`). The digest is over the entry's canonical JSON in UTF-8, a string past ASCII as its own
+    characters, as the challenger signs it, not over its line, where `ledger_text` escapes them."""
     if len(I) != 16:
         raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    body = {k: v for k, v in entry.items() if k != "sig"}
-    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(identity_digest_sha512(tag, body))).digest()
+    unsigned = core_record.unsigned(entry)
+    canonical_json_text(_hexed(unsigned))
+    text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
 
 
 def leaf_of(sig: Any) -> int:
@@ -945,7 +961,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
         else:
             raise ValueError(f"entry {i}: kind {kind!r}")
         leaves.add(q)
-        prev, last = hashlib.sha512(ln).hexdigest(), q
+        prev, last = core_record.prev_of(ln), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
     return ({root: {"reserve": (reserves.get(w["open"]["session"]) or {}).get("entry"), "open": w["open"], "end": w["end"]}
@@ -954,15 +970,16 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
 
 
 def ledger_text(entry: dict) -> str:
-    """An entry's line as the auditor writes it: sorted keys, no whitespace, every character past ASCII escaped."""
-    return json.dumps(entry, sort_keys=True, separators=(",", ":"))
+    """An entry's line as the auditor writes it (`core_record.line`): sorted keys, no whitespace, every character past ASCII
+    escaped."""
+    return core_record.line(entry)
 
 
 def ledger_line(lines: Sequence[str], kind: str, session: str | None, body: dict, I: bytes,
                 sign: Callable[[bytes], bytes], schema: str = LEDGER_SCHEMA) -> str:
     """The auditor's next ledger line after `lines`: entry `kind` for session `session` (None for a period's) with body
     `body`, signed with `sign` under the key whose identifier is `I`."""
-    entry = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else _ZERO,
+    entry = {"body": body, "kind": kind, "prev": core_record.prev_of(lines[-1]) if lines else _ZERO,
              "schema": schema, "seq": len(lines), "session": session}
     return ledger_text({**entry, "sig": bytes(sign(ledger_message(I, entry))).hex()})
 
@@ -978,17 +995,17 @@ def _outcome(w: Any) -> bool:
 
 
 def _ledger_entry(line: Any) -> dict | None:
-    """A ledger line's entry when it is its own `ledger_text` of the ledger's form, else None."""
+    """A ledger line's entry when it is its own `ledger_text`, a record entry (`core_record.of_json`) and of the
+    ledger's form, else None."""
     try:
         e = json.loads(line) if type(line) is str and len(line) <= MAX_LEDGER_LINE else None
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
-        canonical_json_text(e).encode()
+        canonical_json_text(_hexed(e))
+        core_record.of_json(e)
     except (ValueError, TypeError, RecursionError):
         return None
-    if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]
-            and type(e["schema"]) is str and e["schema"] in LEDGER_TAGS and _nat(e["seq"]) and _digest_hex(e["prev"]) and type(e["sig"]) is str
-            and len(e["sig"]) >= 8 and _HEX.fullmatch(e["sig"]) is not None and isinstance(e["body"], dict)):
+    if e["schema"] not in LEDGER_TAGS or len(e["sig"]) < 8:
         return None
     b, kind, v2 = e["body"], e["kind"], e["schema"] == LEDGER_SCHEMA
     if kind in SESSION_KINDS:
@@ -1316,7 +1333,7 @@ class LiveChallenger:
     """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
     recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
-    Lean verifier of record's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
+    Lean verifier's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
     (`coin_claim`), None for an unnamed source, which a served challenger refuses (`served_claim`)."""
 
     def __init__(self, scheme: str, epoch: int, families: Sequence[tuple[str, int]],

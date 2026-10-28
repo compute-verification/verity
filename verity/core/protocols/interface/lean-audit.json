@@ -27,6 +27,11 @@
    "imports": ["CoreProtocol.Cli", "Flock.Hash"],
    "except": [],
    "why": "the interface is spec: a protocol that reads content-addressed files (`BlobProtocol`, `Blobs`) is stated over the same `Protocol`, `Outcome` and `Answer`, so this imports only them (through the protocol's command line) and C-Flock's hash"
+  },
+  "CoreProtocol.Record": {
+   "imports": ["Lean.Data.Json", "Flock.Bytes", "Flock.Hash"],
+   "except": [],
+   "why": "the record entry form is spec: a ledger's properties are stated over the entries `Record.ofJson` reads and the `Record.message` they are signed under, so it imports only Lean's JSON and C-Flock's bytes and SHA-512"
   }
  },
  "dependencies": {
