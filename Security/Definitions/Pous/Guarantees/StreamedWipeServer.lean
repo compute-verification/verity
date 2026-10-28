@@ -62,8 +62,8 @@ it, is accepted with probability at most `2^-128` plus the PRF's advantage again
 `StreamedWipe.Accepts`.
 
 At the 5 GB point (`StreamedWipe.OperatingPoint`, `B ≤ 4·10^10` bits; `StreamedWipeMeetsServer5GB`), the least `r` and
-its least `k`. A GB is `10^9` bytes. The H200 is vy-dc-h200-2's card as measured in r20261026-003454-bfd2
-(`StreamedWipe.h200`): 143,771 MiB in all, a fill of 4,425 segments (148.48 GB), so `R` = 2.276 GB. For the server,
+its least `k`. A GB is `10^9` bytes. The H200 is vy-dc-h200-2's card as measured (`StreamedWipe.h200`): 143,771 MiB
+in all, a fill of 4,425 segments (148.48 GB), so `R` = 2.276 GB. For the server,
 an 8×H200 server's HBM is 8 × 141 GB, its host RAM 2 TB and its disks 12 TB. `8 × 1.2 GB` is today's fill-process
 contexts at zero reserve, and `8 × 0.3 GB + 1.5 GB` a minimal context per GPU and a host OS.
 
@@ -98,7 +98,7 @@ Frozen (no-function): a bound in the wipe game's model, which no Lean function c
 def StreamedWipeMeetsServer5GB : Prop := Pous.Claims.StreamedWipeMeetsServer5GB StreamedWipe.Accepts
 
 /-- **The deployed H200 at 5 GB: 148.48 GB filled on vy-dc-h200-2's card at 5500 reads, with 2.276 GB outside the
-fill.** `StreamedWipeMeetsServer5GB` at `StreamedWipe.h200`, as measured in r20261026-003454-bfd2:
+fill.** `StreamedWipeMeetsServer5GB` at `StreamedWipe.h200`, as measured:
 `n = 2,319,974,400` labels (4,425 segments of 32 MiB) on a card of `M_s = 1,206,038,560,768` bits (143,771 MiB),
 so `R = 18,211,667,968` bits, at the deployed `k = 5500` and its published `r = 62`. A server with `E` bits of egress
 that keeps at least `4·10^10 + E` bits of uniform prior content through the reads is accepted with probability at most
@@ -121,7 +121,7 @@ counts the host's RAM and disks in `R`, so it holds only of a server whose memor
 3.9 GB. `r = 1050` is the least ratio at 5 GB, `k = 93,843` the least `k` with `1049^k · 2^129 ≤ 1050^k`. Same footing
 as `StreamedWipe`. Proof: `PousStreamedWipe.streamed_wipe_meets_server_8H200_HBM`.
 
-Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and the minimal-context probe in Tuesday's window
+Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and a minimal-context probe
 on vy-dc-h200-2 is to measure it.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
@@ -141,7 +141,7 @@ fill's share `8,798,169,129` (1.0998 GB). Its disks count in `R`. `r = 2922` is 
 the least `k` with `2921^k · 2^129 ≤ 2922^k`. Same footing as `StreamedWipe`. Proof:
 `PousStreamedWipe.streamed_wipe_meets_server_8H200_HBMRAM`.
 
-Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and the minimal-context probe in Tuesday's window
+Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and a minimal-context probe
 on vy-dc-h200-2 is to measure it.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
@@ -161,7 +161,7 @@ uniform prior content through the reads is accepted with probability at most `2^
 5 GB, `k = 1,268,143` the least `k` with `14182^k · 2^129 ≤ 14183^k`. Same footing as `StreamedWipe`. Proof:
 `PousStreamedWipe.streamed_wipe_meets_server_8H200`.
 
-Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and the minimal-context probe in Tuesday's window
+Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and a minimal-context probe
 on vy-dc-h200-2 is to measure it.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
