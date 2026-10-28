@@ -18,9 +18,7 @@ inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other
 The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock.Soundness.Audit.Circuit`.
 -/
 
-namespace FlockSoundness.Audit
-
-namespace Circuit
+namespace Verity.Boolean.Circuit
 
 variable (C : Circuit)
 
@@ -33,7 +31,9 @@ inductive Feeds : Fin C.N → Fin C.N → Prop
   | refl (t : Fin C.N) : Feeds t t
   | step {g h t : Fin C.N} : g ∈ (C.op h).args → Feeds h t → Feeds g t
 
-end Circuit
+end Verity.Boolean.Circuit
+
+namespace FlockSoundness.Audit
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/

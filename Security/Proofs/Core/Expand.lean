@@ -7,7 +7,7 @@ import Proofs.Core.Circuit
 
 * `getLsbD_ofBits`, `ofBits_getLsbD`: `ofBits` assembles a value from its bits;
 * `Circuit.card_filter_unbit`: the expansion's gates whose gate satisfies `p` are the bits of the gates satisfying `p`;
-* `FlockSoundness.Audit.Circuit.toCircuit_boolean`: C-Flock's circuits are Boolean in the draft's sense when no gate is
+* `Verity.Boolean.Circuit.toCircuit_boolean`: C-Flock's circuits are Boolean in the draft's sense when no gate is
   an empty row, the one operation that reads nothing.
 -/
 
@@ -166,7 +166,7 @@ theorem ExpandSize : Guarantees.ExpandSize := by
 
 end Verity.SecurityProofs
 
-namespace FlockSoundness.Audit.Circuit
+namespace Verity.Boolean.Circuit
 
 /-- C-Flock's circuits are Boolean in the draft's sense when no gate is an empty row. -/
 theorem toCircuit_boolean (B : Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.toCircuit.Boolean where
@@ -178,4 +178,4 @@ theorem toCircuit_boolean (B : Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.t
     have := h g
     cases hop : B.op g <;> simp_all [Op.args, Op.isInput]
 
-end FlockSoundness.Audit.Circuit
+end Verity.Boolean.Circuit

@@ -194,7 +194,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 - **The audit's circuit is the rows the verifier parses** (spec §16.5, `Flock/Net.lean`).
   - A template's unit is its input columns, its computed rows and its constant (`Rows`).
   - A computed row is `z_i = (⊕_{c∈a_i} z_c)·(⊕_{c∈b_i} z_c)`, reading earlier columns and the constant. It is one gate
-    of the circuit (`Audit.Op.row`).
+    of the circuit (`Verity.Boolean.Op.row`).
   - A program's circuit (`ProgSpec.circuit`) is its units' rows, with each unit's input columns and constant wired to
     earlier gates. Several input columns may be wired to one gate (a unit reading one source on several inputs), and
     the constant to a gate no input column is wired to. Every unit is an instance of its template's rows

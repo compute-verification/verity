@@ -91,7 +91,7 @@ end SecurityProofs
 
 end Verity
 
-namespace FlockSoundness.Audit.Circuit
+namespace Verity.Boolean.Circuit
 
 open Verity Verity.Circuit Finset
 
@@ -177,11 +177,11 @@ theorem apply_row_andProbe {N : ℕ} {a b : List (Fin N)} {x y : Fin N} (hxy : x
     xorSum_andProbe b hxy p q false true (count_even b x hxb) (count_odd b y hyb)]
   cases p <;> cases q <;> rfl
 
-end FlockSoundness.Audit.Circuit
+end Verity.Boolean.Circuit
 
 namespace Verity.SecurityProofs
 
-open FlockSoundness.Audit FlockSoundness.Audit.Circuit Finset
+open FlockSoundness.Audit Verity.Boolean.Circuit Finset
 
 theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
   intro B g

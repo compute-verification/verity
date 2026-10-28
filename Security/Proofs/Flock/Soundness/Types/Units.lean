@@ -25,7 +25,7 @@ namespace FlockSoundness
 
 open Audit Types.Dag Types.Flatten Compose
 
-/-- A gate as an `Audit.Op`, its arguments renamed by `w`. -/
+/-- A gate as a `Verity.Boolean.Op`, its arguments renamed by `w`. -/
 def Types.Flatten.Gate.lift {N : ℕ} (w : ℕ → Fin N) : Gate → Op N
   | .input => .input
   | .and a b => .and (w a) (w b)

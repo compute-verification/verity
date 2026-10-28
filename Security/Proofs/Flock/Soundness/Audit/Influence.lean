@@ -34,7 +34,9 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal
 
-namespace Circuit
+end FlockSoundness.Audit
+
+namespace Verity.Boolean.Circuit
 
 variable (C : Circuit)
 
@@ -43,13 +45,18 @@ inductive FeedsAvoiding (K : Finset (Fin C.N)) : Fin C.N → Fin C.N → Prop
   | refl {t : Fin C.N} : t ∉ K → FeedsAvoiding K t t
   | step {g h t : Fin C.N} : g ∉ K → g ∈ (C.op h).args → FeedsAvoiding K h t → FeedsAvoiding K g t
 
-end Circuit
-
-theorem Circuit.FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t : Fin C.N}
+theorem FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t : Fin C.N}
     (h : C.FeedsAvoiding K g t) : g ∉ K := by
   cases h with
   | refl hK => exact hK
   | step hg _ _ => exact hg
+
+end Verity.Boolean.Circuit
+
+namespace FlockSoundness.Audit
+
+open Game Finset
+open scoped ENNReal
 
 /-- **Guessing through a small set of outputs**: a receiver `g` that sees only the delivered output `y m` recovers the
 message `m`, with `y m ∈ Y`, for at most `|Y|` messages. -/

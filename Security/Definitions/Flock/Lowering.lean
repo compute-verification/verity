@@ -131,7 +131,9 @@ end UnitPlace
 
 /-! ## The circuit of a program: its units' rows -/
 
-namespace Audit.Op
+end FlockSoundness
+
+namespace Verity.Boolean.Op
 
 variable {N M : ℕ}
 
@@ -149,7 +151,11 @@ theorem args_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).args = o.args.ma
 theorem isInput_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).isInput = o.isInput := by
   cases o <;> rfl
 
-end Audit.Op
+end Verity.Boolean.Op
+
+namespace FlockSoundness
+
+open Audit Model
 
 /-- **A program of template units**, unit by unit: `k` input gates, then each unit's computed rows.
 A unit's input columns are wired to earlier gates, several possibly to one, and its constant to an

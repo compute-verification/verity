@@ -371,7 +371,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 381
+KNOWN_MAX = 379
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -481,10 +481,6 @@ KNOWN: dict[str, str] = {
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::Verity.Boolean.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
-    "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Circuit":
-        "duplicate of `Verity.Circuit`: becomes it (a copy of Core/Boolean's) (lean)",
-    "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Op":
-        "duplicate of `Verity.Boolean.Op`: becomes it (a copy of Core/Boolean's) (lean)",
     "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
         "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
     "Security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":

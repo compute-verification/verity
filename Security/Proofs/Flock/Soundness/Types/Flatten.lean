@@ -1098,9 +1098,9 @@ theorem flatten_topo (types : String → Option CircuitType) (words : String →
       (c1.trans f1).size_le
     simpa [Array.getD, ho] using this
 
-/-! ## As an `Audit.Circuit` -/
+/-! ## As a `Verity.Boolean.Circuit` -/
 
-/-- Gate `g` as an `Audit.Op`: its arguments as gates of the array (below it, when `Topo` holds; an argument past the
+/-- Gate `g` as a `Verity.Boolean.Op`: its arguments as gates of the array (below it, when `Topo` holds; an argument past the
 array reads `g` itself, which `Topo` rules out). -/
 def toOp (gs : Array Gate) (g : Fin gs.size) : Op gs.size :=
   let fin := fun a : ℕ => if ha : a < gs.size then (⟨a, ha⟩ : Fin gs.size) else g
@@ -1155,14 +1155,14 @@ theorem toOp_args {gs : Array Gate} (h : Topo gs) (g : Fin gs.size) : ∀ a ∈ 
     subst ha
     exact hx
 
-/-- **A gate array as an `Audit.Circuit`**: the same gates, each over gates below it (`Topo`). -/
+/-- **A gate array as a `Verity.Boolean.Circuit`**: the same gates, each over gates below it (`Topo`). -/
 def toCircuit (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) : Circuit where
   N := gs.size
   op := toOp gs
   topo := toOp_args h
   outputs := outs
 
-/-- **The circuit computes the gate array**: on inputs `inp`, gate `g`'s value in `Audit.Circuit.eval` is `gval`'s. -/
+/-- **The circuit computes the gate array**: on inputs `inp`, gate `g`'s value in `Verity.Boolean.Circuit.eval` is `gval`'s. -/
 theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) (inp : ℕ → Bool)
     (g : Fin gs.size) : (toCircuit gs h outs).eval (fun g => inp g.val) g = gval inp gs g.val := by
   suffices ∀ n (hn : n < gs.size), (toCircuit gs h outs).eval (fun g => inp g.val) ⟨n, hn⟩ = gval inp gs n from
@@ -1204,14 +1204,14 @@ theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.si
     simp only [Op.apply, Gate.step]
     rw [ih x hx (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx]
 
-/-- **Type `t`'s Boolean circuit**, as an `Audit.Circuit`: `flatten`'s gates, its outputs' gates as outputs. -/
+/-- **Type `t`'s Boolean circuit**, as a `Verity.Boolean.Circuit`: `flatten`'s gates, its outputs' gates as outputs. -/
 def flatCircuit (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ) (F : ℕ)
     (t : CircuitType) : Circuit :=
   toCircuit (flatten types words loOf F t).1 (flatten_topo types words loOf F t).1
     (Finset.univ.filter fun g => g.val ∈ (flatten types words loOf F t).2)
 
 /-- **`flatCircuit_eval`**: on inputs `x` (and `one` fed 1), the gate of type `t`'s output `o` carries `evalT`'s
-output `o`, in `Audit.Circuit.eval`. -/
+output `o`, in `Verity.Boolean.Circuit.eval`. -/
 theorem flatCircuit_eval (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ)
     (F : ℕ) (t : CircuitType) (x : ℕ → Bool) (o : ℕ) (ho : o < t.outputs.size) :
     (flatCircuit types words loOf F t).eval (fun g => if g.val < t.inBits then x g.val else true)

@@ -9,7 +9,7 @@ gates it reads, `in(R_b) = transfersInto b ∪ inputsRead b` (`into_eq`), two di
 computed, so never in a baseline. So `novelReads d R_b` is the width of `(transfersInto b ∪ inputsRead b) \ θ`
 (`novelReads_eq`): the bits on the wire into `b`, plus the width of the novel input gates `b` reads itself
 (`novelReads_eq_add`). In the Boolean profile, where every gate is one bit (`∀ g, d.D.w g = 1`, which
-`FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
+`Verity.Boolean.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
 `novelReads_eq_card_add`).
 
 So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one IU, holds

@@ -22,7 +22,9 @@ theorem xorSum_map {ι κ : Type} (l : List ι) (f : ι → κ) (v : κ → Bool
   unfold xorSum
   rw [List.map_map]
 
-namespace Circuit
+end FlockSoundness.Audit
+
+namespace Verity.Boolean.Circuit
 
 variable (C : Circuit)
 
@@ -52,7 +54,9 @@ theorem eval_op (a : Fin C.N → Bool) {g : Fin C.N} (h : (C.op g).isInput = fal
     C.eval a g = (C.op g).apply (C.eval a) :=
   C.run_free (by simp [h])
 
-end Circuit
+end Verity.Boolean.Circuit
+
+namespace FlockSoundness.Audit
 
 namespace Partition
 
