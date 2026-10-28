@@ -6,7 +6,7 @@ C-Flock prover against a verifier that never sees the hidden statement or the pr
     python -m verity_flock.rec_live --schedule-of PUBLIC_JSON        a record's schedule, to compare with the one it was held to
 
 The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``) speaks the live protocol (``live/src/lib.rs``) to
-:class:`Proxy`, which runs on the prover's side. The proxy is the firewall of the inner phase (live PROTOCOL.md §10.3): it
+:class:`Proxy`, which runs on the prover's side. The proxy is the ZK server of the inner phase (live PROTOCOL.md §10.3): it
 answers what the live server would, except that every coin comes from :class:`CoinServer`, the verifier's side, which is shown
 only the session's public schedule and salted hashes:
 
@@ -21,21 +21,21 @@ only the session's public schedule and salted hashes:
 registered row is (`top_rows`: its 32 u16 words and 32 zero words, one SHA-512 block; ``hm96-sha512/row/v1`` under its own
 fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s openings each read their node as one row of the
 registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
-(``private.json``). Level 0's cap reaches the firewall three times (``Commit``, the rep's binding round, Ligerito's first
-absorb): it is committed once, at ``Commit``, and the firewall refuses a binding round whose cap is not ``root_B``; a later
+(``private.json``). Level 0's cap reaches the ZK server three times (``Commit``, the rep's binding round, Ligerito's first
+absorb): it is committed once, at ``Commit``, and the ZK server refuses a binding round whose cap is not ``root_B``; a later
 copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (candidate 3's
 stacked table R) has its level-0 top committed as a salted top of its stream's binding round instead, and its later copies
 counted the same way. That top is registered with the private circuit at staging (`register_top`,
-`verity_flock.rec_session.stage_stacked`): its nodes are registered rows under salts drawn once, and the staged statement's
+`verity_flock.rec_session.stage_stacked`): its nodes are registered rows under salts sampled once, and the staged statement's
 circuit registration (``verity/registration/v2``, `verity_flock.inner_registered.bind`; this directory's copy
 ``REGISTRATION``), whose digest META binds (``bound``), names them as one more ``registered`` entry, named for the table.
-The firewall refuses a registration whose digest is not META's, a table that has neither a root at ``Commit`` nor a
+The ZK server refuses a registration whose digest is not META's, a table that has neither a root at ``Commit`` nor a
 registered top, and a binding round whose cap is not the registered top's or whose statement digest is not the one the
 circuit reps' binding rounds absorbed (so META, and the registration it binds, precede the stream's first coin); the
 round's salted top is the registered one, ``b || c`` for ``b || c``, so the verifier rebuilds the entry from that round's
 top alone (`top_entry`). The inner trees' leaves need no salt of their own (the statement's
 ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`): nothing about a tree but its salted top leaves the
-firewall.
+ZK server.
 
 **The schedule.** The proxy holds the session to a pinned schedule (`schedule_of`: the public ``Hello``, each table's root
 node count, the number of ``Link``'s ``y`` elements, every stream's parent, position and round count, and per round its
@@ -47,7 +47,7 @@ zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A refusa
 is a **stop**: the coin server's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
 session.
 
-**Live coins.** Each round's coins are drawn by the coin server when the round's commitments reach it, never before
+**Live coins.** Each round's coins are flipped by the coin server when the round's commitments reach it, never before
 (`RecursiveKS`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
@@ -55,11 +55,11 @@ points as round 0 of stream ``link``, each to `coin_message` under a fresh salt 
 commitments (``commitments``) stops a session whose coins do not open their commitment or come without an opening, and a
 proxy given none stops one whose coins come with an opening, as the contract decides under the public input's ``coins``.
 
-**The draw.** ``Register`` is answered with the verifier's draw (``--draw``, `full_draw`: the stratified law at K = the
-population over the verifier's own program and partition object, so every stratum draws all its units), or ``null``
-without one; the session record keeps it as ``unit_draw``. The prover then proves the drawn units' statement, the
-population's in order with the draw in its header, so its Σ is the drawn statement's and its shape (and the schedule) the
-population's. ``verify`` holds the draw to its own law (``--stratified N --program --partition``): a session without one
+**The sample.** ``Register`` is answered with the verifier's sample (``--draw``, `full_draw`: the stratified law at K = the
+population over the verifier's own program and partition object, so every stratum samples all its units), or ``null``
+without one; the session record keeps it as ``unit_draw``. The prover then proves the sampled proof blocks' statement, the
+population's in order with the sample in its header, so its Σ is the drawn statement's and its shape (and the schedule) the
+population's. ``verify`` holds the sample to its own law (``--stratified N --program --partition``): a session without one
 is refused (D12), and the soundness headline at the full draw has no sampling term.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
@@ -406,7 +406,7 @@ def refused(what: str) -> str:
 
 
 def canonical(v) -> str:
-    """``v`` as the firewall compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
+    """``v`` as the ZK server compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
     (or ``true`` and ``1``) differ."""
     return json.dumps(v, sort_keys=True, separators=(",", ":"))
 
@@ -511,9 +511,9 @@ def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None
 
 
 def full_draw(program, query: dict) -> dict:
-    """The verifier's draw for an inner session over its own program and partition query: the stratified law at K = the
-    population (`one_stage.draw.derive`), whose every stratum draws all its units (`stratum_k(N, size, N) = size`), so the
-    draw is every unit, ascending. ``verify --stratified N --program --partition`` derives the same law."""
+    """The verifier's sample for an inner session over its own program and partition query: the stratified law at K = the
+    population (`one_stage.draw.derive`), whose every stratum samples all its units (`stratum_k(N, size, N) = size`), so the
+    sample is every unit, ascending. ``verify --stratified N --program --partition`` derives the same law."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
@@ -525,7 +525,7 @@ def full_draw(program, query: dict) -> dict:
 
 
 #: `RecSetup.noInnerDraw`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose
-#: record holds no draw
+#: record holds no sample
 NO_INNER_DRAW = ("refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner "
                  "session is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's "
                  "proof covers")
@@ -536,7 +536,7 @@ def _not_json(c: str):
 
 
 def inner_draw(record: str):
-    """The inner session's draw: its record's ``unit_draw`` (`Proxy.session_record`) as the verifier reads it
+    """The inner session's sample: its record's ``unit_draw`` (`Proxy.session_record`) as the verifier reads it
     (`RecCoins.recordDraw`: absent or null, or a record that is not a JSON object, is none). The verifier refuses every
     session over an inner session without one (`RecSetup.innerDrawn`, last in its verdict), so V*'s statements over it
     would all be refused: ValueError (`NO_INNER_DRAW`)."""
@@ -591,7 +591,7 @@ def on_schedule(record: dict, schedule: dict) -> None:
     """The verifier's `RecVStar.checkSchedule`: the coin server's record ``record`` declares exactly the streams of
     ``schedule`` (`schedule_for` at the verifier's inner shape), each where the schedule opens it and with its round
     count, and holds the schedule's rounds in its order, each with its stream, number, coin count (``n`` and the coins
-    drawn), tops' node counts, copies of level 0's top and a ``c_k`` exactly where the schedule's round absorbs a
+    flipped), tops' node counts, copies of level 0's top and a ``c_k`` exactly where the schedule's round absorbs a
     message; else ValueError. `Proxy` holds a session to the same schedule, on the prover's side: a session that
     bypasses it reaches the coin server with any rounds, and its record still ends ``finish``."""
     want, got = check_schedule(schedule), schedule_of(record)
@@ -633,12 +633,12 @@ class CoinServer:
                 for i in range(n)]
 
     def commit_coins(self, schedule: dict, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict[str, list[str]]:
-        """Commit to every coin of the session before it starts (Goldreich–Kahan): draw the coins the pinned schedule needs,
+        """Commit to every coin of the session before it starts (Goldreich–Kahan): flip the coins the pinned schedule needs,
         the link points then each round's in the schedule's order (so ``rand`` is read as the rounds would read it), and
         commit to each round's under a salt of its own (`coin_commitment`). Returns the commitments in hex, per stream and
         round in order: the verifier's public input's ``coins`` (`firewall_transcript.public`). Each round's coins then go
         out with their salt as the opening (``openings``), and a round whose coins were not committed is refused. A
-        schedule's round that is not its stream's next (no session reaches it: the firewall holds its i-th round to the
+        schedule's round that is not its stream's next (no session reaches it: the ZK server holds its i-th round to the
         schedule's i-th) gets no commitment."""
         if self.committed is not None or self.hello is not None:
             raise ValueError("the challenger commits to its coins once, before Hello")
@@ -717,7 +717,7 @@ class CoinServer:
 
     def record(self) -> dict:
         """Everything the coin server saw and issued; its streams by name, as a schedule lists them, whatever order the
-        prover opened them in. A stream is listed once it has a round; the firewall opens it here only at that round, so
+        prover opened them in. A stream is listed once it has a round; the ZK server opens it here only at that round, so
         neither the record nor the coin server's calls show whether or when the prover sent its Open."""
         return {"kind": KIND, "tops": TOPS, "hello": self.hello, "link": self.link,
                 "streams": {s: self.streams[s] for s in sorted(self.streams) if self.streams[s]["rounds"]},
@@ -777,7 +777,7 @@ class Proxy:
     (`Flock.Firewall.Contract`'s rule). ``registration``: the circuit registration (``verity/registration/v2``) and
     ``bound`` the digest the statement's META binds, which it must have; ``registered``: by table, the prover's opening of the registered top (`register_top`) of each table the schedule gives
     no root at ``Commit``, which the registration names by the table's name and its stream's binding round must bind
-    (`register`). ``draw``: the verifier's draw (`full_draw`), answered at ``Register`` and kept as the record's
+    (`register`). ``draw``: the verifier's sample (`full_draw`), answered at ``Register`` and kept as the record's
     ``unit_draw``."""
 
     def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
@@ -997,7 +997,7 @@ class Proxy:
         if t == REQ_FINISH:
             if self.commit is None or self.y is None:
                 raise ValueError("Finish before the link exchange")
-            # the firewall's own counts: an early Finish must not make it read the coin server
+            # the ZK server's own counts: an early Finish must not make it read the coin server
             ran = {s: len(v["rounds"]) for s, v in sorted(self.streams.items()) if v["rounds"]}
             self._pinned("Finish's rounds", sum(ran.values()), len(self.schedule["rounds"]))
             self._pinned("Finish's streams", ran, {s: v["rounds"] for s, v in sorted(self.schedule["streams"].items())})
@@ -1069,13 +1069,13 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
     algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
-    the firewall serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
+    the ZK server serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
     ``budget`` is the stream's failure budget (the challenger's stream's ``budget``); once the stream has stopped at it, a
     connection is closed before anything is served and ``serve`` returns. ``release`` (``{"windows_ms": [one a
     statement]}``, public) is each recursive session's release schedule, its ``start_ms`` the time (``now_ms``) its
     connection was accepted, so that no release time depends on how long the inner session took. A recursive session the
-    firewall cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
-    closes the connection unserved, and ``serve`` raises. ``draw``: the verifier's draw every session's ``Register`` is
+    ZK server cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
+    closes the connection unserved, and ``serve`` raises. ``draw``: the verifier's sample every session's ``Register`` is
     answered with (`Proxy`)."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
@@ -1154,14 +1154,14 @@ def main(argv=None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--sessions", type=int, default=1, help="sessions to serve, one connection each (several: out/s<k>/)")
     ap.add_argument("--schedule", help="the schedule every session is held to (required to serve: --schedule-for's)")
-    ap.add_argument("--draw", help="the verifier's draw, answered at Register and recorded (rec_inner.py stage's draw.json)")
+    ap.add_argument("--draw", help="the verifier's sample, answered at Register and recorded (rec_inner.py stage's draw.json)")
     ap.add_argument("--schedule-for", metavar="STATEMENT",
                     help="print the schedule of a statement (flock-circuit statement's output, or its STATEMENT record) and exit")
     ap.add_argument("--holo", action="store_true", help="--schedule-for: hidden unit circuits' rounds (h after z_partial)")
     ap.add_argument("--stacked", type=int, metavar="M_R", help="--schedule-for: the stacked table R's stream, R of 2^M_R cells")
     ap.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="--schedule-for: each rep's sparse stream at this RecSparse shape")
     ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
-    ap.add_argument("--firewall", metavar="DIR", help="the firewall's state: each session opens a recursive session on it")
+    ap.add_argument("--firewall", metavar="DIR", help="the ZK server's state: each session opens a recursive session on it")
     ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
     ap.add_argument("--parts", metavar="L0,L1,...,alg",
                     help="each recursive session's V* statements in their order, the only order served (required with --firewall)")

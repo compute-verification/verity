@@ -495,7 +495,7 @@ def negative_rows(d: Path) -> list[Row]:
 
 
 def refused(r: Row) -> None:
-    """A forged statement's outer row: refused when no run of it was accepted (the firewall stopped it before release, or
+    """A forged statement's outer row: refused when no run of it was accepted (the ZK server stopped it before release, or
     its releases were refused), the stop or the refusal as its note; `forgeries` judges an accepted one."""
     r.extra["forged"] = True
     r.extra["refused"] = r.ok is not True
@@ -639,7 +639,7 @@ def summary(rows: list[Row]) -> dict[str, Any]:
     slow = max(timed, key=med, default=None)
     whole = {r.step: med(r) for r in rows if r.stage == f"{r.step} step" and r.wall_s}
     inner = next((r for r in rows if r.stage == "inner M0"), None)
-    # the mode that proved the most statements (firewall on a tie): a mode measured on one statement is no run's path
+    # the mode that proved the most statements (ZK server on a tie): a mode measured on one statement is no run's path
     mode = max(outer, key=lambda m: (outer[m]["statements"], m == "firewall"), default=None)
     # one recursive run's path, each part as long as an auditor waits for it: the inner run, V*'s staging (the
     # vstage and vcap steps' whole walls: their statements are staged in parallel), V*'s statements proved one after

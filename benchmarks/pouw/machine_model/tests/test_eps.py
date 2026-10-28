@@ -258,7 +258,7 @@ def test_two_bit_entries_on_the_indexed_operand(tmp_path):
 
 
 def test_core_and_sample_are_two_layers():
-    """The core ε is the protocol with 100% checking, Corollary D3's: every check is one draw, so ε_luck
+    """The core ε is the protocol with 100% checking, Corollary D3's: every check is one sample, so ε_luck
     is in it (LEDGER; JL is not assumed) and ε_adapt = 0; ε_sample = ε_adapt is the sampling compiler's and never
     enters it."""
     e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))

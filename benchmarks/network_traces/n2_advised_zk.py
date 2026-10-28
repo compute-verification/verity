@@ -1,7 +1,7 @@
 """N2's advised unit proved in zero knowledge and decided on the proof: each link-window of an advised link
 (`service.LinkWindows(advised=…)`, its unit `NetworkAdvisedLinkWindow_v2`: both ends' head checks and the advised
 counts on the counts those heads hold) committed, registered on the link's own stream, proved by C-Flock `prove --zk`
-behind the Lean firewall, delivered, and decided by N2's verifier of record with the link's advice
+behind the Lean ZK server, delivered, and decided by N2's verifier of record with the link's advice
 (`LinkWindows.outcome(advice=…)`), through `n2_zk`'s statement and rounds (`n2_zk.stager`, `stage`, `member`).
 
     python benchmarks/network_traces/n2_advised_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
@@ -46,9 +46,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   window's salted root and the advice's digest, the challenger then draws K of the windows on its coins
   (`LinkWindows.period_draw`), and only the drawn windows are registered, proved and decided; the network verdict is
   the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows of the period's, ε = bound / n, at the
-  stream's δ, ``--delta``). Its draw of record is the Lean verifier of record's (``--lean``'s ``draw --population n
-  --k K --stream-file``, `service.lean_draw`) on the coins the period draw read, and it accepts only when the windows
-  proved are that draw's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
+  stream's δ, ``--delta``). Its sample of record is the Lean verifier of record's (``--lean``'s ``draw --population n
+  --k K --stream-file``, `service.lean_draw`) on the coins the period flip read, and it accepts only when the windows
+  proved are that sample's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
   ``--challenger local|gate:USER@HOST`` takes the auditor's challenger's instead (`Challenger`: one session, as
   `records_audit` takes it, whose evidence the coins each member's Lean drew on are held to, `coins.coins_reason`). The
   summary's ``draw`` and ``sampled`` report them, ``sampled`` per member in scan_zk's shape: ``draw`` {law, coins,
@@ -60,9 +60,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   more handed to the egress certifier in its first busy bucket, the egress records certified anew; and on the served
   link ``tampered``, window 0's egress head with one count more and its certificate unchanged (`n2_zk.one_count`),
   since the run's certifier key isn't the driver's, and ``tampered_all``, that change in every window
-  (`every_count`), which a sampled period refuses whatever it draws; with ``--draw K`` (K < n), ``other_subset``, the
-  honest records with the prover proving another K-subset of the windows than the draw's (`n2_zk.other_subset`) under
-  a draw object listing them, every window accepted, which the network verdict refuses by name since the Lean's draw
+  (`every_count`), which a sampled period refuses whatever it samples; with ``--draw K`` (K < n), ``other_subset``, the
+  honest records with the prover proving another K-subset of the windows than the sample's (`n2_zk.other_subset`) under
+  a sample object listing them, every window accepted, which the network verdict refuses by name since the Lean's sample
   on the period's coins isn't those windows. The advice is public and the heads are witness: moved and short
   change the view the verifier computes, extra and tampered the egress heads the prover commits. Each advice negative
   and extra is the first of its kind that `advised.view` takes in every window, so the unit takes every window's
@@ -71,7 +71,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
 * **The statement and the rounds** are `n2_zk`'s: one circuit, `LinkWindows.proof_unit` lowered once (each gate the
   Definition its pinned digest names), and each link-window a statement of one instance on rows ``pub`` and ``wit``
   (`LinkWindows.layout`; ``pub`` ends with the window's view of the advice, `service.ADVICE`) and the output row
-  ``o0``, the verdict and deadline bits. A round registers, selects, proves live behind the firewall, delivers, and
+  ``o0``, the verdict and deadline bits. A round registers, selects, proves live behind the ZK server, delivers, and
   decides on the proof: the verifier's own Lean run, the ``pub`` row opened only to its own copy (its own view of the
   public advice) and the ``o0`` row read. Per window: prove (the session's wall time, the prover's ``prove_total_s``,
   proof bytes) and verify (the verifier of record's run, Lean included): the per-window price. The members run one
@@ -134,7 +134,7 @@ SHAPE = AT.Shape(T, WINDOWS, GridParams(T, AT.R, 1), GridParams(T, 4, 1),
                  tuple(range(T - 8, T + 8)) + tuple(range(3 * T - 8, 3 * T + 8)))
 MEMBERS = ("honest", "moved", "short", "extra")
 E2E_MEMBERS = ("honest", "moved", "short", "tampered", "tampered_all")
-#: the sampled period's negative: the prover proves another K-subset than the draw of record's
+#: the sampled period's negative: the prover proves another K-subset than the sample of record's
 OTHER = "other_subset"
 #: IoTieRequest's one pinned size class (B, T, R, OWN): the only one whose ingress tie can be proved
 TIE_PINNED = (512, 4, 2, 1)
@@ -360,7 +360,7 @@ def from_io(io: list[dict]) -> ADV.Advice:
 
 def every_count(lw: LinkWindows, w: int, pair):
     """Every window's egress head with one count more (`n2_zk.one_count`'s change, in each window): what a prover
-    that changed a count in every window commits, which a sampled period refuses whichever windows it draws."""
+    that changed a count in every window commits, which a sampled period refuses whichever windows it samples."""
     return Z.one_count(lw, 0, pair)
 
 
@@ -515,11 +515,11 @@ def coin_need(k: int, n: int, coin_bytes: int) -> int:
 
 class Challenger:
     """The period draws' coins from the auditor's challenger (``--challenger local|gate:USER@HOST``), as
-    `records_audit` takes them (`a5_coins`): one session on `coins_root`, one rank per member, and each member's draw
+    `records_audit` takes them (`a5_coins`): one session on `coins_root`, one rank per member, and each member's sample
     in its own turn on the session's one client (`a5_coins.RankCoins`), its coins committed to its period's commitment
     before any is read (`LinkWindows.period_draw`). Every rank plans its need together, before any member runs (the
     members prove one at a time), so the session opens or is refused before anything is proved. Once every member
-    has drawn or won't, the session's evidence is published, and `check` holds each member's draw to it
+    has drawn or won't, the session's evidence is published, and `check` holds each member's sample to it
     (`coins.coins_reason`, with `a5_coins.negatives` refused the same way)."""
 
     def __init__(self, a, rounds: dict, dest: Path) -> None:
@@ -558,8 +558,8 @@ class Challenger:
         return self.published
 
     def check(self, done: dict, out: Path) -> dict:
-        """Each member's draw held to the session's evidence: the root the verifier recomputes from every member's
-        ``period.json`` (`coins_root`), the coins its draw read (``period.json``'s ``read``, which the network verdict's
+        """Each member's sample held to the session's evidence: the root the verifier recomputes from every member's
+        ``period.json`` (`coins_root`), the coins its sample read (``period.json``'s ``read``, which the network verdict's
         Lean drew on, and which must be what its rank released) released after its period's commitment in that one
         session (`coins.coins_reason`), and each of `a5_coins.negatives` refused. Writes each member's evidence beside
         what its verifier received (``coins.json``)."""
@@ -770,7 +770,7 @@ def main(argv=None) -> int:
                    help="with --e2e, for a run with no endpoint advice and no report.json (a gate's rehearsal): the "
                         "advice synthesized from its certified I/O (from_io), labelled so")
     p.add_argument("--draw", type=int, default=0,
-                   help="K: each member's period sampled, K of its windows drawn after every window's root and the "
+                   help="K: each member's period sampled, K of its windows sampled after every window's root and the "
                         "advice are committed, and only those proved (LinkWindows.period_draw); 0 (the default): every "
                         "window, Selection All")
     p.add_argument("--challenger", help="with --draw: the period draws on the auditor's challenger's coins (a5_coins, "

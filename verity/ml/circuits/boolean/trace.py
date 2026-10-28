@@ -1,4 +1,4 @@
-"""Boolean Definitions from circuit builders: run a builder over `forms`, then write what it computed as And/Xor/Not gates.
+"""Boolean Definitions from registered compilers: run a builder over `forms`, then write what it computed as And/Xor/Not gates.
 
 A builder is ``build(C, *elements) -> elements``: one argument per element of the Definition's parameters (`boolean.elements`,
 in order), each a list of forms LSB first, as C-Flock's pieces take one argument per leaf of the word Definition; it returns a

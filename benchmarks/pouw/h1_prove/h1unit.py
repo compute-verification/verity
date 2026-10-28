@@ -155,7 +155,7 @@ def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
 def stand_in_reveal(coin: bytes) -> bytes:
     """A STAND-IN for the network certifier's salt for the window, its ``reveal(p)`` (`pouw.salt.revealed`), which this
     harness has no certifier to give: SHA-512 of the epoch's opened salt coin (`pouw.coins`) under this harness's tag.
-    Like the certifier's salt it is the auditor's, drawn before the window and opened only after the window's roots are
+    Like the certifier's salt it is the auditor's, sampled before the window and opened only after the window's roots are
     recorded; unlike it, no certifier signs it or bounds when it is revealed."""
     return hashlib.sha512(STAND_IN_REVEAL_TAG + bytes(coin)).digest()
 
@@ -673,7 +673,7 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
                  reads: list[dict[str, tuple[str, int, str]]]) -> bytes:
     """The verifier's own public file for n units (`circuit.write`'s ``pub_path`` of a shared-row statement):
     ``circuit_head`` the statement's circuit-side fields (its META, pin and class, which the verifier reads off the
-    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the drawn units),
+    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the sampled proof blocks),
     each unit's rows' ``b || c`` (port name -> 128 bytes: the window's opened leaves, and its own public and ok rows'), and
     each unit's registered reads (``reads``: port -> (value, position, path), the position the verifier's Program reads
     and the opened path, hex; one value a port, `one_value`). A registered port's table is its units' distinct positions

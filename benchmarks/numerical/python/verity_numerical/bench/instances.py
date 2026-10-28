@@ -655,7 +655,7 @@ def _plan_tu(kinds: list[str], x: array, w: array, accs: list[list[int]], seeds:
 
 
 def _draw_states(rng: G.Rng, ids: list[int], accs: list[list[int]], n: int) -> list[tuple[int, int]]:
-    """``n`` distinct (instance, step >= 1) pairs over ``ids``, drawn uniformly; the incoming accumulator is finite by
+    """``n`` distinct (instance, step >= 1) pairs over ``ids``, sampled uniformly; the incoming accumulator is finite by
     construction (only a chain's last accumulator can be infinite)."""
 
     seen: set[tuple[int, int]] = set()

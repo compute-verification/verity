@@ -126,7 +126,7 @@ def composite(name: str, body: Body, ret: list[int]):
 
 
 def _op(rng, body: Body, srcs: list[int], k: int | None = None, exact: list[int] | None = None) -> list[int]:
-    """One primitive over the handles `exact`, or over `k` (else one to four) drawn from `srcs`, or now and then a
+    """One primitive over the handles `exact`, or over `k` (else one to four) sampled from `srcs`, or now and then a
     constant."""
     if exact is None and (not srcs or rng.random() < 0.04):
         return body.add(("call", prim((), r := rng.choice(WIDTHS)), []), [r])

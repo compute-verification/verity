@@ -1,6 +1,6 @@
 """served_zk's window through the proof system (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
 window of served calls' side rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
-grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
+grid level, registered with exactly PoUW's public items, received by a `Stream`, sampled once, each drawn tile's proof
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
 from __future__ import annotations
 
@@ -285,7 +285,7 @@ def _salt_after(params) -> bytes:
 
 def _challenger(params, units=None, coins=None, sampler=None, record=None) -> SC.Challenger:
     """The challenger holding the epoch's coins (the ones that salted the window's pass, by default), its salt coin opened
-    after the pass's weights' root as the job opens it; `units` a stand-in for Lean's draw."""
+    after the pass's weights' root as the job opens it; `units` a stand-in for Lean's sample."""
     sampler = sampler or (SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]]))
     ch = SC.Challenger(params, coins or _coins(), sampler, clock=lambda: 0.0, record=record)
     ch.open("salt", _salt_after(params))
@@ -325,7 +325,7 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
     """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
     instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
-    it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
+    it; a source no claim instance names, `os.urandom` among them, is refused before any coin is flipped or published."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
     for source in (os.urandom, random.Random(0).randbytes):
@@ -384,8 +384,8 @@ def test_the_challenger_holds_every_item_to_its_own(served):
 
 @LEAN
 def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(served):
-    """The draw is the law's subset:K′ over the padded population, over the key of the epoch's draw coin, which the
-    challenger opens after the registration (its digest) and checks against its commitment; Lean's draw on that key's
+    """The sample is the law's subset:K′ over the padded population, over the key of the epoch's sampling coin, which the
+    challenger opens after the registration (its digest) and checks against its commitment; Lean's sample on that key's
     stream is `stream_subset`'s.  A second select is refused, and so is a retry after a failed draw: the coin opens once.
     A replay from the recorded opening draws the same units; a tampered recorded coin is refused."""
     *_, words = served
@@ -513,7 +513,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
 
 
 def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_path):
-    """The record's order is each window's receipt before the epoch's draw coin's release: once the draw coin is open, a
+    """The record's order is each window's receipt before the epoch's sampling coin's release: once the sampling coin is open, a
     window is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
     stream is left as it was.  A control replaying the honest draw opens no coin and still registers.  A record whose
     parameters predate the deadline replays as it ran (`replay`), byte for byte: its post-draw registration of the same
@@ -580,7 +580,7 @@ def _certifier(sid: bytes, key, sign, record: bytes, keys, seed: bytes = b"", cl
     """The certifier's run `run` on ingress link `link`, answering under `keys`' certifier signer the requests its
     challenger signs, PoUW's reader and the prover's `key` registered, the stream `sid` its context, on `clock`: the
     prover records `record` for PoUW windows 0 … `windows` − 1 before the first tick, signed, then they are published.
-    With the salt it drew for each, which the prover's server receives in-band."""
+    With the salt it sampled for each, which the prover's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -654,7 +654,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     """RT4-INT-1's witness, refused.  The fixture's rows are formed once, under SHA-256(b"salt"), which is no certifier
     window's salt, and committed twice (matmuls 5 and 9) in PoUW windows 0 and 1, each window's pass salted by its own
     certifier reveal under the recorded stream and prover.  A certified window credits only units that read its salt
-    (`salt.unit_reason`), and the window's drawn unit, `Pc8TileSide`, reads two committed rows and no salt, so both are
+    (`salt.unit_reason`), and the window's sampled proof block, `Pc8TileSide`, reads two committed rows and no salt, so both are
     refused (``unsalted``) before the stream receives them and before the certifier is asked for its record or salt:
     nothing is registered, received or drawn."""
     *_, words = served
@@ -713,19 +713,19 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     and a signed answer it verifies, over localhost to `serve_reveals`).  The prover records its pass's weights, the
     window's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link), which the proxy and its
     client give alike) and its prover id (`salt.prover_id`) with the certifier for PoUW window 0 before its salt is
-    drawn, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the window's
+    sampled, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the window's
     registration and only then has the certifier reveal window 0's salt, so a challenger whose stream or prover isn't
     the recorded one is refused (``coin``) and takes no reveal: the honest one after it passes (``certifier``), holds
-    the salt its pass was checked against, and its draw is the live epoch's ``pouw/draw`` coin 0 opened after the
-    registration, under the commitment the challenger read itself from its challenger's signed record, which the draw's
+    the salt its pass was checked against, and its sample is the live epoch's ``pouw/draw`` coin 0 opened after the
+    registration, under the commitment the challenger read itself from its challenger's signed record, which the sample's
     check of record verifies again under the challenger key the deployment pins (`Deployment`), and refuses under any
-    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),
+    other pin (``coin-key``).  Its sampled proof blocks are opened under that salt (`Challenger.check`, SALT-BIND-1),
     where `check` alone passes none.  The certifier reveals window 0 once and within its reveal deadline on its own
     clock, so a second registration, or one past the deadline, is refused (``certifier``).  A second proxy of the same
     run (its key, run id and link) gives the same stream id, and the deployment's shared `Registrations` refuse its
     window 0 (``reregistered``); another run (another run id) is another stream, so a record naming the first run's
     stream is refused (``coin``) and one naming its own registers, though coins that aren't its signed record's
-    challenger's are refused at the draw.  A certified challenger opens no salt coin, and is refused parameters with a
+    challenger's are refused at the sample.  A certified challenger opens no salt coin, and is refused parameters with a
     registration deadline, a certifier that names no run (an in-process proxy, which has no signer), no deployment, a
     client for another certifier key or run id than the deployment pins, coins it can't read from a signed record under
     the deployment's challenger key, a prover id that isn't 64 bytes or a context that names no PoUW window; parameters
@@ -902,7 +902,7 @@ def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
 @LEAN
 def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_refused(served):
     """The challenger re-starts the window's pass's epoch from its manifest under its own coin commitment: a salt coin of
-    another challenger, opened after what it had not recorded, labelled the draw coin or tampered is refused, and so is a
+    another challenger, opened after what it had not recorded, labelled the sampling coin or tampered is refused, and so is a
     pass whose commitment is not the epoch's, whose salt is not its coin's, which carries no coin or names no pass, or
     which is not the pass the window's parameters name.  A pass recorded before epoch coins (a v1 manifest, a beacon's
     salt) is received only as a recorded replay, and a manifest of any other schema not at all.  Nothing refused opens a
@@ -967,7 +967,7 @@ def test_stream_subset_is_the_exact_partial_fisher_yates_on_one_stream():
 
 @LEAN
 def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
-    """A proof's public file opens a drawn unit, a call's tile or the filler's, only when its rows are that unit's rows of
+    """A proof's public file opens a sampled proof block, a call's tile or the filler's, only when its rows are that unit's rows of
     this window: another row, another window's rows, another window's registration, or an undrawn unit is rejected."""
     *_, words = served
     params, public, advice, priv = _window(words)
@@ -994,7 +994,7 @@ def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
 
 
 def _session(t: int) -> str:
-    """Unit `t`'s session record's SHA-512, as the firewall delivers it and Lean's verdict names it."""
+    """Unit `t`'s session record's SHA-512, as the ZK server delivers it and Lean's verdict names it."""
     return hashlib.sha512(f"session {t}".encode()).hexdigest()
 
 
@@ -1009,8 +1009,8 @@ def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None =
 
 @LEAN
 def test_the_outcome_publishes_exactly_the_public_items(served):
-    """The outcome over every drawn unit accepts only when each unit's Lean verdict and opening check accept; PoUW's public
-    items of it are exactly `window.PUBLIC`; it waits for the proof's delivery, is final, and units other than the draw's
+    """The outcome over every sampled proof block accepts only when each unit's Lean verdict and opening check accept; PoUW's public
+    items of it are exactly `window.PUBLIC`; it waits for the proof's delivery, is final, and units other than the sample's
     are refused, and so is a Lean verdict about sessions other than the delivered ones.  A control stream replays the
     honest draw: a reject there is final, and its failure budget stops it."""
     *_, words = served
@@ -1055,7 +1055,7 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
 
 
 def _through(ch, rec, name="honest"):
-    """Window `rec` received, drawn, delivered and its outcome, every drawn unit accepted."""
+    """Window `rec` received, drawn, delivered and its outcome, every sampled proof block accepted."""
     _held(ch, name, rec)
     d = ch.select(name)
     ch.deliver(name, [_session(t) for t in d.units])
@@ -1193,7 +1193,7 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
 @LEAN
 def test_a_disagreement_rejects_the_session(served, monkeypatch):
     """A Python reference that disagrees with Lean, at each check, refuses the session as ``lean-python-disagree: <check>``
-    with both verdicts in the witness; nothing is retried, and a refused draw is never redrawn."""
+    with both verdicts in the witness; nothing is retried, and a refused draw is never resampled."""
     *_, words = served
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
@@ -1276,7 +1276,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     """The job's steps through `main`: register (and the refused extra item), then one challenger process's requests,
     as the job sends them a line at a time: its coin commitment, its salt coin opened after the pass's weights' root (as
     serving asks for it), the refused edited record and the passes whose salt coin is a control's, the honest one,
-    Lean's draw (a stand-in, on the draw coin's key) and the refused second select, the opening checks, the delivery, the
+    Lean's sample (a stand-in, on the sampling coin's key) and the refused second select, the opening checks, the delivery, the
     outcome and the refused second one.  `replay` re-runs them from the recorded coins byte for byte, and refuses a
     tampered record."""
     *_, words = served
@@ -1306,7 +1306,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
                     "print('DRAW ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
     lean.chmod(lean.stat().st_mode | stat.S_IEXEC)
     rec = json.loads((tmp_path / "registration.json").read_text())
-    dry = _challenger(params, coins=_coins())        # the process's coins: its draw is the one the job opens
+    dry = _challenger(params, coins=_coins())        # the process's coins: its sample is the one the job opens
     _held(dry, "honest", rec)
     drawn = dry.select("honest").units
     rows = []
@@ -1439,7 +1439,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
 
 def _recorded(words, root: Path, units=(1, 13)) -> Path:
     """A committed window laid out as a served_zk run records it (`job.sh`): the request's advice, params and
-    registration, the draw, and each drawn unit's and the filler unit's opening."""
+    registration, the sample, and each sampled proof block's and the filler unit's opening."""
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
     out = root / "r-window" / "out"
@@ -1499,11 +1499,11 @@ _UNIT_CHECK = re.compile(r"^(open|lean)-u[0-9]+$")
 @pytest.mark.skipif(not os.environ.get("SZ_PARITY_E2E"),
                     reason="SZ_PARITY_E2E unset: the parity needs the flock/Lean builds and a served window on the node")
 def test_fan_out_verdicts_match_the_serial_loop(tmp_path):
-    """served_zk/job.sh's parallel fan-out over the drawn units (SZ_JOBS=4) gives the same verdicts as the serial loop
+    """served_zk/job.sh's parallel fan-out over the sampled proof blocks (SZ_JOBS=4) gives the same verdicts as the serial loop
     (SZ_JOBS=1).  The two runs draw different unit indices -- each run's commitment uses fresh salts, so its registration
-    root, and the draw coin opened after it, differ -- so the parity is draw-independent: the structural and control checks
+    root, and the sampling coin opened after it, differ -- so the parity is draw-independent: the structural and control checks
     (coins, receive-*, select, open/lean-filler, open/lean-foreign-*, lean-st-*, outcome-*, deliver-*, shape-filler, replay,
-    ...) must have byte-identical verdicts, and both runs must draw the same number of units (pinned ε, δ, calls fix K'),
+    ...) must have byte-identical verdicts, and both runs must sample the same number of units (pinned ε, δ, calls fix K'),
     every one opening and Lean-verifying ACCEPT.  Opt in with SZ_PARITY_E2E on a node that has the served window
     ($WORK/passes/$SERVED_RUN) and the flock/Lean builds ($HZ_CACHE); it runs the whole pipeline twice over a tiny window
     (ε=1/8, δ=1/2, K'=6), a few minutes each.  The realistic-parameter audits run this fan-out at scale."""

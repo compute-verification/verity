@@ -4,7 +4,7 @@ One point is sessions of one workload that each prove the B coordinates a loopba
 workload's population by the stratified law (``instances``), proved by C-Flock's native prover with live coins, warm
 ``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``flock-verify
 verify --stratified B``, its own law). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
-``instances`` is null (the contract's names the B ids a statement proves, which a draw doesn't fix); ``population`` names the
+``instances`` is null (the contract's names the B ids a statement proves, which a sample doesn't fix); ``population`` names the
 frozen population and ``draw`` the law.
 
 - ``t.total``: the median timed statement's prover seconds, the witness wait plus both reps (``statement_seconds``, the
@@ -22,7 +22,7 @@ frozen population and ``draw`` the law.
 - ``fixed.setup_seconds``: staging the population (lowering, lanes, witness and public files), done once for every B.
 
 The prover run's result passes when the live verifier accepted every session; the verifier run's, the point's result of
-record, only when the Lean verifier also accepted every timed session. A session the Lean verifier refused for having no draw
+record, only when the Lean verifier also accepted every timed session. A session the Lean verifier refused for having no sample
 alone (``DRAWLESS``) is labelled ``D12_LABEL`` and fails the point.
 """
 from __future__ import annotations
@@ -99,7 +99,7 @@ def prover_measurements(w: Workload, B: int, rec: Mapping[str, Any], gpu_peak_mi
     return ms
 
 
-#: The Lean verifier's refusal of a session without a draw, issued only once every check has passed and the statement's form is
+#: The Lean verifier's refusal of a session without a sample, issued only once every check has passed and the statement's form is
 #: covered (verity/ml/flock/verifier/PROTOCOL.md §16.15, D12). A session counts toward throughput only when the Lean verifier
 #: accepts it (the proofs ruling of 17 Oct): a point whose sessions meet this refusal fails, labelled ``D12_LABEL``, and gives
 #: no headline. Its result still counts them (``verify.lean_drawless``).
@@ -113,7 +113,7 @@ def lean_passed(v: Mapping[str, Any]) -> bool:
 
 def verifier_measurements(lean: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """The Lean verifier's side: its median wall and CPU seconds over the timed sessions, its peak memory, and how many
-    sessions it accepted and how many it refused for having no draw alone."""
+    sessions it accepted and how many it refused for having no sample alone."""
     timed = [v for v in lean if v.get("wall_s") is not None]
     if not timed:
         return []

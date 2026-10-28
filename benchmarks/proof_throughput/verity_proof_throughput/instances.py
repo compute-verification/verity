@@ -2,10 +2,10 @@
 
 A class-statement workload's population is ``n_max`` independent instances of its VU Definition (``Workload.population``,
 core's ``population_program``), each instance one unit of ``Q_template_instance`` v0 (``PARTITION``), so the population is
-one stratum. Its lanes are the ones ``verity_flock.class_statement.class_lanes`` gives that one unit class: uniform words drawn
+one stratum. Its lanes are the ones ``verity_flock.class_statement.class_lanes`` gives that one unit class: uniform words sampled
 from ``partition_units.derive(SOURCE, DOMAIN, {program digest, seed 0})``, each instance its own x and weight row. The point
 job stages exactly these (``--program-module``, ``--batch fixed --n n_max``, seed 0) once, whatever B, and each session proves
-the B units the verifier draws by the stratified law (``law``: core's ``one_stage.draw.derive`` of ``stratified:B`` over the
+the B units the verifier samples by the stratified law (``law``: core's ``one_stage.draw.derive`` of ``stratified:B`` over the
 program and query, which every verifier derives for itself). The words are uniform 16-bit encodings, non-finite ones
 included (the statement's domain is ``total``): a Boolean circuit's proving cost doesn't depend on the values it carries.
 
@@ -165,8 +165,8 @@ def check(w: Workload) -> dict[str, Any]:
 
 
 def population_ref(w: Workload) -> dict[str, Any] | None:
-    """The fingerprint's ``population``: ids ``[0, n_max)`` of the workload's tier, the units each session's draw is taken
-    from (the contract's ``instances`` names the B ids a statement proves, which a draw doesn't fix); None without a manifest."""
+    """The fingerprint's ``population``: ids ``[0, n_max)`` of the workload's tier, the units each session's sample is taken
+    from (the contract's ``instances`` names the B ids a statement proves, which a sample doesn't fix); None without a manifest."""
     if not manifest_path(w).exists():
         return None
     return {"dataset": DATASET, "tier": w.name, "range": [0, w.n_max], "manifest_sha256": manifest_sha256(w)}

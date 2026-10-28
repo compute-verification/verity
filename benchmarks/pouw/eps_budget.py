@@ -4,9 +4,9 @@
 
 ε_skip = (honest work a cheater can skip) / (the cheater's unavoidable work), the brief's definition
 (note:20261017T0013Z-report-epsilon-program). Each component of honest work is classified per design as unavoidable (a
-transcript Verify recomputes, a commitment, a draw, noise the cheater must expand, a value a check recomputes from the
+transcript Verify recomputes, a commitment, a sample, noise the cheater must expand, a value a check recomputes from the
 transcript) or skippable (unchecked: the strip of a low-rank noise, a product served plain, the vector work only a
-served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the draw), which makes every strip,
+served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the sample), which makes every strip,
 every served output and everything derived from it free unless a check recomputes it from the transcript.
 
 - MAC-weighted: tensor MACs only, strips at their logical rank (L per output word).
@@ -106,7 +106,7 @@ RATES = {
     "c_apv_serve": 4.4 / 128,  # a cell: the served f's 4.4 warp instructions a 128-cell tile
     "t_quant": 0.56e-12,     # s an element, plain activation quantizer (COMMIT-GPU r5: +23 ms at 8 x 4K, 40.8 G elements)
     "t_dither": 0.48e-12,    # s an element, the dither's bits (EGEMM r20261016-104404-700b: qdither - qplain 0.016 ms, 8192 x 4096)
-    "t_wedit": 0.86e-12,     # s a weight element a draw, W' = W + U written (EGEMM: wedit 0.0144 ms, 4096 x 4096)
+    "t_wedit": 0.86e-12,     # s a weight element a sample, W' = W + U written (EGEMM: wedit 0.0144 ms, 4096 x 4096)
     "t_xcommit": 1.10e-12,   # s an operand element, SHA-512 tile leaves R = 128 (COMMIT-GPU r5: +45 ms at 8 x 4K)
     "receipt_commit": 0.016,  # of plain prefill time, S = 128 (COMMIT-GPU r5)
     "draws": 0.019,           # of plain prefill time, 0.3 ms simulated draws at 8 x 4K (COMMIT-GPU r5)
@@ -146,7 +146,7 @@ def decode_step(name: str, ctx: int, rates: dict = RATES) -> dict:
 
 #: The served model's components. The first four are the registry's PRODUCTS (`COMP`), each noised as its design's
 #: `[noise]` names. Every design derives each stage's operand by C1′ from the previous stage's served output (the
-#: epilogue and quantizer are checked) and serves decode edited, under one σ a request drawn once the circuit and its
+#: epilogue and quantizer are checked) and serves decode edited, under one σ a request sampled once the circuit and its
 #: inputs are committed (decision 72), so softmax and forming are never skippable and no pass is deferred.
 COMPONENTS = ("linears", "lm_head", "QKᵀ", "P·V", "softmax", "forming", "noise, commitments, draws")
 COMP = {"linears": "linears", "lm_head": "lm_head", "QKᵀ": "qk", "P·V": "pv"}
@@ -261,7 +261,7 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     weights = sum(k * n for _, k, n in s.linears)
     extra = (r["t_dither"] * (act + qkv_el + s.heads * s.d + weights / r["tokens_per_draw"])
              + r["t_xcommit"] * (act + qkv_el) + (r["receipt_commit"] + r["draws"]) * (lin_plain + att_plain))
-    if noise["linears"] == "one-sided":                # U written into the weights once a draw
+    if noise["linears"] == "one-sided":                # U written into the weights once a sample
         extra += r["t_wedit"] * weights / r["tokens_per_draw"]
     out.append(Part("noise, commitments, draws", 0, 0, extra, 0, 0))
     return out

@@ -39,13 +39,13 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   or the receiving rank's own read as the sender's, is another value ("not another value").
 * **Provenance** (`source_of`): rank r's registration is a stand-in of its rank's run, of this step at the TP run root, its
   partials each the verifier's own shape and domain, and its peers exactly the partials rank 1 − r registered.
-* **Negatives**, beside a5's (its registered reads' three, the transfer-gate negatives, R1 to R4 and the draw's): rank r's
+* **Negatives**, beside a5's (its registered reads' three, the transfer-gate negatives, R1 to R4 and the sample's): rank r's
   registration naming its peer's partial under another root, naming its own partial as its peer's, naming another
   request's partial as its peer's, naming a partial under another TP run's domain, and the other rank's registration as its
   own, each refused by `source`; rank r's ports built before the peer's registration is read, refused by `reads`; and the
   receiving port of request 0's c0 opened by the statement of each `TRANSFERS` kind, each refused by the host's read of
   Lean's registered reads (`warden_rows.refusal`) by name.
-* **Refused runs**, each to pass every check before the draw on both ranks, accept rank 0, draw rank 1's q0c0 and be refused
+* **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, draw rank 1's q0c0 and be refused
   by Lean's registered reads by name: ``--altered``, rank 1's ``part0`` row 0 (rank 0's embedding partial of request 0 as
   rank 1 received it) one bit off, under rank 0's salt, the advice bit moved through the transfer, its sum computed from the
   altered row (the circuit holds) ("does not open"); ``--made-for swapped|other-collective|other-request|own``, that port's
@@ -406,7 +406,7 @@ def composer(defn, hidden: int, cache: Path | None = None):
 
 def expected(a: argparse.Namespace, ranks: dict[int, dict]) -> bool:
     """Honest: both ranks accepted with every negative refused. ``--altered`` (``--made-for``): rank 0 accepted, every check
-    before rank 1's draw passed, and Lean's verify of rank 1's chunk q0c0 refused at its registered reads by its reason."""
+    before rank 1's sample passed, and Lean's verify of rank 1's chunk q0c0 refused at its registered reads by its reason."""
     if not (a.altered or a.made_for):
         return all(x["ok"] for x in ranks.values())
     reason, s = TRANSFERS["altered" if a.altered else a.made_for], ranks[RECEIVER]
@@ -421,7 +421,7 @@ def main(argv=None) -> int:
     ap.add_argument("--hidden", type=int, default=2048, help="H: each partial's bf16 words a token (LLAMA32_1B's 2048)")
     ap.add_argument("--requests", type=int, default=2, help="Q: the step's requests, each with partials of its own")
     ap.add_argument("--tokens", type=int, default=2, help="T: each request's token rows, each of its collectives' chunk's units")
-    ap.add_argument("--rest", type=int, default=8, help="the rest's units, drawn by the work law")
+    ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work law")
     ap.add_argument("--seed", type=int, default=0, help="the synthetic activations' seed")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)

@@ -1,17 +1,17 @@
-"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the firewall, the workers and the
+"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the ZK server, the workers and the
 verifier, the roles `verity run CONFIG --party ROLE` runs, and their table (`PROTOCOL`; `PROTOCOLS` by id).
 
 ~~~text
 challenger -> verifier    Challenger {address, pin}: where its host answers the verifier's open and finish of a session
-firewall   -> verifier    Firewall {sha512, sessions}: the Lean firewall every outer proof goes through, one at a time
-workers    -> verifier    Registration {block}, the sampling block's registration record its body (canonical JSON)
-verifier   -> challenger  Done, once every sampling block is decided
+ZK server   -> verifier    Firewall {sha512, sessions}: the Lean ZK server every outer proof goes through, one at a time
+workers    -> verifier    Registration {block}, the verification phase's registration record its body (canonical JSON)
+verifier   -> challenger  Done, once every verification phase is decided
 ~~~
 
 A party does no I/O: what its machine does is a capability it is given (`Identity.capabilities`), by name.
 
-- the workers' ``serve(block) -> bytes``: serve sampling block ``block`` of the run, and give its registration record;
-- the firewall's ``pin() -> {"sha512", "sessions"}``: the firewall the prover's sessions run, by its SHA-512;
+- the workers' ``serve(block) -> bytes``: serve verification phase ``block`` of the run, and give its registration record;
+- the ZK server's ``pin() -> {"sha512", "sessions"}``: the ZK server the prover's sessions run, by its SHA-512;
 - the challenger's ``host``, with ``start() -> {"address", "pin"}`` and ``stop()``: the challenger's host on its machine,
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
   and pinned on main's first-parent commit ``pin``;
@@ -24,12 +24,12 @@ A capability that can't do its step raises `Unavailable` with its reason, and th
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
-The run's parameters (`params_of`) are its sampling blocks (``blocks``), the configuration's listed components
+The run's parameters (`params_of`) are its verification phases (``blocks``), the configuration's listed components
 (``components``, `IDS`' names, sampled proofs among them) and what its coins are (``coins``: ``simulated`` when the
 challenger's host is a machine the prover's parties share, else ``development``, a key made for the session).
 
-The verifier audits block ``i`` once its registration, the firewall's pin and the challenger's address are all in, in
-order of the blocks, so no coin is drawn for a block before its registration (live coins, after the commitment). It
+The verifier audits block ``i`` once its registration, the ZK server's pin and the challenger's address are all in, in
+order of the blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). It
 holds the audit's commitment to the registration the workers sent: an accepting audit of another record rejects, its
 case withheld from the product. A
 listed component with no answer is ``absent``, its case `NO_CASE`, which its own decoders refuse, so the product never
@@ -45,8 +45,8 @@ leaves before it said what the verifier waits on (``closed``); it tells the chal
 however it finishes, and the challenger stops its host on ``Done`` or when the verifier leaves.
 
 What stays the machine's (the capabilities above): the toy's serving, the records audit that runs the prover's sessions
-behind the firewall on the drawn members, the challenger's host (its LMS key, ledger and pins log) and the Lean product
-over the record. Until the audit's draw, its witnesses and its proofs are messages of their own (the configuration's
+behind the ZK server on the drawn members, the challenger's host (its LMS key, ledger and pins log) and the Lean product
+over the record. Until the audit's sample, its witnesses and its proofs are messages of their own (the configuration's
 ``draw``, ``witness`` and ``proof`` channels), the verifier and the workers share the machine the block's rows are on.
 """
 
@@ -139,7 +139,7 @@ class Challenger:
 
 
 class Firewall:
-    """The firewall: its pin told to the verifier."""
+    """The ZK server: its pin told to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:
@@ -154,7 +154,7 @@ class Firewall:
 
 
 class Workers:
-    """The workers: each sampling block served, and its registration sent to the verifier."""
+    """The workers: each verification phase served, and its registration sent to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:

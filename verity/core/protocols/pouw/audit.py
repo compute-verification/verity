@@ -10,7 +10,7 @@ path's prover commits and its verifier reads.
 4. **Transcript.**  A Merkle root over every tile's digest (`transcript_domain`), in matmul order and then tile order
    (`tile_refs`).
 
-The clear audit that drew, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
+The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
 reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
 record, the Lean (`lean/check`, `core_check`).
 
@@ -54,7 +54,7 @@ _M32 = 0xFFFFFFFF
 
 def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
     """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): C-Flock's
-    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are drawn from."""
+    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are sampled from."""
     s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
          counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
     x = list(s)
@@ -158,8 +158,8 @@ class Workload:
 
 @dataclass(frozen=True, slots=True)
 class Epoch:
-    """The committed weights, the salt drawn after them, and the challenger's coin commitment the epoch's coins open
-    against (None for an `unverified` epoch's salt with no draw coin)."""
+    """The committed weights, the salt sampled after them, and the challenger's coin commitment the epoch's coins open
+    against (None for an `unverified` epoch's salt with no sampling coin)."""
 
     workload: Workload
     weight_roots: Mapping[int, bytes]
@@ -187,7 +187,7 @@ class Epoch:
                    coins: CoinCommitment | None = None) -> Epoch:
         """The epoch whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
         instances, replays of recorded runs, and integrations whose salt claims nothing.  `coins`, when given, is the
-        commitment the epoch's draw coin opens against."""
+        commitment the epoch's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
@@ -198,7 +198,7 @@ class Epoch:
         """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
         refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
         `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
-        `coins`, when given, is the commitment the epoch's draw coin opens against."""
+        `coins`, when given, is the commitment the epoch's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 

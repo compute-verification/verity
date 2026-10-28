@@ -1,8 +1,8 @@
-"""One openings coin over g consecutive windows (`Params.groups_per_coin`): at the default, g = 1, a session draws each
-window from its own coin, as it always has; at g = 4 an honest session is accepted, each draw closed at its last window
-and its windows verified on their shares; a prover that skips the reads of one window of a draw is refused there; a
-window short of passes fails `few` wherever it sits in its draw; and a session's coins through a challenger service
-hold to what it signed, with ⌈W/g⌉ openings coins, each released after its draw's last root."""
+"""One openings coin over g consecutive windows (`Params.groups_per_coin`): at the default, g = 1, a session samples each
+window from its own coin, as it always has; at g = 4 an honest session is accepted, each sample closed at its last window
+and its windows verified on their shares; a prover that skips the reads of one window of a sample is refused there; a
+window short of passes fails `few` wherever it sits in its sample; and a session's coins through a challenger service
+hold to what it signed, with ⌈W/g⌉ openings coins, each released after its sample's last root."""
 from __future__ import annotations
 
 import copy
@@ -18,7 +18,7 @@ from verity.core.protocols.remote_bandwidth import audit, codec, coins, ledger, 
 from verity.core.protocols.remote_bandwidth.audit import Session, SessionError
 
 SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
-"""`SCHEDULE` over eight windows: passes (4, 3, 3, 3, 4, 3, 3, 3), so each draw of four holds 13 passes."""
+"""`SCHEDULE` over eight windows: passes (4, 3, 3, 3, 4, 3, 3, 3), so each sample of four holds 13 passes."""
 
 
 def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.Coins]:
@@ -28,8 +28,8 @@ def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.C
 
 
 def finish_draws(s: Session, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
-    """`finish` a draw at a time: past the last deadline, each draw closed at its last window, then each of its windows
-    verified on its own share of the draws, in order, up to the first rejection; a window whose share is none keeps
+    """`finish` a sample at a time: past the last deadline, each sample closed at its last window, then each of its windows
+    verified on its own share of the samples, in order, up to the first rejection; a window whose share is none keeps
     the verdict its close gave it."""
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
@@ -93,9 +93,9 @@ def test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin(store) -
 
 
 def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
-    """Eight windows, two draws: windows 0 … 2 close with window 3, the draw's `samples` receipts uniform over its
+    """Eight windows, two draws: windows 0 … 2 close with window 3, the sample's `samples` receipts uniform over its
     windows' receipts together, each window verified on its share; the openings coins leave after windows 3's and 7's
-    last roots; the record names g, and the pooled bound reads each draw as one window."""
+    last roots; the record names g, and the pooled bound reads each sample as one window."""
     p, c = shared(store, 4)
     assert p.coins == 10 and c.commitment.families[:2] == ((coins.CHALLENGE, 8), (coins.OPENINGS, 2))
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
@@ -122,7 +122,7 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
 
 
 def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(store) -> None:
-    """Three draws over four windows leave at least one window of each draw with none: its close accepts it, a verify
+    """Three draws over four windows leave at least one window of each sample with none: its close accepts it, a verify
     of it is refused, and its record counts none drawn, the reading of its own share."""
     p, c = shared(store, 4, samples=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
@@ -144,8 +144,8 @@ def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(
 
 
 def test_the_last_draw_may_hold_fewer_windows(store) -> None:
-    """Three windows two a coin: windows 0 and 1 are one draw, window 2 the other alone.  The record's `samples` is
-    each draw's request, so the memory line's δ charges the draw's rejection at two draws' `samples`, not three, and
+    """Three windows two a coin: windows 0 and 1 are one sample, window 2 the other alone.  The record's `samples` is
+    each sample's request, so the memory line's δ charges the sample's rejection at two draws' `samples`, not three, and
     the receipts' binding term at two draws of at most twice a window's receipts each, not three windows."""
     p, c = shared(store, 2, windows=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
@@ -178,8 +178,8 @@ def skipping(window: int):
 
 
 def test_a_prover_that_skips_one_window_of_a_draw_is_refused_there(store) -> None:
-    """Under one coin over four windows a prover may gamble that the draw misses the window it skipped, here window 2
-    of draw 0's 260 receipts, 60 of them; at 33 draws the draw reaches it, and its first wrong receipt rejects."""
+    """Under one coin over four windows a prover may gamble that the sample misses the window it skipped, here window 2
+    of draw 0's 260 receipts, 60 of them; at 33 draws the sample reaches it, and its first wrong receipt rejects."""
     p, c = shared(store, 4, samples=33)
     s, prover, passes, clock = drive(store, p, SCHEDULE8, run=skipping(2), coins_=c)
     verdicts = finish_draws(s, prover, passes, clock)

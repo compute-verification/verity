@@ -6,19 +6,19 @@ prover's passes over its store, and the answer of the bandwidth component of ons
 process, `Local`), in the protocol's order:
 
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
-   verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
+   verifier samples the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
-2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
+2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, sampled from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each root
    sent before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
    (`deadline_ns`) before it closes the window;
-3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them.
+3. the verifier samples each window's openings, the prover opens them, and the verifier verifies them.
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
-`eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
+`eps = (2^24 + S)/2^64` for S the samples, as the Lean's `certify` computes them.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
 (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
@@ -229,7 +229,7 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
-    registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
+    registration it samples from `coins`, its challenger's coins, its clock and its log, which are the case."""
     name = node.encode()
     n, root = prover.register()
     reg = audit.register(coins, name, n, root, codec_)

@@ -8,13 +8,13 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
 * **Store and window.** ``--blocks`` N seeded payloads (each 64-byte word's top byte zero, p512's words) registered under
   p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past C-Flock's K_MAX), sketch-sha512
   receipts. One window of N / ``--plan`` passes, pass i a stripe of P chunks from P i, so the window's U is N receipts, of
-  which its openings coin draws ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the
+  which its openings coin selects ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the
   receipt leaves', every row's) comes from its own secret, drawn per run from the OS.
 * **Each opening a proof block.** Draw (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
   DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:
   the chunk, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's proof blocks are one
   statement of the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified sampling
-  design, every proof block drawn by the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean
+  design, every proof block sampled by the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean
   `verify --zk --partition --program`.
 * **What the verifier opens.** Of each proof block its public rows (``pub`` and ``signs``, which it derives itself:
   `opening.public`) and its verdict row ``o0``, under the salts the prover sends for those three rows. It holds the
@@ -26,13 +26,13 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   place). Its proof block's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on
   one stager, so the circuit is lowered once.
 * **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
-  circuit, public file, the session's record and proofs, the draw, the openings it was sent and v0's messages), scanned
+  circuit, public file, the session's record and proofs, the sample, the openings it was sent and v0's messages), scanned
   at every offset, raw and as hex, for each drawn chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
   tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on
   a piece the zero-knowledge drivers' one rule reads ``leaked`` (`leak_scan.scan`). The prover's input file
   (``inst-*.bin``) is the positive control.
-* **Cost** (``--points``): sessions on the honest statement whose verifier draws its first k proof blocks, cold (one prover
-  process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the firewall's send check, `FC_FIREWALL=1`, the design's
+* **Cost** (``--points``): sessions on the honest statement whose verifier samples its first k proof blocks, cold (one prover
+  process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the ZK server's send check, `FC_FIREWALL=1`, the design's
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
   stages only the honest statement and runs the points, Lean verifying each arm's session at the largest k. ``--lease``
@@ -243,7 +243,7 @@ TIMING = ("e2e_s", "wait_s", "wait_e2e_s", "witness_s", "prove_total_s", "tp_s",
 
 
 def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
-    """Member m registered, drawn by the verifier's Lean (every proof block), proved --zk and held by Lean; then the
+    """Member m registered, sampled by the verifier's Lean (every proof block), proved --zk and held by Lean; then the
     verifier's side: each proof block's public rows opened to its own copy, its verdict row read, its plan row linked to
     the pass's plan by ``b || c``, and the window decided on the verdicts. Writes what the verifier received under ``out / "verifier"``."""
     out.mkdir(parents=True, exist_ok=True)
@@ -388,7 +388,7 @@ def scan(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], pub
 # --- cost points --------------------------------------------------------------------------------------------------------------
 
 def cost(a, m: dict, out: Path, port: int) -> list[dict]:
-    """Sessions on member m's statement whose verifier draws its first k proof blocks, ``a.cold`` prover processes a
+    """Sessions on member m's statement whose verifier samples its first k proof blocks, ``a.cold`` prover processes a
     point in each arm; Lean verifies each arm's first session at the largest k."""
     rows = []
     ks = sorted({k for k in a.points if 1 <= k <= m["n"]})
@@ -425,7 +425,7 @@ def main() -> int:
     ap.add_argument("--samples", type=int, default=16, help="the window's openings, each one proof block")
     ap.add_argument("--seed", type=int, default=8)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
-    ap.add_argument("--points", default="", help="cost points: the k drawn proof blocks of each session, comma-separated")
+    ap.add_argument("--points", default="", help="cost points: the k sampled proof blocks of each session, comma-separated")
     ap.add_argument("--arms", default="nofw", help="nofw, fw or both, comma-separated")
     ap.add_argument("--cold", type=int, default=1)
     ap.add_argument("--gpu", action="store_true")

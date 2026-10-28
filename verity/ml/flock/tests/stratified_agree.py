@@ -1,4 +1,4 @@
-"""The Lean verifier's stratified draw against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
+"""The Lean verifier's stratified sample against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
 
 For each program (A4 P6's six-template population, as #164's test builds it, and small and random programs):
 
@@ -6,9 +6,9 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
   `partition.units`;
 - the units on a given stream: against `reference_draw`, the sampler of record written out here (each stratum's
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
-- the draw: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
+- the sample: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
 - U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted draw;
-- one draw over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
+- one sample over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
   take it and the same refusal where both refuse;
 - on a small program, each unit's inclusion frequency over OS draws against `k_s / n_s`;
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
@@ -94,7 +94,7 @@ def _lines(p: subprocess.CompletedProcess, tag: str) -> list:
 
 
 def _mutations(good: dict, rng: random.Random) -> list[tuple[str, dict]]:
-    """Mutations of an accepted stratified draw, each a change U2 or the law check should see (or not)."""
+    """Mutations of an accepted stratified sample, each a change U2 or the law check should see (or not)."""
     def m(f):
         d = json.loads(json.dumps(good))
         f(d)

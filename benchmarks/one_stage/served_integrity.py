@@ -5,7 +5,7 @@
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
 are the ones `SampledProofs.OneStage.check` makes public (the drawn and proved units, the bound on wrong units at δ, each
 template's under a stratified or work law; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
-draw (the records, a check on the registration, the draw) rejects with its codes; an audit record that doesn't accept,
+sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
 its port). An audit that ended with no summary is an error (RuntimeError), not a verdict.
 """
@@ -31,7 +31,7 @@ def _codes(checks: Mapping[str, Any]) -> list[str]:
 
 
 #: a refused member's verdicts, said in this order: its live session's verifier of record first, whose rejection leaves
-#: no proof files, then the Lean replay that finds none, then the draw check
+#: no proof files, then the Lean replay that finds none, then the sample check
 SAID = ("m0-verifier/", "lean-verify/", "lean-draw/")
 
 
@@ -41,7 +41,7 @@ def _said_first(kv: tuple[str, Any]) -> tuple[int, str]:
 
 
 def unproved(rec: Mapping[str, Any]) -> str:
-    """The audit record's drawn units its statement doesn't prove (its ``proved`` check), by the draw's template
+    """The audit record's sampled proof blocks its statement doesn't prove (its ``proved`` check), by the sample's template
     strata: `` (drawn units not proved: T u0-u1, ...)``, or nothing."""
     units = (((rec.get("checks") or {}).get("proved") or {}).get("detail") or {}).get("units") or {}
     missing = sorted(set(units.get("drawn") or ()) - set(units.get("statement") or ()))
@@ -58,7 +58,7 @@ def unproved(rec: Mapping[str, Any]) -> str:
 
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
-    record ``window/audit.json`` when the draw ran). On acceptance its public ``bound`` is the most of the profile's
+    record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ."""
     commitment = R.digest(registration) if registration is not None else None
     try:

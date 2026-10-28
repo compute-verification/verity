@@ -37,7 +37,7 @@ registered unit's template (every GEMM tc step one class, at every K), generic t
 class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class drawn fewer than
 :data:`RARE_DRAWS` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
 its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
-the workload's largest templates). The what-if registers every generic body type drawn at least :data:`RARE_DRAWS` times
+the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_DRAWS` times
 as a tc-step-like unit.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
@@ -422,7 +422,7 @@ def _cost(mean: float, public: float, s: Mapping[str, Any]) -> dict[str, float]:
 
 def pieces_pmf(N: int, K: int, groups: Mapping[int, int]) -> list[float]:
     """The pmf of Y = Σ_p p X_p, X_p ~ Hypergeometric(N, n_p, K) for ``groups`` {p: n_p}, convolved as independent (the
-    draw without replacement correlates them negatively, so this overstates Y's upper tail)."""
+    sample without replacement correlates them negatively, so this overstates Y's upper tail)."""
     y = [1.0]
     for p, n in sorted(groups.items()):
         k0, pmf = P.hyper(N, n, K)
@@ -484,7 +484,7 @@ def menu_t(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[s
            budget: int = BUCKETS_T, rare: float = RARE_DRAWS) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
                                                                        list[P.Unit]]:
     """``dp4t``: the body's buckets keyed by (template class, Z), and its rare types. Every GEMM tc step shares one class
-    (one registered unit at every K). A class drawn at least ``rare`` times per audit gets one bucket, and the rest of
+    (one registered unit at every K). A class sampled at least ``rare`` times per audit gets one bucket, and the rest of
     ``budget`` go one at a time to the class whose :func:`~unit_costs_padding.menu_dp` gains most in padded nonzeros
     (Σ Z_b W_b); the other classes' types are rare."""
     classes: dict[tuple[str, int], list[P.Unit]] = defaultdict(list)
@@ -552,7 +552,7 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
              slaw: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
              **kw: Any) -> dict[str, Any]:
     """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
-    type drawn at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
+    type sampled at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
     text and staging those of one tc step)."""
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)

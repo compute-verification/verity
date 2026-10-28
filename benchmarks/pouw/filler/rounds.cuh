@@ -4,7 +4,7 @@
 // Anti-replay. Slot s of point POINT is round R = POINT·POINT_SLOTS + s, one count for every driver of a run, so no two
 // points' rounds share an id (dscore's slots: 0 the filler-alone calibration, 1 + r round r's arm block, 1 + ROUNDS + r
 // its standalone block, then the two power windows'). Its tiles are the public range [R·2^32, (R + 1)·2^32), fixed by the scorer before the round's coins,
-// which are drawn from the OS once the range is fixed; every seed is dseed(the round's coins, tag | tile id), tag 0 for
+// which are sampled from the OS once the range is fixed; every seed is dseed(the round's coins, tag | tile id), tag 0 for
 // dfill_k (a filler whose kernel marks its ids with a high bit prints it as the round's tag).
 #pragma once
 #include <sys/random.h>

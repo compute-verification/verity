@@ -25,7 +25,7 @@ no encoding.
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
-`encode` draws the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin drawn after the
+`encode` draws the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin flipped after the
 commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` through `gpu.Kernels`, one process a GPU,
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
@@ -657,7 +657,7 @@ def tie(doc: dict[str, Any]) -> str:
 
 
 def spot_blocks(salt: bytes, s: int, n: int, count: int = SPOTS_PER_SEGMENT) -> list[int]:
-    """Segment `s`'s spot-checked blocks at encode: its first, then `count − 1` drawn from the salt and `s`."""
+    """Segment `s`'s spot-checked blocks at encode: its first, then `count − 1` sampled from the salt and `s`."""
     rng = random.Random(hashlib.sha512(b"verity-pous/p2/store-spot/v1\0" + salt + s.to_bytes(8, "big")).digest())
     return sorted({0, *(rng.randrange(n) for _ in range(count - 1))})
 
@@ -1197,7 +1197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                            help="w,c0,blocks_per_segment (default the registered point; others only in tests)")
         p.add_argument("--p2-lib", default="", help="libp2v1.so's directory (v4 keys); without it, the scheme's CPU codec")
     e = sub.choices["encode"]
-    e.add_argument("--source", type=_bytes_arg, help="the auditor's coin, drawn after the commitment (hex:..., hexfile:PATH)")
+    e.add_argument("--source", type=_bytes_arg, help="the auditor's coin, sampled after the commitment (hex:..., hexfile:PATH)")
     e.add_argument("--gpus", type=int, default=None)
     e.add_argument("--cpu-encoders", type=int, default=1)
     e.add_argument("--registration", default=None, help="the weights' registration digest, hex")

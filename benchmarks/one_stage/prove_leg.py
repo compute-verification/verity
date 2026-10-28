@@ -1,5 +1,5 @@
-"""The proof leg: units through C-Flock `prove --zk` behind the Lean firewall and the Lean verifier of record, one call
-(`prove_units`) that stages each member's units, registers them, takes the verifier's draw, proves each drawn member's
+"""The proof leg: units through C-Flock `prove --zk` behind the Lean ZK server and the Lean verifier of record, one call
+(`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each drawn member's
 units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
 record. Network-accounting's I5 for the arbitrary-vLLM goal (thread 1792816009.557169): the compiled per-step units, N2's
@@ -18,22 +18,22 @@ head-check units and the I/O tie's units all ride it.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
-  leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the draw.
-* **The draw** (``coins``): ``"lean"``, the verifier's Lean on its own OS coins (`flock-verify draw --stratified K`, A3);
-  a mapping ``{member: [unit, ...]}`` of each member's drawn units, a draw the proof system made on live coins; or a
+  leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the sample.
+* **The sample** (``coins``): ``"lean"``, the verifier's Lean on its own OS coins (`flock-verify draw --stratified K`, A3);
+  a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
-* **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the firewall
+* **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the ZK server
   (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``) when `Tools.firewall` names one.
 * **The verdict of record** is Lean's `verify --zk --archive --partition --program [--registered]` on the session. A unit
   is accepted when its session's Lean and M0 verdicts accept it and its held and expected rows open to the verifier's own.
-  The audit record (`verifier.audit_record`) holds every verdict, the draw and the roots.
+  The audit record (`verifier.audit_record`) holds every verdict, the sample and the roots.
 
 Negatives (`negatives`), each refused at the proof layer:
 
     tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped: the
-                      firewall's Lean recheck stops it; unfirewalled, Lean `verify --zk` refuses the proof that reaches it
+                      ZK server's Lean recheck stops it; unfirewalled, Lean `verify --zk` refuses the proof that reaches it
     tampered-public   a unit staged on a held row other than the verifier's copy: its proof verifies, its opening fails
-    tampered-root     a registration whose first root is not the statement's: refused before the draw
+    tampered-root     a registration whose first root is not the statement's: refused before the sample
     wrong-unit        a member's session checked against another member's circuit (that stratum's committed pin)
     tampered-registered-root  (members with registered reads) the verifier's --registered file with a root changed
 
@@ -116,8 +116,8 @@ class Member:
 
 @dataclass(frozen=True)
 class Tools:
-    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, and the Lean firewall's frame
-    ``flock-firewall`` (None: proved without the firewall)."""
+    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, and the Lean ZK server's frame
+    ``flock-firewall`` (None: proved without the ZK server)."""
 
     bin: str
     lean: str
@@ -224,7 +224,7 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
-    """The verifier's draw as one draw object over global units: Lean's own (``coins == "lean"``), or the caller's."""
+    """The verifier's sample as one sample object over global units: Lean's own (``coins == "lean"``), or the caller's."""
     if coins == "lean":
         p = a0.run([lean, "draw", "--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
                    out / "draw.log")
@@ -273,7 +273,7 @@ def public_bcs(path: Path, ports: list) -> tuple[dict[str, list[bytes]], dict[st
 
 
 def opened(s: dict, local: list[int], m: Member) -> dict:
-    """Each drawn unit's held rows opened to the verifier's own copy and its expected output rows to the required words,
+    """Each sampled proof block's held rows opened to the verifier's own copy and its expected output rows to the required words,
     under the salts the prover reveals for those rows alone: ``{unit: [failed row, ...]}``."""
     if not (m.held or m.expect):
         return {i: [] for i in local}
@@ -291,7 +291,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                 registered: Path | None = None, *, tools: Tools, out: Path, k: int | None = None, program=None, query=None,
                 window: dict | None = None, mutate: Callable[[dict], dict] | None = None) -> dict:
     """Every member staged, registered, drawn, proved ``--zk`` and verified by Lean; returns the leg's record
-    (``verity/prove-leg/v0``): per member its drawn units, each unit's verdict, the session's verdicts and timing; the
+    (``verity/prove-leg/v0``): per member its sampled proof blocks, each unit's verdict, the session's verdicts and timing; the
     audit record; and ``accepted``. ``registered``: the verifier's own ``--registered`` file. ``k``: the stratified rule's
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
     registration's window (default a stand-in's). ``mutate``: the registration record as the verifier is handed it (a
@@ -487,7 +487,7 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
 def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict,
               program=None, query=None, k: int | None = None) -> dict:
     """The proof-layer negatives on the first member (and, for wrong-unit, the second), each expected refused. ``coins``
-    must draw unit 0 of the first member (``"lean"`` with every unit drawn does), or ``k`` (the stratified rule's K, fewer
+    must sample unit 0 of the first member (``"lean"`` with every unit drawn does), or ``k`` (the stratified rule's K, fewer
     than the member's units) is given and every unit is forged. ``program``/``query``: the honest leg's, when it was given
     its own."""
     m = members[0]
@@ -872,7 +872,7 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
 
 
 def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str | None = None) -> tuple[Member, dict, dict]:
-    """``shape``'s member through `prove_units`, one unit drawn by Lean: staged at one unit, and again at `units_for`'s when
+    """``shape``'s member through `prove_units`, one unit sampled by Lean: staged at one unit, and again at `units_for`'s when
     one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the leg."""
     import a11_kinds as K
 
@@ -895,9 +895,9 @@ def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str | No
 
 def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
          lower_refused: bool = False, reads: str | None = None) -> dict:
-    """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
+    """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
-    draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
+    sample. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
     its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
     summary: dict[str, dict] = {}
     for shape in shapes:
@@ -960,7 +960,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("standin", help="the stand-in members through the leg, and the negatives")
     s.add_argument("--bin", required=True)
     s.add_argument("--lean", required=True)
-    s.add_argument("--firewall", default=None, help="flock-firewall: prove behind the firewall")
+    s.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
     s.add_argument("--out", required=True, type=Path)
     s.add_argument("--n", type=int, default=4)
     s.add_argument("--ks", default="128,256")
@@ -970,7 +970,7 @@ def main(argv=None) -> int:
     d = sub.add_parser("defs", help="vLLM's served Definitions at Llama shapes through the leg (`served`), and the negatives")
     d.add_argument("--bin", default=None)
     d.add_argument("--lean", default=None)
-    d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the firewall")
+    d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
     d.add_argument("--out", required=True, type=Path)
     d.add_argument("--shape", action="append", required=True, help="family:model[:arg] (`served`); repeatable")
     d.add_argument("--negatives", action="store_true")

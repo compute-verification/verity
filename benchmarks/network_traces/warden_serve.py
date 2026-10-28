@@ -173,7 +173,7 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
                    max_tokens: tuple[int, int] = (16, 256), start_s: float = 1.0, temperature: float | None = None,
                    top_p: float | None = None) -> list[dict]:
     """n requests, each {"at": seconds after the origin, "body": a streamed `/v1/completions` body}. `temperature` and
-    `top_p`, when given, are every request's (else a temperature drawn from `TEMPERATURES` and no top_p); the arrivals,
+    `top_p`, when given, are every request's (else a temperature sampled from `TEMPERATURES` and no top_p); the arrivals,
     prompts, lengths and seeds are the seed's either way."""
     rng = random.Random(seed)
     at, out = start_s, []

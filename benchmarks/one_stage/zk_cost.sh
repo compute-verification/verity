@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # C-Flock's zero-knowledge session cost on sm_120 (zk_cost.py): A6's W8A8 coordinates in statements of 1-512 units, sessions
-# by `flock-circuit prove --zk --gpu` with and without the firewall's send check, the Lean verifier on them, and the fit. Run
+# by `flock-circuit prove --zk --gpu` with and without the ZK server's send check, the Lean verifier on them, and the fit. Run
 # from the verity tree on a GPU node, as a GPU host job (the GPU taken by gpu-lease around the sessions only):
 #   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd clone --mem-gb 96 --cpus 32 \
 #     --max-min 240 -- bash benchmarks/one_stage/zk_cost.sh
@@ -57,7 +57,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-# the firewall's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as flock-verify
+# the ZK server's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as flock-verify
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 if [ -x "$LEAN" ] && [ ! -x "$FC_FIREWALL_LEAN" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

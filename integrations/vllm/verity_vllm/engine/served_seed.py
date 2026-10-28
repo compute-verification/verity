@@ -5,7 +5,7 @@ Model Runner V2 draws each sampled token's Gumbel noise from Philox keyed by the
 a seed nobody certified, which would make every token sampled at temperature > 0 a channel of the prover's choosing. A seed is
 an ordinary request input: the client's, certified in the ingress frames like the prompt, or this
 public default, fixed with the registered compiler. `install` applies it at the engine's ``add_request``, so the scheduler,
-the step trace, the runner and the Commit all see the seed the draw used.
+the step trace, the runner and the Commit all see the seed the sample used.
 
 Stdlib only at import, and nothing from vLLM: the request's params are copied with their own ``clone`` (vLLM's
 ``SamplingParams.clone``), else `copy.copy`.

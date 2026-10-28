@@ -3,7 +3,7 @@ protocol with 100% checking, every word and operand verified, has the core ε, C
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
 
-ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
+ε_luck in it: every check is one sample, so an accepted cheater spends Theorem S's budget with every block checked
 (LEDGER; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
 of the proof block and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
@@ -50,7 +50,7 @@ of the proof block and its selection rule, 0 at 100% sampling. Each term is a fr
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 - **ε_adapt** is the proof block's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
-  when σ is drawn after the commitment and before evaluation. A design names its unit (`unit`).
+  when σ is sampled after the commitment and before evaluation. A design names its unit (`unit`).
 
 A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (decision
 79's, with the names tonight's notes and data used as `aliases`), the noise on each product (`[noise]`, a leaf of
@@ -837,7 +837,7 @@ class Eps:
 
     def core(self, sched: bool = True) -> float:
         """ε with 100% checking, every word and operand verified, Corollary D3's: ε_skip, ε_mand, ε_machine, ε_luck
-        (each check one draw, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
+        (each check one sample, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
         s = (self.sched or 0.0) if sched else 0.0
         return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
 

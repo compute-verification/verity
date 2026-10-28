@@ -4,11 +4,11 @@ catches it. benchmarks/pouw/tests/test_e2e_120.py asserts each is rejected, and 
 check doesn't catch.
 
     skip-fraction      skips a fraction of the GEMM's 32-steps (a tile's step j left out, T_j = T_(j-1)) and folds its
-                       receipts over the words it did compute, so they are self-consistent: caught when the draw lands on a
-                       skipped step (`play_until`, which draws until it does)
+                       receipts over the words it did compute, so they are self-consistent: caught when the sample lands on a
+                       skipped step (`play_until`, which samples until it does)
     forge-committed    commits receipt words that are no fold of any products (every word random)
     forge-opened       commits the honest receipts, then opens the drawn leaf with the thread's word changed by a bit
-    mitm               computes and commits random receipts; at the draw it builds the window's S + 1 witness sets with the
+    mitm               computes and commits random receipts; at the sample it builds the window's S + 1 witness sets with the
                        drawn step right and solves two chains' words of a free set by meet-in-the-middle so the fold ends at
                        its committed word (art:22e9a0398b2d's open_any.py, generalised to any drawn step). Today's check
                        accepts it; PIN's pinned spot-check Definition (v3) is to bind every absorbed word
@@ -20,7 +20,7 @@ check doesn't catch.
     replay             replays its previous round's receipts and witness (re-committed under this round's tree) in a round
                        that serves the same values under a fresh coin
     commit-after-coin  commits the activations, sees the coin, then commits a second activation tree
-    commit-after-draw  commits the receipts, sees the draw, then commits a second receipt tree
+    commit-after-draw  commits the receipts, sees the sample, then commits a second receipt tree
 """
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ def _chain_final(ci: int, y0: int, z0: int, sets: list[list[int]], start: int, v
 
 
 class Mitm(Honest):
-    """The meet-in-the-middle forgery (art:22e9a0398b2d): commit random receipts, then at the draw build a witness that opens
+    """The meet-in-the-middle forgery (art:22e9a0398b2d): commit random receipts, then at the sample build a witness that opens
     the thread's committed word for any drawn step. It computes no products; it serves honest operands so their leaves open."""
 
     def __init__(self, *a, candidates: int = 1 << 17, mitm_seed: int = 1, **k):
@@ -192,7 +192,7 @@ class CommitAfterCoin(Honest):
 
 
 class CommitAfterDraw(Honest):
-    """Commits the receipts, then (having seen the draw) commits a second receipt tree."""
+    """Commits the receipts, then (having seen the sample) commits a second receipt tree."""
 
     def run(self, rd: Round):
         xt = self.x_tree(rd.rnd, self.window.X)
@@ -213,7 +213,7 @@ def honest(shape: Shape | None = None, seed: int = 0, fold: str = "duo") -> Hone
 
 
 def _play_until(prover: SkipFraction, shape: Shape, base_seed: int = 0, tries: int = 200) -> WD.Verdict:
-    """Play ``prover`` until the draw lands on a step it skipped (the only draws its forgery is exposed on)."""
+    """Play ``prover`` until the sample lands on a step it skipped (the only draws its forgery is exposed on)."""
     for s in range(base_seed, base_seed + tries):
         rd = Round(shape, prover.w_tree.root, prover.session, 1, __import__("random").Random(s), "duo")
         op = prover.run(rd)

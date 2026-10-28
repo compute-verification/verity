@@ -8,7 +8,7 @@
 // the window's segments after, and stores R[(t nw + w) 512 + ctid] = xor_j (y_j ^ rotl(z_j, 16)). Two schedules of the same
 // receipts: w_d (lag 3, the IMAD tie every fourth MMA, hgemm.cu's) and w_d4q (lag 4, the LOP3 tie every fourth: e_l4q's).
 // A call is egemm.cu's qwe<0> (the dithered quantizer, X and P_A from bf16 x, and W' = W + U, P_B, under one key) and the
-// GEMM (Y = X W^T exactly, the receipts keyed by the draw's seed). The receipts are committed as rows of 2 KiB, one
+// GEMM (Y = X W^T exactly, the receipts keyed by the sample's seed). The receipts are committed as rows of 2 KiB, one
 // window of one tile a row (hm96-sha512/row/v2, frame-v3-sha512), by commit_gpu's Committer in this translation unit, so
 // its constants (one row size, one Ks) are this unit's and ovl.cu's X committers keep theirs.
 #define main egemm_main

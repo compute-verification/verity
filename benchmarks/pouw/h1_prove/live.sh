@@ -7,7 +7,7 @@
 #   1. hidden_zk/job.sh's builds (flock-circuit, the Lean flock-verify, a venv)
 #   2. per window under H1_LIVE (each directory holding a window.json): live.py prepare (the verifier's files, the
 #      openings checked, each round staged), one loopback --zk session per S line of its plan, each prover under the
-#      firewall unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json
+#      ZK server unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json
 # env: H1_LIVE (a dump DIR, or one window's, or a .tgz of either: --send it, then H1_LIVE=inputs/NAME.tgz; relative: the
 #      run dir's)  H1_MEM_GB (128, the job's --mem-gb)  H1_PAR (sessions and Lean checks at a
 #      time; H1_MEM_GB / 60)  H1_FIREWALL (1)  HZ_CACHE: hidden_zk's
@@ -47,7 +47,7 @@ for L in "${WINDOWS[@]}"; do
     vlimit() { :; }   # the firewall's Lean children can't start their threads under `ulimit -v` (job.sh)
   fi
   # each statement is one instance of a few thousand ANDs, padded to k_log 26 by --zk: a session (serve, prove and the
-  # firewall's Lean) peaks near 55 GB and takes about 20 min on 32 CPUs, so they run PAR at a time under the run's cgroup
+  # ZK server's Lean) peaks near 55 GB and takes about 20 min on 32 CPUs, so they run PAR at a time under the run's cgroup
   PAR=${H1_PAR:-$(( MEM_GB / 60 ))}; [ "$PAR" -lt 1 ] && PAR=1
   log "live $name: prove, $PAR sessions at a time"
   while IFS=$'\t' read -r kind tag D n; do

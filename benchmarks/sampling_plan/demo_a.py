@@ -7,7 +7,7 @@ circuit size): half skipped work, half leaked output bits.
 the PoUW tiles included, with no PoUW work table and no influence. Every unit carries its output bits. At each budget B
 the exchange rate divides each half by the least bound B certifies for that half alone,
 `Objective(delta, work=0.5/H_work(B), bits=0.5/H_bits(B))`, which is scale-free, and the plan reports the certificate's
-two bounds from its one draw, `free_compute` and `leak`, at delta = 1% and 1e-6, and the tile stratum's epsilon at delta
+two bounds from its one sample, `free_compute` and `leak`, at delta = 1% and 1e-6, and the tile stratum's epsilon at delta
 (`pouw.window.eps_at`).
 
 **Units** (`families`). Each subcircuit is the map's Definition at its measured ANDs and C-Flock's staged k_log (at most
@@ -23,25 +23,25 @@ and about 257 bits of receipt committed a chunk. Drawn lanes share their chunks'
 
 **Budget.** Proving is within 1% of the block's compute. Serving's overhead is beside it, never in it: the commits
 (1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
-block's 1% is less than one statement's fixed cost, so the plan of record is given for sampling blocks (the proof blocks
-one draw covers, committed and registered before it) of the least length whose 1% affords a plan, a week, a month and a
-year: one draw over all their units, its statements shared per subcircuit. M3's live draw (`m3`) is a uniform 8 of one
+block's 1% is less than one statement's fixed cost, so the plan of record is given for verification phases (the proof blocks
+one sample covers, committed and registered before it) of the least length whose 1% affords a plan, a week, a month and a
+year: one sample over all their units, its statements shared per subcircuit. M3's live sample (`m3`) is a uniform 8 of one
 block's units (and, for its reservation, 8 of its tile lanes), given as its cost against the block's GPU time and its 1%
 budget, and what it certifies.
 
 **Certificate.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
-(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per sampling block, one detection budget
+(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per verification phase, one detection budget
 `sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's wrong
 units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
-delta, from one draw at one delta. A difftest holds `certify`'s fields to that supremum.
+delta, from one sample at one delta. A difftest holds `certify`'s fields to that supremum.
 
-**Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit a sampling block,
-`ceil(k / cap)` statements of drawn units), its feature a unit's ANDs with its rows' openings, every unit's outputs
+**Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit a verification phase,
+`ceil(k / cap)` statements of sampled proof blocks), its feature a unit's ANDs with its rows' openings, every unit's outputs
 committed at the GPU row committer's 225 GB/s, and a drawn request replayed at its share of the block's
 GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay domain,
-a drawn unit replayed at 32 requests' share (`TILE_REQUESTS`), unshared with the other subcircuits' replays.
+a sampled proof block replayed at 32 requests' share (`TILE_REQUESTS`), unshared with the other subcircuits' replays.
 
     uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 """
@@ -77,7 +77,7 @@ COMMIT_STEP_S = 1.0
 COMMIT_BPS = 225e9
 DELTAS = H.DELTAS
 PERIODS = H.PERIODS
-#: the proving budget: proving at this share of the sampling block's GPU time
+#: the proving budget: proving at this share of the verification phase's GPU time
 BUDGET_SHARE = 0.01
 #: the budgets swept, in multiples of one serving block's GPU time, past the cheapest plan's
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
@@ -85,7 +85,7 @@ S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
 #: C-Flock's largest statement (it refuses k_log 28)
 K_LOG_MAX = 27
-#: M3's live draw: a uniform subset of this many of one block's units
+#: M3's live sample: a uniform subset of this many of one block's units
 M3_UNITS = 8
 #: PoUW's proof block: J10-R's per-call lane unit `PouwH1LaneZy_v2` over
 #: `PouwH1Tile_v5`, 1,024 outputs over the call's whole K, traced on its Boolean form: at each K its ANDs and its
@@ -199,7 +199,7 @@ def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
 
 
 def candidates(m: H.Shape = SHAPE, *, blocks: int = 1, tiles: bool = True) -> list[Candidate]:
-    """One candidate a subcircuit over a sampling block of `blocks` serving blocks, its unit's work its own ANDs, its
+    """One candidate a subcircuit over a verification phase of `blocks` serving blocks, its unit's work its own ANDs, its
     output bits committed, and its statement cap its staged k_log's."""
     return [Candidate(t.id, t.id, t.units * blocks, t.ands, t.out_bits, ands=t.ands, rows=t.rows,
                       commit_bits=t.out_bits if t.commit is None else t.commit, cap=t.cap,
@@ -313,7 +313,7 @@ def commit(cands: list[Candidate], cm: CostModel) -> float:
 
 
 def cheapest(cands: list[Candidate], cm: CostModel) -> float:
-    """The proving cost of the least plan, every subcircuit at its floor of one drawn unit."""
+    """The proving cost of the least plan, every subcircuit at its floor of one sampled proof block."""
     p = _plan(cands, cm, Objective(DELTAS[0], work=0.0, bits=1.0), 0.0, frozenset(c.template for c in cands),
               frozenset())
     return p.cost["total"] - commit(cands, cm)
@@ -321,7 +321,7 @@ def cheapest(cands: list[Candidate], cm: CostModel) -> float:
 
 def point(cands: list[Candidate], cm: CostModel, proving: float, *, grid: int = 41) -> Point | None:
     """At proving budget `proving` each half's least bound alone, then the plan under the exchange rate there, certified at
-    both deltas from its one draw; None once a half is proved whole (its least bound below 1)."""
+    both deltas from its one sample; None once a half is proved whole (its least bound below 1)."""
     d, total = DELTAS[0], proving + commit(cands, cm)
     hw = _best(cands, cm, Objective(d, work=1.0), total, grid).certificate.free_compute
     hb = _best(cands, cm, Objective(d, work=0.0, bits=1.0), total, grid).certificate.leak
@@ -337,7 +337,7 @@ def point(cands: list[Candidate], cm: CostModel, proving: float, *, grid: int = 
 
 
 def tile_eps(sizes: dict[str, int], cands: list[Candidate]) -> dict[str, dict[str, float]] | None:
-    """Each tile stratum's epsilon at each delta from the plan's draw (`eps_at`, every lane credited its ANDs), by K."""
+    """Each tile stratum's epsilon at each delta from the plan's sample (`eps_at`, every lane credited its ANDs), by K."""
     out = {}
     for c in cands:
         if c.template.startswith(TILE) and sizes.get(c.template):
@@ -369,8 +369,8 @@ def sweep(cands: list[Candidate], cm: CostModel, m: H.Shape = SHAPE, *, grid: in
 
 
 def least_blocks(m: H.Shape = SHAPE, *, share: float = BUDGET_SHARE) -> int:
-    """The fewest serving blocks a sampling block spans for `share` of its GPU time to afford the cheapest plan. The
-    cheapest plan's cost only grows with the span (its drawn units meet more requests to replay), so no span shorter
+    """The fewest serving blocks a verification phase spans for `share` of its GPU time to afford the cheapest plan. The
+    cheapest plan's cost only grows with the span (its sampled proof blocks meet more requests to replay), so no span shorter
     than one block's cheapest over `share` of a block affords it, and past the first span that does every span does."""
     def affords(n: int) -> bool:
         return cheapest(candidates(m, blocks=n), costs(m, n)) <= share * n * m.block_s
@@ -388,14 +388,14 @@ def least_blocks(m: H.Shape = SHAPE, *, share: float = BUDGET_SHARE) -> int:
 
 
 def spans(m: H.Shape = SHAPE, *, share: float = BUDGET_SHARE, periods: dict[str, int] = PERIODS) -> dict[str, int]:
-    """The sampling blocks the plan of record is given for, in serving blocks."""
+    """The verification phases the plan of record is given for, in serving blocks."""
     return ({"one block": 1, "least": least_blocks(m, share=share)}
             | {name: floor(seconds / m.block_s) for name, seconds in periods.items()})
 
 
 def plan_at(m: H.Shape, name: str, n: int, *, share: float = BUDGET_SHARE, grid: int = 41) -> dict:
-    """The plan at `share` of a sampling block of n serving blocks: its draw a subcircuit, its cost a serving block, and
-    its two bounds at each delta, each also as a share of the sampling block's ANDs and output bits, with the tile
+    """The plan at `share` of a verification phase of n serving blocks: its sample a subcircuit, its cost a serving block, and
+    its two bounds at each delta, each also as a share of the verification phase's ANDs and output bits, with the tile
     stratum's epsilon and serving's commits beside it."""
     cands, cm = candidates(m, blocks=n), costs(m, n)
     ands, bits = sum(c.units * c.ands for c in cands), sum(c.units * c.out_bits for c in cands)
@@ -420,8 +420,8 @@ def plan_at(m: H.Shape, name: str, n: int, *, share: float = BUDGET_SHARE, grid:
 
 
 def m3(m: H.Shape = SHAPE, k: int = M3_UNITS, *, tiles: bool = False, only: str | None = None) -> dict:
-    """M3's live draw: a uniform k of one block's units (`subset:k`, one stratum; with `only`, of the subcircuits whose
-    id starts with it), its expected proving cost, `ceil(x / cap)` statements of a subcircuit it draws x units of, against
+    """M3's live sample: a uniform k of one block's units (`subset:k`, one stratum; with `only`, of the subcircuits whose
+    id starts with it), its expected proving cost, `ceil(x / cap)` statements of a subcircuit it samples x units of, against
     the block's GPU time and its 1% budget, and what it certifies by core's `harm_bound` (the heaviest units first), the
     leak's location term at the unit-weighted bound."""
     cands, cm = candidates(m, tiles=tiles or only is not None), costs(m)
@@ -558,7 +558,7 @@ def render_m3(rows: list[dict]) -> str:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--spans", nargs="*", help="only these sampling blocks (`spans`' names)")
+    ap.add_argument("--spans", nargs="*", help="only these verification phases (`spans`' names)")
     ap.add_argument("--no-frontier", action="store_true")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)

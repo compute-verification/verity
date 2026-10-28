@@ -16,7 +16,7 @@ DIR``).
    adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest run
    doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, the salt drawn after it from the node's OS, ``C*`` encoded on the card (``libp2v1.so``,
+   commitment to ``W``, the salt sampled after it from the node's OS, ``C*`` encoded on the card (``libp2v1.so``,
    ``--p2-lib``), the memory challenger's table and the root. Setup's own inputs are kept as it sent them, for the tie.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each index from ``C*`` on
@@ -131,7 +131,7 @@ def _linear_types() -> tuple[type, ...]:
 
 
 def _salt_source(commitment: bytes) -> bytes:
-    """The salt's source, drawn from this node's OS once the commitment exists."""
+    """The salt's source, sampled from this node's OS once the commitment exists."""
     return secrets.token_bytes(32)
 
 

@@ -145,7 +145,7 @@ def model_of(ids: list[torch.Tensor]) -> torch.nn.Module:
 
 
 def fake_marlin(monkeypatch, *, tamper: str | None = None, seed: int = 0) -> None:
-    """The kernel, its atomic order drawn from ``seed`` and the call's pair count: two runs of other seeds schedule apart."""
+    """The kernel, its atomic order sampled from ``seed`` and the call's pair count: two runs of other seeds schedule apart."""
     def moe_align_block_size(topk_ids, block_size, num_experts, expert_map=None, pad_sorted_ids=False, ignore_invalid_experts=False):
         ids = topk_ids.reshape(-1).tolist()
         out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids) + seed).permutation(len(ids)), unwritten=0)

@@ -189,7 +189,7 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
 
 def test_a_streams_coins_are_the_leans(monkeypatch):
     """A stream's default coins are the Lean verifier of record's `IO.getRandomBytes` (A3): every byte its salt and its
-    draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
+    sample read is a `coins` answer, and the sample of record is the Lean's on exactly those bytes."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
     answered, selected = [], []

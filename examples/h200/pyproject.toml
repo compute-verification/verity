@@ -1,4 +1,4 @@
-# The H200 walking skeleton's step driver, run by `verity example h200`, and its CPU replay of drawn units
+# The H200 walking skeleton's step driver, run by `verity example h200`, and its CPU replay of sampled proof blocks
 # (`replay.py`, `cpu_step.py`). Not a package: its tests run in the workspace environment (torch from the workspace's
 # torch-cpu extra), and `run.py` puts this directory on its path.
 [tool.pytest.ini_options]

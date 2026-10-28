@@ -12,8 +12,8 @@ published, once, and only until its reveal deadline on its own clock after p's e
 * `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
   isn't p's (unregistered), when the certifier refuses (a receipt that isn't the registration's: unregistered; before
   t_d: early; past the reveal deadline: late; a second reveal of p, so a second registration naming p gets none; a salt
-  never drawn, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
-* `committed(certifier, p, registration)` is what PoUW recorded with the certifier for p before it drew p's salt
+  never sampled, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
+* `committed(certifier, p, registration)` is what PoUW recorded with the certifier for p before it sampled p's salt
   (`Proxy.commit_weights`, which takes only a record the prover registered with the certifier signed), given on
   `reveal`'s conditions but the once (`Proxy.committed`), or `Unrevealed` (uncommitted): the `pouw_record` of the
   weights' root, the stream and the prover. The salt binds no weights, so a certified window passes only weights, a
@@ -22,9 +22,9 @@ published, once, and only until its reveal deadline on its own clock after p's e
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
   64-byte id of the prover whose key the certifier verifies records under.
 * `Registrations` is the certified windows' once-only registration ledger: one registration per PoUW window, stream and
-  prover, taken when the challenger receives the window, before its draw and any proof. It is not the window's credit,
+  prover, taken when the challenger receives the window, before its sample and any proof. It is not the window's credit,
   which is its outcome's verdict.
-* `unit_reason(unit)` is why a certified window can't credit a drawn unit: it credits only units that read its salt.
+* `unit_reason(unit)` is why a certified window can't credit a sampled proof block: it credits only units that read its salt.
 * `pouw_window(windows, k)` is the PoUW window certifier windows make up, refusing any that aren't one whole, aligned
   PoUW window.
 * `window_open_root(weights_root, requests_root, session)` is a live window's open root: what the auditor's gate opens
@@ -103,9 +103,9 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
     and `prover`: SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(window) ‖ stream ‖ prover), every part fixed-width. This is the
     only place that states it (Lean's `PouwCheck.pouwSalt` mirrors it), and `test_pouw_salt_form` pins it.
 
-    `stream` and `prover` are recorded with the certifier before it draws the window's salt (`pouw_record`), so two
+    `stream` and `prover` are recorded with the certifier before it samples the window's salt (`pouw_record`), so two
     registrations of one window are salted apart, and the prover can't grind its seeds over them once it holds the salt.
-    The window is the certifier's PoUW window, counted from its origin on its trusted clock, whose salt it draws once
+    The window is the certifier's PoUW window, counted from its origin on its trusted clock, whose salt it samples once
     from fresh randomness, so no epoch is bound beside it. A proxy started again counts from 0 with fresh salts, so the
     stream a window is registered under names the certifier's run."""
     if type(reveal) is not bytes or len(reveal) != SALT_BYTES:
@@ -114,7 +114,7 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
 
 
 def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
-    """What PoUW records with the certifier for a PoUW window before its salt is drawn (`Proxy.commit_weights`), and
+    """What PoUW records with the certifier for a PoUW window before its salt is sampled (`Proxy.commit_weights`), and
     `committed` reads back: SHA-512(`RECORD_TAG` ‖ weights_root ‖ stream ‖ prover), every part fixed-width (Lean's
     `PouwCheck.pouwRecord`). So the certifier's word orders the weights, the stream and the prover before the salt."""
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
@@ -190,7 +190,7 @@ def prover_id(public_key: bytes) -> bytes:
 
 
 def unit_reason(unit: Any) -> str | None:
-    """Why a certified window can't credit `unit`, its drawn unit's Definition, or None: a certified window credits only
+    """Why a certified window can't credit `unit`, its sampled proof block's Definition, or None: a certified window credits only
     units that read its salt, a unit whose ``salt`` parameter is a coin port over the whole 64-byte salt
     (`ports.In(kind="coin")`), as the compiled Program's units take it (`circuit.compile`, `PouwCompiled_v1`, whose
     ``salt-flow`` check holds it to each unit's seed). A unit that reads only committed rows passes on rows formed under any
@@ -209,11 +209,11 @@ def unit_reason(unit: Any) -> str | None:
 
 
 # TODO: a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
-# window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window.
+# window 0's first coin, each window's first coin after the previous window's sample, closed at the first refused window.
 # `Registrations` is none of that.
 class Registrations:
     """The certified windows' once-only registration ledger: a PoUW window registers once per stream and prover, when
-    the challenger receives it, before its draw and before any proof, so a window whose units are never proved, or are
+    the challenger receives it, before its sample and before any proof, so a window whose units are never proved, or are
     refused, keeps its entry. A window's tiles are private, so (window, stream, prover) is the finest public key there
     is. Two registrations of one window under one stream and prover have one salt and so one seed per tile, and `admit`
     refuses the second (`Reregistered`). Under another stream or prover the salts differ (`pouw_salt`)."""
@@ -269,7 +269,7 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
     """PoUW window `window`'s certifier salt, `certifier.reveal(window, registration)`, given the window's registration
     as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the certifier (its receipt isn't the registration's; early, before the window's
-    last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never drawn or
+    last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never sampled or
     the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
@@ -283,11 +283,11 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
 
 
 def committed(certifier: Any, window: int, registration: Registration | None) -> bytes:
-    """What PoUW recorded with the certifier for PoUW window `window` before it drew the window's salt, the 64-byte
+    """What PoUW recorded with the certifier for PoUW window `window` before it sampled the window's salt, the 64-byte
     `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
     (`Proxy.commit_weights` records it, signed by the registered prover), given the window's registration. It fails
     closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on `reveal`'s conditions but the once,
-    or uncommitted: nothing recorded before the draw); or uncommitted, when what the certifier gives isn't 64 bytes."""
+    or uncommitted: nothing recorded before the sample); or uncommitted, when what the certifier gives isn't 64 bytes."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:

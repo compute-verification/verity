@@ -13,7 +13,7 @@
   pins a program, its object digest and the digest of its evaluated owners (`owners_digest`).
 * **Q_word v1** (`cut.evaluate_definition`, the algorithm in `verity.ml.circuits.cut`'s docstring).  The Calls are the root body's nodes other
   than its Input nodes, in canonical order; each is cut as its Definition's activation (parameters as inputs).  Units are numbered by
-  Call, then within the Call's cut; the input unit is not a unit (always checked, never drawn).  The width rule's X and W are the
+  Call, then within the Call's cut; the input unit is not a unit (always checked, never sampled).  The width rule's X and W are the
   query's parameters (EXTRAS = 0), integers in 1..2^16.  It applies to a program whose root Calls are `call` or `primitive` nodes
   (`cut`'s step 0); otherwise `evaluate` raises `QueryInapplicable` and `verify` refuses (`query-inapplicable`).
 * **Q_word v2**, the same parameters: v1's evaluation exactly (the same Calls, units, owners and committed sets, so the same

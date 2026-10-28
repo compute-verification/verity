@@ -163,7 +163,7 @@ class Transfer:
     def commit(cls, link: str, direction: Direction, window: int, kind: str, program: str, value: str,
                rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None, word_bits: int = WORD_BITS,
                schema: str = SCHEMA) -> Transfer:
-        """`rows`: the value's rows of `word_bits`-bit leaves, all of one width. `salts`: one a row, drawn once (default:
+        """`rows`: the value's rows of `word_bits`-bit leaves, all of one width. `salts`: one a row, sampled once (default:
         fresh from the operating system) and never for another row."""
         _kind(kind, direction)
         _format(word_bits, schema)

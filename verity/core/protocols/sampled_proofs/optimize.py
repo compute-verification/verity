@@ -14,11 +14,11 @@ whose wrong output can forfeit downstream work (a noise or form proof block ever
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as C-Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
-`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
-committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
+`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
+committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
-at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
+at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A sampled proof block's
 witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
@@ -61,7 +61,7 @@ class Candidate:
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
     (m = k_log + nbl <= 35); `per_replay` proof blocks of it lie in each replay block of domain `replay`; and `kind` is its weight
-    class for the draw's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
+    class for the sample's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
 
     op: str
     template: str
@@ -100,7 +100,7 @@ class Candidate:
 @dataclass(frozen=True)
 class TemplateCost:
     """One subcircuit's measured costs under one proof-system version, in the caller's currency: `statement_fixed` (a0) and
-    `statement_per_unit` (a1, per staged proof block) per touched statement, `unit` (b) per proved proof block, `replay` per drawn proof block,
+    `statement_per_unit` (a1, per staged proof block) per touched statement, `unit` (b) per proved proof block, `replay` per sampled proof block,
     and `sigma`, their relative uncertainty.  A field left None is derived from the model's rates."""
 
     statement_fixed: float | None = None
@@ -113,7 +113,7 @@ class TemplateCost:
 @dataclass(frozen=True)
 class ReplayDomain:
     """`units` replay blocks (one layer of one step each, say), each re-executed from the last committed state at `cost`
-    to build the witnesses of the drawn proof blocks in it, when the draw meets any.  Replay commits nothing: every value it
+    to build the witnesses of the sampled proof blocks in it, when the sample meets any.  Replay commits nothing: every value it
     recomputes was committed at serve time."""
 
     units: int
@@ -122,7 +122,7 @@ class ReplayDomain:
 
 @dataclass(frozen=True)
 class Commitment:
-    """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
+    """One tensor committed at serve time by one scale, whatever the sample: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
     scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
@@ -148,8 +148,8 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
-    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its drawn proof blocks (`IntegrityPeriod`'s
-    hidden window: one session, its k drawn proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityPeriod`'s
+    hidden window: one session, its k sampled proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
     witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id."""
@@ -242,7 +242,7 @@ class Certificate:
 
 @dataclass(frozen=True)
 class Plan:
-    """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per subcircuit, the subcircuits
+    """A cut per op type (`choice`: op -> its alternative), a statement size and a sample size per subcircuit, the subcircuits
     held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
     `total` everything), each weight class's weight on the density (1 when absent), and the certificate once certified."""
 
@@ -278,7 +278,7 @@ def _miss(n: int, m: int, k: int) -> float:
 
 
 def _hit(n: int, m: int, k: int) -> float:
-    """1 - `_miss`, its digits kept when the draw is sparse."""
+    """1 - `_miss`, its digits kept when the sample is sparse."""
     return -expm1(_log_miss(n, m, k))
 
 
@@ -302,7 +302,7 @@ def _statement_sizes(cap: int, units: int) -> list[int]:
 
 
 def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, dict[str, float]]:
-    """Drawing k of the candidate's proof blocks: its expected proving cost at the cheapest statement size, that size (the larger
+    """sampling k of the candidate's proof blocks: its expected proving cost at the cheapest statement size, that size (the larger
     one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay domains are the plan's."""
     a0, a1 = costs.statement(c)
     units = k * (costs.unit(c) + costs.of(c).replay)
@@ -319,8 +319,8 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
 
 
 def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: CostModel) -> float:
-    """The expected cost of building the drawn proof blocks' witnesses, by replaying each replay block the draw meets: a domain's
-    replay block is missed when every subcircuit's draw misses its share of it, independently across strata."""
+    """The expected cost of building the sampled proof blocks' witnesses, by replaying each replay block the sample meets: a domain's
+    replay block is missed when every subcircuit's sample misses its share of it, independently across strata."""
     total = 0.0
     for name in sorted({c.replay for c in chosen if c.replay}):
         if name not in costs.replay:
@@ -745,10 +745,10 @@ def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Obj
 
 def weigh(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *, by: str = "harm",
           factors: Sequence[float] = (0.25, 0.5, 2.0, 4.0), rounds: int = 3, exact: bool = True, **kw) -> Plan | None:
-    """The cheapest plan certifying at most `target` when each weight class (`Candidate.block`) is drawn at its own weight
+    """The cheapest plan certifying at most `target` when each weight class (`Candidate.block`) is sampled at its own weight
     on the density: from equal weights, a coordinate search, each kind of the current plan in turn (costliest first) taking
     the factor of `factors` on its weight that makes `for_target` cheapest, for at most `rounds` passes.  The certificate
-    is the same stratified one over every subcircuit, so the weights are parameters of the draw, chosen at the target, and
+    is the same stratified one over every subcircuit, so the weights are parameters of the sample, chosen at the target, and
     never of the guarantee; the plan carries them, and registers by its sizes (`work_law`) as any plan does."""
     def at(weights: Mapping[str, float]) -> Plan | None:
         return for_target(candidates, costs, objective, target, by=by, exact=exact, weights=weights, **kw)
@@ -808,7 +808,7 @@ def structure(p: Plan) -> tuple:
 def perturb(costs: CostModel, what: str, factor: float, candidates: Sequence[Candidate] = ()) -> CostModel:
     """The model with one group of costs scaled by `factor`: "prove" (per proved proof block), "statement" (per touched
     statement), "commit" (serving's, the proof blocks' and the fixed serve-time commitments'), "replay" (the domains' and per
-    drawn proof block), or one subcircuit's (its derived costs pinned from `candidates` first)."""
+    sampled proof block), or one subcircuit's (its derived costs pinned from `candidates` first)."""
     t = dict(costs.templates)
     if what == "prove":
         t = {k: replace(v, unit=None if v.unit is None else v.unit * factor) for k, v in t.items()}

@@ -7,7 +7,7 @@ ones, 8 the E4M3 and E5M2 ones, 64 the FP64 ones, and every width the integer ed
 ones, all ones but the sign).
 
 Vector ``j < E`` sets every leaf to the ``j``-th edge of its width (all-NaN, all-inf, ...), so a specials rule is hit on every
-operand at once; the random vectors then draw each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
+operand at once; the random vectors then sample each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
 floats only: arithmetic in the range serving sees) or a uniform word.
 
 A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is in no vector: every vector reads the program's
@@ -34,7 +34,7 @@ E5M2 = (0x7C, 0xFC, 0x7D, 0x7E, 0x7B, 0xFB, 0x03, 0x04, 0x3C)
 FP64 = (0x7FF0000000000000, 0xFFF0000000000000, 0x7FF8000000000000, 0x7FF0000000000001, 0x7FEFFFFFFFFFFFFF, 0x000FFFFFFFFFFFFF,
         0x0010000000000000, 0x3FF0000000000000, 0xBFF0000000000000)
 FLOATS = {8: E4M3 + E5M2, 16: BF16 + FP16, 32: FP32, 64: FP64}
-#: (exponent bits, bias) of the format a random "near 1.0" word is drawn in, per width
+#: (exponent bits, bias) of the format a random "near 1.0" word is sampled in, per width
 _NEAR_ONE = {16: (8, 127), 32: (8, 127)}
 
 

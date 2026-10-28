@@ -1,15 +1,15 @@
 //! Zero-knowledge readiness for `verity/flock-circuit` (lane flock-circuit, M0): the masking hooks the prover API
 //! carries now, as no-ops, and the prover's own randomness.
 //!
-//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it
+//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is sampled and kept where it
 //! is used again, so no premise on a stream generator is left on any of them (Daniel, 9 Oct, decision 4). Under the outer
-//! firewall the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
+//! ZK server the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
 //! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
 //! seed, verifier coins): no message byte depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on
 //! unseeded device state; the selftest `prover_is_deterministic` checks proofs and transcript byte for byte.
 //!
 //! [`ProverRng`] is the source of the masks and the Reed–Solomon padding: the mask slot's words, the pads and their padding,
-//! τ's salt, and Ligerito level 0's padding coefficients and extra lanes. In a proving build each draw reads the OS afresh, in
+//! τ's salt, and Ligerito level 0's padding coefficients and extra lanes. In a proving build each sample reads the OS afresh, in
 //! [`OS_PIECE`]-byte pieces on rayon's threads, whatever its `(purpose, index)`, so a value used twice is kept by its user: level
 //! 0's hiding for the table's session, each rep's pads in the rep's state, each block's mask words with the table's witness
 //! sources. Under an injected seed they are ChaCha20 streams of it, addressed by `(purpose, index)` (`set_stream` /
@@ -41,7 +41,7 @@ pub const STREAM_COIN_NONCE: u64 = 8;
 /// Bytes per `hm96-sha512/v1` leaf salt.
 pub const SALT_BYTES: usize = 192;
 /// A session of several tables gives each its own randomness (the public-circuit ZK proof's §2.2 and gap 1): in a proving build
-/// every table's draws are reads of their own; under an injected seed table `j` reads stream `purpose` at ChaCha20 stream
+/// every table's samples are reads of their own; under an injected seed table `j` reads stream `purpose` at ChaCha20 stream
 /// `purpose | j << TABLE_SHIFT`. Its salt trees are ids `j << TABLE_SHIFT` (level 0) and up, below the next table's. Table 0's
 /// addresses are a one-table session's.
 pub const TABLE_SHIFT: u32 = 32;
@@ -50,7 +50,7 @@ pub const TABLE_SHIFT: u32 = 32;
 const LANE_CHUNK: usize = 1 << 12;
 
 /// The prover's seed: an explicit input of every proof. A proving build can only draw it from the OS, and then expands nothing
-/// from it (every random value is read from the OS where it is drawn). A test harness (feature `seed-injection`, or unit tests)
+/// from it (every random value is read from the OS where it is sampled). A test harness (feature `seed-injection`, or unit tests)
 /// can inject one, which the prover expands with ChaCha20, so it is a function of (statement, witness, seed, verifier coins).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ProverSeed {
@@ -77,8 +77,8 @@ impl ProverSeed {
 /// salts read with one call per leaf cost +96% prover time at m = 33. Trees are numbered: the level-0 tree is id 0 (both reps
 /// bind one root) and every later tree takes the next id. In a session of several tables, table `j` ([`LeafSalts::table`]) takes
 /// ids from `j << TABLE_SHIFT` instead. A tree's salts are read once, so no salt is used twice and every commitment to a tree
-/// sees one set: level 0's are kept for the proof ([`LeafSalts::level0`]: the session's `Commit`, both reps and the firewall's
-/// recheck all commit that tree), and a tree whose salts the firewall's Lean finish drew ([`LeafSalts::preset`]) is kept
+/// sees one set: level 0's are kept for the proof ([`LeafSalts::level0`]: the session's `Commit`, both reps and the ZK server's
+/// recheck all commit that tree), and a tree whose salts the ZK server's Lean finish drew ([`LeafSalts::preset`]) is kept
 /// until the device's tree takes them (zeroed if dropped first). Salts are never written to a record. An
 /// injected seed (a test harness only) expands them with ChaCha20 instead, leaf `i` of tree `id` being blocks
 /// `3i, 3i + 1, 3i + 2` under its `STREAM_SALT` key with nonce `id` ([`chacha20_block`]), so a test proof repeats.
@@ -97,7 +97,7 @@ pub const OS_PIECE: usize = 1 << 16;
 #[derive(Default)]
 struct Kept {
     level0: Option<std::sync::Arc<Vec<u8>>>,
-    /// trees whose salts were drawn elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first draw
+    /// trees whose salts were sampled elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first draw
     preset: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
 }
 
@@ -186,8 +186,8 @@ impl LeafSalts {
     }
 
     /// Tree `id`'s salts, `leaves` × 192 bytes (level 0's: [`Self::level0`]'s): its preset salts at that size, once, else read
-    /// afresh. A device that draws a tree at another size than the Lean finish's gets salts of its own, its tree is not the
-    /// finish's and its opening fails the firewall's check, and nothing panics.
+    /// afresh. A device that samples a tree at another size than the Lean finish's gets salts of its own, its tree is not the
+    /// finish's and its opening fails the ZK server's check, and nothing panics.
     pub fn expand(&self, id: u64, leaves: usize) -> Vec<u8> {
         if id == self.level0 {
             return self.level0(leaves).to_vec();
@@ -214,7 +214,7 @@ impl LeafSalts {
     }
 }
 
-/// Where a proving build's draws read the OS's bytes when not from `getrandom` itself: under the outer firewall, the Lean
+/// Where a proving build's samples read the OS's bytes when not from `getrandom` itself: under the outer ZK server, the Lean
 /// server's `flock-firewall tap` (`firewall::lean_tap`, PROTOCOL.md §10.4), set once before the process's first draw.
 static OS_SOURCE: std::sync::OnceLock<std::sync::Mutex<Box<dyn FnMut(&mut [u8]) + Send>>> = std::sync::OnceLock::new();
 
@@ -302,7 +302,7 @@ pub fn chacha20_block(key: &[u8; 32], counter: u64, nonce: u64) -> [u8; 64] {
     out
 }
 
-/// The prover's random words: in a proving build the OS's, read afresh by every draw (two draws at one address get different
+/// The prover's random words: in a proving build the OS's, read afresh by every sample (two draws at one address get different
 /// words); under an injected seed, ChaCha20 stream `purpose | table << TABLE_SHIFT` from word `8 index`, a function of the seed
 /// and the address alone.
 pub struct ProverRng {
@@ -350,7 +350,7 @@ impl ProverRng {
     }
 
     /// `n` words for each of `lanes` lanes, on rayon's threads: in a proving build each lane read from the OS; under an injected
-    /// seed lane `i` is stream `purpose` at index `i << 32` (`f128s(purpose, (i as u64) << 32, n)`), drawn in [`LANE_CHUNK`]-word
+    /// seed lane `i` is stream `purpose` at index `i << 32` (`f128s(purpose, (i as u64) << 32, n)`), sampled in [`LANE_CHUNK`]-word
     /// pieces, each worker with its own copy of the generator: a word is a function of the seed and its address alone, so the
     /// draw is the sequential one's word for word.
     pub fn f128s_lanes(&self, purpose: u64, lanes: usize, n: usize) -> Vec<Vec<F128>> {
@@ -457,7 +457,7 @@ mod tests {
                                            "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"));
     }
 
-    /// A proving build's salts are the OS's: no two trees, proofs or leaves share a salt, a tree's draw spans several
+    /// A proving build's salts are the OS's: no two trees, proofs or leaves share a salt, a tree's sample spans several
     /// `getrandom` pieces, and level 0's are read once.
     #[test]
     fn os_salts_are_fresh_per_tree_and_read_once_where_shared() {
@@ -476,7 +476,7 @@ mod tests {
     }
 
     /// Salts drawn elsewhere for the next trees ([`LeafSalts::preset`], the Lean finish's): the first draw of each at its size
-    /// takes them; a second draw, a draw at another size and a tree past them read their own.
+    /// takes them; a second draw, a sample at another size and a tree past them read their own.
     #[test]
     fn preset_salts_are_the_next_trees() {
         let mut a = LeafSalts::for_seed(&ProverSeed::from_os());
@@ -546,7 +546,7 @@ mod tests {
     }
 
     /// A proving build's words are the OS's: two draws at one address, two tables of one seed at one address, and the lanes of
-    /// a draw spanning several `getrandom` pieces share no word.
+    /// a sample spanning several `getrandom` pieces share no word.
     #[test]
     fn os_draws_are_read_afresh_at_every_address() {
         let seed = ProverSeed::from_os();

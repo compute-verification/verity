@@ -1,8 +1,8 @@
-"""The recursive inner session's draw: the coin server answers ``Register`` with the verifier's full draw
+"""The recursive inner session's sample: the coin server answers ``Register`` with the verifier's full draw
 (`verity_flock.rec_live.full_draw`, the stratified law at K = the population, so every unit) and the session record keeps
 it as ``unit_draw``, which `verify` holds to its own law (``--stratified N --program --partition``). `full_draw` is checked
 against Lean's own derivation (``flock-verify draw`` at K = N), and the controls `rec_inner.py forge` makes of a drawn
-record (no draw, a unit dropped) against what they change. `inner_draw` reads a record's draw as the verifier does and
+record (no sample, a unit dropped) against what they change. `inner_draw` reads a record's sample as the verifier does and
 refuses a record without one, and `rec_vstage stage` refuses to stage V* over such a session."""
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def test_the_full_draw_is_every_unit_and_each_stratum_whole():
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population(tmp_path):
     """`verify --stratified N` derives the law from its own program and partition object and draws by it: at K = N every
-    stratum draws all its units, whatever the coins, so its draw is `full_draw`'s, byte for byte once canonical."""
+    stratum samples all its units, whatever the coins, so its sample is `full_draw`'s, byte for byte once canonical."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
 
@@ -99,7 +99,7 @@ def test_the_forged_records_lose_the_draw_or_a_unit(tmp_path):
 
 
 def test_the_inner_draw_is_the_records_and_a_record_without_one_is_refused():
-    """`inner_draw` reads the draw the proxy's record keeps, and refuses a record that keeps none, or none readable, with the
+    """`inner_draw` reads the sample the proxy's record keeps, and refuses a record that keeps none, or none readable, with the
     verifier's reason (`RecSetup.noInnerDraw`; `test_vstar_difftest.test_inner_draw_agrees` holds the two readers alike)."""
     proxy = _proxy(DRAW)
     T._session(proxy)
@@ -113,7 +113,7 @@ def test_the_inner_draw_is_the_records_and_a_record_without_one_is_refused():
 
 
 def test_vstage_refuses_to_stage_over_an_undrawn_inner_session(tmp_path, capsys):
-    """`rec_vstage stage` over an inner session whose record holds no draw exits 2 before it reads the fold: the verifier
+    """`rec_vstage stage` over an inner session whose record holds no sample exits 2 before it reads the fold: the verifier
     refuses every session over it (`RecSetup.innerDrawn`)."""
     from verity_flock import rec_vstage as S
 

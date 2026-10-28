@@ -1,5 +1,5 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
-accepted; the same window over a store that lost its first drawn block is rejected on codec at that draw; an uncertified
+accepted; the same window over a store that lost its first sampled proof block is rejected on codec at that sample; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
 system's (pinned from C-Flock's commit strings)."""
 
@@ -102,7 +102,7 @@ def test_an_honest_window_is_accepted(store) -> None:
 
 def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
     """The store's block at the first draw replaced by other bytes before the passes: the prover receipts what it holds,
-    the coins draw the same positions, and the unit's verdict on that draw is codec."""
+    the coins select the same positions, and the unit's verdict on that sample is codec."""
     d0 = window(store).session.drawn(0)[0]
     lost = copy.copy(store)
     lost.blocks = list(store.blocks)

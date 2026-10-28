@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `bash examples/h200/phases.sh PHASE [--dry-run] [FLAG...]`: one phase of Demo A's M3 proper on the demo H200
 # (its interfaces in examples/h200/interfaces; run.py is the step driver).
-# Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin drawn only after the
+# Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin flipped only after the
 # registration is in the challenger's ledger. Each phase below starts its job by the run recorder (`research run`) on its
 # machine (or, for `register`, here on the CPU) with the variables it names; --dry-run prints the command and starts
 # nothing, and further FLAGs go to the recorder. Each phase's run of record is in example.toml's `runs`:
@@ -13,17 +13,17 @@
 #             subset:8 over the step's 3,124,276,224 proof blocks (m3stepreg.py). ROOTS: commit's roots.json, WEIGHTS_REG:
 #             weights' registration.json, PROGRAM, COMMIT_RUN: commit's run id; then REG_OUT/step-registration.json
 #             goes to the evidence store (kind m3-step-registration/v1)
-#   coin      one live coin from the challenger host's gate, its session opened at the registration's digest, no redraw; the
+#   coin      one live coin from the challenger host's gate, its session opened at the registration's digest, no resample; the
 #             receipt and draw.json out (m3coin.py). REG: step-registration.json
-#   open      every registered weight row a drawn block reads, opened from weights' witness (m3bundle.py weights). REG, DRAW:
+#   open      every registered weight row a sampled proof block reads, opened from weights' witness (m3bundle.py weights). REG, DRAW:
 #             coin's draw.json, WEIGHTS_STATE: weights' state directory on WEIGHTS_NODE
 #   replay    the step again on the H200 under the salt secret, every root held to roots.json, the drawn slots' rows kept
 #             beside the secret (m3proper_job.sh PHASE=replay). ROOTS, REG, DRAW
-#   bundle    each drawn block's one-member window and replay bundle, checked against both registrations (m3proper_job.sh
+#   bundle    each sampled proof block's one-member window and replay bundle, checked against both registrations (m3proper_job.sh
 #             PHASE=build); then the tree goes to the evidence store (kind m3-drawn-blocks/v1). REG, DRAW,
 #             RECEIPT: coin's receipt.json, WEIGHTS_OPEN: open's weights-open.json
-#   prove     the draw re-derived from the coin, every block held to the step registration, then each proved by C-Flock --zk
-#             behind the firewall one at a time and decided by Lean, one flipped bit refused (prove_bundle.sh). TREE_ART:
+#   prove     the sample re-derived from the coin, every block held to the step registration, then each proved by C-Flock --zk
+#             behind the ZK server one at a time and decided by Lean, one flipped bit refused (prove_bundle.sh). TREE_ART:
 #             bundle's art id, COIN_DIR: coin's out/coin with its session's ledger, on CPU_NODE
 # Machines: H200_NODE (an H200 node), CPU_NODE and WEIGHTS_NODE (CPU nodes); each defaults to the node its run of record
 # used. A phase whose job isn't in this checkout (prove_bundle.sh's PB_IN_ART and PB_COIN aren't on main) says so and starts

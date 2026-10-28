@@ -7,7 +7,7 @@ sample misses its incorrect units, so outer challenges must not use it (Fiat-Sha
 is ``verity/{protocol}/{purpose}/v{n}``.  `context` names the bindings the challenge must follow (registered roots, a
 Program digest, a request header, a device), so a challenge cannot be computed before they exist.
 
-A `Key` drives exact integer samplers over counter-mode streams.  Every draw is addressed by an `index`, so the draws
+A `Key` drives exact integer samplers over counter-mode streams.  Every sample is addressed by an `index`, so the samples
 for different items are independent streams, and any shard of a population computes its own draws without the rest
 (`Key.shard` hands a worker a sub-key).  Stdlib only.
 

@@ -104,7 +104,7 @@ class Host:
 
     def lines(self, p, i) -> None:
         """pearl_c_sm120.cu's `lines` at E_A, which the host build lacks: line t < i4 is line 0 under its own key (p4 + 32 t),
-        the rest line t under p0's, each drawn by `C.sample_line`'s -h3 rule from the key."""
+        the rest line t under p0's, each sampled by `C.sample_line`'s -h3 rule from the key."""
         key, codes, t32, t128, own = (*p, 0, 0, 0)[:5]
         side, factor, count, norm, rows = i
         assert (side, factor, norm, t32, t128) == (0, 0, R.NORM_256, 0, 0)

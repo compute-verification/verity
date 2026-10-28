@@ -395,7 +395,7 @@ def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(t
     at row 0 of its one row in both instances and every other port at row r; ``v`` is the verifier's own and ``out`` its zero
     rows. Both instances hold and the unit agrees with the reference; with rep 1's first H3 round forged (the prover's
     registration of another row), rep 1 alone fails at H3. When Lean is built, its `statement` accepts the honest files, and
-    refuses the forged prover's row against the verifier's own entry of the row the firewall committed (one salt each)."""
+    refuses the forged prover's row against the verifier's own entry of the row the ZK server committed (one salt each)."""
     from verity.ml.commitments import hm96
 
     sh = RS.Shape(2, 6, 1, 1)
@@ -475,7 +475,7 @@ def _draws(seed: int):
 
 
 def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
-    """On a hidden circuit's entries, h as the relay folds it, and coins drawn a round at a time: the reference accepts the
+    """On a hidden circuit's entries, h as the relay folds it, and coins flipped a round at a time: the reference accepts the
     rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG, u's P_LOG and the claim alone (no
     coins), the claim it sends; the registered claim is R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
     B is one entry, the one held twice in A none."""

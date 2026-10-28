@@ -115,7 +115,7 @@ def _rfc6962_siblings(count: int, ranks: set[int]) -> int:
 @pytest.mark.parametrize("leaves, universe, s", [(1, 3, 2), (2, 2, 3), (3, 5, 3), (5, 5, 3), (6, 9, 3), (8, 8, 3),
                                                   (7, 10, 3), (12, 12, 2)])
 def test_multiproof_expectation_is_exact(leaves, universe, s):
-    """Every draw of `s` from `universe` equally likely outcomes, `leaves` of them this tree's: the mean multiproof
+    """Every sample of `s` from `universe` equally likely outcomes, `leaves` of them this tree's: the mean multiproof
     over all draws is `expected_siblings`, and the audit's RFC 6962 tree never needs more."""
     siblings = hashes = distinct = 0
     for picks in itertools.product(range(universe), repeat=s):
@@ -154,7 +154,7 @@ def test_multiproofs_share_paths():
 
 
 def test_retention_is_exact():
-    """Every draw of 3 from the window's 10 receipts, two receipts a leaf and the last leaf short: the mean bytes read
+    """Every sample of 3 from the window's 10 receipts, two receipts a leaf and the last leaf short: the mean bytes read
     again to rebuild every opened node at each level is `retention`'s, and level 0 keeps every receipt."""
     g = o.Geometry(stores=1, blocks=5, passes=2, block_bytes=8, receipts_per_leaf=2)
     assert o.retention(g, 3, 0) == o.Retention(0, 2 * (5 * 64 + 3 * 64), 0.0)

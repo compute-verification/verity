@@ -253,7 +253,7 @@ def _x(x: str) -> bytes:
 def seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
     """A served call's seeds: SHA-512(`SEEDS_TAG` ‖ coin ‖ receipt ‖ be64(call) ‖ x) for each stream x, from the
     challenger's raw coin `coin` opened after the operand roots, the digest `receipt` of the certifier's signed receipt
-    of them, and the call's index `call` in its sampling block."""
+    of them, and the call's index `call` in its verification phase."""
     if not 0 <= call < 1 << 64:
         raise ValueError(f"a call's index is a u64, not {call}")
     head = SEEDS_TAG + _digest("the coin", coin) + _digest("the operand-root receipt", receipt) + call.to_bytes(8, "big")

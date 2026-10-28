@@ -395,7 +395,7 @@ class _Model:
 
 class _Engine:
     """A stand-in for vLLM's ``llm_engine``: each `step` runs its step's calls, (weight, rows), through the model's linears,
-    as the step's forward does, on rows drawn from `seed`."""
+    as the step's forward does, on rows sampled from `seed`."""
 
     def __init__(self, model, steps, seed=0):
         self.model, self.steps, self.rng, self.at = model, steps, np.random.default_rng(seed), 0
@@ -1070,7 +1070,7 @@ def test_verify_run_reads_a_v1_manifest_only_as_a_recorded_replay(honest_pass):
 
 def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refused():
     """A pass's epoch re-starts only from the epoch's own salt coin under the commitment the verifier holds, opened after
-    the weights' root, with the salt it derives: a coin of another challenger, one opened after another record, the draw
+    the weights' root, with the salt it derives: a coin of another challenger, one opened after another record, the sampling
     coin's label, a flipped coin byte, a claimed commitment that isn't the published one, or a salt that isn't the coin's is
     refused.  A pass recorded with a beacon (a v1 manifest) is read only as a replay of a recorded pass, and a manifest of
     any other schema not at all."""
@@ -1307,7 +1307,7 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
 def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
     """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
-    and the source is given in the command, never drawn inside the run."""
+    and the source is given in the command, never sampled inside the run."""
     from verity.ml.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}

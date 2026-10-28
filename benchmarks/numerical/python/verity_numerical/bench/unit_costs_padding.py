@@ -1,27 +1,27 @@
-"""Front F6's padding table: what proving an audit's drawn units in fixed-shape sessions costs over their own nonzeros, per
+"""Front F6's padding table: what proving an audit's sampled proof blocks in fixed-shape sessions costs over their own nonzeros, per
 workload and bucket menu, at unit = one subcircuit with :mod:`unit_costs`' per-unit nonzeros (registered lowering where one
 exists).
 
     python -m verity_numerical.bench.unit_costs_padding --inventory unit-costs.json --out DIR
 
 **Shapes.** A session proves B slots, each holding any unit of at most Z nonzeros: its shape is (B, Z). A menu is a set of
-Z buckets; a drawn unit goes to the least bucket at or above its nonzeros, and a bucket with X drawn units takes
+Z buckets; a sampled proof block goes to the least bucket at or above its nonzeros, and a bucket with X sampled proof blocks takes
 ceil(X / B) sessions of B slots. A unit's nonzeros for placement are its maximum (an attention stratum's at its largest T),
 and for the actual cost its mean (at the stratum's mean T).
 
 **Menus** (over the body, see tails): ``max`` one bucket at the largest Z; ``pow2`` the powers of two; ``dp{k}`` the k
 buckets minimising the expected padded nonzeros, Σ_b Z_b E[X_b], by dynamic programming over the sorted distinct Z with
-each unit type weighted by its draw mean (:func:`menu_dp`); ``natural`` one bucket per distinct Z (a GEMM-like unit per K,
+each unit type weighted by its sample mean (:func:`menu_dp`); ``natural`` one bucket per distinct Z (a GEMM-like unit per K,
 attention per NB stratum, every other binding its own).
 
 **Tails.** The sampler (token-select, gumbel) and every unit type over :data:`TAIL_FACTOR` x the body's 99th-percentile
-draw (the Z under which 99% of drawn units fall) are the tail, at B = 1 and never in a menu: each sampler binding its own
+draw (the Z under which 99% of sampled proof blocks fall) are the tail, at B = 1 and never in a menu: each sampler binding its own
 bucket, the other large units one bucket at their largest Z (``eval_per_stratum``: one bucket per distinct Z instead), its
 cost shown separately (``tail``). token-select is priced at its argmax tree (``unit_costs.retree``, applied here to an
 inventory without it), which supersedes the generic scan count; ``eval_step_model`` prices the tail again with it at
 (V − 1) ArgmaxStep units.
 
-**The draw.** K = ``record_k`` units uniform without replacement from the workload's N subcircuits; a bucket with n of them
+**The sample.** K = ``record_k`` units uniform without replacement from the workload's N subcircuits; a bucket with n of them
 holds X ~ Hypergeometric(N, n, K), its pmf summed exactly (:func:`hyper`). Per workload x menu x B:
 
 - ``zpad``: Σ_b Z_b E[X_b] / E[actual], the padding from rounding each unit's nonzeros up to its bucket;
@@ -33,7 +33,7 @@ holds X ~ Hypergeometric(N, n, K), its pmf summed exactly (:func:`hyper`). Per w
   its lower quantile with 2⁻⁴⁰ split evenly over them (a union bound).
 
 ``best_B`` is the largest B whose pad_mean is within :data:`B_TOLERANCE` of B = 1's (fewer, fuller sessions at the same
-work). ``large`` lists, per Z in :data:`LARGE_Z`, the unit types over it (which must be split) with their draw share.
+work). ``large`` lists, per Z in :data:`LARGE_Z`, the unit types over it (which must be split) with their sample share.
 """
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def units_of(inv: Mapping[str, Any], workload: str) -> tuple[int, list[Unit], li
     return N, out, skipped
 
 
-# --- the draw --------------------------------------------------------------------------------------------------------------
+# --- the sample --------------------------------------------------------------------------------------------------------------
 
 _PMF: dict[tuple[int, int, int], tuple[int, list[float]]] = {}
 
@@ -172,7 +172,7 @@ def menu_natural(units: Sequence[Unit]) -> list[float]:
 
 
 def menu_dp(units: Sequence[Unit], k: int) -> list[float]:
-    """The at most k bucket tops minimising Σ_b Z_b W_b, W_b the draw weight (units) of the types in bucket b: exact, over
+    """The at most k bucket tops minimising Σ_b Z_b W_b, W_b the sample weight (units) of the types in bucket b: exact, over
     the sorted distinct Z (a bucket's top is the largest Z it holds)."""
     zs = sorted({u.z for u in units})
     w = [sum(u.n for u in units if u.z == z) for z in zs]

@@ -2,8 +2,8 @@
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
-over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), a
-registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed drawn
+over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's samples (`Session.close`'s), a
+registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed sampled
 from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
 from __future__ import annotations

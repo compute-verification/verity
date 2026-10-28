@@ -4,7 +4,7 @@ doesn't control (the challenger host, `trusted-host`) while the prover stays on 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
 its own coins and answers with the registration and the session's coin commitment. It then sends each pass's challenge
-(`{"run": {"challenge", "i", "previous", "t"}}`, answered `{"root"}`) and each window's draws (`{"open": {"draws",
+(`{"run": {"challenge", "i", "previous", "t"}}`, answered `{"root"}`) and each window's samples (`{"open": {"draws",
 "t"}}`, answered `{"openings": hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and
 `{"end": true}` last. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one
 `period.run` makes in one process.

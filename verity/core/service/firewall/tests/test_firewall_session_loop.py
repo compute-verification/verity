@@ -1,4 +1,4 @@
-"""`core-firewall session` (`Core.Firewall.Loop`): the release side around C-Flock's session loop, on the firewall's state
+"""`core-firewall session` (`Core.Firewall.Loop`): the release side around C-Flock's session loop, on the ZK server's state
 directory, with a scripted auditor on the far side and files no statement sets up from (the loop starts; a `Hello` would
 be refused at its setup). A session's `Ping`s are the loop's to answer until its first other request, which is admitted
 or refused on the record before anything of the session reaches the auditor; a refused session reaches nothing of it.
@@ -71,7 +71,7 @@ def verdict(resp: bytes) -> dict:
 
 
 class Auditor:
-    """A scripted auditor: each connection's frames, `Register` answered with a draw of none, anything else `Ok`."""
+    """A scripted auditor: each connection's frames, `Register` answered with a sample of none, anything else `Ok`."""
 
     def __init__(self):
         self.got: list[list[bytes]] = []
@@ -141,7 +141,7 @@ def test_usage(exe):
 
 def test_a_refused_session_reaches_nothing_of_the_auditor(exe, tmp_path):
     """Its inner session has not finished: its `Ping` is the loop's to answer, its first other request is refused with the
-    firewall's why, its `Finish` answered with a verdict that does not accept, and the auditor is never connected to. The
+    ZK server's why, its `Finish` answered with a verdict that does not accept, and the auditor is never connected to. The
     record is Python's for the same ops: open, slot, refused."""
     fw = FW.Firewall(tmp_path / "lean")
     s = fw.open("s", ["L0"])

@@ -1,4 +1,4 @@
-"""forge-after: V*'s three forgeries that the prover's firewall stops before release (coef, dirs, message), made after an
+"""forge-after: V*'s three forgeries that the prover's ZK server stops before release (coef, dirs, message), made after an
 honest firewalled prove instead, and put to the Lean verifier.
 
     python3 benchmarks/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out LEAN_OUT [--bin NAME=PATH ...] [--kinds K,..]
@@ -6,9 +6,9 @@ honest firewalled prove instead, and put to the Lean verifier.
 ``run.py``'s ``forge-after`` step runs it after the lean step (``--run-out``: that step's out/, whose ``lean/own-<stmt>.txt``
 it reuses) with 85's flock-verify; ``forge_after.sh`` runs it over an earlier run's data.
 
-A forgery staged before proving (`rec_vstage --forge`) puts a wrong row in the prover's ``inst.bin``, and the firewall refuses
+A forgery staged before proving (`rec_vstage --forge`) puts a wrong row in the prover's ``inst.bin``, and the ZK server refuses
 to release a proof of it, so Lean never sees a release. Here the release is an honest one pod 85 already proved behind the
-firewall (``v-sess/L0`` for coef and dirs, ``v-sess/alg-p0`` for message). Each forgery changes the verifier's statement
+ZK server (``v-sess/L0`` for coef and dirs, ``v-sess/alg-p0`` for message). Each forgery changes the verifier's statement
 alone, on copies of its files: row 0 of the port (``coef``, ``dirs``, ``m0``) gets bit 0 of its first word flipped under
 the row's own salt, so that the proved row and the verifier's registered row differ by one bit, as in the staged forgery.
 

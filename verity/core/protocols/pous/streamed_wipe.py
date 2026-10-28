@@ -9,7 +9,7 @@ checked in the clear, and nothing of the prover's is opened.
 ~~~text
 K     = derive(secret, KEY_DOMAIN, {server, session})            32 bytes, one key per server and wipe
 L_i   = SHA-512(LABEL_TAG ‖ K ‖ u64 i)                           64 bytes, i in [0, N): one compression a label
-c_j   = derive(coin_secret, COIN_DOMAIN, {server, session, n}).uniform(N, j)    drawn once the fill is complete
+c_j   = derive(coin_secret, COIN_DOMAIN, {server, session, n}).uniform(N, j)    sampled once the fill is complete
 ~~~
 
 `secret` is the auditor's for this server and wipe, `coin_secret` is fresh from the OS when the fill completes.  A
@@ -20,9 +20,9 @@ session has four steps:
    whose sizes add up to at least the fill.
 2. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
    `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
-3. **Challenge.** Once the fill is complete the challenger draws its coins, then reveals them a batch at a time
+3. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
-   `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
+   `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is resampled.
 4. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
    commitment, how the session ended, the fill's times and the egress the network certifier counted over the session
    (`close`), and the records root is the frame-v3-sha512 root of the batch records.
@@ -241,7 +241,7 @@ def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end
 
 class Challenger:
     """One streamed-label wipe of `server` under `session`, signed by `signer` (module docstring).  The session id goes
-    into `log` before anything else.  `coin_secret` is drawn from the OS when the fill completes unless a test gives
+    into `log` before anything else.  `coin_secret` is sampled from the OS when the fill completes unless a test gives
     it."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
@@ -294,7 +294,7 @@ class Challenger:
         return out
 
     def challenge(self) -> tuple[int, ...]:
-        """Reveal the next batch's indices and read its send time; the coins are drawn at the first batch."""
+        """Reveal the next batch's indices and read its send time; the coins are flipped at the first batch."""
         if self.fill_end_ns is None:
             raise RuntimeError("the challenges start once the fill is complete")
         if self.ended is not None:
@@ -351,7 +351,7 @@ class Challenger:
         return self.signed
 
     def coins(self) -> tuple[int, ...]:
-        """The drawn indices, public once the session is signed (the verifier's draws)."""
+        """The drawn indices, public once the session is signed (the verifier's samples)."""
         if self.signed is None or self.indices is None:
             raise RuntimeError("the coins are published after the session, once it is signed")
         return self.indices

@@ -1,7 +1,7 @@
 """The served rows held to their Programs' statics (`served_statics.ServedStaticsTie_v1`) on a sealed served window's real
 rows, proved in zero knowledge: the window's P / G blocks, each a unit whose committed served rows are its leaf of the
 served-rows registration, read through the Lean verifier's registered reads, by C-Flock `prove --zk` behind the Lean
-firewall and held by Lean `verify --zk --registered`, through N2-ZK's audit path (`served_tie_zk`'s stager and scan); and
+ZK server and held by Lean `verify --zk --registered`, through N2-ZK's audit path (`served_tie_zk`'s stager and scan); and
 the cost.
 
     python benchmarks/prove_path/served_statics_zk.py cost [--out DIR]
@@ -223,7 +223,7 @@ def stage(M, sg: SimpleNamespace, name: str, units: list, d: SimpleNamespace, sa
 
 
 def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, port: int) -> dict:
-    """The statement registered, every unit drawn by the verifier's Lean, proved --zk behind the firewall and held by Lean
+    """The statement registered, every unit sampled by the verifier's Lean, proved --zk behind the ZK server and held by Lean
     with the verifier's own registered reads; then per unit the verifier's side: ``pub`` opened to its own copy, the
     verdict read, and ``srb``'s read predicted (`served_rows.leaf_ok`). Writes what the verifier received under
     ``out / "verifier"``."""

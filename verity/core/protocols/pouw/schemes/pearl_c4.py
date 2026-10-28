@@ -3,7 +3,7 @@
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
-inside one atom per element, one noisy cast forms the operand, Pearl's tickets are drawn on C̃, the BF16 clean-up U is
+inside one atom per element, one noisy cast forms the operand, Pearl's tickets are sampled on C̃, the BF16 clean-up U is
 checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the
 theory lane has stated and nobody has proved.
 
@@ -554,7 +554,7 @@ def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
     """Per element of one row: whether its E2M1 code may be the same at every noise draw (P3's saltDead, on codes).
 
     An element is salt-live when two draws in the support (every pair of 32-code E2M1 lines) give its code two values;
-    every other element counts as salt-dead, the sound side.  The draws: E ≡ +6 on the row, the element's F_t ≡ +6, 0 or
+    every other element counts as salt-dead, the sound side.  The samples: E ≡ +6 on the row, the element's F_t ≡ +6, 0 or
     −6, and every other F_u of its block ≡ 0, so the block's other elements are the atom on α·x_u alone and its amax is
     theirs or the element's."""
     atom = BLACKWELL_SM120_NVF4
@@ -562,7 +562,7 @@ def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
     recip: dict[int, int] = {}
 
     def code(v: int, amax: int) -> int:
-        """The element's code at one draw, with −0 (0x8) as 0: salt-deadness compares values."""
+        """The element's code at one sample, with −0 (0x8) as 0: salt-deadness compares values."""
         if amax not in recip:
             recip[amax] = block_scale(fmt, amax)[1]
         c = e2m1(fp32.mul(v, recip[amax]))
@@ -624,7 +624,7 @@ def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
 def noise_law(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
     """The exact law of n = Σ_r (2E_r)·(2F_r) given this salt's E line, F_r uniform over the 16 E2M1 codes and independent
     (one element's noise is a_E·2^-6·n): (lowest value, pmf over the consecutive integers from it).  F is symmetric, so
-    only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one draw's law."""
+    only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one sample's law."""
     law: tuple[int, tuple[float, ...]] = (0, (1.0,))
     for v in sorted({abs(_F2[c]) for c in e_row} - {0}):
         lo, pmf = _f_power(sum(1 for c in e_row if abs(_F2[c]) == v))
@@ -1099,7 +1099,7 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
 class PearlC4:
     """Pearl-C on sm_120's FP4: ``k_min`` = 1024, 64 x 64 tiles and ``n_min`` = 128 (`B_OVF_MIN_N`); smaller bounds make a
     test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
-    tickets, and each row of A drawing its E_A line from its own seed (`row_seeds`); h0 is the default."""
+    tickets, and each row of A sampling its E_A line from its own seed (`row_seeds`); h0 is the default."""
 
     cap = CAP
 
@@ -1213,7 +1213,7 @@ class PearlC4:
         return [row_seed(ctx.salt, C.row_digest(r), ctx.root_b, u.index, i) for i, r in zip(idx, a_rows, strict=True)]
 
     def _lines_a(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[list[int]] | None:
-        """E_A's lines of A's rows `idx` under -h3 (line 0 of each row's seed); None under h0, which draws line i of seed_A."""
+        """E_A's lines of A's rows `idx` under -h3 (line 0 of each row's seed); None under h0, which samples line i of seed_A."""
         return [line(x, ROLE_EA, 0) for x in self.row_seeds(ctx, a_rows, idx)] if self.hashing == "h3" else None
 
     def parse_row(self, row: bytes, k: int) -> list[int]:

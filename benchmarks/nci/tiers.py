@@ -34,7 +34,7 @@ proved.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns faulty outputs into skipped work. A block that
-  injects a chosen output fails its proof whenever it is drawn, so luck doesn't multiply those: ln(1/delta) / q of them
+  injects a chosen output fails its proof whenever it is sampled, so luck doesn't multiply those: ln(1/delta) / q of them
   inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
   worth at most ``chord``, the steepest secant from K of one inference block's thread bound.
 
@@ -96,7 +96,7 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
+#: (about 35 GPU-s a sample), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
 #: its embedding, with ReferenceThreaded's e for a reference circuit written in Dot16 steps, as the declarations are, in
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable

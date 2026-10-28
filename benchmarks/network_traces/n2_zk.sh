@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # N2's verdict of record from zero-knowledge proofs of its registered unit (n2_zk.py) on a CPU machine, on hidden_zk's
-# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's
+# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame, N2's
 # network-records and the sampled-proofs verifier built in the tree. From a clone:
 #   research run --on vy-nebius-2 --source . --project verity --cwd clone --mem-gb 96 --send n2-runs.tar.gz \
 #     --env N2_MEM_GB=96 --env N2_RUNS=n2-runs.tar.gz -- bash benchmarks/network_traces/n2_zk.sh

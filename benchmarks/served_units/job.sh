@@ -6,7 +6,7 @@
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build; the selftest build, with
 #      seed-injection), the Lean flock-verify from verity/core/service/flock, and a venv with numpy and blake3
 #   2. per UNIT in SU_UNITS (stage.py's TYPE[:S=V,...]): stage N inputs of its Q_word proof block from synthetic values, one loopback
-#      --zk run drawing all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
+#      --zk run sampling all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
 #      and the Lean verifier on all of them:
 #        honest-own   the honest run                                                                         ACCEPT
 #        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;

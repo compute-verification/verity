@@ -1,5 +1,5 @@
 # The rename move: what `tools/move/rename.py` renames (Daniel's ruling, 5 Oct 2026 10:45 PM PDT: the network certifier,
-# network certificates, memory challenger, firewall, challenger, verifier and workers; "gateway" is retired). The owners'
+# network certificates, memory challenger, ZK server, challenger, verifier and workers; "gateway" is retired). The owners'
 # maps: note:network-accounting/20261006T0625Z-draft-certifier-rename-map (the certifier), memory-accounting's
 # pous-rename-map.json of 6 Oct 05:59Z (the memory challenger).
 #
@@ -45,7 +45,7 @@
 "Warden" = "Certifier"
 "WARDEN" = "CERTIFIER"
 
-# --- the firewall (was the prover gateway) and the challenger (was the verifier gateway)
+# --- the ZK server (was the prover gateway) and the challenger (was the verifier gateway)
 "prover gateways" = "firewalls"
 "prover gateway" = "firewall"
 "Prover gateway" = "Firewall"

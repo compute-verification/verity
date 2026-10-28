@@ -7,7 +7,7 @@ run recorded.
   records): each run's art, the registration formats it holds and the Python verdicts it recorded.
 * **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
   `OneStage.paramsOfJson` reads them (its own program descriptor, query, law, scheme, ports, leaf layer, log, partition,
-  delta), the registration record as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the draw, the
+  delta), the registration record as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   draw), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
   names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
@@ -17,7 +17,7 @@ run recorded.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier of record's Lean (`one_stage.verifier.lean`) and today's Python.
-* **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the draw's, the record's: proved,
+* **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the sample's, the record's: proved,
   receipt, served, roots, registered; the verdicts'; the public file's) becomes the base case with the one change the
   run made; a refusal by a check the protocol does not make (`flock-verify`'s U1-U3 and roots, M0's selftests and
   bindings, a tampered set before the verifier of record) is listed as outside, with the reason, and where the protocol
@@ -25,7 +25,7 @@ run recorded.
 * **Verdicts.** Lean (`serve`), today's Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
   as `OneStage.check` writes its outcome) and the recorded verdict, compared by verdict, stage (registration, draw,
   checks, verdict; public) and codes.
-* **The whole record.** Where the registration passes and the draw is an object, the audit record itself by the
+* **The whole record.** Where the registration passes and the sample is an object, the audit record itself by the
   verifier of record (`one_stage.verifier.audit_record`: the Lean's `record` beside Python's `audit_record`, equal under
   canonical JSON), on the case's evidence with its floats; whether they agree, and the fields where they don't.
 * **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
@@ -76,7 +76,7 @@ SERVED_TAGS = (R.WINDOW_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
-#: the evidence of a case that holds the registration alone: no draw, so both sides stop at the draw's check
+#: the evidence of a case that holds the registration alone: no sample, so both sides stop at the sample's check
 NO_DRAW = {"draw": None, "instances": 0, "proved_units": [], "receipt": {}, "served": None, "session_roots": None,
            "sessions": [], "statement": {}, "verdicts": {}}
 
@@ -134,7 +134,7 @@ def decode(desc: dict):
 
 def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
     """`decode`, each primitive the descriptor names that today's registry lacks standing in by the descriptor's own
-    signature, never evaluated (the registration's checks and the draw read the program's shape only); and their ids."""
+    signature, never evaluated (the registration's checks and the sample read the program's shape only); and their ids."""
     from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
     from verity.ml.circuits.types import type_from_json
 
@@ -619,7 +619,7 @@ def whole_record(c: Case) -> dict | None:
     with its floats, the law the verifier derives and the run's δ: whether the two records agree, each side's acceptance
     and failed checks, and where they disagree the fields and both sides' values. None where `OneStage.check` never
     reaches the record: a public-file case, a case that holds the registration alone, a registration R1-R7 refuse, a law
-    that doesn't derive, a draw that isn't an object."""
+    that doesn't derive, a sample that isn't an object."""
     p, rec, e = c.params, c.rec, c.evidence
     if c.public is not None or c.stages != STAGES or not isinstance(e["draw"], dict):
         return None
@@ -823,10 +823,10 @@ def a0(run: Run) -> Iterator[Case]:
 
 def a0_lean(run: Run) -> Iterator[Case]:
     """A0 with the auditor's Lean program driving (`a0_lean.py`): A0's registration of a generated set (its name and
-    content digest in `generate.log`), the draw `flock-audit`'s own, the session served at it (`served-draw.json`), and
+    content digest in `generate.log`), the sample `flock-audit`'s own, the session served at it (`served-draw.json`), and
     the audit record with `flock-audit` the verifier of record, taking the sessions, the served draw and the sessions'
     roots. The run kept neither the public file (its leaf layer is the record's, which the run's R4 matched against the
-    launcher's own copy) nor the session's LIVE line (instances are the draw's proved units, which its passing proved
+    launcher's own copy) nor the session's LIVE line (instances are the sample's proved units, which its passing proved
     check implies)."""
     base = "out"
     a = run.json(f"{base}/audit.json")
@@ -1035,7 +1035,7 @@ def a2_unaudited(run: Run) -> Iterator[Case]:
     """An A2 run that stopped before its audit record: the record served it (`inputs/served.tar`'s `registration.json`,
     the receipt's) under A2's copies, the law and δ the `--k` and `--delta` `pod.sh` passed `a2.py` (its defaults 256 and
     2^-20 where it passed none), and the evidence `a0.audit_session` handed `audit_record`, rebuilt from the session's
-    files: the draw the session recorded (`session.json`'s `unit_draw`), the statement from the LIVE line and the
+    files: the sample the session recorded (`session.json`'s `unit_draw`), the statement from the LIVE line and the
     session's coin seed, the verdicts (M0's from `session.json`, `flock-verify draw-test`'s DRAWCHECK lines, `flock-verify
     verify`'s VERDICT line as the verifier of record), the sessions' SHA-512, and the proved units through the public
     header's unit indices. The run recorded no verdict and no negatives."""
@@ -1109,7 +1109,7 @@ def a3(run: Run) -> Iterator[Case]:
     """A3 (`a3.py`): every template of one decoder layer as one population (`mixed_population_program` over
     `Q_template_instances`), each member a stand-in staged from its selection of the set (`stage_subset.py`), one
     registration (ports `<set>/<port>`, the leaf layer the SHA-512 of the map from set to its public file's SHA-512) and
-    one draw over the union. With `--draw-file` the audited draw is the verifier's Lean draw and the sessions' union is
+    one sample over the union. With `--draw-file` the audited draw is the verifier's Lean draw and the sessions' union is
     the served draw; before it the audited draw is the union, and the audit took neither the served draw nor the
     sessions' roots."""
     base = "out/a3"
@@ -1287,7 +1287,7 @@ def a4(run: Run) -> Iterator[Case]:
     """A4 (`a4.py`): #101's layer 0 on serving's own roots: the layout of record's members as one population (the
     canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
     the agreement's law, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
-    SHA-512 of the map from template to its public file's SHA-512, one draw by the verifier's law with each member served
+    SHA-512 of the map from template to its public file's SHA-512, one sample by the verifier's law with each member served
     its share. Before 9515b4d4f the audit took neither the served draw nor the sessions' roots (and the run recorded no
     `audit_negatives`)."""
     base = "out/a4"
@@ -1383,10 +1383,10 @@ def a4(run: Run) -> Iterator[Case]:
 
 
 def a4_unaudited(run: Run) -> Iterator[Case]:
-    """An A4 run refused before its draw: the record served it (`inputs/served.tar`'s `registration.json`, the
+    """An A4 run refused before its sample: the record served it (`inputs/served.tar`'s `registration.json`, the
     receipt's) under A4's copies (`summary.json`'s layout, members, k and δ), the registration alone, since the run holds
-    no draw. The run's own registration check (`summary.json`'s `checks.registration`) is the recorded result of that
-    stage; its other refusals before the draw are M0's checks of each member's served files (pin, classes, bindings),
+    no sample. The run's own registration check (`summary.json`'s `checks.registration`) is the recorded result of that
+    stage; its other refusals before the sample are M0's checks of each member's served files (pin, classes, bindings),
     which the protocol does not make."""
     base = "out/a4"
     summary = run.json(f"{base}/summary.json")
@@ -1429,7 +1429,7 @@ def serving_bundle(run: Run) -> Iterator[Case]:
     """A serving bundle (`vllm-serving-commit`'s files: `registration.json`, `window.json`, `index.json`, and
     `compare.json` for one template or `members.json` and the members' public files for #101's layers) that no verifier
     audited in its own run: the registration alone, under the copies of each replayed audit of the same record (its
-    digest) with the leaf layer from the bundle itself, and no draw. Its `registration-v0.json`, the window's record in
+    digest) with the leaf layer from the bundle itself, and no sample. Its `registration-v0.json`, the window's record in
     `verity/one-stage/registration/v0`, is a format neither side reads."""
     rec = run.json("registration.json")
     audits = run.audits.get(R.digest(rec)) or []
@@ -1904,7 +1904,7 @@ def a5(run: Run) -> Iterator[Case]:
     the population program, a primitive today's registry lacks an opaque stand-in), the canonical query over the members
     `summary.json` names, its law and δ, the served domains over the record's ports under the run root of record
     (`summary.json`'s `run_root`), and the leaf layer over each member's public body (`serving_rows.leaf_layer`, each
-    file's header line dropped). One draw by the subset law, each member served its share."""
+    file's header line dropped). One sample by the subset law, each member served its share."""
     bases = sorted(f["path"].rsplit("/", 1)[0] for f in run.files
                    if re.fullmatch(r"out/(a5|standin-[^/]+/rank\d+)/audit\.json", f["path"]))
     if not bases:

@@ -12,7 +12,7 @@ process per rank of a node Program: `predict.node_registration`), and `write` co
   format). One log is one deployment and θ is what its first record registers, so this record opens the log and is the
   run's own: the deployment's first run. Its keys are the ones nci-check reads (`program`, `registered`, `previous`) with
   `protocol`, `window` and `roots`, as NCI's difftest vectors write them. It carries none of the one-stage draw's fields
-  (query, partition, population, law, scheme, leaf layer, anchors): it registers θ, and no draw follows it.
+  (query, partition, population, law, scheme, leaf layer, anchors): it registers θ, and no sample follows it.
 * **`provenance`**: the instance's, one `{"kind": "registered", "registration", "value", "root"}` per θ node, in θ's order.
 * **`trusted`**: `{"log": [record], "run": digest, "params": [[name, type], ...]}`, the types as the descriptor writes them.
 * **`salts`**: per value its rows' salts, the prover's, which nothing public carries.

@@ -18,8 +18,8 @@ its cap, committing no cap or circuit or closing with other windows, a record on
 or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
-none. A draw's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
-a draw's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
+none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
+a sample's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
@@ -1497,7 +1497,7 @@ def pinned_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-# ---- a draw's coins -----------------------------------------------------------------------------------------------------
+# ---- a sample's coins -----------------------------------------------------------------------------------------------------
 
 def read(j: Any) -> Any:
     _request(j, ["after", "commitment", "read", "roots", "segment"])
@@ -1528,7 +1528,7 @@ def _pairs(log: Sequence[dict]) -> list[str]:
 
 
 class Drawn:
-    """A draw's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
+    """A sample's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
@@ -1582,7 +1582,7 @@ class Drawn:
         return rng.choice(others) if others else _window(rng)["root"]
 
 
-#: each a mutation of the draw's segment or bytes, which both pieces refuse
+#: each a mutation of the sample's segment or bytes, which both pieces refuse
 DRAW_MUTATIONS = ["skipped", "wrong-opening", "before", "unread", "read-tampered", "other-after", "segment-form",
                   "opening-form"]
 
@@ -1646,7 +1646,7 @@ READ_NAMES = ["honest"] + DRAW_MUTATIONS + ["commitment-form", "request"]
 
 
 def _seeded(rng: random.Random) -> random.Random:
-    """A plain generator seeded from `rng`: a `Drawn` session draws more bytes than Hypothesis's smallest example may
+    """A plain generator seeded from `rng`: a `Drawn` session samples more bytes than Hypothesis's smallest example may
     hold when its `randoms` record each one."""
     return random.Random(rng.getrandbits(64))
 

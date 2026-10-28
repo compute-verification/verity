@@ -1,16 +1,16 @@
-"""The firewall's contract check: the inner phase's firewall (`verity_flock.rec_live.Proxy`) and its contract
+"""The ZK server's contract check: the inner phase's ZK server (`verity_flock.rec_live.Proxy`) and its contract
 (`flock-firewall contract`, `Flock/Firewall/Contract.lean`) on the same sessions. Whether the proxy sends what the Lean
 program `Flock.Firewall.run` sends is `tests/test_firewall_agreement.py`'s question; this one is whether what it sends has
 the contract's property.
 
     python firewall_agree.py --lean BIN --out DIR [--cases] [--sessions DIR... [--schedule FILE]]
 
-Each session runs through the firewall with `verity_flock.firewall_transcript` watching what it sends the coin server; the
-firewall's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
+Each session runs through the ZK server with `verity_flock.firewall_transcript` watching what it sends the coin server; the
+ZK server's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
 transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones (on live coins,
 as `rec_live serve`'s, and on coins the challenger committed to), the red team's six on #1270 (review-zk-gateway,
-c00b85b0c), challengers whose coins the firewall must refuse (an opening of live coins; of committed ones, an opening that
-does not open, or none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
+c00b85b0c), challengers whose coins the ZK server must refuse (an opening of live coins; of committed ones, an opening that
+does not open, or none), and tamper controls, ZK servers that let out what the contract forbids, which the contract must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
 contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 ``coins.json`` when the challenger committed, and ``schedule.json`` beside them or in their parent, or ``--schedule``) with
@@ -143,7 +143,7 @@ class AnyY(RL.Proxy):
 
 
 class ClearTop(RL.Proxy):
-    """A firewall that sends each top's nodes as they are, unsalted."""
+    """A ZK server that sends each top's nodes as they are, unsalted."""
 
     def _salted(self, top):
         salts = [self.fresh_salt() for _ in RL.top_nodes(top)]
@@ -152,7 +152,7 @@ class ClearTop(RL.Proxy):
 
 
 class ShowsSalt(RL.Proxy):
-    """A firewall that answers a Proof with the last salt it drew."""
+    """A ZK server that answers a Proof with the last salt it sampled."""
 
     def _handle(self, r):
         if r[0] == RL.REQ_PROOF:
@@ -162,7 +162,7 @@ class ShowsSalt(RL.Proxy):
 
 
 class SwapsCoins(RL.Proxy):
-    """A firewall that hands the workers other coins than the challenger's at a round."""
+    """A ZK server that hands the workers other coins than the challenger's at a round."""
 
     def _handle(self, r):
         out = super()._handle(r)
@@ -172,7 +172,7 @@ class SwapsCoins(RL.Proxy):
 
 
 class IgnoresOpenings(RL.Proxy):
-    """A firewall that relays the challenger's coins without checking their opening."""
+    """A ZK server that relays the challenger's coins without checking their opening."""
 
     def _opened(self, stream, k, coins):
         pass
@@ -200,7 +200,7 @@ class NoOpening(FT.RecordingCoins):
 
 
 def cases():
-    """(name, requests, firewall, salt source, expectation, challenger): ``firewall`` and ``lean`` are the verdicts expected
+    """(name, requests, ZK server, salt source, expectation, challenger): ``firewall`` and ``lean`` are the verdicts expected
     of each, ``why`` a prefix of the contract's reason; ``challenger`` is the session's challenger (`run_case`'s), when it
     is not the honest one."""
     same = lambda ok, why=None: {"firewall": ok, "lean": ok, "why": why}
@@ -209,14 +209,14 @@ def cases():
     out = [("honest", requests(), RL.Proxy, None, same(True)),
            ("honest-pings", requests(ping=True), RL.Proxy, None, same(True)),
            ("hello-keys-reordered", requests(hello={k: HELLO[k] for k in reversed(list(HELLO))}), RL.Proxy, None, same(True))]
-    # the red team's six on #1270 (c00b85b0c), on today's firewall: each a stop, or the schedule's value sent in its place
+    # the red team's six on #1270 (c00b85b0c), on today's ZK server: each a stop, or the schedule's value sent in its place
     out += [(f"gap1-y-{k}", requests(y=bytes(16 * k)), RL.Proxy, None, same(False, stop)) for k in (0, 1, 3, 1000)]
     out += [("gap2-hello-reps-float", requests(hello={**HELLO, "reps": 2.0}), RL.Proxy, None, same(False, stop))]
     out += [(f"gap3-open-{o}", requests(order=o), RL.Proxy, None, same(True)) for o in ("reversed", "after-link", "early")]
     out += [("gap4-no-finish", requests(finish=False), RL.Proxy, None, same(False, stop))]
     out += [(f"gap5-unreadable-hello-{i}", requests(hello=t), RL.Proxy, None, same(False, stop)) for i, t in enumerate(("[]", "7", '"x"'))]
     out += [("gap6-unpinned-field", requests(hello={**HELLO, "note": "5e" * 64}), RL.Proxy, None, same(False, stop))]
-    # tamper controls: the firewall lets out what the contract forbids, and only the contract refuses
+    # tamper controls: the ZK server lets out what the contract forbids, and only the contract refuses
     tamper = lambda why: {"firewall": True, "lean": False, "why": why}
     out += [("tamper-forwards-hello", requests(hello={**HELLO, "reps": 2.0}), ForwardsHello, None, tamper("hello: not the value")),
             ("tamper-any-y", requests(y=bytes(48)), AnyY, None, tamper("link.y: not the value")),
@@ -225,7 +225,7 @@ def cases():
             ("tamper-shows-salt", requests(), ShowsSalt, None, tamper("a commitment under salt")),
             ("tamper-swaps-coins", requests(), SwapsCoins, None, tamper("circuit/rep0 round 0: the workers' coins"))]
     # the challenger's coins: committed ones accepted; an opening of live coins, committed ones that do not open their
-    # commitment or come without an opening, and firewalls that serve such a session anyway
+    # commitment or come without an opening, and ZK servers that serve such a session anyway
     committed = lambda **kw: {"commit": True, **kw}
     out += [("honest-committed", requests(), RL.Proxy, None, same(True), committed()),
             ("challenger-stray-opening", requests(), RL.Proxy, None, same(False, "link round 0: the workers' coins"),
@@ -253,7 +253,7 @@ def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None, challenger=
 
 
 def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | None]:
-    """A recorded inner session through today's firewall again, with its own coins and salts and its requests in the prover's
+    """A recorded inner session through today's ZK server again, with its own coins and salts and its requests in the prover's
     order; and why the replay differs from the record, if it does."""
     rec = json.loads((d / "session" / "session.json").read_text())
     pub = json.loads((d / "public.json").read_text())
@@ -336,18 +336,18 @@ def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> li
 
 def leaks() -> list[tuple[str, dict, dict, dict]]:
     """Review r6's transcripts on #1323 (``note:review-zk-gateway/20261006T0934Z-finding-review-zk-gateway-r6``), each a
-    bit the firewall could choose, built from the honest case's transcript: ``(name, transcript, public input,
+    bit the ZK server could choose, built from the honest case's transcript: ``(name, transcript, public input,
     expectation)``, the expectation the contract's verdict (``accepted``), the items it releases (``released``: the cut is
     the next one) and a part of why. B1, the commitments' count and place: one more, one fewer, one moved. B2, a tape
     number naming another's value: a salt's bytes under two numbers, the workers seeing one under another number, the same
     for a pad; and two commitments under one number. B3, the public input from the transcript: a masked value no relation
     is checked on, or one checked only on a relation the transcript names, a statement value nothing fixes or a wrong one,
-    a Hello from the transcript's own schedule, and no public input at all. N1, a value of the firewall's own under a name
+    a Hello from the transcript's own schedule, and no public input at all. N1, a value of the ZK server's own under a name
     it chose. Committed coins, on a session whose challenger committed to them: coins without the opening of the challenger's
     commitment, under another round's opening, other than the ones committed, with a short opening, relayed twice, and
     their openings under a public input with no commitments. Accepted: the honest transcript (live coins), the committed
     one under its public input, and a masked value checked against the verifier's relation before a value of the
-    firewall's own that depends on it leaves."""
+    ZK server's own that depends on it leaves."""
     s = run_case("honest", requests(), RL.Proxy, None)
     honest, pub = s.transcript(), s.public()
     n = len(honest["items"])

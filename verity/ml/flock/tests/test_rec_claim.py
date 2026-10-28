@@ -34,7 +34,7 @@ U = (0, 1)
 # --- the honest opening ------------------------------------------------------------------------------------------------------
 
 class _Draw(A.Coins):
-    """The verifier's coins drawn as the prover goes, in the rounds `rec_algebra.run` reads them."""
+    """The verifier's coins flipped as the prover goes, in the rounds `rec_algebra.run` reads them."""
 
     def __init__(self, g: random.Random):
         super().__init__([])

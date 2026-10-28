@@ -210,7 +210,7 @@ capsys):
 def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
     """The per-server bound at W63 (`onsite-w63`): 91.1 kbit/s a server over a 32-bucket link-window, intake 0.0282 at
     the reference policy, labelled the honest-δ form with a faulty ingress unit's 356,592 bits excluded (and 0 when
-    every ingress unit is drawn), line rate beside it; the reference itself at `intake · α Φ`, 3.23 Mbit/s."""
+    every ingress unit is sampled), line rate beside it; the reference itself at `intake · α Φ`, 3.23 Mbit/s."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 

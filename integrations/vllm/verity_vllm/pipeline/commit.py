@@ -243,7 +243,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
             "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "finish_reasons": finish, "t_last_step": step_t[-1]}
 
 
-# the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
+# the compiled check's sampled steps are sampled from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
 # (first 4 bytes).  Recorded on value_correspondence.compiled_check.seed_source so the finalizer recomputes it from the same runs.jsonl as a fact.
 COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
 
@@ -257,7 +257,7 @@ def admission_lag(wl: dict) -> int:
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
-    checkpoint's generation_config / config + the workload record's sampling block, read from the file `wl` was loaded from, as GP-01
+    checkpoint's generation_config / config + the workload record's verification phase, read from the file `wl` was loaded from, as GP-01
     reads it (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an
@@ -575,7 +575,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
     -- together the executed prefix of record every population consumer is placed over."""
     """The binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
-    workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
+    workload requests/steps/ranks), the identity-coverage verdict, and openings sampled from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
     from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
@@ -819,7 +819,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     # the in-run challenge / population picks this run could NOT open from host (excluded families' interior; handed over
     # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every drawn leaf is opened by one of the paths
     handed = list(dict.fromkeys(tuple(p) for p in (getattr(com, "_oar_deferred", None) or [])))
-    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are drawn here anyway (and open by replay when not held)
+    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are sampled here anyway (and open by replay when not held)
     com._oar_deferred = []
     picks = sample + forced + deferred
     # which picks the frozen run can open from its OWN retained bytes: all of them (retain=host), none (retain=none), or
@@ -1108,7 +1108,7 @@ class Options:
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
-    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (sampled by --replay-draw) in place of the row's per-stratum sample")
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
@@ -1134,7 +1134,7 @@ class Options:
     compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
-                                "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
+                                "seed sampled after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
                                 "--only-arm control (verity_vllm/ops/served_commit.sh).  kernels = P_compiled: acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [withdrawn as the workload's path] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
     compiled_ring_rows: int = option("--compiled-ring-rows", type=int, default=0, help="rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
@@ -1832,7 +1832,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # the run's coins, drawn once its root of record is fixed (the auditor host's session; without one, this process's own)
+                # the run's coins, sampled once its root of record is fixed (the auditor host's session; without one, this process's own)
                 from verity_vllm.commit.challenge import challenge_positions, run_root_of
                 sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode(), **CC.positions(rc, coins))
                 TL.start("validate.openings", pair=pair)
@@ -2122,7 +2122,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
                     _chal, _chal_rec = CC.replay_challenge(rc, args.replay_challenge)
-                    _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge drawn after the run root
+                    _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge sampled after the run root
                     components.update(_sc2["components"])
                     components["replay_challenge"] = _chal_rec
                     vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")

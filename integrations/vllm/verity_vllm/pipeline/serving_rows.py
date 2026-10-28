@@ -382,10 +382,10 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
 def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_gates: Sequence[str] = ()) -> dict[str, Any] | None:
     """The verifier's work table (`draw.work_table`) for a window of ``counts`` (template -> its units, in the partition's order)
     under ``law``: under ``work:K``, each transfer-gate template (the units holding transfer gates, which the registered compiler
-    lists) works 0 with its floor all its units, so its stratum draws every one of them (`draw.work_k`: selection All, never
-    sampled), and every other template works 1 with floor 1, its draw the stratified law's share of K; None for any other law.
+    lists) works 0 with its floor all its units, so its stratum samples every one of them (`draw.work_k`: selection All, never
+    sampled), and every other template works 1 with floor 1, its sample the stratified law's share of K; None for any other law.
     Refused when the compiler lists transfer gates under another law, when one of its transfer-gate templates is not among the
-    window's (its units would be left out of the proved set), or when every template is one (nothing is drawn: that window's
+    window's (its units would be left out of the proved set), or when every template is one (nothing is sampled: that window's
     selection is all)."""
     tg = list(dict.fromkeys(transfer_gates))
     if law.get("law") != "work":

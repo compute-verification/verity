@@ -8,7 +8,7 @@ The binding is two keys of the registration's window provenance (`binding`, `tp.
     advice     {"root", "bits"}     the advice it read, private: the root of its hiding commitment, and its length in bits
 
 Core's ``verity/registration/v1`` record carries the window's provenance as one public item (``window``), which the record's digest
-covers and the coins commit to before the draw, so the draw comes after both are fixed and the record gains no field.  The advice
+covers and the coins commit to before the sample, so the sample comes after both are fixed and the record gains no field.  The advice
 is not published: its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
 zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
 compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
@@ -29,10 +29,10 @@ rank's `rank_replay.Loaded` for the requests the advice states (`requests_of`), 
 record, by the manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
 
 **Transfer gates**: the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
-proved with selection All, never sampled; every other unit is drawn as before.  The compiler lists them (``transfer_gates``: the
-templates whose units hold them, which its digest covers), and a ``work:K`` window draws by the work table
+proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
+templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
 `serving_rows.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
-floor all its units, so its stratum is drawn whole, beside the rest's strata at the stratified share of K.  Core's work law
+floor all its units, so its stratum is sampled whole, beside the rest's strata at the stratified share of K.  Core's work law
 (`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
 under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or draws it by another law,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
@@ -255,7 +255,7 @@ CAP_BITS = 1 << 23
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` is the inner compiler's."""
+    so the registration's ``compiler`` fixes ℓ before the sample as it fixes the code; `load` is the inner compiler's."""
 
     inner: Any
     cap_bits: int = CAP_BITS

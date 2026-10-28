@@ -1,6 +1,6 @@
 """The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows, proved in zero
-knowledge: the window's P / G units by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through
-N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall and received-pieces scan); and the cost.
+knowledge: the window's P / G units by C-Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through
+N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
 
     python benchmarks/prove_path/served_tie_zk.py cost [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py build --class slice|9c10|served --g G [--out DIR]
@@ -242,7 +242,7 @@ def stage(M, sg: SimpleNamespace, name: str, units: list, salt_key: bytes, salts
 
 
 def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path, port: int) -> dict:
-    """The statement registered, every unit drawn by the verifier's Lean, proved --zk behind the firewall and held by Lean;
+    """The statement registered, every unit sampled by the verifier's Lean, proved --zk behind the ZK server and held by Lean;
     then per unit the verifier's side: ``pub`` opened to its own copy, the verdict read, ``srv``'s b‖c held to its
     registration's row w (`served_rows.leaf_ok`). Writes what the verifier received under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V

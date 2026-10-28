@@ -1,17 +1,17 @@
-"""The block's draw sized to a CPU proving budget: `h200.py`'s windows, one a template, each drawing a uniform
+"""The block's sample sized to a CPU proving budget: `h200.py`'s windows, one a template, each sampling a uniform
 `subset:k` of its n units, priced by C-Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
 each template's units the budget certifies.
 
     python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
 
-* **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
+* **A statement** holds up to `UNITS` sampled proof blocks of one template, at no more cost than one, since C-Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
   rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_LOG_MAX`, so a unit with more
-  ANDs is drawn whole and proved as its least number of parts under it, each part a template of its own (a row cut
+  ANDs is sampled whole and proved as its least number of parts under it, each part a template of its own (a row cut
   where a partial sum is committed).
 * **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
   the live verifier and by Lean. Prove wall time is scaled to a 42-core slot by thread count, with the peak summed
-  over the prover, the live verifier and the firewall. Lean `verify --zk` (one core) and staging are counted apart.
+  over the prover, the live verifier and the ZK server. Lean `verify --zk` (one core) and staging are counted apart.
   Past m = 30 time is extrapolated at 2.2x and memory at 2x per m, and a statement takes as many 120 GB slots as its
   memory needs. No statement is smaller than k_log `K_LOG_MIN` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template draws k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.

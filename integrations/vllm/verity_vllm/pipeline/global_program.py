@@ -3,7 +3,7 @@
     verity-vllm global-program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
 
 Inputs (pre-execution only): the request manifest, read through the workload record (`records.workload.Workload`, which refuses a
-missing or unknown field by name: request ids, prompt lengths, caps, `arrive_step`, the sampling block, the row's declared `target`
+missing or unknown field by name: request ids, prompt lengths, caps, `arrive_step`, the verification phase, the row's declared `target`
 block) and derive_step request artifacts (`descriptor.json.gz` + `construction_manifest.json` / `instances.json.gz`) — one per
 distinct (prompt_len, cap-1) shape, exactly the shapes X-09's Build derives. Nothing from an execution record is read. Exit 4 lists
 the shapes still to derive.  `LAG` (the declared scheduler's post-EOS rows, `TargetProfile.lag()` of the manifest's target) is a
@@ -464,12 +464,12 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     given explicitly.  The bounded request Program has no EOS semantics of its own, so GM-01 needs this declaration to verify that an
     early stop IS an EOS stop (served[-1] in the set) and not a dropped / aborted / stop-string request recorded as `finish_reason=stop`.
     Not part of the Program digest (a declaration beside `applicability`); a Program without it makes GM-01 FAIL CLOSED on any
-    request that stopped early.  `sampling`: the workload record's sampling block (`Workload.sampling`), None for none."""
+    request that stopped early.  `sampling`: the workload record's verification phase (`Workload.sampling`), None for none."""
     ids: set[int] = set(int(x) for x in (eos_token_ids or []))
     sources: dict[str, list[int]] = {}
     if eos_token_ids:
         sources["--eos-token-ids"] = sorted(ids)
-    # the manifest's sampling block may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
+    # the manifest's verification phase may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
     # must then reach its cap -- any early stop FAILS); both are declared here so GM-01 reads one rule
     if checkpoint_dir:
         for fn in ("generation_config.json", "config.json"):
@@ -683,7 +683,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     t2 = time.time()
     wl = W.WorkloadProgram(wreqs, manifest_digest=mdigest, lag=int(lag["value"]), theta_registered=theta_registered)
     art = wl.artifact()
-    art["lag"] = {**lag, "value": wl.lag}   # the declaration block (source, pinned implementation, per-component coupling) beside the static
+    art["lag"] = {**lag, "value": wl.lag}   # the execution block (source, pinned implementation, per-component coupling) beside the static
     art["moe_construction"] = moec         # the construction block (declared value, family, per-component coupling, population label)
     # the manifest's UUIDs beside the Program's r<k> ids (the record's RunHeader/StepStart name requests by the UUID; the global
     # checker maps them through this table -- G1 checks the sets agree)

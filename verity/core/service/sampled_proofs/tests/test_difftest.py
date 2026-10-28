@@ -6,9 +6,9 @@ verdicts, valid ones and one or two changes to each. A disagreement is the Pytho
 The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
-`OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
+`OwnRandomness` over the given bytes, for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
-`slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
+`slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
@@ -30,7 +30,7 @@ R6-prover). A verifier may name its window's open root (`window_root`, `WROOT`) 
 the log's earlier record under another window's (`EARLIER_WROOT`), its own or none.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
-populations in a draw.
+populations in a sample.
 """
 
 from __future__ import annotations
@@ -584,7 +584,7 @@ def _registration(p: dict, rec) -> tuple[str, ...]:
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
-    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the draw's checks, the record's
+    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the sample's checks, the record's
     checks or a verdict that ran and did not accept; undecided when only the verifier of record is missing or has not run;
     accept exactly when `audit_record` accepts, with the drawn and proved units, the bounds and the profile."""
     rec, _ = c
@@ -788,7 +788,7 @@ def _rule(j) -> service.Selection:
 
 
 def select(j):
-    """The challenger's draw as `Stream.register` and `Stream.select` make it: `service.selection_law` over the
+    """The challenger's sample as `Stream.register` and `Stream.select` make it: `service.selection_law` over the
     population of the program under the query, `draw.derive`, `service.select_draw` on the source's bytes read in order
     (the closure map `[[unit, [units]], ...]` as the `{unit: [units]}` it names, each unit once), then `draw.check_draw`;
     with the number of bytes read."""
@@ -831,11 +831,11 @@ def select(j):
 
 
 def slots(j):
-    """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
+    """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
     checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
     gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
     (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    blocks are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    blocks are `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -1105,9 +1105,9 @@ def run(j):
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
     `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a law whose drawn count varies
     (`service.count_varies`: `shapes`), a program whose units read stratum by stratum are not its N in order
-    (`partition.in_order`: `population-order`), and the receipt; `select`: the draw from the source's bytes (`select`), its coins what `coin_source` says (`_coins_hold`:
+    (`partition.in_order`: `population-order`), and the receipt; `select`: the sample from the source's bytes (`select`), its coins what `coin_source` says (`_coins_hold`:
     code `coins`); `deliver`: one or more sessions, each matching
-    `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the draw's proved units unless
+    `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the sample's proved units unless
     given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front."""
     j = _json(j)
@@ -1186,7 +1186,7 @@ def run(j):
 
 
 def _coins_hold(j: dict, rec: dict, read: bytes) -> bool:
-    """`Run.coinsHold`: a draw from the verifier's own coins carries no evidence; one from the challenger carries
+    """`Run.coinsHold`: a sample from the verifier's own coins carries no evidence; one from the challenger carries
     evidence that holds (`coins_reason`) for the verifier's window root, after the registration's digest."""
     if j["coin_source"] == "verifier":
         return j.get("coins") is None
@@ -1249,7 +1249,7 @@ def work_tables(draw, s: Setup):
 
 
 def drawn(draw, law: dict, n: int) -> dict:
-    """The verifier's draw under its expanded law."""
+    """The verifier's sample under its expanded law."""
     kind = law["law"]
     if kind == "subset":
         return {"k": law["k"], "law": "subset", "population": n, "units": sorted(draw(st.permutations(range(n)))[:law["k"]])}
@@ -1416,7 +1416,7 @@ def _other_setup(a, x):
     return SETUPS[x % len(SETUPS)].desc
 
 
-#: One change each to the record (R1-R6; R7's are `ENTRIES`), the parameters (decodable or not) and the evidence (the draw, the record's checks,
+#: One change each to the record (R1-R6; R7's are `ENTRIES`), the parameters (decodable or not) and the evidence (the sample, the record's checks,
 #: the verdicts, its decoding); `x` picks among variants.
 RECORD = [
     _set("record", "format", lambda a, x: [R.FORMAT_V2, "verity/registration/v0"][x % 2]),
@@ -1485,7 +1485,7 @@ DRAW = [
     _draw(lambda d, x: {**d, "strata": d["strata"][::-1]} if "strata" in d else d),
     _draw(lambda d, x: [None, 5, [], "draw"][x % 4]),
 ]
-DRAW_CHANGES = DRAW  # `DRAW` is the draw piece's port below
+DRAW_CHANGES = DRAW  # `DRAW` is the sample piece's port below
 EVIDENCE = [
     _set("evidence", "receipt", lambda a, x: [{**a["evidence"]["receipt"], "registration": "00" * 64}, {}, 5][x % 3]),
     _set("evidence", "proved_units", lambda a, x: [a["evidence"]["proved_units"][:-1], a["evidence"]["proved_units"][::-1],
@@ -2990,8 +2990,8 @@ def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
 
 
 def test_the_select_piece_draws_every_rule(pieces):
-    """One draw under each rule the stream runs, on a partition whose `PAIR` stratum is two ranges apart, Lean's the
-    Python's whole: `All` every unit, reading no coins, and each law's draw (a work law's with its closure) reading them,
+    """One sample under each rule the stream runs, on a partition whose `PAIR` stratum is two ranges apart, Lean's the
+    Python's whole: `All` every unit, reading no coins, and each law's sample (a work law's with its closure) reading them,
     each stratum's count its k, which the drawn runs reach only probably, and a rate law's a subset's of its count over
     the 10 units. Then the same with every non-ASCII digit `str.isdigit` admits in place of an ASCII one, and a rate
     whose count passes the population, and the retired two-stage rule, which both refuse, the last saying it is retired
@@ -3032,7 +3032,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
     slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
-    the input class's are every gate of the program once; and the checked proof blocks are the drawn units' slots and
+    the input class's are every gate of the program once; and the checked proof blocks are the sampled proof blocks' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
@@ -3436,7 +3436,7 @@ def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/1") -> dict:
 
 def test_the_run_reaches_every_step(pieces):
     """A registration's run under each law, over one unit's population and over three, and a v2 registration's, Lean's
-    the Python's whole: each accepts, on the draw from the coins, showing the verdicts' public
+    the Python's whole: each accepts, on the sample from the coins, showing the verdicts' public
     outputs. The same runs refused at each step (a
     declared item missing, a record R1-R7 refuses, no session, a verdict of record about other sessions) and rejected (a
     verdict that ran and did not accept), which the drawn runs reach only probably. A run whose coins came from the
@@ -3466,14 +3466,14 @@ def test_the_run_reaches_every_step(pieces):
 
 
 def test_a_windows_run_from_the_challengers_coins(pieces):
-    """A window of two templates' run (`SETUPS[3]`: PAIR and TRIPLE, one stratum each under `stratified:3`) drawing from
+    """A window of two templates' run (`SETUPS[3]`: PAIR and TRIPLE, one stratum each under `stratified:3`) sampling from
     the auditor's challenger, as a `Stream` over a window runs it: its coins a ledger session's challenger opened after
-    the registration's digest and read by the selection rule's draw (`Drawn`), Lean's `Run.run` the Python's whole. The
-    honest run is accepted, each stratum drawn at least its floor. It is refused at its registration for a window of
+    the registration's digest and read by the selection rule's sample (`Drawn`), Lean's `Run.run` the Python's whole. The
+    honest run is accepted, each stratum sampled at least its floor. It is refused at its registration for a window of
     other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose law draws a
     stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
     segment or the bytes, coins opened after another digest, evidence for another window, none or empty, and evidence
-    on a draw from the verifier's own coins."""
+    on a sample from the verifier's own coins."""
     rule, s = service.Law("stratified:3"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]

@@ -317,7 +317,7 @@ def _mutated(rng: random.Random, layout: R.Layout, store: R.Store, B: int) -> tu
 
 def _placement(rng: random.Random, ex: R.Execution, n: int, T: int) -> tuple[R.Placement, dict[int, int], list[Window]]:
     """A placement on one to three devices, each beginning its engine steps at strictly increasing ticks, all in lockstep
-    or each its own, or one time in five at ticks drawn at random, and a store device with no ticks that holds some of
+    or each its own, or one time in five at ticks sampled at random, and a store device with no ticks that holds some of
     the registered values and run inputs; one placement in eight cuts a device's ticks short, so that a gate there may
     have no tick at its step. A price per value, and up to four windows over some of the devices, which often bound
     their steps from inside (beginning no later than any of their devices begins step `start` and ending no earlier

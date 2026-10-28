@@ -28,7 +28,7 @@ weights (`weights.Weights`, from the generator, not the store, so a wrong decode
 slot ``slots[b]`` at its own position p; its attention reads the slot's K and V rows committed at positions 0 .. p, each at
 the step and row the slot ran it (`Replayer.history`), never the live cache.
 
-A `Subcircuit` joins the step's integrity registration as one more sampling block, drawn with the step's families: PoUW's
+A `Subcircuit` joins the step's integrity registration as one more verification phase, drawn with the step's families: PoUW's
 per-call-noise tiles (`percall`) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
 """
 from __future__ import annotations
@@ -185,7 +185,7 @@ def _pv(t: int) -> RP.Template:
 
 class Subcircuit(Protocol):
     """A subcircuit of the step's integrity registration besides the model's units: ``serve`` runs after each served step
-    (with the driver's resident weights, ``driver.params``), ``families`` gives its units at a step for the draw, and
+    (with the driver's resident weights, ``driver.params``), ``families`` gives its units at a step for the sample, and
     ``manifest`` what the registration records of it. Optionally ``call(driver, st, op, lo, codes, w, acc)``, which the driver
     calls on each served linear call: rows ``lo ..`` of linear ``op``'s A codes, its weight and its s32 sums."""
     name: str
@@ -290,7 +290,7 @@ class Replayer:
                 for g in self.map.groups() for _, us in g for u in us]
 
     def registration(self, step: int) -> dict:
-        """The step's sampling blocks: the model's families by template, then each subcircuit's."""
+        """The step's verification phases: the model's families by template, then each subcircuit's."""
         fams = self.model_families(step)
         return {"blocks": [{"name": "model", "families": len(fams), "templates": sorted({f.template for f in fams})}]
                 + [{"name": sub.name, **sub.manifest()} for sub in self.subcircuits]}
@@ -461,7 +461,7 @@ class Replayer:
             return [logits], self.out(step, u, b, 0).view(np.uint16), argmax_row(logits[None])
         return replay
 
-    # -- the draw
+    # -- the sample
 
     def unit(self, fam: Family, step: int, row: int, index: int) -> Unit:
         inputs, got, want = fam.replay(row, index)

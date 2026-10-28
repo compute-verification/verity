@@ -20,7 +20,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 - the client and the certifier agree on the origin through the wall clock (`origin_unix`), so a client on another
   host needs its clock within a few tens of ms of the certifier host's (requests are sent mid-bucket);
 - the rehearsal (`rehearse`) runs the client on the certifier's host, so its link is loopback, and its check plays the
-  firewall and the challenger in one process, with the network registration of each link-window standing in for
+  ZK server and the challenger in one process, with the network registration of each link-window standing in for
   PoUW's registration of the window, which opens the window's salt;
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
   window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the
@@ -137,7 +137,7 @@ certified, the I/O, the audit and the salt accept.
   certifies every record and signs every reveal off the proxy's GIL), the proxy, the link's listener and the reveal
   endpoint (`active.serve_reveals`, which also serves each window's certificates' public part once both its records
   are certified: `CertifyingPublisher.public`), and writes `deployment.json`, the auditor's record of the run: the
-  certifier's public key, the proxy's run id, the certifier session (`--session`, which the challenger draws), the
+  certifier's public key, the proxy's run id, the certifier session (`--session`, which the challenger samples), the
   links, the addresses, the origin and the reveal deadline. It takes one link connection, which must come before the
   origin. The proxy writes each egress bucket through its pacer, `--paced-ms` (`PACED_MS`) after the bucket's boundary
   (`active.Proxy(paced=…)`), so that nothing on the proxy's loop moves when a bucket leaves; `--paced-ms 0` writes it
@@ -189,7 +189,7 @@ link's verifier of record reads: `read_clocks`), `proxy.json.gz`, the shim's `se
 client's `peer.json`, `certificates.jsonl` and `clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and
 `check.json`, and with `--out-shape` `out-records.jsonl` (public) and `out-witness.jsonl` (the out value's rows and
 salts, witness). Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
-witness, kept behind the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. A
+witness, kept behind the ZK server in a deployment; a rehearsal publishes them so that its check can be replayed. A
 certificate's public part is public, which the client keeps: its key id, link, direction and window, the digest it
 signs and its LMS signature, in the deployment's session. The digest is the head's, or the sync's clock digest,
 salted by its own `salt_c` (`certificate_digest`, `clock_commitment`), a hiding commitment, so the signature over it
@@ -1717,7 +1717,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--reveal", required=True, type=_address, help="HOST:PORT of the reveal endpoint")
     s.add_argument("--key", required=True, type=Path, help="the certifier's key directory (keys)")
     s.add_argument("--challenger-key", required=True, type=Path, help="the challenger's public.json")
-    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex, the challenger's draw")
+    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex, the challenger's sample")
     s.add_argument("--n2-link", default=N2_LINK)
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):

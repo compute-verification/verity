@@ -4,7 +4,7 @@ The stored form of a VU export (`vllm-vu-store/v1`); flat instance sets (`vllm-v
 default extraction is exactly the sets `vu_export` defines.
 
     <out>/store/run.json                               run root, provenance (row, model, serving, run, source, epoch, manifest digest),
-                                                       the draw's limits, the weight sample rule and the checkpoint of record
+                                                       the sample's limits, the weight sample rule and the checkpoint of record
     <out>/store/programs/<program digest>/program.json the Program by reference (digest, request labels, Build dir)
     <out>/store/programs/<program digest>/units.jsonl  one line per exported VU: its Call (i, spec, module op_path, request, step,
                                                        row, phase, stratum), its operand identities, and every row evaluation it
@@ -13,7 +13,7 @@ default extraction is exactly the sets `vu_export` defines.
 
 An evaluation's arg is `{"value": sha, "dtype", "words"}` (committed words, or a small registered weight in full) or, for a GEMM's
 weight, `{"weight": {field, range, shape, sha256 of the whole slice}, "sample": {"rows", "value", "index"}}`: a fixed sample of
-its rows (`gemm_coords_per_row`, drawn from the selection key at the evaluation's own index), the full weight referenced by
+its rows (`gemm_coords_per_row`, sampled from the selection key at the evaluation's own index), the full weight referenced by
 checkpoint field and hash.  `extract(weights=...)` reads the full weight from a checkpoint when one is given (any rows); without
 one it cuts the stored rows.
 
@@ -81,7 +81,7 @@ def _evaluation(k: tuple, fam: str, st: dict, ops: list, out: dict, refs: list, 
 
 
 def _one_vu(k: int) -> tuple[dict[str, Any], dict[str, tuple[str, bytes]], float]:
-    """Evaluate VU `k` of the draw: (its unit record, the value blobs it references, seconds)."""
+    """Evaluate VU `k` of the sample: (its unit record, the value blobs it references, seconds)."""
     c = _FORK
     vu, tv = c["picked"][k], time.perf_counter()
     rid = vu["request_id"]
@@ -101,7 +101,7 @@ def _one_vu(k: int) -> tuple[dict[str, Any], dict[str, tuple[str, bytes]], float
 
 
 def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tuple[dict, dict, float] | None]:
-    """The draw's results in order; None for a VU the spent time budget left undrawn.  `workers` > 1: a forked pool in chunks (the
+    """The sample's results in order; None for a VU the spent time budget left undrawn.  `workers` > 1: a forked pool in chunks (the
     replay's pattern: weights and twin libraries pre-warmed in the parent, the heap frozen before the fork, children never touch CUDA)."""
     if workers <= 1:
         for k in range(n):
@@ -147,7 +147,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     reuse = population_of_record if (population_of_record or {}).get("indices") and set(population_of_record["indices"]) >= set(map(str, programs)) else None
     for n_built, (rid, inst) in enumerate([] if reuse else programs.items()):
         # the population build has its own budget, checked between request Programs (a B32 row's 33 Programs took > 18 min):
-        # the requests left are named, the draw runs over the ones built
+        # the requests left are named, the sample runs over the ones built
         if time.perf_counter() - t0 > float(limits.max_population_seconds):
             skipped = [str(r) for r in list(programs)[n_built:]]
             break
@@ -163,7 +163,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
         pool, _not_exec = split_not_executed(all_vus, executed_prefix)
     key = VX.selection_key(run_root)
     picked = VX.select(pool, limits, key)
-    t_draw = time.perf_counter()                                             # the draw's budget starts here, never inside the build
+    t_draw = time.perf_counter()                                             # the sample's budget starts here, never inside the build
     print(f"[vu-export] population: {len(indices)}/{len(programs)} request Programs, {len(all_vus)} VUs, {len(picked)} drawn, "
           f"{t_draw - t0:.0f} s" + (" (the replay's own)" if reuse else "") + (f"; {len(skipped)} Programs past the population budget" if skipped else ""),
           flush=True)
@@ -274,7 +274,7 @@ def _operands(root: Path, ev: dict[str, Any], weights: Callable | None) -> list:
 def extract(store: str | Path, out_dir: str | Path, *, where: str | None = None, module: str | None = None,
             limits: VX.Limits | None = None, weights: Callable[[str, int, int], np.ndarray | None] | None = None) -> tuple[list[dict], dict[str, int]]:
     """Flat instance sets of the stored units the query selects, written under `out_dir`: (set summaries, instances by family).
-    No query = the default extraction: every stored unit, the draw's own limits."""
+    No query = the default extraction: every stored unit, the sample's own limits."""
     root = Path(store)
     run = json.loads((root / "run.json").read_text())
     limits = limits or VX.Limits(**run["limits"])

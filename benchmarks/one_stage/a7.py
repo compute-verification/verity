@@ -25,9 +25,9 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   ``b || c`` in the statement's public file are the canonical ones; the verifier holds each at the position the public
   requirement names (`bindings`).
 * **Statements and draw.** One circuit per template, staged by C-Flock's `UnitStager` bound to the partition
-  (`Q_template_instances` over `TemplatePopulations`, one unit per step each), drawn by the verifier's Lean
-  (`flock-verify draw --stratified K`, K every unit by default, so no unit is uncertified), each member's draw served
-  `--zk` and held by Lean `verify --zk --partition --program`. For every drawn unit the prover opens its public row (the
+  (`Q_template_instances` over `TemplatePopulations`, one unit per step each), sampled by the verifier's Lean
+  (`flock-verify draw --stratified K`, K every unit by default, so no unit is uncertified), each member's sample served
+  `--zk` and held by Lean `verify --zk --partition --program`. For every sampled proof block the prover opens its public row (the
   verifier's own copy of the step's public data) and its ok row (1): the units the proofs cover are the steps whose
   clauses hold.
 * **The link.** The remote session (v0: appends, releases and plans on the wire) runs a pass a step, its plan the
@@ -38,7 +38,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   verifier recomputes the session's chain of appends (`audit.append_head`) from the map member's public file and each
   step's public first and count (`units_heads`): `UnitsLink.mapped` holds of the record when its chain is that one,
   each pass's head is the chain through the appends of the steps below its own, each map unit's public lifetime cap is
-  the record's, and every map unit is drawn and proved. The heads fix the window each append joined. The passes' steps
+  the record's, and every map unit is sampled and proved. The heads fix the window each append joined. The passes' steps
   are a value: each map unit's pass row (each window's last pass step, `requirement_units.pass_words`) is bound to one
   canonical commitment, from which the unit computes each re-key's cap in gates (the stale bound in step form, which no
   public input carries). The bridge (`bridge`) binds the rest on public data: each pass's plan length is its step's
@@ -47,8 +47,8 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   pass row, whose words are the passes' steps v0's wire carries, until the record commits to them. The ledger then
   credits each pass the bits its step reads from complete blocks, less a block for each planned block it credits no
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
-  it the wrong units the draw allows can carry (`uncertified`), its δ added to the ledger's error.
-* **Check 3.** The session draws ``--samples`` receipts a window, and nothing is opened: each draw goes through the
+  it the wrong units the sample allows can carry (`uncertified`), its δ added to the ledger's error.
+* **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through the
   remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the drawn position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
@@ -109,7 +109,7 @@ LIFE = 60
 SCHEDULE_CAP = 1 << 16
 #: each written value's epochs in the layout row: its production block's and one re-key's
 EPOCHS = 2
-#: the remote session's draws a window, each proved by check 3's unit (`opening`); at 2 the seeded run draws registered
+#: the remote session's samples a window, each proved by check 3's unit (`opening`); at 2 the seeded run draws registered
 #: blocks as well as appended ones
 SAMPLES = 2
 NODE, SOURCE = b"a7-node", b"a7 verifier's secret"
@@ -290,7 +290,7 @@ def check3_inputs(canons: dict, sp, sm, samples: int = SAMPLES) -> SimpleNamespa
     """What check 3 reads of the canonical commitments: each step's certified plan row (its words, salt and ``b || c``) and
     the canonical payload commitment (`opening.Values`, written block j at row j - NR, the row `bound_row` binds its
     ``pay`` row to); the unit's codec, P and depths (a receipt tree of a plan of P + 1 blocks, the registration's payload
-    tree or an append of up to 2 C blocks, the payload commitment); and the draws a window it proves (``samples``), which
+    tree or an append of up to 2 C blocks, the payload commitment); and the samples a window it proves (``samples``), which
     every session of the run draws."""
     c, pay = canons["plan"], canons["payload"]
     values = C3.Values(bytes.fromhex(pay["root"]), canon_dom("payload", pay["n"]), NR, tuple(pay["bc"]))
@@ -311,7 +311,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     t's append sent before t's pass, after step t − 1's), ``dummy`` (a step whose append adds a block holding no value),
     ``rekey`` ((step, j): block j appended again at that step, in its own slot, of the same payload at a fresh index,
     the later plans and its free naming that index), ``drop`` (the last step that writes: its append never sent, and its
-    blocks in no later plan and no release). Each window draws ``c3.samples`` receipts, and check 3 decides them
+    blocks in no later plan and no release). Each window samples ``c3.samples`` receipts, and check 3 decides them
     (``c3``, `check3_inputs`) in place of their openings: by its unit's reference on the prover's witness
     (`opening.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
     Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
@@ -443,9 +443,9 @@ def payloads_of(store, j: int) -> bytes:
 
 @dataclass(frozen=True)
 class UnitsLink:
-    """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every drawn unit's public and ok
+    """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every sampled proof block's public and ok
     rows open, every witness row is bound to its canonical commitment, and the bridge (`bridge`) holds the session to the
-    units' public data and the canonical pass row. `mapped` holds of a record, once every map unit is drawn and proved (`proved`), whose chain is
+    units' public data and the canonical pass row. `mapped` holds of a record, once every map unit is sampled and proved (`proved`), whose chain is
     the one `appends` the map units' writes make, each pass's head (`audit.WindowRecord.heads`) the chain through those
     of the steps below its own (`heads`, `units_heads`), and the map units' public lifetime cap (`life`) the record's.
     The stale bound, which no public input carries, is then what each re-key's old block is held below in the unit, which
@@ -650,12 +650,12 @@ def statement_checks(m: dict, rec: dict, want: dict) -> dict:
 # --- check 3 ----------------------------------------------------------------------------------------------------------------
 
 def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
-    """The remote session's check 3 by proofs: each draw's opening unit (`opening.witness`), one member a receipt-leaf
-    size, its plan row under the canonical plan's salt of the draw's step and every other row under a fresh salt,
-    registered, every unit drawn by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
+    """The remote session's check 3 by proofs: each sample's opening unit (`opening.witness`), one member a receipt-leaf
+    size, its plan row under the canonical plan's salt of the sample's step and every other row under a fresh salt,
+    registered, every unit sampled by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
     --partition --program`. The verifier opens each drawn unit's public rows to its own copy (`opening.public`) and its
     verdict row, holds its plan row to the certified one by ``b || c`` (`opening.plan_link`), and decides each window of
-    the session on its draws. No block, payload, receipt leaf or plan row is opened."""
+    the session on its samples. No block, payload, receipt leaf or plan row is opened."""
     out.mkdir(parents=True, exist_ok=True)
     sess, st_ = rs.session, rs.store
     draws = [d for t in range(len(sess.windows)) for d in sess.drawn(t)]
@@ -760,7 +760,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
                             sessions=sessions, served=sorted(served), session_roots=session_roots)
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
-    # the verifier: each draw's unit proved, its public rows and verdict opened, its plan row linked; each window decided
+    # the verifier: each sample's unit proved, its public rows and verdict opened, its plan row linked; each window decided
     held = set(proved) if result.get("accepted") else set()
     failures = []
     for u, d in enumerate(draws):
@@ -792,7 +792,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
 
 
 def check3_negatives(c3a: dict, rs, c3) -> dict[str, dict]:
-    """Check 3's negatives, each on one drawn unit of the run (an appended block's, if one was drawn) with one witness or
+    """Check 3's negatives, each on one sampled proof block of the run (an appended block's, if one was sampled) with one witness or
     public input altered: the unit's verdict on it (the lowering's own evaluation, `_forged`) and the check it names, or,
     for a prover whose unit accepts a plan row other than the certified one, the verifier's plan link on that row's
     ``b || c`` (`opening.plan_link`)."""
@@ -871,7 +871,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--k", type=int, default=None, help="the stratified rule's k over both templates' units (default: all)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
-    ap.add_argument("--samples", type=int, default=SAMPLES, help="the remote session's draws a window, each proved by check 3")
+    ap.add_argument("--samples", type=int, default=SAMPLES, help="the remote session's samples a window, each proved by check 3")
     ap.add_argument("--port", type=int, default=7571)
     a = ap.parse_args()
     out = Path(a.out)
@@ -947,7 +947,7 @@ def main() -> int:
                            "unit_nnz": m["unit_nnz"], "k_log": m["meta"]["k_log"], "pin": m["pin"], "class": m["class"],
                            "oks": sum(m["oks"]), "stage_s": m["seconds"]} for m in members]
 
-    # one registration, before the draw: the statements' ports and the canonical commitments
+    # one registration, before the sample: the statements' ports and the canonical commitments
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -984,7 +984,7 @@ def main() -> int:
         print("A7 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str)[:4000])
         return 1
 
-    # the verifier's stratified draw, by its own Lean; each member serves its stratum, --zk
+    # the verifier's stratified sample, by its own Lean; each member serves its stratum, --zk
     p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
                 "--stratified", str(a.k)], out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])

@@ -49,7 +49,7 @@ def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
 @pytest.mark.slow
 def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
-    as a tree over roots of row-seg leaves; drawn from the served challenger's coins after its digest, the honest draw's
+    as a tree over roots of row-seg leaves; sampled from the served challenger's coins after its digest, the honest draw's
     outcome is accepted by the Lean run and each of `coin_outcomes`' negatives is refused at its select (`coins`). Every
     case's tables hold against the members' strings and the live step roots. A Spec without the `row-table` Value
     refuses the record (`roots`): the tree over the step roots is one of the window's salted roots. About 70 s, the coins'

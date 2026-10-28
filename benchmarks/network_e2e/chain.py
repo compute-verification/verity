@@ -25,7 +25,7 @@ it stood on; `stubs` lists what is still a stand-in.
   (`endpoint_config`), its bits placed in the run's link-windows.
 * **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
-  coins and every negative was refused; a forged arm when Lean refused the forged unit it drew. The advice the arm
+  coins and every negative was refused; a forged arm when Lean refused the forged unit it sampled. The advice the arm
   committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
   hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
   only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.
@@ -375,7 +375,7 @@ def _same(committed: dict | None, info: dict | None) -> bool | None:
 
 
 def per_unit(rank: dict) -> dict[str, dict]:
-    """A rank's timing per drawn unit, by member, as the prove path's `per_unit` reads it: each drawn
+    """A rank's timing per sampled proof block, by member, as the prove path's `per_unit` reads it: each drawn
     member's prover and Lean verify seconds over the units its one statement proves (``draw_counts``; C-Flock's own
     ``units`` count its virtual units), and its proof's bytes over its reps."""
     out = {}
@@ -438,9 +438,9 @@ def held_to(w: int, root: str | None, given: str | None, adv_dir: Path | None, c
     (``at``) is, ahead of the registration's file time (``file_at``; it has no time field), what the serving run's own
     record attests (``record``, `serve_record`: its advice loop's stamp of that root, to the second, so no later than a
     second past it), read against the endpoint's trace (`closes`): its lag after its own window's close (``closed``) is
-    always reported, and it was at serve time when it was registered before its window's draw (``before_draw``, the
+    always reported, and it was at serve time when it was registered before its window's sample (``before_draw``, the
     arm's own `advice_before_draw`) and no later than the next window's close (``next_closed``), or, for the session's
-    last window, its end (``session_end``); after serving when the draw came first or both times are past that bound,
+    last window, its end (``session_end``); after serving when the sample came first or both times are past that bound,
     and unknown (None) otherwise."""
     out = {"registration": None, "the_registered_root": None, "names_the_commit": None, "opens": None, "tied": False,
            "tied_why": None, "at": None, "file_at": None, "attested": None,
@@ -500,7 +500,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     or apart. ``registered`` is, by window, who registered its advice (``by``, ``ref``), the registration's directory
     when it isn't the report's (``registration``), the serving run's own record (``record``, its run directory,
     `serve_record`) and the arm's first draw (``first_draw``), as the job states them (``--prove-path-registered``);
-    whether it was at serve time is never the job's to say: its draw followed the registration when every rank's
+    whether it was at serve time is never the job's to say: its sample followed the registration when every rank's
     `advice_before_draw` (the verifier's receipt of it before any coin) says so. A window with no next close in the
     endpoint's records is bounded by the session's end only when the record says the session ended with this window
     the last its advice loop logged."""
@@ -903,7 +903,7 @@ def _registered(g: dict | None) -> str:
     """Who registered a Commit window's advice and when (`served_commit`'s ``registered``): ``by`` and the arm's
     ``first_draw`` as the job states them; the registration's time ``at`` (its serving run's record's stamp, to the
     second, when ``attested``, else its file's), always with its lag in seconds after the window's close in the
-    endpoint's records (``after_close_s``); and ``at_serve_time``: before its draw (``before_draw``) and no later than
+    endpoint's records (``after_close_s``); and ``at_serve_time``: before its sample (``before_draw``) and no later than
     the next window's close (``before_next_close_s``) or, for the session's last window, its end
     (``before_session_end_s``)."""
     if not g:

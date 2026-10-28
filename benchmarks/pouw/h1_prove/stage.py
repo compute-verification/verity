@@ -5,7 +5,7 @@ the window is served and drawn: once `run.py` writes the window's public shape (
 "calls"}``), the statement is bound to the window's Program and template-instance partition (`h1unit.Shape.window`), so
 the Lean verifier derives each instance's unit from its own copy of them. `run.py` then drops a request in WORK/requests/
 for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
-rows, the drawn units' instances in order, and their indices in the Program), and this stages it with C-Flock's
+rows, the sampled proof blocks' instances in order, and their indices in the Program), and this stages it with C-Flock's
 `UnitStager.stage` under the window's own salts as a shared-row statement (`h1unit.statement_tables`): each A port's, B
 port's and the record's table the registered rows its instances read, with their value, positions and paths (one call's
 units a statement: its A table, z table and b/<K>), and the ok row's at the verifier's registered ``ok``

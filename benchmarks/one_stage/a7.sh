@@ -8,7 +8,7 @@
 #     bash benchmarks/one_stage/a7.sh
 # (no --mem-gb: the pool's slot holds the memory, and --mem-gb beside it waits outside the slot line for free memory)
 # env: A7_MEM_GB (what job.sh's stages may take, within the slot's)  A7_K (a7.py's --k, every unit by default)  A7_STEPS (its --steps)
-#      A7_SAMPLES (its --samples, the remote session's draws a window)  A7_CACHE (the build cache)
+#      A7_SAMPLES (its --samples, the remote session's samples a window)  A7_CACHE (the build cache)
 # Kept in $OUT/a7: a7's records and logs, the public files, the canonical commitments' b || c, the memory map and the sessions
 # (their proofs and records); never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail

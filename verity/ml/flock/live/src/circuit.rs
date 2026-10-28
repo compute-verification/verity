@@ -20,7 +20,7 @@
 //! - every output row's message bits copies of the returned output bits, and its padding words copies of a forced-zero row;
 //! - every other wire of the template's slots, and every slot's constant a copy of the pinned column.
 //!
-//! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
+//! Public regions, each opened at the verifier's points (sampled after the commitment, both reps), values all the verifier's:
 //! every row's `b || c` (its hm96 slot's output). The rows (outputs too), their salts, the chaining values and every word
 //! between slots stay private. A padding instance is the all-zero instance with zero salts, whose rows' `b || c` are pinned and
 //! checked here natively (a zero salt's mask is zero): its input rows are zero, its output rows its outputs (forced by its
@@ -216,7 +216,7 @@ pub fn leaf_scheme() -> Value {
 }
 
 /// The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
-/// firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+/// ZK server commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
 /// SHA-512 digest (`HashKind::Sha512`) and an opening carries no salt. ZK off only (`verity_flock.circuit.LEAF_SCHEME_PLAIN`).
 pub fn leaf_scheme_plain() -> Value {
     json!({"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
@@ -1677,7 +1677,7 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
-    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its draw's, which no file holds, so this is no file's hash.
+    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its sample's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
     /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
     /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
@@ -1829,8 +1829,8 @@ impl Instances {
         h.finalize().into()
     }
 
-    /// The statement of the drawn units (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
-    /// population's `units[i]`; its header is the population's with the draw, `instances = K` and the drawn units' indices; its
+    /// The statement of the sampled proof blocks (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
+    /// population's `units[i]`; its header is the population's with the sample, `instances = K` and the sampled proof blocks' indices; its
     /// public digest covers that header and the population's public bytes (the frame-v3 roots stay the population's).
     pub fn drawn(&self, c: &Composite, draw: &Value) -> Result<Instances, String> {
         let units = crate::unit_draw::check(draw)?;
@@ -1840,7 +1840,7 @@ impl Instances {
         let np = c.ports.len();
         let rb = c.row_bytes();
         let indices: Vec<usize> = units.iter().map(|&u| self.header["units"]["indices"][u].as_u64().unwrap_or(0) as usize).collect();
-        // the population's header but its units (millions of entries), which the draw's replace
+        // the population's header but its units (millions of entries), which the sample's replace
         let mut header: Value = self.header.as_object().map(|m| m.iter().filter(|(k, _)| k.as_str() != "units").map(|(k, v)| (k.clone(), v.clone()))
             .collect::<serde_json::Map<_, _>>().into()).unwrap_or_default();
         header["unit_draw"] = draw.clone();

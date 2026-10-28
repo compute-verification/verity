@@ -10,7 +10,7 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
-  with exactly ``--tokens`` ids, drawn from a fresh secret seed. A group is sent half a bucket into link-window 0 and
+  with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into link-window 0 and
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
   the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
@@ -39,7 +39,7 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   (`leak_guard.py`) then reads DIR against the warden run's witness. Only the protocol rejects: a step that can't run
   (no kept run, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
   SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K sampled proof blocks (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
@@ -227,7 +227,7 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
 
 
 def sized(windows: int, sets: list[str]) -> list[str]:
-    """N2's draw and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
+    """N2's sample and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
     `served_session.chain`'s 8 (whose draw of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names them."""
     given = {kv.partition("=")[0] for kv in sets}
     if windows > 8:
@@ -415,7 +415,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("dir", type=Path)
     q.add_argument("--eos-ids", default="128001")
     q.add_argument("--lean", help="network-period, built (else built here)")
-    q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every unit by default)")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT")
     q.add_argument("set", nargs="*", help="CR_K=V")
     r = sub.add_parser("relay")

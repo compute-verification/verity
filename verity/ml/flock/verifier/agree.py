@@ -9,13 +9,13 @@
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (PROTOCOL.md §17.1's D list): upstream must then return that verdict instead
-of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a draw law no soundness claim draws by, which the Lean
-verifier refuses at setup: it must reject every session whose record carries a unit draw, one expected accepted with a
+of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim draws by, which the Lean
+verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
 refused for that first), and upstream must return each session's expected verdict; a session with none (a fuzz case) only
 needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the soundness proof does not cover, and
-`--lean-refuses-drawless WHY` at a session without a draw, both of which the Lean verifier refuses last, once every check
-has passed (the form's first): a session they cover (every session, and each without a draw; neither a drawn session of
+`--lean-refuses-drawless WHY` at a session without a sample, both of which the Lean verifier refuses last, once every check
+has passed (the form's first): a session they cover (every session, and each without a sample; neither a drawn session of
 `--lean-refuses-drawn`) refused with their `WHY` passed every check, and is compared as accepted, any other verdict as it
 is, and the Lean verifier must accept none of them. So is every session of a set without `--program`, which the Lean
 verifier refuses last (`NO_PROGRAM`). A session directory may carry its own public file (`pub.bin`, a forgery's false
@@ -48,7 +48,7 @@ def groups(a):
 
 
 def drawn(s):
-    """The session's record carries a unit draw (PR #83 from eb90718f)."""
+    """The session's record carries a unit sample (PR #83 from eb90718f)."""
     try:
         return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
     except (OSError, ValueError):
@@ -131,7 +131,7 @@ def upstream_cmd(a, public, extra=()):
 def verdicts(a, slots=None):
     """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
     one upstream process per chunk, and each drawn session in its own upstream process (`replay --drawn-only` builds only its
-    drawn units' statement; upstream leaks a statement's matrices, so one process holds one statement). A session's verdict does
+    sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). A session's verdict does
     not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
     tasks = []                                                        # (kind, order, command, sessions)
     order = {}
@@ -202,7 +202,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--stratified", default=None, metavar="K",
-                    help="the verifier's own K, for sessions drawn by the stratified law (Lean only; upstream reads the draw)")
+                    help="the verifier's own K, for sessions sampled by the stratified law (Lean only; upstream reads the sample)")
     ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")
     ap.add_argument("--session-tables", default=None, help="the tables of every session")
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
@@ -210,10 +210,10 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--lean-refuses", default=None, metavar="WHY",
                     help="D12 at a statement's form: every session refused with WHY once every check has passed, compared as accepted")
     ap.add_argument("--lean-refuses-drawn", default=None, metavar="WHY",
-                    help="D12 at a draw law: every session whose record carries a unit draw refused at setup with WHY; upstream "
+                    help="D12 at a sample law: every session whose record carries a unit sample refused at setup with WHY; upstream "
                          "gives each its expected verdict")
     ap.add_argument("--lean-refuses-drawless", default=None, metavar="WHY",
-                    help="D12 at a session without a draw: refused with WHY once every check has passed, compared as accepted")
+                    help="D12 at a session without a sample: refused with WHY once every check has passed, compared as accepted")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)
     ap.add_argument("--jobs", type=int, default=1, help="verifier processes at once (each builds its own statement)")

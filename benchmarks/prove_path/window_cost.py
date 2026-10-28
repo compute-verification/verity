@@ -36,7 +36,7 @@ Serving commits its own stream as well, while it serves and before the window's 
 it. ``F`` leaves out of it the attention interiors (the FA2 and FA3 M1 taps, `fa2.m1/` and `fa3.m1/`: each query row's
 scores and probabilities at every key and each key block's running state), which nothing reads after the seal: the window
 circuit's units read wired, registered (weights) and ingress rows only, its key blocks' running states are its own units'
-outputs (`window_rows` evaluates them), and a served window draws no openings.
+outputs (`window_rows` evaluates them), and a served window samples no openings.
 
     python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23]
         [--project S,PROMPT,OUTPUTS[,LANES,EVERY]] [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
@@ -340,7 +340,7 @@ class Registration:
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
     and for its member's entry, and one over the leaf layer's canonical JSON), the JSON's bytes and the files (a member's
     public, private and units files). Under a member root (``L4``), each member's leaf over its port roots and a tree over the
-    members, two compressions a node, and nothing written but the root; the bodies are what the prover keeps until the draw
+    members, two compressions a node, and nothing written but the root; the bodies are what the prover keeps until the sample
     either way."""
     members: int
     roots: int

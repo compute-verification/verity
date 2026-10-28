@@ -49,7 +49,7 @@ LINK = ("provenance, not proof: verity-vllm tp-serving-rows opened the rank's se
 
 
 def require(args: Any, replay_cfg: dict[str, Any] | None) -> None:
-    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before every draw."""
+    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before every sample."""
     if args.serving_rows and (replay_cfg is None or not args.replay_deferred or args.only_arm == "control"):
         raise SystemExit("--serving-rows on a TP Commit needs --required-manifest with a --build-rank per rank (each rank reads its Programs of "
                          "record from the replay config), --replay-deferred at a world that defers (no rank draws its replay seed before "

@@ -49,7 +49,7 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     made from its window's files (`rows.copy_private`) and its header's paths read off the window's (`rows.registered_header`).
     ``circuit`` is the
     circuit's text or its `flock_circuit`, ``write`` the files to write (a member's ``inst`` is the prover's, wanted only once
-    it is drawn), and ``files`` the window's ``window.json`` and ``registration.json`` as read (else read here)."""
+    it is sampled), and ``files`` the window's ``window.json`` and ``registration.json`` as read (else read here)."""
     if not set(write) <= {"pub", "inst"}:
         raise ValueError(f"flock_input_files writes pub and inst, not {sorted(set(write) - {'pub', 'inst'})}")
     d, o = Path(window_dir), Path(out_dir)

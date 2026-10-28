@@ -1,6 +1,6 @@
 """C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`sampled_proofs.costfit`): A6's
 W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) staged in statements of c units, each
-session proving k of them drawn by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
+session proving k of them sampled by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
 
     python benchmarks/one_stage/zk_cost.py stage  --lean flock-verify --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
@@ -14,12 +14,12 @@ sessions.
   once.
 * **Draws.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
   program and partition, served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
-  drawn units in one statement.
+  sampled proof blocks in one statement.
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover today) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
-  design's path: the firewall's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
+  design's path: the ZK server's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
-  so their difference is the firewall's.
+  so their difference is the ZK server's.
 * **Verification.** Lean `verify --zk --partition --program` on each cold session of arm `fw` and the first timed session
   of each warm process, one at a time.
 * **Fit.** Weighted least squares in relative error, with standard errors from the residuals: per K, the cold process
@@ -28,8 +28,8 @@ sessions.
   ands*staged, ands*drawn). `observations.json` holds `costfit.Observation`s: prove is a cold process's wall, verify the
   single-threaded verifier's CPU time (its wall stretches on a loaded node).
 * **CPU** (`--cpu`, `zk_cost_cpu.sh`): the same sessions by `flock-circuit prove --zk` on the node's CPUs, as the CPU nodes
-  prove a block's draw. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
-  and the firewall's Lean's resident memory summed, which is what a node holds for one session.
+  prove a block's sample. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
+  and the ZK server's Lean's resident memory summed, which is what a node holds for one session.
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def unit_ands(K: int) -> int:
 
 
 def draws(c: int, spec: str = "1,8,64,c") -> list[int]:
-    """The draw sizes of a statement of c units: ``spec``'s entries, each a count or ``c`` (every unit), those at most c."""
+    """The sample sizes of a statement of c units: ``spec``'s entries, each a count or ``c`` (every unit), those at most c."""
     return sorted({k for k in (c if x == "c" else int(x) for x in spec.split(",")) if k <= c})
 
 
@@ -76,7 +76,7 @@ def free_port() -> int:
 
 class Peak:
     """The peak of the summed RSS of some processes and all their descendants, sampled every `every` seconds in a thread:
-    a firewalled session's prover, its live verifier (`serve`) and the firewall's Lean child peak together, and their sum is
+    a firewalled session's prover, its live verifier (`serve`) and the ZK server's Lean child peak together, and their sum is
     what a node must hold for the session (ru_maxrss gives only the largest one process)."""
 
     def __init__(self, every: float = 0.5) -> None:
@@ -189,7 +189,7 @@ def stage(a) -> int:
 # ---- prove ----------------------------------------------------------------------------------------------------------------
 
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
-    """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's draw."""
+    """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample."""
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
     warm, runs = (0, 1) if mode == "cold" else (a.warm, a.runs)
     o = out / f"k{pt['K']}-c{c}-k{k}" / f"{arm}-{mode}{rep}"
@@ -403,7 +403,7 @@ def fit(a) -> int:
     put("stage/joint", [(features(K, c, 1)[:3], r["stage_s"]) for (K, c), r in stages.items()], joint[:3])
 
     # costfit.Observations of the design's path (arm fw): a point's cold processes' mean wall, the mean CPU time of Lean's
-    # verification of its sessions (either arm's: the firewall doesn't change what the verifier checks) and its statement's
+    # verification of its sessions (either arm's: the ZK server doesn't change what the verifier checks) and its statement's
     # staging
     obs = []
     arm = "fw" if "fw" in arms else (arms[0] if arms else None)
@@ -437,13 +437,13 @@ def main() -> int:
     ap.add_argument("--lean")
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--sizes", default="1,8,64,512")
-    ap.add_argument("--draws", default="1,8,64,c", help="stage: the draw sizes a statement is proved at, c meaning all its units")
+    ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
-    ap.add_argument("--arms", default="fw,nofw", help="fw: the firewall's send check on (the design's path); nofw: off")
+    ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off")
     ap.add_argument("--cold", type=int, default=2, help="one-session prover processes a point and arm")
     ap.add_argument("--warm", type=int, default=1)
     ap.add_argument("--runs", type=int, default=3, help="the warm process's timed sessions; 0: no warm process")
-    ap.add_argument("--cpu", action="store_true", help="prove: on the node's CPUs (no --gpu), as the CPU nodes prove a draw")
+    ap.add_argument("--cpu", action="store_true", help="prove: on the node's CPUs (no --gpu), as the CPU nodes prove a sample")
     ap.add_argument("--run", default=os.environ.get("RESEARCH_RUN_ID"), help="fit: the run id the observations name")
     a = ap.parse_args()
     if a.command in ("stage", "verify") and not a.lean or a.command == "prove" and not a.bin:

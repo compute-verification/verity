@@ -447,7 +447,7 @@ def main(argv=None) -> int:
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     ap.add_argument("--encoded", type=Path, required=True, help="the encoded store's directory, read only")
-    ap.add_argument("--source", required=True, help="the store's coin (hex), drawn after its commitment")
+    ap.add_argument("--source", required=True, help="the store's coin (hex), sampled after its commitment")
     ap.add_argument("--commitment", required=True, help="the store's commitment (hex)")
     ap.add_argument("--lib", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)

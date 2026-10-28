@@ -1,6 +1,6 @@
 """The proof system's own run of C-Flock's Lean verifier of record (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
-one loopback session under a subset draw of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
+one loopback session under a subset sample of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
 verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
@@ -201,7 +201,7 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted, proving the drawn proof blocks), a session whose proof bytes were
+    the files as blobs: on the honest session (accepted, proving the sampled proof blocks), a session whose proof bytes were
     tampered with (record kept or rehashed), and the honest session without the verifier's registered file, its finding
     is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),

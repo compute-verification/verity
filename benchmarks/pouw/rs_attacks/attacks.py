@@ -1,6 +1,6 @@
 """Cheapest algorithms for the committed prefix targets of (A + U Vᵀ)(B + W Zᵀ) (RS-D2A, CMP-13).
 
-Masks E = U Vᵀ, F = W Zᵀ of rank r are drawn after A and B are committed; the prover commits
+Masks E = U Vᵀ, F = W Zᵀ of rank r are sampled after A and B are committed; the prover commits
 T_s = (A + E)[:, :sL] (B + F)[:sL, :] for s = 1..n/L. `check` verifies every attack route below bit for bit
 against the honest targets over the integers on small instances and counts its operations; `table` prices
 each route per committed word per block (one "output-block": n³/L of them) in int8 tensor MAC slots.

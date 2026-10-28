@@ -22,7 +22,7 @@ shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
 
 ``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists (grouped_check.py's too) under ``coins.json``: every
 pass but control must be accepted (replay-verified, development shortcut; the protocol's check is a ZK proof) and control
-rejected.  ``full`` checks prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's draws: its
+rejected.  ``full`` checks prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
 openings and its leaf against C~ and U recomputed from the opened rows on the device record (`clear_audit.Verifier.check_tile`,
 the verifier's own), then every real row's served y against y_unit of those U and α (RN_f32(RN_f32(U·RN_f32(1/α_A))·RN_f32(1/α_B)),
 then BF16 nearest-even, as `pearl_c.PearlC.useful` states it and fixture.py's y is), on `fast_tile`'s batch forms with every

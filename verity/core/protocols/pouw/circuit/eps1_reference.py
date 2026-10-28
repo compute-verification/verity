@@ -8,7 +8,7 @@ reach it.
 
 Under decision 101 PoUW is a compile pass over the served Program, not an executor: a matmul `A·Bᵀ` keeps serving its exact
 s8 product, and PoUW adds, around it, a per-call seed, the noise the seed derives, a committed receipt and one spot check.
-Everything else is sampled proofs': hm96 leaves, the live draw coin, one audit, one ε.
+Everything else is sampled proofs': hm96 leaves, the live sampling coin, one audit, one ε.
 
 **The seed** (decision 101, with §5 item 10's call-index binding):
 
@@ -156,7 +156,7 @@ def noise(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -
     """The public noise of one thread's H1 call: the dither bits `b`, the served coin bits `c`, the keyed word `U` and the
     digit coins `z` from `seed_j` (`the_seed`, decision 101), and the fx1 fold keys `st` (the chains' starts) from `σ_R`
     (`receipt`, decision 121), never from seed_j.  The verifier computes these and passes them as public inputs to
-    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the draw's, from the same seed)."""
+    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the sample's, from the same seed)."""
     ks, m = shape.ks, SG.n_digits(shape.ks)
     sb = _Stream(the_seed, b"b")
     sc = _Stream(the_seed, b"c")
@@ -198,13 +198,13 @@ def check(ks: int):
 
 
 def templates(shape: Shape) -> dict[str, Any]:
-    """The scheme's Definitions by role: the served arm, the fold and the spot check (the drawn unit)."""
+    """The scheme's Definitions by role: the served arm, the fold and the spot check (the sampled proof block)."""
     shape.check()
     return {"arm": arm(shape.k), "fold": SG.PouwFx1Absorb, "check": check(shape.ks)}
 
 
 def unit(shape: Shape):
-    """The drawn unit: a thread's whole call under `PouwCallCheck_v1` (decision 101, a unit is a whole dot product)."""
+    """The sampled proof block: a thread's whole call under `PouwCallCheck_v1` (decision 101, a unit is a whole dot product)."""
     shape.check()
     return check(shape.ks)
 
@@ -213,7 +213,7 @@ def unit(shape: Shape):
 
 def work_ref(shape: Shape) -> dict[str, int]:
     """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the window's totals.
-    The draw law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
+    The sample law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
     shape.check()
     per_dot = OS8.counts({"N": 1, "K": shape.k, "TAIL": _TAIL})["served_macs"]  # = K
     entries = 4 * 8  # 32 accumulator words a thread (4 row slots × 8 column slots)
@@ -272,7 +272,7 @@ def _onehot(n: int, i: int) -> list[int]:
 @dataclass(frozen=True)
 class Eps1Traced:
     """What sampled proofs traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
-    the spot check that is the drawn unit, the work table and the empty closure, each from the shape alone.  The verifier
+    the spot check that is the sampled proof block, the work table and the empty closure, each from the shape alone.  The verifier
     builds these itself and never takes the prover's."""
 
     scheme: str

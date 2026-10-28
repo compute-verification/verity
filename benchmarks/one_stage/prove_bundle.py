@@ -1,25 +1,25 @@
 """A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `examples/h200/interfaces`) proved: each drawn member's units in
-one C-Flock `prove --zk` session behind the Lean firewall, served the bundle's own draw, and decided by Lean's `verify --zk`,
+one C-Flock `prove --zk` session behind the Lean ZK server, served the bundle's own draw, and decided by Lean's `verify --zk`,
 the verifier of record; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
 tampered window's member, whose proof must not be accepted.
 
     python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
-* **The bundle** is what `replay_bundle.build` wrote of the window's drawn units. `prove_bundle.sh` proves the
-  store's `BUNDLE_WINDOW` (a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four drawn units under its
-  registered `subset:4`, a fixture's draw) unless it's given others.
+* **The bundle** is what `replay_bundle.build` wrote of the window's sampled proof blocks. `prove_bundle.sh` proves the
+  store's `BUNDLE_WINDOW` (a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under its
+  registered `subset:4`, a fixture's sample) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since C-Flock's statement is a whole member. Checks: the bundle's own check
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
-  replayed, and the draw's law the registered one); the bundle's run, registration digest and partition are the
-  window's; each drawn member's public body is the one the bundle names (SHA-512); and a live draw (``--live`` requires
-  one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a draw of
+  replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
+  window's; each drawn member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
+  one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
   the bundle's units under the registered law over the registered population (`draw.check_draw`).
 * **Staging** as a5 stages a drawn member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
   held to the registration's roots and domains, and the prover's file is made under the same header.
-* **The session** serves the bundle's member draw (`serve --zk --draw-file`). The prover runs behind the firewall's send
+* **The session** serves the bundle's member draw (`serve --zk --draw-file`). The prover runs behind the ZK server's send
   check (``FC_FIREWALL=1``, Lean's `flock-firewall`), and Lean `verify --zk --archive --partition --program` decides it.
   The sessions run one at a time, and Lean verifies each (one core) while the next one proves.
   A unit is accepted when its session's M0 and Lean verdicts accept, the served draw is the bundle's, and the proved
@@ -28,7 +28,7 @@ tampered window's member, whose proof must not be accepted.
   retained rounds a prover sending it would have made), each verified by Lean, which must refuse it with the reason the
   mutant names. ``--flips N`` verifies only the first N edits (M3's one flipped bit at m30 costs a Lean verify each).
 * **Tampered** (``--tampered DIR``): the same member of a window whose outputs are not its Definition's, proved with
-  the prover's self-check skipped, once behind the firewall (whose Lean recheck must stop it) and once without it (Lean
+  the prover's self-check skipped, once behind the ZK server (whose Lean recheck must stop it) and once without it (Lean
   `verify --zk` must refuse the proof that reaches it).
 
 The weights' rows are bound here by the window's port roots. A window whose member headers name their registered reads
@@ -85,7 +85,7 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
 
 
 def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
-    """A live draw held to the window (module docstring); ``{}`` for a fixture's. Its law against the registered one is
+    """A live sample held to the window (module docstring); ``{}`` for a fixture's. Its law against the registered one is
     also the bundle check's (`replay_bundle.check`)."""
     d = doc["draw"]
     if d.get("source") != "live":
@@ -211,7 +211,7 @@ def main(argv=None) -> int:
     ap.add_argument("--members", type=int, default=None, help="prove only the bundle's first N drawn members")
     ap.add_argument("--tampered", help="a tampered window of the same shape: its first drawn member must not be accepted")
     ap.add_argument("--session-timeout", type=float, default=14400)
-    ap.add_argument("--live", action="store_true", help="the bundle's draw must be live, with its receipt")
+    ap.add_argument("--live", action="store_true", help="the bundle's sample must be live, with its receipt")
     ap.add_argument("--flips", type=int, default=0, help="Lean-verify only the first N one-bit proof edits (0: all)")
     a = ap.parse_args(argv)
     out, wdir = Path(a.out), Path(a.window)
@@ -267,7 +267,7 @@ def main(argv=None) -> int:
         mm = tv.member(bm["k"])
         for arm, fw in (("firewalled", True), ("unfirewalled", False)):
             s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", firewall=fw, forged=True)
-            # behind the firewall no proof may leave the prover; without it Lean's own verdict must refuse the proof
+            # behind the ZK server no proof may leave the prover; without it Lean's own verdict must refuse the proof
             refused = (str(s["prover"]["stopped"]).startswith("FIREWALL-REFUSED") and s["lean"]["accepted"] is not True
                        and s["m0"]["accepted"] is not True) if fw else a0.lean_refused(s["lean"])
             negatives[f"tampered/{arm}"] = {"refused": refused, "lean": s["lean"], "m0": s["m0"], "prover": s["prover"],

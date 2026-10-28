@@ -422,7 +422,7 @@ def test_the_reps_coins_are_the_prover_records_across_z_partials_split(tmp_path,
      "the prover's record, check 5's)"),
 ], ids=["relay-record", "relay-reps"])
 def test_the_relays_record_is_not_the_inner_sessions(tmp_path, record, why):
-    """The relay's record holds the transcript's rounds as the firewall split them, and the sparse streams and R's: it is not
+    """The relay's record holds the transcript's rounds as the ZK server split them, and the sparse streams and R's: it is not
     the record check 5 reads, and `innerCommits` reads that one."""
     rc, line, err = _read(C3, record=record(tmp_path))
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
@@ -525,7 +525,7 @@ RANGE = {"count": 64, "net": "unit", "pos0": 256, "slot_log": 13, "type": "unit"
 @pytest.fixture(scope="module")
 def sparse(tmp_path_factory) -> Path:
     """2d61's sparse phase staged as its RecSparse statement over both reps, as `rec_vstage stage --sparse` stages it: its
-    message ports read as the firewall committed them (`rec_vstage.sparse_messages`), h as the algebra's h round."""
+    message ports read as the ZK server committed them (`rec_vstage.sparse_messages`), h as the algebra's h round."""
     from verity_flock import rec_sparse as SP
     from verity_flock import rec_vstage as VS
 
@@ -948,7 +948,7 @@ def test_a_stopped_sessions_record_is_refused(tmp_path, d):
 
 
 def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
-    """A session `rec_live`'s firewall stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
+    """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
     server's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
     proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
     something else."""

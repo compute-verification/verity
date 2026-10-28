@@ -57,7 +57,7 @@ PRIVATE, KEY = CH.challenger_key(3, H=5)
 
 
 def salt_only(seed: int) -> LC.LiveChallenger:
-    """A Pearl-C challenge phase's challenger: the salt coin alone, drawn from `seed`."""
+    """A Pearl-C challenge phase's challenger: the salt coin alone, sampled from `seed`."""
     return LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(seed))
 
 
@@ -302,7 +302,7 @@ H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits draw_k, row
 
 
 def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h1s():
-    """While the lane's open period is H1's (its open commits H1's draw K and table rows), a Pearl-C salt-only challenge phase
+    """While the lane's open period is H1's (its open commits H1's sample K and table rows), a Pearl-C salt-only challenge phase
     would be a window H1's checks refuse, so the period would earn nothing: `reserve_salt` refuses by name before
     reserving, reading the lane's open period from the gate's ledger. A challenge phase reserved in it anyway (here by hand) is
     refused by the install by name, before any patch and before the gate opens it, so no challenge phase is opened; so is a

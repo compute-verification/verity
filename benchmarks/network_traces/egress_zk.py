@@ -1,6 +1,6 @@
 """egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress link-window computed
 by its own `EgressBucket_v1` unit, its computed row, output ``o1``, registered against the warden's signed root
-(`warden_rows.bucket_port`: unit base + t reads row t), proved by C-Flock `prove --zk` behind the Lean firewall and held
+(`warden_rows.bucket_port`: unit base + t reads row t), proved by C-Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
 (`verity.core.protocols.certifier.egress`).
@@ -19,8 +19,8 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 * **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
   the unit computes a row the warden didn't sign, so its ``o1`` opens no registered row: refused by Lean ("does not
   open"). ``moved``: units t and t + 1 given each other's state, their positions and salts swapped to match, so each
-  ``o1`` opens at the other unit's position: refused by Lean ("reads position"). Each is registered, every unit drawn
-  by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk`` behind the firewall (``FC_FIREWALL=1``)
+  ``o1`` opens at the other unit's position: refused by Lean ("reads position"). Each is registered, every unit sampled
+  by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk`` behind the ZK server (``FC_FIREWALL=1``)
   and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
   the salt the prover sends for it.
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
@@ -226,7 +226,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
 # --- the audit (warden_zk's, on a bucket port) ------------------------------------------------------------------------
 
 def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
-    """Member m registered, drawn by the verifier's Lean (every unit), proved --zk behind the firewall and held by Lean
+    """Member m registered, sampled by the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean
     with the verifier's own registered reads; then each held unit's verdict opened. Writes what the verifier received
     under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V

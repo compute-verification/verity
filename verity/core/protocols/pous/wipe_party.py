@@ -5,7 +5,7 @@ The challenger listens and the prover connects. The challenger streams the fill 
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
 includes the fill still in flight. Then it sends each batch as `C ‖ u32 count ‖ u64 index …` (reading the send time),
 and the prover answers with the batch's labels, 64 bytes an index (the challenger reads the receipt time); `E` ends the
-session, after its last batch or a late or wrong one. The challenger draws the labels' secret, the session id and its coins on its own host, claims the
+session, after its last batch or a late or wrong one. The challenger samples the labels' secret, the session id and its coins on its own host, claims the
 id in its own session log, and signs under its own key with the egress its host was given (`--egress-bits`, the network
 certifier's count over the session; `UNCOUNTED`, which bounds nothing, when it has none): never a count the prover
 sends. It times the number of reads its own command names (`--reads`, `READS` by default), which the commitment

@@ -56,7 +56,7 @@ WORKLOAD=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["wor
 B=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["B"])' "$BD/point.json")
 PUB=$(ls "$BD"/pub-*.bin | head -1)
 # the verifier's own copies of the partition object the circuit binds and of its program, derived from the workload, not the
-# bundle's; from them and its own K = B it derives the stratified law each session's draw must be by (U2)
+# bundle's; from them and its own K = B it derives the stratified law each session's sample must be by (U2)
 PART=$S/partition.json PROG=$S/program.json
 "$PYBIN" -m verity_proof_throughput partition --workload "$WORKLOAD" --circuit "$BD/circuit.txt" --out "$PART" --program-out "$PROG" \
   > "$O/partition.txt" 2>&1 || { tail -5 "$O/partition.txt"; log "the workload's partition object is not the circuit's"; exit 1; }

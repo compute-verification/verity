@@ -3,7 +3,7 @@ unit's circuit: the window's public Program and template-instance partition deri
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
 the weights' b/<K>) are read where the window's own reads say, every per-window value's domain binds the window's open
 root (PRF-127) and b/<K>'s none, window credit's registration step takes the window's evidence and refuses it without
-that root, one call's units a statement, a window's drawn units open
+that root, one call's units a statement, a window's sampled proof blocks open
 to those rows of its registered roots and to nothing else (a tampered window's, another window's, a tampered A row), each
 in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public
@@ -246,7 +246,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert why in U.check_known(win.obj["program"], wr, "o1", dict(o1, known=known))
     assert "is not the root of its" in U.check_known(win.obj["program"], U.open_root("v", bytes(64)), "o1", o1)
 
-    # window credit's registration step takes the window's evidence: one drawn unit of each call, its finding its call's
+    # window credit's registration step takes the window's evidence: one sampled proof block of each call, its finding its call's
     # --registered ports, under the descriptor whose SHA-512 is the Program's; and refuses each per-window value without
     # the window root, and another window's root
     desc, calls = RN.credit_descriptor(win), U.HW.call_units(win.program)
@@ -293,7 +293,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
 @pytest.mark.slow
 def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
-    """A drawn unit's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
+    """A sampled proof block's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
     another window's), its ok row is the one word 1 under its public salt and row u of the verifier's registered ``ok``
     (a 0 row there opens no root; ``--unregistered-ok`` states no ok registration), a prover's rows with a tampered A row
     (`window.py open --tamper-a`, at every unit that reads it) open no registered root through the path they keep, and

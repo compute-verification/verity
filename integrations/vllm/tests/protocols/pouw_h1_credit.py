@@ -7,13 +7,13 @@ credit computes), then `credit._proved` and `credit._registration` over the outc
 `credit._a_link` and (with the Commit) `credit._arow`, as `credit._window` orders them, over the window's own evidence.
 
 The verifier of record is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no C-Flock
-proof of a served K = 4096 unit here. A session's "proof" is the prover's openings of each drawn unit's ``pub``, o0 and
+proof of a served K = 4096 unit here. A session's "proof" is the prover's openings of each sampled proof block's ``pub``, o0 and
 o1 rows (each row's b || c, its path and, for o0, its salt) from the prover's own tables (`Prover`). The stand-in
 accepts a session only when each opening verifies against the root credit's file gives that port, at the row the file
 reads (`registered.verify_read`, the check Lean makes of a registered port), and the opened o0 and o1 rows are the
 unit's outputs: o0 `h1tile.reference`'s receipt of its A and B rows seeded from credit's public row, o1 the one word 1
 under its public ok salt. The A and B rows are the serving GPU's (`operands`), whose binding is `_arow`'s and the
-weights', not the stand-in's. Units are chosen by the caller: in-process coins draw none.
+weights', not the stand-in's. Units are chosen by the caller: in-process coins select none.
 
 The negatives tamper with the prover's tables after an honest window (`NEGATIVES`): a receipt word flipped (the table
 re-registered and re-listed under its round's root, so the round roots commit it), the same with the round roots left
@@ -259,7 +259,7 @@ def _relist(w: Window, value: str, reg: Any, own: int) -> list[dict[str, Any]]:
 
 
 def tampered(w: Window, kind: str, u: int, receipts: Callable[[int], np.ndarray], key: bytes) -> Window:
-    """``w`` with the prover's tables changed at drawn unit ``u`` (`NEGATIVES`): ``receipt-word``, its call's receipt table
+    """``w`` with the prover's tables changed at sampled proof block ``u`` (`NEGATIVES`): ``receipt-word``, its call's receipt table
     with u's first word flipped, re-registered under its nonce and re-listed under its round's root (``receipts(c)`` the
     call's honest receipt words, ``key`` the run's); ``receipt-word-after-round``, the same table with the round roots
     left honest; ``pub-other-root``, its call's public table built under another step's A table of its K;
@@ -315,7 +315,7 @@ class _Bcs:
 
 def check(w: Window, units: list[int], operands: Operands, receipts: Callable[[int], np.ndarray], key: bytes,
           at: int | None = None) -> dict[str, Any]:
-    """`verdict` of the honest window and of each of `NEGATIVES` at drawn unit ``at`` (default ``units[0]``): ``ok`` when
+    """`verdict` of the honest window and of each of `NEGATIVES` at sampled proof block ``at`` (default ``units[0]``): ``ok`` when
     the honest window is accepted and every negative refused."""
     honest = verdict(w, units, operands)
     u = units[0] if at is None else at

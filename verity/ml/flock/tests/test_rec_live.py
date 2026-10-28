@@ -1,6 +1,6 @@
 """The inner session's proxy and coin server (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
 caps and the private free message, the message rows' and tops' salted commitments, that the coin server is shown nothing
-of the hidden statement or a tree top while the proxy's session record keeps what the live server's would, and the firewall's
+of the hidden statement or a tree top while the proxy's session record keeps what the live server's would, and the ZK server's
 refusals (a session off its pinned schedule, a nonzero ``y``)."""
 from __future__ import annotations
 
@@ -212,7 +212,7 @@ def test_a_records_schedule_is_the_one_it_was_held_to():
 
 
 def test_a_binding_round_whose_cap_is_not_root_b_is_refused():
-    """The firewall commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
+    """The ZK server commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
     proxy = _proxy()
     for req in ((RL.REQ_HELLO, HELLO), (RL.REQ_COMMIT, b"rf", [("circuit", CAP1 + CAP1)], []), (RL.REQ_LINK, bytes(32)),
                 (RL.REQ_OPEN, "circuit/rep0", "", b"d", 0)):

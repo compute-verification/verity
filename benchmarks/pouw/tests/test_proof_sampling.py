@@ -45,7 +45,7 @@ def test_fans_are_specs():
 
 
 def test_work_weighted_reproduces_specs_bound():
-    """(2.6) at one draw: (1 + Fan)·ln(1/δ)/S·0.403, which the knapsack reaches when that lever's supply never binds."""
+    """(2.6) at one sample: (1 + Fan)·ln(1/δ)/S·0.403, which the knapsack reaches when that lever's supply never binds."""
     c = P.cell(P.LLAMA_8B, "decode", 2048)
     for label, eps in (("o→gate/up", 0.35), ("down→lm_head", 0.44)):
         only = np.array([lab == label for lab in c.lev_label])
@@ -63,7 +63,7 @@ def test_mac_shares_match_skip():
 
 @pytest.mark.parametrize("name", ["optimal", "aware"])
 def test_the_minimax_draws_are_covers(name):
-    """Against the uncapped cheater a draw's value is L·max ratio; the closed form's weights bound every ratio by Σ x."""
+    """Against the uncapped cheater a sample's value is L·max ratio; the closed form's weights bound every ratio by Σ x."""
     for c in CELLS[:5]:
         for s in (1, 2, 16):
             w = P.STRATEGIES[name](c, s)
@@ -91,7 +91,7 @@ def test_aware_is_the_exact_minimax_against_the_capped_cheater(s):
 
 
 def test_aware_and_closure_bounds_hold_in_every_cell():
-    """The σ-aware draw is within 25% of ε_luck at one draw; a closure leaves ε_luck alone at any s, even with its
+    """The σ-aware draw is within 25% of ε_luck at one sample; a closure leaves ε_luck alone at any s, even with its
     producers at any coordinate of the row rather than only at noise-active ones."""
     for c in CELLS:
         assert P.evaluate(c, "aware", 1)[0].eps <= 1.25 * P.eps_luck(1)

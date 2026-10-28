@@ -45,7 +45,7 @@ def declared(frames, rule: str, windows: int = 6, lag: int = 0) -> list[ClockSyn
 @pytest.mark.parametrize("lag", [0, 3])
 @pytest.mark.parametrize("rule", RULES)
 def test_no_declaration_reads_a_frame_ready_after_it(rule, lag):
-    """Window w's sync is the same however the frames ready after w·T − lag are redrawn: their ready buckets, their
+    """Window w's sync is the same however the frames ready after w·T − lag are resampled: their ready buckets, their
     anchors, how many there are. So no rule looks past its declaration, less the lag."""
     rng = random.Random(1)
     for _ in range(40):

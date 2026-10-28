@@ -15,7 +15,7 @@ session as the gate publishes it and the auditor's ledger alone, through core's 
 under the key its key.json holds, ``(checked)`` only against the key's deployment record, the window's root and its
 period, and refuses a record under another key, a ledger core refuses, a session the manifest doesn't name, outside the
 window's period or opened for another layout, a round root the challenger didn't receive, a salt that isn't its round's
-coin's, and a draw after another root; an address without its session id is refused, and with neither the coins are
+coin's, and a sample after another root; an address without its session id is refused, and with neither the coins are
 in-process and labelled not certified; serve.py refuses ``--gate``, naming vllm's H1 path as the gated served window of
 record."""
 from __future__ import annotations
@@ -497,7 +497,7 @@ def _calls(rounds: int) -> list[dict]:
 
 def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
     """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
-    root and the step's units under its live salt, then the draw coin after the receipts root; the manifest, its window
+    root and the step's units under its live salt, then the sampling coin after the receipts root; the manifest, its window
     `WINDOW`."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     salt = cs.salt(root)
@@ -519,7 +519,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
 
 def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_and_a_forged_window_is_refused(tmp_path):
     """A window's coins from the challenger off the node (`coins.open_coins` over `RemoteChallenger`): salt, one round a
-    step and the draw, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
+    step and the sample, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
     session as the gate publishes it (out/ beside request.json and open.json), every head of the auditor's ledger and
     the window's manifest, recomputes the round roots, salts and draw root from the manifest's committed roots, and
     passes it under the key key.json holds, ``(checked)`` only when it names the key's deployment record, the window's
@@ -679,8 +679,8 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
 
 def test_the_draw_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent_under():
     """`RoundPipe.draw` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
-    the draw's open: another thread can't take it then, every round sent before has an earlier time and the one sent
-    after a later one; a draw after the coins are closed is refused."""
+    the sample's open: another thread can't take it then, every round sent before has an earlier time and the one sent
+    after a later one; a sample after the coins are closed is refused."""
     ticks = itertools.count()
     cs = CO.open_coins(None, EPOCH, 4, random.Random("prover").randbytes)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]

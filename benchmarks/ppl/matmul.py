@@ -80,7 +80,7 @@ class Run:
         return (self.seed + 1) * 1_000_003 + self.li + self.window * 7_919_003
 
     def gen(self, device) -> torch.Generator:
-        """The attention's coins for this (seed, layer, window), drawn in the order the steps ask (K's dither bits,
+        """The attention's coins for this (seed, layer, window), sampled in the order the steps ask (K's dither bits,
         then V's, per KV group)."""
         if self._gen is None:
             self._gen = torch.Generator(device=device).manual_seed(self.attention_noise_seed())

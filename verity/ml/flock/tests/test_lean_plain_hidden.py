@@ -1,9 +1,9 @@
 """A plain hidden-output session, end to end (PROTOCOL.md §16.15, `plain_hidden.py`): a RoPE d64 statement with hidden
 outputs whose 32 units read their own rows (no shared rows, no registered value), proved by C-Flock in one loopback
-session without `--zk` under a subset draw of 16 on OS coins (`pod/91-plain-hidden.sh`, `FIXTURE`). `flock-verify verify
+session without `--zk` under a subset sample of 16 on OS coins (`pod/91-plain-hidden.sh`, `FIXTURE`). `flock-verify verify
 --coins os` accepts it with the verifier's own program and partition, the form `flock_verify_sound`'s plain hidden-output
-branch covers at the subset law (`FailClosed.SoundExecH` at its subset draw design), and refuses it with a byte of a
-proof changed, or with its record's draw a bernoulli draw of the same units (no claim draws by that law). It is the one
+branch covers at the subset law (`FailClosed.SoundExecH` at its subset sample design), and refuses it with a byte of a
+proof changed, or with its record's sample a bernoulli sample of the same units (no claim draws by that law). It is the one
 test of a plain session at the subset law on the verifier of record; the `#guard`s of `Flock/Test/PlainHidden.lean` hold
 the rule itself. Each verify sets up an m = 22 table, so the module is slow."""
 from __future__ import annotations

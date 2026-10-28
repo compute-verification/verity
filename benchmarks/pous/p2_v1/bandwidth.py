@@ -32,7 +32,7 @@ the one the session ended with), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is the cheat: it neither reads nor decodes layer L's tensors, and the
-receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`).
+receipts of the units they hold are from what was read, so a sample that lands there is rejected (`receipt`).
 
 `--ref-decode` swaps the library for P2's reference decode on the CPU (`RefDecode`), for the toy.
 """
@@ -545,7 +545,7 @@ class Prover:
 
     def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray) -> int:
         """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store and their y to hashlib: the
-        plan's first, its last and `spot` drawn from the seed."""
+        plan's first, its last and `spot` sampled from the seed."""
         plan, rows = self.engine.plan, self.registration.rows
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))
         positions = sorted({0, plan.length - 1, *rng.integers(0, plan.length, self.spot).tolist()})

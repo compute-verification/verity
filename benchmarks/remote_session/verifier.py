@@ -7,7 +7,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
 1. registration: the prover's hello names its node, N, payload root and, if it has one, its store's layout (each
    region's kind and tier, `regions_of`, the memory line's labels), and whether it defers an appended block's
    residency to its encode (`deferred`, `audit.Params.deferred`: refused with `bye` under `--lifetime` 1, since a
-   block appended in window w is resident from w or w + 1 and its re-key falls at age L − 1); the verifier draws the
+   block appended in window w is resident from w or w + 1 and its re-key falls at age L − 1); the verifier samples the
    codec seed from its
    secret (`audit.register`) and sends the registration; the prover encodes its store and answers `ready` with its
    calibration (pass times, the gap, its measured read rate);
@@ -20,7 +20,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
    `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
-   (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   (`Session.close`) as soon as its roots are final and its samples sent; the prover's openings
    checked by the Lean verifier on its threads as their frames arrive (`Pair.verify`), so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
@@ -31,7 +31,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
 passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
-(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
+(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is sampled at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
 fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
 then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
@@ -71,7 +71,7 @@ Python check of a window's openings beside the Lean's is the transcript's replay
 a registration in both registries alike. While a session runs the driver doesn't wait on
 the Lean: an event both take goes out on the books' result and the Lean's answer is held to it as it comes, and
 openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the session's
-verdict, never a coin, a root's intake, a boundary or a draw. A session is accepted only once every one of its
+verdict, never a coin, a root's intake, a boundary or a sample. A session is accepted only once every one of its
 Lean answers has come and agreed.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
@@ -90,7 +90,7 @@ it with the event that released it, and once the session ends what the challenge
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
 session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
-openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close,
+openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows drawn together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
 `coins.APPENDS` by default, or none, and no append family, when the prover's hello says its sessions append nothing
 (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of such a session that ran to
@@ -370,7 +370,7 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
     horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
-    commitment's hiding terms, the receipts' binding term and the draw's rejection (`ledger.hiding`, `ledger.binding`,
+    commitment's hiding terms, the receipts' binding term and the sample's rejection (`ledger.hiding`, `ledger.binding`,
     `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  None when no
     reading has a ledger."""
     for name in ("spec", "measured"):
@@ -578,7 +578,7 @@ def lean_record(session: dict) -> dict:
 
 
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
-    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each draw's
+    """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each sample's
     receipts and draws (`audit.pooled_windows`: a window's own at `groups_per_coin` g = 1, its g windows' together
     above), and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
     g, ws = session["record"]["public"].get("groups_per_coin", 1), session["record"]["profile"]["windows"]
@@ -841,7 +841,7 @@ class Pair:
                           lambda: self.s.receive(t, i, root, change=change, step=step), lv.done_json, clocked=True)[0]
 
     def close(self, t: int):
-        """Window t's close: at `groups_per_coin` g, its draw's (t // g), whose openings coin goes with it."""
+        """Window t's close: at `groups_per_coin` g, its sample's (t // g), whose openings coin goes with it."""
         return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json, clocked=True,
                           coin=lambda out: self._released(coins.OPENINGS, t // self.s.params.groups_per_coin))[0]
 
@@ -1197,7 +1197,7 @@ class Verifier:
                 decide(t)
 
         def close(t: int) -> None:
-            """Window t's draw, at its draw's last window (`Params.draw_of`; every window at g = 1): each window's
+            """Window t's sample, at its sample's last window (`Params.draw_of`; every window at g = 1): each window's
             share goes to the prover, and one whose share is none is accepted as the close accepted it."""
             nonlocal failure
             group = params.draw_of(t)
@@ -1600,7 +1600,7 @@ def main() -> int:
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
                     help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
                          "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all, and the line "
-                         "of record's pooled bound reads its draws (`line.draws_of`); none is at one window in "
+                         "of record's pooled bound reads its samples (`line.draws_of`); none is at one window in "
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "

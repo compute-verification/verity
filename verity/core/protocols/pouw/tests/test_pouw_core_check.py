@@ -574,7 +574,7 @@ def test_every_draw_mutation_hits_its_refusal():
     refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
     signed under another key than the one its coins name, a tampered signature or a record whose commitment was
     swapped (``coin``); a record under a key of the prover's own, a pin of another key, no pin or a malformed one, and
-    seeded coins under a pin (``coin-key``). A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live
+    seeded coins under a pin (``coin-key``). A live sample's coin is ``pouw/draw`` 0, so a seeded opening under live
     coins is refused, and so is a live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
@@ -592,7 +592,7 @@ def test_every_draw_mutation_hits_its_refusal():
 
 
 def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
-    """The draw's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
+    """The sample's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
     `coins`, its record signed under `sk` and naming that key, in a window whose parameters pin challenger key `pinned`."""
     ch = Wd.live_challenger(0, 1, random.Random(coins).randbytes)
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
@@ -607,8 +607,8 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
 
 def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
     """RT4-INT-5's witness, refused. A prover that runs a challenger on coins of its own and signs its record under a key
-    of its own sees each candidate registration's draw before it registers, and keeps one whose draw misses the unit it
-    can't prove (unit 0). The draw's check of record now verifies the record under the challenger key the window's
+    of its own sees each candidate registration's sample before it registers, and keeps one whose draw misses the unit it
+    can't prove (unit 0). The sample's check of record now verifies the record under the challenger key the window's
     parameters pin, not the key its coins name: the prover's record naming its own key is refused (``coin-key``), and
     naming the pinned key it doesn't verify under it (``coin``); with no key pinned, no live record is read
     (``coin-key``). The verifier's own challenger's record, signed under the pinned key, passes on the same draw."""

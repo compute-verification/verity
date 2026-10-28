@@ -1,7 +1,7 @@
 """What a one-stage audit established: its integrity profile, and the audit record that cites what it is about.
 
 The profile (`profile`) is core's `IntegrityProfile` of one level `unit`, the partition's proof blocks (`sizes = (population,)`),
-drawn by the verifier's sampling design (`Subset`, `Bernoulli`, or a `Stratified` sampling design with one stratum per template), with the count
+sampled by the verifier's sampling design (`Subset`, `Bernoulli`, or a `Stratified` sampling design with one stratum per template), with the count
 drawn and delta. It bounds faulty proof blocks and weights nothing: under `Subset(k)` a trace with m faulty proof blocks passes with
 probability C(N - m, k) / C(N, k), and under the stratified sampling design with prod_s C(n_s - m_s, k_s) / C(n_s, k_s). Except with
 probability delta, an accepted trace has at most `bound()` faulty proof blocks, and at most `stratum_bounds()[t]` in template
@@ -10,13 +10,13 @@ t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. A
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
 sampling design's in its v0 form: the sampling design's JSON with delta and the count drawn per template); `wrong_units`, its bounds; and
 `integrity_profile`, `verity/integrity-profile/v1` (README "The audit record and the profile"): the partition, the registration it
-counts against, the sampling design and which proof blocks were drawn and proved, and the evidence by digest. The v1 form's non-sampling
+counts against, the sampling design and which proof blocks were sampled and proved, and the evidence by digest. The v1 form's non-sampling
 terms (ε) come from the soundness analysis, not from the run, so the run leaves them null.
 
-The audit record carries the registration and its receipt, the draw, the proved proof blocks, the statement's digests and each
+The audit record carries the registration and its receipt, the sample, the proved proof blocks, the statement's digests and each
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
 the record incomplete. The record is accepted, and the profiles are present, only when there is a verifier of record
-(`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
+(`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the sample, the proved
 proof blocks, the served draw, the sessions' roots and, for registered values, the roots their reads were opened against passed
 their checks.
 """
@@ -44,7 +44,7 @@ def _sha512(obj: Any) -> str:
 
 def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
     """The audit's integrity profile under any of the four sampling designs. The work sampling design is the stratified sampling design at its sizes (Lean
-    `Law.work`), so its profile is the same `Stratified` one, counting the drawn proof blocks (a closure proves more, and only
+    `Law.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
     helps)."""
     if draw["law"] == "subset":
         law = Subset(draw["k"])
@@ -84,7 +84,7 @@ def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta:
 def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                       sessions: Sequence[str], verdict: str | list[str] | None) -> dict[str, Any]:
     """`verity/integrity-profile/v1`; `sessions` are the session records' SHA-512, `verdict` the verifier of record's (a list
-    when the drawn proof blocks were proved in several sessions)."""
+    when the sampled proof blocks were proved in several sessions)."""
     return {"format": PROFILE, "protocol": registration["protocol"], "program": registration["program"],
             "query": registration["query"], "partition": registration["partition"], "population": registration["population"],
             "registration": registration_digest(registration), "scheme": registration["scheme"],
@@ -121,8 +121,8 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
                  session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """`draw` is the verifier's own draw. `served`: the proof blocks the sessions were served, when the draw was handed to them
-    (each must serve exactly the draw). `session_roots`: `{registered port: root}` from the sessions' statements (each
+    """`draw` is the verifier's own draw. `served`: the proof blocks the sessions were served, when the sample was handed to them
+    (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verifier of record
     opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
     registered values needs it, each the registered root."""

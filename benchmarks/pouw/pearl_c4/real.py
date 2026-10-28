@@ -6,7 +6,7 @@ float32 holding BF16), judged in the clear as the scheme (`verity.core.protocols
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
 * the split unit's screened blocks (`dead_blocks`, 9.5ρ), and the rows D-SS's retired one-in-64 cap would have rejected;
-* on --tiles 64 x 64 grid tiles of the split unit, drawn by a seeded RNG: the verifier's forming with D-SB
+* on --tiles 64 x 64 grid tiles of the split unit, sampled by a seeded RNG: the verifier's forming with D-SB
   (`PearlC4._side`) and the replayed debit of the tile's credited words against the cap (`tile_cap`), item by item.
 
 Shortcuts: the split is a stand-in, not a pinned rule (the ⌊k/100⌋ channels with the largest max|x| over the captured rows

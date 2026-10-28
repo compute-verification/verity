@@ -67,24 +67,24 @@ the tail's units run (steps S - D + 2 to S - 1; under -ov the dispatcher's, drai
 S - D + 1 to S - 1 (each the tree over a step's receipt-table roots, its domain naming that step) under one final round
 sent after the last step's coin, whose coin comes back; then the manifest root, the tree over every round root of the
 window in order (epoch, steps, final; its domain naming the window, its root and its steps), which binds each step's
-round leaves and every call's A, admit, z, y and receipt roots under them; then the draw coin opened after the manifest
-root, and the session closed.  Until the draw the prover keeps what it must open a drawn unit from: each step's live A
+round leaves and every call's A, admit, z, y and receipt roots under them; then the sampling coin opened after the manifest
+root, and the session closed.  Until the sample the prover keeps what it must open a sampled proof block from: each step's live A
 rows and scales and its z/y records' live row tiles (-wea: A and the scales alone, z/y recomputed from them), copied
 to pinned host memory on a stream of their own from the ring slot that holds them, a slot rewritten only once its copy is
 out (`Spill`).  In process the window ends after each of sbench's generates (and a new one opens at the
 next step on a challenger made beforehand, `prepare`, as the gate makes an off-node session's); off the node the
 session's window ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
 every family releases all its coins.  `check_end` holds an ended window to: the salt coin after the window's root, every
-round's coin after its root, the draw coin after the manifest root recomputed from the rounds the challenger received;
+round's coin after its root, the sampling coin after the manifest root recomputed from the rounds the challenger received;
 each step's round recomputed from its manifest row (the round's leaves and each call's roots), the final round from the
 tail's receipt roots; every step's units dispatched after its coin came back, and its receipts' round (round s + D - 1,
-or the final round) sent after that and before the draw coin, no round after it; and the last step's receipts, from its
+or the final round) sent after that and before the sampling coin, no round after it; and the last step's receipts, from its
 ring slot, against h1r v1 under its coin's salt, up to 16 calls' A tables and receipt tables rehashed on the CPU
-(`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The draw coin's time is read under the
-round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the draw.  Two end faults, each
+(`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The sampling coin's time is read under the
+round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the sample.  Two end faults, each
 in a window of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
-round and sent in a round after the draw coin: refused on that leaf and that round alone).  An off-node window's
+round and sent in a round after the sampling coin: refused on that leaf and that round alone).  An off-node window's
 manifest (`dither_manifest`: every round's root and leaves, the final round, the manifest root, the coins) goes to
 $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's own run.
 
@@ -199,7 +199,7 @@ A_LVF_ENV = "DITHER_A_LVF"
 A_LVF_TOP = 8
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
-# -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
+# -we's spill (`Spill`): what each step keeps past the ring until its window's sample, so the prover can open a sampled proof block
 SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest are zero)",
           "a": "A rows and scales (live rows); z/y recomputed from them at an opening (z = A B^T, y = dequant(z))"}
 SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
@@ -273,7 +273,7 @@ class SoWindow(DO.Window):
     a_once = False
     overlap = 0     # -ov: the round ring's depth (`Ov`), 0 without
     window_end = False  # -we: each window ends (`end`)
-    spill_mode: str | None = None   # -we: what each step keeps until the draw (SPILLS), held by `SoSide.spill`
+    spill_mode: str | None = None   # -we: what each step keeps until the sample (SPILLS), held by `SoSide.spill`
 
     def __init__(self, *args, **kwargs):
         if self.depth < 2:
@@ -583,7 +583,7 @@ class SoWindow(DO.Window):
 
     def end(self) -> dict | None:
         """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
-        final round, its coin back, the manifest root, the draw coin after it, the session closed."""
+        final round, its coin back, the manifest root, the sampling coin after it, the session closed."""
         self._lag_finish()
         if not self.open:
             return None
@@ -1939,7 +1939,7 @@ class Ov:
 
 class Spill:
     """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row tiles, the values the prover
-    opens a drawn unit from after the draw, copied on a stream of their own into pinned host memory from the ring slot
+    opens a sampled proof block from after the sample, copied on a stream of their own into pinned host memory from the ring slot
     that holds them, and held until the window's end (`take_window`).  The serving stream rewrites a slot only once its
     copy is out (`wait_a`, `wait_z`): ring slot s mod D at stash s + D; the z/y records at forward s + 1 (under -ov round
     slot s mod R at its copy s + R).  The records' live prefixes go through one device buffer and one transfer.  The
@@ -2299,7 +2299,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     """Ended window `name` (`SoWindow.end_recs`) against the module docstring's list: its coins; each step's round
     recomputed from its manifest row (fault_zlate's two steps' z-step and y-step leaves expected off); each step's units
     under its coin's salt (fault_rearly's expected not) and dispatched after its coin came back, its receipts' round sent
-    after that and before the draw coin, no round after it; the final round from the tail's receipt roots; and the last
+    after that and before the sampling coin, no round after it; the final round from the tail's receipt roots; and the last
     step's receipts against h1r v1 under its coin's salt, `rehashed_calls`' A tables and receipt tables rehashed; under -we
     three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
     when it is refused exactly where its fault is."""
@@ -2411,7 +2411,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         doc["conforming"] = bool(base and order_bad == [s] and not after and not tail_bad and not late_steps
                                  and len(rc_bad) == L and not a_bad)
     elif rec["fault"] == "fault_late_receipt":
-        # the last step's receipt-tail root withheld from the final round and sent after the draw coin: refused on that
+        # the last step's receipt-tail root withheld from the final round and sent after the sampling coin: refused on that
         # leaf and that round alone
         doc["conforming"] = bool(base and not order_bad and tail_bad == [s] and late_steps == [s] and after == [li]
                                  and not rc_bad and not a_bad and not rr_bad)
@@ -2420,7 +2420,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
 
 def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
     """The last step's calls whose A table and receipt table `check_end` rehashes on the CPU: the first and last layers'
-    four (every linear's shape) and `drawn` the draw coin picks: at most 16 of Llama 3.1 8B's 128, about half a second
+    four (every linear's shape) and `drawn` the sampling coin picks: at most 16 of Llama 3.1 8B's 128, about half a second
     where all 128 take about 4 s (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
     h = hashlib.sha512(b"verity/kernels-int12/end-rehash/v1" + coin).digest()
     return sorted({*range(min(4, L)), *range(max(0, L - 4), L),
@@ -2428,8 +2428,8 @@ def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
 
 
 def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
-    """After the draw, the prover's openings from an ended window's spill (`Spill`): three uncaptured steps (its first,
-    its last, and one its draw coin picks), each at a call the draw coin picks.  The call's A table rehashed from the
+    """After the sample, the prover's openings from an ended window's spill (`Spill`): three uncaptured steps (its first,
+    its last, and one its sampling coin picks), each at a call the sampling coin picks.  The call's A table rehashed from the
     held rows and scales (zero past m) against its manifest row's A root; its z/y records recomputed from them (z = A B^T
     by int_mm, y = dequant(z) at the slot's s_a, so past m z 0 and y dq(0, +0, s_w)) against the row's z root; and under
     "azy" the held records against both."""

@@ -1,7 +1,7 @@
 // Deep overlap of per-stage live coins in prefill on one RTX PRO 6000 (sm_120), Llama-3.1-8B, int8 (STAGE-OVL, cmp-13;
 // note:20261016T1037Z-draft-stage-ovl). k independent chunks (different sequences of M tokens) in flight, each through its
 // own chain over 32 layers x 6 stages: commit the stage's operands (stage.cu's fast path of the hm96-sha512 row-seg
-// frame-v3-sha512 tree, which stage.cu's gate holds byte-identical to verity.ml.commitments), wait DRAW_US for the draw,
+// frame-v3-sha512 tree, which stage.cu's gate holds byte-identical to verity.ml.commitments), wait DRAW_US for the sample,
 // then the stage's int8 GEMM. Draw t = (stage s, chunk c) is numbered s * k + c, so T_{t-k} is the same chunk's previous
 // stage and RS-D1E r2's release rule (iv_k) holds by each chunk's own order. stage.cu (with dcap.cu and hm96_rows.cu) is
 // included unchanged, in namespace sc.
@@ -30,7 +30,7 @@
 //   hprio     prio with the commitments at the highest priority
 //   hlo       the commitments at the lowest priority, the GEMMs at the highest
 //   rrW       hhi with the GEMMs in one static order (stage-major, chunk-minor), each after the GEMM W places before it
-//   nodraw    hhi without the draws; nohash: eq without the commitments (nohashrrW: rrW without them); hashonly: the k
+//   nodraw    hhi without the samples; nohash: eq without the commitments (nohashrrW: rrW without them); hashonly: the k
 //             chunks' commitments alone
 //   lite, liteprio, literrW, liteonly: hhi, hprio, rrW and hashonly with each commitment a stand-in of the same
 //             compressions a row (LITE_C, 367 a token-layer) in 128-thread CTAs of LITE_N (8) chained compressions, no
@@ -55,11 +55,11 @@
 //   NAME-f, NAME-p, NAME-fp (NAME a cg, cgh or cgpre arm): the same with commit_gpu's fuse_top (f: the last leaf CTA of
 //             each commitment folds the levels above the CTAs where top_small would be launched) and/or its prefetch (p:
 //             each leaf's next 128-byte block into L1 as its compression starts); held to the serial roots (made without)
-//   cgprend, cgprendeq: cgpre and cgpreeq without the draws
+//   cgprend, cgprendeq: cgpre and cgpreeq without the samples
 //   E:NAME, ER:NAME, ERL:NAME (NAME chunked, chunkedrrW, nohash or a cgpre arm): NAME with every linear (QKV, o_proj,
 //             gate_up, down) EGEMM's edited GEMM (eg.cu: a call is qwe, the dithered quantizer writing the stage's operand
 //             from bf16 and W' = W + U under the call's key, then the GEMM with windowed duo receipts at EG_S segments a
-//             window, keyed by the call's seed, the draw's); ER also commits each GEMM's receipts (2 KiB rows, a window of a
+//             window, keyed by the call's seed, the sample's); ER also commits each GEMM's receipts (2 KiB rows, a window of a
 //             tile each, every slot's salts made before the window) on a stream a chunk at the highest priority (ERL: the
 //             lowest), the next layer's GEMM of that stage waiting for it. Their poisoned check holds the receipts' roots to
 //             the serial path's (E's are the control), EG_DUMP=DIR writes chunk 0's last call of each linear (X, W', the
@@ -126,7 +126,7 @@ static const char* const CG_DIAG = ""
 #endif
     ;
 
-// the draw: one thread waits ns on the global timer and stamps when it started (its commitment done) and ended
+// the sample: one thread waits ns on the global timer and stamps when it started (its commitment done) and ended
 __global__ void draw_stamp(unsigned long long ns, unsigned long long* o) {
   unsigned long long t0, t;
   asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
@@ -198,7 +198,7 @@ __global__ void lite_levels(int leaves, int per, uint64_t* out) {
   if (threadIdx.x == 0) out[blockIdx.x] = s[0];
 }
 
-// CARVE=P: the commitments' and the draws' kernels prefer a P% shared-memory carveout (100: the most, as the GEMMs), so
+// CARVE=P: the commitments' and the samples' kernels prefer a P% shared-memory carveout (100: the most, as the GEMMs), so
 // an SM need not drain to switch its carveout between them and a GEMM's CTAs
 static int g_carve = -1;
 static void set_carve(int p) {
@@ -444,7 +444,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     return ms;
   };
   // the edited arms: a Lin a chunk's linear stage over its operand op[t] (qwe writes it), the weights in [-63, 63]; per-call
-  // keys (the dither and U) and seeds (the receipts', the draw's) a function of (layer, stage, chunk). Layer 31's call
+  // keys (the dither and U) and seeds (the receipts', the sample's) a function of (layer, stage, chunk). Layer 31's call
   // leaves op[t] and the receipts' tree, so the serial reference makes it, before commit_gpu's reference reads op[t]
   bool use_eg = false, use_rc = false;
   for (const std::string& nm : arm_names)

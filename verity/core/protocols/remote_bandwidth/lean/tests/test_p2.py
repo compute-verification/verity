@@ -1,7 +1,7 @@
 """`p2.py`, the remote audit over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
 drawn inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
-from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of drawn blocks under PoUS's leaf
+from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of sampled proof blocks under PoUS's leaf
 and vk tree, honest or with one field changed; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's
 prover bytes): its registration's digest and an honest opening of each of its units."""
 
@@ -213,7 +213,7 @@ class Entropy:
 
 @functools.cache
 def drawn_store(k: int, rows: int) -> p2.Store:
-    """A store of drawn blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
+    """A store of sampled proof blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
     every byte's extremes among them."""
     bps, segments = GEOMETRIES[k]
     blocks = [expand(b"block %d %d" % (k, j), p2.BLOCK_BYTES) for j in range(bps * segments)]

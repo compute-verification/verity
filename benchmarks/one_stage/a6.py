@@ -19,9 +19,9 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   indices. The verifier derives each port's frame domain itself from META's row schemas and the member's set (C-Flock's
   set-bound domains), holds the public files to the registration, and the leaf layer is the SHA-512 of the canonical map
   from member to the SHA-512 of its public file.
-* **One draw, the stratified law** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
+* **One sample, the stratified law** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
   verifier's Lean `flock-verify draw --program --partition --stratified K` over its own program and partition object. Each
-  member's server serves the draw's units it holds (`serve --zk --draw-file`), and Lean `verify --zk --partition --program`
+  member's server serves the sample's units it holds (`serve --zk --draw-file`), and Lean `verify --zk --partition --program`
   holds each session (units derived), so the stratum's share is proved across its template's members.
 """
 from __future__ import annotations
@@ -184,7 +184,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "unit_log": m["st"]["meta"].get("unit_log"), "pin": m["st"]["pin"],
                            "class": m["st"]["class"], "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the draw
+    # one registration, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -212,7 +212,7 @@ def main() -> int:
         print("A6 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return 1
 
-    # the verifier's stratified draw, by its own Lean over its own program and partition object; each member serves its stratum
+    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its stratum
     p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
                 "--stratified", str(a.k)], out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])

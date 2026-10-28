@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A8's cost points on sm_120 (a8.py --no-audit --gpu): the opening unit's honest statement staged on the host, then
-# sessions by `flock-circuit prove --zk --gpu` with and without the firewall's send check, each prover process under a GPU
+# sessions by `flock-circuit prove --zk --gpu` with and without the ZK server's send check, each prover process under a GPU
 # lease (the device held for the proofs alone), Lean verifying each arm at its largest point. Builds as zk_cost.sh's. Run
 # from the verity tree on a GPU node, as a GPU host job:
 #   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd clone --mem-gb 96 --cpus 32 \

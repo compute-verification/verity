@@ -11,7 +11,7 @@ design's zero-instance words leave open (`READINGS`):
 - `closed`: no table route (q*_T at or above the threshold);
 - `measured`: QSTAR's fr16_c32 as timed, 1.906 issue slots and 8 B of L2 a word at 6 TB/s, table builds free. It
   times 1-bit coins only, so b = 2 is left closed here, which flatters a design that fails on perplexity anyway;
-- `builds charged`: tables over a coin drawn fresh each instance are rebuilt each instance and shared only by its rows,
+- `builds charged`: tables over a coin flipped fresh each instance are rebuilt each instance and shared only by its rows,
   which prices a 16-bit table at ≥ 2¹⁷/M adds a word (≥ 16 at M = 8,192). Tables of a resident U (one-sided Dither's
   words, co32c's digits, the adopted P·V's) keep the restated floor. A's c·b words' best is SPEC's packed byte route
   (§4.2a), at its optimistic 2.05 slots and 4 B a word against shared memory's 128 B/SM/clk (1.28% at 2.0 slots, the

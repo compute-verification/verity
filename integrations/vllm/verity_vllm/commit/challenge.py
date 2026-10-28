@@ -1,18 +1,18 @@
-"""The integration's one challenge module: every draw over committed values, on `verity.ml.randomness`.
+"""The integration's one challenge module: every sample over committed values, on `verity.ml.randomness`.
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
 non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
-and the draw's other bindings as context:
+and the sample's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
 * the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
-  proof-block draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
+  proof-block draw, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
-(`stream`, `generator`): changing one moves every sample drawn from it.
+(`stream`, `generator`): changing one moves every sample sampled from it.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def _source(legacy: bool, source: bytes | None) -> None:
 
 
 class NoRunRoot(ValueError):
-    """A run whose committer left a step uncommitted has no run root to draw from."""
+    """A run whose committer left a step uncommitted has no run root to sample from."""
 
 
 def run_root_of(run: Any) -> bytes:
@@ -142,7 +142,7 @@ def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | No
 
 
 def root_seed(run_root: bytes) -> int:
-    """The legacy seed with no verifier challenge, drawn after commitment: the run root's first 8 bytes, big-endian."""
+    """The legacy seed with no verifier challenge, sampled after commitment: the run root's first 8 bytes, big-endian."""
     return int.from_bytes(bytes(run_root)[:8], "big")
 
 

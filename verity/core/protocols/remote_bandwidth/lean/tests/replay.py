@@ -11,21 +11,21 @@ A record is one of two kinds:
   the ones whose sha256 that record keeps: replayed unpaced, a paced session's windows would be held to no cap on their
   roots.
 * A remote session's `verifier.json` (`verity/remote-session/verifier/v0`). Per session it keeps the registration,
-  the parameters, each window's challenge release, boundary and pass arrivals on the verifier's clock, its draws, and
+  the parameters, each window's challenge release, boundary and pass arrivals on the verifier's clock, its samples, and
   for an accepted session each pass's length and step. It keeps no roots, plans, coins or openings, and of appends and
   releases only their counts. `case_of` makes a case of what it keeps: each pass a root (synthetic) at its arrival, the
   registered store its plan (an accepted pass's recorded length when that is shorter) and its step the recorded one
-  (else its count in the session), each boundary at its time and each draw closed at its last window at its time
+  (else its count in the session), each boundary at its time and each sample closed at its last window at its time
   (every window at `groups_per_coin` 1), under synthetic coins and with no appends, releases or openings. A session
   recorded before the window was stated (13 Oct, 36e0ea654) may have a window shorter than its `window_ns`, a
   boundary today's `Session` refuses; its case states its shortest. A session drawn more than one window a coin at
   one window in flight isn't replayed: no property covers it, and the driver refuses it. Both verifiers replay that
   case as above, and `held` holds their verdict to the recorded one:
-  - an accepted session draws every draw, each as many receipts as recorded over its windows;
+  - an accepted session samples every sample, each as many receipts as recorded over its windows;
   - one rejected for a failure the record keeps the cause of (`KEPT`: too few passes in a window) is rejected the same
     at the same window;
   - one rejected for any other failure is rejected nowhere in what is replayed, and draws as many receipts as recorded
-    in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
+    in each window it sampled. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
     the root it rejected, whose arrival the verifier records only once `Session.receive` takes it (so not a late one).
   Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
   registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record
@@ -86,7 +86,7 @@ def digests(reg: dict, s: D.Server) -> tuple[D.Outcome, D.Outcome]:
 
 def summary(outcome: D.Outcome) -> dict:
     """A session's verdict and reasons from one verifier's answer: its outcome (None while a window is unverified), the
-    first rejection (failure, window, draw), how many calls it refused, and each window's draw count."""
+    first rejection (failure, window, draw), how many calls it refused, and each window's sample count."""
     kind, text = outcome
     if kind != "output":
         return {kind: text[:500]}
@@ -167,13 +167,13 @@ def pace_json(session: dict) -> dict | None:
 
 
 def last_of(t: int, g: int, W: int) -> int:
-    """The last window of window t's draw at `groups_per_coin` g: min((t // g + 1)g, W) − 1, t itself at g = 1."""
+    """The last window of window t's sample at `groups_per_coin` g: min((t // g + 1)g, W) − 1, t itself at g = 1."""
     return min((t // g + 1) * g, W) - 1
 
 
 def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     """The case of what a `verifier.json` session keeps (the module's docstring), and how each part of it was made. Drawn
-    `groups_per_coin` g windows a coin, each draw closes at its last window, at the time its draws were sent, under
+    `groups_per_coin` g windows a coin, each sample closes at its last window, at the time its samples were sent, under
     W + ⌈W/g⌉ coins."""
     W, N, g = session["windows"], reg["blocks"], session.get("groups_per_coin", 1)
     record = session.get("record") or {}

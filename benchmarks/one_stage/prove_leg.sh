@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The proof leg (prove_leg.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the
-# Lean flock-verify, cached under $LEG_CACHE) with the firewall's Lean frame and the sampled-proofs verifier built in the
+# Lean flock-verify, cached under $LEG_CACHE) with the ZK server's Lean frame and the sampled-proofs verifier built in the
 # tree. From a clone:
 #   research run --on auto --source . --as proofs --project verity --cwd clone --cpus 8 --mem-gb 32 \
 #     --env LEG_CACHE=/workspace/research/cache/pouw-hidden-zk -- bash benchmarks/one_stage/prove_leg.sh

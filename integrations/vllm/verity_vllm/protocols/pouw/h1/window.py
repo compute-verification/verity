@@ -311,7 +311,7 @@ class Window:
         self.reserved, self.gate, self.client = dict(reserved), gate, None
 
     def open(self, requests_root: bytes) -> tuple[bytes, LiveRecord, LiveRecord, dict[str, Any]]:
-        """The epoch's salt (`audit.salt_of` over the weights' root), the round and draw coins' `LiveRecord`s and what
+        """The epoch's salt (`audit.salt_of` over the weights' root), the round and flip coins' `LiveRecord`s and what
         the commitment records of the session (its ``coins``, ``round_coins``, ``salt_opening`` and the gate's answer
         without its secret, ``session``). Refused (ValueError, the session closed when it was reached): an answer
         that isn't the gate's open of the reserved session on the window's open root, or a challenger off it

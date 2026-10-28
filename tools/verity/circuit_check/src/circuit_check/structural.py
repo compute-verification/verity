@@ -15,7 +15,7 @@ what the lowering computes on every input. It is not complete: one function writ
 A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check draws from the OS's
 random source when it makes the node, since a hash proof block's bits are forms of about half its nodes, which no exact
 table of them fits. Which forms a check builds does not depend on the labels (a triple's node is its first writer's pair),
-and two distinct forms share a fingerprint with probability 2^-512 over labels drawn after both are fixed, so among the M
+and two distinct forms share a fingerprint with probability 2^-512 over labels sampled after both are fixed, so among the M
 forms a check builds it identifies two that differ with probability at most M² / 2^513 over its own coins, with no premise
 on a hash; short of that the table is the exact one.
 

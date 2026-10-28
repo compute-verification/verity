@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # N2's advised unit in zero knowledge (n2_advised_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's network-records and the
+# C-Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame, N2's network-records and the
 # sampled-proofs verifier built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network
 # slots on vy-nebius-cpu-1:
 #   research run --on vy-nebius-cpu-1 --source . --project verity --as LANE --cwd clone --timeout 180m \
@@ -13,9 +13,9 @@
 #      syncs, a labelled stand-in, instead of refused)
 #      N2_ADVICE_FROM_IO=1 (--advice-from-io, with N2_E2E: a run with no endpoint advice, such as a gate's rehearsal,
 #      on an advice synthesized from its certified I/O, labelled so)
-#      N2_DRAW (--draw K: each member's period sampled, K of its windows drawn after the period is committed and only
+#      N2_DRAW (--draw K: each member's period sampled, K of its windows sampled after the period is committed and only
 #      those proved; every window by default, and the verifier's own coins)  N2_DELTA (--delta)
-#      N2_CHALLENGER=local|gate:USER@HOST (--challenger, with N2_DRAW: the draws on the auditor's challenger's coins,
+#      N2_CHALLENGER=local|gate:USER@HOST (--challenger, with N2_DRAW: the samples on the auditor's challenger's coins,
 #      one session for every member, pinned on main's first-parent history fetched from the clone's origin); with
 #      gate:…, N2_PEER (this node as the gate's /etc/vy/peers names it), N2_CHALLENGER_KEY (the challenger's key record,
 #      challenger-key/v1) and N2_GATE_KEY (the lane's gate key)

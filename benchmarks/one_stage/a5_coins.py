@@ -1,36 +1,36 @@
-"""A5's draw from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
+"""A5's sample from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
 of record, from whose coins each rank's registration draws once (`sampled_proofs.coins.ChallengerCoins` over a
-`remote.RemoteChallenger`), and the evidence its verifier checks every draw's coins against once the session has ended.
+`remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
-  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
+  writes, and its key is this run's alone, so its samples show the path, not an auditor's coins. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
   deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
-  `FAMILY`, sized from the draws before anything opens (`families`): one coin, then each rank's `need`, at least
-  `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the draw and planned it
-  (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's draw is
-  refused, so a refusal before the draw never spends the root's one session.
-* **The draws** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
+  `FAMILY`, sized from the samples before anything opens (`families`): one coin, then each rank's `need`, at least
+  `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the sample and planned it
+  (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's sample is
+  refused, so a refusal before the sample never spends the root's one session.
+* **The samples** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
-  then each rank's draw once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
+  then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
   commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
   on the one client until `drawn` returns its segment. Once every rank has drawn or won't (`skip`), the client closes the
   session. `Replay` reads an honest draw's bytes again, for the negatives' streams.
 * **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
-  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one draw's `{key, ledger, main, pins,
+  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one sample's `{key, ledger, main, pins,
   segment, session}` (`coins.coins_reason`'s, and the Lean run's), and `negatives` its altered copies.
 * **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` draws on `VerifierCoins`, the
   service's default coins (`verifier.coins`: the Lean verifier of record's `IO.getRandomBytes`, assumption A3), read by its
   `select` once the stream has received the rank's registration and written its receipt. The stream's coin source is then
-  the verifier, its draws carry no evidence, and the Lean's run takes none (`coin_source` verifier). No auditor's device
+  the verifier, its samples carry no evidence, and the Lean's run takes none (`coin_source` verifier). No auditor's device
   draws them: they show the record path, not an auditor's coins. `verifier_negatives` are the refusals that apply to them.
 """
 from __future__ import annotations
@@ -85,13 +85,13 @@ def served_h1():
 
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
          work_table: Mapping[str, Any] | None = None) -> int:
-    """The most coins one rank's draw reads, known from its window before anything opens. The window gives the stream's law:
+    """The most coins one rank's sample reads, known from its window before anything opens. The window gives the stream's law:
     the rule over its N (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
     the rank registers with (a ``work`` law's), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) draws that law on bytes that reject no
     word (zeros: a zero word is below every largest multiple), and the need is what it reads plus its longest stream once
     more. `coins.draw_first` reads each stream (the law's one, or one per stratum) once, 2 k width(n) + 64 bytes. It reads
     a stream again only when the stream's words run out, which takes k + 1 of them rejected, each with probability below
-    2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a draw reads past its need only after two."""
+    2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a sample reads past its need only after two."""
     selection = S.Law(rule)
     law = D.derive(program, query, S.selection_law(selection, population), work_table)
     reads: list[int] = []
@@ -104,13 +104,13 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
 
 
 def families(needs: Mapping[int, int]) -> list[list[Any]]:
-    """The session's layout for the draws `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
+    """The session's layout for the samples `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
     root (`Draws.pre`) and each rank's need, at least `COINS_PER_RANK` coins."""
     return [[FAMILY, 1 + sum(max(COINS_PER_RANK, n) for n in needs.values())]]
 
 
 def reserve_reason(layout: list, needs: Mapping[int, int]) -> str | None:
-    """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's draw (`needs`,
+    """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's sample (`needs`,
     rank -> `need`), naming the need and the reserve; None when it can."""
     want = 1 + sum(needs.values())
     why = Ch.layout_problem(SCHEME, 0, tuple(tuple(f) for f in layout))
@@ -144,10 +144,10 @@ TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listenin
 
 
 class Draws:
-    """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its draw (`plan`).
+    """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its sample (`plan`).
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
     `ChallengerCoins` for every rank) or is refused (`refuse`). The session's evidence follows once published. A rank's
-    draw holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
+    sample holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
     and its reads."""
 
     def __init__(self, window_root: str, ranks: list[int]) -> None:
@@ -180,14 +180,14 @@ class Draws:
             self._planned.set()
 
     def wait_planned(self) -> dict[int, int]:
-        """Once every rank has planned its draw or ended: each planned rank's coins (a rank that ended first has none)."""
+        """Once every rank has planned its sample or ended: each planned rank's coins (a rank that ended first has none)."""
         self._planned.wait()
         return dict(self._needs)
 
     def connect(self, address: str, secret: str | None, commitment: str | None) -> None:
         """The opened session's client at `address` (its hello with `secret`, its commitment the gate's open's `commitment`
         when given), then the one coin after the window's root itself, before any rank registers. Raises `CoinError`,
-        refusing every rank's draw, when either fails."""
+        refusing every rank's sample, when either fails."""
         client = None
         try:
             client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
@@ -212,7 +212,7 @@ class Draws:
                 self._close()
 
     def refuse(self, why: str) -> None:
-        """No session for the draws (`why`): every rank's `plan` and `commit` raise it."""
+        """No session for the samples (`why`): every rank's `plan` and `commit` raise it."""
         self._refused = why
         self._opened.set()
         self._closed.set()
@@ -254,7 +254,7 @@ class Draws:
         return segment
 
     def skip(self, rank: int) -> None:
-        """Rank `rank` draws nothing (refused before its draw, or its process failed), ending its turn if it holds one: no-op
+        """Rank `rank` draws nothing (refused before its sample, or its process failed), ending its turn if it holds one: no-op
         once it has drawn."""
         self.drawn(rank)
         with self._lock:
@@ -309,7 +309,7 @@ class RankCoins(CC.ChallengerCoins):
         self._draws, self._rank, self.read, self.need = draws, rank, bytearray(), None
 
     def plan(self, coins: int) -> None:
-        """The draw reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
+        """The sample reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
         self.need = coins
         self._draws.plan(self._rank, coins)
 
@@ -367,7 +367,7 @@ class OwnReplay:
         return self._read[self.at - n:self.at]
 
 
-#: Evidence of the challenger's form that a prover might attach to a draw from the verifier's own coins.
+#: Evidence of the challenger's form that a prover might attach to a sample from the verifier's own coins.
 FOREIGN_EVIDENCE = {"key": None, "ledger": [], "main": [], "pins": [], "segment": None, "session": {}}
 SELECT_COINS = ("select", ["coins"])
 
@@ -382,7 +382,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                        register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
                        draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
                        window: str, closure: dict[int, list[int]] | None = None) -> dict[str, dict]:
-    """The refusals that apply to a draw `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
+    """The refusals that apply to a sample `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
     final. `stream_of(coins)` is a fresh stream of the same Spec on `coins`, `register(stream)` receives the honest
     registration on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
     audit record); `window` is the registration's window root, and `closure` the closure map the honest draw was selected
@@ -391,10 +391,10 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
     * ``verifier-coins-claimed-as-challenger``: the honest draw's bytes passed off as the auditor's challenger's coins
       (`Replay`) with no evidence: `coins.coins_reason` refuses, and the Lean's run refuses at its select (`coins`).
     * ``verifier-coins-with-evidence``: the honest draw's bytes as the verifier's own with evidence of the challenger's
-      form attached: a draw from the verifier's own coins carries none, and the Lean's run refuses at its select
+      form attached: a sample from the verifier's own coins carries none, and the Lean's run refuses at its select
       (`coins`).
     * ``verifier-coins-redraw``: a second select on the honest registration: the stream refuses it (`drawn`), and reads
-      no coin; nothing redraws.
+      no coin; nothing resamples.
     * ``verifier-coins-before-the-registration``: a select on a registration the stream never received: refused
       (`unknown`) before any coin is read, so the verifier's coins are read only after the stream's receipt.
 
@@ -611,11 +611,11 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
           reserve: Callable[[Mapping[int, int]], list] = families):
-    """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its draws' manager: (the manager, a
+    """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
-    `ranks` has planned its draw (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
+    `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
     (`families`). It finishes the session into `dest` once the client has closed it. It opens nothing, and refuses every
-    rank's draw, when a rank ended before planning (refused before its draw, or failed) or `reserve_reason` refuses the
+    rank's sample, when a rank ended before planning (refused before its sample, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
     origin/main``)."""
@@ -685,7 +685,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
 
 
 def evidence(published: dict, segment: dict) -> dict | None:
-    """One draw's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
+    """One sample's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
     gave none."""
     if "error" in published:
         return None

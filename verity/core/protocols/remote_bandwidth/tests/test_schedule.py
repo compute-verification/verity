@@ -154,7 +154,7 @@ def test_a_layout_the_session_accepts_is_refused_credit_unless_the_schedule_give
 
 def test_the_ledger_refuses_a_verdict_on_another_session_or_not_the_check_s(honest) -> None:
     """A verdict names its session by its registration and its coin commitment: another session's (the steered one's
-    coins are the same draw, so its registration is changed here), or a look-alike not made by the check, credits
+    coins are the same flip, so its registration is changed here), or a look-alike not made by the check, credits
     nothing.  Without a property verdict no schedule is needed."""
     r, _ = honest
     rec = r.s.record()

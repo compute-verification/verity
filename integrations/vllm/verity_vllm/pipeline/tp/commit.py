@@ -10,7 +10,7 @@ hiding leaves over the rank's `chunk-leaf-v1` step stream, frame-v3-sha512 trees
 i.e. per-rank run roots combined deterministically, rank-tagged, in rank order — the option "per-rank roots combined into the run
 root" of the charter.  ``--commit-scheme vllm-v1`` (by name: tests, an old record's configuration) commits vllm-v1's 32-byte roots
 under the SHA-256 form ``verity/tp-run-root/v1``.  Every rank's root is fixed (finalize on every rank returns) BEFORE the pair's coins
-are drawn (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host's challenger opens them after the TP run root;
+are flipped (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host's challenger opens them after the TP run root;
 without it they are this process's own, a measurement); the challenge of rank r is `challenge_positions(tp_run_root,
 leaves_per_step_r, k, salt=pair/rank r)` from the pair's positions coin, and its population openings come from the identities coin,
 so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
@@ -499,7 +499,7 @@ def main(args: Options) -> int:
                     served = SRT.commit(llm, args, root, claimed, world, root_tag) if args.serving_rows and pair == 0 else None
                     per_rank = {}
                     reasons = []
-                    # every rank's root is fixed and the TP run root with them: the pair's coins come now, and every rank's draws derive from them (one RPC: each rank opens its own)
+                    # every rank's root is fixed and the TP run root with them: the pair's coins come now, and every rank's samples derive from them (one RPC: each rank opens its own)
                     coin = CC.tp_draw(coins, root)
                     src_pos, src_id = CC.tp_keys(coin)
                     positions = {str(int(f["rank"])): [list(p) for p in challenge_positions(root, f["leaves_per_step"], args.openings, salt=f"{pair}/rank{int(f['rank'])}".encode(),

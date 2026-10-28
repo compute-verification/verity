@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dcap.cu's pfill mode on one leased GPU (cwd = the source tree): FILL v1's partitioned DRAM-free filler (the baseline arm)
 # and the phase filler in decode's attention on the step's own SMs (HC-SCHED). Under one lease: FILL's receipt gate (dgate),
-# the phase kernel's gate (pgate), CAP's gate, and nothing timed unless all pass; then each arm. The round's coins are drawn
+# the phase kernel's gate (pgate), CAP's gate, and nothing timed unless all pass; then each arm. The round's coins are flipped
 # once per run (coins.txt). Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-SCHED \

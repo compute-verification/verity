@@ -6,13 +6,13 @@ relations and releases the masked proof; the auditor runs the Lean verifier on w
 doesn't exist yet. What runs today, and what the ZK point (``job.sh ZK=1``, ``zk-point``) measures as its stand-in:
 
 - ``flock-circuit prove --zk --gpu``: C-Flock's masked protocol (M1, ``verity/ml/flock/live/PROTOCOL.md``), the device
-  proving and the host masking, with the session's B units drawn by the stratified law as in configuration 1;
+  proving and the host masking, with the session's B units sampled by the stratified law as in configuration 1;
 - the ZK server (``FC_FIREWALL=1``, PROTOCOL §10): the Lean (``verity/core/service/flock/Flock/Firewall``, the
   ``flock-firewall`` processes the prover starts on its node), which commits level 0 under its own salts and computes the
   opening, the inner proof and the proof file, and ``flock-circuit``'s checks (the skeleton, the end check) on the
   prover's host threads. That is the ZK server's work today (the draft's §3), so the server's CPU is the prover process's
-  CPU with the firewall on less the same sessions' with it off, the ``flock-firewall`` processes counted once the prover
-  has waited for them. The firewall rechecks a witness the host assembled
+  CPU with the ZK server on less the same sessions' with it off, the ``flock-firewall`` processes counted once the prover
+  has waited for them. The ZK server rechecks a witness the host assembled
   (``FC_HOST_WITNESS=1``, PROTOCOL §10.2), so both arms take the host's witness.
 
 Each field names its source: ``config1`` is configuration 1 at the same B, ``stand-in`` the ZK point above.
@@ -69,7 +69,7 @@ def _jsonl(p: Path, prefix: str = "") -> list[dict[str, Any]]:
 
 
 def _firewall(session: dict[str, Any]) -> dict[str, float]:
-    """One session's firewall times, summed over its reps' buckets."""
+    """One session's ZK server times, summed over its reps' buckets."""
     got: dict[str, float] = {}
     for b in session.get("buckets") or []:
         for k, v in (b or {}).items():

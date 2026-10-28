@@ -4,7 +4,7 @@ checks the same vectors against the Python, and that they reach every case the P
 side's semantics then fails a build.
 
 Run as a script, this file writes the vectors from the Python: hand-picked words (NaNs of every kind, the infinities,
-signed zeros, subnormals, the extremes), then words drawn from a seeded generator, kept when they reach a rounding case
+signed zeros, subnormals, the extremes), then words sampled from a seeded generator, kept when they reach a rounding case
 (`_rounding`) the vectors don't have twice yet, then uniform words."""
 from __future__ import annotations
 

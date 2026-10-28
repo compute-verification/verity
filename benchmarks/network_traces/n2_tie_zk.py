@@ -1,6 +1,6 @@
 """The ingress tie in zero knowledge: each ingress link-window's T bucket rows of the warden's cells, each proved as
 IoTieRequest (`tie_service.IngressTie`, its unit `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the link's
-own stream, proved by C-Flock `prove --zk` behind the Lean firewall with each unit's witness row read off the warden's
+own stream, proved by C-Flock `prove --zk` behind the Lean ZK server with each unit's witness row read off the warden's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
 and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `advised.IoTieVerdict` on the link
 and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through
@@ -29,14 +29,14 @@ and the stream's registrations built from the stream's outcomes of record alone 
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
   its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but which
   opens to no public row of the verifier's, so window 1 is refused; ``forged``, an advice whose request 1 is 45 prompt
-  tokens in the same cells, which IoTieRequest refuses in both sampling blocks; ``split``,
+  tokens in the same cells, which IoTieRequest refuses in both verification phases; ``split``,
   prompts of 40 and 5 tokens in cells the advice swaps, proved on the cells' own lanes, which
   the verifier refuses in every window, the release not being the swapped advice's schedule (`EXPECT`).
 * **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_unit` lowered once (the gate
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file whose ``wit``
   table is the window's bucket rows under the warden's salts and paths, its registered port. A round registers,
-  selects, proves live behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its
+  selects, proves live behind the ZK server, delivers, and decides on the proof: the verifier's own Lean run with its
   own registered reads at the warden's root (`IngressTie.registered`), each ``pub`` row opened only to its own copy
   (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove (the session's wall time,
   the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included). The members
@@ -430,12 +430,12 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
     """The member's link-windows on its own stream, in order: the warden registers, the challenger selects, the prover
-    proves the statement live behind the firewall and delivers, and the verifier of record decides on the proof
+    proves the statement live behind the ZK server and delivers, and the verifier of record decides on the proof
     (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
     stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
                         clock=time.monotonic)
-    # the firewall rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
+    # the ZK server rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
     # FIREWALL-REFUSED otherwise), as a8's fw arm does
     env = {**Z.firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)

@@ -1,5 +1,5 @@
 """`pous-run` (`PousCheck.Run`) against `run.check_at`, through the core difftest harness: the outcome, its reason word for
-word, on runs drawn at reduced points (the verifier's list of memory-challenger keys, a setup's public outputs, the table of
+word, on runs sampled at reduced points (the verifier's list of memory-challenger keys, a setup's public outputs, the table of
 `C*`'s row digests, one session the memory challenger signed bound to the setup's root, the id the auditor designated),
 honest and under one edit of the verifier's list, the setup, the table, the point, the session or the designated id, the
 session edits among them every one of `mc_cases.MUTATIONS`, and runs whose JSON is not exactly what it decodes to, a
@@ -90,7 +90,7 @@ def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
 def runs(draw, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None = None) -> Run:
     """An honest run: a setup at a drawn reduced point, the memory challenger's session over its `C*` (some rounds late, some
     answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id.
-    With `stores`, a strategy of honest setups `(q, W, salt, C*)`, the setup is one it draws and `C*` its encoding, which
+    With `stores`, a strategy of honest setups `(q, W, salt, C*)`, the setup is one it samples and `C*` its encoding, which
     the setup protocol accepts (the run's `setup_of`); else `C*` is labels of no setup."""
     stored = draw(stores) if stores is not None else None
     if stored is None:

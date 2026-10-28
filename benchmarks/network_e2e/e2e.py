@@ -1,7 +1,7 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
 the link's network verdict (`LinkWindows.verify` through the proof system's stream, `network_verdict`), every
-link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
+link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean ZK server and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
 the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and the negatives
 (`negatives.py`), and what is still stubbed.
@@ -13,7 +13,7 @@ the chain's stages (`chain`): the advice's bits per link-window, the prove path'
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
 
-`run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the firewall's frame as `n2_zk.sh` does,
+`run.sh` is the runner (`verity bench network_e2e`): it builds the binaries and the ZK server's frame as `n2_zk.sh` does,
 then runs this. The README says what the report establishes and what it doesn't.
 
 * **The runs** (`collect`). Each ``--from`` SRC is a rehearsal (`certifier_serve.py rehearse --out`'s directory: its
@@ -33,8 +33,8 @@ then runs this. The README says what the report establishes and what it doesn't.
   proved (adopted) carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's are
   taken here.
 * **Proofs** (planned profile). `n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the
-  extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, drawn by the
-  verifier's Lean, proved ``--zk`` behind the firewall and held by Lean; the verifier opens each unit's ``pub`` row to its
+  extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, sampled by the
+  verifier's Lean, proved ``--zk`` behind the ZK server and held by Lean; the verifier opens each unit's ``pub`` row to its
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
   certificate digest must be these runs'), so that what n2_zk's own run proved isn't proved again. Not yet on `n2_zk` as
   it now proves: one member a round, each link-window decided by its proof of N2's registered unit; `prove` refuses and
@@ -575,7 +575,7 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
 
 
 def alone(summary: dict, d: Path | None) -> dict | None:
-    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier draws one unit of
+    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier samples one unit of
     the n staged), with its prover and Lean seconds, its two proofs' bytes (read from ``d``, n2_zk's output, when
     there) and the peak, as the report's sessions."""
     out = {}
@@ -923,7 +923,7 @@ def main(argv=None) -> int:
                          "record, first_draw, ref}}, registration the verity-vllm advice directory it was registered in "
                          "when not the report's own, record the serving run's own run directory, first_draw ISO 8601 "
                          "UTC; when is read off the record's out/advice_windows.jsonl stamp, else the registration's "
-                         "file time: at serve time if before its draw and no later than the next window's close (the "
+                         "file time: at serve time if before its sample and no later than the next window's close (the "
                          "session's end, per the record, for its last window)")
     ap.add_argument("--ids", metavar="FILE", help="each request's sampled ids by its advice id (the endpoint's "
                                                   "requests.jsonl: user, output_ids), for the I/O tie's verdict on the "

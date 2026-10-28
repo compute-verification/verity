@@ -7,7 +7,7 @@
 #     bash benchmarks/one_stage/a8.sh
 # env: A8_MEM_GB (what job.sh's stages may take, within the slot's)  A8_BLOCKS  A8_PLAN  A8_SAMPLES  A8_POINTS (a8.py's
 #      --blocks, --plan, --samples, --points; points 1,4,16 by default)  A8_ARMS (fw,nofw by default; fw builds the
-#      firewall's Lean frame beside flock-verify)  A8_COLD  A8_CACHE (the build cache, kept across runs where writable)
+#      ZK server's Lean frame beside flock-verify)  A8_COLD  A8_CACHE (the build cache, kept across runs where writable)
 #      A8_NO_AUDIT=1 (a8.py's --no-audit: the honest statement staged and the cost points only)
 # Kept in $OUT/a8: a8's records and logs, the public files and everything the verifier received; never a prover's file
 # (inst-*) nor a circuit (its pin is kept), nor a session's archive.

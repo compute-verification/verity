@@ -3,7 +3,7 @@
 # whose filler warps run the DRAM-free chain while its consumers wait on memory. Under one lease: fgate (every linear's
 # output on every row and the filler's receipts, bit for bit) and CAP's gate first, and nothing is timed unless both pass;
 # then each linear's 32 layers against cuBLASLt (flin), ncu's DRAM and tensor-pipe counters for a few configurations, and
-# the decode step with its linears through flin (fstep). The round's coins are drawn once per run (coins.txt). Clocks are
+# the decode step with its linears through flin (fstep). The round's coins are flipped once per run (coins.txt). Clocks are
 # read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \

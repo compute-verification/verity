@@ -6,14 +6,14 @@
 ``prepare`` runs one epoch of the window and plans its proofs, the prover's steps by `window.py` (a subprocess: the
 challenger and the verifier never hold a row, a salt or a served value):
 
-1. the challenger (`pouw.coins.Challenger`) commits to the epoch's salt and draw coins; the prover commits each call's
+1. the challenger (`pouw.coins.Challenger`) commits to the epoch's salt and flip coins; the prover commits each call's
    tables, as a served round commits them before its coin (`h1window.table`): its A table a/<K>@<c> (the window's A
    rows, each with its s_a) and its z table zy@<c> (its tiles' z/y records: z = A Bᵀ exact and y its served dequant,
    what ``scaled_mm_zy`` writes), and the calls' B rows (each with its s_w) as the weights' b/<K> (`window.py commit`),
    and the salt coin opens after those roots are recorded;
 2. the prover serves every tile's receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt` of the
    coin's stand-in for the certifier's reveal, the epoch as the window, a stand-in stream and prover) and commits them
-   (`window.py serve`); the registration (the window's commitment and its receipt root) is recorded, and the draw coin
+   (`window.py serve`); the registration (the window's commitment and its receipt root) is recorded, and the sampling coin
    opens after it. The verifier builds the window's public Program and its template-instance partition from the
    commitment's public shape (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
@@ -24,30 +24,30 @@ challenger and the verifier never hold a row, a salt or a served value):
    one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
    its own Program under the window's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
    WORK/verifier/w1-c<c>.registered.json);
-4. the prover opens the drawn units call by call (`window.py open`), and the verifier checks each opened row is the one
+4. the prover opens the sampled proof blocks call by call (`window.py open`), and the verifier checks each opened row is the one
    the Program's unit reads (`h1unit.unit_reads`) with a path to its root (its call's A table's and z table's and
    b/<K>'s registered roots under the Program's digest, the receipt's under the window's), and builds its own public
    file of each call's units (`h1unit.verifier_pub`: a shared-row file, each registered port's table the registered rows
    its units read, at the positions its Program reads and the opened paths) from the opened ``b || c``, its own public
    and ok rows and the units' indices;
-5. the stager (`stage.py`, building the circuit once the window's shape is known) stages each call's drawn units as one
-   shared-row statement on the prover's rows at their indices (``honest``, the first drawn unit's call, and
+5. the stager (`stage.py`, building the circuit once the window's shape is known) stages each call's sampled proof blocks as one
+   shared-row statement on the prover's rows at their indices (``honest``, the first sampled proof block's call, and
    ``honest-c<c>`` each other drawn call), and each prover's pub.bin must be the verifier's byte for byte: every unit's
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
    from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
    ok row against its registered root at the position its Program reads, so ok is bound through the verifier's
    registration (`Accounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
 
-The negatives are on ``honest``'s units, the drawn units of the first drawn unit's call.
+The negatives are on ``honest``'s units, the sampled proof blocks of the first sampled proof block's call.
 
 The planted negatives, each checked by Lean against the verifier's own file:
 
-* ``flipped-zy``: a window registered with the first drawn unit's record word 0 flipped (`window.py tamper --zy-word`,
+* ``flipped-zy``: a window registered with the first sampled proof block's record word 0 flipped (`window.py tamper --zy-word`,
   every salt kept). Its openings pass their paths (a consistent window), so the verifier's file holds the flipped leaf
   and its registered file the window's z table root; the only proof of those rows the unit admits is the honest one,
   which Lean must reject against them.
 * ``wrong-receipt``: the same with that unit's receipt from another salt.
-* ``other-window``: the first drawn unit's tile, opened from a second window (other tokens, its own epoch and salt) and
+* ``other-window``: the first sampled proof block's tile, opened from a second window (other tokens, its own epoch and salt) and
   proved as a statement of its own: its opening fails window 1's roots, and Lean must reject its proof against the
   verifier's file of window 1's unit. ``other-window-own`` (its own window's file) must accept: the proof is sound for
   the window it came from.
@@ -55,7 +55,7 @@ The planted negatives, each checked by Lean against the verifier's own file:
 Those three fail at binding (the proof's statement is not the verifier's). ``tampered-a`` passes binding and fails the
 registered reads:
 
-* ``tampered-a``: the drawn units' statement staged on rows whose first unit's a0 row (at every unit that reads it) is not
+* ``tampered-a``: the sampled proof blocks' statement staged on rows whose first unit's a0 row (at every unit that reads it) is not
   the registered one (`window.py open --tamper-a`: one code flipped, a fresh salt, the registered path kept), checked
   against its own public file with the verifier's ``--registered`` file. The proof is of the rows it commits, so Lean
   must reject it for that table row not opening its call's A table's registered root, and say so; the verifier's own
@@ -64,7 +64,7 @@ registered reads:
 Two more pass binding against their own public files and fail the ok row's registered read, each a proof Lean would
 accept were ok bound only through the public file:
 
-* ``ok-zero``: the base statement of ``in-z`` (`OK_ZERO`: the drawn units on the tampered window's committed rows, the
+* ``ok-zero``: the base statement of ``in-z`` (`OK_ZERO`: the sampled proof blocks on the tampered window's committed rows, the
   unit computing ok = 0 at the moved record, `stage.py`'s outputs), whose public file states that 0 under the public
   ok salt: its o1 table row opens no root of the verifier's ``ok``, and Lean must say so.
 * ``ok-unregistered``: the honest units staged with their ok rows committed afresh (`window.py open --unregistered-ok`),
@@ -72,8 +72,8 @@ accept were ok bound only through the public file:
   with no path to its registered root.
 
 The in-proof negatives (`IN_PROOF`) pass both and carry a wrong witness instead. Each is a window registered with one
-value of the first drawn unit changed (`window.py tamper`, every salt kept), opened and checked like the honest one under
-its own registered file, and a statement of it whose committed rows are all the window's (`forge`: the drawn units'
+value of the first sampled proof block changed (`window.py tamper`, every salt kept), opened and checked like the honest one under
+its own registered file, and a statement of it whose committed rows are all the window's (`forge`: the sampled proof blocks'
 statement staged on the window's rows, each output row the circuit computes but the window does not commit replaced with
 the committed one, `h1unit.forge_statement`). The prover's pub.bin is then the verifier's, and some output row is not
 what the circuit computes on its unit's inputs. A changed record makes the unit compute ok = 0 where the verifier's file
@@ -84,8 +84,8 @@ holds 1:
   ``H1_TILE=v3`` the record's z that word's recombination, y its dequant.
 * ``in-y``: the record's y of cell 0 plus one (``--y-cell``): y is not dq(z).
 * ``in-z``: the record's z of cell 0 plus one, its y that z's dequant (``--z-cell``): z is not A Bᵀ.
-* ``in-swap``: the records of the first drawn unit and another unit of its call exchanged (``--swap``: the next drawn
-  unit of the call when there is one, so both swapped records are in the statement).
+* ``in-swap``: the records of the first sampled proof block and another unit of its call exchanged (``--swap``: the next sampled
+  proof block of the call when there is one, so both swapped records are in the statement).
 * ``in-call``: the record of the same tile in the next call (``--call``), a row of another call's z table.
 * ``in-z-only``: a record of z alone, its y zeroed (``--z-only``).
 * ``in-xa`` (``H1_TILE=v3`` only): the record's z computed with one entry's X wrap bit xa = [A = 127] ∧ b flipped
@@ -104,8 +104,8 @@ Every per-window registered value (each call's A table and z table, and ``ok``) 
 (PRF-127: `h1unit.open_root`, a stand-in, as this harness has no auditor's ledger), and only the weights' b/<K> under none;
 the verifier computes the root itself and refuses a commitment that registers its tables without it
 (``unrooted-registration``). Window credit's last two steps (`credit_registration`: the layout of the descriptor, each
-session's ok held to the verifier's own, `credit._ok_held`, one accepted outcome per drawn unit, and
-`credit._registration`) take the window's evidence: in ``prepare`` with each drawn unit's finding the ports of its
+session's ok held to the verifier's own, `credit._ok_held`, one accepted outcome per sampled proof block, and
+`credit._registration`) take the window's evidence: in ``prepare`` with each sampled proof block's finding the ports of its
 call's ``--registered`` file, and refused for entries without the root, sessions that opened ``ok`` at its rows
 registered without the root (``ok-unrooted``: credit reads no entry of ``ok``, the verifier's own) and another window's
 root; in ``summarize`` on Lean's own VERDICT findings.
@@ -375,8 +375,8 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
                         ok: dict) -> list | None:
     """Window credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
     that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
-    held to the verifier's own (`credit._ok_held`, step 5's rule: each drawn unit's finding opened ``o1`` at ``ok``,
-    the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per drawn unit
+    held to the verifier's own (`credit._ok_held`, step 5's rule: each sampled proof block's finding opened ``o1`` at ``ok``,
+    the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per sampled proof block
     (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
     (`credit._registration`): the window's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
@@ -440,7 +440,7 @@ def wait_for(path: Path, what: str, pid: int | None) -> None:
 def epoch(work: Path, name: str, layer: str, number: int, a, record: dict,
           program: str = "") -> tuple[dict, dict, bytes, Challenger]:
     """One window's epoch to its registration: commit (``program``: the window Program's digest, when known), the salt
-    coin, serve. Returns its commitment, served root, the unit salt and the challenger (its draw coin still closed)."""
+    coin, serve. Returns its commitment, served root, the unit salt and the challenger (its sampling coin still closed)."""
     ch = Challenger(number, verifier.coins)
     rec = record.setdefault("windows", {}).setdefault(name, {})
     rec["coin_commitment"] = {"epoch": ch.epoch, "root": ch.commitment.root.hex()}
@@ -485,7 +485,7 @@ def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
 
 
 def draw_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
-    """The `k` units of `population` a window's draw coin selects, after its registration (hex) was recorded: Lean
+    """The `k` units of `population` a window's sampling coin selects, after its registration (hex) was recorded: Lean
     ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the window's name and its registration."""
     key = derive(coin, DRAW_DOMAIN, {"window": window, "registration": registration})
     return sorted(lean_draw(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
@@ -534,7 +534,7 @@ def cmd_prepare(a) -> int:
         by_call.setdefault(U.HW.call_of(win.program, u)[0], []).append(u)
     c0 = U.HW.call_of(win.program, u0)[0]
     units0 = by_call[c0]
-    # one statement a drawn call: "honest" the first drawn unit's (the negatives'), "honest-c<c>" each other's
+    # one statement a drawn call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
     honest = {c: "honest" if c == c0 else f"honest-c{c}" for c in by_call}
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
     record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "flock-verify draw (Lean)",
@@ -593,7 +593,7 @@ def cmd_prepare(a) -> int:
     prover("open", str(work / w1), salt1.hex(), ",".join(map(str, units0)), str(work / "open-ok-unregistered"),
            "--unregistered-ok")
 
-    # the second window, its first drawn unit's tile presented as window 1's
+    # the second window, its first sampled proof block's tile presented as window 1's
     com2, served2, salt2, _ch2 = epoch(work, w2, a.layer2, 2, a, record, win.obj["program"])
     if U.window_shape(com2) != U.window_shape(com1) or com2["tiles"] != T:
         raise SystemExit("the second window's shape (its slot and calls) is not the first's, so its Program is another")
@@ -609,7 +609,7 @@ def cmd_prepare(a) -> int:
                                           "against_own_window": check_opening(win, com2, served2, op2, u0)}
     log(f"opening other-window: refused against window 1 for {len(record['openings']['other-window']['refused'])} rows")
 
-    # window credit's registration step on this window's evidence, each drawn unit's finding the ports of its call's
+    # window credit's registration step on this window's evidence, each sampled proof block's finding the ports of its call's
     # --registered file (what a session verified against it states; `summarize` repeats it on Lean's own findings), and
     # refused for entries without the window root, sessions that opened ok at its rows registered without it, and
     # another window's root
@@ -856,7 +856,7 @@ def refused_by(lay: dict, lean: str, why: str) -> list[str]:
 
 
 def lean_credit(work: Path, out: Path, record: dict) -> dict:
-    """`credit_registration` of the first window on Lean's own findings: each drawn unit's the ``registered`` of the
+    """`credit_registration` of the first window on Lean's own findings: each sampled proof block's the ``registered`` of the
     VERDICTs of the honest check of its call (every session of a check the same), under the verifier's own descriptor,
     the window's public commitment and ``ok``, and the open root the verifier computes. Not run (``ran`` false) when an
     honest check has no VERDICT (``--only``)."""
@@ -991,7 +991,7 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--controls", default="")
-    p.add_argument("--firewall", default="0", help="1: the provers ran under the firewall (FC_FIREWALL=1), whose times "
+    p.add_argument("--firewall", default="0", help="1: the provers ran under the ZK server (FC_FIREWALL=1), whose times "
                                                     "the honest prover's records must carry")
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)

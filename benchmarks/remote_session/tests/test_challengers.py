@@ -277,7 +277,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
     family. The honest session's
     challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
-    openings as its draws arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
+    openings as its samples arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
     coins unreleased and is not, and the period's close lists the two so."""
     if kind == "gate":
         host.period()
@@ -824,7 +824,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     forms', exactly; a refused form records none), beside its five parts (verifier.json's `delta`,
     `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
     sum to it, give no line. The hiding part, n·2^-191, is below the float δ's precision, so the exact parts exceed
-    the recorded total by it. A ledger that didn't charge the draw's rejection has Σ_t k_t/2^64 added at the session's
+    the recorded total by it. A ledger that didn't charge the sample's rejection has Σ_t k_t/2^64 added at the session's
     `samples`, so it reads as one that did, a window that opened all its receipts included. Every error names the
     windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
     fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
@@ -894,7 +894,7 @@ GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
 def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     """On gate runs 8 and 9's records, written before verifier.json carried δ's parts or the slack (`slack_log2`), a
     session's error is the memory line's δ its ledger recorded, bit for bit, plus the coin commitment's hiding and the
-    draw's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
+    sample's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its

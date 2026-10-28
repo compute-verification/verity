@@ -275,8 +275,8 @@ def test_the_scan_names_both_ends_pieces_and_leaves_out_what_the_public_rows_hol
 
 
 def test_the_prover_s_other_subset_is_another_k_subset_of_the_period():
-    """`n2_zk.other_subset`, the ``other_subset`` member's windows: K of the period's, ascending, not the draw's units
-    (the undrawn windows first), and the draw's own at K = n, where no other subset exists."""
+    """`n2_zk.other_subset`, the ``other_subset`` member's windows: K of the period's, ascending, not the sample's units
+    (the undrawn windows first), and the sample's own at K = n, where no other subset exists."""
     for n, k, units in ((26, 8, [3, 8, 10, 11, 15, 18, 19, 23]), (4, 3, [0, 1, 3]), (5, 1, [0]), (3, 2, [1, 2])):
         got = n2.Z.other_subset({"population": n, "k": k, "units": units})
         assert len(got) == len(set(got)) == k and got == sorted(got) and got != units and set(got) <= set(range(n))
@@ -301,7 +301,7 @@ def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_bu
     """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
     zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
     off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros, so a
-    control on the instance files fails on exactly those pieces. Here the sampling blocks' wit rows, the rows the
+    control on the instance files fails on exactly those pieces. Here the verification phases' wit rows, the rows the
     instance files hold as they are, stand in for them."""
     _, rounds = _link(n2.T)
     rd = rounds["honest"]

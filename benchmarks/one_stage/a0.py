@@ -1,5 +1,5 @@
-"""One-stage audit, run A0: a template's captured served values through registration, the verifier's draw, M0's prover and
-verifier, the Lean verifier's draw checks, and the audit record with its integrity profile; then the negatives.
+"""One-stage audit, run A0: a template's captured served values through registration, the verifier's sample, M0's prover and
+verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
@@ -10,7 +10,7 @@ verifier, the Lean verifier's draw checks, and the audit record with its integri
   link is provenance, not proof, and the registration says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
 * **Verifier of record.** Lean's `flock-verify verify` replays the session offline with the circuit and the public
-  file held by content; Lean also checks U1-U3 on the draw, and M0's own verifier (`flock-circuit serve`) checks it live.
+  file held by content; Lean also checks U1-U3 on the sample, and M0's own verifier (`flock-circuit serve`) checks it live.
 """
 from __future__ import annotations
 
@@ -160,9 +160,9 @@ def stand_in(set_dir: str) -> dict:
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
-    """One live session: `serve --draw` (the verifier's side: registration, the draw, coins, the verdict) and `prove`.
+    """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
-    sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset draw at hidden outputs and one table
+    sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (verifier PROTOCOL §16.15). `env`: added to
     both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
@@ -265,7 +265,7 @@ def lean_refused(v: dict, names: str | None = None) -> bool:
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
-    """Lean's draw check refused case `i` by `code` (U1, U3), not for a draw it could not read."""
+    """Lean's sample check refused case `i` by `code` (U1, U3), not for a sample it could not read."""
     return len(cases) > i and not cases[i]["ok"] and cases[i]["why"].startswith(f"{code}:")
 
 
@@ -303,7 +303,7 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
 def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier of record
     not run or absent, a session root that isn't the registered one, a verifier of record reporting a registered value's
-    reads opened against another root than its registered one, and, when the sessions were handed the verifier's draw
+    reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
     (`served`), a served share that isn't it. Each is decided by the verifier of record (`verifier.audit_record`); `agree`
     is whether the Lean and the Python decided it alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
@@ -362,7 +362,7 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks (PR #113)")
+    ap.add_argument("--lean", required=True, help="flock-verify for the sample checks (PR #113)")
     ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify (PR #118); default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)
@@ -426,7 +426,7 @@ def main() -> int:
         print("A0 " + json.dumps({"refused_before_draw": checks}))
         return 1
 
-    # 4-6. the verifier draws after Register, M0 proves the drawn units, M0's verifier and Lean's draw checks
+    # 4-6. the verifier samples after Register, M0 proves the sampled proof blocks, M0's verifier and Lean's sample checks
     t = time.time()
     record, live = session(a.bin, st, n, law_text, a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)

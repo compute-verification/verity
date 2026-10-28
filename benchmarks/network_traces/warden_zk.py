@@ -1,5 +1,5 @@
 """warden-zk: the warden's bucket rows read by the proof system. A toy unit over one row's bits, its port registered
-against the warden's signed egress root (`warden_rows`), proved by C-Flock `prove --zk` behind the Lean firewall and
+against the warden's signed egress root (`warden_rows`), proved by C-Flock `prove --zk` behind the Lean ZK server and
 held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through the one-stage audit as
 `n2_zk.py` proves N2's head checks.
 
@@ -35,8 +35,8 @@ held by the Lean verifier's registered reads (`flock-verify verify --zk --regist
   - ``pad-named``: ``pad``'s rows under the Program's value, which is public: unit 0's row isn't the Program's;
   - ``swapped``: made for units 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
     Program's: the header names the swapped units' wiring.
-  Each is registered, every unit drawn by the verifier's Lean (`flock-verify draw --stratified n`), proved `--zk`
-  behind the firewall (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition --program
+  Each is registered, every unit sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved `--zk`
+  behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition --program
   --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered reads.
 * **What the verifier receives**, scanned for every 16-byte piece of every opened row and every salt of the
   statement (`a8.received`) but the pieces the public circuit holds, the empty slot's (zero bytes, the schedule's)
@@ -280,7 +280,7 @@ def firewall(M, m: dict) -> dict:
 
 
 def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
-    """Member m registered, drawn by the verifier's Lean (every unit), proved --zk behind the firewall and held by Lean
+    """Member m registered, sampled by the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean
     with the verifier's own registered reads. Writes what the verifier received under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)

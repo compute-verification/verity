@@ -1,5 +1,5 @@
 """`core-firewall serve` (`Firewall.Protocol`, `verity/firewall-release/v0`) against a reference built on Python's
-firewall: the case framing as `Core.Protocol` decodes it (`verity_difftest.protocol.answer`), the record as
+ZK server: the case framing as `Core.Protocol` decodes it (`verity_difftest.protocol.answer`), the record as
 `verity_flock.firewall` reads it, its slot and admission, the send check and the release time. The send check is
 `Flock.Firewall.Contract.run` on both sides: the port reuses it, so the reference asks `flock-firewall contract` for its
 verdict, and what is compared is everything around it. Transcripts are `firewall_agree.py`'s sessions (honest ones, the
@@ -94,8 +94,8 @@ def _firewall(record: bytes):
 
 
 def reference(contract: Contract, tally: Counter | None = None):
-    """The firewall's release in Python, as `Firewall.Protocol` decides it: parameters are a public input the contract
-    reads; the commitment a record Python's firewall reads (its digest the SHA-512 of its bytes); the evidence canonical
+    """The ZK server's release in Python, as `Firewall.Protocol` decides it: parameters are a public input the contract
+    reads; the commitment a record Python's ZK server reads (its digest the SHA-512 of its bytes); the evidence canonical
     JSON `{"now_ms", "part", "session", "transcript"}` with a transcript the contract reads; the check takes the slot,
     admits the session (a record its own ops left unreadable rejects), holds the transcript to the contract, then the
     release time."""
@@ -252,7 +252,7 @@ def test_a_record_its_slot_leaves_unreadable_releases_nothing(server, contract):
 @pytest.mark.slow
 def test_a_reference_without_the_slots_rule_is_caught(server, contract, monkeypatch):
     """Rule 2's orphan: a reference whose slot doesn't stop the session of a holder that died admits it again, on the
-    orphan itself and among drawn cases (at this seed the first orphan the draw reaches is past its 600th case)."""
+    orphan itself and among drawn cases (at this seed the first orphan the sample reaches is past its 600th case)."""
     orphan = _case([["open", "s", ["L0", "L1"], None, None], ["finish", "r0000"], ["slot", "r0000", "L0"]], "r0000", "L0", 0)
 
     @contextmanager

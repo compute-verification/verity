@@ -1,4 +1,4 @@
-"""One link-window's network certificates through the proof system (N2): the network `Spec`, the firewall's salted
+"""One link-window's network certificates through the proof system (N2): the network `Spec`, the ZK server's salted
 commitment to the link-window's certified records, and the check's verifier of record.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the link-window's two certified
@@ -26,15 +26,15 @@ challenger records before it reads a coin (a coin source with a `commit` is firs
 a remote challenger's is). It then draws `subset:K` of the n windows, and only the drawn windows are registered, in
 window order, each held to its committed root (`register(drawn=…)`), selected and proved. `network_verdict(drawn=…)`
 accepts when exactly the drawn windows are registered, in order, each under its committed root, with an accepted
-outcome of record (on an advised link naming the committed advice), and it states what the draw established: except
+outcome of record (on an advised link naming the committed advice), and it states what the sample established: except
 with probability δ, at most `wrong_units["bound"]` of the n committed windows are wrong (the uniform K-subset's exact
-bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's draw is Python's
-(`service.select_draw`), which records the coin bytes it read (`read`); the draw of record is the Lean verifier of
+bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's sample is Python's
+(`service.select_draw`), which records the coin bytes it read (`read`); the sample of record is the Lean verifier of
 record's on those bytes (`lean_draw`: C-Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
 `draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
 draw is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
-proved are exactly that draw's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever units the draw object it is
-handed lists. Selection `All` (K None) draws every window and reads no coin, and K = n leaves nothing to draw.
+proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever units the sample object it is
+handed lists. Selection `All` (K None) draws every window and reads no coin, and K = n leaves nothing to sample.
 The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
@@ -83,18 +83,18 @@ N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the 
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
-**The proof.** The prover proves the drawn unit as one C-Flock statement of one instance: rows ``pub`` (the unit's
+**The proof.** The prover proves the sampled proof block as one C-Flock statement of one instance: rows ``pub`` (the unit's
 public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt), each the
 little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`, `LinkWindows.row`), and
 the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed under a hiding salt. Its
 circuit is `LinkWindows.proof_unit`, the registered unit with each gate the Definition its pinned digest names, bound to
-the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it behind the firewall).
+the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it behind the ZK server).
 
 Its verifier of record is `LinkWindows.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when
 - the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, `verify --zk`) accepts every session on the circuit
   file the auditor committed, the sessions prove this link's registered unit (`LinkWindows.proved`: every gate names a
-  pinned circuit digest and every session names the registered Program) and the drawn unit;
+  pinned circuit digest and every session names the registered Program) and the sampled proof block;
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
   root, the link-window's public fields and both certificates' signed digests), and its ``o0`` row to the output word
   delivered, whose verdict and deadline bits are both 1;
@@ -102,7 +102,7 @@ alone. It accepts when
   session over its public fields and its signed digest, and names the registered link-window), and the window's
   declared sync is one of Σ_sync.
 
-What the verifier receives: the registration (the salted root), the draw, the two certificates' public fields and
+What the verifier receives: the registration (the salted root), the sample, the two certificates' public fields and
 signatures, from the certifier, which is the auditor's device; the declared syncs; and from the prover the statement's
 public file (each row's hiding commitment), its session files, the circuit file (held to the committed digest), the
 salts of the ``pub`` and ``o0`` rows and the output word. Never the opening nor the ``wit`` row's salt. The certificates
@@ -196,7 +196,7 @@ Lean takes as an input rather than checks:
 - on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of C-Flock's Lean
-  verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
+  verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
@@ -206,7 +206,7 @@ through both to the verdict it recorded, and the properties of the Lean's verdic
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered unit whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
-sync is declared; the outcome record binds the registered root, the draw and the delivered sessions. The verifier of
+sync is declared; the outcome record binds the registered root, the sample and the delivered sessions. The verifier of
 record reads no witness but an advised link's clock openings (`certified_clocks`), on the host until N2's advised
 unit opens them (PROTOCOL.md's named gap, "The clock's opening"). The proof opens the head leaves (2, 3) only, so the
 record leaves (0, 1), which hold each certified record whole, are committed but read by nothing in the verdict, and
@@ -263,8 +263,8 @@ STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
 NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
 PERIOD_DRAW = "verity-network-certifier/period-draw/v0"
-#: the sampled network verdict's refusal by name: the windows registered and proved are not the period's draw of record
-#: (`lean_draw` on the coins the period draw read), or that draw can't be made
+#: the sampled network verdict's refusal by name: the windows registered and proved are not the period's sample of record
+#: (`lean_draw` on the coins the period flip read), or that sample can't be made
 PERIOD_DRAWN = "period-draw"
 VALUE = "certificates"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
@@ -493,8 +493,8 @@ def _root_of(record: Any) -> Any:
 
 
 def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
-    """The period's draw of record: C-Flock's Lean verifier of record (`proofs.executable`, which verifies the
-    windows' proofs) drawing `subset:k` of n on `read`, the coin bytes the period draw read, in order
+    """The period's sample of record: C-Flock's Lean verifier of record (`proofs.executable`, which verifies the
+    windows' proofs) sampling `subset:k` of n on `read`, the coin bytes the period draw read, in order
     (``flock-verify draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
     byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
     object, or ``{"refused": why}`` where the bytes run out or the Lean refuses or can't run."""
@@ -530,7 +530,7 @@ def _profile(rows: Sequence[Sequence[int]] | None) -> list[list[int]] | None:
 @dataclass(frozen=True)
 class Delivered:
     """A link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its circuit file
-    the auditor's own lowering of the unit), and for the drawn unit the salts of its public row and its output row
+    the auditor's own lowering of the unit), and for the sampled proof block the salts of its public row and its output row
     (``pub``, ``o0``) and its output word, which the verifier opens against the public file's commitments to those rows.
     Never the witness row's salt."""
 
@@ -610,7 +610,7 @@ def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) ->
 
 @dataclass(frozen=True)
 class Opening:
-    """The firewall's side of one link-window's commitment, all witness: the egress and the ingress certified records,
+    """The ZK server's side of one link-window's commitment, all witness: the egress and the ingress certified records,
     in leaf order, and one salt per leaf (`rows`'s order: the two records', then the two heads')."""
 
     window: int
@@ -637,7 +637,7 @@ class WardenProfile:
 class LinkWindows:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
-    challenger drew for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
+    challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
     link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile, nor
     has a warden's (`warden`: the active warden's records, its key and session the certifier's here, its counts its
@@ -837,11 +837,11 @@ class LinkWindows:
     def provenance(window: int) -> dict[str, Any]:
         return {"kind": "served", "window": window}
 
-    # the firewall
+    # the ZK server
 
     def commit(self, window: int, egress: CertifiedRecord, ingress: CertifiedRecord,
                salts: Sequence[bytes] | None = None) -> Opening:
-        """The link-window's opening. `salts`: four distinct salts, one per leaf, drawn once (default: fresh from the
+        """The link-window's opening. `salts`: four distinct salts, one per leaf, sampled once (default: fresh from the
         operating system)."""
         salts = tuple(salts) if salts is not None else tuple(_INST.fresh_salt() for _ in range(LEAVES))
         if len(salts) != LEAVES or len(set(salts)) != LEAVES or any(len(s) != _INST.salt_bytes for s in salts):
@@ -869,7 +869,7 @@ class LinkWindows:
                         previous=previous)
 
     def session(self, opening: Opening, draw: S.Draw) -> str:
-        """The delivered session's SHA-512: the registration, the draw and the salted leaves the opening reproduces."""
+        """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
         return _sha512({"format": SESSION, "registration": draw.registration.digest, "draw": _sha512(dict(draw.draw)),
                         "leaves": [x.hex() for x in self.leaves(opening)]})
 
@@ -1120,7 +1120,7 @@ class LinkWindows:
                   delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
                   advice: Any = None) -> dict[str, Any] | None:
         """`verify`'s inputs as `NetworkCheck.LinkWindow.caseOf` reads them: the verifier's own structure (the Program's
-        and partition's digests, the gate ids), the registration, the draw, the findings of its own run of C-Flock's
+        and partition's digests, the gate ids), the registration, the sample, the findings of its own run of C-Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync,
@@ -1198,8 +1198,8 @@ class LinkWindows:
         """The verdict of record on the link-window's delivered proof, from public inputs and the proof alone: accepted
         when
         - the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
-          `circuit_sha512`) accepts every session, and they prove this link's registered unit (`proved`) and the drawn
-          unit;
+          `circuit_sha512`) accepts every session, and they prove this link's registered unit (`proved`) and the sampled
+          proof block;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests, and on an advised link the window's
           view of `advice`, the link's advice, which `advised.view` takes under the tie from `ties` alone), and its
@@ -1348,14 +1348,14 @@ class LinkWindows:
 
     def period_draw(self, stream: S.Stream, roots: Sequence[str], k: int | None, coins: Any, *,
                     advice: str | None = None) -> dict[str, Any]:
-        """The period's draw over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
+        """The period's sample over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes), and on
         an advised link `advice`, the advice's digest (`advised.digest`), which every accepted window must name. Every
         window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
         count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
         (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
         registration. The object is `{format, stream, law, k, population, units, roots, advice, commitment, read}`,
-        `read` the coin bytes the draw read, in order (hex), from which the network verdict's Lean draws its own
+        `read` the coin bytes the sample read, in order (hex), from which the network verdict's Lean draws its own
         (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that isn't
         this link's or holds a registration, roots that aren't n SHA-512 hex digests, an advice on a link that isn't
         advised or none on one that is, and k outside [1, n]."""
@@ -1402,7 +1402,7 @@ class LinkWindows:
 
     @staticmethod
     def _of_record(n: int, drawn: Mapping[str, Any]) -> tuple[list[int] | None, str | None]:
-        """The period's draw of record over its n windows, ascending, and None; or None and why there is none: every
+        """The period's sample of record over its n windows, ascending, and None; or None and why there is none: every
         window at K = n, else `lean_draw` on the coins `drawn` read, which must be `subset:K` over n."""
         k = drawn["k"]
         if k == n:
@@ -1433,18 +1433,18 @@ class LinkWindows:
         exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
         accepted outcome; on an advised link each names the committed advice. An undrawn window has no registration and
         its record is None; a registration past the drawn windows is listed in `refused` as n, n + 1, … The verdict
-        then carries `selection` (the draw) and `wrong_units`, what it established at the stream's δ: except with
+        then carries `selection` (the sample) and `wrong_units`, what it established at the stream's δ: except with
         probability δ, an accepted link has at most `bound` wrong windows of the `of` committed, and `epsilon` is
         bound / of (the uniform K-subset's exact bound, one-stage's `wrong_units` over windows); `digest` binds the
-        draw too.
+        sample too.
 
-        The drawn windows are the draw of record's, never the units `drawn` lists: the verdict runs `lean_draw` on
-        `drawn`'s coins (`read`), and every window at K = n, which leaves nothing to draw. It refuses the link by name,
-        `why[PERIOD_DRAWN]` with the Lean's draw (or why there is none), `drawn`'s units and the windows registered,
+        The drawn windows are the sample of record's, never the units `drawn` lists: the verdict runs `lean_draw` on
+        `drawn`'s coins (`read`), and every window at K = n, which leaves nothing to sample. It refuses the link by name,
+        `why[PERIOD_DRAWN]` with the Lean's sample (or why there is none), `drawn`'s units and the windows registered,
         when the Lean can't draw, when `drawn`'s units aren't the Lean's, and when a registered window isn't one the
-        Lean drew; a drawn window not registered is in `refused`. `selection` is the draw of record, ``by`` ``lean``
+        Lean drew; a drawn window not registered is in `refused`. `selection` is the sample of record, ``by`` ``lean``
         (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
-        served or advised profile, as `verify` does, on a stream that isn't this link's, and on a draw that isn't this
+        served or advised profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
         stream's period draw."""
         n = self._period(stream, windows)
         why: dict[str, Any] = {}

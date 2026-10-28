@@ -11,7 +11,7 @@
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
   Their root must be the one the pass published before any draw.
-- **The draws' source** is 32 bytes of the Lean verifier of record's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
+- **The samples' source** is 32 bytes of the Lean verifier of record's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
   `uniform/io-getrandombytes`), the verifier's own, drawn here after the transcript is fixed: a
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,

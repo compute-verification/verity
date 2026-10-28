@@ -344,8 +344,8 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     """H1 on an engine built with ``worker_extension_cls`` = `EXTENSION`: the ranks' layout gathered, each rank's `RankRun`
     installed, the window's salt from ``coins`` (an in-process `pouw.coins.Challenger`, as `pouw._install_h1` without a
     challenger) over every rank's weight roots, or opened by ``opener`` at round 0 (the challenger's), and the executor's
-    ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`, its draw family the
-    window's draw coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
+    ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`, its sample family the
+    window's sampling coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
     (`pouw_h1_served.Served`, without the period's `Weights` or a registry) registers the window's tables from the rows
     the ranks ship; ``commit`` (with ``served``, at PP 1, the engine's ``worker_extension_cls`` `COMMIT_EXTENSION`)
     puts the Commit on every rank, its keywords `acquire.h1_commit.RankCommit.h1rank_commit`'s, and ``served``'s tap is the

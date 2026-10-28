@@ -7,7 +7,7 @@ The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs withou
 answers as the Lean verifier does, one ``VERDICT`` line a session, and accepts a session only when its proof is the
 SHA-512 of every file it was handed (the circuit file, the public file, the program, the partition object and the
 ``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
-session drew. `prove` makes those proofs with the files a prover would hold,
+session sampled. `prove` makes those proofs with the files a prover would hold,
 the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
 verifier the files the prover proved against. `sampled_proofs/tests/test_proofs.py` holds the real verifier to
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
@@ -109,7 +109,7 @@ def live_reads(d: dict, s: int, m: int | None = None) -> dict:
 def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
     """The window's live evidence as an honest prover delivers it (`credit.LIVE_STATEMENTS`): its live descriptor and
     each round's statement, the live template's circuit file, a public file whose one instance is unit s, and one session
-    drawing it, its proof bound to the files the verifier is handed (round s's ``--registered`` file at the manifest's
+    sampling it, its proof bound to the files the verifier is handed (round s's ``--registered`` file at the manifest's
     m_s, or ``m[s]``)."""
     desc = d["live"]["descriptor"]
     raw = bytes.fromhex(desc)
@@ -142,8 +142,8 @@ def _units(d: dict, k: int) -> list[int]:
 
 
 def prove(d: dict, k: int, to: Path) -> list[dict]:
-    """The window's statements as an honest prover delivers them: for each call with a drawn unit, its K's circuit file,
-    a public file whose instances are the call's drawn units, and one session drawing all of them, its proof bound to
+    """The window's statements as an honest prover delivers them: for each call with a sampled proof block, its K's circuit file,
+    a public file whose instances are the call's sampled proof blocks, and one session sampling all of them, its proof bound to
     the files the verifier is handed (the call's ``--registered`` file as `h1window.table_reads_file` writes it, at the
     roots the window registers)."""
     raw, lay = bytes.fromhex(d["descriptor"]), _layout(d)
@@ -200,7 +200,7 @@ def test_an_honest_windows_statements_credit_its_bits(seed, tmp_path, verifier):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_window_carrying_verdicts_and_no_proof_files_is_refused(seed, tmp_path, verifier):
-    """The evidence carries proof files, never verdicts: the drawn units' accepted outcomes in place of the statements,
+    """The evidence carries proof files, never verdicts: the sampled proof blocks' accepted outcomes in place of the statements,
     or a statement carrying a verdict beside its files, credit nothing."""
     d, statements = window(seed, tmp_path)
     assert credit(d, d["proofs"]) == (None, ("proof", Cr.STATEMENTS_FORM))
@@ -251,7 +251,7 @@ def test_a_circuit_file_other_than_the_committed_one_is_refused_before_the_verif
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_statements_the_draw_did_not_ask_for_are_refused(seed, tmp_path, verifier):
-    """A call proved twice (a retry), a statement of a call no drawn unit is in, a statement whose session proved a unit
+    """A call proved twice (a retry), a statement of a call no sampled proof block is in, a statement whose session proved a unit
     of another call, and a drawn call with no statement: each refuses the window."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements + [statements[0]])[1] == (
@@ -390,7 +390,7 @@ def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> di
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, tmp_path, verifier):
     """RT-ALGO-16: a J10-R window's unit's public row is today's, then its ``call``, its call's first position u0 (the
-    one its seed_c is drawn at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
+    one its seed_c is sampled at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
     t % (n/C)) at the call's slot M, its K and the tile: credit derives both from the committed layout, as it builds
     the rest of the row. A statement whose units drew their noise at another unit's blocks, at another call's u0, or at
     blocks one off was proved against another file, so its session is rejected and the window refused whole."""

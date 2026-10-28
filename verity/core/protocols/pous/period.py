@@ -5,7 +5,7 @@ component of onsite Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in 
 is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and audited every period):
 
 1. the prover commits to `W`, the node's `store` padded with zeros to the point's payload (`setup.commit`);
-2. the verifier draws the salt after the commitment, from its live `coins` (`setup.draw_salt`);
+2. the verifier samples the salt after the commitment, from its live `coins` (`setup.draw_salt`);
 3. the prover encodes `C*` (`P2.encode_segment`), and the verifier decodes it and checks `Dec(C*)` against the commitment
    (`setup.verifier_key_from_encoding`, the public-encoder setup; in Lean `verity/pous/p2/v4/setup`), publishing its root;
 4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), draws its `k` indices
@@ -297,7 +297,7 @@ def encode(q: P2.P2Params, salt: bytes, w: bytes, workers: int = 1) -> list[list
 
 
 def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> Store:
-    """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt drawn
+    """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt sampled
     from the verifier's `coins` after the commitment, `C*` encoded in `workers` processes, and the public-encoder check of
     it (`setup.verifier_key_from_encoding`), which raises `ValueError` on a setup it refuses."""
     point = point_for(len(store)) if point is None else point

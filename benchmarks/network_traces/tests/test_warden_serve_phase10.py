@@ -363,10 +363,10 @@ def test_the_close_marker_carries_the_records_grid_digest(tmp_path):
 
 @pytest.mark.parametrize("edit", [_shifted, _altered], ids=["shifted", "altered"])
 def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path, edit):
-    """The process once trusted that the rows since the last marker were the sampling block's. With the marker's
-    digest it refuses sampling block 0's egress record when a row was lost and another doubled on the way (the count
+    """The process once trusted that the rows since the last marker were the verification phase's. With the marker's
+    digest it refuses verification phase 0's egress record when a row was lost and another doubled on the way (the count
     unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is signed,
-    and the check refuses it. Sampling block 0's ingress record, kept before it, stays certified."""
+    and the check refuses it. Verification phase 0's ingress record, kept before it, stays certified."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]

@@ -1,6 +1,6 @@
 """`verity.ml.circuits.ops.argmax` and `ops.boolean.argmax`: a row's chunk units and their combine are `TokenSelect_v1`'s greedy
 argmax (here in numpy float32: the first index on ties, a NaN never taken, a NaN logits[0] never left), on random rows and on
-rows drawn from a few words (ties across chunks, +0 against -0, -inf, ±inf and NaNs), at the demo's V = 256 in chunks of 128 and
+rows sampled from a few words (ties across chunks, +0 against -0, -inf, ±inf and NaNs), at the demo's V = 256 in chunks of 128 and
 on ragged rows; each Boolean unit computes its word Definition, the combine on any partials, in range or not; each unit's output
 is one 16-bit word; and `bind` refuses statics outside the family."""
 from __future__ import annotations

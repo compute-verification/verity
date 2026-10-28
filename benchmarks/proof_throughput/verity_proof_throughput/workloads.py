@@ -3,7 +3,7 @@
 A workload is one VU family: the coordinate Definition a served GEMM's ``Q_word`` partition cuts it into, at that GEMM's K.
 Its population is ``n_max`` independent instances of that Definition (``population``: core's ``population_program``, each
 instance one unit of ``Q_template_instance`` v0, so the population is one stratum), staged once as one statement; each
-session proves the B units the verifier draws from it by the stratified law, the draw the Lean verifier's soundness covers
+session proves the B units the verifier samples from it by the stratified law, the sample the Lean verifier's soundness covers
 (``instances``). Its unit is the coordinate class the ``Q_word`` partition of a ``Gemm_v2`` Call gives, gate for gate.
 
 ``bf16-k6144`` is the VU family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
@@ -36,7 +36,7 @@ class Workload:
     sites: dict[str, int | None]
     #: how the point job stages it: ``class-statement`` (verity_flock.class_statement --program-module) or ``served-unit``
     stager: str
-    #: the population's instance count: the units a session's draw is taken from, and the largest B
+    #: the population's instance count: the units a session's sample is taken from, and the largest B
     n_max: int
     #: block bits one coordinate takes in a statement (2^k_log), from staging; the cap is MAX_STATEMENT_BITS / 2^k_log
     k_log: int | None = None

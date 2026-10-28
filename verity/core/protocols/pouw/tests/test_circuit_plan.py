@@ -103,7 +103,7 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 def test_the_work_table_and_law_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
     `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
-    verifier's table raises a zero-work stratum's draws to it (X-SPC-81)."""
+    verifier's table raises a zero-work stratum's samples to it (X-SPC-81)."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
@@ -130,7 +130,7 @@ def test_the_profile_is_stratified_over_the_tile_strata():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
     assert PL.profile(lay, {tile.name: 1}) == Stratified((Stratum(tile.name, 4, 1),))
-    # one draw of four tiles at δ = 1/4: three unsound tiles escape with probability exactly 1/4
+    # one sample of four tiles at δ = 1/4: three unsound tiles escape with probability exactly 1/4
     bound = PL.unsound_work_bound(lay, {tile.name: 1}, 0.25)
     assert 3 * lay.tile_work() <= bound < 3.01 * lay.tile_work()
 
@@ -171,7 +171,7 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
 def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
     """Root's option B on X-SPC-105: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
     the window's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
-    window draws at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
+    window samples at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
     alone proves all its y cells up to K_y. Over the window the escape of b_c wrong cells in each call is at most
     (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the window pin states."""
     import random
@@ -241,7 +241,7 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
 def test_the_red_team_s_capped_window_is_refused():
     """The red team's window (20260929T1622Z): call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
     work 0 and 1 at work 1, and K = 5,000. Call 0's share 5,000 is capped at its 1,010 units, so its work-2 stratum would
-    draw 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the window bound claims
+    sample 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the window bound claims
     (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the window: call 0 does work in two strata."""
     from math import comb
 
@@ -265,7 +265,7 @@ def test_the_red_team_s_capped_window_is_refused():
 
 def test_a_window_that_does_no_work_is_refused():
     """The window pin's `hW`, 0 < W: `window_laws` refuses a window whose calls do no work (every stratum at work 0), so
-    it is never drawn or accepted; one call's work is enough."""
+    it is never sampled or accepted; one call's work is enough."""
     import pytest
 
     shape = ncp2.Shape(16, 64, 16)
@@ -387,7 +387,7 @@ def _anchors(call, **kw):
 
 def _window(t, anchors, source=bytes(range(32)), commitments=None):
     """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
-    its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the draws are
+    its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the samples are
     reproducible."""
     import hashlib
     from unittest import mock
@@ -437,8 +437,8 @@ def test_the_verifier_draws_over_its_own_layout():
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     """The window pin takes a window's per-call draws as independent (M1), and each call's subsets are keyed by its index
     under the one window key. A receipt lists each call index once, and `Traced.draw` admits the call to the window's
-    `Ledger` before it draws: a call index already drawn, even with another weight id, is refused before `plan.draw`
-    runs. A draw without a ledger is refused."""
+    `Ledger` before it samples: a call index already drawn, even with another weight id, is refused before `plan.draw`
+    runs. A sample without a ledger is refused."""
     import hashlib
 
     import pytest
@@ -528,7 +528,7 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
 
 def test_a_caller_built_ledger_has_no_key():
     """The red team's first probe: a ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
-    or source, and sets none afterwards, so only `Ledger.open` makes one that draws."""
+    or source, and sets none afterwards, so only `Ledger.open` makes one that samples."""
     import pytest
 
     import circuit_fixtures as F
@@ -553,7 +553,7 @@ def test_a_caller_built_ledger_has_no_key():
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
     """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
-    `Traced.draw` reads it from the ledger, so a caller's key never reaches a draw."""
+    `Traced.draw` reads it from the ledger, so a caller's key never reaches a sample."""
     import pytest
 
     import circuit_fixtures as F
@@ -572,7 +572,7 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
 
 def test_an_opened_ledger_s_receipt_cannot_be_swapped():
     """The red team's third probe: an opened ledger whose receipt is swapped for a larger one after the key exists, so a
-    call committed after the key would be drawn under it. The receipt is set once, in `Ledger.open`, and the later call
+    call committed after the key would be sampled under it. The receipt is set once, in `Ledger.open`, and the later call
     is refused."""
     import hashlib
 
@@ -632,9 +632,9 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
 
 def test_the_record_keeps_the_source_once_the_draw_is_sent():
-    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its draw
-    is sent, so a third party re-derives the key (`replay_key`) and so the draw. Before it is sent the record is refused,
-    and after it the window draws nothing more. What the record can't show is that the source was fresh."""
+    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its sample
+    is sent, so a third party re-derives the key (`replay_key`) and so the sample. Before it is sent the record is refused,
+    and after it the window samples nothing more. What the record can't show is that the source was fresh."""
     import pytest
 
     import circuit_fixtures as F
@@ -661,7 +661,7 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
 
 
 def test_each_window_s_source_is_fresh():
-    """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it draws 32 fresh bytes
+    """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it samples 32 fresh bytes
     from the operating system's CSPRNG (`secrets`) for each window, once the receipt is complete, so two windows, even
     over one receipt, get independent keys, and no window's key is a function of another's."""
     import inspect
