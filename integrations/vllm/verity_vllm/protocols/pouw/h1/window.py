@@ -82,21 +82,19 @@ def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -
     return out
 
 
-def connect(at: str, given: Mapping[str, Any], wait_s: float = remote.TUNNEL_WAIT_S,
+def connect(session: remote.ClientSession, wait_s: float = remote.TUNNEL_WAIT_S,
             clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Any] = time.sleep) -> Any:
-    """The session the gate's answer `given` (`pouw_h1_challenger.session_of`) opened, on the challenger at `at`: its hello carries the
-    answer's ``secret`` when it has one, and a challenger whose coin commitment isn't the answer's is closed and refused
-    (ValueError) before its first coin, since another process's challenger on that port would serve other coins. While
-    the session's port on this machine isn't up yet (its certifier coin link) the connection is refused before any
-    hello, and it is tried again for up to `wait_s` (`remote.connect_when_listening`)."""
-    secret = given.get("secret")
-    client = remote.connect_when_listening(at, None if secret is None else bytes.fromhex(secret), None, wait_s, clock,
-                                           sleep)
-    got = client.commitment.root.hex()
-    if got != given["commitment"]:
+    """The client of `session`, the one the gate's answer (`pouw_h1_challenger.session_of`) opened
+    (`remote.ClientSession.of_answer`): its hello carries the answer's ``secret`` when it has one, and a challenger whose
+    coin commitment isn't the answer's is closed and refused (ValueError, `remote.ClientSession.commitment_reason`)
+    before its first coin, since another process's challenger on that port would serve other coins. While the session's
+    port on this machine isn't up yet (its certifier coin link) the connection is refused before any hello, and it is
+    tried again for up to `wait_s` (`remote.connect_when_listening`)."""
+    client = session.connect(None, wait_s, clock, sleep)
+    why = session.commitment_reason(client.commitment)
+    if why is not None:
         _close(client)
-        raise ValueError(f"the challenger at {at} commits to coins {got[:16]}..., not {given['commitment'][:16]}..., the "
-                         f"commitment the gate's answer gives session {given['session']}: refused before its first coin")
+        raise ValueError(why)
     return client
 
 
@@ -161,7 +159,7 @@ def _live(entry: str, at: str, steps: int, given: Mapping[str, Any],
     alone, `window.salt_epoch_reason`) with at least `steps` round coins; on a refusal the session is closed and
     ValueError raised (`CoinError` when the challenger refused or nothing listened)."""
     try:
-        client = connect(at, given, clock=clock, sleep=wait)
+        client = connect(remote.ClientSession.of_answer(given, at), clock=clock, sleep=wait)
     except CoinError as e:
         raise CoinError(f"{entry}: {e}") from e
     except ValueError as e:

@@ -448,7 +448,7 @@ class _Host:
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = f"127.0.0.1:{self.listener.getsockname()[1]}"
-        self.session = CO.Session(SID, self.address, secret)
+        self.session = CO.R.ClientSession(SID, self.address, secret)
         self.reason: str | None = None
         self._ended = False
         self._thread = threading.Thread(target=self._run)
@@ -732,7 +732,7 @@ def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad
     a, b = socket.socketpair()
     t = threading.Thread(target=_pipe_server, args=(b, ch, ["ok", answer]))
     t.start()
-    cs = CO.Coins(R.RemoteChallenger(a), "off-node", CO.Session("s", "127.0.0.1:1"))
+    cs = CO.Coins(R.RemoteChallenger(a), "off-node", CO.R.ClientSession("s", "127.0.0.1:1"))
     pipe = CO.RoundPipe(cs)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(3)]
     assert [pipe.send(r) for r in roots[:2]] == [0, 1]
@@ -780,7 +780,7 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
               "secret": secret.hex(), "commitment": "cd" * 64}
     at, answer = CO.open_window("research@gate", sid, root, run=_gate(sent, opened))
     assert sent[-1][1] == ["open", "--session", sid, "--root", root.hex()]
-    assert at == CO.Session(sid, "127.0.0.1:7811", secret, "cd" * 64)
+    assert at == CO.R.ClientSession(sid, "127.0.0.1:7811", secret, "cd" * 64)
     assert answer == {k: v for k, v in opened.items() if k != "secret"}
     assert secret.hex() not in repr(at) + json.dumps(answer)
     with pytest.raises(CO.Ch.CoinError, match="refused reserve: period dev-kernels holds its cap"):
@@ -826,7 +826,7 @@ def test_coins_py_open_reserves_then_opens_on_the_stand_in_root_and_writes_the_s
     assert secret.hex() not in out and CO.STAND_IN in out
     assert out.splitlines()[-1] == (f"{CO.CHALLENGER_ENV}=127.0.0.1:7811 {CO.SESSION_ENV}=s1 {CO.SECRET_ENV}={f} "
                                     f"{CO.COMMITMENT_ENV}={'ab' * 64}")
-    assert CO.read_secret(f) == secret and f.stat().st_mode & 0o777 == 0o600
+    assert CO.R.read_secret(f) == secret and f.stat().st_mode & 0o777 == 0o600
     sent.clear()
     with pytest.raises(SystemExit):
         CO.main(argv)
@@ -864,18 +864,18 @@ def test_a_sessions_secret_is_its_hello_and_a_hello_without_it_is_refused(tmp_pa
     assert host.ended() is None
     for name, session, why in (("b", lambda s: dataclasses.replace(s, secret=None), "hello with the session's secret"),
                                ("c", lambda s: dataclasses.replace(s, commitment="cd" * 64),
-                                "answered the hello with commitment .* not the cdcd")):
+                                "answered the hello with coin commitment .* not cdcd")):
         other = _Host(tmp_path / name)
         with pytest.raises(CO.Ch.CoinError, match=why):
             CO.open_coins(session(other.session), EPOCH, ROUNDS)
         other.ended()
         assert [json.loads(x)["event"] for x in (other.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
-    assert CO.session(host.address, SID, commitment=signed) == CO.Session(SID, host.address, None, signed)
+    assert CO.session(host.address, SID, commitment=signed) == CO.R.ClientSession(SID, host.address, None, signed)
     for bad in ({"commitment": signed}, {"address": host.address, "sid": "s", "commitment": signed[:64]}):
         with pytest.raises(CO.Ch.CoinError, match="an id and an address|128 lowercase hex"):
             CO.session(**bad)
     f = tmp_path / "secret"
-    CO.write_secret(f, at.secret)
+    CO.R.write_secret(f, at.secret)
     assert CO.session(host.address, SID, str(f), signed) == at
     with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
         CO.session(secret_file=str(f))
@@ -897,7 +897,7 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
 def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_any_other_error_at_once():
     """An onsite window's client retries a refused connect (no hello, no coin) until the session's tunnel listens, every
     half second up to `wait_s` on the injected clock; past it `CoinError` refuses it, and any other error raises at once."""
-    at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
+    at = CO.R.ClientSession(SID, "127.0.0.1:7811", b"\x01" * 32)
     challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
 
     def run(outcomes, wait_s=CO.R.TUNNEL_WAIT_S):
@@ -933,7 +933,7 @@ def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_an
 def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):
     for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV, CO.COMMITMENT_ENV):
         monkeypatch.delenv(name, raising=False)
-    assert CO.session() is None and CO.session("h:1", "s1") == CO.Session("s1", "h:1")
+    assert CO.session() is None and CO.session("h:1", "s1") == CO.R.ClientSession("s1", "h:1")
     for half in (("h:1", None), (None, "s1")):
         with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
             CO.session(*half)
@@ -941,7 +941,7 @@ def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_a
     with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
         CO.session()
     monkeypatch.setenv(CO.SESSION_ENV, "s2")
-    assert CO.session() == CO.Session("s2", "127.0.0.1:7811")
+    assert CO.session() == CO.R.ClientSession("s2", "127.0.0.1:7811")
     cs = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
     assert (cs.source, cs.label, cs.record()["label"]) == ("in-process", "in-process (not certified)", CO.IN_PROCESS)
     assert CO.layout_reason(cs.commitment, EPOCH, ROUNDS) is None and CO.layout_reason(cs.commitment, EPOCH, 2) is not None
@@ -955,7 +955,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     path (`integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`)."""
     SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
-    CO.write_secret(tmp_path / "secret", host.secret)
+    CO.R.write_secret(tmp_path / "secret", host.secret)
     monkeypatch.delenv(CO.COMMITMENT_ENV, raising=False)
     monkeypatch.setenv(CO.CHALLENGER_ENV, host.address)
     monkeypatch.setenv(CO.SESSION_ENV, host.session.id)

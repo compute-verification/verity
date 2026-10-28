@@ -241,8 +241,9 @@ def test_a_session_bound_to_another_commitment_is_closed_and_refused_before_its_
     """A gate answer naming coins other than the challenger's on that port (another process's challenge phase) closes the
     challenge phase before its salt coin and refuses the install, which patches nothing and starts no run."""
     host, model = _host(tmp_path, monkeypatch), _model()
-    with pytest.raises(ValueError, match=f"commits to coins {host.challenger.commitment.root.hex()[:16]}..., not "
-                                         f"{'dd' * 8}..., the commitment the gate's answer gives session {SID}"):
+    with pytest.raises(ValueError, match=f"session {SID}'s challenger at .* answered the hello with coin commitment "
+                                         f"{host.challenger.commitment.root.hex()[:16]}…, not {'dd' * 8}…, the one its "
+                                         "open answered: refused before its first coin"):
         PO.install(model, _served(lambda sid, r: {**host.open(sid, r), "commitment": "dd" * 64}))
     assert host.ended() is None and RUNS == []
     assert R.released_roots(host.directory / R.RELEASES, host.challenger.commitment) == {Wd.SALT: ()}

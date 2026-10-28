@@ -561,8 +561,8 @@ def test_a_challenger_off_the_answers_commitment_is_refused_before_its_first_coi
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=19)
     def other(session: str, root: str) -> dict:
         return {"session": session, "seq": 0, "root": root, "commitment": "dd" * 64, "secret": "5e" * 32}
-    with pytest.raises(ValueError, match=f"commits to coins {host.commitment[:16]}..., not {'dd' * 8}..., the commitment "
-                                         "the gate's answer gives session"):
+    with pytest.raises(ValueError, match=f"answered the hello with coin commitment {host.commitment[:16]}…, not "
+                                         f"{'dd' * 8}…, the one its open answered: refused before its first coin"):
         _serve(T._remote(session={"session": "auditor"}, gate=other))
     assert host.ended() is None and host.secrets == [bytes.fromhex("5e" * 32)]
     assert R.released_roots(host.directory / R.RELEASES, host.challenger.commitment) == {

@@ -119,7 +119,7 @@ class Session:
             self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
-        self.client = PHW.connect(self._address(int(answer["port"])), self.given)
+        self.client = PHW.connect(remote.ClientSession.of_answer(self.given, self._address(int(answer["port"]))))
         c = self.client.commitment
         if c.scheme != SCHEME or [list(f) for f in c.families] != families(self.runs):
             self.close()

@@ -367,6 +367,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     `opened_on`, its salt opened after `opened_on` and its round and draw coins after the window's own roots, as
     `test_pouw_h1._salted` forges one in process: (the forged commitment, its challenge phase)."""
     from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -379,7 +380,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
         raise ValueError(f"open: {answer['refused']}")
     if answer.get("commitment") is None:
         answer["commitment"] = gate("status", reserved["session"]).get("commitment")
-    client = PHW.connect(PHW.at_port(at, answer.get("port")), answer)
+    client = PHW.connect(remote.ClientSession.of_answer(answer, PHW.at_port(at, answer.get("port"))))
     salt = client.open(Wd.SALT, 0, opened_on)
     log = [{**r, "coin": client.open(Wd.ROUND, s, bytes.fromhex(r["root"])).to_json()} for s, r in enumerate(honest["rounds"])]
     root = RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
