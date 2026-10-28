@@ -1,8 +1,7 @@
-# VF3l-16: VF3k-16 with the gated ATOME64 probes (r20261016-210926-d856): every gated form is slower than VF3h's ungated line, which stays; six replicate lines faster by at most 0.07%.
+# VF3l-16: VF3k-16 with the gated ATOME64 probes: every gated form is slower than VF3h's ungated line, which stays; six replicate lines faster by at most 0.07%.
 name = "VF3l-16"
 epoch = "VF3l-16"
-summary = "VF3k-16 with the gated ATOME64 probes (r20261016-210926-d856): every gated form is slower than VF3h's ungated line, which stays; six replicate lines faster by at most 0.07%."
-note = "note:20261016T2055Z-draft-machine-model-vf3l"
+summary = "VF3k-16 with the gated ATOME64 probes: every gated form is slower than VF3h's ungated line, which stays; six replicate lines faster by at most 0.07%."
 superseded_by = "VF3m-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
