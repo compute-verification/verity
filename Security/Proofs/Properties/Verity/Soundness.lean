@@ -50,9 +50,10 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Remote.protocol.on s.blobs) s.params s.commitment s.evidence h
+    have hch' : Composition.checkSame "verity/remote/v0" (tied .remote) (s.components .remote) ps c ev =
+        .accept pub prof := hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
-      Properties.Composition.acceptSame "verity/remote/v0" (Remote.components.map (·.id)) (s.components .remote)
-        ps c ev pub prof hch, fun t ht => absurd ht List.not_mem_nil⟩
+      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hch', fun t ht => absurd ht List.not_mem_nil⟩
 
 /-- **What a composite's verifier of record accepts, each of its subprotocols' components accepts on its own
 case.** -/
@@ -110,7 +111,7 @@ theorem remote_soundness_of_legs : RemoteSoundness := by
   · exact hS
   · exact hW
   · exact hI
-  all_goals simp [subprotocols, component] at ha
+  all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
 theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Exchange → Prop)
