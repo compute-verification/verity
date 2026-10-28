@@ -8,9 +8,11 @@
 # receipts sketched from the rows the decode reads (`benchmarks/pous/p2_v1/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
-# never a process on this node: the `p2_party --listen` that the auditor host's gate starts for BW_PARTY (the ssh command
-# its key is forced to), reached at BW_PARTY_HOST; it holds its own registration, which the store's must be
-# (BW_REGISTRATION, the tracked one). The
+# never a process on this node: the `p2_party --listen` that the auditor host's gate starts for BW_PARTY, reached at
+# BW_PARTY_HOST; it holds its own registration, which the store's must be (BW_REGISTRATION, the tracked one). The gate
+# kills the party once the session's minutes run out, and BW_PARTY asks for BW_PARTY_MIN of them (`bw_party --minutes`,
+# default 40, the lease's; the gate takes 1 to 180), unless the key's forced command fixes its own: a session that
+# outlives them fails naming the kill. The
 # session's record is DIR/session, and its answer, held to the verifier's own record of it, is DIR/answer.json in the
 # core interface's form (`served_bandwidth.py answer`): the credited reads q_bytes at eps and δ, and γ against
 # BW_R_BYTES_PER_S (default an H200's specified 4.8 TB/s). The session runs after the window was served, beside it, and
@@ -30,7 +32,8 @@ PY=${PY:-/workspace/cp/venv312/bin/python}
 STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
 REG=${BW_REGISTRATION:-$P2/bandwidth-mem69-v2.json}
-PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party}
+PARTY_MIN=${BW_PARTY_MIN:-40}
+PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --minutes $PARTY_MIN}
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}
 WINDOWS=${BW_WINDOWS:-2} PASSES=${BW_PASSES:-1} SAMPLES=${BW_SAMPLES:-1024} WINDOW_S=${BW_WINDOW_S:-1}
 DEADLINE_S=${BW_DEADLINE_S:-1} DEVICE=${BW_DEVICE:-cuda} LEASE_MIN=${BW_LEASE_MIN:-40}
