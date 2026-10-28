@@ -17,7 +17,8 @@ With ``--live T,S`` the manifest's ``files`` also holds ``live``: the SHA-512 of
 Program's template, `live.template_v2(T)` bound to `live.program_v2(T, S, PREFIX)` (PREFIX the declared Program's,
 `credit._prefix`) and its `live.query_v2` partition, lowered as ``h1_prove/live.py`` lowers it (`live_stager`), which is
 what core's credit verifies each round's ``live@<s>`` on (``circuit_files["live"]``). T is the period's rows and S the
-window's rounds. It takes seconds.
+window's rounds. Past T = `live.PIECE_ROWS` it is the piece's, `live.template_rows(T, PIECE_ROWS)` bound to
+`live.program_rows` (a V3 prefill round at T 8,192 is 128 pieces of 64 rows). It takes seconds.
 
 The lowering runs once per K, each in its own process (`lower`). At K = 4096 and 14336 on the 32 × 32 tile it is the
 long step, so it runs once as its own CPU job and later runs reuse its directory (`build`, `MANIFEST`). ``--strata``
@@ -111,20 +112,27 @@ def _lower(k: int, r: int, c: int, bind: dict, path: Path) -> None:
     U.Shape(k, r, c).stager(NAME, circuit=path, bind=bind)
 
 
-def live_part(T: int, S: int, prefix: str) -> dict:
-    """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on."""
-    from verity.core.protocols.pouw.circuit import live as L
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    return P.partition(L.program_v2(T, S, prefix), L.query_v2(T))
-
-
-def lower_live(T: int, part: dict, path: Path) -> None:
-    """``h1_prove/live.py``'s lowering of the live template at T rows, bound to `part`, written to `path`."""
+def _h1_live():
     import importlib.util
     spec = importlib.util.spec_from_file_location("h1_prove_live", H1_PROVE / "live.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.live_stager(T, path, part)
+    return module
+
+
+def live_part(T: int, S: int, prefix: str) -> dict:
+    """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
+    `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
+
+
+def lower_live(T: int, part: dict, path: Path) -> None:
+    """``h1_prove/live.py``'s lowering of the live template at T rows (a piece's past `live.PIECE_ROWS`), bound to `part`,
+    written to `path`."""
+    module = _h1_live()
+    r, p = module.form({"T": T})
+    module.live_stager(T, path, part, None if p == 1 else r)
 
 
 def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, int] | None = None,
