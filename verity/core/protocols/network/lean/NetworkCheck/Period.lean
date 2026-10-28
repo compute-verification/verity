@@ -220,7 +220,6 @@ def protocolId : String := "verity/certifier/v0"
 def commitmentTag : String := "verity-network-certifier/period/v0"
 def clockTag : String := "verity-network-certifier/clock/v1"
 def oneStage : String := "verity/sampled-proofs/one-stage/v1"
-def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
 /-- A proof unit's public outputs are at most 16 bits (the values it commits can be wider). -/
 def outBits : Nat := 16
 def unitLevel : String := "unit"
@@ -299,14 +298,10 @@ structure Params where
   form : Form
   windows : Nat
 
-/-- A registration record and its one-stage digest. -/
-structure Registration where
-  record : Json
-  digest : ByteArray
-
+/-- The one-stage window records of the compute audits and of the link-windows, in order. -/
 structure Commitment where
-  audits : Array Registration
-  windows : Array Registration
+  audits : Array Json
+  windows : Array Json
   bytes : ByteArray
 
 structure Layout where
@@ -722,13 +717,12 @@ def paramsOf (j : Json) : V Params := do
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
 
-/-- A record of one of `formats` and its digest, the window record's (`Flock.WindowRecord.digestOf` of its format and
-canonical JSON, `registration.digest`). -/
-def registrationOf (j : Json) (ctx : String) : V Registration := do
+/-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
+def registrationOf (j : Json) (ctx : String) : V Json := do
   let format ← Flock.J.str j "format" ctx
-  unless formats.contains format do throw s!"{ctx}: format is not {" or ".intercalate formats}"
-  let body ← Flock.canon j
-  pure ⟨j, Flock.WindowRecord.digestOf format body.toUTF8⟩
+  unless Flock.WindowRecord.FORMATS.contains format do
+    throw s!"{ctx}: format is not {" or ".intercalate Flock.WindowRecord.FORMATS}"
+  pure j
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
@@ -819,11 +813,13 @@ abbrev Found := Except (Core.Verdict × String)
 
 def refuse {α} (r : String) : Found α := .error (.reject, r)
 
-/-- One-stage's answer for the registration: its reject is a rejection, its undecided leaves the period undecided, and its
-acceptance gives the profile. -/
-def answered (what : String) (reg : Registration) (a : Core.Answer) : Found (Core.Integrity × Json) := do
+/-- One-stage's answer for the window record `reg`, read from canonical bytes, so its digest
+(`Flock.WindowRecord.digest`, `registration.digest`) is always defined: its reject is a rejection, its undecided leaves
+the period undecided, and its acceptance gives the profile. -/
+def answered (what : String) (reg : Json) (a : Core.Answer) : Found (Core.Integrity × Json) := do
   if a.protocol != oneStage then refuse s!"{what}: protocol {a.protocol}, not one-stage's {oneStage}"
-  else if a.digest != some reg.digest then refuse s!"{what}: the answer is for another registration"
+  else if a.digest.isNone || a.digest != (Flock.WindowRecord.digest reg).toOption then
+    refuse s!"{what}: the answer is for another registration"
   else match a.verdict, a.published, a.profile with
     | .accept, some pub, some prof =>
       match Core.Integrity.ofJson prof with
@@ -839,12 +835,12 @@ def canonText (j : Json) : Option String := (Flock.canon j).toOption
 
 /-- Link-window `w`'s findings, in the order the module docstring gives, `clear` being `clearClocks` of Σ_sync and
 `earlier` the period's earlier link-windows' clock digests. -/
-def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray) (w : Nat) (reg : Registration)
+def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray) (w : Nat) (reg : Json)
     (x : Window) : Found Unit := do
   let what := s!"window {w}"
   let .clock clock := x.shown | refuse s!"{what}: registrations, not a clock certificate: the rows form's"
-  unless reg.record.getObjValD "program" == .str p.program &&
-      canonText (reg.record.getObjValD "window") == canonText (served w) do
+  unless reg.getObjValD "program" == .str p.program &&
+      canonText (reg.getObjValD "window") == canonText (served w) do
     refuse s!"{what}: registration: not the link's Program at window {w}"
   unless x.certificates.size == 2 && (x.certificates.zip #[Direction.egress, .ingress]).all
       (fun (c, d) => certifies p d w c) do
@@ -893,8 +889,8 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
     refuse s!"{what}: not under the deployment key in the session"
 
 /-- The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain. -/
-def holds (reg : Registration) (r : Rows) : Bool :=
-  let entries := fun (k : String) => match reg.record.getObjValD k with | .arr xs => xs | _ => #[]
+def holds (reg : Json) (r : Rows) : Bool :=
+  let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
   (entries "roots" ++ entries "registered").any fun e =>
     e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
 
@@ -924,20 +920,20 @@ def entriesPortName (port : String) : Bool :=
 port's or an entries port's entry (`outputPort`, `entriesPortName`) at the root and domain of the scan's registration's
 `scan/prog` entry (`progName`), so the rows its ingress units read as `prog` are the ones that audit's units
 computed. -/
-def tiedAudits (audits : Array Registration) (reg : Registration) : Array Nat :=
+def tiedAudits (audits : Array Json) (reg : Json) : Array Nat :=
   let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str s => s == n | _ => false
-  let prog := (entries reg.record "roots").filter (named "port" progName) ++
-    (entries reg.record "registered").filter (named "value" progName)
+  let prog := (entries reg "roots").filter (named "port" progName) ++
+    (entries reg "registered").filter (named "value" progName)
   (Array.range audits.size).filter fun i => prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
-    | .str root, .str dom => ((audits[i]?.map (entries ·.record "roots")).getD #[]).any fun o =>
+    | .str root, .str dom => ((audits[i]?.map (entries · "roots")).getD #[]).any fun o =>
         (match o.getObjValD "port" with | .str q => outputPort q || entriesPortName q | _ => false) &&
           named "root" root o &&
           named "domain" dom o
     | _, _ => false
 
 /-- The scan's Programs' row is a compute audit's output: some audit is tied to it (`tiedAudits`). -/
-def progTied (audits : Array Registration) (reg : Registration) : Bool := !(tiedAudits audits reg).isEmpty
+def progTied (audits : Array Json) (reg : Json) : Bool := !(tiedAudits audits reg).isEmpty
 
 /-- The scan's Programs' row is a compute audit's slot entries: the root and domain of the scan's registration's
 `scan/prog` entry (`progName`) are those of an audit's entries port (`entriesPort`) of a `SlotEntry_v1` template of
@@ -946,15 +942,15 @@ its whole body is `io_shell.SlotEntry_v1`'s), with one member a slot of the wind
 bucket `t`'s port `prog<j>`, which reads slot `j · (T / every) + ⌊t / every⌋`'s entry (`scanOf`), reads the entry that
 slot's Program computed, read bit included. One-stage binds the rest: a reused value is its port's leaves, one chunk's,
 and an audit's roots are the ports its Program's layout derives. -/
-def wired (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
+def wired (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  let prog := (entries reg.record "roots").filter (named "port" progName) ++
-    (entries reg.record "registered").filter (named "value" progName)
+  let prog := (entries reg "roots").filter (named "port" progName) ++
+    (entries reg "registered").filter (named "value" progName)
   (audits.zip regs).any fun (a, r) => a.entries.any fun (k, n, d) => n == s.windowPrograms &&
     slotEntryPins.contains d &&
     prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
-      | .str root, .str dom => (entries r.record "roots").any fun o =>
+      | .str root, .str dom => (entries r "roots").any fun o =>
           named "port" (entriesPort k) o && named "root" root o && named "domain" dom o
       | _, _ => false
 
@@ -967,8 +963,8 @@ def stateValue : String := "verity/certifier/scan-state/v1"
 
 /-- A registration's state entries: those of its `roots` whose port is `stateName` and of its `registered` whose value
 is `stateValue`. -/
-def stateEntries (reg : Registration) : Array Json :=
-  let entries := fun (k : String) => match reg.record.getObjValD k with | .arr xs => xs | _ => #[]
+def stateEntries (reg : Json) : Array Json :=
+  let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
 
@@ -976,7 +972,7 @@ def stateEntries (reg : Registration) : Array Json :=
 every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
 The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
 audit's Programs read is the chain of the scan's transitions. -/
-def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
+def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   match (stateEntries reg)[0]? with
   | some e => match e.getObjValD "root", e.getObjValD "domain" with
@@ -988,7 +984,7 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Registration) 
   | none => false
 
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
-def tiedIn (audits windows : Array Registration) (i : Nat) : Bool :=
+def tiedIn (audits windows : Array Json) (i : Nat) : Bool :=
   windows.any fun reg => (tiedAudits audits reg).contains i
 
 /-- The audits the form ties to a link-window's scan: the rows form's `tiedIn`, and none in the clock form. -/
@@ -1015,11 +1011,11 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
 facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
 `prog` is, each once). -/
-def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Registration) (w : Nat)
-    (reg : Registration) (x : Window) : Found (Facts × Nat) := do
+def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
+    (reg : Json) (x : Window) : Found (Facts × Nat) := do
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
-  unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
+  unless reg.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
     refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
@@ -1038,9 +1034,9 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
 /-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, the answer's units are the
 Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) has every unit drawn, since its
 link-window's term charges its free inputs and no faulty term for it. -/
-def auditCheck (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
+def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
   let what := s!"audit {i}"
-  unless reg.record.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
+  unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
   let f ← factsOf what prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
@@ -1055,7 +1051,7 @@ def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Fact
 
 /-- Link-window `w`'s wiring finding in the rows form: a refusal unless its scan's Programs' row is a compute audit's
 slot entries (`wired`). -/
-def wiredCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Nat) (reg : Registration) :
+def wiredCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
   if wired p.audits s audits reg then none else
     some (.reject, s!"window {w}: the scan's prog is no compute audit's slot entries: its {progName} entry's root and \
@@ -1072,7 +1068,7 @@ def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
 its `prog` is wired to (`stateTied`). With the `prog` wired, each slot's entry is the one its Program computed, and a
 Program reads the requests from its own registered `SCAN_STATE`; unless that is the scan's state, it computes its entry
 on a state the prover chose. -/
-def stateCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Nat) (reg : Registration) :
+def stateCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
   if stateTied p.audits s audits reg then none else
     some (.reject, s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its {stateName} entries' root and \
