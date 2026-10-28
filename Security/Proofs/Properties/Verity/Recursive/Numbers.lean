@@ -39,6 +39,18 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Flock.Coins} {count : ℕ} {
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray}
   {spec : SessionSpec} {sts : Array Flock.Stmt}
 
+/-- A setup followed by a refusal guard (`setupTables`' refusal of pinned outputs) passes only the setup's own table. -/
+theorem guard_ok {α : Type} {x : Flock.V α} {p : α → Bool} {e : α → String} {w : α}
+    (h : (x >>= fun st => if p st = true then throw (e st) else pure st) = .ok w) : x = .ok w := by
+  cases x with
+  | error => cases h
+  | ok a =>
+    change (if p a = true then throw (e a) else pure a : Flock.V α) = .ok w at h
+    split at h
+    · first | (simp [throw, throwThe, MonadExceptOf.throw] at h; done) | cases h
+    · cases h
+      rfl
+
 set_option maxHeartbeats 4000000 in
 /-- Under hidden outputs, `setupTables` at any public input words is `setupHidden`'s one table, or several. -/
 theorem setupTables_hidden (hh : tags.hiddenOutputs = true)
@@ -73,6 +85,7 @@ theorem setupTables_hidden (hh : tags.hiddenOutputs = true)
   all_goals
     first
     | exact Or.inl ⟨_, by assumption, rfl, rfl⟩
+    | exact Or.inl ⟨_, guard_ok (by assumption), rfl, rfl⟩
     | exact absurd hh ‹_›
     | (obtain ⟨hsz, -⟩ := FlockSoundness.Discharge.Exec.range_mapM_ok (by assumption)
        exact Or.inr ⟨by omega, hsz⟩)
