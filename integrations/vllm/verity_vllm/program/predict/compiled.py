@@ -282,7 +282,8 @@ def predict(role: str, device: str, schedule: list[dict[str, Any]], steps: int, 
     return SV.assemble(wired, plans, residual, b.kernels, pin["artifact"]["winners"],
                        source={"predicted": {"role": role, "device": device, "config": found[1], "pin": f"pins/served/{pin_file(role, device)}"}},
                        schedule=schedule, steps=steps, routes=dev["cublas"], capture_sizes=d["capture_sizes"], max_num_seqs=d["max_num_seqs"],
-                       device=SD.device_of(dev["compute_capability"], dev["sms"], max_model_len=d.get("max_model_len")),
+                       device=SD.device_of(dev["compute_capability"], dev["sms"], card=SD.card_of(device),
+                                           max_model_len=d.get("max_model_len")),
                        split_cap=SV.SPLIT_CAP, lm_head=lm_head, rank=rank)
 
 
