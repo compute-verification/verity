@@ -24,7 +24,8 @@
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. Each request's
 #     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
-#     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
+#     committed step's end is the serve dir's step_trace.jsonl's t_end, on the clock of the timings' start_unix. The serve
+#     dir's requests.jsonl, step traces and load.jsonl hold request values and stay on the node (`serve_commit.MIRRORED`).
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
@@ -454,7 +455,7 @@ print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed win
 sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
-for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
+for f in serve.json windows.jsonl seals.jsonl period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;
                    cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"

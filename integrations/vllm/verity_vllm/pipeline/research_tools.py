@@ -119,7 +119,7 @@ PRODUCES: dict[str, list[str]] = {
     "plan": ["vllm-commit-plan/v1", "execution-evidence/v1", "run-files/v1"],
     "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
     "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
-    "replay": ["vllm-verdict/v1", "vllm-replay-slim/v1", "execution-evidence/v1", "run-files/v1"],
+    "replay": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
 }
 
 

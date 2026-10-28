@@ -2,6 +2,9 @@
 
     verity-vllm commit-replay BUNDLE --row-dir D --checkpoint-dir CK [--checkpoints-manifest M --model REPO --revision REV]
 
+The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
+prover's node, so neither it nor its keep is verifier-facing.  A verifier gets the drawn units proved (`sampled_proofs.one_stage`).
+
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
 required manifest and the Build's Programs of record (under `D`), with the Definitions they bound.  The weights the relations
@@ -21,6 +24,8 @@ Before the record is rewritten, the decided replay leaves its SLIM KEEP beside t
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
 serving again (the sample is seeded from the run root, so it draws the same picks).  Not under other Definition bodies: the replay is
 refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
+The keep stays on the node: it holds clear values (the opened committed values with their salts, the requests and served tokens, the
+opened tensors' salt keys and bundle bytes), so no stage publishes it (`research_outputs`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
                       linkage opened, folding to the run root
@@ -182,7 +187,7 @@ def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
-    """The weights tree a slim keep carries, which is published: under rows-sha512 never the registration's ``Kw`` (every weights leaf's
+    """The weights tree a slim keep carries: under rows-sha512 never the registration's ``Kw`` (every weights leaf's
     salt derives from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened),
     and the bundle's bytes of those alone; a vllm-v1 tree, unsalted, as the bundle carries it."""
     if tree_scheme(tree) != step_rows.NAME:
