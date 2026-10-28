@@ -2,31 +2,39 @@
 
 The Lean statement and proof of what an accepted run of Verity guarantees: for each subprotocol, and then for the composed
 protocol, a bound on the probability that the verifier accepts while a claim about the run fails. The terms are the
-[Glossary](../GLOSSARY.md)'s. The first section is the whole security argument, from the hardware to the slowdown a
-secret training run suffers, with the symbols every layer uses and where each step stands in Lean.
+[Glossary](../GLOSSARY.md)'s. The first section is the whole security argument, from what makes training hard to the
+slowdown a secret training run suffers, with its symbols and where each step stands in Lean.
 
 ## The security argument
 
-This is a conditional argument, not yet a proved theorem: its assumptions are T0 to T3 below, and the status table at
-the end marks which connections are proved and which are open.
+This is a conditional argument, not yet a proved theorem. Its scientific content is three hypotheses about learning,
+H1 to H3; the protocol's part is to make them matter. The question it rests on:
 
-In five sentences:
+> What property of a capability-acquiring computation forces it to integrate information that can't be cheaply
+> regenerated within small computational compartments that receive little input?
 
-1. The hardware computes at most Φ work a tick (the device model).
-2. When the verifier accepts, its accounts establish, except on an event of probability at most δ jointly with
-   acceptance, how much registered capacity was spent computing the declared circuit correctly (sampled proofs and
-   PoUW), and that the declared circuit divides into inference blocks of bounded size and fresh input (the
-   inference-only policy).
-3. Every counted multiplication of a secret training run then comes from one of two places: correct declared
-   computation, or everything else.
-4. The token structure caps what each inference block contributes (Q_D), and a rate ceiling caps what everything else
-   contributes (Q_rest).
-5. If every successful method needs at least M_ref/α counted multiplications, then
+The idea: training repeatedly uses information accumulated since registration. An inference block can do the same only
+as far as it can import or reconstruct that information within its two budgets, c gates and k fresh bits. The
+restriction bites when useful computation repeatedly depends on more updated information than one block can cheaply
+reconstruct, and successful alternative methods can't cheaply avoid that dependence. *Repeatedly* matters: a large
+update that is hard to reconstruct but needed once is imported once, at a cost that doesn't grow with training.
 
-   $$ \frac{M_{\mathrm{ref}}}{\alpha} \;\le\; Q_D + Q_{\mathrm{rest}}, $$
+The argument has four parts:
 
-   which bounds from below the capacity-time any successful run needs, and so its slowdown ρ against a demonstrated
-   reference run.
+1. **Reaching the target requires hard-to-localize computation**: H3, coverage of efficient methods.
+2. **Small inference blocks can do little of it**: H1, local update hardness, and H2, distributed dependence, with
+   Lemma 1 and Theorem 3.
+3. **The protocol forces most physical compute into those blocks**: the device model, protocol soundness and the
+   accounting.
+4. **So reaching the target takes more fleet-time**: the slowdown bound.
+
+They meet in one inequality:
+
+$$ \underbrace{M_*}_{\text{required for covered success}} \;\le\;
+   \underbrace{\sum_{I \in \mathcal I_{\mathrm{good}}} q_I}_{\text{possible inside the good blocks}} \;+\;
+   \underbrace{Q_{\mathrm{rem}}}_{\text{everything else}} $$
+
+M_* comes from part 1, each q_I from part 2 and Q_rem from part 3. Part 4 divides by rates; it adds no assumption.
 
 The numbers come from the slowdown calculator (`benchmarks/rho`), not from this file.
 
@@ -61,9 +69,14 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   - Φ_cred, the rate PoUW credits as declared work, and the **declared utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
   - Φ_D, the rate of correct credited declared work;
-  - q(c, k), the most counted multiplications a subcircuit of at most c gates reading at most k fresh bits computes
-    (Layer 4);
-  - ζ_ref = M_ref/C_ref, the reference run's counted multiplications per unit of fleet-time (Layer 4).
+  - q_I, the most counted multiplications inference block I computes whole (part 2).
+- **Updated state.** The trained model's parameter slots i, each with its eligible versions (one per optimizer step
+  that writes it) and a **price** p_i in bits: what a joint description of it costs, not its storage width.
+- **Counted multiplication**: a product of a version of an updated slot and the operand of a **use** j (one token
+  position's input to one layer at one training step, a forward value or a gradient). Each use's operand is computed
+  by its own **upstream computation** T_j.
+- **Local description length** LDL_{t,R}(y): the length of a shortest program from which a fixed decoder, given the
+  registration R, outputs y within t steps.
 
 ### The protocol
 
@@ -89,21 +102,98 @@ Onsite adds four subprotocols on devices at the site: memory wipes cut each regi
 blocks, each carrying at most k_wipe bits across its boundary; network certification bounds each server's ingress to
 r_in bits a tick, besides side channels at r_side; and PoUS and PoUB bound the memory and bandwidth used.
 
-### Layer 1: the device model
+### Part 1: reaching the target requires hard-to-localize computation
 
-What the hardware can do, the feasible set 𝓕:
+The setting is fixed first, without assuming the result: the **target** of the task 𝒢 (a loss below every registered
+model's, reached within J from θ, with probability above η), the registered baseline, the initial information θ, the
+arithmetic, and the range T_max of computation the claim rules out. Information specific to a candidate can't enter
+through preparation that isn't charged. The setting does not say that θ can't produce an acceptable model cheaply: that
+is the question.
 
-- compute: |A[X, I]| ≤ Φ_X·|I| for every location X and span I;
-- hosts carry no compute: A places no gate on a host CPU (a named assumption; without it, host capacity joins Φ_U);
-- links, memory and causality, which onsite reads;
-- the inventory: Φ_U/Φ is at most a stated share. No registration covers unregistered hardware, so this is an
-  assumption about the world.
+**H3, coverage of efficient methods** (`Nci.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
+computation contains a counted structure of at least M_* counted multiplications, each meeting H1 and H2 at the block
+budgets. Uniformly over the programs, the initial information and the experiment,
 
-### Layer 2: protocol soundness
+$$ \Pr\big[\,A(x) \text{ reaches the target} \;\wedge\; |A| < T_{\max} \;\wedge\; \neg\,\mathrm{Core}(A, x)\,\big]
+   \;\le\; \eta. $$
 
-Except on an event of probability at most δ = Σ_p δ_p plus the cryptographic terms, jointly with acceptance, the run
-lies in the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p, one 𝒜_p per subprotocol (`Verity.Soundness`; its subprotocols' guarantees
-are the table under "The guarantees to read first"). What the slowdown reads from 𝒜:
+Each method may have its own covered structure (products, accumulations, recoveries); none has to reproduce a reference
+circuit. H3 doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
+can't escape every analysed structure. The question it answers is a trade-off: as a method reduces the updated state or
+dependence the policy restricts, how much more computation does it need for the same target? That full-parameter
+training is the unrestricted optimum isn't enough: if a compact-state method reaches the target at twice the cost and
+the policy barely slows it, the slowdown is at most two. A method that reaches the target cheaply with a compact update,
+frozen features, another learning procedure or another representation, escaping every lower bound that applies, refutes
+H3 at that target and operating point. Small-state and alternative-precision training experiments test it. H3 is the
+largest scientific uncertainty here.
+
+The earlier work floor (every computation reaching the target does at least M_ref/α of a reference's counted
+multiplications) is H3 for one structure: a candidate sufficient condition, not the explanation.
+
+### Part 2: small inference blocks can do little of it
+
+**Lemma 1, proved** (`Verity.Guarantees.BlockDescription`). In a registration R with B inference blocks of at most c
+gates and k fresh bits each, if a fixed evaluator of a_blk bits extracts y_I from block I within t steps, then
+
+$$ \mathrm{LDL}_{t,R}(y_I) \;\le\; k' := k + \lceil \log_2 B \rceil + a_{\mathrm{blk}}. $$
+
+This is mathematics, not a hypothesis about learning. The question is what useful training computation can't fit under
+it.
+
+**H1, local update hardness** (`Nci.Assumptions.LocalUpdateHardness`). For every set U of updated slots and every
+choice of one eligible version of each, the tuple w_U of their values satisfies
+
+$$ \mathrm{LDL}_{t,R}(w_U) \;\ge\; \sum_{i \in U} p_i \;-\; \lambda_w. $$
+
+It covers every collection a block can choose, not a typical tensor or a random subset; it charges a slot once however
+often a block reuses it; and it is time-bounded, so a short program that rebuilds the state by replaying training counts
+only if it finishes within t. It doesn't assume the parameters independent or incompressible with unlimited time. It
+fails, or holds only at lower prices, where a block can replay the training prefix within t, where the update has a
+small effective representation (low rank, a short seed), or where the chosen slots are cheaply predictable from R; those
+cases mark where it applies, and a deficit λ_w that cancels every useful price leaves it empty. The measured object is
+the cheapest joint reconstruction found for slot sets an adversary can choose, at the decoder budget t, not an entropy
+code for a checkpoint. Each decoder found is an upper bound and can refute a price; not finding a shorter one is
+evidence, not proof.
+
+With Lemma 1, a block holds updated state priced at most k' + λ_w, whether it loads, decompresses or computes it
+(`Nci.Guarantees.UpdatedStatePerBlock`).
+
+**H2, distributed dependence** (`Nci.Assumptions.DistributedDependence`). The upstream computations T_j of distinct
+uses are disjoint and hold no registered gate. A block that completes a counted multiplication of use j while reading
+nothing of T_j holds updated state priced above k' + λ_w: without a value from j's own upstream computation,
+reproducing j's operand needs more updated state than one block can describe. H1 alone isn't enough: in one trained
+layer over cheaply computable features a_j = h_θ(x_j), a block pays once for w_i and generates every a_j itself. H2 is a
+property of a named circuit, checkable there; first layers and fixed features fail it, and their products aren't
+counted.
+
+With H1 and one price β_w per slot, a block holds at most (k' + λ_w)/β_w slots, and each use it serves costs it a fresh
+bit from that use's own region, which no other use shares, so (`Nci.Guarantees.ProductsPerBlock`)
+
+$$ q_I \;\le\; k \cdot \frac{k' + \lambda_w}{\beta_w}. $$
+
+No activation is assumed to carry a positive information rate. Overlapping regions need a multiplicity argument,
+repeated products of one slot and one use a reuse factor, and multiplications split between blocks their own account.
+
+Stronger bounds are refinements, each a hypothesis still to earn: an activation rate,
+LDL_{t,R}(a_I) ≥ β_x·|V_I| − λ_x (`Nci.Ldl.Assumptions.ActivationRate`), which the exact-decoding experiments already
+contradict at several uniform rates; a joint additive budget for weights and activations (the same bits can describe
+both); and the threaded read costs (`Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`), under which
+`Nci.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)). ThreadedReads counts what
+fits under assumed read costs; it doesn't show that training incurs them.
+
+### Part 3: the protocol forces most physical compute into those blocks
+
+The protocol isn't what makes training hard; it makes the hardness matter. Three obligations, separate from parts 1
+and 2:
+
+**The device model**, the feasible set 𝓕: compute |A[X, I]| ≤ Φ_X·|I| for every location X and span I; hosts carry no
+compute (a named assumption; without it host capacity joins Φ_U); links, memory and causality, which onsite reads; and
+the inventory, Φ_U/Φ at most a stated share, an assumption about the world, since no registration covers unregistered
+hardware.
+
+**Protocol soundness.** Except on an event of probability at most δ = Σ_p δ_p plus the cryptographic terms, jointly with
+acceptance, the run lies in 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p (`Verity.Soundness`; the subprotocols' guarantees are the table under "The
+guarantees to read first"):
 
 - **sampled proofs:** F lies in the confidence set M_δ, which bounds the faulty proof blocks in each size class, and
   with each class's block size the faulty share φ;
@@ -113,82 +203,76 @@ are the table under "The guarantees to read first"). What the slowdown reads fro
 - **the utilization policy**, once it exists: u ≥ u_min;
 - **onsite:** each server block, of at most c_S gates, reads at most k_S = k_wipe + (r_in + r_side)·Δ_wipe fresh bits.
 
-### Layer 3: accounting
+**The accounting**, deterministic. Every counted multiplication of a successful computation inside A goes to exactly
+one of two parts:
 
-One deterministic statement. Let G be a successful computation inside A. Every counted multiplication of G is assigned
-to exactly one of two parts:
+- an inference block I of correct credited declared computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
+  (its own fresh input, the bits faulty proof blocks inject into it, and the advice bits its structure depends on) is
+  within H1's and H2's range, contributing q_I;
+- the remainder: unregistered hardware, registered hardware not running credited declared work, the faulty proof
+  blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
-- an inference block I of correct credited declared computation whose **effective fresh input** k_I + k_{F,I} + k_{a,I}
-  is within T3's range: its own fresh input, the bits faulty proof blocks inject into it, and the advice bits its
-  structure depends on. Q_D is the sum of q(c, k_I + k_{F,I} + k_{a,I}) over these blocks.
-- the rest, everything else: unregistered hardware, registered hardware not running credited declared work, the
-  faulty proof blocks, the credit gap, the bookkeeping, inference blocks pushed out of range, and operations split
-  between a block and the rest. Q_rest bounds its counted multiplications.
+Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
+counted multiplications per unit of its fleet-time, so Q_rem ≤ ζ̄·(Φ − Φ_D)·|J| (remote). ζ̄ is a justified ceiling,
+not a reference's achieved rate: a reference execution shows what is feasible, not what is optimal. **Reference
+efficiency**, ζ̄ = ζ_ref with ζ_ref = M_ref/C_ref the reference's rate, is a hypothesis; at peak, ζ̄ = ζ_ref/MFU₀.
 
-Then the run's counted multiplications number at most Q_D + Q_rest.
-
-### Layer 4: the task and its assumptions
-
-The **target** of the task 𝒢: a loss below every registered model's, reached within J from the initial information θ,
-with probability above η. A **counted multiplication** is a product of a weight of the model being trained and an
-**activation**, one of a token position's values at one training step (a forward value or a gradient). The assumptions
-name no protocol:
-
-- **T0, reference.** A demonstrated execution on the fleet reaches the target with probability above η, in fleet-time
-  C_ref, doing M_ref counted multiplications.
-- **T1, work floor.** Every computation that reaches the target does at least M_ref/α counted multiplications. It is
-  meant to cover every method, including ones that read registered models' outputs, such as the declared circuit's
-  served outputs used as training targets; that coverage is the assumption.
-- **T2, rate ceiling.** Computation outside correct declared work does at most ζ̄ counted multiplications per unit of
-  its fleet-time, so Q_rest ≤ ζ̄·(Φ − Φ_D)·|J| (remote). The ruled case is reference efficiency, ζ̄ = ζ_ref: no method
-  is more efficient than the reference; at peak, ζ̄ = ζ_ref/MFU₀.
-- **T3, token structure**, a sufficient property for bounding a block's yield, conjectured to hold for every computation
-  that reaches the target. For every subcircuit of at most c gates reading at most k ≤ k_max(c) fresh bits: each
-  activation feeds at most a_out counted multiplications (**fan-out**); each output sums at least a_in of them
-  (**fan-in**); each weight feeds at most w_out of them per token position (**weight fan-out**); and weights and
-  activations carry at least b_w and β bits that can't be compressed away. The gate bound matters: given enough gates,
-  a subcircuit can generate its own weights and activations from θ and a short seed. Its range k_max(c) is calibrated
-  at about N*·b_w, the weight state of one token's active path (N* active parameters per token); that calibration rules
-  out one construction and is not a proof that T3 holds below it.
-
-Under T3 such a subcircuit does at most
-
-$$ q(c, k) = \frac{k}{\beta}\,\max\!\Big(a_{\mathrm{out}},\ \frac{w_{\mathrm{out}}\, k}{4\,a_{\mathrm{in}}\,b_w}\Big) $$
-
-counted multiplications (`Nci.Guarantees.ThreadedReads`, whose threading writes d, e and reuse for a_in, a_out and
-w_out).
-
-### Layer 5: slowdown
+### Part 4: so reaching the target takes more fleet-time
 
 The **slowdown** ρ(𝒢, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
 reaches the target with probability above η, and **fleet-time** elapsed time times Φ, registered and unregistered.
 
-**Remote.** Write f = 1 − Φ_D/Φ for the share of capacity outside correct credited declared work, and
-y = Q_D/(ζ_ref·Φ·|J|) for the declared yield as a share. Layer 3, T1 and T2 give
+**Remote.** A covered successful computation does at least M_* counted multiplications (part 1). The good blocks number
+at most Φ_D·|J|/c and each does at most q (part 2), and the remainder at most Q_rem (part 3). With f = 1 − Φ_D/Φ the
+share of capacity outside correct credited declared work,
 
-$$ \frac{M_{\mathrm{ref}}}{\alpha} \;\le\; Q_D + \bar\zeta\,(\Phi - \Phi_D)\,|J|
+$$ M_* \;\le\; \Big(\frac{q}{c}\,\Phi_D + \bar\zeta\,(\Phi - \Phi_D)\Big)\,|J|
    \quad\Longrightarrow\quad
-   \Phi\,|J| \;\ge\; \frac{C_{\mathrm{ref}}}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, $$
+   \Phi\,|J| \;\ge\; \frac{M_*}{\bar\zeta\,f + (q/c)\,(1 - f)}. $$
 
-and T0 gives T_𝒢(η; 𝓕) ≤ C_ref. If f and y are bounded uniformly over 𝒜 (the utilization policy bounds f), then
+A demonstrated execution reaching the target in fleet-time C_ref gives T_𝒢(η; 𝓕) ≤ C_ref. If f is bounded uniformly
+over 𝒜 (the utilization policy bounds it),
 
-$$ \rho \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}. $$
+$$ \rho \;\ge\; \frac{M_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
-Under reference efficiency ζ̄/ζ_ref = 1. Without the token structure, y could approach 1 − f, and the bound falls to
-1/α, no slowdown at all: T3 is what makes declared work not training.
+up to probability η: by H3, computations without the covered structure reach the target below T_max with probability
+at most η (`Nci.Guarantees.CapabilityFloor`). With the earlier work floor, M_* = ζ_ref·C_ref/α, and reference efficiency
+this is 1/(α·[f + y]), y = (q/(c·ζ_ref))·(1 − f) the declared yield as a share. Without part 2, q/c could reach ζ̄ and
+the bound falls to M_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps declared work from being training.
 
-**Onsite.** As remote, except that each registered server's part of Q_rest is capped per server block: a server block
-of at most c_S gates with effective fresh input k_S within T3's range does at most q(c_S, k_S) counted
-multiplications, its declared and residual work together. So server s contributes, per server block, the smaller of
-q(c_S, k_S) and ζ̄ times its residual fleet-time plus its inference blocks' Q_D. When k_S exceeds k_max(c_S), a server
-block can hold a token's whole path, the cap is void and onsite gives remote's bound.
+**Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
+most c_S gates whose effective fresh input k_S is within H1's and H2's range does at most q_S counted multiplications,
+declared and residual together. When k_S is large enough for a server block to hold a token's whole path, the cap is
+void and onsite gives remote's bound.
+
+### What the argument doesn't assume
+
+Each of these would restate the conclusion:
+
+- that a large final model is hard to compartmentalize: large state can have a short generator, or be used without
+  repeated expensive crossings;
+- that every activation carries β_x new bits: some are cheaply rebuilt from R and the tokens, others share information
+  with held weights or upstream values;
+- that weights and activations pay independent additive costs: they can describe one another or come from the same
+  small input;
+- that because a whole active path doesn't fit, the local bound holds: that rules out one strategy, not recomputation,
+  partial paths, compression or other representations;
+- that the reference's achieved rate is a ceiling on every method;
+- that nothing derives the capability within the claimed time.
 
 ### Where each step stands
 
 | Step | Lean | Status |
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
-| Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
+| Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Registration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
+| H3, coverage | `Nci.Assumptions.CoversEfficientMethods` | Stated; Core not yet read off a run's circuit; untested |
+| Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
+| H1, local update hardness | `Nci.Assumptions.LocalUpdateHardness`, `Nci.Capability.UpdatedState` | Stated; no prices measured at a decoder budget |
+| H2, distributed dependence | `Nci.Assumptions.DistributedDependence`, `Nci.Covering.MulBlocks` | Stated; not yet checked on a named training circuit |
+| Part 2's consequences | `Nci.Guarantees.UpdatedStatePerBlock`, `Nci.Guarantees.ProductsPerBlock` | Stated, not yet proved |
+| Theorem 3 | `Verity.Guarantees.Counting` | Proved |
+| The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved; the policy is not yet a subprotocol of either, and neither checks one registration |
 | The utilization policy | not yet in Lean | Not a policy yet |
@@ -198,8 +282,8 @@ block can hold a token's whole path, the cap is void and onsite gives remote's b
 | The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.Complies` | Proved; k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
-| T0–T2 | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; named Props not yet in Lean | Open |
-| T3 and q(c, k) | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.ThreadedThrottledDark` | Proved for the circuit in hand, at a gate and read budget; stated over every computation that reaches the target, with its range, not yet in Lean |
+| Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
+| The floor | `Nci.Guarantees.CapabilityFloor` | Stated, not yet proved |
 | Slowdown | `Accounting.Overhead.overhead`, `Accounting.Overhead.threshold`, `Accounting.Overhead.cost` | Defined, with cost in server-time, not fleet-time; no theorem reads it |
 | The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
