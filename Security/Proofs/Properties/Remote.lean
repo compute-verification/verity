@@ -415,4 +415,15 @@ theorem acceptComplies : AcceptComplies := by
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
   exact ⟨verifier_own hx hi, (NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp⟩
 
+theorem acceptComplies_by :
+    AcceptComplies ↔ ∀ blobs, AcceptCompliesBy (Core.Remote.protocol.on blobs).check := Iff.rfl
+
+/-- **No check that accepts every input has `AcceptComplies`'s property** (its nontrivial lemma), as for
+`AcceptInferenceOnly`: such a check accepts `ev = []`. -/
+theorem acceptComplies_nontrivial : ∀ v, AcceptsAll v → ¬ AcceptCompliesBy v := by
+  intro v hall h
+  obtain ⟨pub, prof, hv⟩ := hall [] ByteArray.empty []
+  obtain ⟨kI, kW, kS, p, cr, e, P, hev, -⟩ := h [] ByteArray.empty [] pub prof hv
+  cases hev
+
 end Properties.Remote.SecurityProofs

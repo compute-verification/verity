@@ -32,8 +32,8 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other.
 
-`AcceptInferenceOnlyBy` and `AcceptsAll` put another check in remote's place, so that the proofs can show that no check
-accepting every input has the property.
+`AcceptInferenceOnlyBy`, `AcceptCompliesBy` and `AcceptsAll` put another check in remote's place, so that the proofs
+can show that no check accepting every input has either property.
 
 `Γ` and `α = num / den` are the verifier's own: the parameters the composite names for the policy. No statement takes an
 assumption: the digests are those the code computes and compares, so that PoUW and the one-stage audit read the policy's
@@ -136,26 +136,35 @@ def AcceptInferenceOnlyBy (v : List Named → ByteArray → List Case → Outcom
 def AcceptsAll (v : List Named → ByteArray → List Case → Outcome Keyed Keyed) : Prop :=
   ∀ (ps : List Named) (c : ByteArray) (ev : List Case), ∃ pub prof, v ps c ev = .accept pub prof
 
-/-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes. On every input
-remote's check accepts, the evidence is the three subprotocols' cases in order, the policy's case decodes to the
-parameters `p`, the run's record `cr` and the evidence `e`, the record names the registered circuit `P` by its SHA-512,
-the instance the policy checked, expanded gate by gate, has a parse carrying the policy's parameters and a declaration
-`P` lays out with its θ, which complies at the policy's `Γ` and `α`, and on every such expansion and parse, the parse
-carries the policy's parameters and every such declaration complies. -/
+/-- What remote's acceptance establishes in the form `Nci.Guarantees.DampenerRemote` reads, about its cases `ev`: they
+are the three subprotocols' cases in order, the policy's case decodes to the parameters `p`, the run's record `cr` and
+the evidence `e`, the record names the registered circuit `P` by its SHA-512, the instance the policy checked, expanded
+gate by gate, has a parse carrying the policy's parameters and a declaration `P` lays out with its θ, which complies at
+the policy's `Γ` and `α`, and on every such expansion and parse, the parse carries the policy's parameters and every
+such declaration complies. -/
+def CompliesHeld (ev : List Case) : Prop :=
+  ∃ (kI kW kS : Case) (p : NciCheck.Protocol.Params) (cr : NciCheck.Protocol.Commitment)
+    (e : NciCheck.Protocol.Evidence) (P : Prog), ev = [kI, kW, kS] ∧
+    (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
+    NciCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
+    Flock.Program.decode p.program.toUTF8 = .ok P ∧
+    NciCheck.Baseline.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
+    (∃ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
+      Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
+        Nci.Complies i.gamma ((i.num : ℝ) / i.den) d) ∧
+    ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
+      Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
+        VerifierOwn p i ∧ Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+
+/-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes: on every input
+remote's check accepts, on any blobs, its cases are `CompliesHeld`. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
-    (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof →
-      ∃ (kI kW kS : Case) (p : NciCheck.Protocol.Params) (cr : NciCheck.Protocol.Commitment)
-        (e : NciCheck.Protocol.Evidence) (P : Prog), ev = [kI, kW, kS] ∧
-        (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
-        NciCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
-        Flock.Program.decode p.program.toUTF8 = .ok P ∧
-        NciCheck.Baseline.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
-        (∃ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
-          Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
-            Nci.Complies i.gamma ((i.num : ℝ) / i.den) d) ∧
-        ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
-          Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
-            VerifierOwn p i ∧ Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+    (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof → CompliesHeld ev
+
+/-- `AcceptComplies` with the check `v` in place of remote's on the blobs. -/
+def AcceptCompliesBy (v : List Named → ByteArray → List Case → Outcome Keyed Keyed) : Prop :=
+  ∀ (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
+    v ps c ev = .accept pub prof → CompliesHeld ev
 
 end Properties.Remote
