@@ -17,11 +17,18 @@ part's `rec_shared` holds every input the compiled verifier's parts read, at the
 within one run, `CoinTree.checkFresh`, and this across runs). `Accepts` states it, and `check_accepts` proves it of
 `check`; `Proofs.Flock.Claims.Recursion.ComposeParts` carries it to the parts' statements.
 
-It doesn't check that the parts' sessions are one run of the compiled verifier, which is the open condition C10
-`OneRun`: one session per part, every session the coin server opened for the statement's parts recorded, and the
-staging before the first part's Hello. A prover can retry a part and hand over only the session that accepted, since
-`checkFresh` and this see only the keys they are handed. `OneRun` needs the service's interactive-run record, a later
-PR; until it holds, the recursive verdict is not a claim a guarantee backs.
+**One run** (C10 `OneRun`). The keys alone don't show that the parts' sessions are one run of the compiled verifier: a
+prover could retry a part and hand over only the session that accepted. So `check` also reads the challenger's
+interactive-run record of the run (`verity/rec-run/v1`, `--rec-run`, written by
+`verity.core.protocols.sampled_proofs.challenger.RunRecord`, read from the challenger's host, never from the prover's
+bundle): the staging of V*'s statements (the rows file's SHA-512 and the shared set), then every session the
+challenger opened for the run's parts, each logged at its `Hello` before the answer that carries its fresh coin key,
+then the close. It accepts only when the staging is the record's first event, at the composition's rows and the shared
+set every part read; each of V*'s statements has exactly one session opened and no other index has one; every opened
+session is a composed part's (its part and coin key) and every composed part's session is among them; and the close is
+the last event (`checkRun`). `OneRun` states it, and `check_oneRun` proves it of `check`. The record holds no coin:
+each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, never committed before the run. The
+record is read once, in comparisons quadratic in V*'s statement count (at most 4096, `RecBudget`), never per gate.
 -/
 import Lean.Data.Json
 import Flock.Bytes
@@ -271,10 +278,119 @@ def checkVerdicts (n : Nat) (rows inner : String) (vs : List (String × Verdict)
       (if vs.length = n then .ok () else .error s!"{vs.length} parts, not V*'s {n} statements") >>= fun _ =>
       checkKeys vs
 
+/-! ## The challenger's interactive-run record -/
+
+/-- **A session the challenger opened** for one of the run's parts, at the prover's `Hello`, before it answered: the
+session's id, its part (`--rec-part`) and the fresh coin key the answer carries (the session's `coin_tree.key`,
+`Flock.CoinTree`). -/
+structure Opened where
+  session : String
+  part : Nat
+  coinKey : String
+  deriving DecidableEq, Repr, Inhabited
+
+/-- **An event of the interactive-run record** (`verity/rec-run/v1`, `challenger.RunRecord`): V*'s statements staged
+(the shared rows file's SHA-512 and the shared set every part reads, as `rec_shared` names it), a session opened, or
+the run closed. -/
+inductive Event where
+  | stage (rows : String) (shared : Shared)
+  | opened (o : Opened)
+  | close
+  deriving DecidableEq, Repr, Inhabited
+
+def RUN_KIND : String := "verity/rec-run/v1"
+
+/-- One event as the challenger writes it: `{"event": "stage", "rec_rows_sha512", "rec_shared"}`,
+`{"event": "open", "session", "rec_part", "coin_key"}` or `{"event": "close"}`. -/
+def Event.ofJson? (j : Json) : Option Event :=
+  match j.getObjValAs? String "event" with
+  | .ok "stage" => do
+    let rows ← (j.getObjValAs? String "rec_rows_sha512").toOption
+    pure (.stage rows (← (j.getObjVal? "rec_shared").toOption.bind Shared.ofJson?))
+  | .ok "open" => do
+    pure (.opened ⟨← (j.getObjValAs? String "session").toOption, ← (j.getObjValAs? Nat "rec_part").toOption,
+      ← (j.getObjValAs? String "coin_key").toOption⟩)
+  | .ok "close" => some .close
+  | _ => none
+
+/-- The events from the `i`-th on, each in its form. -/
+def eventsOf : Nat → List Json → Except String (List Event)
+  | _, [] => .ok []
+  | i, e :: es => match Event.ofJson? e with
+    | some ev => (eventsOf (i + 1) es).map (ev :: ·)
+    | none => .error s!"run record: its event {i} is not a stage, an open or a close in its form"
+
+/-- **The record** `{"kind": "verity/rec-run/v1", "events": [...]}`: its events, in the order the challenger logged
+them. -/
+def runOf (text : String) : Except String (List Event) :=
+  match Json.parse text with
+  | .error _ => .error "run record: not JSON"
+  | .ok j =>
+    if (j.getObjValAs? String "kind").toOption != some RUN_KIND then .error s!"run record: not a {RUN_KIND} record"
+    else match (j.getObjValAs? (Array Json) "events").toOption with
+      | none => .error "run record: no list of events"
+      | some evs => eventsOf 0 evs.toList
+
+/-- The sessions opened after the staging, up to the close, which is the record's last event. -/
+def opensOf : List Event → Except String (List Opened)
+  | [] => .error "run record: not closed: the challenger closes a run's record after its last session, and an open record may gain sessions"
+  | [.close] => .ok []
+  | .close :: _ :: _ => .error "run record: an event after its close"
+  | .stage .. :: _ =>
+    .error "run record: a second staging: V*'s statements are staged once, before the first part's Hello"
+  | .opened o :: rest => (opensOf rest).map (o :: ·)
+
+/-- The verdict `v` is the session `o`'s: at its part, on its coin key. -/
+def isOf (o : Opened) (v : Verdict) : Bool := v.part == some o.part && v.coinKey == some o.coinKey
+
+/-- Every part read the shared set the record staged. -/
+def checkStaged (sh : Shared) (name : String) (v : Verdict) : Except String Unit :=
+  if v.shared = some sh then .ok ()
+  else .error s!"{name}: its rec_shared is not the one the run record staged before the first Hello"
+
+/-- An opened session is for one of V*'s `n` statements. -/
+def checkBound (n : Nat) (o : Opened) : Except String Unit :=
+  if o.part < n then .ok ()
+  else .error s!"run record: session {o.session} was opened for part {o.part}: V* has {n} statements"
+
+/-- **Part `j` had exactly one session opened.** -/
+def checkOnce (opens : List Opened) (j : Nat) : Except String Unit :=
+  if (opens.map (·.part)).count j = 1 then .ok ()
+  else .error s!"part {j}: {(opens.map (·.part)).count j} sessions opened in the run record, not one: a part is never retried"
+
+/-- **Every opened session is a composed part's.** -/
+def checkOpened (vs : List (String × Verdict)) (o : Opened) : Except String Unit :=
+  if vs.any fun p => isOf o p.2 then .ok ()
+  else .error s!"run record: session {o.session} was opened for part {o.part}, and it is not the session composed for that part"
+
+/-- **Every composed part's session was opened** in the run. -/
+def checkRecorded (opens : List Opened) (name : String) (v : Verdict) : Except String Unit :=
+  if opens.any fun o => isOf o v then .ok ()
+  else .error s!"{name}: its session is not one the run record opened for its part"
+
+/-- **The parts are one run** (C10 `OneRun`) of the record `evs`: staging first, at the composition's rows `rows` and
+the shared set every part read; then the sessions opened, each for one of V*'s `n` statements and exactly one for each
+(`checkOnce`), every one a composed part's (`checkOpened`) and every composed part's among them (`checkRecorded`); then
+the close. -/
+def checkRun (n : Nat) (rows : String) (vs : List (String × Verdict)) (evs : List Event) : Except String Unit :=
+  match evs with
+  | .stage r sh :: rest =>
+    if r ≠ rows then .error s!"run record: it staged the rows file {r}, not the composition's {rows}" else
+    (vs.forM fun p => checkStaged sh p.1 p.2) >>= fun _ =>
+    opensOf rest >>= fun opens =>
+    (opens.forM (checkBound n)) >>= fun _ =>
+    ((List.range n).forM (checkOnce opens)) >>= fun _ =>
+    (opens.forM (checkOpened vs)) >>= fun _ =>
+    vs.forM fun p => checkRecorded opens p.1 p.2
+  | _ => .error "run record: its first event is not the staging: V*'s statements are staged before the first part's Hello"
+
 /-- **The composition**: `parts`' logs (name, text), one `VERDICT` each (`partOf`), composed at V*'s `n` statements,
-the composition's own rows file's SHA-512 `rows` and inner shape's `inner` (`checkVerdicts`). -/
-def check (n : Nat) (rows inner : String) (parts : List (String × String)) : Except String Unit :=
-  (parts.mapM fun p => partOf p.1 p.2) >>= checkVerdicts n rows inner
+the composition's own rows file's SHA-512 `rows` and inner shape's `inner` (`checkVerdicts`), and one run of the
+challenger's interactive-run record `run` (`runOf`, `checkRun`). -/
+def check (n : Nat) (rows inner : String) (run : String) (parts : List (String × String)) : Except String Unit :=
+  (parts.mapM fun p => partOf p.1 p.2) >>= fun vs =>
+  checkVerdicts n rows inner vs >>= fun _ =>
+  runOf run >>= checkRun n rows vs
 
 /-! ## `check` accepts only what `Accepts` states -/
 
@@ -408,13 +524,118 @@ theorem checkVerdicts_accepts {n : Nat} {rows inner : String} {vs : List (String
   · rw [List.map_map]
     exact hk2
 
+/-- **C10 `OneRun`**, what `checkRun` holds the challenger's record `evs` to against the parts' verdicts `vs`: the
+staging is its first event, at the composition's rows `rows` and the one shared set `sh` every part read; then come the
+sessions it opened, `opens`, and then its close. Every opened session is for one of V*'s `n` statements, each
+statement has exactly one, and the opened sessions are the composed parts' (each at its part on its coin key, both
+ways). -/
+def OneRun (n : Nat) (rows : String) (vs : List Verdict) (evs : List Event) : Prop :=
+  ∃ (sh : Shared) (opens : List Opened), evs = Event.stage rows sh :: (opens.map Event.opened ++ [Event.close]) ∧
+    (∀ v ∈ vs, v.shared = some sh) ∧ (∀ o ∈ opens, o.part < n) ∧
+    (∀ j, j < n → (opens.map (·.part)).count j = 1) ∧
+    (∀ o ∈ opens, ∃ v ∈ vs, v.part = some o.part ∧ v.coinKey = some o.coinKey) ∧
+    (∀ v ∈ vs, ∃ o ∈ opens, v.part = some o.part ∧ v.coinKey = some o.coinKey)
+
+theorem opensOf_ok : ∀ {evs : List Event} {opens : List Opened}, opensOf evs = .ok opens →
+    evs = opens.map Event.opened ++ [Event.close]
+  | [], _, h => by simp [opensOf] at h
+  | [.close], _, h => by
+    simp only [opensOf, Except.ok.injEq] at h
+    subst h
+    rfl
+  | .close :: _ :: _, _, h => by simp [opensOf] at h
+  | .stage .. :: _, _, h => by simp [opensOf] at h
+  | .opened o :: rest, opens, h => by
+    simp only [opensOf] at h
+    cases hr : opensOf rest with
+    | error e => rw [hr] at h; cases h
+    | ok os =>
+      rw [hr] at h
+      cases h
+      rw [opensOf_ok hr]
+      rfl
+
+theorem isOf_eq {o : Opened} {v : Verdict} (h : isOf o v = true) :
+    v.part = some o.part ∧ v.coinKey = some o.coinKey := by
+  simpa [isOf] using h
+
+/-- **`checkRun` accepts only what `OneRun` states.** -/
+theorem checkRun_oneRun {n : Nat} {rows : String} {vs : List (String × Verdict)} {evs : List Event}
+    (h : checkRun n rows vs evs = .ok ()) : OneRun n rows (vs.map (·.2)) evs := by
+  unfold checkRun at h
+  split at h
+  · rename_i r sh rest
+    split at h
+    · cases h
+    rename_i hr
+    obtain ⟨_, hst, h⟩ := bind_ok h
+    obtain ⟨opens, hops, h⟩ := bind_ok h
+    obtain ⟨_, hb, h⟩ := bind_ok h
+    obtain ⟨_, honce, h⟩ := bind_ok h
+    obtain ⟨_, hop, hrec⟩ := bind_ok h
+    have hr : r = rows := by simpa using hr
+    subst hr
+    refine ⟨sh, opens, by rw [opensOf_ok hops], ?_, ?_, ?_, ?_, ?_⟩
+    · intro w hw
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hw
+      have e := forM_ok hst p hp
+      unfold checkStaged at e
+      split at e
+      · assumption
+      · cases e
+    · intro o ho
+      have e := forM_ok hb o ho
+      unfold checkBound at e
+      split at e
+      · assumption
+      · cases e
+    · intro j hj
+      have e := forM_ok honce j (List.mem_range.2 hj)
+      unfold checkOnce at e
+      split at e
+      · assumption
+      · cases e
+    · intro o ho
+      have e := forM_ok hop o ho
+      unfold checkOpened at e
+      split at e
+      · rename_i ha
+        obtain ⟨p, hp, hx⟩ := List.any_eq_true.1 ha
+        exact ⟨p.2, List.mem_map_of_mem hp, isOf_eq hx⟩
+      · cases e
+    · intro w hw
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hw
+      have e := forM_ok hrec p hp
+      unfold checkRecorded at e
+      split at e
+      · rename_i ha
+        obtain ⟨o, ho, hx⟩ := List.any_eq_true.1 ha
+        exact ⟨o, ho, isOf_eq hx⟩
+      · cases e
+  · cases h
+
 /-- **`check` accepts only what `Accepts` states**: where it accepts the logs, each holds one `VERDICT`, and their
 verdicts meet `Accepts`. -/
-theorem check_accepts {n : Nat} {rows inner : String} {parts : List (String × String)}
-    (h : check n rows inner parts = .ok ()) :
+theorem check_accepts {n : Nat} {rows inner run : String} {parts : List (String × String)}
+    (h : check n rows inner run parts = .ok ()) :
     ∃ vs, parts.mapM (fun p => partOf p.1 p.2) = .ok vs ∧ Accepts n rows inner (vs.map (·.2)) := by
   obtain ⟨vs, hvs, h⟩ := bind_ok h
-  exact ⟨vs, hvs, checkVerdicts_accepts h⟩
+  obtain ⟨_, hv, _⟩ := bind_ok h
+  exact ⟨vs, hvs, checkVerdicts_accepts hv⟩
+
+/-- **`check` accepts only one run** (C10 `OneRun`): where it accepts the logs and the challenger's record, the
+record reads as events, and they are one run of the parts' verdicts: the staging first, at the composition's rows and
+the shared set every part read, exactly one session opened for each of V*'s statements and none for another, each the
+composed part's session, and the close last. A part retried, a session opened and not composed, a part composed whose
+session the record doesn't hold, a staging after a Hello or a second one, and a record not closed are refused. -/
+theorem check_oneRun {n : Nat} {rows inner run : String} {parts : List (String × String)}
+    (h : check n rows inner run parts = .ok ()) :
+    ∃ vs evs, parts.mapM (fun p => partOf p.1 p.2) = .ok vs ∧ runOf run = .ok evs ∧
+      Accepts n rows inner (vs.map (·.2)) ∧ OneRun n rows (vs.map (·.2)) evs := by
+  obtain ⟨vs, hvs, h⟩ := bind_ok h
+  obtain ⟨_, hv, h⟩ := bind_ok h
+  obtain ⟨evs, hevs, h⟩ := bind_ok h
+  exact ⟨vs, evs, hvs, hevs, checkVerdicts_accepts hv, checkRun_oneRun h⟩
 
 end RecCompose
 end Flock

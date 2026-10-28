@@ -1631,15 +1631,19 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
   IO.println s!"QWORDPROGRAM {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
-/-- `rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG...`: a recursive statement's verdict from its V* parts'
-`verify` logs (`RecCompose.check`). The verifier's own inner shape (`--rec-inner`) gives V*'s statements, and
-`--rec-rows` is the one shared rows file the prover staged. It accepts exactly when `RecCompose.Accepts` holds of the
-logs' verdicts (`RecCompose.check_accepts`): one log per V* statement with one `VERDICT`, each accepted at its own part,
-under `--zk`, without an identifier and at that rows file's SHA-512; every part naming one set of the other shared
-inputs, the first at this inner shape's SHA-512 and in the compiled verifier's form; and no coin key twice. One
-`REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
+/-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG...`: a recursive statement's verdict from
+its V* parts' `verify` logs and the challenger's interactive-run record (`RecCompose.check`). The verifier's own inner
+shape (`--rec-inner`) gives V*'s statements, `--rec-rows` is the one shared rows file the prover staged, and
+`--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It accepts
+exactly when `RecCompose.Accepts` holds of the logs' verdicts (`RecCompose.check_accepts`): one log per V* statement
+with one `VERDICT`, each accepted at its own part, under `--zk`, without an identifier and at that rows file's SHA-512;
+every part naming one set of the other shared inputs, the first at this inner shape's SHA-512 and in the compiled
+verifier's form; and no coin key twice; and `RecCompose.OneRun` holds of the record (`RecCompose.check_oneRun`): the
+staging first, exactly one session opened per part, every opened session a composed part's and every part's opened,
+the close last. A record that can't be read is refused. One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused,
+2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG..."
+  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG..."
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
@@ -1652,6 +1656,7 @@ def recComposeCmd (args : List String) : IO UInt32 := do
     | .ok (some h) => pure h
     | .ok none => IO.eprintln usage; return 2
     | .error e => IO.eprintln e; return 2
+  let some runFile := argOf args "--rec-run" | IO.eprintln usage; return 2
   let n ← match RecVStar.statements i with
     | .ok ss => pure ss.size
     | .error e => IO.eprintln s!"rec-inner: {e}"; return 2
@@ -1659,15 +1664,18 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   let mut flag := false
   for a in args do
     if flag then flag := false
-    else if a == "--rec-inner" || a == "--rec-rows" || a == "--archive" then flag := true
+    else if a == "--rec-inner" || a == "--rec-rows" || a == "--rec-run" || a == "--archive" then flag := true
     else logs := logs.push a
   -- a log that can't be read is a part that never ran: no VERDICT, so refused
   let parts : List (String × String) ← logs.toList.mapM fun f => do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
-  let res := RecCompose.check n digest innerDigest parts
+  -- a record that can't be read is no record: not JSON, so refused
+  let run ← try IO.FS.readFile ⟨runFile⟩ catch _ => pure ""
+  let res := RecCompose.check n digest innerDigest run parts
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
-    ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest)]
+    ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest),
+    ("rec_run_sha512", Lean.Json.str (RecCompose.digest run.toUTF8))]
   IO.println s!"REC-COMPOSE {line.compress}"
   return (if res.toBool then 0 else 1)
 
