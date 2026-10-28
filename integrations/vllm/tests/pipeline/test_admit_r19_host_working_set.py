@@ -289,7 +289,7 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.check.oracle_compare import OpenedReader
-    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES as C
+    from verity_vllm.commit.step_rows import ROW_BYTES as C
     # step stream: [qkv 300 B][fa2.m1 plane 4 chunks + 100 B][o_proj 200 B]
     spec = [("model.layers.0.self_attn.qkv_proj/0", 300, "bfloat16"), ("fa2.m1/L0/s0/g32x8x1/S", 4 * C + 100, "int32"), ("model.layers.0.self_attn.o_proj/0", 200, "bfloat16")]
     used = sum(nb for _name, nb, _dt in spec)
@@ -309,7 +309,7 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     n = -(-used // C) * C
     blk = com._gpu_blocks[0][0]
     ranges = [(0, lo, blk[0:lo]), (hi, n, blk[hi:n])]                         # the collector keeps whole chunk-padded windows outside the interior
-    hr = NC._HostRanges(ranges, used, excluded={"fa2_hidden_m1": hi - lo})
+    hr = NC._HostRanges(ranges, used, excluded={"fa2_hidden_m1": hi - lo}, chunk=C)
     assert hr.retained_bytes == n - (hi - lo) and hr.numel() == n
     assert hr.holds(0, 300) and hr.holds(metas[2].dev_off, metas[2].dev_off + 200) and not hr.holds(lo, lo + C) and not hr.holds(300, 300 + C)
     assert bytes(hr[0:300].numpy()) == bytes(stream[0:300].numpy())
