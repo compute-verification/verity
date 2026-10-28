@@ -358,6 +358,19 @@ def fileDigest (args : List String) (flag : String) : IO (Except String (Option 
     | some dir => archiveGet dir f
   return bytes.map fun b => some (hexOf (Sha512.hash b))
 
+/-- The SHA-512, in hex, of the inner session's record (`--rec-inner-session DIR`'s `session.json`) and of the coin
+server's transcript of it (`--rec-inner-transcript F`), each at its `VERDICT` key, for those given: the files as the
+verifier reads them, from their paths. -/
+def recSessionDigests (args : List String) : IO (Except String (List (String × Lean.Json))) := do
+  let files := [("rec_inner_session_sha512", (argOf args "--rec-inner-session").map (· ++ "/session.json")),
+    ("rec_inner_transcript_sha512", argOf args "--rec-inner-transcript")]
+  let mut out := []
+  for (key, f) in files do
+    if let some f := f then
+      try out := out ++ [(key, Lean.Json.str (hexOf (Sha512.hash (← IO.FS.readBinFile f))))]
+      catch e => return .error s!"{key}: {e}"
+  return .ok out
+
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
 def identifierInput (args : List String) : IO (Except String (Option (Lean.Json × String))) := do
@@ -724,8 +737,10 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
 with `--rec-part J` its part (`rec_part`), with `--rec-rows F` the SHA-512 of the shared rows file it checked
-(`rec_rows_sha512`) and with `--rec-inner F` the SHA-512 of the inner shape file it read (`rec_inner_sha512`), which
-`rec-compose` holds every part of a recursive statement to.
+(`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file it read (`rec_inner_sha512`), and with
+`--rec-inner-session DIR` and `--rec-inner-transcript F` the SHA-512 of the inner session's record and of the transcript
+(`rec_inner_session_sha512`, `rec_inner_transcript_sha512`, `recSessionDigests`), which `rec-compose` holds every part
+of a recursive statement to.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
@@ -850,6 +865,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let recInnerSha ← match ← fileDigest args "--rec-inner" with
     | .ok h => pure h
     | .error e => IO.eprintln e; return 2
+  let recSessionShas ← match ← recSessionDigests args with
+    | .ok hs => pure hs
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -970,7 +988,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- part to
       (match recPart with | some j => [("rec_part", Lean.toJson j)] | none => []) ++
       (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []) ++
-      (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []))
+      (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []) ++ recSessionShas)
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
@@ -1601,8 +1619,9 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
 /-- `rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG...`: a recursive statement's verdict from its V* parts'
 `verify` logs (`RecCompose.check`). The verifier's own inner shape (`--rec-inner`) gives V*'s statements, and
 `--rec-rows` is the one shared rows file the prover staged. It accepts exactly when there is one log per V* statement,
-each of whose `VERDICT`s accepts at its part and names that rows file's SHA-512 and the inner shape file's. One
-`REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
+each of whose `VERDICT`s accepts at its part and names that rows file's SHA-512, the inner shape file's, and the inner
+session record's and transcript's the first part names. One `REC-COMPOSE` line, naming those digests (refused: the two
+files'); exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG..."
   let i ← match ← recInnerInput args with
@@ -1630,9 +1649,9 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   let parts : List (String × String) ← logs.toList.mapM fun f => do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
   let res := RecCompose.check n digest innerDigest parts
-  let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
-      | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
-    ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest)]
+  let line := Lean.Json.mkObj ([("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
+      | .ok _ => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length)] ++
+    (res.toOption.getD (RecCompose.filePins digest innerDigest)).map fun p => (p.key, Lean.Json.str p.digest))
   IO.println s!"REC-COMPOSE {line.compress}"
   return (if res.toBool then 0 else 1)
 
