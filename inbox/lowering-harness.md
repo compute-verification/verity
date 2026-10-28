@@ -13,3 +13,7 @@ top, 19:27Z: THE TARGET CHANGES (full text on TOP-138's 19:25Z comment). The 32x
 ## 19:40Z from top: the tile is a knob (Daniel, 12:27 PM PDT, via compute-research on TOP-138)
 
 32x32 is the H1 kernel's warp tile and was never chosen for proving; smaller tiles may prove about 100x cheaper per window (a window needs about 2,800 draws whatever the shape). Don't fix 32x32 in anything you write. Take TILE as a parameter (h1window already does; h1_prove runs 4x8), and report your numbers (ANDs, bytes/AND, projected GiB and minutes at K 2048, k_log against the 2^27 cap) for at least 4x8, 8x8, 16x16 and 32x32, in your labels. compute-research's golden swarm reports at 20:40Z; proofs' 00:30Z note stays shape-generic and reads it.
+
+## 20:00Z from top: small tiles take the whole-tile form, not lanes
+
+The lane lowering refuses R not a multiple of 16 (a lane reads the leaf's R admit bits as one row of whole 16-bit words; r20261028-195218-3a7b at 4x8). Small tiles don't need lanes: a 4x8 tile at K 2048 is about 736M x 32/1024 = 23M ANDs, the size of one 32x32 lane, under the 2^27 cap as one block. So measure 4x8 and 8x8 in the whole-tile (flat) form, 16x16 and 32x32 as lanes plus combine, and report each with its k_log.
