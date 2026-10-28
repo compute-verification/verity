@@ -475,7 +475,7 @@ class Remote:
 
     #: the inference cut: the remote composition, `Nci.Guarantees.DampenerRemote`, term for term, its envelopes'
     #: premises, and the registration
-    CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
+    CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.ThetaRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 

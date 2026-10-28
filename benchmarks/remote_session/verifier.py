@@ -1489,7 +1489,7 @@ class Verifier:
         every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
         `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
         prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
-        Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        Each reading (`spec`, `measured`) also carries the session's terms (`audit.GammaTerms`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
