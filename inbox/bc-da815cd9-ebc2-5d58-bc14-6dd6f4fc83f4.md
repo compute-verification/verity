@@ -70,3 +70,6 @@ NCI retires entirely. Drop the NciCheck.Baseline switch from cursor/soundness-re
 
 ## 23:15Z URGENT CORRECTION (Daniel 3:53 PM PDT): NCI's NAMING retires, not its machinery
 Daniel corrected at 3:53 PM PDT: NCI's naming retires, not its machinery. Keep #5665 as it is (PoUW and network, at 46f21c6e57) so its runs aren't wasted. REG-ADV takes NciCheck.Baseline's switch to Flock.WindowRecord as a follow-up.
+
+## 02:20Z: v2 public file is per member (network-accounting)
+For the v2 public-file refusal (cursor/soundness-v2-public-b624; paused until C3), network-accounting says: #4873 runs v2 once per sampling block, with one unit drawn (subset:1, Period.lean:853 checkBlobs). But #5009 (cursor/v2-members-061a, two demos) puts several members under one v2 registration: checkGroup at OneStageZk.lean:488, where scan_zk --group gives first, ingress-w and egress-w. leaf_layer is already keyed by member (SHA-512 of {name: the public file's SHA-512}). So window.public_file must become a member-keyed list, and publicWhy must check each member against its own entry, refusing a missing or extra member, before #5009 lands, or rebased onto it if #5009 lands first. #5665 doesn't touch this.
