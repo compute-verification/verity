@@ -1,5 +1,5 @@
-"""The sampling plan for the end-to-end demo's transformer under C-Flock (PRF-166): CMP-92's decoder block, small (the
-CPU reference) or scaled onto one RTX PRO 6000 (compute-accounting's Phase 2 model), every operation a proof block.
+"""The sampling plan for the end-to-end demo's transformer under C-Flock: the demo's decoder block, small (the CPU
+reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation a proof block.
 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
 the rest generated greedily, the last one never fed back, so `positions` = context - 1 run), through `layers` pre-norm
@@ -16,8 +16,8 @@ and its units, from the finest up:
   request's head (`stub:QkHead`, `stub:PvHead`); every row padded to `context` keys (masked keys read as zero), so
   every position has one shape, as the GPU loop runs it;
 - the residual and position adds: `Bf16Add_v1`, a coordinate or a row (`stub:Bf16AddRow`);
-- RMSNorm, the per-row s8 quantizer, softmax, ReLU, the embedding's select and argmax: CIR-100's Definitions, not on
-  main yet, so stubs here (every id `stub:`), each one's ANDs composed from pinned pieces. A row op is a unit whole
+- RMSNorm, the per-row s8 quantizer, softmax, ReLU, the embedding's select and argmax: Definitions not on main
+  yet, so stubs here (every id `stub:`), each one's ANDs composed from pinned pieces. A row op is a unit whole
   when its outputs fit a size class, or commits its row statistic as a unit of its own (`shared`: RMSNorm's 1/rms, the
   quantizer's scale, softmax's max and sum) read by coordinate units or chunks (`chunked`: the quantizer at N > 16,384,
   whose whole row of N/2 code pairs and its scale is over `UNIT_CLASS_MAX`), or recomputes it in each reader
@@ -43,6 +43,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass, replace
+from fractions import Fraction
 from math import ceil, log, log2
 from pathlib import Path
 
@@ -50,32 +51,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import I, KEY, observations  # noqa: E402
 
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
-                                                           frontier, row_ands)
+                                                           frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
-DELTAS = (1e-2, 1e-6)
-#: the server-time block, assumed: compute-accounting's Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute
-#: ceiling sets (note:compute-accounting/20261025T2215Z-draft-allp-gpu §4); no wipe has been timed, and the census has
-#: no block length
+#: core's reporting deltas (`wipe_monitoring`), as floats
+DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+#: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
+#: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
-#: the datacenter, assumed (#4358's table took the same): the census has no datacenter size
+#: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
+#: core's monitoring periods (`wipe_monitoring`), seconds by name
+PERIODS = dict(wipe_monitoring.PERIODS)
 #: the target, a share of the block's ANDs certified at most wrong: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
 TARGET_SHARE = 1e-3
-#: F32Rint_v1's ANDs from #2487 (not on main), the quantizer's round half to even
+#: F32Rint_v1's ANDs (a Definition not on main), the quantizer's round half to even
 F32_RINT = 275
-#: the widest ReLU chunk and quantizer code chunk circuits plans (note:compute-accounting/20261025T2215Z-draft-allp-gpu §4)
+#: the widest ReLU chunk and quantizer code chunk the Phase 2 model plans
 CHUNK = 16_384
 #: output channels a static-matmul tile spans
 TILE_COLS = 32
@@ -91,7 +94,7 @@ def pieces() -> dict[str, int]:
 
 @dataclass(frozen=True)
 class Model:
-    """CMP-92's block at a size, and one server-time block's serving: `requests` requests of `context` positions, the
+    """The demo's block at a size, and one server-time block's serving: `requests` requests of `context` positions, the
     first `prompt` given, `sequences` of them live at once (staggered, so the KV cache's occupancy is constant);
     `inflight` carry their KV cache across the block's close."""
 
@@ -148,7 +151,7 @@ class Model:
     @property
     def kv_resident(self) -> int:
         """The KV cache held while serving: `sequences` staggered over the positions, so on average each holds half
-        (compute-accounting's 16,368 entries a layer at 1,023 sequences)."""
+        (the Phase 2 model's 16,368 entries a layer at 1,023 sequences)."""
         return self.sequences * ((self.positions + 1) // 2) * self.kv_bytes
 
 
@@ -430,7 +433,7 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
     accepted, except with probability `delta`: a set of x_{b,s} faulty proof blocks escapes with at most
     prod exp(-k_s x_{b,s} / n_s), never once x_{b,s} > n_s - k_s, so the total is the knapsack `density_bound` over
     `blocks` copies of each stratum, which the period's length doesn't move (each stratum's rate k_s / n_s is a
-    block's).  This relaxation is the optimizer's, not a Lean guarantee; `IntegrityHorizon` (#4358) proves the
+    block's).  This relaxation is the optimizer's, not a Lean guarantee; `IntegrityHorizon` proves the
     uniform case, ln(1/delta) / q (`horizon`)."""
     return density_bound(((c.units * blocks, plan.sizes[c.template] * blocks, float(c.work) if ands else 1.0)
                           for c in cands if c.template in plan.sizes), delta)
@@ -438,8 +441,9 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
     """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
-    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
-    return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
+    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws, ln(1/delta) the planner's `ln_upper`."""
+    return float(ln_upper(delta) / min(Fraction(plan.sizes[c.template], c.units) for c in cands
+                                       if c.template in plan.sizes))
 
 
 def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int = SERVERS) -> list[dict]:
@@ -458,9 +462,9 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
 
 def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
-    a Definition's descriptor id (a stub's id until CIR-100 lands) with its units:
+    a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
-    * `windows`, the form `IntegrityPeriod` (#4358) reads: one window a subcircuit, its units under `subset:k_s` in
+    * `windows`, the form `IntegrityPeriod` reads: one window a subcircuit, its units under `subset:k_s` in
       members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
       ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no draw misses), so
       outside delta every window has fewer than its K0 units wrong;
@@ -512,7 +516,7 @@ def budget(front: list[Plan], gpu_s: float) -> Plan | None:
 
 
 SMALL = Model()
-#: compute-accounting's Phase 2 model (note:compute-accounting/20261025T2215Z-draft-allp-gpu §1): CMP-92's block at
+#: the Phase 2 model: the demo's block at
 #: width 8,192, 70 layers, 1,023 sequences staggered; 52.5 GiB of INT8 linears and 35.0 GiB of KV, 91% of 96 GiB
 LARGE_SEQUENCES = 1023
 #: its decode step, estimated by their sizing script, not measured: the INT8 GEMMs at 85% of peak (86% of the step)
@@ -575,16 +579,16 @@ def parameters(m: Model, s: Serving, share: float) -> list[list[str]]:
     tok = None if s.step_s is None else m.sequences / s.step_s
     return [
         ["shape", f"L {m.layers}, d {m.width}, {m.heads} heads of {m.head_dim}, MLP {m.mlp}, V {m.vocab}, "
-                  f"C {m.context} ({m.positions} run, {m.prompt} prompt)", "CMP-92; large: compute-accounting's"],
+                  f"C {m.context} ({m.positions} run, {m.prompt} prompt)", "the demo's block; large: the Phase 2 model's"],
         ["memory", f"{m.weight_bytes / 2**30:.4g} GiB weights + {m.kv_resident / 2**30:.4g} GiB KV",
          "derived from the shape and `sequences`"],
-        ["sequences live", f"{m.sequences:,}", "large: compute-accounting's"],
+        ["sequences live", f"{m.sequences:,}", "large: the Phase 2 model's"],
         ["step", "-" if s.step_s is None else f"{s.step_s * 1e3:.0f} ms, {tok:,.0f} tokens/s",
-         "large: compute-accounting's estimate (a sizing script, not measured)"],
+         "large: the Phase 2 model's estimate (a sizing script, not measured)"],
         ["block", f"{s.block_s:.0f} s, {m.requests:,} requests",
-         "assumed (`BLOCK_S`)" + ("; requests from the step" if s.step_s is not None else "; requests CMP-92's")],
+         "assumed (`BLOCK_S`)" + ("; requests from the step" if s.step_s is not None else "; requests the demo's")],
         ["datacenter", f"{SERVERS:,} servers", "assumed (`SERVERS`); not in benchmarks/census"],
-        ["replay", f"{s.replay:g} GPU-s a drawn request", "large: compute-accounting's estimate"],
+        ["replay", f"{s.replay:g} GPU-s a drawn request", "large: the Phase 2 model's estimate"],
         ["serve-time commitments", "units' outputs, request bytes, KV carry, PoUW h1 receipts, bandwidth receipts",
          "h1 assumed; commitment rate `inputs.commit_per_byte`"],
         ["cost model", "C-Flock zk sessions of ScaledMmS8Coordinate at K = 4096, 14336 on sm_120",
@@ -596,7 +600,7 @@ def parameters(m: Model, s: Serving, share: float) -> list[list[str]]:
 
 def render(out: dict) -> str:
     m = out["model"]
-    lines = [f"# CMP-92 block, {m['layers']} layers x {m['width']} ({m['heads']} heads, MLP {m['mlp']}), "
+    lines = [f"# Demo block, {m['layers']} layers x {m['width']} ({m['heads']} heads, MLP {m['mlp']}), "
              f"{m['requests']:,} requests a block: the sampling plan at delta {out['delta']:g}", "",
              "| parameter | value | source |", "|---|---|---|"]
     lines += [f"| {a} | {b} | {c} |" for a, b, c in out["parameters"]]
