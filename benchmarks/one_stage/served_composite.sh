@@ -11,7 +11,8 @@
 # the whole re-encoded store), all within CASE_TIMEOUT (default 90m). Then, where the tree has `served_cases.py`,
 # sampled proofs' v2 case and the registration case from the window's records audit (SERVE_DIR/v3c-w*/audit), the latter
 # with the policy's α and Γ read off the case's own division (`--from-division`), or ALPHA and GAMMA where both are set,
-# each under SERVE_DIR/private; each CASE line's protocol, verdict and `alpha_gamma` go to OUT/verdicts.txt. Then
+# each under SERVE_DIR/private; each CASE line's protocol and verdict go to OUT/verdicts.txt, and α and Γ, which count
+# the block's gates, stay in the case's private policy.json. Then
 # `composite.py` remote and onsite,
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
@@ -70,8 +71,7 @@ import json, sys
 for line in sys.stdin:
     head, _, body = line.partition(" ")
     c = json.loads(body)
-    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []),
-          *(["(alpha_gamma " + str(c["alpha_gamma"]) + ")"] if c.get("alpha_gamma") else []))' \
+    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []))' \
     | tee -a "$OUT/verdicts.txt"
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi
