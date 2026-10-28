@@ -69,8 +69,8 @@ def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
 
 
 def test_the_work_law_is_roots_rule():
-    """#362's rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
-    draws 2 and 1; a floor of 3 on T2 draws 3. #362's own example also gives work to a second template (T1, 3 units of
+    """The work rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
+    draws 2 and 1; a floor of 3 on T2 draws 3. The rule's own example (`Flock/Draw.lean`) also gives work to a second template (T1, 3 units of
     work 1), which a call's table may not (`hone`, `check_work_strata`), so the verifier refuses it."""
     import pytest
 
@@ -83,7 +83,7 @@ def test_the_work_law_is_roots_rule():
 
 
 def test_the_record_budget_is_27713():
-    """(1 − 0.001)^K ≤ 2⁻⁴⁰ first at K = 27,713 (#362's `record_sizing`); 27,712 misses (`record_sizing_one_fewer`)."""
+    """(1 − 0.001)^K ≤ 2⁻⁴⁰ first at K = 27,713 (`record_sizing`); 27,712 misses (`record_sizing_one_fewer`)."""
     assert PL.record_k(Fraction(1, 1000), Fraction(1, 2 ** 40)) == PL.RECORD_K == 27_713
     assert 999 ** 27_712 * 2 ** 40 > 1000 ** 27_712
     assert PL.record_k(Fraction(1, 1000), Fraction(1, 100)) == 4_603
@@ -103,7 +103,7 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 def test_the_work_table_and_law_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
     `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
-    verifier's table raises a zero-work stratum's draws to it (X-SPC-81)."""
+    verifier's table raises a zero-work stratum's draws to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
@@ -117,13 +117,13 @@ def test_the_work_table_and_law_object_are_362s():
 
 
 def test_openings_are_one_leaf_per_row():
-    """A and the weight are committed a leaf per row (X-SPC-57): a proved strip opens exactly its 16 rows."""
+    """A and the weight are committed a leaf per row: a proved strip opens exactly its 16 rows."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     by_role = {u.role: u for u in lay.units if u.role == "form_x"}
     assert PL.openings(lay, [by_role["form_x"].index]) == tuple(("a", r) for r in range(16 * by_role["form_x"].where[0],
                                                                                          16 * by_role["form_x"].where[0] + 16))
     assert PL.openings(lay, [], [1]) == (*(("b", r) for r in range(16, 32)), ("y", 1))   # the weight Program's Y unit 1,
-    # and the call's Y input at its strip beside that unit's output (X-SPC-95)
+    # and the call's Y input at its strip beside that unit's output
 
 
 def test_the_profile_is_stratified_over_the_tile_strata():
@@ -136,7 +136,7 @@ def test_the_profile_is_stratified_over_the_tile_strata():
 
 
 def test_traced_as_is_the_compositions_entry_point():
-    """What #311's PoUW adapter calls: the circuit for `ncp-v2`, nothing for a scheme without one."""
+    """What the vLLM integration's PoUW adapter calls: the circuit for `ncp-v2`, nothing for a scheme without one."""
     import pytest
 
     from verity.core.protocols.pouw.circuit import partition as P
@@ -154,7 +154,7 @@ def test_traced_as_is_the_compositions_entry_point():
 
 
 def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
-    """K = 27,713 is a window's budget (X-SPC-83): alone, a call is capped at its units instead of raising; in a window each
+    """K = 27,713 is a window's budget: alone, a call is capped at its units instead of raising; in a window each
     call draws ⌈K·W_c/W_window⌉, so C equal calls draw about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
@@ -163,13 +163,13 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     deq = _by_role(lay)["dequant"]                                   # y's floor ⌈K_y·1,024/(10,000·1,024)⌉ (option B)
     assert laws[0].sizes(lay.strata) == {s.name: 3 if s in (tile, deq) else 1 for s in lay.strata}
-    assert PL.law_object(lay, laws[0])["k"] == 3                     # #362's law at the call's share
+    assert PL.law_object(lay, laws[0])["k"] == 3                     # the work law at the call's share
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
 
 
 
 def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
-    """Root's option B on X-SPC-105: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
+    """y's floors over the window: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
     the window's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
     window draws at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
     alone proves all its y cells up to K_y. Over the window the escape of b_c wrong cells in each call is at most
@@ -209,8 +209,8 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
 
 def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     """The window pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
-    root's counterexample (4 units at work 2 and 2 at work 5, K = 8) draws 3 of the first where covering needs 3.6. The
-    verifier's own layouts give work to the tile template only (X-SPC-84), and `work_table`, `WorkLaw` and `window_laws`
+    a counterexample (4 units at work 2 and 2 at work 5, K = 8) draws 3 of the first where covering needs 3.6. The
+    verifier's own layouts give work to the tile template only, and `work_table`, `WorkLaw` and `window_laws`
     refuse any layout that doesn't."""
     import dataclasses
 
@@ -239,7 +239,7 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
 
 
 def test_the_red_team_s_capped_window_is_refused():
-    """The red team's window (20260929T1622Z): call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
+    """A capped window: call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
     work 0 and 1 at work 1, and K = 5,000. Call 0's share 5,000 is capped at its 1,010 units, so its work-2 stratum would
     draw 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the window bound claims
     (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the window: call 0 does work in two strata."""
@@ -294,7 +294,7 @@ def test_a_window_with_no_y_cells_is_refused():
     assert len(PL.window_laws([lay, lay])) == 2
 
 def test_the_window_law_is_the_window_pin_s():
-    """#418's `Audit/Window.lean` definitions, recomputed on ℕ from their formulas on random small windows, against
+    """`Audit/Window.lean`'s definitions, recomputed on ℕ from their formulas on random small windows, against
     `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `windowK` = workRule(K_c, w_s, n_s, W_c, f_s)
     is `WorkLaw.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
     the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_window_split_of_record` reads."""
@@ -340,7 +340,7 @@ def test_the_window_law_is_the_window_pin_s():
 
 def test_a_tiles_closure_contains_the_tile_itself():
     """A drawn tile is proved itself, not only what it reads: `t ∈ cl t`, as Lean's `Layout.cl` inserts the tile's own unit.
-    Without it a wrong tile over right strips would count as zero harm (the Flock red team's C1 on #390)."""
+    Without it a wrong tile over right strips would count as zero harm."""
     for shape in (ncp2.Shape(32, 64, 32), ncp2.Shape(48, 64, 32)):
         lay = PL.layout(shape)
         tiles = {u.index for u in lay.units if u.role == "tile"}
@@ -401,9 +401,9 @@ def _window(t, anchors, source=bytes(range(32)), commitments=None):
 
 
 def test_equal_calls_under_one_key_draw_different_tiles():
-    """Each stratum's subset is keyed by the call's index, (forward, position), with its template (X-SPC-96): equal calls of
+    """Each stratum's subset is keyed by the call's index, (forward, position), with its template: equal calls of
     a window, under its one key, draw different tiles, and one call draws the same tiles under that key every time. The
-    strata stay one per template of the call's partition (X-SPC-84); only the randomness is per call."""
+    strata stay one per template of the call's partition; only the randomness is per call."""
     import circuit_fixtures as F
     from verity.core.protocols.pouw.circuit import traced_as
 
@@ -419,7 +419,7 @@ def test_equal_calls_under_one_key_draw_different_tiles():
 
 
 def test_the_verifier_draws_over_its_own_layout():
-    """`Traced.draw(law, anchors, ledger)` takes no layout and no key: it is `plan.draw` over `Traced.layout()` (X-SPC-97)
+    """`Traced.draw(law, anchors, ledger)` takes no layout and no key: it is `plan.draw` over `Traced.layout()`
     under the ledger's key."""
     import inspect
 
@@ -527,7 +527,7 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
 
 
 def test_a_caller_built_ledger_has_no_key():
-    """The red team's first probe: a ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
+    """A ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
     or source, and sets none afterwards, so only `Ledger.open` makes one that draws."""
     import pytest
 
@@ -552,7 +552,7 @@ def test_a_caller_built_ledger_has_no_key():
 
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
-    """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
+    """An opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
     `Traced.draw` reads it from the ledger, so a caller's key never reaches a draw."""
     import pytest
 
@@ -571,7 +571,7 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
 
 
 def test_an_opened_ledger_s_receipt_cannot_be_swapped():
-    """The red team's third probe: an opened ledger whose receipt is swapped for a larger one after the key exists, so a
+    """An opened ledger whose receipt is swapped for a larger one after the key exists, so a
     call committed after the key would be drawn under it. The receipt is set once, in `Ledger.open`, and the later call
     is refused."""
     import hashlib
@@ -596,7 +596,7 @@ def test_an_opened_ledger_s_receipt_cannot_be_swapped():
 
 
 def test_openings_are_checked_against_the_receipt_s_commitment():
-    """The red team's tier-3 item: the call's A-row openings are checked against its commitment as the opened ledger's
+    """The call's A-row openings are checked against its commitment as the opened ledger's
     receipt lists it, by call index (`Ledger.commitment`), never one supplied with the openings. The prover's own rows
     under the receipt's commitment pass; rows committed under any other commitment, a missing row, a row opened twice,
     or a call the receipt doesn't list are refused."""
@@ -632,7 +632,7 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
 
 def test_the_record_keeps_the_source_once_the_draw_is_sent():
-    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its draw
+    """The audit record keeps the window's source and receipt digest once its draw
     is sent, so a third party re-derives the key (`replay_key`) and so the draw. Before it is sent the record is refused,
     and after it the window draws nothing more. What the record can't show is that the source was fresh."""
     import pytest
@@ -681,7 +681,7 @@ def test_each_window_s_source_is_fresh():
 
 def test_the_call_s_y_is_linked_to_the_weight_program():
     """The call reads its weight's Y strips and c₀ as inputs, so the plan opens them at each drawn tile's column strip
-    beside the weight Program's outputs there, and the verifier compares the two (`Traced.check_link`, X-SPC-95). Another
+    beside the weight Program's outputs there, and the verifier compares the two (`Traced.check_link`). Another
     weight's Y, or one c₀ changed, is refused."""
     import pytest
 
