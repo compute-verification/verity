@@ -1,5 +1,7 @@
 """`catalog.load()` registers exactly `COUNT` Definitions and primitives: a module that stops importing or registering, or
 one that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
+Each scope of `load` registers the Definitions of the walk it replaced (`REPLACED`), in the same order, whatever the registry
+holds: a module only `load`'s walk reaches, a registry subpackage's, can't register on import or move one unnoticed.
 
 The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
 registers) is not in it.
@@ -95,6 +97,61 @@ def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
     assert not got["errors"], got["errors"]
     assert got["count"] == COUNT, f"catalog.load() registers {got['count']} Definitions, not {COUNT}"
+
+
+#: by scope of `catalog.load`, the walk it replaced: the registry's own modules alone, none of a subpackage's, and replay's and
+#: the red-team demo's every module of ops and of the registry
+REPLACED = {
+    "registry": ("import importlib, pkgutil\n"
+                 "import verity.ml.definitions.registry as package\n"
+                 "for m in sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name):\n"
+                 "    if m.name not in ('quarantine', 'catalog'):\n"
+                 "        importlib.import_module(package.__name__ + '.' + m.name)\n"),
+    ("ops", "registry"): ("import importlib, pkgutil\n"
+                          "for name in ('verity.ml.circuits.ops', 'verity.ml.definitions.registry'):\n"
+                          "    package = importlib.import_module(name)\n"
+                          "    for m in pkgutil.walk_packages(package.__path__, name + '.'):\n"
+                          "        importlib.import_module(m.name)\n"),
+}
+
+
+def _registered(code: str) -> list[str]:
+    """The ids `REGISTRY` holds, in registration order, once ``code`` has run in a process of its own: the test modules beside
+    this one import registry modules as they are collected, which reorders this process's registry."""
+    p = subprocess.run([sys.executable, "-c", code + "from verity.ml.circuits.defs import REGISTRY\nprint('\\n'.join(REGISTRY.defs))\n"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-2000:]
+    return p.stdout.split()
+
+
+def test_each_scope_registers_what_the_walk_it_replaced_did_in_its_order():
+    """Each scope of `catalog.load` registers the Definitions the walk it replaced (`REPLACED`) registered, in the same order:
+    the registry scope's walk reaches its subpackages' modules, which the old one never imported, so one that registers on import
+    fails here.  Nothing to update when a Definition is added: both walks register it."""
+    for scope, walk in REPLACED.items():
+        got = _registered(f"from verity.ml.definitions.registry import catalog\nassert not catalog.load({scope!r})[1]\n")
+        want = _registered(walk)
+        at = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+        assert got == want, (f"catalog.load({scope!r}) registers {len(got)} Definitions, the walk it replaced {len(want)}, first apart "
+                             f"at {at}: {got[at:at + 3]} against {want[at:at + 3]} (a module only load's walk imports registers on import)")
+
+
+def test_the_ops_scope_imports_every_module_of_ops():
+    """`load(("ops", "registry"))` imports every module of `verity.ml.circuits.ops` and of its subpackages besides the registry's,
+    and registers Definitions the registry alone does not: in a process of its own, so the count above stays the registry's."""
+    code = ("import pkgutil, sys\n"
+            "from verity.ml.circuits import ops\n"
+            "from verity.ml.definitions.registry import catalog\n"
+            "alone = len(catalog.load()[0].defs)\n"
+            "registry, errors = catalog.load(('ops', 'registry'))\n"
+            "assert not errors, errors\n"
+            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.ml.circuits.ops.') if m.name not in sys.modules]\n"
+            "assert not missing, missing\n"
+            "print(alone, len(registry.defs))\n")
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-2000:]
+    alone, both = map(int, p.stdout.split())
+    assert alone == COUNT and both > alone, (alone, both)
 
 
 def test_the_catalog_reads_no_protocol():
