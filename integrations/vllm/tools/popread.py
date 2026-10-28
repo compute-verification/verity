@@ -708,7 +708,7 @@ IGNORE_EOS = "the row serves with ignore_eos, so every request runs to max_token
 
 
 def _eos(lag: int, counted: bool, ignore: bool, why: str | None) -> dict[str, Any]:
-    """`counted`: the keyed counts are filled (what an EOS stop would key); `applied`: the row's stop rule honors EOS, so they are."""
+    """`counted`: the keyed counts are filled (what an EOS stop would key); `applied`: the workload's stop rule honors EOS, so they are."""
     return {"lag": lag, "keyed_from_step": 1 + lag, "counted": counted, "applied": counted and not ignore,
             "why_not": why if not counted else (IGNORE_EOS if ignore else None)}
 
@@ -766,7 +766,7 @@ def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, igno
     token row, attention once per query row and layer, the logits and the sampled id once per request.  The plan runs every
     request to max_tokens, so a request's rows from its own step 1 + LAG on are the activity an EOS stop would key
     (`eos_keyed`), and every row of an engine step holding one of them is in a batch whose shape that stop would change
-    (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the row serves
+    (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the workload serves
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.program import Program
