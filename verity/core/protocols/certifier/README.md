@@ -20,9 +20,9 @@ A spec-level reference for network accounting's timing channel:
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
 - the power certifier, onsite's power sub-protocol, as a second certificate kind on this machinery: its
-  record (`power`: one channel's certified energy over an interval, signed under the certifier's salt as a network
+  record (`power`: one channel's certified energy over one block's span, signed under the certifier's salt as a network
   record is, and the public threshold, quantized against the prover) and its proof block (`power_check`:
-  `PowerCheck_v1`, the head's and the interval's committed counts' hiding openings, the head's fields, the threshold
+  `PowerCheck_v1`, the head's and the span's committed counts' hiding openings, the head's fields, the threshold
   E − floors − tolerance ≤ β·e_h·θ·Δ in integers, and the signed digest), whose one output is the verdict bit. No
   issuer, Spec or Lean check yet;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no

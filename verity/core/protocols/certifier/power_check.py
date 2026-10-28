@@ -1,6 +1,6 @@
-"""The power certifier's proof block, zero-knowledge: one interval's power certificate against its committed counts and
-the public threshold (`power`). A Boolean Definition whose one output is the verdict bit; drawn intervals are proved
-through the firewall like N2's link-windows, and the unit's Program holds it as one gate naming its pinned circuit digest
+"""The power certifier's proof block, zero-knowledge: one block span's power certificate against its committed counts
+and the public threshold (`power`). A Boolean Definition whose one output is the verdict bit; drawn spans are proved
+through the firewall like the network certifier's records, and the unit's Program holds it as one gate naming its pinned circuit digest
 (`gate`, `head_check.gate_of`).
 
     PowerCheck_v1{L, J, DH, DC}
@@ -15,9 +15,9 @@ through the firewall like N2's link-windows, and the unit's Program holds it as 
 classes' MACs, compressions, forming units), DH and DC the depths of the trees the head and the counts open in. All are
 public: the channel, the threshold's kinds and the commitments' shapes are protocol structure.
 
-**Public inputs.** The power root and its domain id and the head's leaf position in it; the channel, the interval's index
+**Public inputs.** The power root and its domain id and the head's leaf position in it; the channel, the span's index
 (u64) and length Δ_ms (u32), and the meter's manifest digest (`power.Meter.digest`); the counts root and its domain id
-and the counts' leaf position; `signed`, the digest the interval's certificate signs; and the threshold as `power`
+and the counts' leaf position; `signed`, the digest the span's certificate signs; and the threshold as `power`
 quantizes it (`Threshold.quantized`): a floor per kind (u48), the gain (u24) and the slack (u128), every integer least
 significant bit first.
 
@@ -26,7 +26,7 @@ significant bit first.
 
 **What 1 means.** (1) The head opens at `power_pos` of the power root and (2) the counts row at `counts_pos` of the
 counts root (`NetworkHidingRead`: the sha512/row/v2 digest, hm96's hiding leaf, the frame-v3-sha512 read). (3) The head's
-fields are the public inputs' (`PowerHeadFields`): its channel, interval, Δ_ms, status 0 (complete) and manifest digest.
+fields are the public inputs' (`PowerHeadFields`): its channel, span index, Δ_ms, status 0 (complete) and manifest digest.
 (4) The threshold holds (`PowerThreshold`): gain · E_µJ · 2²⁰ ≤ Σ_j floor_j · N_j + slack, with E the head's energy and
 N_j the counts. (5) The certificate signs this head: its record digest (`PowerRecordDigest`) salted by `salt_c` is
 `signed` (`head_check.NetworkSignedDigest`). The head's sample count is free.
@@ -63,7 +63,7 @@ PINS = Path(__file__).with_name("power_check.circuit-check.json")
 
 
 class Shape(SimpleNamespace):
-    """A power head's byte offsets (`PowerHead.encode`) for a channel name of L bytes: the interval, Δ_ms, the status, the
+    """A power head's byte offsets (`PowerHead.encode`) for a channel name of L bytes: the span's index, Δ_ms, the status, the
     manifest digest, the energy and the sample count."""
 
     def __init__(self, L: int) -> None:
@@ -102,7 +102,7 @@ def _build_fields(C, S, *e):
 
 PowerHeadFields = _part(
     "PowerHeadFields", ("L",), _sig_fields, _build_fields,
-    "1 iff the power head's bytes before its energy are u16 L, the channel, the interval (u64 big-endian), Δ_ms (u32 "
+    "1 iff the power head's bytes before its energy are u16 L, the channel, the span's index (u64 big-endian), Δ_ms (u32 "
     "big-endian), status 0 and the meter's manifest digest")
 
 
@@ -198,7 +198,7 @@ def _body_check(B, S, *args):
 PowerCheck = CompositeDefinition(
     "PowerCheck", 1, ("L", "J", "DH", "DC"), _sig_check, _body_check, conformance="exact-model-tested",
     doc="1 iff the power head opens at power_pos of the power root and the counts at counts_pos of the counts root, the "
-        "head's fields are the interval's, complete and the meter's, the threshold holds on its energy and the counts, "
+        "head's fields are the span's, complete and the meter's, the threshold holds on its energy and the counts, "
         "and its record digest salted by salt_c is the signed digest; its sample count is free")
 
 PowerCheck.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`gate`)
@@ -220,7 +220,7 @@ def gate(L: int, J: int, DH: int, DC: int) -> PrimitiveDefinition:
 
 @dataclass(frozen=True)
 class Instance:
-    """One interval's check: its arguments as bytes and ints (positions as leaf indices, the threshold quantized)."""
+    """One span's check: its arguments as bytes and ints (positions as leaf indices, the threshold quantized)."""
 
     power: bytes
     power_domain: bytes

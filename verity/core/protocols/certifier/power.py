@@ -1,11 +1,12 @@
-"""Power certificates: the power certifier's signed reading of one channel's energy over an interval (record v1).
+"""Power certificates: the power certifier's signed reading of one channel's energy over one block's span
+(record v1).
 
 The power certifier is onsite's power sub-protocol's auditor-trusted device: an inline meter or a metered PDU
 outlet on a machine the prover doesn't control, never the GPU's own sensor or the prover's BMC. Trust in it and its host
 is the named ``trusted-nebius-host`` assumption, as for the network certifier, whose certificate machinery it shares: the
 same hiding signed digest (`certificate.certificate_digest`, the certifier's fresh salt), LMS over SHA-512 (n = 64) and the
-fail-closed signer (`certificate.Signer`). Once per interval it signs one **power certificate** over the hiding digest of
-the interval's record. The record and the salt are witness: they enter proofs and never reach the auditor in the clear.
+fail-closed signer (`certificate.Signer`). Its span is one block's span of the run, and once per span it signs one **power certificate**
+over the hiding digest of the span's record. The record and the salt are witness: they enter proofs and never reach the auditor in the clear.
 
 **The record (v1).**
 
@@ -14,20 +15,20 @@ the interval's record. The record and the salt are witness: they enter proofs an
     record digest = tagged_sha512("verity-power-certifier/record/v1", R)
     signed digest = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ record digest)      (`certificate.certificate_digest`)
 
-`channel` names the metered outlet, `interval` its index and Δ_ms its length, `status` is `PowerStatus`'s code,
+`channel` names the metered outlet, `interval` the span's index and Δ_ms its length, `status` is `PowerStatus`'s code,
 `parameters` is the meter's manifest digest (`Meter.digest`: its source, sampling rate and accuracy class, and whether it
-is a stand-in), `E_µJ` the energy the meter integrated over the interval and `samples` the readings it integrated. A
+is a stand-in), `E_µJ` the energy the meter integrated over the span and `samples` the readings it integrated. A
 record signs a record digest and a clock certificate a clock digest, each under its own tag, so one opens as another
 only on a SHA-512 collision.
 
-**The threshold.** Interval i passes when the certified energy, less the public floors of the work it accounts and a
+**The threshold.** Span i passes when the certified energy, less the public floors of the work it accounts and a
 public tolerance, leaves at most the bar's share of hidden capacity:
 
     E − Σ_j e_j·N_j − τ₀·Δ − ρ·E − P₀·Δ ≤ β·e_h·θ·Δ
 
-over the interval's committed counts N_j (MACs per declared operand class, compressions, forming units), with the floors
+over the span's committed counts N_j (MACs per declared operand class, compressions, forming units), with the floors
 e_j, idle P₀, the hidden-MAC floor e_h, the capacity θ, the bar β and the tolerance (τ₀, ρ) public (`Threshold`). It is the
-served bound's U = (E − floors)/(e_h·θ·wall) ≤ β, per interval and with the tolerance. `power_check` proves it in
+served bound's U = (E − floors)/(e_h·θ·wall) ≤ β, per span and with the tolerance. `power_check` proves it in
 integers: energies in 2⁻⁴⁰ µJ and the gain 1 − ρ in 2⁻²⁰,
 
     gain · E_µJ · 2^(40 − 20) ≤ Σ_j floor_j · N_j + slack,
@@ -72,7 +73,7 @@ def _u(value: int, width: int, name: str) -> bytes:
 
 @dataclass(frozen=True, slots=True)
 class Meter:
-    """The meter's manifest, fixed before the first interval: what it reads (`source`; a stand-in names itself
+    """The meter's manifest, fixed before the first span: what it reads (`source`; a stand-in names itself
     `stand-in/...` and sets `stand_in`), how often (`rate_hz`) and how well (`accuracy_ppm` of the reading, and
     `offset_mw`)."""
 
@@ -120,14 +121,14 @@ class PowerHead:
         return tagged_sha512(RECORD_TAG, self.encode())
 
     def signed_digest(self, salt_c: bytes) -> bytes:
-        """The digest the interval's certificate signs: the record digest under the certifier's salt."""
+        """The digest the span's certificate signs: the record digest under the certifier's salt."""
         if type(salt_c) is not bytes or len(salt_c) != SALT_BYTES:
             raise ValueError(f"a power certificate's salt is {SALT_BYTES} bytes")
         return certificate_digest(salt_c, self.digest())
 
 
 def counts_row(counts: tuple[int, ...]) -> bytes:
-    """An interval's committed counts as `power_check` opens them: each a u64 big-endian, in the threshold's order."""
+    """A span's committed counts as `power_check` opens them: each a u64 big-endian, in the threshold's order."""
     return b"".join(_u(n, 8, "a count") for n in counts)
 
 
@@ -153,7 +154,7 @@ class Threshold:
             raise ValueError("a threshold has a floor per counted kind and every parameter a Fraction >= 0, ρ < 1")
 
     def slack_j(self, interval_ms: int) -> Fraction:
-        """(P₀ + τ₀ + β·e_h·θ)·Δ: the energy an interval of Δ_ms may spend beyond its work's floors and the gain error."""
+        """(P₀ + τ₀ + β·e_h·θ)·Δ: the energy a span of Δ_ms may spend beyond its work's floors and the gain error."""
         return (self.idle_w + self.offset_w + self.bar * self.hidden_j * self.capacity) * Fraction(interval_ms, MS)
 
     def quantized(self, interval_ms: int) -> tuple[tuple[int, ...], int, int]:

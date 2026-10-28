@@ -1,5 +1,5 @@
-"""The power certifier's proof block (`power_check`) on a period of four intervals: each part against its reference on
-honest intervals and on intervals wrong in one input (a tampered certificate, a tampered energy, an over-threshold run),
+"""The power certifier's proof block (`power_check`) on four block spans of one channel: each part against its reference
+on honest spans and on spans wrong in one input (a tampered certificate, a tampered energy, an over-threshold span),
 the threshold's rounding against the prover, and the whole Definition against its reference."""
 
 import random
@@ -42,14 +42,14 @@ def _tree(domain: bytes, values: list[bytes]) -> tuple[bytes, list[tuple[bytes, 
 
 
 def _honest_energy(counts: tuple[int, ...], margin_uj: int = 0) -> int:
-    """An honest interval's energy in µJ: idle and the counted work at their floors, plus `margin_uj`."""
+    """An honest span's energy in µJ: idle and the counted work at their floors, plus `margin_uj`."""
     t = THRESHOLD
     joules = t.idle_w * Fraction(INTERVAL_MS, 1000) + sum(f * n for f, n in zip(t.floors, counts))
     return int(joules * UJ) + margin_uj
 
 
-def _period(heads: list[PowerHead], rows: list[bytes], seed: int = 0) -> list[PC.Instance]:
-    """Each interval's instance: the heads and the counts rows committed under hiding salts in their own trees, and
+def _spans(heads: list[PowerHead], rows: list[bytes], seed: int = 0) -> list[PC.Instance]:
+    """Each span's instance: the heads and the counts rows committed under hiding salts in their own trees, and
     each head's certificate's signed digest under a certifier salt."""
     rnd = random.Random(seed)
     salts = [rnd.randbytes(HC.SALT.leaves // 8) for _ in heads]
@@ -75,7 +75,7 @@ def _head(i: int, energy_uj: int, status: PowerStatus = PowerStatus.COMPLETE) ->
 
 
 def _honest(margins=(0, 1_000_000, 0, 5_000_000)) -> list[PC.Instance]:
-    return _period([_head(i, _honest_energy(c, m)) for i, (c, m) in enumerate(zip(COUNTS, margins))],
+    return _spans([_head(i, _honest_energy(c, m)) for i, (c, m) in enumerate(zip(COUNTS, margins))],
                    [counts_row(c) for c in COUNTS])
 
 
@@ -86,15 +86,15 @@ def cases():
     out = {f"honest {i}": (inst, None) for i, inst in enumerate(honest)}
     h0, h1 = honest[0], honest[1]
     over_budget = _honest_energy(COUNTS[0]) + 2 * int(THRESHOLD.slack_j(INTERVAL_MS) * UJ)
-    over = _period([_head(0, over_budget)] + [_head(i, _honest_energy(c)) for i, c in enumerate(COUNTS[1:], 1)],
+    over = _spans([_head(0, over_budget)] + [_head(i, _honest_energy(c)) for i, c in enumerate(COUNTS[1:], 1)],
                    [counts_row(c) for c in COUNTS])[0]
     tampered_head = _head(0, _honest_energy(COUNTS[0]) - 1_000_000)
-    tampered = _period([tampered_head] + [_head(i, _honest_energy(c)) for i, c in enumerate(COUNTS[1:], 1)],
+    tampered = _spans([tampered_head] + [_head(i, _honest_energy(c)) for i, c in enumerate(COUNTS[1:], 1)],
                        [counts_row(c) for c in COUNTS])[0]
-    gap = _period([_head(0, _honest_energy(COUNTS[0]), PowerStatus.SAMPLE_GAP)]
+    gap = _spans([_head(0, _honest_energy(COUNTS[0]), PowerStatus.SAMPLE_GAP)]
                   + [_head(i, _honest_energy(c)) for i, c in enumerate(COUNTS[1:], 1)], [counts_row(c) for c in COUNTS])[0]
     return out | {
-        "an over-threshold interval": (over, "threshold"),
+        "an over-threshold span": (over, "threshold"),
         "a tampered energy under the honest certificate": (replace(tampered, signed=h0.signed), "signed"),
         "a tampered certificate": (replace(h0, signed=h1.signed), "signed"),
         "another certifier salt": (replace(h0, salt_c=h1.salt_c), "signed"),
@@ -108,7 +108,7 @@ def cases():
         "another head salt": (replace(h0, salt=h1.salt), "opening"),
         "another head position": (replace(h0, power_pos=1), "opening"),
         "another counts salt": (replace(h0, counts_salt=h1.counts_salt), "counts opening"),
-        "another interval's counts": (replace(h0, counts=h1.counts, counts_salt=h1.counts_salt), "counts opening"),
+        "another span's counts": (replace(h0, counts=h1.counts, counts_salt=h1.counts_salt), "counts opening"),
     }
 
 
@@ -158,7 +158,7 @@ def test_the_threshold_circuit_decides_the_boundary_exactly():
 
 
 def test_the_quantized_threshold_never_passes_an_interval_the_exact_one_refuses():
-    """Rounding is against the prover: over random intervals near the boundary, a quantized pass is an exact pass. The
+    """Rounding is against the prover: over random spans near the boundary, a quantized pass is an exact pass. The
     gain's rounding up moves the boundary by under 10⁻⁶ of the energy and the floors' down by under 2⁻⁴⁰ µJ a count, so
     energies are drawn within 3·10⁻⁶ of it."""
     rnd = random.Random(7)
