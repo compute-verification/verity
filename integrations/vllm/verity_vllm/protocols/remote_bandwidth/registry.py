@@ -1,4 +1,4 @@
-"""`Store`: the node's store as one registry, the reference implementation of `StoreView` and `Lifecycle`.
+"""`NodeMemory`: the node's store as one registry, the reference implementation of `StoreView` and `Lifecycle`.
 
 Regions are numbered into one block index space in registration order.  A KV pool is one page table shared by its
 layer regions (a vLLM block id is a page in every layer): ``fill[page]`` slots of an allocated page are written, and
@@ -29,7 +29,7 @@ The plan and the tree are the remote bandwidth driver's, imported (`rb`, its `re
 `Plan` (canonical runs of distinct blocks; `plan_digest` is its digest in numpy), its tree `rb.domain`'s
 frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan order, each `rb.hidden` as an hm96-sha512/row/v2 leaf
 under its salt, and an opening verifies by `rb.verify_leaf`.  `RemoteBandwidthReceipt` is its receipt.  The seed is
-the chained one (`chain`, under its seed domain).  A leaf's salt is `Store.salt`, a PRF of the store's secret key, so
+the chained one (`chain`, under its seed domain).  A leaf's salt is `NodeMemory.salt`, a PRF of the store's secret key, so
 no salt is kept.
 """
 from __future__ import annotations
@@ -48,6 +48,7 @@ import numpy as np
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
+from verity.ml.circuits import requirement
 from verity.ml.commitments import merkle_depth
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
@@ -59,7 +60,7 @@ SEED_BYTES = 64
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
 SALT_DOMAIN = b"verity/store/salt/v0\0"
 
-FillerPlan = Callable[["Store", int], Sequence[tuple[str, Sequence[int]]]]
+FillerPlan = Callable[["NodeMemory", int], Sequence[tuple[str, Sequence[int]]]]
 
 
 def frame(b: bytes) -> bytes:
@@ -293,10 +294,13 @@ class _Pass:
         return self.segments[i].start + q if b is None else int(b[q])
 
 
-class Store:
-    """The node's store.  ``filler_plan(store, pass_index)`` returns the filler a pass reads after the weights and the
-    KV, as ``(region, blocks)`` pairs (region block indices in read order); ``chaining`` derives each pass's seed
-    (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by default."""
+class NodeMemory:
+    """The node's memory under the audit: its regions' bytes, the registration log, the KV pool's pages, and each
+    window's passes and openings.  Its store, the blocks registered and those each step wrote and freed, is the audit's
+    `requirement.Store`, which `audit_store` reads off the memory map.  ``filler_plan(store, pass_index)`` returns the
+    filler a pass reads after the weights and the KV, as ``(region, blocks)`` pairs (region block indices in read
+    order); ``chaining`` derives each pass's seed (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by
+    default."""
 
     def __init__(self, *, filler_plan: FillerPlan | None = None,
                  chaining: Callable[[bytes, bytes, int], bytes] = chain, salt_key: bytes | None = None) -> None:
@@ -445,6 +449,12 @@ class Store:
         if self._pool is not None:
             self._pool.dirty[:] = self._pool.released[:] = False
         return m
+
+    def audit_store(self) -> requirement.Store:
+        """The audit's store as the memory map's lines closed so far record it (`memory_map.audit_store`)."""
+        if self.memory_map is None:
+            raise RuntimeError("the audit's store is read off the memory map: start one (record_memory_map)")
+        return mm.audit_store(self.memory_map.text())
 
     def end_step(self) -> None:
         """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
